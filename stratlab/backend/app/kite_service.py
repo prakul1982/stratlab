@@ -148,9 +148,11 @@ class KiteService:
 
     def ltp(self, token: int) -> float | None:
         self._require()
+        inst = self.instrument(token)
+        key = f"{inst['exchange']}:{inst['symbol']}" if inst else str(token)
         self._throttle()
-        data = self.kite.ltp([token])
-        v = data.get(str(token)) or next(iter(data.values()), None)
+        data = self.kite.ltp([key])
+        v = data.get(key) or data.get(str(token)) or next(iter(data.values()), None)
         return v["last_price"] if v else None
 
     # ---------- historical candles ----------
