@@ -1,0 +1,10 @@
+.env
+backend/.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+.vscode/
+.idea/
+.netlify/
