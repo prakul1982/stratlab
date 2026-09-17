@@ -2,181 +2,308 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>StratLab: build, backtest and paper trade NSE strategies</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'><rect x='1' y='1' width='24' height='24' rx='7' fill='%232F6FDB'/><path d='M5 17 L10 12 L14 15 L21 7' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  try { const t = localStorage.getItem("stratlab-theme"); if(t) document.documentElement.dataset.theme = t; } catch(e){}
+</script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <style>
 :root{
-  --bg:#EDF0ED; --surface:#FFFFFF; --surface-2:#F5F7F5; --ink:#16213A; --muted:#5A6580;
-  --line:#D3DAD4; --indigo:#3B39A6; --indigo-soft:#E4E4F6; --up:#13805A; --up-soft:#DDF1E8;
-  --down:#BF3A2B; --down-soft:#F8E1DE; --marigold:#C98A12; --marigold-soft:#FBEFD6; --on-accent:#FFFFFF;
-  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#0E1423; --surface:#151D30; --surface-2:#1B253D; --ink:#E6E9F2; --muted:#9AA4BD;
-    --line:#29344F; --indigo:#908EF2; --indigo-soft:#252A58; --up:#3CC48D; --up-soft:#173A30;
-    --down:#F06A5C; --down-soft:#43221F; --marigold:#F0B846; --marigold-soft:#3D3219; --on-accent:#0E1423;
-  }
+  --bg:#F5F6F8; --surface:#FFFFFF; --surface-2:#F2F4F7; --ink:#1B2130; --muted:#667085; --line:#E4E7EC; --line-strong:#CDD3DC;
+  --accent:#2F6FDB; --accent-ink:#FFFFFF; --accent-soft:#EAF1FD;
+  --up:#0E9F6E; --up-soft:#E5F6EF; --down:#E0444B; --down-soft:#FDECEC; --warn:#B7791F; --warn-soft:#FDF3E1;
+  --shadow:0 12px 32px rgba(16,24,40,.12);
+  --font:"Hanken Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* aliases used by charts and the strategy graph */
+  --indigo:var(--accent); --indigo-soft:var(--accent-soft); --marigold:var(--warn); --marigold-soft:var(--warn-soft);
+  color-scheme:light;
 }
 :root[data-theme="dark"]{
-  --bg:#0E1423; --surface:#151D30; --surface-2:#1B253D; --ink:#E6E9F2; --muted:#9AA4BD;
-  --line:#29344F; --indigo:#908EF2; --indigo-soft:#252A58; --up:#3CC48D; --up-soft:#173A30;
-  --down:#F06A5C; --down-soft:#43221F; --marigold:#F0B846; --marigold-soft:#3D3219; --on-accent:#0E1423;
+  --bg:#0F1218; --surface:#161A22; --surface-2:#1D222C; --ink:#E7EAF0; --muted:#98A1B2; --line:#262C38; --line-strong:#353D4C;
+  --accent:#5E97F2; --accent-ink:#0F1218; --accent-soft:#1B2940;
+  --up:#2BC48A; --up-soft:#133126; --down:#F2646A; --down-soft:#3A1D20; --warn:#E3A93B; --warn-soft:#352A15;
+  --shadow:0 12px 32px rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]){
+    --bg:#0F1218; --surface:#161A22; --surface-2:#1D222C; --ink:#E7EAF0; --muted:#98A1B2; --line:#262C38; --line-strong:#353D4C;
+    --accent:#5E97F2; --accent-ink:#0F1218; --accent-soft:#1B2940;
+    --up:#2BC48A; --up-soft:#133126; --down:#F2646A; --down-soft:#3A1D20; --warn:#E3A93B; --warn-soft:#352A15;
+    --shadow:0 12px 32px rgba(0,0,0,.45); color-scheme:dark;
+  }
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;font-variant-numeric:tabular-nums}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 img,svg,canvas{max-width:100%}
-h1,h2,h3{font-family:var(--display);line-height:1.15;margin:0}
-h2{font-size:1.15rem;font-weight:700}
-.muted{color:var(--muted)} .small{font-size:.85rem}
+h1,h2,h3{margin:0;line-height:1.2;letter-spacing:-.01em}
+h1{font-size:1.6rem;font-weight:800}
+h2{font-size:1.02rem;font-weight:700}
+p{margin:0}
+.muted{color:var(--muted)} .small{font-size:.84rem}
 .up{color:var(--up)} .down{color:var(--down)}
 [hidden]{display:none!important}
 
-.top{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--line)}
-.top-in{max-width:1320px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.brand{font-family:var(--display);font-weight:700;font-size:1.35rem;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
-.brand svg{width:26px;height:26px}
-.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;overflow-x:auto;max-width:100%}
-.tab{border:0;background:none;padding:7px 14px;border-radius:999px;cursor:pointer;font-weight:600;color:var(--muted);white-space:nowrap}
-.tab[aria-selected="true"]{background:var(--ink);color:var(--bg)}
-.top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
-.plan-pill{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:.84rem;font-weight:600;background:var(--surface);cursor:pointer}
-.plan-pill.pro{background:var(--indigo);color:var(--on-accent);border-color:var(--indigo)}
-.status-dot{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--muted)}
-.status-dot i{width:8px;height:8px;border-radius:50%;background:var(--marigold)}
-.status-dot.on i{background:var(--up)}
+/* ---------- boot + login ---------- */
+.boot{min-height:100vh;display:grid;place-items:center;color:var(--muted)}
+.spinner{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.login{min-height:100vh;display:grid;grid-template-columns:1fr 1fr}
+.login-l{display:flex;flex-direction:column;justify-content:center;padding:48px clamp(24px,6vw,88px)}
+.login-l h1{font-size:clamp(2rem,4.4vw,3.2rem);line-height:1.05;letter-spacing:-.03em;margin:28px 0 14px;max-width:14ch}
+.login-l p{color:var(--muted);font-size:1.05rem;max-width:44ch}
+.login-r{background:var(--surface);border-left:1px solid var(--line);display:flex;align-items:center;justify-content:center;padding:32px}
+.login-r svg{width:100%;max-width:460px;height:auto}
+@media (max-width:860px){.login{grid-template-columns:1fr}.login-r{display:none}}
+.gbtn{display:inline-flex;align-items:center;justify-content:center;gap:10px;margin-top:28px;padding:12px 20px;font-size:1rem;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface);font-weight:700;cursor:pointer;width:fit-content}
+.gbtn:hover{border-color:var(--ink)}
+.fine{margin-top:18px;font-size:.84rem;color:var(--muted);max-width:46ch}
 
-main{max-width:1320px;margin:0 auto;padding:20px}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
-.stack>*+*{margin-top:16px}
-.grid-build{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
-@media (max-width:1060px){.grid-build{grid-template-columns:1fr}}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
-.row>label{flex:1 1 120px}
-label{display:block;font-size:.82rem;color:var(--muted);font-weight:500}
-label>input,label>select{display:block;width:100%;margin-top:4px}
-input,select,textarea{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
-textarea{width:100%;min-height:96px;resize:vertical}
-.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}
+/* ---------- top bar ---------- */
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--surface) 92%, transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1360px;margin:0 auto;height:58px;padding:0 20px;display:flex;align-items:center;gap:24px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:1.18rem;letter-spacing:-.02em;white-space:nowrap}
+.brand svg{width:26px;height:26px;flex:none}
+.desk-nav{display:flex;gap:2px;height:100%}
+.navbtn{border:0;background:none;cursor:pointer;color:var(--muted);font-weight:600;padding:0 12px;height:100%;border-bottom:2px solid transparent;margin-bottom:-1px}
+.navbtn:hover{color:var(--ink)}
+.navbtn[aria-current="page"]{color:var(--accent);border-bottom-color:var(--accent)}
+.top-r{margin-left:auto;display:flex;align-items:center;gap:10px}
+.status{display:inline-flex;align-items:center;gap:7px;font-size:.82rem;color:var(--muted);white-space:nowrap}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.status.on i{background:var(--up)}
+.iconbtn{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer;color:var(--muted)}
+.iconbtn:hover{color:var(--ink);border-color:var(--line-strong)}
+.iconbtn svg{width:18px;height:18px}
+.plan-pill{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:.82rem;font-weight:700;background:var(--surface-2);cursor:pointer;white-space:nowrap}
+.plan-pill.pro{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.bottom-nav{display:none}
+@media (max-width:820px){
+  .desk-nav,.status span{display:none}
+  .top-in{gap:12px;padding:0 14px}
+  .bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  .bottom-nav button{border:0;background:none;padding:8px 0 7px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.7rem;font-weight:600;color:var(--muted);cursor:pointer}
+  .bottom-nav svg{width:22px;height:22px}
+  .bottom-nav button[aria-current="page"]{color:var(--accent)}
+  main{padding-bottom:150px!important}
+}
+
+/* ---------- layout ---------- */
+main{max-width:1360px;margin:0 auto;padding:22px 20px 48px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.stack>*+*{margin-top:14px}
+.page-h{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.page-h p{margin-top:4px}
+.banner{border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:.9rem;background:var(--warn-soft);color:var(--ink);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+
+/* ---------- controls ---------- */
+label.f{display:block;font-size:.8rem;color:var(--muted);font-weight:600}
+label.f>input,label.f>select{display:block;width:100%;margin-top:5px}
+input,select,textarea{background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;min-width:0;height:38px}
+textarea{height:auto;width:100%;min-height:92px;resize:vertical;line-height:1.5;padding:10px 12px}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.btn{height:38px;border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;padding:0 14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
 .btn:hover{border-color:var(--ink)}
-.btn:disabled{opacity:.55;cursor:not-allowed}
-.btn.primary{background:var(--indigo);border-color:var(--indigo);color:var(--on-accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted)}
+.btn.ghost:hover{color:var(--ink);background:var(--surface-2)}
 .btn.danger{color:var(--down)}
-.btn.sm{padding:5px 10px;font-size:.85rem}
-.pro-tag{font-size:.7rem;font-weight:700;background:var(--indigo-soft);color:var(--indigo);border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:middle}
-.icon{border:0;background:none;color:var(--muted);cursor:pointer;font-size:1.2rem;line-height:1;padding:4px 8px;border-radius:6px}
-.icon:hover{background:var(--down-soft);color:var(--down)}
-.head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.btn.sm{height:32px;padding:0 10px;font-size:.85rem}
+.btn.block{width:100%}
+.pro-tag{font-size:.66rem;font-weight:800;background:var(--accent-soft);color:var(--accent);border-radius:4px;padding:1px 5px}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:560px){.g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;border-radius:7px;padding:5px 11px;cursor:pointer;font-size:.86rem;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(16,24,40,.12)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:4px 12px;font-size:.84rem;cursor:pointer}
-.chip:hover,.chip[aria-pressed="true"]{border-color:var(--indigo);color:var(--indigo)}
-.chip[aria-pressed="true"]{background:var(--indigo-soft);font-weight:600}
-.note{font-size:.86rem;margin:8px 0 0;min-height:1.3em}
-.notes-list{margin:8px 0 0;padding-left:1.1em;font-size:.86rem;color:var(--muted)}
-.cond{display:grid;grid-template-columns:minmax(84px,1.1fr) 52px minmax(132px,1.5fr) minmax(84px,1.1fr) 60px 26px;gap:6px;align-items:center;margin-top:8px}
-.cond .ghost{visibility:hidden}
-@media (max-width:560px){.cond{grid-template-columns:1fr 58px}.cond select[data-f=op]{grid-column:1/-1}}
-.cond-empty{border:1px dashed var(--line);border-radius:8px;padding:10px;font-size:.88rem;color:var(--muted);margin-top:8px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.seg button{border:0;background:none;padding:4px 10px;cursor:pointer;font-size:.84rem;color:var(--muted)}
-.seg button[aria-pressed="true"]{background:var(--indigo-soft);color:var(--indigo);font-weight:600}
+.chip{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:.85rem;font-weight:600;cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.note{font-size:.85rem;margin-top:8px;min-height:1.3em}
+.notes-list{margin:8px 0 0;padding-left:1.1em;font-size:.85rem;color:var(--muted)}
+
+/* ---------- build ---------- */
+.build{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;align-items:start}
+@media (max-width:1100px){.build{grid-template-columns:minmax(0,1fr)}}
+.side{position:sticky;top:78px}
+@media (max-width:1100px){.side{position:static}}
+.name-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.name-input{flex:1 1 220px;min-width:0;width:100%;height:auto;font-size:1.5rem;font-weight:800;letter-spacing:-.02em;border:1px solid transparent;background:none;padding:4px 8px;margin-left:-8px}
+.name-input:hover{border-color:var(--line)}
+.step{position:relative;padding-left:52px}
+.step::before{content:attr(data-n);position:absolute;left:18px;top:18px;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:.78rem;font-weight:800;display:grid;place-items:center}
+@media (max-width:560px){.step{padding-left:18px}.step::before{display:none}}
 .picker{position:relative;margin-top:10px}
-.picker input{width:100%}
-.results{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--line);border-radius:10px;max-height:300px;overflow:auto;z-index:5;box-shadow:0 8px 24px rgba(10,20,40,.12)}
-.results button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;border:0;background:none;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
-.results button:hover,.results button:focus-visible{background:var(--surface-2)}
+.picker input{width:100%;padding-left:34px}
+.picker svg{position:absolute;left:11px;top:11px;width:16px;height:16px;color:var(--muted)}
+.results{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--line);border-radius:10px;max-height:320px;overflow:auto;z-index:15;box-shadow:var(--shadow)}
+.results button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+.results button:last-child{border-bottom:0}
+.results button:hover,.results button:focus-visible{background:var(--surface-2);outline:none}
 .results small{color:var(--muted)}
-.sel-inst{margin-top:10px;font-size:.9rem}
-.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-@media (max-width:560px){.facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.fact{background:var(--surface);padding:10px 12px}
-.fact b{display:block;font-size:1.15rem;font-family:var(--display)}
-.fact span{font-size:.8rem;color:var(--muted)}
-.graph-wrap{overflow-x:auto;background:var(--surface-2);border-radius:10px;padding:8px}
-.graph-wrap svg{display:block;min-width:520px;width:100%;height:auto}
-.g-node text{font-family:var(--body);fill:var(--ink)}
-.g-node .sub{fill:var(--muted);font-size:11px}
-.g-edge{fill:none;stroke:var(--line);stroke-width:2}
-.g-col{font-family:var(--display);font-size:12px;fill:var(--muted);font-weight:500}
+.tag{font-size:.7rem;font-weight:700;border-radius:4px;padding:2px 6px;background:var(--surface-2);color:var(--muted)}
+.sel-inst{display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--surface-2)}
+.sel-inst b{font-size:1rem}
+.sel-inst .px{margin-left:auto;font-weight:700}
+.rules-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:4px 0 2px}
+.rule{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:var(--surface)}
+.rule select{flex:1 1 118px}
+.rule input{width:66px;flex:none}
+.rule .op{flex:1 1 128px;font-weight:700;color:var(--accent)}
+.rule .ghost{display:none}
+.rule .icon{margin-left:auto}
+.icon{border:0;background:none;color:var(--muted);cursor:pointer;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;flex:none}
+.icon:hover{background:var(--down-soft);color:var(--down)}
+.icon svg{width:16px;height:16px}
+@media (max-width:560px){.rule select{flex:1 1 calc(100% - 80px)}.rule .icon{margin-left:0}}
+.empty-rule{border:1px dashed var(--line-strong);border-radius:10px;padding:12px;font-size:.88rem;color:var(--muted);margin-top:8px}
+.graph-wrap{overflow-x:auto;border-radius:10px;background:var(--surface-2);padding:6px}
+.graph-wrap svg{display:block;width:100%;height:auto;min-width:340px}
+.g-node text{font-family:var(--font);fill:var(--ink)}
+.g-node .sub{fill:var(--muted);font-size:10.5px}
+.g-edge{fill:none;stroke:var(--line-strong);stroke-width:1.6}
+.g-col{font-family:var(--font);font-size:11px;fill:var(--muted);font-weight:700}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.fact{padding:10px 12px;border-bottom:1px solid var(--line)}
+.fact:nth-child(odd){border-right:1px solid var(--line)}
+.fact:nth-last-child(-n+2){border-bottom:0}
+.fact b{display:block;font-size:1.08rem;font-weight:800}
+.fact span{font-size:.78rem;color:var(--muted)}
+.side-actions{display:grid;gap:8px;margin-top:14px}
+.side-actions .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mobile-cta{display:none}
+@media (max-width:1100px){
+  .mobile-cta{display:flex;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:19;padding:10px 14px;background:var(--surface);border-top:1px solid var(--line)}
+  .mobile-cta .btn{flex:1}
+  .side .side-actions{display:none}
+}
+@media (max-width:820px){.mobile-cta{bottom:calc(58px + env(safe-area-inset-bottom))}}
+@media (min-width:821px) and (max-width:1100px){main{padding-bottom:90px}}
+
+/* ---------- backtest ---------- */
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.toolbar .spacer{flex:1}
+.kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:560px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{padding:14px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);margin:0 -1px -1px 0}
+.kpi b{display:block;font-size:1.35rem;font-weight:800;letter-spacing:-.01em}
+.kpi span{font-size:.78rem;color:var(--muted)}
+.kpi.lead b{font-size:1.7rem}
 .chart-box{position:relative;height:260px}
-.chart-box.short{height:140px}
-.chart-box.tall{height:320px}
-.page-head{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-.page-head h1{font-size:1.9rem;letter-spacing:-.02em}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.stat b{display:block;font-family:var(--display);font-size:1.45rem}
-.stat span{font-size:.8rem;color:var(--muted)}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media (max-width:900px){.grid-2{grid-template-columns:1fr}}
-.heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:4px}
-.heat div{border-radius:6px;padding:6px 4px;text-align:center;font-size:.74rem;line-height:1.25}
-.heat small{display:block;opacity:.8}
-.table-wrap{overflow-x:auto}
+.chart-box.tall{height:340px}
+.chart-box.short{height:130px}
+@media (max-width:560px){.chart-box.tall{height:260px}.chart-box{height:220px}}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:900px){.two{grid-template-columns:minmax(0,1fr)}}
+.meter{display:inline-block;width:110px;height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;vertical-align:middle;margin-left:8px}
+.meter i{display:block;height:100%;background:var(--accent)}
+.heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:4px}
+.heat div{border-radius:6px;padding:6px 4px;text-align:center;font-size:.74rem;line-height:1.25;font-weight:600}
+.heat small{display:block;opacity:.75;font-weight:500}
+.table-wrap{overflow-x:auto;margin:0 -18px -18px}
 table{border-collapse:collapse;width:100%;font-size:.86rem}
-th,td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th,td{text-align:right;padding:9px 14px;border-top:1px solid var(--line);white-space:nowrap}
 th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
-th{color:var(--muted);font-weight:600}
-.empty{padding:40px 20px;text-align:center}
-.empty p{max-width:48ch;margin:8px auto 16px}
-.meter{height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden;width:140px;display:inline-block;vertical-align:middle;margin-left:8px}
-.meter i{display:block;height:100%;background:var(--indigo)}
-.grid-live{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
-@media (max-width:980px){.grid-live{grid-template-columns:1fr}}
-.sess{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;cursor:pointer;margin-top:8px}
-.sess[aria-current="true"]{border-color:var(--indigo);background:var(--indigo-soft)}
-.sess b{display:block}
-.badge{font-size:.72rem;font-weight:700;border-radius:4px;padding:1px 6px}
+th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78rem}
+.empty{text-align:center;padding:44px 20px}
+.empty svg{width:44px;height:44px;color:var(--muted);margin-bottom:10px}
+.empty p{max-width:46ch;margin:8px auto 16px;color:var(--muted)}
+.skeleton{background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%;animation:sh 1.2s infinite;border-radius:10px;height:320px}
+@keyframes sh{to{background-position:-200% 0}}
+
+/* ---------- live ---------- */
+.sess-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px}
+.sess{flex:none;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;cursor:pointer;min-width:180px}
+.sess[aria-current="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.sess b{display:block;font-size:.92rem}
+.badge{font-size:.7rem;font-weight:800;border-radius:4px;padding:1px 6px}
 .badge.running{background:var(--up-soft);color:var(--up)}
 .badge.stopped{background:var(--surface-2);color:var(--muted)}
-.badge.paused{background:var(--marigold-soft);color:var(--marigold)}
-.grid-paper{display:grid;grid-template-columns:minmax(0,8fr) minmax(0,4fr);gap:16px;align-items:start}
-@media (max-width:1100px){.grid-paper{grid-template-columns:1fr}}
-.acct div{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.badge.paused{background:var(--warn-soft);color:var(--warn)}
+.live-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
+@media (max-width:1000px){.live-grid{grid-template-columns:minmax(0,1fr)}}
+.acct div{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .acct div:last-child{border:0}
-.log{max-height:300px;overflow:auto;font-size:.84rem}
-.log p{margin:0;padding:6px 0;border-bottom:1px solid var(--line)}
-.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-@media (max-width:900px){.plans{grid-template-columns:1fr}}
+.log{max-height:320px;overflow:auto;font-size:.85rem}
+.log p{padding:8px 0;border-bottom:1px solid var(--line)}
+.dot-live{display:inline-flex;align-items:center;gap:6px;font-size:.84rem;color:var(--muted)}
+.dot-live i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot-live.on i{background:var(--up);box-shadow:0 0 0 4px var(--up-soft)}
+
+/* ---------- plans + account ---------- */
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:stretch}
+@media (max-width:900px){.plans{grid-template-columns:minmax(0,1fr)}}
 .plan{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column}
-.plan.featured{border:2px solid var(--indigo)}
-.plan h2{font-size:1.4rem}
-.price{font-family:var(--display);font-size:2.2rem;font-weight:700;margin:8px 0 2px}
+.plan.featured{border:2px solid var(--accent)}
+.plan h2{font-size:1.2rem}
+.plan .who{color:var(--muted);font-size:.88rem;margin-top:2px}
+.price{font-size:2.2rem;font-weight:800;letter-spacing:-.02em;margin:14px 0 0}
 .price small{font-size:.9rem;font-weight:500;color:var(--muted)}
-.plan ul{padding-left:1.1em;margin:14px 0 18px;flex:1}
-.plan li{margin:5px 0}
-.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 16px;display:flex;gap:12px;align-items:center;z-index:50;max-width:calc(100% - 32px);box-shadow:0 8px 30px rgba(0,0,0,.25)}
-.toast .btn{background:var(--bg);color:var(--ink);border:0}
-.login{min-height:100vh;display:grid;place-items:center;padding:20px}
-.login-card{max-width:520px}
-.login-card h1{font-size:clamp(2rem,6vw,3rem);letter-spacing:-.03em;margin:20px 0 12px}
-.login-card p{color:var(--muted);font-size:1.05rem;margin:0 0 24px}
-.gbtn{display:inline-flex;align-items:center;gap:10px;padding:12px 18px;font-size:1rem}
-.banner{background:var(--marigold-soft);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:.9rem}
-@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+.plan ul{list-style:none;padding:0;margin:16px 0 20px;flex:1}
+.plan li{padding:6px 0 6px 24px;position:relative;font-size:.92rem}
+.plan li::before{content:"";position:absolute;left:2px;top:11px;width:12px;height:7px;border-left:2px solid var(--up);border-bottom:2px solid var(--up);transform:rotate(-45deg)}
+.check-list div{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.check-list div:last-child{border:0}
+.check-list i{flex:none;width:18px;height:18px;border-radius:50%;margin-top:2px;background:var(--surface-2)}
+.check-list i.ok{background:var(--up)}
+.check-list i.bad{background:var(--down)}
+.check-list i.wait{background:var(--warn)}
+.check-list b{display:block;font-size:.92rem}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 14px;display:flex;gap:12px;align-items:center;z-index:50;max-width:calc(100% - 28px);box-shadow:var(--shadow);font-size:.92rem}
+@media (max-width:1100px){.toast{bottom:84px}}
+@media (max-width:820px){.toast{bottom:146px}}
+.toast .btn{height:30px;background:var(--bg);color:var(--ink);border:0}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 
+<div class="boot" id="bootView"><div><div class="spinner"></div>Loading StratLab</div></div>
+
 <!-- LOGIN -->
 <section class="login" id="loginView" hidden>
-  <div class="login-card">
-    <div class="brand"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="7" fill="var(--ink)"/><path d="M5 17 L10 12 L14 15 L21 7" stroke="var(--bg)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21" cy="7" r="2.2" fill="var(--marigold)"/></svg>StratLab</div>
+  <div class="login-l">
+    <div class="brand"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="7" fill="var(--accent)"/><path d="M5 17 L10 12 L14 15 L21 7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>StratLab</div>
     <h1>Test your trading idea before your money does.</h1>
     <p>Write a strategy in plain words, backtest it on NSE history, then paper trade it on the live market with fake capital.</p>
-    <button class="btn primary gbtn" id="googleBtn"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
-    <p class="small" style="margin-top:16px">Free plan: 5 backtests a month and a 24-hour live paper trading trial. Paper trading only, no real orders.</p>
+    <button class="gbtn" id="googleBtn"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
+    <p class="fine">Free plan: 5 backtests a month and a 24-hour live paper trading trial. Paper trading only; no real orders are placed.</p>
+    <p class="fine down" id="loginErr" hidden></p>
+  </div>
+  <div class="login-r" aria-hidden="true">
+    <svg viewBox="0 0 460 360">
+      <rect x="0" y="0" width="460" height="360" rx="16" fill="var(--surface-2)"/>
+      <text x="24" y="38" font-family="Hanken Grotesk, sans-serif" font-size="13" font-weight="700" fill="var(--muted)">EMA 20 crosses above EMA 50 on NIFTY 50</text>
+      <g stroke="var(--line)" stroke-width="1"><line x1="24" x2="436" y1="90" y2="90"/><line x1="24" x2="436" y1="150" y2="150"/><line x1="24" x2="436" y1="210" y2="210"/><line x1="24" x2="436" y1="270" y2="270"/></g>
+      <path d="M24 250 L60 238 L92 246 L124 214 L156 222 L188 190 L220 198 L252 160 L284 172 L316 132 L348 146 L380 108 L412 118 L436 92" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M24 252 C90 244, 150 226, 210 204 S320 150, 436 108" fill="none" stroke="var(--accent)" stroke-width="2"/>
+      <path d="M24 258 C110 252, 190 236, 260 212 S360 168, 436 130" fill="none" stroke="var(--warn)" stroke-width="2"/>
+      <path d="M124 228 l7 12 h-14z" fill="var(--up)"/><path d="M316 146 l7 12 h-14z" fill="var(--up)"/>
+      <path d="M284 158 l7 -12 h-14z" fill="var(--down)"/>
+      <rect x="24" y="296" width="126" height="44" rx="8" fill="var(--surface)"/><text x="36" y="316" font-family="Hanken Grotesk, sans-serif" font-size="17" font-weight="800" fill="var(--up)">+18.4%</text><text x="36" y="332" font-family="Hanken Grotesk, sans-serif" font-size="11" fill="var(--muted)">Strategy return</text>
+      <rect x="166" y="296" width="126" height="44" rx="8" fill="var(--surface)"/><text x="178" y="316" font-family="Hanken Grotesk, sans-serif" font-size="17" font-weight="800" fill="var(--down)">−6.2%</text><text x="178" y="332" font-family="Hanken Grotesk, sans-serif" font-size="11" fill="var(--muted)">Max drawdown</text>
+      <rect x="308" y="296" width="128" height="44" rx="8" fill="var(--surface)"/><text x="320" y="316" font-family="Hanken Grotesk, sans-serif" font-size="17" font-weight="800" fill="var(--ink)">54%</text><text x="320" y="332" font-family="Hanken Grotesk, sans-serif" font-size="11" fill="var(--muted)">Win rate</text>
+    </svg>
   </div>
 </section>
 
@@ -184,182 +311,173 @@ th{color:var(--muted);font-weight:600}
 <div id="appView" hidden>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="7" fill="var(--ink)"/><path d="M5 17 L10 12 L14 15 L21 7" stroke="var(--bg)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21" cy="7" r="2.2" fill="var(--marigold)"/></svg>StratLab</div>
-    <nav class="tabs" role="tablist" aria-label="Pages">
-      <button class="tab" role="tab" data-page="build" aria-selected="true">Build</button>
-      <button class="tab" role="tab" data-page="backtest" aria-selected="false">Backtest</button>
-      <button class="tab" role="tab" data-page="live" aria-selected="false">Live paper trading</button>
-      <button class="tab" role="tab" data-page="plans" aria-selected="false">Plans</button>
-      <button class="tab" role="tab" data-page="account" aria-selected="false">Account</button>
+    <div class="brand"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="7" fill="var(--accent)"/><path d="M5 17 L10 12 L14 15 L21 7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>StratLab</div>
+    <nav class="desk-nav" aria-label="Main">
+      <button class="navbtn" data-page="build">Build</button>
+      <button class="navbtn" data-page="backtest">Backtest</button>
+      <button class="navbtn" data-page="live">Paper trade</button>
+      <button class="navbtn" data-page="plans">Plans</button>
+      <button class="navbtn" data-page="account">Account</button>
     </nav>
-    <div class="top-right">
-      <span class="status-dot" id="dataStatus"><i></i><span>Checking data</span></span>
+    <div class="top-r">
+      <span class="status" id="dataStatus"><i></i><span>Checking data</span></span>
+      <button class="iconbtn" id="themeBtn" aria-label="Switch to dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
       <button class="plan-pill" id="planPill" data-goto="plans">Free</button>
     </div>
   </div>
 </header>
 
 <main>
-<div class="banner" id="offlineBanner" hidden>Market data is offline right now. Backtests and live sessions will work again once today's Kite login is done.</div>
+<div class="banner" id="offlineBanner" hidden><span id="offlineText">Market data is offline. Backtests and paper trading resume after today's Kite login.</span><button class="btn sm" data-goto="account">Run connection check</button></div>
 
 <!-- BUILD -->
 <section class="page" id="page-build">
-  <div class="grid-build">
+  <div class="name-row">
+    <input class="name-input" id="sName" maxlength="80" aria-label="Strategy name">
+    <select id="savedSel" aria-label="Open a saved strategy" style="max-width:200px"><option value="">Open saved…</option></select>
+    <button class="btn sm" id="newBtn">New</button>
+    <button class="btn sm primary" id="saveBtn">Save</button>
+    <button class="btn sm ghost danger" id="delBtn" hidden>Delete</button>
+  </div>
+  <div class="build">
     <div class="stack">
-      <div class="panel">
-        <div class="head"><h2>Strategy</h2>
-          <div class="row">
-            <select id="savedSel" aria-label="Saved strategies"><option value="">Saved strategies</option></select>
-            <button class="btn sm" id="newBtn">New</button>
-            <button class="btn sm" id="saveBtn">Save</button>
-            <button class="btn sm danger" id="delBtn" hidden>Delete</button>
-          </div>
+      <section class="card step" data-n="1">
+        <div class="card-h"><h2>Instrument and candles</h2>
+          <div class="seg" id="tfSeg" role="group" aria-label="Candle size"><button data-tf="1d">1 day</button><button data-tf="1h">1 hour</button><button data-tf="15m">15 min</button><button data-tf="5m">5 min</button></div>
         </div>
-        <div class="row">
-          <label>Name<input id="sName" maxlength="80"></label>
-          <label style="flex:0 1 140px">Candles<select id="sTf"><option value="1d">1 day</option><option value="1h">1 hour</option><option value="15m">15 min</option><option value="5m">5 min</option></select></label>
+        <div class="chips" id="defaultInst"></div>
+        <div class="picker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="instSearch" placeholder="Search any NSE stock, like RELIANCE or Tata Motors" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="instResults" aria-label="Search instruments">
+          <div class="results" id="instResults" role="listbox" hidden></div>
         </div>
-        <div style="margin-top:12px">
-          <label for="instSearch">Instrument</label>
-          <div class="chips" id="defaultInst" style="margin-top:6px"></div>
-          <div class="picker">
-            <input id="instSearch" placeholder="Search any NSE stock, e.g. RELIANCE or Tata" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="instResults">
-            <div class="results" id="instResults" role="listbox" hidden></div>
-          </div>
-          <div class="sel-inst" id="selInst"></div>
-        </div>
-      </div>
+        <div class="sel-inst" id="selInst" hidden></div>
+      </section>
 
-      <div class="panel">
-        <div class="head"><h2>Describe your strategy</h2></div>
-        <textarea id="sText" maxlength="2000" placeholder="Buy when 20 EMA crosses above 50 EMA. Sell when RSI goes above 70. Stop loss 2%, target 6%, risk 1% of capital."></textarea>
-        <div class="row" style="margin-top:10px;justify-content:space-between">
-          <div class="chips" id="templates"></div>
-          <div class="row">
-            <button class="btn" id="parseBtn">Turn into rules</button>
-            <button class="btn primary" id="aiBtn">Write with AI<span class="pro-tag">Pro</span></button>
-          </div>
+      <section class="card step" data-n="2">
+        <div class="card-h"><h2>Describe your idea</h2><div class="chips" id="templates"></div></div>
+        <textarea id="sText" maxlength="2000" placeholder="Buy when 20 EMA crosses above 50 EMA. Sell when RSI goes above 70. Stop loss 2%, target 6%."></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="btn" id="parseBtn">Turn into rules</button>
+          <button class="btn primary" id="aiBtn">Write rules with AI <span class="pro-tag">Pro</span></button>
         </div>
-        <p class="note muted" id="parseNote">"Turn into rules" understands simple sentences with SMA, EMA, RSI and price. The AI writer handles complex ideas and advanced indicators.</p>
+        <p class="note muted" id="parseNote">Simple sentences with SMA, EMA, RSI and price work everywhere. The AI writer understands complex ideas and advanced indicators.</p>
         <ul class="notes-list" id="aiNotes" hidden></ul>
-      </div>
+      </section>
 
-      <div class="panel">
-        <div class="head"><h2>Entry rules</h2>
-          <div class="row"><div class="seg" id="joinSeg"><button data-join="all">Match all</button><button data-join="any">Match any</button></div><button class="btn sm" data-add="entry">Add rule</button></div>
+      <section class="card step" data-n="3">
+        <div class="rules-h"><h2>Buy when</h2>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div class="seg" id="joinSeg"><button data-join="all">All match</button><button data-join="any">Any matches</button></div><button class="btn sm" data-add="entry">Add condition</button></div>
         </div>
         <div id="entryList"></div>
-        <div class="head" style="margin-top:18px"><h2>Exit rules</h2><button class="btn sm" data-add="exit">Add rule</button></div>
+        <div class="rules-h" style="margin-top:20px"><h2>Sell when</h2><button class="btn sm" data-add="exit">Add condition</button></div>
         <div id="exitList"></div>
-        <p class="note muted">Any exit rule closes the trade. Stop loss and target are checked first on every candle.</p>
-      </div>
+        <p class="note muted">Any sell condition closes the trade. Stop loss and target are checked first on every candle.</p>
+      </section>
 
-      <div class="panel">
-        <div class="head"><h2>Risk and capital</h2></div>
-        <div class="row">
-          <label>Capital (₹)<input type="number" id="rCap" min="1000" step="1000"></label>
-          <label>Risk per trade (%)<input type="number" id="rRisk" min="0.1" max="100" step="0.1"></label>
-          <label>Max capital per trade (%)<input type="number" id="rAlloc" min="1" max="100" step="1"></label>
+      <section class="card step" data-n="4">
+        <div class="card-h"><h2>Risk and capital</h2></div>
+        <div class="grid g3">
+          <label class="f">Capital (₹)<input type="number" id="rCap" min="1000" step="1000" inputmode="numeric"></label>
+          <label class="f">Risk per trade (%)<input type="number" id="rRisk" min="0.1" max="100" step="0.1" inputmode="decimal"></label>
+          <label class="f">Max capital per trade (%)<input type="number" id="rAlloc" min="1" max="100" step="1" inputmode="numeric"></label>
         </div>
-        <div class="row" style="margin-top:10px">
-          <label>Stop loss (%)<input type="number" id="rSl" min="0" step="0.1"></label>
-          <label>Target (%)<input type="number" id="rTgt" min="0" step="0.1"></label>
-          <label>Brokerage per order (₹)<input type="number" id="rBrok" min="0" step="1"></label>
-          <label>Slippage (%)<input type="number" id="rSlip" min="0" step="0.01"></label>
+        <div class="grid g4" style="margin-top:12px">
+          <label class="f">Stop loss (%)<input type="number" id="rSl" min="0" step="0.1" inputmode="decimal"></label>
+          <label class="f">Target (%)<input type="number" id="rTgt" min="0" step="0.1" inputmode="decimal"></label>
+          <label class="f">Brokerage per order (₹)<input type="number" id="rBrok" min="0" step="1" inputmode="numeric"></label>
+          <label class="f">Slippage (%)<input type="number" id="rSlip" min="0" step="0.01" inputmode="decimal"></label>
         </div>
-        <p class="note muted">Set stop loss or target to 0 to switch it off. Position size = risk amount ÷ distance to stop, capped by max capital per trade. F&amp;O quantities round down to whole lots.</p>
-      </div>
+        <p class="note muted">Set stop loss or target to 0 to turn it off. Quantity = risk amount ÷ distance to stop, capped by max capital per trade. F&amp;O rounds down to whole lots.</p>
+      </section>
     </div>
 
-    <div class="stack">
-      <div class="panel">
-        <div class="head"><h2>Strategy graph</h2><span class="muted small">How a trade flows through your rules</span></div>
+    <aside class="side stack">
+      <section class="card">
+        <div class="card-h"><h2>How a trade flows</h2></div>
         <div class="graph-wrap" id="graph"></div>
-      </div>
-      <div class="panel">
-        <div class="head"><h2>Risk at a glance</h2><span class="muted small" id="riskAt"></span></div>
+      </section>
+      <section class="card">
+        <div class="card-h"><h2>Risk per trade</h2><span class="muted small" id="riskAt"></span></div>
         <div class="facts" id="riskFacts"></div>
-      </div>
-      <div class="row" style="justify-content:flex-end">
-        <button class="btn" id="exportBtn">Export strategy<span class="pro-tag">Pro</span></button>
-        <button class="btn" id="goLive">Paper trade live</button>
-        <button class="btn primary" id="goBacktest">Backtest this strategy</button>
-      </div>
-    </div>
+        <div class="side-actions">
+          <button class="btn primary block" id="goBacktest">Backtest this strategy</button>
+          <div class="row2"><button class="btn" id="goLive">Paper trade live</button><button class="btn" id="exportBtn">Export <span class="pro-tag">Pro</span></button></div>
+        </div>
+      </section>
+    </aside>
   </div>
+  <div class="mobile-cta"><button class="btn" id="goLiveM">Paper trade</button><button class="btn primary" id="goBacktestM">Backtest</button></div>
 </section>
 
 <!-- BACKTEST -->
 <section class="page" id="page-backtest" hidden>
-  <div class="page-head">
-    <div><p class="muted" style="margin:0 0 2px" id="btSub"></p><h1 id="btName">Backtest</h1></div>
+  <div class="page-h">
+    <div><h1 id="btName">Backtest</h1><p class="muted" id="btSub"></p></div>
     <div class="small muted" id="usageBox"></div>
   </div>
-  <div class="row" style="margin-bottom:16px">
-    <label style="flex:0 1 180px">Test period<select id="btPeriod"></select></label>
+  <div class="toolbar">
+    <div class="seg" id="periodSeg" role="group" aria-label="Test period"></div>
     <button class="btn primary" id="runBt">Run backtest</button>
-    <button class="btn" id="csvBtn" disabled>Download trades CSV<span class="pro-tag">Pro</span></button>
+    <span class="spacer"></span>
     <span class="muted small" id="btMeta"></span>
+    <button class="btn sm" id="csvBtn" disabled>Download trades <span class="pro-tag">Pro</span></button>
   </div>
-  <div id="btEmpty" class="panel empty">
-    <h2>Run your first backtest</h2>
-    <p class="muted">Pick a test period and press Run backtest. Each run counts toward your monthly backtests.</p>
+  <div id="btEmpty" class="card empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
+    <h2>Pick a period and run your first backtest</h2>
+    <p>Each run uses one of your monthly backtests. Results show returns, drawdown, every trade and how it compares with simply buying and holding.</p>
   </div>
+  <div id="btLoading" hidden><div class="skeleton"></div></div>
   <div id="btResults" class="stack" hidden>
-    <p class="banner" id="btWarn" hidden></p>
-    <div class="stats" id="btStats"></div>
-    <div class="panel">
-      <div class="head"><h2>Price and trades</h2><span class="muted small">Green arrows are buys, red arrows are sells</span></div>
+    <div class="banner" id="btWarn" hidden></div>
+    <div class="kpis" id="btStats"></div>
+    <section class="card">
+      <div class="card-h"><h2>Price and trades</h2><span class="muted small">▲ buy &nbsp; ▼ sell</span></div>
       <div class="chart-box tall"><canvas id="cPrice"></canvas></div>
-      <div class="chart-box short" id="oscBox" style="margin-top:8px"><canvas id="cOsc"></canvas></div>
+      <div class="chart-box short" id="oscBox" style="margin-top:10px"><canvas id="cOsc"></canvas></div>
+    </section>
+    <div class="two">
+      <section class="card"><div class="card-h"><h2>Equity vs buy and hold</h2></div><div class="chart-box"><canvas id="cEquity"></canvas></div></section>
+      <section class="card"><div class="card-h"><h2>Drawdown</h2><span class="muted small">Fall from the last peak</span></div><div class="chart-box"><canvas id="cDd"></canvas></div></section>
     </div>
-    <div class="grid-2">
-      <div class="panel"><div class="head"><h2>Equity curve</h2><span class="muted small">Strategy vs buy and hold</span></div><div class="chart-box"><canvas id="cEquity"></canvas></div></div>
-      <div class="panel"><div class="head"><h2>Drawdown</h2><span class="muted small">Fall from the last equity peak</span></div><div class="chart-box"><canvas id="cDd"></canvas></div></div>
+    <div class="two">
+      <section class="card"><div class="card-h"><h2>Profit and loss per trade</h2></div><div class="chart-box"><canvas id="cPnl"></canvas></div></section>
+      <section class="card"><div class="card-h"><h2 id="heatTitle">Monthly returns</h2></div><div class="heat" id="heat"></div></section>
     </div>
-    <div class="grid-2">
-      <div class="panel"><div class="head"><h2>Profit and loss per trade</h2></div><div class="chart-box"><canvas id="cPnl"></canvas></div></div>
-      <div class="panel"><div class="head"><h2 id="heatTitle">Monthly returns</h2></div><div class="heat" id="heat"></div></div>
-    </div>
-    <div class="panel">
-      <div class="head"><h2>Trade log</h2><span class="muted small" id="logMeta"></span></div>
+    <section class="card">
+      <div class="card-h"><h2>Trades</h2><span class="muted small" id="logMeta"></span></div>
       <div class="table-wrap"><table><thead><tr><th>Entry</th><th>Exit</th><th>Qty</th><th>Buy ₹</th><th>Sell ₹</th><th>P&amp;L ₹</th><th>Return</th><th>Reason</th></tr></thead><tbody id="tradeRows"></tbody></table></div>
-    </div>
+    </section>
   </div>
 </section>
 
 <!-- LIVE -->
 <section class="page" id="page-live" hidden>
-  <div class="page-head">
-    <div><h1>Live paper trading</h1><p class="muted" style="margin:4px 0 0" id="liveSub"></p></div>
+  <div class="page-h">
+    <div><h1>Paper trading</h1><p class="muted" id="liveSub"></p></div>
     <button class="btn primary" id="startLive">Start current strategy</button>
   </div>
-  <div class="grid-live">
-    <div class="panel">
-      <div class="head" style="margin:0"><h2>Your sessions</h2></div>
-      <div id="sessList"><p class="muted small">No sessions yet.</p></div>
+  <div class="sess-strip" id="sessList"></div>
+  <div id="liveEmpty" class="card empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    <h2>No session selected</h2>
+    <p>Start your current strategy to trade it on live NSE prices with fake capital. Orders fire when a candle closes during market hours (9:15 am to 3:30 pm).</p>
+  </div>
+  <div id="liveView" hidden>
+    <div class="card-h" style="margin-bottom:14px">
+      <div><h2 id="lvName" style="font-size:1.25rem"></h2><p class="muted small" id="lvSub"></p></div>
+      <div style="display:flex;gap:10px;align-items:center"><span class="dot-live" id="lvFeed"><i></i><span></span></span><button class="btn danger" id="stopLive">Stop session</button></div>
     </div>
-    <div id="liveDetail">
-      <div class="panel empty" id="liveEmpty">
-        <h2>Nothing selected</h2>
-        <p class="muted">Start your current strategy, or pick a session on the left. Candles update as the market trades; orders are simulated with fake capital.</p>
+    <div class="banner" id="lvReason" hidden></div>
+    <div class="live-grid">
+      <div class="stack">
+        <section class="card"><div class="card-h"><h2>Live chart</h2><span class="small" id="lvLast"></span></div><div class="chart-box tall"><canvas id="cLive"></canvas></div></section>
+        <section class="card"><div class="card-h"><h2>Paper equity</h2></div><div class="chart-box short"><canvas id="cLiveEq"></canvas></div></section>
       </div>
-      <div id="liveView" hidden>
-        <div class="page-head" style="margin-bottom:12px">
-          <div><p class="muted small" style="margin:0" id="lvSub"></p><h2 id="lvName" style="font-size:1.4rem"></h2></div>
-          <div class="row"><span class="small muted" id="lvFeed"></span><button class="btn danger" id="stopLive">Stop session</button></div>
-        </div>
-        <p class="banner" id="lvReason" hidden></p>
-        <div class="grid-paper">
-          <div class="stack">
-            <div class="panel"><div class="head"><h2>Live chart</h2><span class="muted small" id="lvLast"></span></div><div class="chart-box tall"><canvas id="cLive"></canvas></div></div>
-            <div class="panel"><div class="head"><h2>Paper equity</h2></div><div class="chart-box short"><canvas id="cLiveEq"></canvas></div></div>
-          </div>
-          <div class="stack">
-            <div class="panel"><div class="head"><h2>Account</h2><span class="muted small">Fake capital</span></div><div class="acct" id="lvAcct"></div></div>
-            <div class="panel"><div class="head"><h2>Orders</h2></div><div class="log" id="lvLog"></div></div>
-          </div>
-        </div>
+      <div class="stack">
+        <section class="card"><div class="card-h"><h2>Account</h2><span class="muted small">Fake capital</span></div><div class="acct" id="lvAcct"></div></section>
+        <section class="card"><div class="card-h"><h2>Orders</h2></div><div class="log" id="lvLog"></div></section>
       </div>
     </div>
   </div>
@@ -367,29 +485,43 @@ th{color:var(--muted);font-weight:600}
 
 <!-- PLANS -->
 <section class="page" id="page-plans" hidden>
-  <div class="page-head"><div><h1>Plans</h1><p class="muted" style="margin:4px 0 0">Billed monthly through Razorpay. Cancel any time; your plan runs until the end of the paid month.</p></div></div>
+  <div class="page-h"><div><h1>Plans</h1><p class="muted">Billed monthly through Razorpay. Cancel any time; your plan stays active until the paid month ends.</p></div></div>
   <div class="plans" id="plansGrid"></div>
-  <p class="small muted" style="margin-top:16px">StratLab is a paper trading and research tool. It does not place real orders or give investment advice. Past performance in a backtest does not predict future returns.</p>
+  <p class="small muted" style="margin-top:16px;max-width:80ch">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past backtest results don't predict future returns.</p>
 </section>
 
 <!-- ACCOUNT -->
 <section class="page" id="page-account" hidden>
-  <div class="page-head"><h1>Account</h1><button class="btn" id="signOut">Sign out</button></div>
-  <div class="grid-2">
-    <div class="panel"><div class="head"><h2>Plan and billing</h2></div><div class="acct" id="acctPlan"></div><div class="row" style="margin-top:12px" id="acctActions"></div></div>
-    <div class="panel">
-      <div class="head"><h2>Trade alerts<span class="pro-tag">Pro</span></h2></div>
-      <p class="small muted" style="margin-top:0">Get a message whenever a live paper session buys or sells. For Telegram, open our bot and press Start, then paste your chat ID (message @userinfobot to find it).</p>
-      <label style="display:flex;align-items:center;gap:8px;margin:10px 0"><input type="checkbox" id="alEnabled"> Send alerts for live sessions</label>
-      <div class="row">
-        <label>Telegram chat ID<input id="alTg" inputmode="numeric" maxlength="40"></label>
-        <label>Alert email<input id="alEmail" type="email" maxlength="200"></label>
-      </div>
-      <div class="row" style="margin-top:12px"><button class="btn primary" id="alSave">Save alerts</button><button class="btn" id="alTest">Send test alert</button></div>
+  <div class="page-h"><div><h1>Account</h1><p class="muted" id="acctEmail"></p></div><button class="btn" id="signOut">Sign out</button></div>
+  <div class="two">
+    <div class="stack">
+      <section class="card"><div class="card-h"><h2>Plan and billing</h2></div><div class="acct" id="acctPlan"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px" id="acctActions"></div></section>
+      <section class="card">
+        <div class="card-h"><h2>Connection check</h2><button class="btn sm" id="diagBtn">Run check</button></div>
+        <div class="check-list" id="diagList"><p class="muted small">Checks your sign-in, the StratLab server, market data and your account. Run it if something isn't loading.</p></div>
+      </section>
     </div>
+    <section class="card">
+      <div class="card-h"><h2>Trade alerts <span class="pro-tag">Pro</span></h2></div>
+      <p class="small muted">Get a message whenever a paper trading session buys or sells. For Telegram, open the StratLab bot and press Start, then paste your chat ID (message @userinfobot to find it).</p>
+      <label style="display:flex;align-items:center;gap:8px;margin:14px 0;font-weight:600"><input type="checkbox" id="alEnabled" style="width:18px;height:18px"> Send alerts for paper trades</label>
+      <div class="grid g2">
+        <label class="f">Telegram chat ID<input id="alTg" inputmode="numeric" maxlength="40"></label>
+        <label class="f">Alert email<input id="alEmail" type="email" maxlength="200"></label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn primary" id="alSave">Save alerts</button><button class="btn" id="alTest">Send test alert</button></div>
+    </section>
   </div>
 </section>
 </main>
+
+<nav class="bottom-nav" aria-label="Main">
+  <button data-page="build"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><circle cx="18" cy="16" r="3"/></svg>Build</button>
+  <button data-page="backtest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>Backtest</button>
+  <button data-page="live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Paper</button>
+  <button data-page="plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>Plans</button>
+  <button data-page="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</button>
+</nav>
 </div>
 
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button class="btn sm" id="toastAct" hidden></button></div>
@@ -404,7 +536,7 @@ const inr = (v, dp = 0) => v == null ? "–" : (v < 0 ? "−" : "") + "₹" + Ma
 const pct = (v, dp = 1) => v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(dp) + "%";
 const cls = v => v > 0 ? "up" : v < 0 ? "down" : "";
 const charts = {};
-const state = {me: null, page: "build", strategyId: null, instrument: null, defaults: [], lastBt: null, liveId: null, pollTimer: null, ltp: {}};
+const state = {btDays: "365", me: null, page: "build", strategyId: null, instrument: null, defaults: [], lastBt: null, liveId: null, pollTimer: null, ltp: {}};
 
 class ApiError extends Error {}
 async function api(path, {method = "GET", body, raw = false} = {}){
@@ -437,35 +569,60 @@ function handleErr(e){
 }
 function busy(btn, on, label){ if(on){ btn.dataset.label = btn.innerHTML; btn.disabled = true; btn.textContent = label; } else { btn.disabled = false; btn.innerHTML = btn.dataset.label || btn.innerHTML; } }
 const isPro = () => state.me && state.me.plan_info.pro_features;
-function setData(online){ $("dataStatus").className = "status-dot" + (online ? " on" : ""); $("dataStatus").lastElementChild.textContent = online ? "Market data online" : "Market data offline"; $("offlineBanner").hidden = online; }
+function setData(online, text){
+  $("dataStatus").className = "status" + (online ? " on" : "");
+  $("dataStatus").lastElementChild.textContent = online ? "Market data online" : "Market data offline";
+  $("offlineBanner").hidden = online;
+  if(text) $("offlineText").textContent = text;
+}
 
 /* ================= auth ================= */
-function showLogin(){ $("loginView").hidden = false; $("appView").hidden = true; stopPoll(); }
+function showLogin(){ $("bootView").hidden = true; $("loginView").hidden = false; $("appView").hidden = true; stopPoll(); }
+function oauthError(){
+  const p = new URLSearchParams(location.search + "&" + location.hash.replace(/^#/, ""));
+  const d = p.get("error_description");
+  if(!d) return;
+  $("loginErr").hidden = false;
+  $("loginErr").textContent = /exchange external code/i.test(d)
+    ? "Google sign-in couldn't finish: the Google Client ID or Secret saved in Supabase doesn't match your Google Cloud OAuth client."
+    : `Sign-in failed: ${d}`;
+  history.replaceState(null, "", location.pathname);
+}
 $("googleBtn").onclick = () => sb.auth.signInWithOAuth({provider: "google", options: {redirectTo: location.origin + location.pathname}});
 $("signOut").onclick = async () => { await sb.auth.signOut(); showLogin(); };
 sb.auth.onAuthStateChange((ev, session) => { if(ev === "SIGNED_OUT") showLogin(); });
 
 async function boot(){
   const {data: {session}} = await sb.auth.getSession();
-  if(!session) return showLogin();
-  $("loginView").hidden = true; $("appView").hidden = false;
+  if(!session){ showLogin(); oauthError(); return; }
+  $("bootView").hidden = true; $("loginView").hidden = true; $("appView").hidden = false;
+  go(state.page);
   try { await loadMe(); } catch(e){
-    handleErr(e); setData(false);
+    handleErr(e); setData(false, "StratLab couldn't load your account: " + e.message);
     const { data: { user } } = await sb.auth.getUser();
     $("planPill").textContent = user ? user.email : "Signed in";
     fillForm(); renderBuild(); return;
   }
   fillForm(); renderBuild(); refreshSaved();
+  loadDefaults();
+}
+async function loadDefaults(){
+  $("defaultInst").innerHTML = `<span class="muted small">Loading indices…</span>`;
   try {
     state.defaults = await api("/instruments/defaults");
     if(!state.instrument && state.defaults.length) selectInstrument(state.defaults[0]);
     renderDefaults();
-  } catch(e){ renderDefaults(); }
+  } catch(e){
+    state.defaults = [];
+    $("defaultInst").innerHTML = `<span class="small down">${esc(e.message)}</span> <button class="btn sm" id="retryDefaults">Retry</button>`;
+    $("retryDefaults").onclick = loadDefaults;
+  }
 }
 async function loadMe(){
   state.me = await api("/me");
   const p = state.me.plan;
   $("planPill").textContent = state.me.plan_info.name;
+  $("acctEmail").textContent = state.me.email || "";
   $("planPill").className = "plan-pill" + (p === "pro" ? " pro" : "");
   setData(state.me.data_online);
   document.querySelectorAll(".pro-tag").forEach(t => t.hidden = isPro());
@@ -475,15 +632,36 @@ async function loadMe(){
 /* ================= navigation ================= */
 function go(page){
   state.page = page;
-  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.page === page));
+  document.querySelectorAll("[data-page]").forEach(t => { if(t.dataset.page === page) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current"); });
   ["build","backtest","live","plans","account"].forEach(p => $("page-" + p).hidden = p !== page);
   if(page !== "live") stopPoll();
   if(page === "build") renderBuild();
-  if(page === "backtest") renderBacktestHead();
+  if(page === "backtest"){ renderBacktestHead(); if(state.lastBt && !charts.cPrice) renderBacktest(state.lastBt); }
   if(page === "live") openLive();
   window.scrollTo({top: 0});
 }
-document.querySelectorAll(".tab").forEach(t => t.onclick = () => go(t.dataset.page));
+document.querySelectorAll("[data-page]").forEach(t => t.onclick = () => go(t.dataset.page));
+const TF_NAME = {"1d": "daily", "1h": "1-hour", "15m": "15-minute", "5m": "5-minute"};
+/* theme */
+function applyThemeIcon(){
+  const dark = document.documentElement.dataset.theme === "dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+  $("themeBtn").setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+  $("themeBtn").innerHTML = dark
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+}
+function redrawCharts(){
+  Object.keys(charts).forEach(k => { charts[k].destroy(); delete charts[k]; });
+  if(state.page === "backtest" && state.lastBt) renderBacktest(state.lastBt);
+  if(state.page === "live" && state.liveId) showSession(state.liveId);
+}
+$("themeBtn").onclick = () => {
+  const dark = $("themeBtn").getAttribute("aria-label").includes("light");
+  const next = dark ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("stratlab-theme", next); } catch(e){}
+  applyThemeIcon(); redrawCharts();
+};
 document.addEventListener("click", e => { const g = e.target.closest("[data-goto]"); if(g) go(g.dataset.goto); });
 
 /* ================= strategy model ================= */
@@ -566,12 +744,13 @@ function parseStrategyText(raw){
 /* ================= build page ================= */
 const RISK_FIELDS = {rCap: "capital", rRisk: "riskPct", rAlloc: "maxAlloc", rSl: "sl", rTgt: "tgt", rBrok: "brokerage", rSlip: "slippage"};
 function fillForm(){
-  $("sName").value = S.name; $("sTf").value = S.tf; $("sText").value = S.text || "";
+  $("sName").value = S.name; $("sText").value = S.text || "";
+  document.querySelectorAll("#tfSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.tf === S.tf));
   for(const [id, k] of Object.entries(RISK_FIELDS)) $(id).value = S.risk[k];
   $("delBtn").hidden = !state.strategyId;
 }
 $("sName").oninput = e => { S.name = e.target.value || "Untitled strategy"; };
-$("sTf").onchange = e => { S.tf = e.target.value; renderGraph(); };
+$("tfSeg").onclick = e => { const b = e.target.closest("[data-tf]"); if(!b) return; S.tf = b.dataset.tf; fillForm(); renderGraph(); };
 $("sText").oninput = e => { S.text = e.target.value; };
 for(const [id, k] of Object.entries(RISK_FIELDS)) $(id).addEventListener("input", e => { const v = parseFloat(e.target.value); if(!isNaN(v) && v >= 0){ S.risk[k] = v; renderGraph(); renderRiskFacts(); } });
 $("templates").innerHTML = Object.keys(TEMPLATES).map(k => `<button class="chip" data-tpl="${esc(k)}">${esc(k)}</button>`).join("");
@@ -629,22 +808,22 @@ const opts = (list, v) => list.map(([k, n]) => `<option value="${k}"${k === v ? 
 function condRow(c, list, i){
   const lHas = c.l.t !== "price", rHas = c.r.t !== "price";
   const rv = c.r.t === "num" ? c.r.v : (c.r.p ?? "");
-  return `<div class="cond" data-list="${list}" data-idx="${i}">
+  return `<div class="rule" data-list="${list}" data-idx="${i}">
     <select data-f="lt" aria-label="Indicator">${indOpts(c.l.t)}</select>
     <input data-f="lp" type="number" min="1" max="500" value="${c.l.p ?? ""}" class="${lHas ? "" : "ghost"}" aria-label="Period" title="Period">
-    <select data-f="op" aria-label="Condition">${opts(OPS, c.op)}</select>
+    <select data-f="op" class="op" aria-label="Condition">${opts(OPS, c.op)}</select>
     <select data-f="rt" aria-label="Compare with">${indOpts(c.r.t)}<option value="num"${c.r.t === "num" ? " selected" : ""}>Value</option></select>
     <input data-f="rp" type="number" step="any" value="${rv}" class="${rHas ? "" : "ghost"}" aria-label="Period or value" title="${c.r.t === "num" ? "Value" : "Period"}">
-    <button class="icon" data-act="del" aria-label="Remove rule">×</button></div>`;
+    <button class="icon" data-act="del" aria-label="Remove condition"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>`;
 }
 function renderRules(){
   if(!S) return;
-  $("entryList").innerHTML = S.entry.length ? S.entry.map((c, i) => condRow(c, "entry", i)).join("") : `<div class="cond-empty">No entry rules. Add one, or describe your idea above.</div>`;
-  $("exitList").innerHTML = S.exit.length ? S.exit.map((c, i) => condRow(c, "exit", i)).join("") : `<div class="cond-empty">No exit rules. Trades close only on stop loss or target.</div>`;
+  $("entryList").innerHTML = S.entry.length ? S.entry.map((c, i) => condRow(c, "entry", i)).join("") : `<div class="empty-rule">No buy conditions yet. Add one, or describe your idea above and turn it into rules.</div>`;
+  $("exitList").innerHTML = S.exit.length ? S.exit.map((c, i) => condRow(c, "exit", i)).join("") : `<div class="empty-rule">No sell conditions. Trades close only on stop loss or target.</div>`;
   document.querySelectorAll("#joinSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.join === S.entryJoin));
 }
 function onCondChange(e){
-  const row = e.target.closest(".cond"); if(!row) return;
+  const row = e.target.closest(".rule"); if(!row) return;
   const c = S[row.dataset.list][+row.dataset.idx], f = e.target.dataset.f, v = e.target.value;
   if(f === "lt") c.l = mkRef(v);
   else if(f === "lp"){ const n = parseInt(v); if(n >= 1) c.l.p = n; else return; }
@@ -655,7 +834,7 @@ function onCondChange(e){
   renderGraph();
 }
 ["entryList","exitList"].forEach(id => { $(id).addEventListener("change", onCondChange); $(id).addEventListener("click", e => {
-  const b = e.target.closest("[data-act=del]"); if(!b) return; const row = b.closest(".cond");
+  const b = e.target.closest("[data-act=del]"); if(!b) return; const row = b.closest(".rule");
   S[row.dataset.list].splice(+row.dataset.idx, 1); renderBuild(); }); });
 document.querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
   S[b.dataset.add].push(b.dataset.add === "entry" ? {l: {t: "price"}, op: "gt", r: {t: "sma", p: 50}} : {l: {t: "rsi", p: 14}, op: "gt", r: {t: "num", v: 70}});
@@ -675,7 +854,11 @@ function renderDefaults(){
 $("defaultInst").onclick = e => { const b = e.target.closest("[data-tok]"); if(!b) return; selectInstrument(state.defaults.find(i => i.token === +b.dataset.tok)); };
 function selectInstrument(i){
   state.instrument = i;
-  $("selInst").innerHTML = i ? `Selected: <strong>${esc(i.symbol)}</strong> <span class="muted">${esc(i.name !== i.symbol ? i.name : "")} ${esc(instLabel(i).split("·")[1] || "")}</span>` : "";
+  $("selInst").hidden = !i;
+  if(i){
+    const kind = i.type === "INDEX" ? "Index" : i.type === "EQ" ? "NSE" : i.type === "FUT" ? `Future, lot ${i.lot}` : `${i.type} ${i.strike ?? ""}, lot ${i.lot}`;
+    $("selInst").innerHTML = `<b>${esc(i.symbol)}</b><span class="tag">${esc(kind)}</span><span class="muted small">${esc(i.name !== i.symbol ? i.name : "")}${i.expiry ? " exp " + esc(i.expiry) : ""}</span><span class="px" id="selPx">${state.ltp[i.token] != null ? inr(state.ltp[i.token], 2) : ""}</span>`;
+  }
   renderDefaults(); renderGraph(); loadLtp();
 }
 let searchTimer, lastResults = [];
@@ -702,6 +885,7 @@ async function loadLtp(){
   if(state.ltp[i.token] == null){
     try { state.ltp[i.token] = (await api(`/instruments/${i.token}/ltp`)).ltp; } catch(e){ state.ltp[i.token] = null; }
   }
+  if($("selPx") && state.instrument === i) $("selPx").textContent = state.ltp[i.token] != null ? inr(state.ltp[i.token], 2) : "";
   renderRiskFacts();
 }
 
@@ -762,31 +946,33 @@ function renderGraph(){
   const tfName = {"1d": "Daily", "1h": "1 hour", "15m": "15 min", "5m": "5 min"}[S.tf];
   const cols = [
     {title: "Market data", nodes: [{a: inst ? inst.symbol : "No instrument", b: tfName + " candles", k: inst ? "data" : "warn"}]},
-    {title: S.entry.length > 1 ? `Entry (${S.entryJoin === "any" ? "any one" : "all must match"})` : "Entry",
-      nodes: S.entry.length ? S.entry.map(c => ({a: refName(c.l), b: `${OP_NAME[c.op]} ${refName(c.r)}`, k: "entry"})) : [{a: "No entry rule", b: "Add one to start", k: "warn"}]},
+    {title: S.entry.length > 1 ? `Buy when ${S.entryJoin === "any" ? "any one matches" : "all match"}` : "Buy when",
+      nodes: S.entry.length ? S.entry.map(c => ({a: refName(c.l), b: `${OP_NAME[c.op]} ${refName(c.r)}`, k: "entry"})) : [{a: "No buy condition", b: "Add one to start", k: "warn"}]},
     {title: "Position size", nodes: [{a: `Risk ${r.riskPct}% of capital`, b: r.sl > 0 ? `Stop ${r.sl}% away sets qty` : `Uses up to ${r.maxAlloc}% capital`, k: "size"}]},
-    {title: "Exit", nodes: [
+    {title: "Sell when", nodes: [
       ...(r.sl > 0 ? [{a: `Stop loss −${r.sl}%`, b: "Checked first", k: "down"}] : []),
       ...(r.tgt > 0 ? [{a: `Target +${r.tgt}%`, b: "Book profit", k: "up"}] : []),
       ...S.exit.map(c => ({a: refName(c.l), b: `${OP_NAME[c.op]} ${refName(c.r)}`, k: "rule"}))]}
   ];
   if(!cols[3].nodes.length) cols[3].nodes.push({a: "No exit set", b: "Trade never closes", k: "warn"});
-  const W = 760, NW = 160, NH = 46, GAP = 14, TOP = 34, xs = [10, 205, 400, 590];
-  const maxN = Math.max(...cols.map(c => c.nodes.length));
-  const H = TOP + maxN*(NH + GAP) + 10;
-  const style = {data: ["var(--surface)","var(--ink)"], entry: ["var(--indigo-soft)","var(--indigo)"], size: ["var(--surface)","var(--muted)"], down: ["var(--down-soft)","var(--down)"], up: ["var(--up-soft)","var(--up)"], rule: ["var(--marigold-soft)","var(--marigold)"], warn: ["var(--surface)","var(--down)"]};
-  const pos = cols.map((c, ci) => { const total = c.nodes.length*(NH+GAP) - GAP; const y0 = TOP + (maxN*(NH+GAP) - GAP - total)/2; return c.nodes.map((n, ni) => ({x: xs[ci], y: y0 + ni*(NH+GAP), n})); });
-  let edges = "";
-  for(let ci = 0; ci < 3; ci++) for(const a of pos[ci]) for(const b of pos[ci+1]){
-    const x1 = a.x + NW, y1 = a.y + NH/2, x2 = b.x, y2 = b.y + NH/2, mx = (x1 + x2)/2;
-    edges += `<path class="g-edge" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`;
-  }
+  const W = 360, X = 38, NW = W - X - 6, NH = 40, style = {data: ["var(--surface)","var(--line-strong)"], entry: ["var(--accent-soft)","var(--accent)"], size: ["var(--surface)","var(--line-strong)"], down: ["var(--down-soft)","var(--down)"], up: ["var(--up-soft)","var(--up)"], rule: ["var(--warn-soft)","var(--warn)"], warn: ["var(--surface)","var(--down)"]};
   const trunc = (t, n) => t.length > n ? t.slice(0, n-1) + "…" : t;
-  let nodes = "";
-  pos.forEach(col => col.forEach(p => { const [f, st] = style[p.n.k];
-    nodes += `<g class="g-node"><rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="9" fill="${f}" stroke="${st}" stroke-width="1.5"/><text x="${p.x+12}" y="${p.y+19}" font-size="13" font-weight="600">${esc(trunc(p.n.a, 21))}</text><text class="sub" x="${p.x+12}" y="${p.y+35}">${esc(trunc(p.n.b, 26))}</text></g>`; }));
-  const titles = cols.map((c, i) => `<text class="g-col" x="${xs[i]}" y="18">${esc(c.title)}</text>`).join("");
-  $("graph").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Strategy flow from market data through entry rules and position sizing to exits">${titles}${edges}${nodes}</svg>`;
+  let y = 6, out = "", dots = [];
+  cols.forEach((c, ci) => {
+    dots.push(y + 8);
+    out += `<text class="g-col" x="${X}" y="${y + 12}">${esc(c.title)}</text>`;
+    y += 20;
+    c.nodes.forEach(n => {
+      const [f, st] = style[n.k];
+      out += `<g class="g-node"><rect x="${X}" y="${y}" width="${NW}" height="${NH}" rx="8" fill="${f}" stroke="${st}" stroke-width="1.2"/><text x="${X+12}" y="${y+17}" font-size="12.5" font-weight="700">${esc(trunc(n.a, 40))}</text><text class="sub" x="${X+12}" y="${y+31}">${esc(trunc(n.b, 48))}</text></g>`;
+      y += NH + 6;
+    });
+    y += 12;
+  });
+  const H = y - 8;
+  let spine = `<line x1="16" x2="16" y1="${dots[0]}" y2="${dots[dots.length-1]}" stroke="var(--line-strong)" stroke-width="2"/>`;
+  dots.forEach((d, k) => { spine += `<circle cx="16" cy="${d}" r="9" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/><text x="16" y="${d+3.6}" text-anchor="middle" font-size="10" font-weight="800" fill="var(--accent)" font-family="Hanken Grotesk, sans-serif">${k+1}</text>`; });
+  $("graph").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Strategy flow: market data, buy conditions, position size, then exits">${spine}${out}</svg>`;
 }
 function renderRiskFacts(){
   if(!S) return;
@@ -795,7 +981,7 @@ function renderRiskFacts(){
   const streak = r.riskPct > 0 && r.riskPct < 100 ? Math.ceil(Math.log(0.8)/Math.log(1 - r.riskPct/100)) : "–";
   if(!px){
     $("riskAt").textContent = i ? "Live price unavailable" : "Pick an instrument";
-    $("riskFacts").innerHTML = fact(inr(r.capital*r.riskPct/100), "Max risk per trade") + fact(r.sl > 0 && r.tgt > 0 ? `1 : ${(r.tgt/r.sl).toFixed(1)}` : "–", "Risk to reward") + fact(streak, "Losing trades in a row to lose 20%");
+    $("riskFacts").innerHTML = fact(inr(r.capital), "Capital") + fact(inr(r.capital*r.riskPct/100), "Max risk per trade") + fact(r.sl > 0 && r.tgt > 0 ? `1 : ${(r.tgt/r.sl).toFixed(1)}` : "–", "Risk to reward") + fact(streak, "Losses in a row to lose 20%");
     return;
   }
   const lot = i.fno ? i.lot : 1, slp = r.sl/100;
@@ -810,14 +996,14 @@ function renderRiskFacts(){
     fact(r.sl > 0 ? inr(-loss) : "No stop", "Loss if stop hits", "down") +
     fact(gain !== null ? inr(gain) : "No target", "Gain if target hits", "up") +
     fact(r.sl > 0 && r.tgt > 0 ? `1 : ${(r.tgt/r.sl).toFixed(1)}` : "–", "Risk to reward") +
-    fact(streak, "Losing trades in a row to lose 20%");
+    fact(streak, "Losses in a row to lose 20%");
 }
 function renderBuild(){ renderRules(); renderGraph(); renderRiskFacts(); }
 
 /* ================= charts ================= */
-function css(){ const g = getComputedStyle(document.documentElement); const v = n => g.getPropertyValue(n).trim(); return {ink: v("--ink"), muted: v("--muted"), line: v("--line"), indigo: v("--indigo"), up: v("--up"), down: v("--down"), marigold: v("--marigold")}; }
+function css(){ const g = getComputedStyle(document.documentElement); const v = n => g.getPropertyValue(n).trim(); return {ink: v("--ink"), muted: v("--muted"), line: v("--line"), indigo: v("--accent"), up: v("--up"), down: v("--down"), marigold: v("--warn")}; }
 function alpha(hex, a){ const h = hex.replace("#",""); const n = parseInt(h.length === 3 ? h.split("").map(x => x+x).join("") : h, 16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
-const FONT = "Figtree, system-ui, sans-serif";
+const FONT = "Hanken Grotesk, system-ui, sans-serif";
 function baseOpts(extra = {}){
   const c = css();
   return Object.assign({responsive: true, maintainAspectRatio: false, animation: false, interaction: {mode: "index", intersect: false},
@@ -869,22 +1055,25 @@ function renderUsage(){
 function renderBacktestHead(){
   if(!S) return;
   $("btName").textContent = S.name;
-  $("btSub").textContent = state.instrument ? `${state.instrument.symbol}, ${$("sTf").selectedOptions[0].text.toLowerCase()} candles, ${inr(S.risk.capital)} capital` : "Pick an instrument on the Build page";
-  const list = PERIODS[S.tf], cur = $("btPeriod").value;
-  $("btPeriod").innerHTML = opts(list, list.some(p => p[0] === cur) ? cur : list[1][0]);
+  $("btSub").textContent = state.instrument ? `${state.instrument.symbol} on ${TF_NAME[S.tf]} candles with ${inr(S.risk.capital)} capital` : "Pick an instrument on the Build page first.";
+  const list = PERIODS[S.tf];
+  if(!list.some(p => p[0] === state.btDays)) state.btDays = list[1][0];
+  $("periodSeg").innerHTML = list.map(([d, n]) => `<button data-days="${d}" aria-pressed="${d === state.btDays}">${n}</button>`).join("");
   $("csvBtn").disabled = !state.lastBt;
   renderUsage();
 }
+$("periodSeg").onclick = e => { const b = e.target.closest("[data-days]"); if(!b) return; state.btDays = b.dataset.days; renderBacktestHead(); };
 $("runBt").onclick = async () => {
   if(!checkReady()) return;
   const btn = $("runBt"); busy(btn, true, "Running…");
+  $("btEmpty").hidden = true; $("btLoading").hidden = false; if(!state.lastBt) $("btResults").hidden = true;
   try {
-    const out = await api("/backtest", {method: "POST", body: {strategy: S, instrument_token: state.instrument.token, days: +$("btPeriod").value}});
+    const out = await api("/backtest", {method: "POST", body: {strategy: S, instrument_token: state.instrument.token, days: +state.btDays}});
     state.lastBt = {...out, strategy: JSON.parse(JSON.stringify(S))};
     state.me.usage = out.usage; renderUsage();
     renderBacktest(state.lastBt);
   } catch(e){ handleErr(e); }
-  finally { busy(btn, false); $("csvBtn").disabled = !state.lastBt; }
+  finally { busy(btn, false); $("btLoading").hidden = true; $("csvBtn").disabled = !state.lastBt; if(!state.lastBt) $("btEmpty").hidden = false; }
 };
 function renderBacktest(res){
   const c = css(), s = res.strategy, st = res.stats, tf = s.tf;
@@ -895,7 +1084,8 @@ function renderBacktest(res){
   if(res.warmup_short) warn.push("Limited history before this period, so long indicators (like a 200 SMA) start late.");
   if(!st.n && !res.open_trade && res.lot > 1) warn.push(`No trades: one lot is ${res.lot} units, which your risk settings can't afford. Raise capital or risk per trade.`);
   $("btWarn").hidden = !warn.length; $("btWarn").textContent = warn.join(" ");
-  const card = (b, sp, k = "") => `<div class="stat"><b class="${k}">${b}</b><span>${sp}</span></div>`;
+  let first = true;
+  const card = (b, sp, k = "") => { const c = `<div class="kpi${first ? " lead" : ""}"><b class="${k}">${b}</b><span>${sp}</span></div>`; first = false; return c; };
   $("btStats").innerHTML =
     card(pct(st.ret), `Total return (${inr(st.pnl)})`, cls(st.ret)) +
     card(pct(st.buy_hold_ret), "Buy and hold", cls(st.buy_hold_ret)) +
@@ -950,7 +1140,8 @@ async function openLive(){
 async function loadSessions(){
   try {
     const rows = await api("/live/sessions");
-    $("sessList").innerHTML = rows.length ? rows.map(r => `<button class="sess" data-sid="${r.id}" aria-current="${r.id === state.liveId}"><b>${esc(r.name)}</b><span class="small muted">${esc(r.instrument.symbol)}, ${new Date(r.started_at).toLocaleDateString("en-IN", {...IST, day: "2-digit", month: "short"})}</span> <span class="badge ${r.status}">${r.status}</span></button>`).join("") : `<p class="muted small">No sessions yet.</p>`;
+    $("sessList").hidden = !rows.length;
+    $("sessList").innerHTML = rows.map(r => `<button class="sess" data-sid="${r.id}" aria-current="${r.id === state.liveId}"><b>${esc(r.name)}</b><span class="small muted">${esc(r.instrument.symbol)}, ${new Date(r.started_at).toLocaleDateString("en-IN", {...IST, day: "2-digit", month: "short"})}</span> <span class="badge ${r.status}">${r.status}</span></button>`).join("");
   } catch(e){ handleErr(e); }
 }
 $("sessList").onclick = e => { const b = e.target.closest("[data-sid]"); if(b) showSession(b.dataset.sid); };
@@ -994,7 +1185,9 @@ function drawSession(snap){
   $("lvName").textContent = snap.name;
   $("lvSub").textContent = `${snap.instrument.symbol}, ${tf} candles, started ${new Date(snap.started_at).toLocaleString("en-IN", {...IST, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"})}`;
   $("stopLive").hidden = !running;
-  $("lvFeed").textContent = running ? (snap.feed_connected ? (snap.last_tick_at ? "Receiving ticks" : "Waiting for market ticks") : "Feed reconnecting") : "";
+  $("lvFeed").className = "dot-live" + (running && snap.feed_connected && snap.last_tick_at ? " on" : "");
+  $("lvFeed").hidden = !running;
+  $("lvFeed").lastElementChild.textContent = running ? (snap.feed_connected ? (snap.last_tick_at ? "Live prices" : "Waiting for market to open") : "Reconnecting to prices") : "";
   $("lvReason").hidden = running || !snap.stop_reason; $("lvReason").textContent = snap.stop_reason ? `Stopped: ${snap.stop_reason}` : "";
   const bars = snap.bars, labels = bars.map(b => tLabel(b.t, tf));
   if(bars.length){
@@ -1039,7 +1232,8 @@ function renderPlans(){
     const btn = p === "free" ? (cur ? `<button class="btn" disabled>Current plan</button>` : `<span class="small muted">Included when a paid plan ends</span>`)
       : cur ? `<button class="btn" disabled>Current plan</button>` : `<button class="btn primary" data-sub="${p}">${me.plan === "pro" && p === "basic" ? "Switch to Basic" : "Upgrade to " + (p === "pro" ? "Pro" : "Basic")}</button>`;
     const price = {free: 0, basic: 1999, pro: 4900}[p];
-    return `<div class="plan${p === "pro" ? " featured" : ""}"><h2>${{free: "Free", basic: "Basic", pro: "Pro"}[p]}</h2>
+    const who = {free: "Try the builder and a few backtests", basic: "For traders testing one idea at a time", pro: "For active traders running several strategies"}[p];
+    return `<div class="plan${p === "pro" ? " featured" : ""}"><h2>${{free: "Free", basic: "Basic", pro: "Pro"}[p]}</h2><p class="who">${who}</p>
       <div class="price">₹${price.toLocaleString("en-IN")}<small> / month</small></div>
       <ul>${PLAN_FEATURES[p].map(f => `<li>${esc(f)}</li>`).join("")}</ul>${btn}</div>`;
   }).join("");
@@ -1092,15 +1286,39 @@ $("alTest").onclick = async () => {
   try { const r = await api("/me/alerts/test", {method: "POST"}); toast(`Test alert sent by ${r.sent.join(" and ")}.`); } catch(e){ handleErr(e); }
 };
 
+/* ================= connection check ================= */
+async function runDiag(){
+  const list = $("diagList"), rows = [];
+  const put = () => { list.innerHTML = rows.map(r => `<div><i class="${r.s}"></i><span><b>${esc(r.t)}</b><span class="small muted">${esc(r.d)}</span></span></div>`).join(""); };
+  const add = (t, s, d) => { rows.push({t, s, d}); put(); };
+  busy($("diagBtn"), true, "Checking…");
+  try {
+    const {data: {session}} = await sb.auth.getSession();
+    add("Signed in", session ? "ok" : "bad", session ? (session.user && session.user.email) || "Google sign-in active" : "Not signed in. Sign out and sign in again.");
+    if(!CFG.API_BASE){ add("StratLab server", "bad", "The site has no server address configured (API_BASE in config.js)."); return; }
+    let health = null;
+    try { const r = await fetch(CFG.API_BASE + "/health"); health = await r.json(); add("StratLab server", "ok", CFG.API_BASE.replace("https://", "")); }
+    catch(e){ add("StratLab server", "bad", "Can't reach the server. Check the Railway service is running and FRONTEND_ORIGIN matches this site."); return; }
+    add("Market data", health.data_online ? "ok" : "wait", health.data_online ? "Kite connected" : "Kite isn't logged in today. Open the admin login link.");
+    try { const me = await api("/me"); add("Your account", "ok", `${me.plan_info.name} plan, ${me.usage.backtests_used} backtests used this month`); }
+    catch(e){ add("Your account", "bad", e.message + (e.status === 401 ? " Check SUPABASE_URL and SUPABASE_SERVICE_KEY in Railway." : "")); return; }
+    if(health.data_online){
+      try { const d = await api("/instruments/defaults"); add("Instrument list", d.length ? "ok" : "wait", d.length ? d.map(x => x.symbol).join(" and ") + " available" : "Kite returned no indices."); }
+      catch(e){ add("Instrument list", "bad", e.message); }
+    }
+  } finally { busy($("diagBtn"), false); }
+}
+$("diagBtn").onclick = runDiag;
+
 /* ================= start ================= */
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  Object.keys(charts).forEach(k => { charts[k].destroy(); delete charts[k]; });
-  if(state.page === "backtest" && state.lastBt) renderBacktest(state.lastBt);
-  if(state.page === "live" && state.liveId) showSession(state.liveId);
-});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { applyThemeIcon(); redrawCharts(); });
+applyThemeIcon();
+$("goBacktestM").onclick = () => $("goBacktest").click();
+$("goLiveM").onclick = () => $("goLive").click();
 Chart.defaults.font.family = FONT;
 S = blankStrategy();
 boot();
+
 </script>
 </body>
 </html>
