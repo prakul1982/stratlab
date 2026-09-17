@@ -310,6 +310,13 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
 .linkbtn{border:0;background:none;color:var(--accent);font-weight:700;cursor:pointer;padding:2px 4px;font-size:.84rem}
 .ready{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px;padding:12px;border-radius:10px;background:var(--up-soft)}
 .ready b{display:block}
+.diag{border-color:var(--warn)}
+.diag ul{list-style:none;margin:8px 0 0;padding:0}
+.diag li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.92rem}
+.diag li:last-child{border:0}
+.diag .cnt{white-space:nowrap;font-weight:700}
+.diag .why{margin-top:12px;padding:12px;border-radius:10px;background:var(--warn-soft);font-size:.92rem}
+.diag .why .btn{margin-top:10px}
 .fallback{margin:0;padding:10px 14px;background:var(--warn-soft);font-size:.86rem;border-bottom:1px solid var(--line)}
 /* ---------- guided / expert modes ---------- */
 body.mode-expert .guided-only{display:none!important}
@@ -561,6 +568,7 @@ details.gloss dd{margin:0;color:var(--muted)}
   <div id="btLoading" hidden><div class="skeleton"></div></div>
   <div id="btResults" class="stack" hidden>
     <div class="banner" id="btWarn" hidden></div>
+    <section class="card diag" id="btDiag" hidden></section>
     <div class="kpis" id="btStats"></div>
     <section class="card explain guided-only" id="btExplain"></section>
     <section class="card">
@@ -918,8 +926,8 @@ function applyParse(){
     note.textContent = isPro() ? "No simple rules found. Try Write with AI for this one." : "No rules found. Try a sentence like \"Buy when 20 EMA crosses above 50 EMA\".";
     return;
   }
-  if(p.entry.length) S.entry = p.entry;
-  if(p.exit.length) S.exit = p.exit;
+  if(p.entry.length){ S.entry = p.entry; S.exit = p.exit; }
+  else if(p.exit.length) S.exit = p.exit;
   Object.assign(S.risk, p.risk);
   const bits = [];
   if(p.entry.length) bits.push(`${p.entry.length} entry rule${p.entry.length > 1 ? "s" : ""}`);
@@ -1016,8 +1024,9 @@ async function buildStrategy(){
   Object.assign(S.risk, out.risk || {});
   state.build = null;
   const instFound = out.instrument ? await resolveInstrument(out.instrument) : false;
+  if(out.instrument && !instFound) selectInstrument(null);
   state.build = {mentioned: new Set(out.mentioned || []), answers: {}, order: [], notes: out.notes || [], usedAI, fallback, instName: out.instrument, instFound};
-  if(out.instrument && !state.build.instFound) state.build.notes.push(`We couldn't find "${out.instrument}" on NSE. Pick the instrument below.`);
+  if(out.instrument && !state.build.instFound) state.build.notes.push(`We couldn't find "${out.instrument}" on NSE, so nothing is selected yet. Search for it in step 1; companies sometimes change their trading symbol after a merger or demerger.`);
   guideMark("idea");
   fillForm(); renderBuild(); renderComplete();
   $("completeBox").scrollIntoView({behavior: "smooth", block: "nearest"});
@@ -1448,7 +1457,7 @@ function renderUsage(){
 function renderBacktestHead(){
   if(!S) return;
   $("btName").textContent = S.name;
-  $("btSub").textContent = state.instrument ? `${state.instrument.symbol} on ${TF_NAME[S.tf]} candles with ${inr(S.risk.capital)} capital` : "Pick an instrument on the Build page first.";
+  $("btSub").innerHTML = state.instrument ? `Testing on <b>${esc(state.instrument.symbol)}</b> with ${TF_NAME[S.tf]} candles and ${inr(S.risk.capital)} capital <button class="linkbtn" data-goto="build">Change</button>` : `<span class="down">No instrument selected.</span> <button class="linkbtn" data-goto="build">Pick one on the Build page</button>`;
   const list = PERIODS[S.tf];
   if(!list.some(p => p[0] === state.btDays)) state.btDays = list[1][0];
   $("periodSeg").innerHTML = list.map(([d, n]) => `<button data-days="${d}" aria-pressed="${d === state.btDays}">${n}</button>`).join("");
@@ -1503,6 +1512,7 @@ function renderBacktest(res){
     backgroundColor: all.map(t => t.why === "Still open" ? alpha(c.marigold, .8) : t.pnl > 0 ? c.up : c.down), borderRadius: 3}]},
     options: baseOpts({plugins: {legend: {display: false}, tooltip: {callbacks: {label: i => inr(i.raw)}}}, scales: {x: {ticks: {color: c.muted, maxTicksLimit: 12}, grid: {display: false}}, y: yMoney()}})});
   renderExplain(res);
+  renderDiag(res);
   $("heatTitle").textContent = tf === "1d" ? "Monthly returns" : "Daily returns";
   const maxAbs = Math.max(1, ...res.periods.map(g => Math.abs(g.ret)));
   $("heat").innerHTML = res.periods.map(g => { const a = Math.min(1, Math.abs(g.ret)/maxAbs)*0.85 + 0.08, flat = Math.abs(g.ret) < 0.005;
@@ -1768,6 +1778,38 @@ $("parseBtn").addEventListener("click", () => { if(S.entry.length) guideMark("id
 
 const KPI_HINT = {"Total return": "Gain or loss on your capital", "Buy and hold": "If you had just bought and held", "CAGR": "Yearly growth rate", "Max drawdown": "Worst fall from a high point",
   "Win rate": "Share of trades that made money", "Profit factor": "Money won per ₹1 lost", "Sharpe ratio": "Return for the bumpiness; above 1 is good"};
+function renderDiag(res){
+  const box = $("btDiag"), st = res.stats, d = res.diagnostics;
+  if(!d || st.n || res.open_trade){ box.hidden = true; return; }
+  const M = d.candles.toLocaleString("en-IN");
+  const rows = d.entry.map(e => `<li><span>${esc(e.text)}</span><span class="cnt ${e.true_on ? "" : "down"}">${e.never_computed ? "no data" : `true on ${e.true_on.toLocaleString("en-IN")} of ${M} candles`}</span></li>`).join("");
+  const never = d.entry.filter(e => e.never_computed || !e.true_on);
+  const crosses = S.entry.filter(c => c.op === "xa" || c.op === "xb").length;
+  let why = "", fix = "";
+  if(never.length){
+    why = `<b>${esc(never[0].text)}</b> was never true in this period${never[0].never_computed ? " because there wasn't enough price history to calculate it. Long averages like a 200-candle SMA need at least that many candles, so pick a longer period" : ". Check its numbers, or loosen it"}.`;
+  } else if(d.entry.length > 1 && d.entry_join === "all" && !d.all_true_on){
+    why = crosses > 1
+      ? `Each rule happens on its own, but never on the same candle. A <b>crosses above/below</b> rule is true for just one candle, so ${crosses} crossing rules almost never line up.`
+      : `Each rule happens on its own, but never all on the same candle.`;
+    fix = crosses > 1 ? `<button class="btn primary sm" id="diagFix">Keep the first crossover, make the others "is above/below"</button>`
+      : `<button class="btn primary sm" id="diagAny">Switch to "Any matches"</button>`;
+  } else if(d.skipped_size){
+    why = `Your buy signal fired ${d.skipped_size} time${d.skipped_size === 1 ? "" : "s"}, but your settings couldn't afford even ${res.lot > 1 ? `one lot (${res.lot} units)` : "one share"} at that price. Raise capital or risk per trade, or widen the max capital per trade.`;
+    fix = `<button class="btn primary sm" id="diagRisk">Open risk settings</button>`;
+  } else {
+    why = "Your buy signal happened, but a trade couldn't be opened. Check capital and risk settings.";
+  }
+  box.hidden = false;
+  box.innerHTML = `<div class="card-h"><h2>Why no trades happened</h2><span class="small muted">${esc(res.instrument.symbol)}, ${M} candles</span></div>
+    <span class="small muted">How often each buy rule was true (${d.entry_join === "all" ? "all must be true together" : "any one is enough"}):</span>
+    <ul>${rows}${d.entry.length > 1 ? `<li><span><b>All together</b></span><span class="cnt ${d.all_true_on ? "" : "down"}">true on ${d.all_true_on.toLocaleString("en-IN")} candles</span></li>` : ""}</ul>
+    <div class="why">${why}${fix ? `<div>${fix}</div>` : ""}</div>`;
+  const rerun = () => { renderRules(); renderGraph(); $("runBt").click(); };
+  if($("diagFix")) $("diagFix").onclick = () => { let first = true; S.entry.forEach(c => { if(c.op === "xa" || c.op === "xb"){ if(first) first = false; else c.op = c.op === "xa" ? "gt" : "lt"; } }); toast("Rules updated. Running the backtest again."); rerun(); };
+  if($("diagAny")) $("diagAny").onclick = () => { S.entryJoin = "any"; toast("Switched to Any matches. Running the backtest again."); rerun(); };
+  if($("diagRisk")) $("diagRisk").onclick = () => scrollToStep(4);
+}
 function renderExplain(res){
   const box = $("btExplain"); if(!box) return;
   const st = res.stats, sym = res.instrument.symbol, fmt = v => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
