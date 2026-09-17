@@ -56,22 +56,71 @@ class AIBusy(AIError):
     """Quota or rate limit hit; the app falls back to the simple converter."""
 
 
+_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
+_model_cache = {"name": None, "at": 0.0}
+
+
+def _version_key(name: str):
+    nums = [float(x) for x in re.findall(r"(\d+(?:\.\d+)?)", name.split("/")[-1])[:1]] or [0.0]
+    stable = 0 if re.search(r"preview|exp|latest", name) else 1
+    return (stable, nums[0])
+
+
+def pick_gemini_model(force: bool = False) -> str:
+    """Ask Google which models this key can use and pick the newest Flash text model."""
+    configured = settings.GEMINI_MODEL.strip()
+    if configured and configured.lower() != "auto" and not force:
+        return configured
+    if _model_cache["name"] and time.time() - _model_cache["at"] < 6 * 3600:
+        return _model_cache["name"]
+    r = httpx.get(f"{_GEMINI_BASE}/models", params={"pageSize": 1000},
+                  headers={"x-goog-api-key": settings.GEMINI_API_KEY}, timeout=20)
+    if r.status_code >= 400:
+        raise AIError("Couldn't list Gemini models for this key. Check GEMINI_API_KEY in Railway.")
+    skip = ("image", "tts", "audio", "live", "embedding", "vision", "thinking", "robotics", "computer", "native")
+    names = []
+    for m in r.json().get("models", []):
+        name = m.get("name", "")
+        short = name.split("/")[-1]
+        if "generateContent" not in (m.get("supportedGenerationMethods") or []):
+            continue
+        if "flash" not in short or any(k in short for k in skip):
+            continue
+        names.append(short)
+    if not names:
+        raise AIError("This Gemini key has no Flash text models available.")
+    full = [n for n in names if "lite" not in n] or names
+    best = sorted(full, key=_version_key, reverse=True)[0]
+    _model_cache.update(name=best, at=time.time())
+    return best
+
+
 def _gemini(system: str, text: str) -> str:
     if not settings.GEMINI_API_KEY:
         raise AIError("The AI builder isn't set up yet: GEMINI_API_KEY is missing in Railway.")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent"
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": text}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 2048},
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 8192},
     }
-    for attempt in range(2):
-        r = httpx.post(url, json=body, headers={"x-goog-api-key": settings.GEMINI_API_KEY}, timeout=45)
+    model = pick_gemini_model()
+    tried_auto = False
+    attempt = 0
+    while attempt < 3:
+        attempt += 1
+        r = httpx.post(f"{_GEMINI_BASE}/models/{model}:generateContent", json=body,
+                       headers={"x-goog-api-key": settings.GEMINI_API_KEY}, timeout=60)
         if r.status_code == 429:
-            if attempt == 0:
-                time.sleep(2)
+            if attempt < 3:
+                time.sleep(2 * attempt)
                 continue
             raise AIBusy("The AI builder is busy right now.")
+        if r.status_code == 404 and not tried_auto:
+            # configured model was retired or isn't on this key: discover one
+            tried_auto = True
+            model = pick_gemini_model(force=True)
+            attempt -= 1
+            continue
         if r.status_code >= 400:
             try:
                 detail = r.json().get("error", {}).get("message", "")
@@ -79,14 +128,13 @@ def _gemini(system: str, text: str) -> str:
                 detail = r.text[:200]
             if r.status_code in (400, 403) and "key" in detail.lower():
                 raise AIError("The Gemini API key on the server is invalid. Check GEMINI_API_KEY in Railway.")
-            if r.status_code == 404:
-                raise AIError(f"The Gemini model '{settings.GEMINI_MODEL}' isn't available for this key. Set GEMINI_MODEL in Railway to a model listed in AI Studio.")
-            raise AIError(f"The AI service returned an error ({r.status_code}): {detail[:160]}")
+            raise AIError(f"The AI service returned an error ({r.status_code}) on model {model}: {detail[:160]}")
         data = r.json()
         try:
-            return "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
+            parts = data["candidates"][0]["content"]["parts"]
         except (KeyError, IndexError):
             raise AIError("The AI didn't return a strategy. Try rephrasing it.")
+        return "".join(p.get("text", "") for p in parts if not p.get("thought"))
     raise AIBusy("The AI builder is busy right now.")
 
 

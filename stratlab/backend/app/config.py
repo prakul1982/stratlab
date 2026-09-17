@@ -23,7 +23,7 @@ class Settings:
 
     AI_PROVIDER = _env("AI_PROVIDER", "gemini")          # "gemini" or "anthropic"
     GEMINI_API_KEY = _env("GEMINI_API_KEY")
-    GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_MODEL = _env("GEMINI_MODEL", "auto")        # "auto" picks the newest Flash model your key can use
     ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
     ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 
