@@ -120,9 +120,22 @@ class KiteService:
             out += [r for r in self._inst if r["exchange"] == exch and r["symbol"] == sym][:1]
         return out
 
+    ALIASES = {
+        # Tata Motors demerged in 2025; the old symbol was replaced
+        "TATAMOTORS": ["TMPV", "TMCV"], "TATA MOTORS": ["TMPV", "TMCV"],
+        "BANKNIFTY": ["NIFTY BANK"], "BANK NIFTY": ["NIFTY BANK"], "NIFTY": ["NIFTY 50"], "NIFTY50": ["NIFTY 50"],
+        "SBI": ["SBIN"], "STATE BANK": ["SBIN"], "HDFC": ["HDFCBANK"], "ICICI": ["ICICIBANK"], "KOTAK": ["KOTAKBANK"],
+        "AIRTEL": ["BHARTIARTL"], "BHARTI AIRTEL": ["BHARTIARTL"], "L&T": ["LT"], "LARSEN": ["LT"], "M&M": ["M&M"],
+        "MAHINDRA": ["M&M"], "BAJAJ FINANCE": ["BAJFINANCE"], "ASIAN PAINTS": ["ASIANPAINT"], "SUN PHARMA": ["SUNPHARMA"],
+        "HUL": ["HINDUNILVR"], "HINDUSTAN UNILEVER": ["HINDUNILVR"], "MARUTI": ["MARUTI"], "ZOMATO": ["ETERNAL"],
+    }
+
     def search(self, q: str, allow_fno: bool, limit: int = 25) -> list[dict]:
         self._load_instruments()
         q = q.strip().upper()
+        alias_hits = []
+        for sym in self.ALIASES.get(q, []):
+            alias_hits += [r for r in self._inst if r["symbol"] == sym and not r["fno"]]
         if len(q) < 2:
             return []
         scored = []
@@ -144,7 +157,8 @@ class KiteService:
             score = score * 10 + (0 if r["type"] == "INDEX" else 1 if r["type"] == "EQ" else 2 if r["type"] == "FUT" else 3)
             scored.append((score, r["expiry"] or "", r["symbol"], r))
         scored.sort(key=lambda x: x[:3])
-        return [x[3] for x in scored[:limit]]
+        seen = {r["token"] for r in alias_hits}
+        return (alias_hits + [x[3] for x in scored if x[3]["token"] not in seen])[:limit]
 
     def ltp(self, token: int) -> float | None:
         self._require()

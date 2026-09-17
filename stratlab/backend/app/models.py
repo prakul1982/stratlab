@@ -1,5 +1,5 @@
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 RefType = Literal[
     "price", "num", "sma", "ema", "rsi",
@@ -14,6 +14,12 @@ class Ref(BaseModel):
     p: Optional[float] = Field(None, ge=1, le=500)   # period (MACD: fast length)
     m: Optional[float] = Field(None, gt=0, le=500)   # MACD slow length, BB std-devs, Supertrend multiplier
     v: Optional[float] = None                         # value when t == "num"
+
+    @model_validator(mode="after")
+    def _num_needs_value(self):
+        if self.t == "num" and self.v is None:
+            raise ValueError("A number in a rule needs a value.")
+        return self
 
 
 class Cond(BaseModel):

@@ -59,6 +59,7 @@ class Engine:
         self.entry_t = None
         self.trades: list[dict] = []
         self.events: list[dict] = []
+        self.skipped_size = 0
         if state:
             self.load(state)
 
@@ -107,6 +108,8 @@ class Engine:
                 q = math.floor(self.cash * r.riskPct / 100 / (px * slp)) if slp > 0 else math.inf
                 q = min(q, math.floor((self.cash * r.maxAlloc / 100 - brok) / px))
                 q = (q // self.lot) * self.lot
+                if q <= 0:
+                    self.skipped_size += 1
                 if q > 0:
                     self.cash -= q * px + brok
                     self.qty, self.entry, self.entry_t = q, px, b["t"]
@@ -158,6 +161,19 @@ def clean(a) -> list:
     return [None if (x is None or (isinstance(x, float) and not math.isfinite(x))) else round(float(x), 4) for x in a]
 
 
+def _never(ctx: Ctx, c, start: int) -> bool:
+    """True if one side of the condition has no value at all in the test window (e.g. a missing number)."""
+    for ref in (c.l, c.r):
+        if ref.t == "num":
+            if ref.v is None:
+                return True
+            continue
+        vals = ctx.series(ref)[start:]
+        if not any(math.isfinite(x) for x in vals):
+            return True
+    return False
+
+
 def period_key(t: pd.Timestamp, tf: str) -> str:
     return t.strftime("%b %y") if tf == "1d" else t.strftime("%d %b")
 
@@ -192,7 +208,19 @@ def backtest(bars: list[dict], strategy, start: int, lot: int = 1) -> dict:
             cur = k
     periods.append({"k": cur, "ret": (equity[-1] / s_eq - 1) * 100})
     overlays, osc = chart_series(strategy, ctx, start)
+    rng = range(start + 1, len(bars))
+    ent = [[eval_cond(ctx, c, i) for i in rng] for c in strategy.entry]
+    comb = [(any if strategy.entryJoin == "any" else all)(col) for col in zip(*ent)] if ent else []
+    diagnostics = {
+        "entry": [{"text": cond_text(c), "true_on": sum(v), "never_computed": _never(ctx, c, start)} for c, v in zip(strategy.entry, ent)],
+        "entry_join": strategy.entryJoin,
+        "all_true_on": sum(comb),
+        "exit": [{"text": cond_text(c), "true_on": sum(eval_cond(ctx, c, i) for i in rng)} for c in strategy.exit],
+        "skipped_size": eng.skipped_size,
+        "candles": len(rng),
+    }
     return {
+        "diagnostics": diagnostics,
         "bars": [{"t": b["t"], "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"]} for b in view],
         "equity": clean(equity), "buy_hold": clean(bh), "drawdown": clean(st.pop("dd")),
         "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100},
