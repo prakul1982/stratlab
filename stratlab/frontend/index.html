@@ -996,6 +996,11 @@ async function buildStrategy(){
   }
   busy($("aiBtn"), false);
   renderAiUsage();
+  const toList = v => Array.isArray(v) ? v : (typeof v === "string" && v.trim() ? [v] : []);
+  out.notes = toList(out.notes).map(String).filter(n => n.trim());
+  out.mentioned = Array.isArray(out.mentioned) ? out.mentioned : String(out.mentioned || "").split(",").map(x => x.trim()).filter(Boolean);
+  out.entry = Array.isArray(out.entry) ? out.entry : [];
+  out.exit = Array.isArray(out.exit) ? out.exit : [];
   S.text = text;
   $("parseNote").hidden = true; $("aiNotes").hidden = true;
   if(!out.entry.length){
