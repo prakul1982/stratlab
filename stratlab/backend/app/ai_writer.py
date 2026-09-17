@@ -178,7 +178,12 @@ def write_strategy(text: str, pro: bool) -> dict:
         data = json.loads(raw)
     except json.JSONDecodeError:
         raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
-    out = {"notes": [str(n) for n in (data.get("notes") or [])][:8]}
+    raw_notes = data.get("notes") or []
+    if isinstance(raw_notes, str):
+        raw_notes = [raw_notes]
+    elif not isinstance(raw_notes, list):
+        raw_notes = []
+    out = {"notes": [str(n).strip() for n in raw_notes if str(n).strip()][:8]}
     allowed = None if pro else {"price", "num", "sma", "ema", "rsi"}
 
     def conds(items):
@@ -208,7 +213,10 @@ def write_strategy(text: str, pro: bool) -> dict:
         out["risk"] = {}
         out["notes"].append("Some risk numbers were out of range and were skipped.")
     valid = {"instrument", "tf", "exit", "sl", "tgt", "riskPct", "capital"}
-    mentioned = {m for m in (data.get("mentioned") or []) if m in valid}
+    raw_m = data.get("mentioned") or []
+    if isinstance(raw_m, str):
+        raw_m = [x.strip() for x in raw_m.split(",")]
+    mentioned = {m for m in raw_m if m in valid}
     # keep "mentioned" honest with what was actually parsed
     mentioned |= {k for k in out["risk"]}
     if out["exit"]:
