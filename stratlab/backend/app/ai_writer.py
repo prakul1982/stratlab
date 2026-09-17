@@ -57,7 +57,8 @@ class AIBusy(AIError):
 
 
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
-_model_cache = {"name": None, "at": 0.0}
+_model_cache = {"name": None, "list": [], "at": 0.0}
+_cooldown: dict[str, float] = {}   # model -> time until which we skip it after overload
 
 
 def _version_key(name: str):
@@ -66,13 +67,10 @@ def _version_key(name: str):
     return (stable, nums[0])
 
 
-def pick_gemini_model(force: bool = False) -> str:
-    """Ask Google which models this key can use and pick the newest Flash text model."""
-    configured = settings.GEMINI_MODEL.strip()
-    if configured and configured.lower() != "auto" and not force:
-        return configured
-    if _model_cache["name"] and time.time() - _model_cache["at"] < 6 * 3600:
-        return _model_cache["name"]
+def gemini_models() -> list[str]:
+    """Flash text models this key can use, best first (stable full Flash, then Lite, then previews)."""
+    if _model_cache["list"] and time.time() - _model_cache["at"] < 6 * 3600:
+        return _model_cache["list"]
     r = httpx.get(f"{_GEMINI_BASE}/models", params={"pageSize": 1000},
                   headers={"x-goog-api-key": settings.GEMINI_API_KEY}, timeout=20)
     if r.status_code >= 400:
@@ -80,19 +78,34 @@ def pick_gemini_model(force: bool = False) -> str:
     skip = ("image", "tts", "audio", "live", "embedding", "vision", "thinking", "robotics", "computer", "native")
     names = []
     for m in r.json().get("models", []):
-        name = m.get("name", "")
-        short = name.split("/")[-1]
-        if "generateContent" not in (m.get("supportedGenerationMethods") or []):
-            continue
-        if "flash" not in short or any(k in short for k in skip):
-            continue
-        names.append(short)
+        short = m.get("name", "").split("/")[-1]
+        if "generateContent" in (m.get("supportedGenerationMethods") or []) and "flash" in short and not any(k in short for k in skip):
+            names.append(short)
     if not names:
         raise AIError("This Gemini key has no Flash text models available.")
-    full = [n for n in names if "lite" not in n] or names
-    best = sorted(full, key=_version_key, reverse=True)[0]
-    _model_cache.update(name=best, at=time.time())
-    return best
+    full = sorted([n for n in names if "lite" not in n], key=_version_key, reverse=True)
+    lite = sorted([n for n in names if "lite" in n], key=_version_key, reverse=True)
+    ordered = full[:3] + lite[:2]
+    _model_cache.update(list=ordered, name=ordered[0], at=time.time())
+    return ordered
+
+
+def _candidates() -> list[str]:
+    configured = settings.GEMINI_MODEL.strip()
+    try:
+        auto = gemini_models()
+    except AIError:
+        if configured and configured.lower() != "auto":
+            return [configured]
+        raise
+    lst = ([configured] if configured and configured.lower() != "auto" else []) + auto
+    seen, out = set(), []
+    for m in lst:
+        if m not in seen:
+            seen.add(m); out.append(m)
+    now = time.time()
+    ready = [m for m in out if _cooldown.get(m, 0) < now]
+    return ready or out
 
 
 def _gemini(system: str, text: str) -> str:
@@ -103,39 +116,45 @@ def _gemini(system: str, text: str) -> str:
         "contents": [{"role": "user", "parts": [{"text": text}]}],
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 8192},
     }
-    model = pick_gemini_model()
-    tried_auto = False
-    attempt = 0
-    while attempt < 3:
-        attempt += 1
-        r = httpx.post(f"{_GEMINI_BASE}/models/{model}:generateContent", json=body,
-                       headers={"x-goog-api-key": settings.GEMINI_API_KEY}, timeout=60)
-        if r.status_code == 429:
-            if attempt < 3:
-                time.sleep(2 * attempt)
-                continue
-            raise AIBusy("The AI builder is busy right now.")
-        if r.status_code == 404 and not tried_auto:
-            # configured model was retired or isn't on this key: discover one
-            tried_auto = True
-            model = pick_gemini_model(force=True)
-            attempt -= 1
-            continue
-        if r.status_code >= 400:
+    last_err = None
+    for model in _candidates()[:4]:
+        for attempt in range(2):
             try:
-                detail = r.json().get("error", {}).get("message", "")
-            except ValueError:
-                detail = r.text[:200]
-            if r.status_code in (400, 403) and "key" in detail.lower():
-                raise AIError("The Gemini API key on the server is invalid. Check GEMINI_API_KEY in Railway.")
-            raise AIError(f"The AI service returned an error ({r.status_code}) on model {model}: {detail[:160]}")
-        data = r.json()
-        try:
-            parts = data["candidates"][0]["content"]["parts"]
-        except (KeyError, IndexError):
-            raise AIError("The AI didn't return a strategy. Try rephrasing it.")
-        return "".join(p.get("text", "") for p in parts if not p.get("thought"))
-    raise AIBusy("The AI builder is busy right now.")
+                r = httpx.post(f"{_GEMINI_BASE}/models/{model}:generateContent", json=body,
+                               headers={"x-goog-api-key": settings.GEMINI_API_KEY}, timeout=60)
+            except httpx.HTTPError:
+                last_err = "network"
+                time.sleep(1)
+                continue
+            if r.status_code in (429, 500, 502, 503, 504):
+                last_err = r.status_code
+                if attempt == 0:
+                    time.sleep(1.5)
+                    continue
+                _cooldown[model] = time.time() + 120   # skip this model for 2 minutes
+                break                                  # try the next model
+            if r.status_code == 404:
+                last_err = 404
+                _model_cache.update(list=[], at=0)
+                break
+            if r.status_code >= 400:
+                try:
+                    detail = r.json().get("error", {}).get("message", "")
+                except ValueError:
+                    detail = r.text[:200]
+                if r.status_code in (400, 403) and "key" in detail.lower():
+                    raise AIError("The Gemini API key on the server is invalid. Check GEMINI_API_KEY in Railway.")
+                raise AIError(f"The AI service returned an error ({r.status_code}) on model {model}: {detail[:160]}")
+            try:
+                parts = r.json()["candidates"][0]["content"]["parts"]
+            except (KeyError, IndexError, ValueError):
+                last_err = "empty"
+                break
+            _model_cache["name"] = model
+            return "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    if last_err == "empty":
+        raise AIError("The AI didn't return a strategy. Try rephrasing it.")
+    raise AIBusy("Google's AI models are overloaded right now.")
 
 
 def _anthropic(system: str, text: str) -> str:
