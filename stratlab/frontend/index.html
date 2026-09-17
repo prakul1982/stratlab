@@ -408,6 +408,7 @@ const state = {me: null, page: "build", strategyId: null, instrument: null, defa
 
 class ApiError extends Error {}
 async function api(path, {method = "GET", body, raw = false} = {}){
+  if(!CFG.API_BASE){ const e = new ApiError("You're signed in, but the StratLab server isn't connected yet. Backtests and live trading will work once the backend is live."); e.code = "no_backend"; throw e; }
   const {data: {session}} = await sb.auth.getSession();
   const r = await fetch(CFG.API_BASE + path, {method, headers: {"Content-Type": "application/json", ...(session ? {Authorization: "Bearer " + session.access_token} : {})}, body: body ? JSON.stringify(body) : undefined});
   if(raw && r.ok) return r;
@@ -448,7 +449,12 @@ async function boot(){
   const {data: {session}} = await sb.auth.getSession();
   if(!session) return showLogin();
   $("loginView").hidden = true; $("appView").hidden = false;
-  try { await loadMe(); } catch(e){ return handleErr(e); }
+  try { await loadMe(); } catch(e){
+    handleErr(e); setData(false);
+    const { data: { user } } = await sb.auth.getUser();
+    $("planPill").textContent = user ? user.email : "Signed in";
+    fillForm(); renderBuild(); return;
+  }
   fillForm(); renderBuild(); refreshSaved();
   try {
     state.defaults = await api("/instruments/defaults");
@@ -855,6 +861,7 @@ const PERIODS = {"1d": [["182","6 months"],["365","1 year"],["730","2 years"],["
   "15m": [["30","1 month"],["90","3 months"],["180","6 months"],["365","1 year"]],
   "5m": [["15","15 days"],["30","1 month"],["60","2 months"],["120","4 months"]]};
 function renderUsage(){
+  if(!state.me) return;
   const u = state.me.usage;
   $("usageBox").innerHTML = u.backtests_limit == null ? "Unlimited backtests"
     : `${u.backtests_used} of ${u.backtests_limit} backtests used this month <span class="meter"><i style="width:${Math.min(100, u.backtests_used/u.backtests_limit*100)}%"></i></span>`;
@@ -929,6 +936,7 @@ $("csvBtn").onclick = () => {
 function stopPoll(){ if(state.pollTimer){ clearInterval(state.pollTimer); state.pollTimer = null; } }
 async function openLive(){
   const me = state.me;
+  if(!me){ $("liveSub").textContent = "Waiting for the server connection."; return; }
   let sub = `Your plan runs ${me.live_limit} live strateg${me.live_limit === 1 ? "y" : "ies"} at a time.`;
   if(me.plan === "free"){
     const t = me.trial;
@@ -1025,6 +1033,7 @@ const PLAN_FEATURES = {
 };
 function renderPlans(){
   const me = state.me;
+  if(!me) return;
   $("plansGrid").innerHTML = ["free","basic","pro"].map(p => {
     const cur = me.plan === p;
     const btn = p === "free" ? (cur ? `<button class="btn" disabled>Current plan</button>` : `<span class="small muted">Included when a paid plan ends</span>`)
