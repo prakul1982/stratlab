@@ -58,7 +58,7 @@ class AIBusy(AIError):
 
 def _gemini(system: str, text: str) -> str:
     if not settings.GEMINI_API_KEY:
-        raise AIError("The AI builder isn't configured on the server.")
+        raise AIError("The AI builder isn't set up yet: GEMINI_API_KEY is missing in Railway.")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent"
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
@@ -73,7 +73,15 @@ def _gemini(system: str, text: str) -> str:
                 continue
             raise AIBusy("The AI builder is busy right now.")
         if r.status_code >= 400:
-            raise AIError(f"The AI service returned an error ({r.status_code}).")
+            try:
+                detail = r.json().get("error", {}).get("message", "")
+            except ValueError:
+                detail = r.text[:200]
+            if r.status_code in (400, 403) and "key" in detail.lower():
+                raise AIError("The Gemini API key on the server is invalid. Check GEMINI_API_KEY in Railway.")
+            if r.status_code == 404:
+                raise AIError(f"The Gemini model '{settings.GEMINI_MODEL}' isn't available for this key. Set GEMINI_MODEL in Railway to a model listed in AI Studio.")
+            raise AIError(f"The AI service returned an error ({r.status_code}): {detail[:160]}")
         data = r.json()
         try:
             return "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])

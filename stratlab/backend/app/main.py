@@ -107,7 +107,10 @@ def _kite_error(request, exc):
 # ---------- account ----------
 @app.get("/health")
 def health():
-    return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected}
+    ai_key = settings.ANTHROPIC_API_KEY if settings.AI_PROVIDER == "anthropic" else settings.GEMINI_API_KEY
+    return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
+            "ai_provider": settings.AI_PROVIDER, "ai_configured": bool(ai_key),
+            "ai_model": settings.ANTHROPIC_MODEL if settings.AI_PROVIDER == "anthropic" else settings.GEMINI_MODEL}
 
 
 @app.get("/plans")
