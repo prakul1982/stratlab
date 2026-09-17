@@ -876,7 +876,11 @@ function parseStrategyText(raw){
     else if(/\b(buy|enter|go long)/.test(cl)) side = "entry";
     for(const p of cl.split(/ and | & /)){
       const om = p.match(opRe); if(!om) continue;
-      const L = parseRef(p.slice(0, om.index)) || lastRef; if(!L) continue;
+      const leftText = p.slice(0, om.index);
+      let L = parseRef(leftText);
+      if(!L && lastRef && !/[a-z]{3,}/.test(leftText.replace(/\b(sell|exit|close|buy|when|if|and|then|it|is|goes|go|moves?|once|price)\b/g, ""))) L = lastRef;
+      if(!L && /\b(buy|sell|exit|close|when|if)\b/.test(leftText)) L = {t: "price"};
+      if(!L) continue;
       lastRef = L;
       const right = p.slice(om.index + om[0].length);
       let R = parseRef(right);
@@ -944,8 +948,9 @@ function detectInst(t){
   t = t.toLowerCase();
   if(/bank\s*nifty|nifty\s*bank/.test(t)) return "NIFTY BANK";
   if(/\bnifty(\s*50)?\b/.test(t)) return "NIFTY 50";
-  const m = t.match(/\b(?:buy|sell|trade)\s+([a-z&]{3,20})\b/);
-  if(m && !["when","if","the","at","on","it","and","only","above","below","once","after"].includes(m[1])) return m[1].toUpperCase();
+  const m = t.match(/\b(?:buy|sell|trade)\s+([a-z&]{2,20}(?:\s+[a-z&]{2,20})?)\s+(?:when|if|on|at|once|after|whenever)\b/) || t.match(/\b(?:buy|sell|trade)\s+([a-z&]{3,20})\b/);
+  const stop = ["when","if","the","at","on","it","and","only","above","below","once","after","whenever","stock","shares"];
+  if(m && !stop.includes(m[1].split(" ")[0])) return m[1].toUpperCase();
   return null;
 }
 function localBuild(text){
@@ -981,8 +986,11 @@ async function buildStrategy(){
   } catch(e){
     if(["ai_busy", "ai_limit", "ai_daily_limit", "ai_failed", "no_backend"].includes(e.code) || e.status >= 500 || !e.status){
       usedAI = false;
-      fallback = e.code === "ai_limit" ? `${e.message} We used the simple converter, which understands SMA, EMA, RSI and price rules.`
-        : "The AI builder is busy, so we used the simple converter. It understands SMA, EMA, RSI and price rules; try the AI again in a minute for anything more complex.";
+      const simple = "We used the simple converter instead, which understands SMA, EMA, RSI and price rules.";
+      fallback = e.code === "ai_limit" || e.code === "ai_daily_limit" ? `${e.message} ${simple}`
+        : e.code === "ai_busy" ? `The AI builder is busy right now. ${simple} Try the AI again in a minute for anything more complex.`
+        : e.code === "ai_failed" ? `The AI builder couldn't run: ${e.message} ${simple}`
+        : `The AI builder couldn't be reached. ${simple}`;
       out = localBuild(text);
     } else { busy($("aiBtn"), false); return handleErr(e); }
   }
