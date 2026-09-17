@@ -1,6 +1,6 @@
-// Fill these in before deploying. The anon key is safe to expose; never put the service key here.
+// The anon/publishable key is safe to expose; never put the service_role key here.
 window.STRATLAB_CONFIG = {
-  API_BASE: "http://localhost:8000",
-  SUPABASE_URL: "https://YOUR-PROJECT.supabase.co",
-  SUPABASE_ANON_KEY: "your-anon-public-key",
+  API_BASE: "",   // set to your Railway backend URL, e.g. "https://stratlab-production.up.railway.app"
+  SUPABASE_URL: "https://enxrxhikzzfualjzqibf.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_31v3Fc59LUCl_aMZpyulbA_SXtDV4cs",
 };
