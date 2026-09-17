@@ -101,7 +101,7 @@ p{margin:0}
 
 /* ---------- layout ---------- */
 main{max-width:1360px;margin:0 auto;padding:22px 20px 48px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;scroll-margin-top:76px}
 .stack>*+*{margin-top:14px}
 .page-h{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
 .page-h p{margin-top:4px}
@@ -273,10 +273,108 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
 @media (max-width:1100px){.toast{bottom:84px}}
 @media (max-width:820px){.toast{bottom:146px}}
 .toast .btn{height:30px;background:var(--bg);color:var(--ink);border:0}
+/* ---------- strategy builder (AI) ---------- */
+.idea-box{position:relative}
+.idea-box textarea{min-height:110px;font-size:1.02rem;padding:14px 14px 14px}
+.build-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.build-row .ai-usage{margin-left:auto;font-size:.8rem;color:var(--muted)}
+.examples{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center;font-size:.82rem;color:var(--muted)}
+.examples button{border:0;background:var(--surface-2);border-radius:999px;padding:4px 10px;font-size:.8rem;cursor:pointer;color:var(--ink)}
+.examples button:hover{background:var(--accent-soft);color:var(--accent)}
+.or{display:flex;align-items:center;gap:10px;margin:18px 0 12px;color:var(--muted);font-size:.84rem;font-weight:600}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.complete{margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.complete-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--surface-2)}
+.complete-h h3{font-size:.98rem}
+.understood{padding:12px 14px;border-bottom:1px solid var(--line)}
+.understood ul{margin:6px 0 0;padding-left:1.1em;font-size:.9rem}
+.understood li{margin:3px 0}
+.understood li em{font-style:normal;color:var(--muted)}
+.qa{padding:14px}
+.q-done{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:.9rem}
+.q-done i{flex:none;width:16px;height:16px;border-radius:50%;background:var(--up);display:grid;place-items:center}
+.q-done i::after{content:"";width:6px;height:3px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+.q-done span{flex:1;min-width:0}
+.q-done b{font-weight:700}
+.q-now{margin-top:12px}
+.q-now h4{margin:0;font-size:1.05rem}
+.q-now .why{font-size:.88rem;color:var(--muted);margin:4px 0 12px;max-width:70ch}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media (max-width:640px){.opts{grid-template-columns:minmax(0,1fr)}}
+.opt{text-align:left;border:1px solid var(--line-strong);background:var(--surface);border-radius:10px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.opt:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.opt b{font-size:.95rem}
+.opt span{font-size:.83rem;color:var(--muted)}
+.rec{align-self:flex-start;font-size:.68rem;font-weight:800;border-radius:4px;padding:1px 6px;background:var(--accent-soft);color:var(--accent)}
+.q-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:.84rem;color:var(--muted)}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:700;cursor:pointer;padding:2px 4px;font-size:.84rem}
+.ready{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px;padding:12px;border-radius:10px;background:var(--up-soft)}
+.ready b{display:block}
+.fallback{margin:0;padding:10px 14px;background:var(--warn-soft);font-size:.86rem;border-bottom:1px solid var(--line)}
+/* ---------- guided / expert modes ---------- */
+body.mode-expert .guided-only{display:none!important}
+body.mode-guided .expert-only{display:none!important}
+.mode-seg button{padding:4px 10px;font-size:.82rem}
+@media (max-width:820px){.top-r .mode-seg{display:none}}
+.help{font-size:.9rem;color:var(--muted);margin:-4px 0 14px;max-width:72ch}
+.help b{color:var(--ink)}
+.rule-say{flex-basis:100%;font-size:.86rem;color:var(--ink);margin:2px 4px 0;padding-top:6px;border-top:1px dashed var(--line)}
+.rule-say em{font-style:normal;color:var(--muted)}
+.starters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+@media (max-width:760px){.starters{grid-template-columns:minmax(0,1fr)}}
+.starter{text-align:left;border:1px solid var(--line-strong);background:var(--surface);border-radius:10px;padding:12px 14px;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.starter:hover{border-color:var(--accent)}
+.starter[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.starter b{font-size:.98rem}
+.starter span{font-size:.84rem;color:var(--muted)}
+.lvl{align-self:flex-start;font-size:.7rem;font-weight:800;border-radius:4px;padding:1px 6px;background:var(--up-soft);color:var(--up)}
+.lvl.mid{background:var(--warn-soft);color:var(--warn)}
+.guide{border:1px solid var(--accent);background:linear-gradient(0deg,var(--surface),var(--surface)) padding-box}
+.guide-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.bar{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin:12px 0 10px}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.guide-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+@media (max-width:760px){.guide-items{grid-template-columns:minmax(0,1fr)}}
+.gi{display:flex;align-items:center;gap:9px;text-align:left;border:0;background:var(--surface-2);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:.88rem;font-weight:600}
+.gi:hover{background:var(--accent-soft)}
+.gi i{flex:none;width:18px;height:18px;border-radius:50%;border:2px solid var(--line-strong);display:grid;place-items:center}
+.gi.done{color:var(--muted)}
+.gi.done i{background:var(--up);border-color:var(--up)}
+.gi.done i::after{content:"";width:7px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+.gi.next{box-shadow:inset 0 0 0 1.5px var(--accent);background:var(--accent-soft)}
+.grad{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--up-soft);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:.9rem}
+.presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.preset{border:1px solid var(--line-strong);background:var(--surface);border-radius:10px;padding:10px 12px;text-align:left;cursor:pointer}
+.preset b{display:block}
+.preset span{font-size:.8rem;color:var(--muted)}
+.preset[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+@media (max-width:560px){.presets{grid-template-columns:minmax(0,1fr)}}
+.hint{display:block;font-size:.76rem;color:var(--muted);font-weight:500;margin-top:3px}
+details.gloss{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+details.gloss summary{cursor:pointer;font-weight:700;font-size:.9rem;color:var(--accent)}
+details.gloss dl{margin:10px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;font-size:.88rem}
+details.gloss dt{font-weight:700}
+details.gloss dd{margin:0;color:var(--muted)}
+@media (max-width:560px){details.gloss dl{grid-template-columns:1fr}details.gloss dd{margin-bottom:6px}}
+.explain ul{list-style:none;margin:0;padding:0}
+.explain li{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:.94rem}
+.explain li:last-child{border:0}
+.explain li i{flex:none;width:8px;height:8px;border-radius:50%;margin-top:8px;background:var(--muted)}
+.explain li i.g{background:var(--up)} .explain li i.r{background:var(--down)} .explain li i.a{background:var(--warn)}
+.kpi .hint{margin-top:4px}
+.modal{position:fixed;inset:0;z-index:60;background:rgba(10,14,22,.55);display:grid;place-items:center;padding:20px}
+.modal-box{background:var(--surface);border-radius:16px;max-width:640px;width:100%;padding:26px;box-shadow:var(--shadow)}
+.modal-box h2{font-size:1.45rem;letter-spacing:-.02em}
+.mode-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+@media (max-width:560px){.mode-choices{grid-template-columns:1fr}}
+.mode-choice{text-align:left;border:1px solid var(--line-strong);background:var(--surface);border-radius:12px;padding:16px;cursor:pointer}
+.mode-choice:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.mode-choice b{display:block;font-size:1.05rem;margin-bottom:4px}
+.mode-choice span{font-size:.88rem;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
-<body>
+<body class="mode-guided">
 
 <div class="boot" id="bootView"><div><div class="spinner"></div>Loading StratLab</div></div>
 
@@ -320,6 +418,7 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
       <button class="navbtn" data-page="account">Account</button>
     </nav>
     <div class="top-r">
+      <div class="seg mode-seg" role="group" aria-label="Experience mode"><button data-mode="guided" title="Step-by-step help for new traders">Guided</button><button data-mode="expert" title="All controls, no hand-holding">Expert</button></div>
       <span class="status" id="dataStatus"><i></i><span>Checking data</span></span>
       <button class="iconbtn" id="themeBtn" aria-label="Switch to dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
       <button class="plan-pill" id="planPill" data-goto="plans">Free</button>
@@ -341,10 +440,17 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
   </div>
   <div class="build">
     <div class="stack">
+      <section class="card guide guided-only" id="guideCard">
+        <div class="guide-top"><div><h2>Your first strategy</h2><p class="muted small" id="guideSub">Follow these steps. We'll explain everything along the way.</p></div><span class="small muted" id="guideCount"></span></div>
+        <div class="bar"><i id="guideBar" style="width:0"></i></div>
+        <div class="guide-items" id="guideItems"></div>
+        <div class="grad" id="gradBox" hidden><span>You've done the full loop: built, tested and paper traded a strategy. Expert mode shows every control without the explanations.</span><button class="btn sm primary" data-mode="expert">Switch to Expert mode</button></div>
+      </section>
       <section class="card step" data-n="1">
         <div class="card-h"><h2>Instrument and candles</h2>
           <div class="seg" id="tfSeg" role="group" aria-label="Candle size"><button data-tf="1d">1 day</button><button data-tf="1h">1 hour</button><button data-tf="15m">15 min</button><button data-tf="5m">5 min</button></div>
         </div>
+        <p class="help guided-only">Pick what you want to test your idea on. <b>NIFTY 50</b> is a good start: it tracks India's 50 biggest companies, so it moves more calmly than a single stock. A <b>candle</b> is one block of time on the chart; <b>1 day</b> is easiest because each trade lasts days, not minutes.</p>
         <div class="chips" id="defaultInst"></div>
         <div class="picker">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -355,17 +461,30 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
       </section>
 
       <section class="card step" data-n="2">
-        <div class="card-h"><h2>Describe your idea</h2><div class="chips" id="templates"></div></div>
-        <textarea id="sText" maxlength="2000" placeholder="Buy when 20 EMA crosses above 50 EMA. Sell when RSI goes above 70. Stop loss 2%, target 6%."></textarea>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <button class="btn" id="parseBtn">Turn into rules</button>
-          <button class="btn primary" id="aiBtn">Write rules with AI <span class="pro-tag">Pro</span></button>
+        <div class="card-h"><h2>Describe your strategy</h2><div class="chips expert-only" id="templates"></div></div>
+        <p class="help guided-only">Write your idea the way you'd explain it to a friend. It doesn't need to be complete: we'll turn it into rules and ask about anything that's missing, explaining each choice.</p>
+        <div class="idea-box">
+          <textarea id="sText" maxlength="2000" placeholder="e.g. Buy when NIFTY 50 is above the 7 EMA"></textarea>
         </div>
-        <p class="note muted" id="parseNote">Simple sentences with SMA, EMA, RSI and price work everywhere. The AI writer understands complex ideas and advanced indicators.</p>
+        <div class="examples guided-only">Try:
+          <button data-example="Buy when NIFTY 50 is above the 7 EMA">Buy NIFTY above 7 EMA</button>
+          <button data-example="Buy Reliance when RSI drops below 30, sell when it goes back above 55">Reliance RSI bounce</button>
+          <button data-example="Buy Bank Nifty on 15 min candles when the 9 EMA crosses above the 21 EMA, stop loss 1%">Bank Nifty EMA cross</button>
+        </div>
+        <div class="build-row">
+          <button class="btn primary" id="aiBtn">Build my strategy</button>
+          <button class="btn expert-only" id="parseBtn" title="Instant, no AI. Understands simple sentences with SMA, EMA, RSI and price.">Convert without AI</button>
+          <span class="ai-usage" id="aiUsage"></span>
+        </div>
+        <p class="note muted" id="parseNote" hidden></p>
         <ul class="notes-list" id="aiNotes" hidden></ul>
+        <div class="complete" id="completeBox" hidden></div>
+        <div class="or guided-only">or start from a proven idea</div>
+        <div class="starters guided-only" id="starters"></div>
       </section>
 
       <section class="card step" data-n="3">
+        <p class="help guided-only">These are the exact rules the computer follows, checked once per candle. Each rule is written out in plain English underneath, so you can confirm it says what you mean.</p>
         <div class="rules-h"><h2>Buy when</h2>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div class="seg" id="joinSeg"><button data-join="all">All match</button><button data-join="any">Any matches</button></div><button class="btn sm" data-add="entry">Add condition</button></div>
         </div>
@@ -373,22 +492,31 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
         <div class="rules-h" style="margin-top:20px"><h2>Sell when</h2><button class="btn sm" data-add="exit">Add condition</button></div>
         <div id="exitList"></div>
         <p class="note muted">Any sell condition closes the trade. Stop loss and target are checked first on every candle.</p>
+        <details class="gloss guided-only"><summary>What do these words mean?</summary><dl>
+          <dt>SMA (average price)</dt><dd>The average closing price over the last N candles. Price above its 50-day SMA usually means the stock is in an uptrend.</dd>
+          <dt>EMA (fast average)</dt><dd>Like SMA, but recent prices count more, so it reacts faster to moves.</dd>
+          <dt>RSI (momentum)</dt><dd>A score from 0 to 100. Below 30 often means the stock fell too fast (oversold); above 70 means it rose too fast (overbought).</dd>
+          <dt>Crosses above</dt><dd>True only on the candle where the first line moves from below to above the second. "Is above" is true on every candle where it stays above.</dd>
+          <dt>All match / Any matches</dt><dd>With "All match", every buy condition must be true at the same time. With "Any matches", one is enough.</dd>
+        </dl></details>
       </section>
 
       <section class="card step" data-n="4">
         <div class="card-h"><h2>Risk and capital</h2></div>
+        <p class="help guided-only">This is the most important step. It decides how much you can lose on one bad trade. Pick a style to start; you can fine-tune the numbers after.</p>
+        <div class="presets guided-only" id="presets"></div>
         <div class="grid g3">
-          <label class="f">Capital (₹)<input type="number" id="rCap" min="1000" step="1000" inputmode="numeric"></label>
-          <label class="f">Risk per trade (%)<input type="number" id="rRisk" min="0.1" max="100" step="0.1" inputmode="decimal"></label>
-          <label class="f">Max capital per trade (%)<input type="number" id="rAlloc" min="1" max="100" step="1" inputmode="numeric"></label>
+          <label class="f">Capital (₹)<input type="number" id="rCap" min="1000" step="1000" inputmode="numeric"><span class="hint guided-only">Pretend money the test starts with</span></label>
+          <label class="f">Risk per trade (%)<input type="number" id="rRisk" min="0.1" max="100" step="0.1" inputmode="decimal"><span class="hint guided-only">Most traders keep this at 1% or less</span></label>
+          <label class="f expert-only">Max capital per trade (%)<input type="number" id="rAlloc" min="1" max="100" step="1" inputmode="numeric"></label>
         </div>
         <div class="grid g4" style="margin-top:12px">
-          <label class="f">Stop loss (%)<input type="number" id="rSl" min="0" step="0.1" inputmode="decimal"></label>
-          <label class="f">Target (%)<input type="number" id="rTgt" min="0" step="0.1" inputmode="decimal"></label>
-          <label class="f">Brokerage per order (₹)<input type="number" id="rBrok" min="0" step="1" inputmode="numeric"></label>
-          <label class="f">Slippage (%)<input type="number" id="rSlip" min="0" step="0.01" inputmode="decimal"></label>
+          <label class="f">Stop loss (%)<input type="number" id="rSl" min="0" step="0.1" inputmode="decimal"><span class="hint guided-only">Sell if price falls this much</span></label>
+          <label class="f">Target (%)<input type="number" id="rTgt" min="0" step="0.1" inputmode="decimal"><span class="hint guided-only">Sell if price rises this much</span></label>
+          <label class="f expert-only">Brokerage per order (₹)<input type="number" id="rBrok" min="0" step="1" inputmode="numeric"></label>
+          <label class="f expert-only">Slippage (%)<input type="number" id="rSlip" min="0" step="0.01" inputmode="decimal"></label>
         </div>
-        <p class="note muted">Set stop loss or target to 0 to turn it off. Quantity = risk amount ÷ distance to stop, capped by max capital per trade. F&amp;O rounds down to whole lots.</p>
+        <p class="note muted expert-only">Set stop loss or target to 0 to turn it off. Quantity = risk amount ÷ distance to stop, capped by max capital per trade. F&amp;O rounds down to whole lots.</p>
       </section>
     </div>
 
@@ -399,6 +527,7 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
       </section>
       <section class="card">
         <div class="card-h"><h2>Risk per trade</h2><span class="muted small" id="riskAt"></span></div>
+        <p class="help guided-only" style="margin-top:-6px">What one trade looks like with your settings, at today's price.</p>
         <div class="facts" id="riskFacts"></div>
         <div class="side-actions">
           <button class="btn primary block" id="goBacktest">Backtest this strategy</button>
@@ -423,6 +552,7 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
     <span class="muted small" id="btMeta"></span>
     <button class="btn sm" id="csvBtn" disabled>Download trades <span class="pro-tag">Pro</span></button>
   </div>
+  <p class="help guided-only">A backtest replays your rules on past prices, as if you had traded them back then. Choose how far back to test: longer periods give more reliable results.</p>
   <div id="btEmpty" class="card empty">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
     <h2>Pick a period and run your first backtest</h2>
@@ -432,6 +562,7 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
   <div id="btResults" class="stack" hidden>
     <div class="banner" id="btWarn" hidden></div>
     <div class="kpis" id="btStats"></div>
+    <section class="card explain guided-only" id="btExplain"></section>
     <section class="card">
       <div class="card-h"><h2>Price and trades</h2><span class="muted small">▲ buy &nbsp; ▼ sell</span></div>
       <div class="chart-box tall"><canvas id="cPrice"></canvas></div>
@@ -458,6 +589,7 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
     <div><h1>Paper trading</h1><p class="muted" id="liveSub"></p></div>
     <button class="btn primary" id="startLive">Start current strategy</button>
   </div>
+  <p class="help guided-only">Paper trading runs your strategy on today's real prices with fake money, so you can see how it behaves before risking anything. It only trades while the market is open (9:15 am to 3:30 pm, Monday to Friday), and each new candle takes as long as the candle size you picked.</p>
   <div class="sess-strip" id="sessList"></div>
   <div id="liveEmpty" class="card empty">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -497,6 +629,10 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
     <div class="stack">
       <section class="card"><div class="card-h"><h2>Plan and billing</h2></div><div class="acct" id="acctPlan"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px" id="acctActions"></div></section>
       <section class="card">
+        <div class="card-h"><h2>Experience mode</h2><div class="seg" role="group" aria-label="Experience mode"><button data-mode="guided">Guided</button><button data-mode="expert">Expert</button></div></div>
+        <p class="small muted">Guided mode explains each step and hides advanced settings. Expert mode shows every control. Both are free, and you can switch any time.</p>
+      </section>
+      <section class="card">
         <div class="card-h"><h2>Connection check</h2><button class="btn sm" id="diagBtn">Run check</button></div>
         <div class="check-list" id="diagList"><p class="muted small">Checks your sign-in, the StratLab server, market data and your account. Run it if something isn't loading.</p></div>
       </section>
@@ -524,6 +660,16 @@ th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:.78r
 </nav>
 </div>
 
+<div class="modal" id="modeModal" hidden role="dialog" aria-modal="true" aria-labelledby="modeTitle">
+  <div class="modal-box">
+    <h2 id="modeTitle">How much trading experience do you have?</h2>
+    <p class="muted" style="margin-top:6px">We'll set up StratLab to match. You can switch any time from the top bar or your Account page.</p>
+    <div class="mode-choices">
+      <button class="mode-choice" data-choose="guided"><b>I'm new to this</b><span>Guided mode walks you through building and testing your first strategy, explains every term, and keeps advanced settings out of the way.</span></button>
+      <button class="mode-choice" data-choose="expert"><b>I've done this before</b><span>Expert mode gives you every control straight away: all timeframes, rule logic, brokerage, slippage and position limits.</span></button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button class="btn sm" id="toastAct" hidden></button></div>
 
 <script>
@@ -597,6 +743,7 @@ async function boot(){
   if(!session){ showLogin(); oauthError(); return; }
   $("bootView").hidden = true; $("loginView").hidden = true; $("appView").hidden = false;
   go(state.page);
+  maybeAskMode();
   try { await loadMe(); } catch(e){
     handleErr(e); setData(false, "StratLab couldn't load your account: " + e.message);
     const { data: { user } } = await sb.auth.getUser();
@@ -626,7 +773,7 @@ async function loadMe(){
   $("planPill").className = "plan-pill" + (p === "pro" ? " pro" : "");
   setData(state.me.data_online);
   document.querySelectorAll(".pro-tag").forEach(t => t.hidden = isPro());
-  renderUsage(); renderPlans(); renderAccount(); renderRules();
+  renderUsage(); renderPlans(); renderAccount(); renderRules(); renderAiUsage();
 }
 
 /* ================= navigation ================= */
@@ -723,13 +870,14 @@ function parseStrategyText(raw){
   t = t.replace(/(?:with |and |, )?(?:an? )?(?:stop[ -]?loss|\bsl\b|\bstop\b|target|take[ -]?profit|\btp\b|\brisk(?:ing)?|capital)[^.;,]*?\d[\d,.]*\s*%?(?:\s*(?:lakhs?|lacs?|crores?|cr|k)\b)?(?: of (?:my |the )?capital)?/g, " ");
   const clauses = t.split(/[.;\n]| then |,(?= ?(?:and )?(?:sell|exit|close|square|buy|enter|go long)\b)| and (?=(?:sell|exit|close|square off|buy|enter|go long)\b)/);
   const opRe = /(cross(?:es|ing)? (?:above|over)\b|crossover\b|cross(?:es|ing)? (?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<)/;
-  let side = "entry";
+  let side = "entry", lastRef = null;
   for(const cl of clauses){
     if(/\b(sell|exit|close|square off|book profit)/.test(cl)) side = "exit";
     else if(/\b(buy|enter|go long)/.test(cl)) side = "entry";
     for(const p of cl.split(/ and | & /)){
       const om = p.match(opRe); if(!om) continue;
-      const L = parseRef(p.slice(0, om.index)); if(!L) continue;
+      const L = parseRef(p.slice(0, om.index)) || lastRef; if(!L) continue;
+      lastRef = L;
       const right = p.slice(om.index + om[0].length);
       let R = parseRef(right);
       if(!R){ const nm = right.match(/-?\d+(?:\.\d+)?/); if(!nm) continue; R = {t: "num", v: +nm[0]}; }
@@ -754,9 +902,10 @@ $("tfSeg").onclick = e => { const b = e.target.closest("[data-tf]"); if(!b) retu
 $("sText").oninput = e => { S.text = e.target.value; };
 for(const [id, k] of Object.entries(RISK_FIELDS)) $(id).addEventListener("input", e => { const v = parseFloat(e.target.value); if(!isNaN(v) && v >= 0){ S.risk[k] = v; renderGraph(); renderRiskFacts(); } });
 $("templates").innerHTML = Object.keys(TEMPLATES).map(k => `<button class="chip" data-tpl="${esc(k)}">${esc(k)}</button>`).join("");
-$("templates").onclick = e => { const b = e.target.closest("[data-tpl]"); if(!b) return; $("sText").value = TEMPLATES[b.dataset.tpl]; S.name = b.dataset.tpl; $("sName").value = S.name; applyParse(); };
+$("templates").onclick = e => { const b = e.target.closest("[data-tpl]"); if(!b) return; $("sText").value = TEMPLATES[b.dataset.tpl]; S.name = b.dataset.tpl; $("sName").value = S.name; state.build = null; $("completeBox").hidden = true; applyParse(); };
 
 function applyParse(){
+  $("parseNote").hidden = false;
   S.text = $("sText").value;
   const p = parseStrategyText(S.text);
   const note = $("parseNote"); $("aiNotes").hidden = true;
@@ -775,34 +924,231 @@ function applyParse(){
   note.className = "note up"; note.textContent = `Found ${bits.join(", ")}. Check them below.`;
   fillForm(); renderBuild();
 }
-$("parseBtn").onclick = applyParse;
+$("parseBtn").onclick = () => { state.build = null; $("completeBox").hidden = true; $("parseNote").hidden = false; applyParse(); };
 
-$("aiBtn").onclick = async () => {
-  if(!isPro()) return toast("The AI strategy writer is on the Pro plan.", {label: "See plans", run: () => go("plans")});
+/* ---- strategy builder: plain English -> rules -> fill in the gaps ---- */
+function renderAiUsage(){
+  if(!state.me || !state.me.usage) { $("aiUsage").textContent = ""; return; }
+  const u = state.me.usage;
+  $("aiUsage").textContent = u.ai_limit == null ? "Unlimited AI builds" : `${Math.max(0, u.ai_limit - u.ai_used)} of ${u.ai_limit} AI builds left this month`;
+}
+function detectTf(t){
+  t = t.toLowerCase();
+  if(/\b5\s*-?\s*min/.test(t)) return "5m";
+  if(/\b15\s*-?\s*min/.test(t)) return "15m";
+  if(/\b(1\s*-?\s*hour|hourly|60\s*-?\s*min|1h)\b/.test(t)) return "1h";
+  if(/\b(daily|1\s*-?\s*day|day candles?|1d)\b/.test(t)) return "1d";
+  return null;
+}
+function detectInst(t){
+  t = t.toLowerCase();
+  if(/bank\s*nifty|nifty\s*bank/.test(t)) return "NIFTY BANK";
+  if(/\bnifty(\s*50)?\b/.test(t)) return "NIFTY 50";
+  const m = t.match(/\b(?:buy|sell|trade)\s+([a-z&]{3,20})\b/);
+  if(m && !["when","if","the","at","on","it","and","only","above","below","once","after"].includes(m[1])) return m[1].toUpperCase();
+  return null;
+}
+function localBuild(text){
+  const p = parseStrategyText(text);
+  const tf = detectTf(text), inst = detectInst(text);
+  const mentioned = Object.keys(p.risk);
+  if(p.exit.length) mentioned.push("exit");
+  if(tf) mentioned.push("tf");
+  if(inst) mentioned.push("instrument");
+  return {entry: p.entry, exit: p.exit, risk: p.risk, entryJoin: "all", tf, instrument: inst, name: null, mentioned, notes: []};
+}
+async function resolveInstrument(name){
+  const up = name.toUpperCase().replace(/\s+/g, " ").trim();
+  const alias = {"NIFTY": "NIFTY 50", "BANKNIFTY": "NIFTY BANK", "BANK NIFTY": "NIFTY BANK"}[up] || up;
+  let hit = state.defaults.find(i => i.symbol === alias);
+  if(!hit){
+    try {
+      const rows = await api("/instruments/search?q=" + encodeURIComponent(alias.slice(0, 40)));
+      hit = rows.find(r => r.symbol === alias) || rows.find(r => r.type === "EQ" || r.type === "INDEX");
+    } catch(e){}
+  }
+  if(hit){ selectInstrument(hit); return true; }
+  return false;
+}
+async function buildStrategy(){
   const text = $("sText").value.trim();
-  if(text.length < 5) return toast("Describe your strategy first.");
-  busy($("aiBtn"), true, "Writing rules…");
+  if(text.length < 5){ $("sText").focus(); return toast("Describe your strategy first, e.g. \"Buy when NIFTY 50 is above the 7 EMA\"."); }
+  busy($("aiBtn"), true, "Building…");
+  let out, usedAI = true, fallback = "";
   try {
-    const out = await api("/ai/strategy", {method: "POST", body: {text}});
-    S.text = text;
-    if(out.entry.length) S.entry = out.entry;
-    if(out.exit.length) S.exit = out.exit;
-    if(out.entryJoin) S.entryJoin = out.entryJoin;
-    if(out.tf) S.tf = out.tf;
-    if(out.name && S.name === "Untitled strategy") S.name = out.name;
-    Object.assign(S.risk, out.risk || {});
-    fillForm(); renderBuild();
-    $("parseNote").className = "note " + (out.entry.length ? "up" : "down");
-    $("parseNote").textContent = out.entry.length ? `AI wrote ${out.entry.length} entry and ${out.exit.length} exit rules. Check them below.` : "The AI couldn't find entry rules in that description.";
-    $("aiNotes").hidden = !out.notes.length;
-    $("aiNotes").innerHTML = out.notes.map(n => `<li>${esc(n)}</li>`).join("");
-  } catch(e){ handleErr(e); }
-  finally { busy($("aiBtn"), false); }
-};
+    out = await api("/ai/strategy", {method: "POST", body: {text}});
+    if(state.me && out.usage) Object.assign(state.me.usage, out.usage);
+  } catch(e){
+    if(["ai_busy", "ai_limit", "ai_daily_limit", "ai_failed", "no_backend"].includes(e.code) || e.status >= 500 || !e.status){
+      usedAI = false;
+      fallback = e.code === "ai_limit" ? `${e.message} We used the simple converter, which understands SMA, EMA, RSI and price rules.`
+        : "The AI builder is busy, so we used the simple converter. It understands SMA, EMA, RSI and price rules; try the AI again in a minute for anything more complex.";
+      out = localBuild(text);
+    } else { busy($("aiBtn"), false); return handleErr(e); }
+  }
+  busy($("aiBtn"), false);
+  renderAiUsage();
+  S.text = text;
+  $("parseNote").hidden = true; $("aiNotes").hidden = true;
+  if(!out.entry.length){
+    state.build = null; $("completeBox").hidden = true;
+    $("parseNote").hidden = false; $("parseNote").className = "note down";
+    $("parseNote").textContent = (usedAI ? "" : fallback + " ") + "We couldn't find a buy rule. Say when to buy, e.g. \"Buy when the price is above the 50-day average\".";
+    if(out.notes && out.notes.length){ $("aiNotes").hidden = false; $("aiNotes").innerHTML = out.notes.map(n => `<li>${esc(n)}</li>`).join(""); }
+    return;
+  }
+  S.entry = out.entry; S.exit = out.exit || []; S.entryJoin = out.entryJoin || "all";
+  if(out.tf) S.tf = out.tf;
+  if(out.name && (!state.strategyId)) S.name = out.name;
+  Object.assign(S.risk, out.risk || {});
+  state.build = null;
+  const instFound = out.instrument ? await resolveInstrument(out.instrument) : false;
+  state.build = {mentioned: new Set(out.mentioned || []), answers: {}, order: [], notes: out.notes || [], usedAI, fallback, instName: out.instrument, instFound};
+  if(out.instrument && !state.build.instFound) state.build.notes.push(`We couldn't find "${out.instrument}" on NSE. Pick the instrument below.`);
+  guideMark("idea");
+  fillForm(); renderBuild(); renderComplete();
+  $("completeBox").scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+$("aiBtn").onclick = buildStrategy;
+$("sText").addEventListener("keydown", e => { if(e.key === "Enter" && (e.metaKey || e.ctrlKey)) buildStrategy(); });
+document.querySelectorAll("[data-example]").forEach(b => b.onclick = () => { $("sText").value = b.dataset.example; buildStrategy(); });
 
+const ABOVE = op => (op === "gt" || op === "xa") ? "above" : "below";
+function plainRef(r){ return sayRef(r).replace(/<[^>]+>/g, ""); }
+function gapQuestions(){
+  const b = state.build, m = b.mentioned, qs = [], first = S.entry[0], r = S.risk;
+  if(!m.has("instrument") || !b.instFound){
+    const blurb = {"NIFTY 50": "India's 50 largest companies. Steadier moves, a good place to start.", "NIFTY BANK": "The 12 biggest banks. Moves faster than NIFTY 50, so bigger swings both ways."};
+    qs.push({id: "inst", title: "What do you want to trade?", short: "Instrument",
+      why: b.instName ? `We couldn't match "${b.instName}". Pick one, or search for the exact NSE name.` : "Your idea doesn't name a stock or index yet. The same rules can behave very differently on different instruments.",
+      options: [...state.defaults.map(i => ({label: i.symbol, rec: i.symbol === "NIFTY 50", explain: blurb[i.symbol] || "Index", apply: () => selectInstrument(i)})),
+        {label: "Another stock", explain: "Search any NSE stock by name in step 1.", keepOpen: true, apply: () => { scrollToStep(1); setTimeout(() => $("instSearch").focus(), 350); }}]});
+  }
+  S.entry.forEach((c, k) => {
+    if((c.op === "gt" || c.op === "lt") && c.r.t !== "num" && !b.answers["style" + k]){
+      const w = ABOVE(c.op);
+      qs.push({id: "style" + k, title: `Buy only when it first crosses ${w}, or any time it's ${w}?`, short: "Buy timing",
+        why: `"${plainRef(c.l)} is ${w} ${plainRef(c.r)}" stays true on every candle, not just once. That decides how often you trade.`,
+        options: [
+          {label: `Only when it first crosses ${w}`, rec: true, explain: "Buys once, on the candle where it moves across. You get in early in a new move instead of buying late.", apply: () => { c.op = c.op === "gt" ? "xa" : "xb"; }},
+          {label: `Any time it's ${w}`, explain: `Buys straight away if it's already ${w}, and again after every exit while it stays ${w}. More trades, and some entries come late.`, apply: () => {}}]});
+    }
+  });
+  if(!m.has("exit")){
+    const opts = [];
+    if(first && first.r.t !== "num" && (first.op === "gt" || first.op === "xa"))
+      opts.push({label: `Sell when ${plainRef(first.l)} drops below ${plainRef(first.r)}`, rec: true, explain: "Exit when the reason you bought is gone. The most common exit for trend ideas.", apply: () => { S.exit = [{l: {...first.l}, op: "xb", r: {...first.r}}]; }});
+    if(first && first.l.t === "rsi" && (first.op === "lt" || first.op === "xb"))
+      opts.push({label: "Sell when RSI rises back above 55", rec: true, explain: "Exit once the stock has bounced back from being oversold.", apply: () => { S.exit = [{l: {...first.l}, op: "xa", r: {t: "num", v: 55}}]; }});
+    if(first && first.l.t === "ema" && first.r.t === "ema" && first.op === "xa")
+      opts.push({label: `Sell when ${plainRef(first.l)} crosses back below ${plainRef(first.r)}`, rec: true, explain: "The mirror of your buy signal: exit when short-term momentum fades.", apply: () => { S.exit = [{l: {...first.l}, op: "xb", r: {...first.r}}]; }});
+    opts.push({label: "Only my stop loss and target", rec: !opts.length, explain: "Exit only at a fixed % loss or gain. Simple, but you'll need a target, or winning trades never close.", apply: () => { S.exit = []; b.needTarget = true; }});
+    qs.push({id: "exit", title: "When should it sell?", short: "Sell rule", why: "Your idea says when to buy but not when to sell. Without a sell rule, a trade only closes when the stop loss hits.", options: opts});
+  }
+  if(!m.has("tf")){
+    const p = first ? Math.max(first.l.p || 0, first.r.p || 0) : 0;
+    qs.push({id: "tf", title: "How long should each candle be?", short: "Candles",
+      why: `Your rules are checked once per candle.${p ? ` A ${p}-candle indicator looks back ${p} trading days on daily candles, but only ${p * 15} minutes on 15-minute candles.` : ""}`,
+      options: [
+        {label: "1 day", rec: true, explain: "Swing trading: trades last days to weeks. Least noise and easiest to follow.", apply: () => { S.tf = "1d"; }},
+        {label: "1 hour", explain: "Trades last hours to a few days. More signals, and more false ones.", apply: () => { S.tf = "1h"; }},
+        {label: "15 min", explain: "Intraday: several trades a day. You'd need to watch the market.", apply: () => { S.tf = "15m"; }},
+        {label: "5 min", explain: "Very fast intraday. Lots of false signals, and costs add up quickly.", apply: () => { S.tf = "5m"; }}]});
+  }
+  if(!m.has("sl")){
+    const intra = S.tf !== "1d", lv = intra ? [0.5, 1, 2] : [1, 2, 4];
+    qs.push({id: "sl", title: "How big a loss will you accept on one trade?", short: "Stop loss",
+      why: "A stop loss sells automatically if the price falls this far below your buy price, so one bad trade can't do big damage.",
+      options: [
+        {label: `${lv[0]}% (tight)`, explain: "Small losses, but normal price wiggles may knock you out of good trades.", apply: () => { r.sl = lv[0]; }},
+        {label: `${lv[1]}% (balanced)`, rec: true, explain: `Leaves room for normal moves on ${intra ? "intraday" : "daily"} candles while keeping losses small.`, apply: () => { r.sl = lv[1]; }},
+        {label: `${lv[2]}% (wide)`, explain: "More room for the trade, but each loss is bigger, so you buy fewer shares.", apply: () => { r.sl = lv[2]; }},
+        {label: "No stop loss", explain: "Not recommended. A losing trade keeps falling until your sell rule fires.", apply: () => { r.sl = 0; }}]});
+  }
+  if(!m.has("tgt")){
+    const sl = r.sl || 2, hasExit = S.exit.length > 0, two = +(sl * 2).toFixed(2), three = +(sl * 3).toFixed(2);
+    qs.push({id: "tgt", title: "Should it take profit at a fixed gain?", short: "Target",
+      why: hasExit ? "Your sell rule will close trades. A target also locks in gains early if the price jumps." : "You're exiting only with stop loss and target, so trades need a target to close in profit.",
+      options: [
+        ...(hasExit ? [{label: "No target, let the sell rule decide", rec: true, explain: "Lets winning trades run for as long as the move lasts.", apply: () => { r.tgt = 0; }}] : []),
+        {label: `${two}% (2× your stop)`, rec: !hasExit, explain: "Aim to win twice what you risk. You can be right less than half the time and still come out ahead.", apply: () => { r.tgt = two; }},
+        {label: `${three}% (3× your stop)`, explain: "Bigger wins, but fewer trades reach the target.", apply: () => { r.tgt = three; }}]});
+  }
+  if(!m.has("riskPct")){
+    const cap = r.capital;
+    qs.push({id: "risk", title: "How much of your capital should one trade risk?", short: "Risk per trade",
+      why: `This sets how many shares to buy: if the stop loss hits, you lose about this much of your ${inr(cap)}.`,
+      options: [0.5, 1, 2].map(v => ({label: `${v}% (${inr(cap * v / 100)})`, rec: v === 1,
+        explain: v === 0.5 ? "Very cautious. Slower growth and small drawdowns." : v === 1 ? "The usual rule of thumb for most traders." : "Faster growth, but a losing streak hurts much more.",
+        apply: () => { r.riskPct = v; }}))});
+  }
+  if(!m.has("capital")){
+    qs.push({id: "cap", title: "How much capital should the test use?", short: "Capital",
+      why: "This is pretend money for the test. Use roughly what you'd really trade with, so the numbers mean something.",
+      options: [100000, 500000, 1000000].map(v => ({label: inr(v), rec: v === 500000,
+        explain: v === 100000 ? "A small account. Fewer shares per trade." : v === 500000 ? "A typical size for testing." : "A larger account. Position sizes scale up.",
+        apply: () => { r.capital = v; }}))});
+  }
+  return qs;
+}
+function renderComplete(){
+  const box = $("completeBox"), b = state.build;
+  if(!b){ box.hidden = true; return; }
+  const all = gapQuestions();
+  const open = all.filter(q => !b.answers[q.id]);
+  const now = open[0];
+  const total = b.order.length + open.length;
+  const inst = state.instrument;
+  const understood = [
+    ...(b.mentioned.has("instrument") && b.instFound && inst ? [`Trade <b>${esc(inst.symbol)}</b>`] : []),
+    ...S.entry.map((c, k) => ruleSentence(c, "entry")),
+    ...(b.mentioned.has("exit") ? S.exit.map(c => ruleSentence(c, "exit")) : []),
+    ...(b.mentioned.has("tf") ? [`Use <b>${esc(TF_NAME[S.tf])}</b> candles`] : []),
+    ...(b.mentioned.has("sl") ? [`Stop loss at <b>${S.risk.sl}%</b>`] : []),
+    ...(b.mentioned.has("tgt") ? [`Target at <b>${S.risk.tgt}%</b>`] : []),
+    ...(b.mentioned.has("riskPct") ? [`Risk <b>${S.risk.riskPct}%</b> of capital per trade`] : []),
+    ...(b.mentioned.has("capital") ? [`Test with <b>${inr(S.risk.capital)}</b>`] : []),
+  ];
+  const done = b.order.map(id => b.answers[id]).map(a => `<div class="q-done"><i></i><span>${esc(a.short)}: <b>${esc(a.label)}</b></span>${all.some(q => q.id === a.id) ? `<button class="linkbtn" data-change="${a.id}">Change</button>` : ""}</div>`).join("");
+  const nowHtml = now ? `<div class="q-now"><h4>${esc(now.title)}</h4><p class="why">${esc(now.why)}</p>
+      <div class="opts">${now.options.map((o, k) => `<button class="opt" data-opt="${k}">${o.rec ? `<span class="rec">Suggested</span>` : ""}<b>${esc(o.label)}</b><span>${esc(o.explain)}</span></button>`).join("")}</div>
+      <div class="q-foot"><span>Question ${b.order.length + 1} of ${total}${open.length > 1 ? `. Next: ${open.slice(1, 3).map(q => q.short.toLowerCase()).join(", ")}${open.length > 3 ? "…" : ""}` : ""}</span><button class="linkbtn" id="acceptRest">Use suggested answers for the rest</button></div></div>`
+    : `<div class="ready"><span><b>Your strategy is complete.</b><span class="small muted">Every rule is filled in. Check the details below, then test it on past prices.</span></span><button class="btn primary" id="readyBt">Backtest it</button></div>`;
+  box.hidden = false;
+  box.innerHTML = `${b.usedAI ? "" : `<p class="fallback">${esc(b.fallback)}</p>`}
+    <div class="complete-h"><h3>${now ? "Let's fill in the missing details" : "Strategy ready"}</h3><span class="small muted">${total ? `${b.order.length} of ${total} details added` : "Nothing missing"}</span></div>
+    <div class="understood"><span class="small muted">Here's what we understood</span><ul>${understood.map(t => `<li>${t}</li>`).join("")}</ul>
+      ${b.notes.length ? `<ul class="notes-list">${b.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}</div>
+    <div class="qa">${done}${nowHtml}</div>`;
+  box.querySelectorAll("[data-opt]").forEach(btn => btn.onclick = () => answer(now, now.options[+btn.dataset.opt]));
+  box.querySelectorAll("[data-change]").forEach(btn => btn.onclick = () => { const id = btn.dataset.change; delete b.answers[id]; b.order = b.order.filter(x => x !== id); renderComplete(); });
+  if($("acceptRest")) $("acceptRest").onclick = () => {
+    let guard = 0;
+    while(guard++ < 12){
+      const q = gapQuestions().find(x => !b.answers[x.id]); if(!q) break;
+      const o = q.options.find(x => x.rec && !x.keepOpen) || q.options.find(x => !x.keepOpen);
+      if(!o) break;
+      answer(q, o, true);
+    }
+    fillForm(); renderBuild(); renderComplete();
+  };
+  if($("readyBt")) $("readyBt").onclick = () => $("goBacktest").click();
+}
+function answer(q, o, quiet){
+  const b = state.build;
+  o.apply();
+  if(o.keepOpen) return;
+  b.answers[q.id] = {id: q.id, short: q.short, label: o.label};
+  b.order.push(q.id);
+  if(q.id === "sl" || q.id === "risk" || q.id === "cap") guideMark("risk");
+  if(!quiet){ fillForm(); renderBuild(); renderComplete(); }
+}
+
+const FRIENDLY = {price: "Price", sma: "Average price (SMA)", ema: "Fast average (EMA)", rsi: "Momentum (RSI)", macd: "MACD line", macd_signal: "MACD signal", macd_hist: "MACD histogram", bb_upper: "Upper Bollinger band", bb_mid: "Middle Bollinger band", bb_lower: "Lower Bollinger band", vwap: "VWAP", supertrend: "Supertrend"};
 function indOpts(v){
   const pro = isPro();
-  return IND.map(([k, n, p]) => `<option value="${k}"${k === v ? " selected" : ""}${p && !pro && k !== v ? " disabled" : ""}>${n}${p && !pro ? " (Pro)" : ""}</option>`).join("");
+  const guided = state.mode === "guided";
+  return IND.map(([k, n0, p]) => [k, guided ? FRIENDLY[k] : n0, p]).map(([k, n, p]) => `<option value="${k}"${k === v ? " selected" : ""}${p && !pro && k !== v ? " disabled" : ""}>${n}${p && !pro ? " (Pro)" : ""}</option>`).join("");
 }
 const opts = (list, v) => list.map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${n}</option>`).join("");
 function condRow(c, list, i){
@@ -814,7 +1160,35 @@ function condRow(c, list, i){
     <select data-f="op" class="op" aria-label="Condition">${opts(OPS, c.op)}</select>
     <select data-f="rt" aria-label="Compare with">${indOpts(c.r.t)}<option value="num"${c.r.t === "num" ? " selected" : ""}>Value</option></select>
     <input data-f="rp" type="number" step="any" value="${rv}" class="${rHas ? "" : "ghost"}" aria-label="Period or value" title="${c.r.t === "num" ? "Value" : "Period"}">
-    <button class="icon" data-act="del" aria-label="Remove condition"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>`;
+    <button class="icon" data-act="del" aria-label="Remove condition"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <p class="rule-say guided-only">${ruleSentence(c, list)}</p></div>`;
+}
+const UNIT = {"1d": "day", "1h": "hour", "15m": "15-minute", "5m": "5-minute"};
+function sayRef(r){
+  const p = r.p ?? (DEF[r.t] || [])[0], u = UNIT[S.tf];
+  switch(r.t){
+    case "price": return "the price";
+    case "num": return `<b>${esc(r.v)}</b>`;
+    case "sma": return `its <b>${p}-${u} average</b>`;
+    case "ema": return `its <b>${p}-${u} fast average</b>`;
+    case "rsi": return `<b>momentum (RSI ${p})</b>`;
+    case "macd": return "<b>the MACD line</b>"; case "macd_signal": return "<b>the MACD signal line</b>"; case "macd_hist": return "<b>the MACD histogram</b>";
+    case "bb_upper": return "<b>the upper Bollinger band</b>"; case "bb_mid": return "<b>the middle Bollinger band</b>"; case "bb_lower": return "<b>the lower Bollinger band</b>";
+    case "vwap": return "<b>VWAP</b>"; default: return "<b>the Supertrend line</b>";
+  }
+}
+function ruleSentence(c, list){
+  const verb = list === "entry" ? "Buy" : "Sell";
+  const op = {xa: "moves above", xb: "drops below", gt: "is above", lt: "is below"}[c.op];
+  let extra = "";
+  if(c.l.t === "rsi" && c.r.t === "num"){
+    if((c.op === "lt" || c.op === "xb") && c.r.v <= 35) extra = " <em>(the stock may have fallen too far, too fast)</em>";
+    if((c.op === "gt" || c.op === "xa") && c.r.v >= 65) extra = " <em>(the stock may have risen too far, too fast)</em>";
+  }
+  if(c.l.t === "price" && (c.r.t === "sma" || c.r.t === "ema") && (c.op === "xa" || c.op === "gt")) extra = " <em>(a common sign of an uptrend)</em>";
+  if(c.l.t === "price" && (c.r.t === "sma" || c.r.t === "ema") && (c.op === "xb" || c.op === "lt")) extra = " <em>(a common sign the trend is weakening)</em>";
+  if(c.l.t === "ema" && c.r.t === "ema" && c.op === "xa") extra = " <em>(short-term momentum is overtaking the longer trend)</em>";
+  return `${verb} when ${sayRef(c.l)} ${op} ${sayRef(c.r)}${extra}.`;
 }
 function renderRules(){
   if(!S) return;
@@ -859,7 +1233,12 @@ function selectInstrument(i){
     const kind = i.type === "INDEX" ? "Index" : i.type === "EQ" ? "NSE" : i.type === "FUT" ? `Future, lot ${i.lot}` : `${i.type} ${i.strike ?? ""}, lot ${i.lot}`;
     $("selInst").innerHTML = `<b>${esc(i.symbol)}</b><span class="tag">${esc(kind)}</span><span class="muted small">${esc(i.name !== i.symbol ? i.name : "")}${i.expiry ? " exp " + esc(i.expiry) : ""}</span><span class="px" id="selPx">${state.ltp[i.token] != null ? inr(state.ltp[i.token], 2) : ""}</span>`;
   }
-  renderDefaults(); renderGraph(); loadLtp();
+  renderDefaults(); renderGraph(); loadLtp(); renderGuide();
+  if(state.build && i){
+    state.build.instFound = true;
+    if(!state.build.answers.inst){ state.build.answers.inst = {id: "inst", short: "Instrument", label: i.symbol}; state.build.order.push("inst"); }
+    renderComplete();
+  }
 }
 let searchTimer, lastResults = [];
 $("instSearch").addEventListener("input", e => {
@@ -907,7 +1286,8 @@ $("savedSel").onchange = async e => {
   }
   fillForm(); renderBuild();
 };
-$("newBtn").onclick = () => { S = blankStrategy(); S.name = "Untitled strategy"; S.text = ""; S.entry = []; S.exit = []; state.strategyId = null; fillForm(); renderBuild(); refreshSaved(); };
+$("newBtn").onclick = () => { state.build = null; $("completeBox").hidden = true; S = blankStrategy();
+setMode(lsGet(MODE_KEY) || "guided"); S.name = "Untitled strategy"; S.text = ""; S.entry = []; S.exit = []; state.strategyId = null; fillForm(); renderBuild(); refreshSaved(); };
 $("saveBtn").onclick = async () => {
   busy($("saveBtn"), true, "Saving…");
   try {
@@ -998,7 +1378,7 @@ function renderRiskFacts(){
     fact(r.sl > 0 && r.tgt > 0 ? `1 : ${(r.tgt/r.sl).toFixed(1)}` : "–", "Risk to reward") +
     fact(streak, "Losses in a row to lose 20%");
 }
-function renderBuild(){ renderRules(); renderGraph(); renderRiskFacts(); }
+function renderBuild(){ renderRules(); renderGraph(); renderRiskFacts(); renderGuide(); renderStarters(); renderPresets(); }
 
 /* ================= charts ================= */
 function css(){ const g = getComputedStyle(document.documentElement); const v = n => g.getPropertyValue(n).trim(); return {ink: v("--ink"), muted: v("--muted"), line: v("--line"), indigo: v("--accent"), up: v("--up"), down: v("--down"), marigold: v("--warn")}; }
@@ -1072,6 +1452,9 @@ $("runBt").onclick = async () => {
     state.lastBt = {...out, strategy: JSON.parse(JSON.stringify(S))};
     state.me.usage = out.usage; renderUsage();
     renderBacktest(state.lastBt);
+    guideBump("backtests");
+    if(state.mode === "guided") setTimeout(() => $("btExplain").scrollIntoView({behavior: "smooth", block: "start"}), 150);
+    if(state.mode === "guided" && state.guide.backtests === 3 && state.guide.live && !state.guide.nudged){ guideMark("nudged"); toast("You're getting the hang of this. Want every control?", {label: "Switch to Expert", run: () => setMode("expert", true)}); }
   } catch(e){ handleErr(e); }
   finally { busy(btn, false); $("btLoading").hidden = true; $("csvBtn").disabled = !state.lastBt; if(!state.lastBt) $("btEmpty").hidden = false; }
 };
@@ -1085,7 +1468,7 @@ function renderBacktest(res){
   if(!st.n && !res.open_trade && res.lot > 1) warn.push(`No trades: one lot is ${res.lot} units, which your risk settings can't afford. Raise capital or risk per trade.`);
   $("btWarn").hidden = !warn.length; $("btWarn").textContent = warn.join(" ");
   let first = true;
-  const card = (b, sp, k = "") => { const c = `<div class="kpi${first ? " lead" : ""}"><b class="${k}">${b}</b><span>${sp}</span></div>`; first = false; return c; };
+  const card = (b, sp, k = "") => { const key = Object.keys(KPI_HINT).find(h => sp.startsWith(h)); const c = `<div class="kpi${first ? " lead" : ""}"><b class="${k}">${b}</b><span>${sp}</span>${key ? `<span class="hint guided-only">${KPI_HINT[key]}</span>` : ""}</div>`; first = false; return c; };
   $("btStats").innerHTML =
     card(pct(st.ret), `Total return (${inr(st.pnl)})`, cls(st.ret)) +
     card(pct(st.buy_hold_ret), "Buy and hold", cls(st.buy_hold_ret)) +
@@ -1101,11 +1484,12 @@ function renderBacktest(res){
     {label: "Buy and hold", data: res.buy_hold, borderColor: c.muted, borderDash: [5, 4], borderWidth: 1.4}]},
     options: baseOpts({scales: {x: baseOpts().scales.x, y: yMoney()}})});
   mk("cDd", {type: "line", data: {labels, datasets: [{label: "Drawdown", data: res.drawdown, borderColor: c.down, backgroundColor: alpha(c.down, .18), fill: "origin"}]},
-    options: baseOpts({plugins: {legend: {display: false}}, scales: {x: baseOpts().scales.x, y: {max: 0, ticks: {color: c.muted, callback: v => v.toFixed(0) + "%"}, grid: {color: c.line}, border: {display: false}}}})});
+    options: baseOpts({plugins: {legend: {display: false}}, scales: {x: baseOpts().scales.x, y: {max: 0, ticks: {color: c.muted, callback: v => (Math.abs(v) < 5 ? v.toFixed(1) : v.toFixed(0)) + "%"}, grid: {color: c.line}, border: {display: false}}}})});
   const all = res.open_trade ? [...res.trades, res.open_trade] : res.trades;
   mk("cPnl", {type: "bar", data: {labels: all.map((t, i) => `#${i+1}`), datasets: [{label: "P&L", data: all.map(t => Math.round(t.pnl)),
     backgroundColor: all.map(t => t.why === "Still open" ? alpha(c.marigold, .8) : t.pnl > 0 ? c.up : c.down), borderRadius: 3}]},
     options: baseOpts({plugins: {legend: {display: false}, tooltip: {callbacks: {label: i => inr(i.raw)}}}, scales: {x: {ticks: {color: c.muted, maxTicksLimit: 12}, grid: {display: false}}, y: yMoney()}})});
+  renderExplain(res);
   $("heatTitle").textContent = tf === "1d" ? "Monthly returns" : "Daily returns";
   const maxAbs = Math.max(1, ...res.periods.map(g => Math.abs(g.ret)));
   $("heat").innerHTML = res.periods.map(g => { const a = Math.min(1, Math.abs(g.ret)/maxAbs)*0.85 + 0.08, flat = Math.abs(g.ret) < 0.005;
@@ -1151,7 +1535,7 @@ $("startLive").onclick = async () => {
   try {
     const snap = await api("/live/sessions", {method: "POST", body: {strategy: S, instrument_token: state.instrument.token}});
     await loadMe(); state.liveId = snap.id; await loadSessions(); drawSession(snap); startPoll();
-    toast("Live paper session started.");
+    toast("Paper trading started."); guideBump("live");
   } catch(e){ handleErr(e); }
   finally { busy($("startLive"), false); }
 };
@@ -1220,9 +1604,9 @@ function drawSession(snap){
 
 /* ================= plans ================= */
 const PLAN_FEATURES = {
-  free: ["5 backtests a month", "24-hour live paper trading trial", "SMA, EMA, RSI and price rules", "Nifty 50, Bank Nifty and any NSE stock"],
-  basic: ["50 backtests a month", "Live paper trading, 1 strategy at a time", "SMA, EMA, RSI and price rules", "Saved strategies"],
-  pro: ["Unlimited backtests", "Live paper trading, 5 strategies at a time", "AI strategy writer", "MACD, Bollinger Bands, VWAP, Supertrend", "F&O instruments", "Telegram and email trade alerts", "Strategy and trade export"]
+  free: ["AI strategy builder, 10 builds a month", "5 backtests a month", "24-hour live paper trading trial", "SMA, EMA, RSI and price rules", "Nifty 50, Bank Nifty and any NSE stock"],
+  basic: ["AI strategy builder, 100 builds a month", "50 backtests a month", "Live paper trading, 1 strategy at a time", "SMA, EMA, RSI and price rules", "Saved strategies"],
+  pro: ["Unlimited backtests", "Live paper trading, 5 strategies at a time", "Unlimited AI strategy builds", "MACD, Bollinger Bands, VWAP, Supertrend", "F&O instruments", "Telegram and email trade alerts", "Strategy and trade export"]
 };
 function renderPlans(){
   const me = state.me;
@@ -1285,6 +1669,115 @@ $("alSave").onclick = async () => {
 $("alTest").onclick = async () => {
   try { const r = await api("/me/alerts/test", {method: "POST"}); toast(`Test alert sent by ${r.sent.join(" and ")}.`); } catch(e){ handleErr(e); }
 };
+
+/* ================= guided / expert modes ================= */
+const MODE_KEY = "stratlab-mode", GUIDE_KEY = "stratlab-guide";
+function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function lsSet(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+state.guide = (() => { try { return JSON.parse(lsGet(GUIDE_KEY)) || {}; } catch(e){ return {}; } })();
+function guideMark(key, val = true){ if(state.guide[key] === val) return; state.guide[key] = val; lsSet(GUIDE_KEY, JSON.stringify(state.guide)); renderGuide(); }
+function guideBump(key){ state.guide[key] = (state.guide[key] || 0) + 1; lsSet(GUIDE_KEY, JSON.stringify(state.guide)); renderGuide(); }
+function setMode(m, announce){
+  state.mode = m === "expert" ? "expert" : "guided";
+  document.body.classList.toggle("mode-guided", state.mode === "guided");
+  document.body.classList.toggle("mode-expert", state.mode === "expert");
+  lsSet(MODE_KEY, state.mode);
+  document.querySelectorAll("[data-mode]").forEach(b => { if(b.closest(".seg")) b.setAttribute("aria-pressed", b.dataset.mode === state.mode); });
+  if(S){ renderRules(); renderGuide(); }
+  if(state.lastBt) renderExplain(state.lastBt);
+  if(announce) toast(state.mode === "guided" ? "Guided mode on. We'll explain each step." : "Expert mode on. All controls are visible.");
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-mode]"); if(b && !b.closest(".desk-nav")) { setMode(b.dataset.mode, true); return; }
+  const c = e.target.closest("[data-choose]"); if(c){ $("modeModal").hidden = true; setMode(c.dataset.choose, true); }
+});
+function maybeAskMode(){ if(!lsGet(MODE_KEY)){ $("modeModal").hidden = false; $("modeModal").querySelector("button").focus(); } }
+
+const GUIDE_STEPS = [
+  {k: "inst", t: "Pick what to trade", done: () => !!state.instrument, go: () => scrollToStep(1)},
+  {k: "idea", t: "Describe your strategy", done: () => S.entry.length > 0 && !!state.guide.idea, go: () => scrollToStep(2)},
+  {k: "risk", t: "Set your risk", done: () => !!state.guide.risk, go: () => scrollToStep(4)},
+  {k: "bt", t: "Run a backtest", done: () => (state.guide.backtests || 0) > 0, go: () => $("goBacktest").click()},
+  {k: "read", t: "Read what the results mean", done: () => !!state.guide.read, go: () => go("backtest")},
+  {k: "live", t: "Paper trade with fake money", done: () => (state.guide.live || 0) > 0, go: () => $("goLive").click()},
+];
+function scrollToStep(n){ go("build"); const el = document.querySelector(`.step[data-n="${n}"]`); if(el) el.scrollIntoView({behavior: "smooth", block: "start"}); }
+function renderGuide(){
+  if(!S || !$("guideItems")) return;
+  const states = GUIDE_STEPS.map(g => g.done());
+  const n = states.filter(Boolean).length, next = states.indexOf(false);
+  $("guideBar").style.width = (n / GUIDE_STEPS.length * 100) + "%";
+  $("guideCount").textContent = `${n} of ${GUIDE_STEPS.length} done`;
+  $("guideSub").textContent = next === -1 ? "All done. Keep experimenting with new ideas." : `Next: ${GUIDE_STEPS[next].t.toLowerCase()}.`;
+  $("guideItems").innerHTML = GUIDE_STEPS.map((g, i) => `<button class="gi${states[i] ? " done" : ""}${i === next ? " next" : ""}" data-gi="${i}"><i></i>${esc(g.t)}</button>`).join("");
+  $("gradBox").hidden = next !== -1;
+}
+$("guideItems").addEventListener("click", e => { const b = e.target.closest("[data-gi]"); if(b) GUIDE_STEPS[+b.dataset.gi].go(); });
+
+const STARTERS = [
+  {title: "Ride the trend", lvl: "Easiest", why: "Buys when the price climbs above its 50-day average, and sells when it drops back below.",
+   text: "Buy when price crosses above 50 SMA. Sell when price crosses below 50 SMA. Stop loss 4%, target 10%, risk 1% of capital."},
+  {title: "Average crossover", lvl: "Easy", why: "Buys when the short-term average overtakes the longer one, a classic sign momentum is turning up.",
+   text: TEMPLATES["EMA crossover"]},
+  {title: "Buy the dip", lvl: "Moderate", why: "Buys after a sharp fall (low RSI) while the long-term trend is still up, then sells on the bounce.",
+   text: TEMPLATES["RSI dip buy"]},
+];
+function renderStarters(){
+  if(!$("starters")) return;
+  $("starters").innerHTML = STARTERS.map((st, i) => `<button class="starter" data-starter="${i}" aria-pressed="${S.text === st.text}"><span class="lvl${st.lvl === "Moderate" ? " mid" : ""}">${st.lvl}</span><b>${esc(st.title)}</b><span>${esc(st.why)}</span></button>`).join("");
+}
+$("starters").addEventListener("click", e => {
+  const b = e.target.closest("[data-starter]"); if(!b) return;
+  const st = STARTERS[+b.dataset.starter];
+  $("sText").value = st.text; S.name = st.title; $("sName").value = S.name;
+  state.build = null; $("completeBox").hidden = true;
+  applyParse(); guideMark("idea");
+  document.querySelector('.step[data-n="3"]').scrollIntoView({behavior: "smooth", block: "start"});
+});
+const PRESETS = [
+  {k: "careful", t: "Careful", d: "Risk 0.5% a trade, tight 2% stop", v: {riskPct: 0.5, sl: 2, tgt: 4}},
+  {k: "balanced", t: "Balanced", d: "Risk 1% a trade, 3% stop, 6% target", v: {riskPct: 1, sl: 3, tgt: 6}},
+  {k: "bold", t: "Bold", d: "Risk 2% a trade, wider 5% stop", v: {riskPct: 2, sl: 5, tgt: 10}},
+];
+function renderPresets(){
+  if(!$("presets")) return;
+  const r = S.risk;
+  $("presets").innerHTML = PRESETS.map((p, i) => `<button class="preset" data-preset="${i}" aria-pressed="${r.riskPct === p.v.riskPct && r.sl === p.v.sl && r.tgt === p.v.tgt}"><b>${p.t}</b><span>${p.d}</span></button>`).join("");
+}
+$("presets").addEventListener("click", e => {
+  const b = e.target.closest("[data-preset]"); if(!b) return;
+  Object.assign(S.risk, PRESETS[+b.dataset.preset].v);
+  fillForm(); renderBuild(); guideMark("risk");
+});
+["rCap","rRisk","rSl","rTgt"].forEach(id => $(id).addEventListener("change", () => { guideMark("risk"); renderPresets(); }));
+["entryList","exitList"].forEach(id => $(id).addEventListener("change", () => { if(S.entry.length) guideMark("idea"); if(state.build) renderComplete(); }));
+$("parseBtn").addEventListener("click", () => { if(S.entry.length) guideMark("idea"); });
+
+const KPI_HINT = {"Total return": "Gain or loss on your capital", "Buy and hold": "If you had just bought and held", "CAGR": "Yearly growth rate", "Max drawdown": "Worst fall from a high point",
+  "Win rate": "Share of trades that made money", "Profit factor": "Money won per ₹1 lost", "Sharpe ratio": "Return for the bumpiness; above 1 is good"};
+function renderExplain(res){
+  const box = $("btExplain"); if(!box) return;
+  const st = res.stats, sym = res.instrument.symbol, fmt = v => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
+  const items = [];
+  if(!st.n && !res.open_trade){
+    items.push(["r", `No trades happened. Your buy rules never matched during this period. Try a longer period, or a starting idea like "Ride the trend".`]);
+  } else {
+    items.push(st.ret >= st.buy_hold_ret
+      ? ["g", `Your strategy returned <b>${fmt(st.ret)}</b>, beating simply buying and holding ${esc(sym)} (<b>${fmt(st.buy_hold_ret)}</b>).`]
+      : ["r", `Your strategy returned <b>${fmt(st.ret)}</b>. Just buying and holding ${esc(sym)} would have returned <b>${fmt(st.buy_hold_ret)}</b>, so this idea didn't beat holding. That's common, and useful to know before risking money.`]);
+    items.push([st.win >= 45 ? "g" : "a", `It made <b>${st.n}</b> trade${st.n === 1 ? "" : "s"}, and <b>${st.win.toFixed(0)}%</b> of them were profitable.${st.win < 40 ? " A low win rate is fine only if the winners are much bigger than the losers." : ""}`]);
+    if(st.n) items.push([st.pf === null || st.pf >= 1 ? "g" : "r", st.pf === null ? "No trade lost money in this period." : st.pf >= 1 ? `For every ₹1 lost on bad trades, good trades made <b>₹${st.pf.toFixed(2)}</b>.` : `Losing trades cost more than winning trades made: <b>₹${st.pf.toFixed(2)}</b> won for every ₹1 lost.`]);
+    items.push([st.mdd > -10 ? "g" : "a", `At its worst, your account fell <b>${Math.abs(st.mdd).toFixed(1)}%</b> from its high point. Ask yourself whether you'd have kept following the rules through that.`]);
+    const tips = [];
+    if(st.n < 5) tips.push("Few trades means the result could be luck. Test a longer period.");
+    if(st.n >= 5 && st.win < 35) tips.push("Lots of small losses? Try a wider stop loss, or add a trend rule so you only buy in uptrends.");
+    if(st.ret < st.buy_hold_ret && st.n >= 5) tips.push("Try another starting idea, or a different instrument, and compare.");
+    if(tips.length) items.push(["a", `<b>Tip:</b> ${tips[0]}`]);
+  }
+  box.innerHTML = `<div class="card-h"><h2>What these results mean</h2><button class="btn sm primary" id="explainLive">Try it with fake money</button></div><ul>${items.map(([c, t]) => `<li><i class="${c}"></i><span>${t}</span></li>`).join("")}</ul>`;
+  $("explainLive").onclick = () => $("goLive").click();
+  if(state.mode === "guided" && state.page === "backtest") guideMark("read");
+}
 
 /* ================= connection check ================= */
 async function runDiag(){
