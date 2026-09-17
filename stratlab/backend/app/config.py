@@ -21,6 +21,9 @@ class Settings:
     RAZORPAY_PLAN_BASIC = _env("RAZORPAY_PLAN_BASIC")
     RAZORPAY_PLAN_PRO = _env("RAZORPAY_PLAN_PRO")
 
+    AI_PROVIDER = _env("AI_PROVIDER", "gemini")          # "gemini" or "anthropic"
+    GEMINI_API_KEY = _env("GEMINI_API_KEY")
+    GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-2.5-flash")
     ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
     ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 

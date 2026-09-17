@@ -11,7 +11,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay.errors import SignatureVerificationError
 
 from . import billing, db
-from .ai_writer import AIError, write_strategy
+from .ai_writer import AIBusy, AIError, write_strategy
 from .alerts import notify
 from .auth import current_profile
 from .config import settings
@@ -125,7 +125,8 @@ def me(profile=Depends(current_profile)):
         "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                     "renews_or_ends": profile.get("current_period_end"),
                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
-        "usage": {"backtests_used": backtests_used(profile), "backtests_limit": info["backtests_per_month"]},
+        "usage": {"backtests_used": backtests_used(profile), "backtests_limit": info["backtests_per_month"],
+                  "ai_used": db.count_usage(profile["id"], "ai", month_start_iso()), "ai_limit": info["ai_builds_per_month"]},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
@@ -211,16 +212,21 @@ def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
 
 @app.post("/ai/strategy")
 def ai_strategy(req: AIReq, profile=Depends(current_profile)):
-    if not is_pro(profile):
-        upgrade("The AI strategy writer is on the Pro plan.")
+    limit = PLANS[profile["_plan"]]["ai_builds_per_month"]
+    used = db.count_usage(profile["id"], "ai", month_start_iso())
+    if limit is not None and used >= limit:
+        err(429, "ai_limit", f"You've used all {limit} AI builds this month.")
     since = (datetime.now(IST) - timedelta(days=1)).isoformat()
-    if db.count_usage(profile["id"], "ai", since) >= 100:
-        err(429, "ai_daily_limit", "You've used the AI writer 100 times today. Try again tomorrow.")
+    if db.count_usage(profile["id"], "ai", since) >= 200:
+        err(429, "ai_daily_limit", "You've used the AI builder 200 times today. Try again tomorrow.")
     try:
-        out = write_strategy(req.text)
+        out = write_strategy(req.text, pro=is_pro(profile))
+    except AIBusy as e:
+        err(503, "ai_busy", str(e))
     except AIError as e:
         err(422, "ai_failed", str(e))
     db.add_usage(profile["id"], "ai")
+    out["usage"] = {"ai_used": used + 1, "ai_limit": limit}
     return out
 
 

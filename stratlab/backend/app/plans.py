@@ -5,6 +5,7 @@ PLANS = {
     "free": {
         "name": "Free", "price": 0,
         "backtests_per_month": 5,
+        "ai_builds_per_month": 10,
         "live_limit": 1,              # only during the 24-hour trial
         "live_trial_hours": 24,
         "pro_features": False,
@@ -12,6 +13,7 @@ PLANS = {
     "basic": {
         "name": "Basic", "price": 1999,
         "backtests_per_month": 50,
+        "ai_builds_per_month": 100,
         "live_limit": 1,
         "live_trial_hours": None,
         "pro_features": False,
@@ -19,9 +21,10 @@ PLANS = {
     "pro": {
         "name": "Pro", "price": 4900,
         "backtests_per_month": None,  # unlimited
+        "ai_builds_per_month": None,  # unlimited (a daily safety cap still applies)
         "live_limit": 5,
         "live_trial_hours": None,
-        "pro_features": True,         # AI writer, advanced indicators, F&O, alerts, export
+        "pro_features": True,         # advanced indicators, F&O, alerts, export
     },
 }
 
