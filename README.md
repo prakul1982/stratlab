@@ -110,3 +110,7 @@ Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on t
 ## Disclaimer
 
 StratLab is a research and paper trading tool. It places no real orders and gives no investment advice, and past backtest results don't predict future returns.
+
+## License
+
+Proprietary. © 2026 Prakul Bansal. All rights reserved. See [LICENSE](LICENSE).
