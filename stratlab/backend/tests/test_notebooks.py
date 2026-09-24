@@ -192,3 +192,33 @@ def test_basket_robustness_check(api):
     assert len(api.usage) == 2
     assert api.get(f"/notebooks/{nb['id']}").json()["experiments"][0]["basket"]["headline"] == b["headline"]
     assert api.post(f"/notebooks/{nb['id']}/experiments/9/basket").status_code == 404
+
+
+def test_walkforward(api):
+    nb = api.post("/notebooks", json={"name": "Trend follower", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 1500})
+    r = api.post(f"/notebooks/{nb['id']}/experiments/1/walkforward")
+    assert r.status_code == 200, r.text
+    w = r.json()["walkforward"]
+    assert w["status"] in ("pass", "warn", "fail") and w["headline"] and w["total"] == len(w["windows"]) >= 3
+    first, last = w["windows"][0], w["windows"][-1]
+    assert first["train_to"] == first["test_from"] and first["test_to"] <= w["windows"][1]["test_from"]
+    assert all(len(x["chosen"]) == 2 and x["chosen"][0]["label"] == "EMA" for x in w["windows"])   # both lengths re-tuned
+    assert last["test_to"] == w["to"] and w["grid_size"] == 25
+    assert len(w["series"]["t"]) == len(w["series"]["wf"]) == len(w["series"]["fixed"]) and w["series"]["wf"][0] == 0
+    # stitched curve ends at the compounded return of the unseen blocks
+    assert abs(w["series"]["wf"][-1] - w["wf_ret"]) < 0.05
+    assert len(api.usage) == 2
+    assert api.get(f"/notebooks/{nb['id']}").json()["experiments"][0]["walkforward"]["headline"] == w["headline"]
+
+
+def test_walkforward_skips_rules_with_nothing_to_tune():
+    from app.engine import walkforward
+    from app.models import Strategy
+    from tests.test_engine import bars_from
+    bars = bars_from([100 + (i % 30) for i in range(400)])
+    s = Strategy(entry=[{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 110}}], exit=[], risk=EMA["risk"])
+    out = walkforward.run(bars, s, 50)
+    assert out["status"] == "skip" and "nothing" in out["detail"].lower()
+    short = Strategy(**{k: EMA[k] for k in ("entry", "exit", "risk")})
+    assert walkforward.run(bars[:120], short, 50)["status"] == "skip"

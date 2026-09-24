@@ -2,6 +2,11 @@
 
 ## September 2026
 
+### Walk-forward testing
+- **Walk-forward test** on every verdict: the period is cut into blocks; each step tries 25 nearby settings on the past, keeps the best, and trades it on the next block the tuning never saw, then slides forward. You get the stitched return with no hindsight, next to your fixed settings and buy and hold, the settings picked at each step, and how much of the tuned return survived. It counts as one experiment and is saved with the verdict.
+- ADX, Stochastic, ATR %, Donchian and volume-average lengths can now be nudged by the Nearby settings check and re-tuned by walk-forward.
+- Paper trading's page now says what was already true: it works in every market (India, crypto, US, UK, Europe, Japan, forex), not only India and crypto.
+
 ### Tidy up old runs
 - **Paper trading:** a stopped session has a **Delete** button, and **Clear stopped sessions** removes them all at once. Running sessions can't be deleted until they're stopped.
 - **Experiments:** **Delete this experiment** on a verdict page removes one run and keeps the notebook and its other experiments.

@@ -3,13 +3,90 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, moneyShort, pct, periodName, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
-import type { Basket, Check, Experiment, Notebook } from "../lib/types";
+import type { Basket, Check, Experiment, Notebook, WalkForward } from "../lib/types";
 import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars, type Marker } from "../components/Charts";
 import { Info, Loading, STATUS_NAME } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { downloadShareImage } from "../components/shareImage";
 import { Book, Globe, Pencil, Pulse, Share, Trash } from "../components/Icons";
+
+const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+
+/** Re-tune on the past, trade the next unseen block, slide forward, repeat. */
+function WalkForwardCheck({ nb, e }: { nb: Notebook; e: Experiment }) {
+  const { fail, refreshMe } = useApp();
+  const [w, setW] = useState<WalkForward | undefined>(e.walkforward);
+  const [busy, setBusy] = useState(false);
+  if (!e.instrument.market || e.instrument.market === "CSV") return null;
+  const run = async () => {
+    setBusy(true);
+    try { setW((await api<{ walkforward: WalkForward }>(`/notebooks/${nb.id}/experiments/${e.v}/walkforward`, { method: "POST" })).walkforward); refreshMe(); }
+    catch (err) { fail(err); }
+    finally { setBusy(false); }
+  };
+  const s = w?.series;
+  return (
+    <section className="card stack" style={{ gap: 14 }}>
+      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
+        <h2 className="h2 row" style={{ gap: 0 }}>Walk-forward test<Info>{HELP.walkforward}</Info></h2>
+        <button className="btn quiet sm" disabled={busy} onClick={run}>{busy ? "Walking forward…" : w ? "Run again" : "Run a walk-forward test"}</button>
+      </div>
+      {!w && <p className="small muted">Would this idea still work if you kept re-tuning it? Walk-forward tunes the settings on the past, trades them on the next stretch it never saw, then slides forward and repeats. It's the strictest test of a tuned strategy. Counts as one experiment.</p>}
+      {w && <>
+        <div className="row wrap" style={{ gap: 12 }}>
+          <span className={`badge ${w.status}`}>{STATUS_NAME[w.status]}</span>
+          <span className="serif" style={{ fontSize: 22 }}>{w.headline}</span>
+        </div>
+        <p className="small" style={{ maxWidth: "80ch" }}>{w.detail}</p>
+        {w.windows.length > 0 && <>
+          <div className="stats-grid">
+            {([["Walk-forward return", w.wf_ret!, "Tuned on the past each time, traded only on unseen blocks."],
+              ["Your settings, same blocks", w.fixed_ret!, "Your exact settings, never re-tuned, over the same unseen blocks."],
+              ["Buy and hold, same span", w.buy_hold_ret!, "Just buying and holding over the same unseen span."]] as [string, number, string][]).map(([k, v, h]) => (
+              <div key={k} className="card stack" style={{ gap: 4, padding: "14px 16px" }}>
+                <span className={`serif ${signClass(v)}`} style={{ fontSize: 24, lineHeight: 1.15 }}>{pct(v)}</span>
+                <span className="small muted row" style={{ gap: 0 }}>{k}<Info>{h}</Info></span>
+              </div>
+            ))}
+            <div className="card stack" style={{ gap: 4, padding: "14px 16px" }}>
+              <span className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>{w.profitable} of {w.total}</span>
+              <span className="small muted row" style={{ gap: 0 }}>Unseen blocks in profit<Info>{`Each block was traded with settings chosen only from the data before it. ${w.trades} trades in all.`}</Info></span>
+            </div>
+          </div>
+          {s && s.t.length > 1 && <>
+            <LineChart ariaLabel="Walk-forward return against your fixed settings" height={220}
+              labels={s.t.map((t) => when(t, tzOf(e.instrument), false))} axisLabels={s.t.map((t) => shortDate(t))}
+              lines={[{ values: s.fixed, color: "var(--dash)", width: 1.6, label: "Your settings" }, { values: s.wf, color: "var(--blue)", width: 2.4, label: "Walk-forward" }]}
+              format={(v) => pct(v)} baseline={0} />
+            <Legend items={[{ label: "Walk-forward (re-tuned each block)", color: "var(--blue)" }, { label: "Your settings, never re-tuned", color: "var(--dash)" }]} />
+          </>}
+          <p className="hint">
+            Each step tried {w.grid_size} nearby settings around your {w.tuned?.join(" and ")} on the past and kept the best.
+            {w.efficiency != null && ` Unseen blocks earned ${Math.round(w.efficiency * 100)}% of the yearly return the tuning showed`}
+            {w.efficiency != null && (w.efficiency >= 0.5 ? " (50% or more is healthy)." : " (under 50% means the tuning flatters it).")}
+            {w.settings_used! > 3 && " The best settings kept changing, which suggests they're fitting noise."}
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Tuned on</th><th>Then traded</th><th>Settings picked</th><th>Tuned return</th><th>Unseen return</th><th>Yours, unseen</th></tr></thead>
+              <tbody>{w.windows.map((x) => (
+                <tr key={x.test_from}>
+                  <td>{shortDate(x.train_from)} – {shortDate(x.train_to)}</td>
+                  <td>{shortDate(x.test_from)} – {shortDate(x.test_to)}</td>
+                  <td className="num">{x.chosen.map((c) => `${c.label} ${c.value}${c.value === c.yours ? "" : ` (yours ${c.yours})`}`).join(" · ")}</td>
+                  <td className={`num ${signClass(x.train_ret)}`}>{pct(x.train_ret)}</td>
+                  <td className={`num ${signClass(x.test_ret)}`} style={{ fontWeight: 700 }}>{pct(x.test_ret)}</td>
+                  <td className={`num ${signClass(x.fixed_ret)}`}>{pct(x.fixed_ret)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </>}
+      </>}
+    </section>
+  );
+}
 
 const PEERS: Record<string, string> = { CRYPTO: "coins", FX: "currency pairs" };
 
@@ -246,6 +323,8 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           </table>
         </div>
       </section>
+
+      <WalkForwardCheck key={`wf${e.v}`} nb={nb} e={e} />
 
       <BasketCheck key={e.v} nb={nb} e={e} />
 

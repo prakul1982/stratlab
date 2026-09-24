@@ -19,7 +19,8 @@ from .indicators import params, ref_name
 SPLIT = 0.7
 SHUFFLES = 1000
 PERIOD_TYPES = {"sma", "ema", "rsi", "vwap", "macd", "macd_signal", "macd_hist",
-                "bb_upper", "bb_mid", "bb_lower", "supertrend"}
+                "bb_upper", "bb_mid", "bb_lower", "supertrend",
+                "adx", "stoch_k", "atr_pct", "dc_upper", "dc_lower", "vol_sma"}
 NUDGES = (0.6, 0.8, 1.0, 1.2, 1.4)
 
 HEADLINES = {

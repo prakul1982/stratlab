@@ -58,6 +58,17 @@ export interface Experiment {
     overlays: Record<string, (number | null)[]>; split: number | null };
   trades: Trade[];
   basket?: Basket;
+  walkforward?: WalkForward;
+}
+export interface WFWindow {
+  train_from: string; train_to: string; test_from: string; test_to: string;
+  chosen: { label: string; value: number; yours: number }[]; train_ret: number; test_ret: number; fixed_ret: number; trades: number;
+}
+export interface WalkForward {
+  status: "pass" | "warn" | "fail" | "skip"; headline: string; detail: string; windows: WFWindow[];
+  wf_ret?: number; fixed_ret?: number; buy_hold_ret?: number; profitable?: number; total?: number; trades?: number;
+  efficiency?: number | null; settings_used?: number; tuned?: string[]; grid_size?: number; from?: string; to?: string;
+  series?: { t: string[]; wf: number[]; fixed: number[] };
 }
 export interface BasketRow { id: string; symbol: string; name?: string | null; ret?: number; buy_hold?: number; n?: number; win?: number; mdd?: number; error?: string }
 export interface Basket {

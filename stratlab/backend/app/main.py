@@ -21,6 +21,7 @@ from .alerts import notify
 from .auth import current_profile
 from .config import settings
 from . import research
+from .engine import walkforward
 from .data import DataError, Registry
 from .intel import routes as research_routes
 from .intel.company import Research
@@ -482,6 +483,30 @@ def run_basket(nid: str, version: int, profile=Depends(current_profile)):
     nb["experiments"] = [exp if e["v"] == version else e for e in exps]
     save_notebook(profile, nb)
     return ok({"basket": out, "usage": {"backtests_used": backtests_used(profile), "backtests_limit": limit}})
+
+
+@app.post("/notebooks/{nid}/experiments/{version}/walkforward")
+def run_walkforward(nid: str, version: int, profile=Depends(current_profile)):
+    """Re-tune the indicator lengths on a rolling window of the past and trade them on the next,
+    unseen stretch, over the experiment's own period. Counts as one experiment."""
+    nb = get_notebook(profile, nid)
+    exps = list(nb.get("experiments") or [])
+    exp = next((e for e in exps if e["v"] == version), None)
+    if exp is None:
+        err(404, "not_found", "Experiment not found.")
+    inst = exp.get("instrument") or {}
+    if not inst.get("id") or inst.get("market") == "CSV":
+        err(400, "no_walkforward", "Walk-forward needs market data StratLab can fetch again, so it isn't available for uploaded CSVs.")
+    strategy = Strategy(**exp["strategy"])
+    limit = use_backtest(profile)
+    check_features(profile, strategy, inst)
+    data = research.load(markets, strategy, basket._Req(inst["id"], exp.get("days") or 365))
+    out = walkforward.run(data["bars"], strategy, data["start"], data["lot"], data["kind"])
+    db.add_usage(profile["id"], "backtest")
+    exp["walkforward"] = out
+    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
+    save_notebook(profile, nb)
+    return ok({"walkforward": out, "usage": {"backtests_used": backtests_used(profile), "backtests_limit": limit}})
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}")
