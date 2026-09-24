@@ -10,10 +10,17 @@ updates:
     ignore:
       # pinned by kiteconnect; see "Known limits" in stratlab/README.md
       - dependency-name: autobahn
+      # major versions can break the engine or billing: upgrade those by hand
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /stratlab/frontend
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      # React, TypeScript and Vite majors need a hand-checked upgrade
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor:
         update-types: [minor, patch]
