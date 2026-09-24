@@ -6,7 +6,7 @@ import { ago, dateOnly, money } from "../lib/format";
 import { Loading, Modal } from "../components/ui";
 
 type Plan = "free" | "basic" | "pro";
-type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null };
+type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quick_rank?: number | null; research_rank?: number | null };
 interface Overview {
   server: {
     kite_ready: boolean; kite_token_day: string | null; feed_connected: boolean; live_sessions: number;
@@ -167,6 +167,7 @@ export function AdminPage() {
               {!aiKeys.length && <Status ok={false} label="No AI keys" detail="Add a free GROQ_API_KEY in Railway → Variables, then redeploy." />}
               {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
               {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error} label={a.label} detail={a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
+              {aiKeys.length > 0 && <AIOrder rows={sv!.ai} />}
               <Status ok={!!sv!.research?.finnhub} label="US company data (Finnhub)" detail={sv!.research?.finnhub ? "FINNHUB_API_KEY is set" : "Add FINNHUB_API_KEY in Railway for US company pages (free at finnhub.io). India needs no key."} />
               <Status ok={sv!.billing_enabled} warn label="Payments" detail={sv!.billing_enabled ? "Razorpay is connected" : "Razorpay not set up, so paid plans show \"Coming soon\". Grant plans by hand below."} />
             </section>
@@ -212,6 +213,20 @@ export function AdminPage() {
         <p className="hint">Counts are for this month. The newest 200 users are shown; search to find others.</p>
       </section>
       {editing && <PlanModal user={editing} onClose={() => setEditing(null)} onSaved={() => { loadUsers(q); loadOverview(); }} />}
+    </div>
+  );
+}
+
+
+/** Which provider is asked first for each kind of job, and which keys are still missing. */
+function AIOrder({ rows }: { rows: AIRow[] }) {
+  const chain = (k: "quick_rank" | "research_rank") => rows.filter((r) => r[k]).sort((a, b) => a[k]! - b[k]!).map((r) => r.label).join(" → ");
+  const missing = rows.filter((r) => !r.configured).map((r) => r.label);
+  return (
+    <div className="stack small" style={{ gap: 4, padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
+      <span><b>Idea builder asks:</b> <span className="muted">{chain("quick_rank") || "–"}</span></span>
+      <span><b>Research reads ask:</b> <span className="muted">{chain("research_rank") || "–"}</span></span>
+      {missing.length > 0 && <span className="muted">No key yet: {missing.join(", ")}.</span>}
     </div>
   );
 }

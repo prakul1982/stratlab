@@ -16,7 +16,12 @@ import httpx
 
 from .config import settings
 
-DEFAULT_ORDER = ["groq", "cerebras", "sambanova", "gemini", "mistral", "openrouter", "anthropic"]
+# Two orders, because the jobs differ. Quick jobs (turning one sentence into rules) want the fastest
+# answer: Groq first. Research reads are long (several thousand tokens each), and Groq's free tier caps
+# tokens per day on its big models, so research leads with the providers that give the most tokens free
+# (Cerebras, Mistral) and keeps Groq's allowance for the quick jobs. Anthropic is paid, so always last.
+DEFAULT_ORDER = ["groq", "cerebras", "gemini", "mistral", "sambanova", "openrouter", "anthropic"]
+RESEARCH_ORDER = ["cerebras", "mistral", "gemini", "sambanova", "groq", "openrouter", "anthropic"]
 
 OPENAI_STYLE = {
     "groq": {"base": "https://api.groq.com/openai/v1", "label": "Groq"},
@@ -71,10 +76,15 @@ def model_setting(name: str) -> str:
     return (getattr(settings, f"{name.upper()}_MODEL", "") or "auto").strip()
 
 
-def order() -> list[str]:
+def order(kind: str = "quick") -> list[str]:
+    """Providers to try, in order, for a "quick" job (the idea builder) or a "research" one (long reads).
+    AI_PROVIDERS / AI_PROVIDERS_RESEARCH override the defaults; research falls back to AI_PROVIDERS."""
     raw = (settings.AI_PROVIDERS or "auto").strip().lower()
+    if kind == "research":
+        own = (settings.AI_PROVIDERS_RESEARCH or "auto").strip().lower()
+        raw = own if own != "auto" else raw
     if raw == "auto":
-        names = list(DEFAULT_ORDER)
+        names = list(RESEARCH_ORDER if kind == "research" else DEFAULT_ORDER)
         if settings.AI_PROVIDER == "anthropic":  # older setting: Claude first
             names.remove("anthropic")
             names.insert(0, "anthropic")
@@ -185,9 +195,10 @@ class OpenAIStyle:
         raise last or AIError(f"{LABELS[self.name]} had no model to try.")
 
 
-def complete(system: str, text: str, gemini=None, anthropic=None, transport=None, max_tokens: int = 1500) -> str:
+def complete(system: str, text: str, gemini=None, anthropic=None, transport=None, max_tokens: int = 1500,
+             kind: str = "quick") -> str:
     """Ask each configured provider in turn and return the first reply that holds a JSON object."""
-    names = order()
+    names = order(kind)
     if not names:
         raise AIConfig("No AI provider is set up on the server. Add a free key such as GROQ_API_KEY or GEMINI_API_KEY.")
     errors = []
@@ -240,10 +251,12 @@ def test_all(gemini=None, anthropic=None, transport=None) -> list[dict]:
 
 
 def health() -> list[dict]:
-    names = order()
+    names, research = order(), order("research")
     out = []
     for name in DEFAULT_ORDER:
         st = status(name)
         out.append({"name": name, "label": LABELS[name], "configured": bool(key_for(name)), "in_use": name in names,
+                    "quick_rank": names.index(name) + 1 if name in names else None,
+                    "research_rank": research.index(name) + 1 if name in research else None,
                     "model": st.model, "last_ok": st.last_ok, "last_error": st.last_error})
     return out

@@ -167,3 +167,16 @@ def test_env_forgives_pasting_mistakes(monkeypatch):
     assert _env("X_KEY") == "gsk_abc"
     monkeypatch.setenv("X_KEY", "gsk_abc")
     assert _env("X_KEY") == "gsk_abc"
+
+
+def test_research_uses_its_own_order(monkeypatch):
+    for k in ("GROQ", "CEREBRAS", "MISTRAL", "GEMINI"):
+        monkeypatch.setattr(settings, f"{k}_API_KEY", "k")
+    assert P.order() == ["groq", "cerebras", "gemini", "mistral"]              # quick jobs: fastest first
+    assert P.order("research") == ["cerebras", "mistral", "gemini", "groq"]    # long reads: biggest free allowance first
+    monkeypatch.setattr(settings, "AI_PROVIDERS", "gemini,groq")
+    assert P.order("research") == ["gemini", "groq"]                            # falls back to AI_PROVIDERS
+    monkeypatch.setattr(settings, "AI_PROVIDERS_RESEARCH", "mistral")
+    assert P.order("research") == ["mistral"] and P.order() == ["gemini", "groq"]
+    ranks = {h["name"]: (h["quick_rank"], h["research_rank"]) for h in P.health()}
+    assert ranks["mistral"] == (None, 1) and ranks["gemini"] == (1, None)
