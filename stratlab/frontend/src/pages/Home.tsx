@@ -52,7 +52,7 @@ export function Starters() {
 export function NewNotebook() {
   const create = useCreateNotebook();
   return (
-    <div className="stack" style={{ gap: 28, maxWidth: 900 }}>
+    <div className="stack" style={{ gap: 28, maxWidth: 960, margin: "0 auto" }}>
       <div className="stack" style={{ gap: 10 }}>
         <span className="eyebrow">New notebook</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>

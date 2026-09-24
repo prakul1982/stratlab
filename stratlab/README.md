@@ -137,4 +137,5 @@ cd frontend && npm run build                   # typecheck and production build
 - Backtests don't model intra-candle order (if stop and target fall in the same candle, the stop is assumed to hit first).
 - Only India and crypto have live data so far. Other markets can be tested with an uploaded CSV; adding one means writing a provider in `backend/app/data/` (see `coinbase.py`) and a cost model in `engine/costs.py`.
 - The tax figure is a rough estimate for Indian equity only, not tax advice.
+- `kiteconnect` (even its latest release, 5.2.2) pins `autobahn==19.11.2`, which has known advisories, so security scanners will keep flagging it until Zerodha updates the package. StratLab only uses it for the outgoing connection to Zerodha's own price feed, not to serve anything. Replacing Kite's ticker client with our own is the way to clear it if needed.
 - This is a paper trading tool: no real orders are placed. If you add live execution later, review SEBI's retail algo trading framework first.
