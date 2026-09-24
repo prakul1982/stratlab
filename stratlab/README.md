@@ -2,21 +2,22 @@
 
 [← Back to the project overview](../README.md)
 
-A web app for Indian retail traders to build trading strategies, backtest them on NSE data and paper trade them on the live market with fake capital.
+A research notebook for traders: describe a strategy in plain words, test it on real market data, get an honest verdict (real edge or luck), then paper trade it with fake capital.
 
-- **Frontend:** `frontend/`, a static site with plain HTML/JS, Chart.js, Supabase login and Razorpay Checkout.
-- **Backend:** `backend/`, built with FastAPI. It handles Kite Connect data, the backtest engine, live paper trading, billing, alerts and the AI writer.
+- **Frontend:** `frontend/`, a React + TypeScript app built with Vite. Supabase login, Razorpay Checkout, charts drawn as SVG.
+- **Backend:** `backend/`, built with FastAPI. It handles market data (Kite for India, Coinbase for crypto, uploaded CSVs), the backtest engine, the verdict checks, trading costs, live paper trading, billing, alerts and the AI writer.
 - **Database and login:** Supabase (Postgres plus Google sign-in). The schema is in `supabase/schema.sql`.
 
 ## Plans (edit in `backend/app/plans.py`)
 
 | | Free | Basic, ₹1,999/mo | Pro, ₹4,900/mo |
 |---|---|---|---|
-| Backtests | 5 per month | 50 per month | Unlimited |
+| Experiments (backtest + verdict) | 5 per month | 50 per month | Unlimited |
 | Live paper trading | 24-hour trial from first use, 1 strategy | 1 strategy at a time | 5 at a time |
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | + MACD, Bollinger, VWAP, Supertrend |
-| Instruments | Nifty 50, Bank Nifty, any NSE stock | same | + F&O (futures and options) |
-| AI strategy writer, alerts, export | – | – | Yes |
+| Markets | Indian stocks and indices, crypto, your own CSV | same | + Indian F&O (futures and options) |
+| AI strategy builds | 10 per month | 100 per month | Unlimited |
+| Alerts, export | – | – | Yes |
 
 Monthly backtest counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them.
 
@@ -70,7 +71,10 @@ To test the credentials straight away, send a POST request to `https://YOUR-BACK
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.
 - **Email:** fill in the SMTP settings. For Gmail, use an app password. Port 465 uses SSL, 587 uses STARTTLS.
 
-### 5. Run locally
+### 5. Crypto and uploaded data
+Nothing to set up. Crypto prices come from Coinbase's public market data, which needs no account or key. Uploaded CSVs are read in the browser and sent with each test; they aren't stored on the server.
+
+### 6. Run locally
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
@@ -80,33 +84,41 @@ uvicorn app.main:app --reload --port 8000
 ```
 ```bash
 cd frontend
-python -m http.server 5500   # then open http://localhost:5500
+npm install
+npm run dev                  # then open http://localhost:5500
 ```
+The frontend reads `public/config.js` at runtime (API URL and the Supabase public key), so changing servers doesn't need a rebuild.
 Set `FRONTEND_ORIGIN` in `.env` to match the frontend URL, for CORS. To allow several (say production and localhost), separate them with commas.
 
-Run the tests with:
+Run the checks with:
 ```bash
-cd backend
-pip install pytest
-pytest
+cd backend && pip install pytest && pytest     # backend tests
+cd frontend && npm run build                   # typecheck and production build
 ```
 
-### 6. Deploy
+### 7. Deploy
 - **Backend:** Render, Railway or a small VPS. Run it as **one process**, e.g. `uvicorn app.main:app --host 0.0.0.0 --port 8000` with no multiple workers. Live sessions and the tick feed live in memory in that process.
-- **Frontend:** Netlify, Vercel or Cloudflare Pages. Update `config.js` with the production API URL.
+- **Frontend:** Vercel or Netlify, with the project's root directory set to `stratlab/frontend`. `vercel.json` and `netlify.toml` set the build (`npm run build`, output `dist`) and send every page to `index.html`, so links like `/n/…` work on refresh. On Vercel, clear any Build Command or Output Directory overrides in the project settings so `vercel.json` applies. Put the production API URL in `public/config.js`.
 
 ---
 
 ## How it works
 
-- **Engine** (`backend/app/engine/`): long-only and candle-based. Each candle it checks the stop loss first, then the target, then the exit rules; entries fill at the candle's close.
+- **Engine** (`backend/app/engine/core.py`): long-only and candle-based. Each candle it checks the stop loss first, then the target, then the exit rules; entries fill at the candle's close.
   - Position size = (capital × risk %) ÷ (price × stop %), capped by max capital per trade.
-  - F&O quantities round down to whole lots.
-  - Brokerage and slippage apply on every order.
+  - Quantities round down to the instrument's step: 1 share, a whole F&O lot, or a fraction of a coin.
   - About 210 extra candles are loaded before the test period so indicators are warmed up.
+- **Costs** (`engine/costs.py`): every order pays your brokerage plus the market's own charges. India equity: STT 0.1% each side, exchange and SEBI fees, stamp duty 0.015% on buys, GST on brokerage and fees; futures and options use their own rates. US: SEC and FINRA fees on sells. Crypto: 0.1% exchange fee each side. Slippage applies to every fill. For Indian equity there's also a tax estimate (20% short-term, 12.5% long-term above ₹1.25 lakh). Rates change from time to time and all live in this one file.
+- **Verdict** (`engine/verdict.py`): four checks on every experiment, all after costs.
+  - *Unseen data:* the period is split 70/30 and each part traded with fresh capital. Passes if the last 30% still makes money.
+  - *Nearby settings:* the first two indicator lengths are nudged to 60–140% of their values (up to 25 combinations). Passes if 60% or more make money; under 40% fails.
+  - *Bad-luck drawdown:* the closed trades are reshuffled 1,000 times (same seed every time). Warns if the 95th-percentile drawdown is well above the backtest's; fails above 35%.
+  - *Enough trades:* 30+ passes, 15–29 warns, under 15 fails.
+  - The verdict: under 15 trades is *not enough evidence*; a loss after costs is *no edge*; a failed unseen-data or nearby-settings check is *probably luck*; passing both (with no failed drawdown check) is *likely a real edge*; anything else is *mixed*.
+- **Notebooks** (`/notebooks` routes): stored in the existing `strategies` table, so no database migration is needed. Each experiment keeps a compact record (up to 240 chart points, the trades, costs and verdict), capped at 50 per notebook.
 - **Live paper trading** (`backend/app/live.py`):
-  - One KiteTicker connection feeds every session.
-  - Ticks become candles for your timeframe (market hours 09:15–15:30 IST).
+  - India: one KiteTicker connection feeds every session, and ticks become candles for your timeframe (market hours 09:15–15:30 IST).
+  - Crypto: each session checks Coinbase every 15 seconds for newly closed candles.
   - On each closed candle, the same engine decides whether to trade.
   - Session state is saved every 30 seconds and resumes after a restart.
   - Free trials and plan limits are re-checked every minute.
@@ -116,4 +128,6 @@ pytest
 - Long only; no short selling yet.
 - Historical data for **expired** option and futures contracts isn't available from Kite, so F&O backtests only work on currently listed contracts. Continuous data is used for daily futures candles.
 - Backtests don't model intra-candle order (if stop and target fall in the same candle, the stop is assumed to hit first).
+- Only India and crypto have live data so far. Other markets can be tested with an uploaded CSV; adding one means writing a provider in `backend/app/data/` (see `coinbase.py`) and a cost model in `engine/costs.py`.
+- The tax figure is a rough estimate for Indian equity only, not tax advice.
 - This is a paper trading tool: no real orders are placed. If you add live execution later, review SEBI's retail algo trading framework first.

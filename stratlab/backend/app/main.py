@@ -2,6 +2,7 @@
 import json
 import math
 import secrets
+import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -63,6 +64,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="StratLab API", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def unexpected_errors(request: Request, call_next):
+    """Turn crashes into a normal JSON error. Registered before CORS, so the browser can still read it."""
+    try:
+        return await call_next(request)
+    except Exception:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"detail": {"code": "server_error",
+                            "message": "Something went wrong on our side. Try again in a moment."}})
+
+
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -353,7 +367,8 @@ def instrument_summary(inst_id: str | None) -> dict | None:
     if not inst_id:
         return None
     if inst_id.startswith("CSV:"):
-        return {"id": inst_id, "symbol": "Uploaded data", "market": "CSV"}
+        name = inst_id[4:].strip()[:60] or "Uploaded data"
+        return {"id": "CSV:upload", "symbol": name, "name": name, "market": "CSV", "currency": "", "tz": "UTC"}
     try:
         return get_instrument(inst_id)[1]
     except (HTTPException, KiteNotReady, DataError):
