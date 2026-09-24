@@ -28,7 +28,7 @@ Monthly backtest counts reset on the 1st of each month (IST). Limits are enforce
 1. Create a project at supabase.com.
 2. Open **SQL Editor**, paste `supabase/schema.sql` and run it.
 3. Under **Authentication > Providers > Google**, enable Google. Create an OAuth client in Google Cloud Console and paste its ID and secret into Supabase.
-4. Under **Authentication > URL Configuration**, add your frontend URL, for example `http://localhost:5500` and your production domain.
+4. Under **Authentication > URL Configuration**, add your frontend URL, for example `http://localhost:5500` and your production domain (`https://stratlab.studio`).
 5. Copy these from **Project settings > API**:
    - the project URL and `anon` key go into `frontend/config.js`
    - the `service_role` key goes into `backend/.env`. It must stay on the server only.

@@ -6,7 +6,8 @@
 
 Describe a strategy in plain English, backtest it on NSE history, then paper trade it on the live market with fake capital.
 
-[![Tests](https://github.com/prakul1982/stratlab/actions/workflows/tests.yml/badge.svg)](https://github.com/prakul1982/stratlab/actions/workflows/tests.yml)
+### [🌐 stratlab.studio](https://stratlab.studio)
+
 ![Python 3.11](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)

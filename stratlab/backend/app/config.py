@@ -45,7 +45,7 @@ class Settings:
     ALERT_FROM_EMAIL = _env("ALERT_FROM_EMAIL")
 
     FRONTEND_ORIGIN = _env("FRONTEND_ORIGIN", "http://localhost:5500")
-    # comma-separated, e.g. "https://stratlab.netlify.app,http://localhost:5500"
+    # comma-separated, e.g. "https://stratlab.studio,http://localhost:5500"
     FRONTEND_ORIGINS = origins(FRONTEND_ORIGIN)
     ADMIN_KEY = _env("ADMIN_KEY")
     ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails
