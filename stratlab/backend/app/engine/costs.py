@@ -17,10 +17,12 @@ IN_STCG, IN_LTCG, IN_LTCG_EXEMPT = 0.20, 0.125, 125000
 US_SEC_FEE = 0.0000278           # on sells
 US_FINRA_TAF, US_FINRA_CAP = 0.000166, 8.30   # per share sold, capped per trade
 CRYPTO_FEE = 0.001               # typical taker fee, each side
+UK_STAMP = 0.005                 # stamp duty (SDRT) on share purchases
+FX_SPREAD = 0.0001               # about one pip on a major pair, each side
 
 LABELS = {
     "brokerage": "Brokerage", "stt": "STT", "exchange": "Exchange + SEBI fees", "stamp": "Stamp duty",
-    "gst": "GST", "sec": "SEC fee", "finra": "FINRA fee", "fee": "Exchange fee",
+    "gst": "GST", "sec": "SEC fee", "finra": "FINRA fee", "fee": "Exchange fee", "spread": "Spread",
 }
 
 
@@ -31,6 +33,8 @@ def kind_of(inst: dict | None) -> str:
     if market == "IN":
         t = inst.get("type")
         return "in_fut" if t == "FUT" else "in_opt" if t in ("CE", "PE") else "in_eq"
+    if market == "UK":
+        return "uk_etf" if inst.get("type") == "ETF" else "uk"
     return {"US": "us", "CRYPTO": "crypto", "FX": "fx"}.get(market, "flat")
 
 
@@ -51,6 +55,10 @@ def order_costs(kind: str, side: str, qty: float, price: float, brokerage: float
         c["finra"] = min(qty * US_FINRA_TAF, US_FINRA_CAP)
     elif kind == "crypto":
         c["fee"] = value * CRYPTO_FEE
+    elif kind == "uk" and side == "buy":
+        c["stamp"] = value * UK_STAMP
+    elif kind == "fx":
+        c["spread"] = value * FX_SPREAD
     return c
 
 

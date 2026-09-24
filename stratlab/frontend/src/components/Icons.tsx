@@ -28,5 +28,6 @@ export const Globe = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="1
 export const Sparkle = ({ size }: P) => <svg {...base(size)}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" /></svg>;
 export const Download = ({ size }: P) => <svg {...base(size)}><path d="M12 4v11M7 10l5 5 5-5" /><path d="M5 20h14" /></svg>;
 export const Pencil = ({ size }: P) => <svg {...base(size)}><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></svg>;
+export const Lens = ({ size }: P) => <svg {...base(size)}><path d="M4 20V13M8 20V9M12 20v-4" /><circle cx="16" cy="9" r="4.2" /><path d="m19 12 3 3" /></svg>;
 export const Shield = ({ size }: P) => <svg {...base(size)}><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z" /><path d="m9 12 2 2 4-4" /></svg>;
 export const Compass = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></svg>;

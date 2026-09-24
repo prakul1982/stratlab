@@ -12,7 +12,12 @@ OP_NAME = {"xa": "crosses above", "xb": "crosses below", "gt": "is above", "lt":
 class Ctx:
     def __init__(self, bars: list[dict], intraday: bool):
         df = pd.DataFrame(bars)
-        df["t"] = pd.to_datetime(df["t"])
+        try:
+            df["t"] = pd.to_datetime(df["t"])
+        except (ValueError, TypeError):
+            # markets with daylight saving mix two UTC offsets; the engine only needs each
+            # bar's local date and time (days for VWAP, months for period returns)
+            df["t"] = pd.to_datetime(df["t"].astype(str).str.slice(0, 19))
         for col in "ohlcv":
             if col not in df:
                 df[col] = 0.0

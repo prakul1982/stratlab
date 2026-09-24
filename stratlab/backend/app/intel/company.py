@@ -1,0 +1,382 @@
+"""One research hub over all the sources: search, company profiles, charts, quotes,
+index levels and headlines, in the same shape for India and the US.
+
+Every call is made in parallel and every source can fail on its own: the profile
+carries a `sources` list saying which ones answered, so the page can show what's
+missing instead of breaking."""
+import re
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timezone
+
+from ..kite_service import KiteService
+from .finnhub import Finnhub
+from .net import SourceError, num
+from .news import GoogleNews, Wikipedia
+from .screener import Screener, summary as scr_summary
+from .yahoo import Yahoo
+
+RANGES = {"1m": 31, "6m": 186, "1y": 366, "3y": 1100, "5y": 1830, "max": 3650}
+US_EXCHANGES = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "NASDAQ", "NYSE", "NYSEArca"}
+INDICES = {
+    "IN": [("NIFTY 50", "^NSEI"), ("SENSEX", "^BSESN"), ("NIFTY BANK", "^NSEBANK")],
+    "US": [("S&P 500", "^GSPC"), ("NASDAQ", "^IXIC"), ("DOW JONES", "^DJI")],
+}
+_pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="intel")
+
+
+def _fy(label: str) -> str:
+    m = re.search(r"(\d{4})", str(label))
+    return f"FY{m.group(1)[2:]}" if m else str(label)
+
+
+def _series(cols: list, vals: list, n: int = 8) -> list[dict]:
+    out = [{"y": _fy(c), "v": v} for c, v in zip(cols, vals) if v is not None and "TTM" not in str(c)]
+    return out[-n:]
+
+
+def inr(v: float) -> str:
+    """Indian digit grouping: 1905432 -> 19,05,432."""
+    s = f"{abs(v):.0f}"
+    head, tail = s[:-3], s[-3:]
+    while len(head) > 2:
+        tail = head[-2:] + "," + tail
+        head = head[:-2]
+    return ("-" if v < 0 else "") + (head + "," + tail if head else tail)
+
+
+def _item(label, value, unit="x"):
+    return {"label": label, "value": num(value), "unit": unit}
+
+
+def _groups(*groups) -> list[dict]:
+    out = []
+    for title, items in groups:
+        items = [i for i in items if i["value"] is not None]
+        if items:
+            out.append({"title": title, "items": items})
+    return out
+
+
+class Research:
+    def __init__(self, kite: KiteService | None, finnhub=None, yahoo=None, screener=None, news=None, wiki=None):
+        self.kite = kite
+        self.finnhub = finnhub or Finnhub()
+        self.yahoo = yahoo or Yahoo()
+        self.screener = screener or Screener()
+        self.news = news or GoogleNews()
+        self.wiki = wiki or Wikipedia()
+
+    # ---------- helpers ----------
+    def _kite(self) -> bool:
+        return bool(self.kite and self.kite.ready())
+
+    @staticmethod
+    def _run(tasks: dict) -> tuple[dict, list[dict]]:
+        """Run {name: (source_name, fn)} in parallel; returns results and a per-source status list."""
+        futures = {k: (src, _pool.submit(fn)) for k, (src, fn) in tasks.items()}
+        results, status = {}, {}
+        for k, (src, f) in futures.items():
+            try:
+                results[k] = f.result(timeout=25)
+                status.setdefault(src, {"source": src, "ok": True, "error": None})
+            except SourceError as e:
+                results[k] = None
+                status[src] = {"source": src, "ok": False, "error": str(e)}
+            except Exception as e:  # a parsing surprise in one source mustn't sink the page
+                results[k] = None
+                status[src] = {"source": src, "ok": False, "error": f"Unexpected error ({e.__class__.__name__})."}
+        return results, list(status.values())
+
+    # ---------- search ----------
+    def search(self, q: str, region: str) -> list[dict]:
+        q = q.strip()
+        if len(q) < 1:
+            return []
+        if region == "IN":
+            if self._kite():
+                rows = [r for r in self.kite.search(q, allow_fno=False, limit=15) if r["type"] == "EQ"]
+                return [{"symbol": r["symbol"], "name": r["name"], "exchange": "NSE", "region": "IN"} for r in rows[:10]]
+            rows = [x for x in self.yahoo.search(q) if str(x["symbol"]).endswith((".NS", ".BO"))
+                    and x.get("quoteType") == "EQUITY"]
+            return [{"symbol": x["symbol"].rsplit(".", 1)[0], "name": x.get("longname") or x.get("shortname"),
+                     "exchange": "NSE" if x["symbol"].endswith(".NS") else "BSE", "region": "IN"} for x in rows[:10]]
+        if self.finnhub.ready():
+            try:
+                rows = [x for x in self.finnhub.search(q) if "." not in x.get("symbol", "")
+                        and x.get("type") in ("Common Stock", "ETP", "ADR", "")]
+                if rows:
+                    return [{"symbol": x["symbol"], "name": x.get("description") or x["symbol"], "exchange": "US",
+                             "region": "US"} for x in rows[:10]]
+            except SourceError:
+                pass
+        rows = [x for x in self.yahoo.search(q) if x.get("exchange") in US_EXCHANGES
+                and x.get("quoteType") in ("EQUITY", "ETF")]
+        return [{"symbol": x["symbol"], "name": x.get("longname") or x.get("shortname") or x["symbol"],
+                 "exchange": x.get("exchDisp") or "US", "region": "US"} for x in rows[:10]]
+
+    # ---------- quotes ----------
+    def quotes(self, region: str, symbols: list[str]) -> dict[str, dict]:
+        symbols = [s.strip().upper() for s in symbols if s.strip()][:24]
+        if not symbols:
+            return {}
+        if region == "IN" and self._kite():
+            try:
+                return self.kite.quote(symbols)
+            except Exception:
+                pass
+        out = {}
+
+        def one(sym):
+            # Yahoo first: peers and watchlists would use up Finnhub's 60 calls a minute
+            try:
+                return self.yahoo.meta(sym + ".NS" if region == "IN" else sym)
+            except SourceError:
+                if region == "US" and self.finnhub.ready():
+                    q = self.finnhub.quote(sym)
+                    if q.get("c"):
+                        return {"price": q.get("c"), "change": q.get("d"), "change_pct": q.get("dp"),
+                                "prev_close": q.get("pc"), "high": q.get("h"), "low": q.get("l"), "open": q.get("o")}
+                raise
+        futures = {s: _pool.submit(one, s) for s in symbols}
+        for s, f in futures.items():
+            try:
+                out[s] = f.result(timeout=20)
+            except Exception:
+                out[s] = None
+        return out
+
+    # ---------- charts ----------
+    def chart(self, region: str, symbol: str, rng: str = "1y") -> dict:
+        days = RANGES.get(rng, 366)
+        symbol = symbol.strip().upper()
+        if region == "IN" and self._kite():
+            inst = self.kite.by_symbol(symbol)
+            if inst:
+                try:
+                    return {"currency": "INR", "source": "Kite", "candles": self.kite.history(inst["token"], "1d", days)}
+                except Exception:
+                    pass
+        ysym = symbol + ".NS" if region == "IN" and not symbol.startswith("^") else symbol
+        c = self.yahoo.chart(ysym, "1d", days)
+        return {"currency": c["meta"].get("currency") or ("INR" if region == "IN" else "USD"),
+                "source": "Yahoo Finance", "candles": c["candles"]}
+
+    # ---------- market pulse ----------
+    def indices(self, region: str) -> list[dict]:
+        out = []
+        futures = [(name, _pool.submit(self.yahoo.meta, sym)) for name, sym in INDICES.get(region, [])]
+        for name, f in futures:
+            try:
+                m = f.result(timeout=20)
+            except Exception:
+                continue
+            if m.get("price") is None:
+                continue
+            hi = m.get("high52")
+            out.append({"name": name, "price": m["price"], "change_pct": m.get("change_pct"),
+                        "high52": hi, "low52": m.get("low52"),
+                        "from_high_pct": ((m["price"] / hi - 1) * 100) if hi else None})
+        return out
+
+    def headlines(self, region: str, focus: str = "") -> list[dict]:
+        if region == "US" and self.finnhub.ready() and not focus:
+            try:
+                return [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
+                         "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
+                        for n in self.finnhub.market_news()[:14] if n.get("headline")]
+            except SourceError:
+                pass
+        q = (focus + " " if focus else "") + ("Nifty Sensex India stock market" if region == "IN" else "US stock market")
+        return self.news.search(q, region, limit=14)
+
+    # ---------- company profiles ----------
+    def company(self, region: str, symbol: str) -> dict:
+        symbol = symbol.strip().upper()
+        return self._company_in(symbol) if region == "IN" else self._company_us(symbol)
+
+    def _company_us(self, sym: str) -> dict:
+        fh = self.finnhub
+        p = fh.profile(sym)
+        if not p.get("name"):
+            raise SourceError("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
+        r, sources = self._run({
+            "q": ("Finnhub", lambda: fh.quote(sym)), "m": ("Finnhub", lambda: fh.metrics(sym)),
+            "news": ("Finnhub", lambda: fh.news(sym)), "peers": ("Finnhub", lambda: fh.peers(sym)),
+            "rec": ("Finnhub", lambda: fh.recommendation(sym)), "earn": ("Finnhub", lambda: fh.earnings(sym)),
+            "fin": ("Finnhub", lambda: fh.financials(sym)), "ins": ("Finnhub", lambda: fh.insider(sym)),
+            "cal": ("Finnhub", lambda: fh.earnings_calendar(sym)), "wiki": ("Wikipedia", lambda: self.wiki.company(p["name"])),
+        })
+        q, M = r["q"] or {}, r["m"] or {}
+        trend = self._us_trend(r["fin"])
+        earn = [e for e in (r["earn"] or []) if e.get("actual") is not None and e.get("estimate") is not None][:4][::-1]
+        ins = (r["ins"] or {}).get("data") or []
+        today = date.today().isoformat()
+        nxt = sorted([e for e in (r["cal"] or []) if e.get("date", "") >= today], key=lambda e: e["date"])
+        rec = (r["rec"] or [None])[0]
+        return {
+            "region": "US", "symbol": sym, "name": p.get("name"), "exchange": p.get("exchange"),
+            "currency": p.get("currency") or "USD", "logo": p.get("logo") or None, "website": p.get("weburl") or None,
+            "facts": [{"label": k, "value": v} for k, v in (("Industry", p.get("finnhubIndustry")), ("Country", p.get("country")),
+                                                            ("Listed since", p.get("ipo")), ("Exchange", p.get("exchange"))) if v],
+            "industry": p.get("finnhubIndustry"),
+            "market_cap": (p["marketCapitalization"] * 1e6) if p.get("marketCapitalization") else None,
+            "quote": {"price": q.get("c"), "change": q.get("d"), "change_pct": q.get("dp"), "open": q.get("o"),
+                      "high": q.get("h"), "low": q.get("l"), "prev_close": q.get("pc")} if q.get("c") else None,
+            "range52": {"low": num(M.get("52WeekLow")), "high": num(M.get("52WeekHigh"))},
+            "margins": {"gross": num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
+                        "net": num(M.get("netProfitMarginTTM"))},
+            "metrics": _groups(
+                ("Valuation", [_item("P/E", M.get("peTTM")), _item("Fwd P/E", M.get("forwardPE")),
+                               _item("P/S", M.get("psTTM")), _item("P/B", M.get("pb")),
+                               _item("EV/EBITDA", M.get("evEbitdaTTM")), _item("EV/FCF", M.get("currentEv/freeCashFlowTTM")),
+                               _item("PEG (fwd)", M.get("forwardPEG"))]),
+                ("Profitability", [_item("Gross margin", M.get("grossMarginTTM"), "%"),
+                                   _item("Operating margin", M.get("operatingMarginTTM"), "%"),
+                                   _item("Net margin", M.get("netProfitMarginTTM"), "%"), _item("ROE", M.get("roeTTM"), "%"),
+                                   _item("ROA", M.get("roaTTM"), "%")]),
+                ("Growth", [_item("Revenue YoY", M.get("revenueGrowthTTMYoy"), "%±"),
+                            _item("EPS YoY", M.get("epsGrowthTTMYoy"), "%±"),
+                            _item("Revenue 3Y", M.get("revenueGrowth3Y"), "%±"),
+                            _item("Revenue 5Y", M.get("revenueGrowth5Y"), "%±"), _item("EPS 5Y", M.get("epsGrowth5Y"), "%±")]),
+                ("Financial health", [_item("Current ratio", M.get("currentRatioQuarterly")),
+                                      _item("LT debt / equity", M.get("longTermDebt/equityQuarterly")),
+                                      _item("Interest coverage", M.get("netInterestCoverageTTM")),
+                                      _item("Asset turnover", M.get("assetTurnoverTTM"))]),
+                ("Per share and returns", [_item("EPS TTM", M.get("epsTTM"), "money"), _item("Beta", M.get("beta")),
+                                           _item("1Y return", M.get("52WeekPriceReturnDaily"), "%±"),
+                                           _item("Div yield", M.get("dividendYieldIndicatedAnnual"), "%"),
+                                           _item("Payout ratio", M.get("payoutRatioTTM"), "%")]),
+            ),
+            "trend": trend,
+            "earnings": [{"period": e.get("period"), "actual": e["actual"], "estimate": e["estimate"],
+                          "surprise_pct": e.get("surprisePercent") if e.get("surprisePercent") is not None else
+                          ((e["actual"] - e["estimate"]) / abs(e["estimate"]) * 100 if e["estimate"] else 0)} for e in earn],
+            "next_earnings": {"date": nxt[0]["date"], "eps_estimate": nxt[0].get("epsEstimate")} if nxt else None,
+            "analysts": {k: rec.get(k, 0) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")} | {"period": rec.get("period")} if rec else None,
+            "insider": {"net": sum(num(t.get("change")) or 0 for t in ins[:40]),
+                        "rows": [{"name": t.get("name"), "change": t.get("change"), "date": t.get("filingDate") or t.get("transactionDate")}
+                                 for t in ins[:8]]} if ins else None,
+            "peers": [x for x in (r["peers"] or []) if x and x != sym][:8],
+            "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
+                      "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
+                     for n in (r["news"] or [])[:8] if n.get("headline")],
+            "about": {"wiki": r["wiki"], "profile": None},
+            "sources": sources, "links": [{"label": "Yahoo Finance", "url": f"https://finance.yahoo.com/quote/{sym}"}],
+            "testable": True, "instrument_id": f"US:{sym}",
+        }
+
+    @staticmethod
+    def _us_trend(rep) -> dict | None:
+        by_year = {}
+        for f in (rep or {}).get("data") or []:
+            y = str(f.get("year") or str(f.get("endDate", ""))[:4])
+            if not y or y in by_year:
+                continue
+            rev = ni = None
+            for it in ((f.get("report") or {}).get("ic") or []):
+                lab, con = str(it.get("label", "")).lower(), str(it.get("concept", ""))
+                if rev is None and (lab in ("revenue", "revenues", "total revenue", "net sales", "total revenues")
+                                    or con.endswith("Revenues") or "RevenueFromContractWithCustomer" in con):
+                    rev = num(it.get("value"))
+                if ni is None and (lab in ("net income", "net income loss", "net income (loss)")
+                                   or con in ("us-gaap_NetIncomeLoss", "us-gaap_ProfitLoss")):
+                    ni = num(it.get("value"))
+            by_year[y] = (rev, ni)
+        years = sorted(by_year)[-6:]
+        rev = [{"y": f"FY{y[2:]}", "v": by_year[y][0]} for y in years if by_year[y][0] is not None]
+        ni = [{"y": f"FY{y[2:]}", "v": by_year[y][1]} for y in years if by_year[y][1] is not None]
+        return {"unit": "USD", "revenue": rev, "profit": ni, "revenue_label": "Revenue", "profit_label": "Net income"} \
+            if len(rev) > 1 or len(ni) > 1 else None
+
+    def _company_in(self, sym: str) -> dict:
+        kite_ok = self._kite()
+        inst = self.kite.by_symbol(sym) if kite_ok else None
+        tasks = {"scr": ("Screener.in", lambda: self.screener.company(sym))}
+        if inst:
+            tasks["kq"] = ("Kite", lambda: self.kite.quote([sym]).get(sym))
+            tasks["k1y"] = ("Kite", lambda: self.kite.history(inst["token"], "1d", 370))
+        else:
+            tasks["y"] = ("Yahoo Finance", lambda: self.yahoo.meta(sym + ".NS"))
+        r, sources = self._run(tasks)
+        scr = r.get("scr")
+        if not scr and not r.get("kq") and not r.get("y"):
+            raise SourceError("Research", f"Couldn't find {sym}. Use the NSE symbol, like RELIANCE, TCS or HDFCBANK.")
+        s = scr_summary(scr) if scr else {}
+        name = (scr or {}).get("name") or (inst or {}).get("name") or (r.get("y") or {}).get("name") or sym
+        clean = re.sub(r"\s+(Ltd|Limited)\.?$", "", name, flags=re.I).strip()
+        r2, sources2 = self._run({
+            "news": ("Google News", lambda: self.news.search(f"{clean} share price", "IN")),
+            "wiki": ("Wikipedia", lambda: self.wiki.company(clean)),
+        })
+        quote, lo52, hi52 = None, s.get("low52"), s.get("high52")
+        if r.get("kq"):
+            quote = r["kq"]
+        elif r.get("y"):
+            y = r["y"]
+            quote = {k: y.get(k) for k in ("price", "change", "change_pct", "high", "low", "prev_close", "volume")}
+            lo52, hi52 = y.get("low52") or lo52, y.get("high52") or hi52
+        if r.get("k1y"):
+            bars = r["k1y"][-252:]
+            if bars:
+                lo52, hi52 = min(b["l"] for b in bars), max(b["h"] for b in bars)
+        if quote is None and s.get("price"):
+            quote = {"price": s["price"]}
+        g = (scr or {}).get("growth", {})
+        gs, gp, gpr = g.get("sales", {}), g.get("profit", {}), g.get("price", {})
+        pl = (scr or {}).get("pl")
+        trend = None
+        if pl:
+            cols = pl["cols"]
+            sales = next((v for k, v in pl["rows"].items() if k.lower().startswith(("sales", "revenue"))), [])
+            profit = next((v for k, v in pl["rows"].items() if k.lower().startswith("net profit")), [])
+            trend = {"unit": "₹ Cr", "revenue": _series(cols, sales), "profit": _series(cols, profit),
+                     "revenue_label": "Sales", "profit_label": "Net profit"}
+        qt = (scr or {}).get("quarters")
+        quarters = None
+        if qt:
+            def row(*prefixes):
+                return next((v for k, v in qt["rows"].items() if k.lower().startswith(prefixes)), [])
+            quarters = {"cols": qt["cols"][-8:], "sales": row("sales", "revenue")[-8:],
+                        "profit": row("net profit")[-8:], "opm": row("opm", "financing margin")[-8:]}
+        sh = (scr or {}).get("shareholding")
+        holding = None
+        if sh and sh["cols"]:
+            holding = {"as_of": sh["cols"][-1], "rows": []}
+            for k in ("Promoters", "FIIs", "DIIs", "Government", "Public"):
+                vals = next((v for lab, v in sh["rows"].items() if lab.lower().startswith(k.lower())), None)
+                if vals and vals[-1] is not None:
+                    prev = vals[-5] if len(vals) >= 5 else vals[0]
+                    holding["rows"].append({"label": k, "value": vals[-1],
+                                            "change": (vals[-1] - prev) if prev is not None else None})
+        return {
+            "region": "IN", "symbol": sym, "name": name, "exchange": "NSE", "currency": "INR", "logo": None,
+            "website": (scr or {}).get("website"), "industry": None,
+            "facts": [{"label": "Listed", "value": f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr") else []),
+            "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
+            "quote": quote, "range52": {"low": lo52, "high": hi52},
+            "margins": None,
+            "metrics": _groups(
+                ("Valuation", [_item("P/E", s.get("pe")), _item("P/B", s.get("pb")),
+                               _item("Div yield", s.get("div_yield"), "%"), _item("Book value", s.get("book_value"), "money"),
+                               _item("Face value", s.get("face_value"), "money")]),
+                ("Returns and quality", [_item("ROCE", s.get("roce"), "%"), _item("ROE", s.get("roe"), "%"),
+                                         _item("Net margin", s.get("net_margin"), "%"), _item("OPM", s.get("opm"), "%"),
+                                         _item("Debt", s.get("debt_cr"), "cr"), _item("Debt / equity", s.get("debt_equity"))]),
+                ("Sales growth", [_item("Latest YoY", s.get("sales_yoy"), "%±"), _item("3Y CAGR", gs.get("3 Years"), "%±"),
+                                  _item("5Y CAGR", gs.get("5 Years"), "%±"), _item("10Y CAGR", gs.get("10 Years"), "%±")]),
+                ("Profit growth", [_item("Latest YoY", s.get("profit_yoy"), "%±"), _item("3Y CAGR", gp.get("3 Years"), "%±"),
+                                   _item("5Y CAGR", gp.get("5 Years"), "%±"), _item("10Y CAGR", gp.get("10 Years"), "%±")]),
+                ("Stock price CAGR", [_item("1Y", gpr.get("1 Year"), "%±"), _item("3Y", gpr.get("3 Years"), "%±"),
+                                      _item("5Y", gpr.get("5 Years"), "%±"), _item("10Y", gpr.get("10 Years"), "%±")]),
+            ),
+            "trend": trend, "quarters": quarters, "shareholding": holding,
+            "pros": (scr or {}).get("pros") or [], "cons": (scr or {}).get("cons") or [],
+            "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
+            "news": r2.get("news") or [],
+            "about": {"wiki": r2.get("wiki"), "profile": (scr or {}).get("about")},
+            "sources": sources + sources2,
+            "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{sym}/"}],
+            "summary": s,
+            "testable": bool(inst) or not kite_ok,
+            "instrument_id": inst["id"] if inst else None,
+        }

@@ -20,10 +20,11 @@ The engine is LONG ONLY: it buys, then sells to close. Reply with ONLY a JSON ob
 Schema:
 {
   "name": short strategy name (max 6 words),
-  "instrument": the stock, index or coin the user named: an NSE trading symbol or index name
-                (e.g. "NIFTY 50", "NIFTY BANK", "RELIANCE"), or a crypto pair (e.g. "BTC-USD", "ETH-USD"),
-                or null if not named,
-  "market": "IN" for Indian stocks and indices, "CRYPTO" for coins, or null if unclear,
+  "instrument": the stock, index, coin or currency pair the user named: an NSE trading symbol or index name
+                (e.g. "NIFTY 50", "NIFTY BANK", "RELIANCE"), a crypto pair (e.g. "BTC-USD"), a US ticker
+                (e.g. "AAPL", "SPY"), a London (e.g. "VOD.L"), European (e.g. "SAP.DE") or Tokyo (e.g. "7203.T")
+                listing, or a forex pair (e.g. "EURUSD=X"), or null if not named,
+  "market": "IN" (Indian stocks and indices), "CRYPTO", "US", "UK", "EU", "JP" or "FX", or null if unclear,
   "tf": "1d" | "1h" | "15m" | "5m" or null if the user gave no timeframe,
   "entryJoin": "all" | "any",
   "entry": [Cond, ...],
@@ -104,13 +105,13 @@ def _candidates() -> list[str]:
     return ready or out
 
 
-def _gemini(system: str, text: str) -> str:
+def _gemini(system: str, text: str, max_tokens: int = 8192) -> str:
     if not settings.GEMINI_API_KEY:
         raise AIConfig("GEMINI_API_KEY is missing.")
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": text}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 8192},
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": max(max_tokens, 8192)},
     }
     last_err = None
     for model in _candidates()[:4]:
@@ -154,13 +155,13 @@ def _gemini(system: str, text: str) -> str:
     raise AIBusy("Google's models are busy or out of free quota.")
 
 
-def _anthropic(system: str, text: str) -> str:
+def _anthropic(system: str, text: str, max_tokens: int = 1500) -> str:
     import anthropic
     if not settings.ANTHROPIC_API_KEY:
         raise AIError("The AI builder isn't configured on the server.")
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     try:
-        msg = client.messages.create(model=settings.ANTHROPIC_MODEL, max_tokens=1500, system=system,
+        msg = client.messages.create(model=settings.ANTHROPIC_MODEL, max_tokens=max_tokens, system=system,
                                      messages=[{"role": "user", "content": text}])
     except (anthropic.RateLimitError, anthropic.APIConnectionError):
         raise AIBusy("The AI builder is busy right now.")
@@ -204,7 +205,7 @@ def write_strategy(text: str, pro: bool) -> dict:
     out["tf"] = data.get("tf") if data.get("tf") in ("1d", "1h", "15m", "5m") else None
     out["name"] = str(data.get("name") or "")[:80] or None
     out["instrument"] = str(data["instrument"])[:40] if data.get("instrument") else None
-    out["market"] = data.get("market") if data.get("market") in ("IN", "CRYPTO") else None
+    out["market"] = data.get("market") if data.get("market") in ("IN", "CRYPTO", "US", "UK", "EU", "JP", "FX") else None
     raw_risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
     risk = {k: v for k, v in raw_risk.items()
             if k in ("sl", "tgt", "riskPct", "capital") and isinstance(v, (int, float)) and not isinstance(v, bool)}

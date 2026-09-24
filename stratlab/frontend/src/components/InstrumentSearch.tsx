@@ -16,7 +16,15 @@ export function useDefaults(): Instrument[] {
 }
 
 export const instKind = (r: Instrument) =>
-  r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
+  r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "ETF" ? "ETF" : r.type === "FX" ? "Currency pair"
+    : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
+
+const PLACEHOLDER: Record<string, string> = {
+  IN: "Search any NSE stock, index or F&O contract: RELIANCE, NIFTY 50…", CRYPTO: "Search any coin: BTC, ETH, SOL…",
+  US: "Search any US stock or ETF: AAPL, NVDA, SPY…", UK: "Search any London listing: Shell, VOD.L, ISF.L…",
+  EU: "Search European stocks: SAP, ASML, LVMH…", JP: "Search Tokyo listings: Toyota, Sony, 7203…",
+  FX: "Search a currency pair: EURUSD, USDJPY, GBPUSD…",
+};
 
 /** Search box plus popular picks for one market. */
 export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
@@ -47,7 +55,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
         <span className="sr-only">Search {market.name}</span>
         <input autoFocus={autoFocus} value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
-          placeholder={market.id === "IN" ? "Search any NSE stock, index or F&O contract: RELIANCE, NIFTY 50…" : "Search any coin: BTC, ETH, SOL…"} />
+          placeholder={PLACEHOLDER[market.id] ?? "Search…"} />
         {results && (
           <div className="results">
             {results.length === 0 && <p className="small muted" style={{ padding: 14 }}>No matches in {market.name}.</p>}

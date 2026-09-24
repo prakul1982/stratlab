@@ -22,6 +22,8 @@ from .auth import current_profile
 from .config import settings
 from . import research
 from .data import DataError, Registry
+from .intel import routes as research_routes
+from .intel.company import Research
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
@@ -33,6 +35,7 @@ kite = KiteService()
 hub = TickHub(kite)
 markets = Registry(kite)
 manager = LiveManager(kite, hub, markets)
+research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
 
 
 def after_login() -> str:
@@ -67,6 +70,8 @@ async def lifespan(app: FastAPI):
 
 log = logging.getLogger("stratlab")
 app = FastAPI(title="StratLab API", lifespan=lifespan)
+research_routes.setup(research_hub, _gemini, _anthropic)
+app.include_router(research_routes.router)
 
 
 @app.middleware("http")
@@ -635,7 +640,8 @@ def server_status() -> dict:
             "feed_connected": hub.connected, "live_sessions": len(manager.sessions),
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
-            "billing_enabled": billing.enabled(), "ai": ai_health()}
+            "billing_enabled": billing.enabled(), "ai": ai_health(),
+            "research": {"finnhub": bool(settings.FINNHUB_API_KEY)}}
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------

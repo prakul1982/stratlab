@@ -16,18 +16,21 @@ import httpx
 
 from .config import settings
 
-DEFAULT_ORDER = ["groq", "cerebras", "gemini", "openrouter", "anthropic"]
+DEFAULT_ORDER = ["groq", "cerebras", "sambanova", "gemini", "mistral", "openrouter", "anthropic"]
 
 OPENAI_STYLE = {
     "groq": {"base": "https://api.groq.com/openai/v1", "label": "Groq"},
     "cerebras": {"base": "https://api.cerebras.ai/v1", "label": "Cerebras"},
+    "sambanova": {"base": "https://api.sambanova.ai/v1", "label": "SambaNova"},
+    "mistral": {"base": "https://api.mistral.ai/v1", "label": "Mistral"},
     "openrouter": {"base": "https://openrouter.ai/api/v1", "label": "OpenRouter", "free_only": True},
 }
 LABELS = {**{k: v["label"] for k, v in OPENAI_STYLE.items()}, "gemini": "Google Gemini", "anthropic": "Anthropic"}
 
 # models that aren't general chat models
 SKIP = ("whisper", "tts", "guard", "embed", "vision", "audio", "transcrib", "moderation", "image", "playai",
-        "compound", "search", "safety", "rerank", "ocr")
+        "compound", "search", "safety", "rerank", "ocr", "codestral", "devstral", "voxtral", "pixtral", "-r1",
+        "distill", "thinking", "reasoning")
 
 
 class AIError(Exception):
@@ -83,7 +86,7 @@ def order() -> list[str]:
 def rank(model_id: str) -> int:
     """Lower is tried first: capable-but-fast models, then small ones as a fallback."""
     m = model_id.lower()
-    if any(k in m for k in ("versatile", "70b", "gpt-oss", "llama-3.3", "llama3.3")):
+    if any(k in m for k in ("versatile", "70b", "gpt-oss", "llama-3.3", "llama3.3", "mistral-large", "mistral-medium")):
         return 0
     if any(k in m for k in ("scout", "maverick", "qwen", "mistral", "gemma", "deepseek")):
         return 1
@@ -148,10 +151,10 @@ class OpenAIStyle:
             raise AIConfig(f"{LABELS[self.name]} has no suitable free chat model for this key.")
         return st.models
 
-    def complete(self, system: str, text: str) -> str:
+    def complete(self, system: str, text: str, max_tokens: int = 1500) -> str:
         last: AIError | None = None
         for model in self.models():
-            body = {"model": model, "temperature": 0.1, "max_tokens": 1500,
+            body = {"model": model, "temperature": 0.1, "max_tokens": max_tokens,
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
                     "response_format": {"type": "json_object"}}
             try:
@@ -182,7 +185,7 @@ class OpenAIStyle:
         raise last or AIError(f"{LABELS[self.name]} had no model to try.")
 
 
-def complete(system: str, text: str, gemini=None, anthropic=None, transport=None) -> str:
+def complete(system: str, text: str, gemini=None, anthropic=None, transport=None, max_tokens: int = 1500) -> str:
     """Ask each configured provider in turn and return the first reply that holds a JSON object."""
     names = order()
     if not names:
@@ -192,23 +195,23 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
         if status(name).cooldown_until > time.time():
             errors.append(f"{LABELS[name]}: cooling down after a rate limit")
             continue
-        raw, error = _try(name, system, text, gemini, anthropic, transport)
+        raw, error = _try(name, system, text, gemini, anthropic, transport, max_tokens)
         if error is None:
             return raw
         errors.append(f"{LABELS[name]}: {error}")
     raise AIBusy("None of the AI providers could answer. " + " · ".join(errors))
 
 
-def _try(name, system, text, gemini, anthropic, transport) -> tuple[str | None, str | None]:
+def _try(name, system, text, gemini, anthropic, transport, max_tokens: int = 1500) -> tuple[str | None, str | None]:
     """One provider, one request. Returns (reply, None) or (None, error) and records the outcome."""
     st = status(name)
     try:
         if name in OPENAI_STYLE:
-            raw = OpenAIStyle(name, transport).complete(system, text)
+            raw = OpenAIStyle(name, transport).complete(system, text, max_tokens)
         elif name == "gemini":
-            raw = gemini(system, text)
+            raw = gemini(system, text, max_tokens=max_tokens)
         else:
-            raw = anthropic(system, text)
+            raw = anthropic(system, text, max_tokens=max_tokens)
         extract_json(raw)  # a reply we can't read counts as a failure: try the next provider
     except AIError as e:
         st.last_error = str(e)

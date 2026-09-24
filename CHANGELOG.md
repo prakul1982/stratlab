@@ -2,6 +2,14 @@
 
 ## September 2026
 
+### Research, and every market live
+- **Research a company** (India and US): live price and chart, where it sits in its 52-week range, key numbers with an industry-range dot, sales and profit by year, quarterly results, results against estimates, analyst ratings, insider trades, shareholding, Screener's strengths and concerns, news, and what the company does.
+- An **AI read** on every company: scores, valuation, bull and bear cases, segments, what to watch, and three **ideas to test** that open as a notebook with the market, company and rules filled in.
+- **Themes** (AI map of a sector with a ranked shortlist), **Market pulse** (index levels, headlines and the day's mood), **Compare** two companies with an AI verdict, and a **Watchlist** saved to your account.
+- **US, UK, European and Japanese stocks and ETFs, and forex** are now live for backtests and paper trading, with UK stamp duty and forex spread in the costs.
+- Two more free AI providers (SambaNova, Mistral) join the chain; research answers are cached and shared.
+- Fixed: backtests on markets with daylight saving time.
+
 ### Admin page
 - An **Admin** page for the site owner (set by `ADMIN_EMAILS`): server and Kite status, Kite login button, live AI test, user list with usage, plan grants by hand, and running paper sessions with a Stop button.
 

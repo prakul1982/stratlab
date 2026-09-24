@@ -44,12 +44,20 @@ class Settings:
     GROQ_MODEL = _env("GROQ_MODEL", "auto")
     CEREBRAS_API_KEY = _env("CEREBRAS_API_KEY")
     CEREBRAS_MODEL = _env("CEREBRAS_MODEL", "auto")
+    SAMBANOVA_API_KEY = _env("SAMBANOVA_API_KEY")
+    SAMBANOVA_MODEL = _env("SAMBANOVA_MODEL", "auto")
+    MISTRAL_API_KEY = _env("MISTRAL_API_KEY")
+    MISTRAL_MODEL = _env("MISTRAL_MODEL", "auto")
     OPENROUTER_API_KEY = _env("OPENROUTER_API_KEY")
     OPENROUTER_MODEL = _env("OPENROUTER_MODEL", "auto")  # "auto" uses only models marked :free
     GEMINI_API_KEY = _env("GEMINI_API_KEY")
     GEMINI_MODEL = _env("GEMINI_MODEL", "auto")        # "auto" picks the newest Flash model your key can use
     ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
     ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
+
+    # Research: US company data (free key at finnhub.io). India uses Screener.in, Yahoo and Kite, no key needed.
+    FINNHUB_API_KEY = _env("FINNHUB_API_KEY")
+    RESEARCH_AI_PER_DAY = int(_env("RESEARCH_AI_PER_DAY", "60") or 60)   # fresh AI analyses per user per day
 
     TELEGRAM_BOT_TOKEN = _env("TELEGRAM_BOT_TOKEN")
     SMTP_HOST = _env("SMTP_HOST")

@@ -44,4 +44,11 @@ export const HELP = {
   connection: "Checks your sign-in, the StratLab server, each market's live data and the AI builder. Run it if something isn't loading.",
   alerts: "Get a Telegram message or email whenever a paper trading session buys or sells.",
   experimentsQuota: "Each experiment is one backtest plus its honesty checks. Your plan includes a number of them each month.",
+  researchPulse: "Live levels of the main indices, how far each is from its 52-week high, and an AI read of today's mood built only from those numbers and the latest headlines.",
+  researchThemes: "Type a sector or trend and the AI maps the companies involved, where the margin sits, and ranks the ones worth a closer look.",
+  research52: "Where today's price sits between the lowest and highest price of the past year. Near the top means it has been strong lately; near the bottom, weak.",
+  researchMargins: "How much of each sale is left after each layer of costs: making the product, running the business, then tax and interest.",
+  researchMetrics: "The main numbers, grouped. The dot on each line shows where this company sits in a typical range for its industry: blue is strong, orange is weak. The two ticks mark the edges of normal.",
+  researchEarnings: "Each quarter's earnings per share against what analysts expected. Blue bars beat the estimate, orange bars missed it.",
+  researchHolding: "Who owns the shares: the founders or promoters, foreign funds (FIIs), Indian funds (DIIs) and the public. Promoters selling or funds piling in can be worth watching.",
 };

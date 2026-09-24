@@ -92,10 +92,12 @@ def test_ids_and_registry_markets():
     assert split_id("256265") == ("IN", "256265")
     assert split_id("CRYPTO:BTC-USD") == ("CRYPTO", "BTC-USD")
     from app.kite_service import KiteService
-    reg = Registry(KiteService(), CoinbaseProvider(transport=fake_coinbase()))
+    from app.intel.yahoo import Yahoo
+    from tests.fake_yahoo import fake_yahoo
+    reg = Registry(KiteService(), CoinbaseProvider(transport=fake_coinbase()), yahoo=Yahoo(transport=fake_yahoo()))
     status = {m["id"]: m["status"] for m in reg.markets()}
-    assert status["IN"] == "offline" and status["CRYPTO"] == "live" and status["CSV"] == "live" and status["US"] == "soon"
+    assert status["IN"] == "offline" and status["CRYPTO"] == "live" and status["CSV"] == "live" and status["US"] == "live"
     prov, inst = reg.resolve("CRYPTO:ETH-USD")
     assert inst["symbol"] == "ETH/USD"
-    hits = reg.search("eth", None, True)   # India is offline, so only crypto answers
+    hits = reg.search("eth", None, True)   # India is offline and no stock matches, so only crypto answers
     assert hits and all(r["market"] == "CRYPTO" for r in hits)

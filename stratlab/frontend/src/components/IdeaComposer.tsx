@@ -31,17 +31,17 @@ async function findInstrument(name: string, market?: string | null): Promise<Ins
     const rows = await api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(q.slice(0, 40))}${market ? `&market=${market}` : ""}`);
     const norm = (s: string) => s.replace("/", "-").toUpperCase();
     return rows.find((r) => norm(r.symbol) === norm(q) || String(r.token).toUpperCase() === norm(q))
-      ?? rows.find((r) => ["EQ", "INDEX", "CRYPTO"].includes(r.type || "")) ?? null;
+      ?? rows.find((r) => ["EQ", "INDEX", "CRYPTO", "ETF", "FX"].includes(r.type || "")) ?? null;
   } catch {
     return null;
   }
 }
 
-export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFocus }: {
-  onBuilt: (b: Built) => Promise<void> | void; busyLabel?: string; autoFocus?: boolean;
+export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFocus, initial = "" }: {
+  onBuilt: (b: Built) => Promise<void> | void; busyLabel?: string; autoFocus?: boolean; initial?: string;
 }) {
   const { me, refreshMe, fail } = useApp();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 

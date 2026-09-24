@@ -11,6 +11,8 @@ from app.data import Registry
 from app.data.coinbase import CoinbaseProvider
 from app.kite_service import KiteService
 from tests.test_data import PRODUCTS
+from tests.fake_yahoo import fake_yahoo
+from app.intel.yahoo import Yahoo
 
 EMA = {"name": "Trend follower", "tf": "1d",
        "entry": [{"l": {"t": "ema", "p": 10}, "op": "xa", "r": {"t": "ema", "p": 30}}],
@@ -64,7 +66,7 @@ def api(monkeypatch):
     monkeypatch.setattr(db, "delete_strategy", lambda u, sid: rows.pop(sid, None))
     monkeypatch.setattr(db, "count_usage", lambda u, kind, since: len(usage))
     monkeypatch.setattr(db, "add_usage", lambda u, kind: usage.append(kind))
-    monkeypatch.setattr(main, "markets", Registry(KiteService(), CoinbaseProvider(transport=wavy_coinbase())))
+    monkeypatch.setattr(main, "markets", Registry(KiteService(), CoinbaseProvider(transport=wavy_coinbase()), yahoo=Yahoo(transport=fake_yahoo())))
     profile = {"id": "user-1", "_plan": "pro", "plan": "pro"}
     main.app.dependency_overrides[main.current_profile] = lambda: profile
     client = TestClient(main.app)
@@ -75,7 +77,8 @@ def api(monkeypatch):
 
 def test_markets_catalogue(api):
     m = {x["id"]: x for x in api.get("/markets").json()}
-    assert m["CRYPTO"]["status"] == "live" and m["IN"]["status"] == "offline" and m["US"]["status"] == "soon"
+    assert m["CRYPTO"]["status"] == "live" and m["IN"]["status"] == "offline" and m["US"]["status"] == "live"
+    assert all(m[x]["status"] == "live" for x in ("UK", "EU", "JP", "FX"))
     assert m["CRYPTO"]["max_days"]["5m"] == 30
 
 
@@ -85,7 +88,9 @@ def test_search_and_instrument(api):
     assert api.get("/instruments/CRYPTO:ETH-USD").json()["symbol"] == "ETH/USD"
     assert api.get("/instruments/CRYPTO:ETH-USD/ltp").json()["ltp"] == 30000
     assert api.get("/instruments/CRYPTO:NOPE-USD").status_code == 404
-    assert api.get("/instruments/US:AAPL").status_code == 400
+    vod = api.get("/instruments/UK:VOD.L").json()
+    assert vod["name"] == "VODAFONE GROUP PLC" and vod["currency"] == "GBP" and vod["market"] == "UK"
+    assert api.get("/instruments/XX:ABC").status_code == 400
 
 
 def test_notebook_experiments_flow(api):
@@ -158,3 +163,14 @@ def test_needs_an_instrument(api):
     nb = api.post("/notebooks", json={"name": "x", "strategy": EMA}).json()
     r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "no_instrument"
+
+
+def test_us_stock_backtest_uses_us_costs(api):
+    nb = api.post("/notebooks", json={"name": "SPY trend", "question": "Does a 10/30 cross work on SPY?",
+                                      "strategy": EMA, "instrument": "US:SPY"}).json()
+    assert nb["instrument"]["market"] == "US" and nb["instrument"]["currency"] == "USD"
+    r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 1500})
+    assert r.status_code == 200, r.text
+    exp = r.json()["experiment"]
+    labels = {i["label"] for i in exp["costs"]["items"]}
+    assert exp["stats"]["n"] > 0 and ("SEC fee" in labels or "FINRA fee" in labels)
