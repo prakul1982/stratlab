@@ -14,6 +14,10 @@ Describe a strategy in plain English, test it honestly on Indian stocks, crypto 
 ![Python 3.11](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
+![React](https://img.shields.io/badge/React_18-20232A?logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
+![License: proprietary](https://img.shields.io/badge/license-proprietary-555)
 
 </div>
 
@@ -81,7 +85,7 @@ flowchart LR
     API --> SB
     API -- "India: candles, live ticks" --> KITE["Zerodha Kite Connect"]
     API -- "crypto: candles, prices" --> CB["Coinbase public data"]
-    API -- "subscriptions" --> RZP["Razorpay"]
+    API -- "subscriptions (coming soon)" --> RZP["Razorpay"]
     RZP -- "webhooks" --> API
     API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini,<br/>OpenRouter, Claude"]
     API --> ALERT["Telegram / email alerts"]
@@ -101,7 +105,7 @@ stratlab/
 │   │   │   ├── indicators.py SMA, EMA, RSI, MACD, Bollinger, VWAP, Supertrend
 │   │   │   ├── costs.py      per-market trading costs and tax estimates
 │   │   │   └── verdict.py    the four honesty checks and the verdict
-│   │   ├── data/             market data: markets list, Kite (India), Coinbase (crypto)
+│   │   ├── data/             market data: markets list, Coinbase (crypto)
 │   │   ├── research.py       load candles, run an experiment, keep a compact record
 │   │   ├── live.py           paper trading on live ticks (India) or polled candles (crypto)
 │   │   ├── kite_service.py   Zerodha Kite Connect
@@ -109,15 +113,16 @@ stratlab/
 │   │   ├── billing.py        Razorpay subscriptions
 │   │   ├── plans.py          plan limits and prices
 │   │   ├── ai_writer.py      plain English → strategy rules
+│   │   ├── ai_providers.py   the free AI provider chain (Groq, Cerebras, Gemini, OpenRouter, Claude)
 │   │   └── alerts.py         Telegram and email alerts
 │   ├── tests/                pytest suite
 │   └── .env.example          every setting the server reads
 ├── frontend/                 React + TypeScript app built with Vite (deploys to Vercel)
-│   ├── public/config.js      API URL and Supabase public key, read at runtime
+│   ├── public/               config.js (API URL, Supabase public key), favicon, app icons, link-preview image
 │   └── src/
 │       ├── pages/            notebook, verdict, markets, paper trading, plans, account
-│       ├── components/       rules editor, charts, sidebar, share image
-│       └── lib/              API client, formatting, rule parser, CSV import
+│       ├── components/       rules editor, charts, sidebar, feature tour, logo, share image
+│       └── lib/              API client, formatting, rule parser, CSV import, (i) help texts, brand
 └── supabase/
     └── schema.sql            tables, row-level security, sign-up trigger
 ```
@@ -153,7 +158,11 @@ The **[setup guide](stratlab/README.md)** covers Supabase, Kite Connect (includi
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | + MACD, Bollinger, VWAP, Supertrend |
 | Alerts, export | – | – | ✓ |
 
-Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server.
+Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server. **Paid plans are coming soon:** until Razorpay is connected, everyone is on Free and the Plans page says so.
+
+## What's new
+
+See the [changelog](CHANGELOG.md).
 
 ## Disclaimer
 
