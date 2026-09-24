@@ -1,13 +1,14 @@
 import { useState, type ReactNode } from "react";
-import { Compass, Flask, Globe, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
+import { Compass, Globe, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
 import { Modal } from "./ui";
+import { LogoMark } from "./Logo";
 
 const SEEN = "stratlab.tour.v1";
 
 type Step = { icon: ReactNode; title: string; body: string; where: string };
 
 const STEPS: Step[] = [
-  { icon: <Flask size={34} />, title: "Welcome to your trading lab",
+  { icon: <LogoMark size={52} />, title: "Welcome to your trading lab",
     body: "StratLab tests trading ideas honestly. You describe an idea, we run it on years of real prices after real costs, and tell you if the edge is real or just luck. Here is everything you can do, in about a minute.",
     where: "Each idea lives in its own notebook, listed in the sidebar (the ☰ menu on phones)." },
   { icon: <Sparkle size={34} />, title: "Describe ideas in plain English",

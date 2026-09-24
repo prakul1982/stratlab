@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/api";
-import { Flask, Google } from "../components/Icons";
+import { Google } from "../components/Icons";
+import { Logo } from "../components/Logo";
 
 export function Login() {
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +21,7 @@ export function Login() {
   return (
     <div className="ruled" style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)" }}>
       <div style={{ padding: "48px clamp(20px, 6vw, 88px)", display: "flex", flexDirection: "column", justifyContent: "center", gap: 22 }}>
-        <div className="brand"><Flask />StratLab</div>
+        <div className="brand" role="img" aria-label="StratLab"><Logo size={70} /></div>
         <h1 className="serif" style={{ fontSize: "clamp(40px, 5.4vw, 68px)", lineHeight: 1.02, fontWeight: 400, letterSpacing: "-0.03em", maxWidth: "13ch" }}>
           Is your trading idea real, or just <em>lucky</em>?
         </h1>

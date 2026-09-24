@@ -1,6 +1,8 @@
 import { StrictMode, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import "@fontsource/montserrat/300.css";
+import "@fontsource/montserrat/800.css";
 import "@fontsource/fraunces/400.css";
 import "@fontsource/fraunces/600.css";
 import "@fontsource/fraunces/400-italic.css";

@@ -4,9 +4,6 @@ const base = (size = 20) => ({
   strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true,
 });
 
-export const Flask = ({ size = 28 }: P) => (
-  <svg {...base(size)}><path d="M9 2.5h6M10 2.5v6.2L4.2 19.3A1.6 1.6 0 0 0 5.6 21.7h12.8a1.6 1.6 0 0 0 1.4-2.4L14 8.7V2.5" /><path d="M7 15.5h10" /></svg>
-);
 export const Plus = ({ size }: P) => <svg {...base(size)}><path d="M12 5v14M5 12h14" /></svg>;
 export const Menu = ({ size }: P) => <svg {...base(size)}><path d="M4 7h16M4 12h16M4 17h16" /></svg>;
 export const Pulse = ({ size }: P) => <svg {...base(size)}><path d="M3 12h4l3-7 4 14 3-7h4" /></svg>;
