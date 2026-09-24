@@ -1,4 +1,6 @@
-# StratLab
+# StratLab setup guide
+
+[← Back to the project overview](../README.md)
 
 A web app for Indian retail traders to build trading strategies, backtest them on NSE data and paper trade them on the live market with fake capital.
 
