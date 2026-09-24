@@ -103,3 +103,28 @@ def test_rejected_login_stops_retries_for_the_day(monkeypatch):
     with pytest.raises(AutoLoginError):
         al.run_once()
     assert al._gave_up and al.last["ok"] is False
+
+
+@pytest.mark.parametrize("raw", [
+    "gezd gnbv gy3t qojq gezd gnbv gy3t qojq",
+    '"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"',
+    "otpauth://totp/Kite:AB1234?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Kite",
+])
+def test_secret_accepted_in_common_pasted_forms(raw):
+    assert totp(raw, at=59) == "287082"
+
+
+@pytest.mark.parametrize("raw", ["481920", "", "not a secret!"])
+def test_invalid_secret_is_a_clear_non_retryable_error(raw):
+    with pytest.raises(AutoLoginError) as e:
+        totp(raw)
+    assert e.value.retry is False and "KITE_TOTP_SECRET" in str(e.value)
+
+
+def test_invalid_secret_fails_before_contacting_zerodha(monkeypatch):
+    monkeypatch.setattr(settings, "KITE_TOTP_SECRET", "123456")
+    calls = []
+    transport = httpx.MockTransport(lambda req: calls.append(req) or httpx.Response(500))
+    with pytest.raises(AutoLoginError):
+        fetch_request_token(LOGIN_URL, transport)
+    assert calls == []
