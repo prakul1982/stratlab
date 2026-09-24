@@ -14,7 +14,8 @@ from kiteconnect import exceptions as kite_exc
 from razorpay.errors import SignatureVerificationError
 
 from . import billing, db
-from .ai_writer import AIBusy, AIError, _model_cache, write_strategy
+from .ai_providers import health as ai_health
+from .ai_writer import AIBusy, AIError, write_strategy
 from .alerts import notify
 from .auth import current_profile
 from .config import settings
@@ -164,10 +165,9 @@ def _kite_error(request, exc):
 # ---------- account ----------
 @app.get("/health")
 def health():
-    ai_key = settings.ANTHROPIC_API_KEY if settings.AI_PROVIDER == "anthropic" else settings.GEMINI_API_KEY
+    ai = ai_health()
     return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
-            "ai_provider": settings.AI_PROVIDER, "ai_configured": bool(ai_key),
-            "ai_model": settings.ANTHROPIC_MODEL if settings.AI_PROVIDER == "anthropic" else (_model_cache["name"] or settings.GEMINI_MODEL)}
+            "ai_configured": any(p["in_use"] for p in ai), "ai": ai}
 
 
 @app.get("/plans")

@@ -8,7 +8,8 @@ import type { Experiment, Instrument, Notebook, Strategy, Tf } from "../lib/type
 import { getUpload } from "../lib/upload";
 import { GapsCard, type GapInfo } from "../components/Gaps";
 import { RulesCard } from "../components/Rules";
-import { AutoGrow, Loading, Modal, VerdictBadge } from "../components/ui";
+import { AutoGrow, Info, Loading, Modal, VerdictBadge } from "../components/ui";
+import { HELP } from "../lib/help";
 import { IdeaComposer } from "../components/IdeaComposer";
 
 const PERIODS: Record<Tf, number[]> = {
@@ -177,12 +178,19 @@ export function NotebookPage() {
   };
   applyRef.current = apply;
 
+  const steps = [
+    { done: !!inst, text: "Pick what to test it on", act: () => nav(`/n/${nb.id}/market`) },
+    { done: s.entry.length > 0, text: "Check the rules", act: () => document.getElementById("rules-h")?.scrollIntoView({ behavior: "smooth" }) },
+    { done: experiments.length > 0, text: "Run an experiment", act: () => document.getElementById("exp-h")?.scrollIntoView({ behavior: "smooth" }) },
+  ];
+  const nextStep = steps.findIndex((x) => !x.done);
+
   return (
     <div className="nb-grid">
-      <div className="stack" style={{ gap: 28, minWidth: 0 }}>
-        <div className="stack" style={{ gap: 12 }}>
+      <div className="stack" style={{ gap: 32, minWidth: 0 }}>
+        <div className="stack" style={{ gap: 14 }}>
           <div className="spread" style={{ flexWrap: "wrap" }}>
-            <span className="eyebrow">Notebook · {nb.name}</span>
+            <span className="eyebrow row" style={{ gap: 0 }}>Notebook · {nb.name}<Info>{HELP.notebook}</Info></span>
             <span className="small muted" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>
           </div>
           <AutoGrow className="question" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
@@ -194,12 +202,26 @@ export function NotebookPage() {
                 {currency && <span className="pill">{currency}</span>}
                 <span className="pill">{TF_NAME[s.tf]} candles</span>
                 <Link to={`/n/${nb.id}/market`} className="link">Change market</Link>
+                <Info>{HELP.market}</Info>
               </>
             ) : (
               <Link to={`/n/${nb.id}/market`} className="btn blue sm">Pick what to test it on</Link>
             )}
           </div>
         </div>
+
+        {nextStep !== -1 && (
+          <ol className="steps" aria-label="Getting started">
+            {steps.map((st, i) => (
+              <li key={st.text} className={st.done ? "done" : i === nextStep ? "next" : ""}>
+                <button type="button" onClick={st.act}>
+                  <span className="num" aria-hidden="true">{st.done ? "✓" : i + 1}</span>
+                  <span>{st.text}{i === nextStep && <span className="sr-only"> (next step)</span>}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
 
         {gaps && (
           <GapsCard s={s} gaps={gaps} hasInstrument={!!inst} currency={currency}
@@ -210,65 +232,69 @@ export function NotebookPage() {
 
         <RulesCard s={s} currency={currency} onChange={setStrategy} />
 
-        <section className="stack" aria-labelledby="exp-h" style={{ gap: 14 }}>
+        <section className="stack" aria-labelledby="exp-h" style={{ gap: 16 }}>
           <div className="spread" style={{ flexWrap: "wrap" }}>
-            <h2 id="exp-h" className="h2">Experiments</h2>
+            <h2 id="exp-h" className="h2 row" style={{ gap: 0 }}>Experiments<Info>{HELP.experiments}</Info></h2>
             <button className="link" onClick={() => setRewrite(true)}>Describe the idea again</button>
           </div>
-          <div className="card stack" style={{ gap: 14 }}>
+          <div className="card stack" style={{ gap: 18 }}>
             {!isUpload && (
               <div className="stack" style={{ gap: 8 }}>
-                <span className="small muted">Test period</span>
+                <span className="label row" style={{ gap: 0 }}>Test period<Info>{HELP.period}</Info></span>
                 <div className="seg" role="group" aria-label="Test period">
                   {periods.map((d) => <button key={d} aria-pressed={d === period} onClick={() => setDays(d)}>{periodName(d)}</button>)}
                 </div>
               </div>
             )}
-            <div className="row wrap" style={{ gap: 10 }}>
-              <label className="sr-only" htmlFor="exp-label">What changed in this experiment</label>
-              <input id="exp-label" className="input" style={{ flex: "1 1 240px" }} value={label} maxLength={120}
-                placeholder={`What's different in v${nextV}? (optional)`} onChange={(e) => setLabel(e.target.value)} />
-              <button className="btn blue" disabled={running} onClick={run}>{running ? "Running 4 honesty checks…" : `Run experiment v${nextV}`}</button>
+            <div className="stack" style={{ gap: 8 }}>
+              <label className="label" htmlFor="exp-label">What's different this time? <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+              <div className="row wrap" style={{ gap: 10 }}>
+                <input id="exp-label" className="input" style={{ flex: "1 1 240px" }} value={label} maxLength={120}
+                  placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
+                <button className="btn blue" disabled={running} onClick={run}>{running ? "Running 4 honesty checks…" : `Run experiment v${nextV}`}</button>
+                <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
+              </div>
             </div>
             <p className="hint">
-              Each run is one backtest{me?.usage.backtests_limit != null ? ` (${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} left this month)` : ""}.
-              We also retest nearby settings and unseen years for the verdict, at no extra cost.
+              {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month. ` : ""}
+              Takes a few seconds.
             </p>
           </div>
           {experiments.length === 0
             ? <p className="muted">No experiments yet. Your first run shows whether the idea holds up.</p>
-            : experiments.map((e) => <ExperimentRow key={e.v} e={e} to={`/n/${nb.id}/e/${e.v}`} />)}
+            : <div className="stack" style={{ gap: 10 }}>{experiments.map((e) => <ExperimentRow key={e.v} e={e} to={`/n/${nb.id}/e/${e.v}`} />)}</div>}
         </section>
       </div>
 
-      <aside className="stack" style={{ gap: 22 }}>
-        <section className="stack" style={{ gap: 8 }}>
-          <h2 className="serif" style={{ fontSize: 20, fontWeight: 600, fontStyle: "italic" }}>Lab notes</h2>
+      <aside className="stack" style={{ gap: 18 }}>
+        <section className="card stack" style={{ gap: 8 }}>
+          <h2 className="h3 row" style={{ gap: 0 }}>Lab notes<Info>{HELP.labNotes}</Info></h2>
           <label className="sr-only" htmlFor="notes">Lab notes</label>
           <textarea id="notes" ref={notesRef} className="lab-note" value={nb.notes ?? ""} maxLength={4000}
             placeholder="What did you notice? What do you want to try next?" onChange={(e) => patch({ notes: e.target.value })} />
         </section>
         {suggestions.length > 0 && (
-          <section className="card stack" style={{ gap: 10, padding: 20 }}>
-            <h2 className="h3">Worth testing next</h2>
+          <section className="card stack" style={{ gap: 10 }}>
+            <h2 className="h3 row" style={{ gap: 0 }}>Worth testing next<Info>{HELP.nextSteps}</Info></h2>
             {suggestions.map((sg) => (
-              <button key={sg.action} className="btn quiet" style={{ justifyContent: "flex-start", whiteSpace: "normal", textAlign: "left", padding: "10px 12px" }}
+              <button key={sg.action} className="btn quiet" style={{ justifyContent: "flex-start", whiteSpace: "normal", textAlign: "left", padding: "10px 14px" }}
                 onClick={() => apply(sg.action)}>{sg.text}</button>
             ))}
           </section>
         )}
-        <section className="card dashed stack" style={{ gap: 8, padding: 20 }}>
-          <h2 className="h3">Paper trading</h2>
+        <section className="card stack" style={{ gap: 10 }}>
+          <h2 className="h3 row" style={{ gap: 0 }}>Paper trading<Info>{HELP.paper}</Info></h2>
           <p className="small muted">
             {last?.verdict.verdict === "edge" ? "The last verdict looks like a real edge. Try it on live prices with fake money." :
-              "Trade these rules on live prices with fake money. Best once a verdict says the edge looks real."}
+              "Try these rules on live prices with fake money. Best once a verdict says the edge looks real."}
           </p>
           <button className="btn outline sm" onClick={paperTrade} disabled={!inst || isUpload}>Paper trade these rules</button>
         </section>
-        <div className="row wrap" style={{ gap: 8 }}>
-          <button className="btn quiet sm" onClick={exportStrategy}>Export rules{isPro ? "" : " (Pro)"}</button>
-          <button className="btn danger sm" onClick={del}>Delete notebook</button>
-        </div>
+        <section className="card stack" style={{ gap: 10 }}>
+          <h2 className="h3">More</h2>
+          <button className="btn quiet sm" style={{ justifyContent: "flex-start" }} onClick={exportStrategy}>Export rules as a file{isPro ? "" : " (Pro)"}</button>
+          <button className="btn danger sm" style={{ justifyContent: "flex-start" }} onClick={del}>Delete this notebook</button>
+        </section>
       </aside>
 
       {rewrite && (

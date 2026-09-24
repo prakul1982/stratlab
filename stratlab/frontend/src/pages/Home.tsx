@@ -60,6 +60,11 @@ export function NewNotebook() {
         </h1>
         <p className="muted" style={{ fontSize: 17 }}>Write it the way you'd explain it to a friend. We'll turn it into exact rules and ask about anything that's missing.</p>
       </div>
+      <ol className="how" aria-label="How StratLab works">
+        <li><b>1. Describe it</b><span>In plain words. We turn it into rules you can read and edit.</span></li>
+        <li><b>2. Test it honestly</b><span>On years of real prices, after real costs, with four checks for luck.</span></li>
+        <li><b>3. Trade it on paper</b><span>If the verdict says the edge is real, watch it live with fake money.</span></li>
+      </ol>
       <IdeaComposer onBuilt={create} autoFocus />
       <div className="stack">
         <h2 className="h2">Or start from a classic idea</h2>

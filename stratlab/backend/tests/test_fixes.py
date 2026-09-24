@@ -56,9 +56,18 @@ def test_unconfigured_channel_is_an_error_not_a_silent_success(monkeypatch):
         alerts.send_telegram("42", "hi")
 
 
+def only_gemini(monkeypatch):
+    for k in ("GROQ_API_KEY", "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"):
+        monkeypatch.setattr(settings, k, "")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "test")
+    monkeypatch.setattr(settings, "AI_PROVIDERS", "auto")
+    from app import ai_providers
+    ai_providers._status.clear()
+
+
 @pytest.mark.parametrize("reply", ["[]", '"text"', '{"entry": "oops", "risk": [1, 2]}'])
 def test_ai_writer_handles_malformed_replies(monkeypatch, reply):
-    monkeypatch.setattr(settings, "AI_PROVIDER", "gemini")
+    only_gemini(monkeypatch)
     monkeypatch.setattr(ai_writer, "_gemini", lambda system, text: reply)
     try:
         out = ai_writer.write_strategy("buy when rsi below 30", pro=False)
@@ -71,7 +80,7 @@ def test_ai_writer_keeps_valid_rules(monkeypatch):
     reply = json.dumps({"name": "RSI dip", "tf": "1d", "entry": [{"l": {"t": "rsi", "p": 14}, "op": "lt", "r": {"t": "num", "v": 30}}],
                         "exit": [{"l": {"t": "macd"}, "op": "gt", "r": {"t": "num", "v": 0}}],
                         "risk": {"sl": 2, "capital": True}, "mentioned": ["sl"]})
-    monkeypatch.setattr(settings, "AI_PROVIDER", "gemini")
+    only_gemini(monkeypatch)
     monkeypatch.setattr(ai_writer, "_gemini", lambda system, text: reply)
     out = ai_writer.write_strategy("x", pro=False)
     assert len(out["entry"]) == 1

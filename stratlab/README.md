@@ -67,7 +67,14 @@ To test the credentials straight away, send a POST request to `https://YOUR-BACK
 4. Test everything in Test Mode first.
 
 ### 4. AI writer and alerts (Pro)
-- **AI writer:** uses Google Gemini by default: set `GEMINI_API_KEY` (`GEMINI_MODEL=auto` picks the newest Flash model). To use Claude instead, set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`; the model is set in `ANTHROPIC_MODEL`.
+- **AI strategy builder:** set a key for one or more providers. They're tried in order (Groq, Cerebras, Gemini, OpenRouter, then Anthropic) until one answers, so a rate limit or outage at one moves on to the next. All but Anthropic have free tiers, and the job (turning one sentence into rules) suits small, fast models.
+  - `GROQ_API_KEY` from console.groq.com: free and the fastest. A good first choice.
+  - `CEREBRAS_API_KEY` from cloud.cerebras.ai: free and very fast.
+  - `GEMINI_API_KEY` from aistudio.google.com: free tier.
+  - `OPENROUTER_API_KEY` from openrouter.ai: with `OPENROUTER_MODEL=auto` only free models are used.
+  - `ANTHROPIC_API_KEY`: paid. Set `AI_PROVIDER=anthropic` to try Claude first.
+  - Each `<NAME>_MODEL=auto` picks a suitable chat model from that provider's list; set a model id to pin one. `AI_PROVIDERS=groq,gemini` sets your own order.
+  - Account → Connection check shows each provider's status and its last error, so you can see why the AI isn't answering. With no provider working, the app falls back to its simple offline converter.
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.
 - **Email:** fill in the SMTP settings. For Gmail, use an app password. Port 465 uses SSL, 587 uses STARTTLS.
 
