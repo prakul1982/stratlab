@@ -22,3 +22,14 @@ def test_trial_window():
     assert trial_state({})["available"] is True
     assert trial_state({"live_trial_started_at": (NOW - timedelta(hours=1)).isoformat()})["active"] is True
     assert trial_state({"live_trial_started_at": (NOW - timedelta(hours=25)).isoformat()})["active"] is False
+
+
+def test_pro_features_are_open_until_payments_go_live(monkeypatch):
+    from app.config import settings
+    from app.plans import has_pro_features, plan_info
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "")
+    assert has_pro_features("free") and plan_info("free")["pro_features"] and plan_info("free")["backtests_per_month"] == 5
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_live_x")
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "secret")
+    assert not has_pro_features("free") and not has_pro_features("basic") and has_pro_features("pro")

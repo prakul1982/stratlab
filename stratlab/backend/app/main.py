@@ -29,7 +29,7 @@ from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
 from .models import (AdminPlanReq, AIReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
-from .plans import PLANS, trial_state
+from .plans import PLANS, has_pro_features, plan_info, trial_state
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -121,7 +121,7 @@ def backtests_used(profile) -> int:
 
 
 def is_pro(profile) -> bool:
-    return PLANS[profile["_plan"]]["pro_features"]
+    return has_pro_features(profile["_plan"])
 
 
 def check_id(sid: str) -> str:
@@ -145,7 +145,7 @@ def get_instrument(inst_id: str) -> tuple:
 
 def check_features(profile, strategy: Strategy, inst: dict | None):
     if not is_pro(profile) and needs_pro(strategy, inst):
-        upgrade("Advanced indicators (MACD, Bollinger Bands, VWAP, Supertrend) and F&O are on the Pro plan.")
+        upgrade("Advanced indicators (MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, Donchian and more) and F&O are on the Pro plan.")
 
 
 @app.exception_handler(KiteNotReady)
@@ -185,7 +185,7 @@ def plans():
 @app.get("/me")
 def me(profile=Depends(current_profile)):
     plan = profile["_plan"]
-    info = PLANS[plan]
+    info = plan_info(plan)
     return ok({
         "id": profile["id"], "email": profile.get("email"),
         "plan": plan, "plan_info": info,

@@ -2,6 +2,12 @@
 
 ## September 2026
 
+### Polish
+- **Pro features are open to everyone until payments go live.** Advanced indicators, F&O and alerts work on every plan while Razorpay isn't set up, and lock again on their own once it is.
+- The idea examples and placeholder on **New notebook** now follow the market and instrument you picked (pick NVDA, the examples are about NVDA). "Your own data" moved to the end of the market row.
+- Research pages: cards line up in even rows with no gaps, the yearly bars carry their numbers, the results chart no longer wastes half its height, the price sits on the left on phones, and compare tables line up both columns.
+- Dependencies: FastAPI, httpx, pandas, razorpay and the GitHub Actions updated.
+
 ### More from every strategy
 - **Short selling**: tap *Buy* in the rules to switch to *Sell short*. Stops, targets, costs and paper trading all work the other way round.
 - **Trailing stop**: the stop follows the best price and locks in gains. **Time limit**: close a trade after N candles if nothing else has.

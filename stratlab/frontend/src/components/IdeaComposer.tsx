@@ -18,11 +18,27 @@ interface AIOut {
   side?: "long" | "short";
 }
 
-const EXAMPLES = [
-  "Buy NIFTY 50 when the 20 EMA crosses above the 50 EMA, stop loss 2%",
-  "Buy Bitcoin when RSI drops below 30, sell when it goes back above 55",
-  "Buy Reliance when price is above the 200-day average and RSI crosses above 50",
-];
+/** Well-known names per market, used in the examples until you pick an instrument. */
+const SAMPLE: Record<string, [string, string, string]> = {
+  IN: ["NIFTY 50", "RELIANCE", "HDFCBANK"], CRYPTO: ["Bitcoin", "Ethereum", "Solana"], US: ["SPY", "AAPL", "NVDA"],
+  UK: ["SHEL.L", "VOD.L", "HSBA.L"], EU: ["SAP.DE", "ASML.AS", "MC.PA"], JP: ["7203.T", "6758.T", "9984.T"],
+  FX: ["EUR/USD", "GBP/USD", "USD/JPY"],
+};
+
+/** Example ideas in the market (and on the instrument) you picked, so one click never tests the wrong thing. */
+function examplesFor(market?: string, symbol?: string | null): { placeholder: string; list: string[] } {
+  const [a, b, c] = symbol ? [symbol, symbol, symbol] : SAMPLE[market || ""] ?? ["it", "it", "it"];
+  const on = (x: string) => (x === "it" ? "" : ` ${x}`);
+  return {
+    placeholder: `e.g. Buy${on(a)} when the 20-day average crosses above the 50-day, with a 2% stop loss`,
+    list: [
+      `Buy${on(a)} when the 20 EMA crosses above the 50 EMA, stop loss 2%`,
+      `Buy${on(b)} when RSI drops below 30, sell when it goes back above 55`,
+      `Buy${on(c)} when price is above the 200-day average and RSI crosses above 50`,
+      `Short${on(a)} when the price falls below the lowest low of the last 20 days, with a 5% trailing stop`,
+    ],
+  };
+}
 
 async function findInstrument(name: string, market?: string | null): Promise<Instrument | null> {
   const up = name.toUpperCase().replace(/\s+/g, " ").trim();
@@ -38,9 +54,12 @@ async function findInstrument(name: string, market?: string | null): Promise<Ins
   }
 }
 
-export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFocus, initial = "" }: {
+export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFocus, initial = "", market, symbol }: {
   onBuilt: (b: Built) => Promise<void> | void; busyLabel?: string; autoFocus?: boolean; initial?: string;
+  /** The market and instrument already chosen: the examples use them, and names in the idea are looked up there. */
+  market?: string; symbol?: string | null;
 }) {
+  const ex = examplesFor(market, symbol);
   const { me, refreshMe, fail } = useApp();
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -81,7 +100,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
         (out.notes?.length ? " " + out.notes.join(" ") : ""));
       return;
     }
-    const instrument = out.instrument ? await findInstrument(out.instrument, out.market) : null;
+    const instrument = out.instrument ? await findInstrument(out.instrument, out.market || (market && market !== "CSV" ? market : null)) : null;
     const s = blankStrategy(out.name || nameFor({ ...blankStrategy(), entry: out.entry }, instrument?.symbol));
     const strategy: Strategy = {
       ...s, text: idea, entry: out.entry, exit: out.exit || [], entryJoin: out.entryJoin || "all", tf: out.tf || "1d", side: out.side === "short" ? "short" : "long",
@@ -104,7 +123,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
       <label className="sr-only" htmlFor="idea">Describe your trading idea</label>
       <textarea id="idea" className="input serif" autoFocus={autoFocus} value={text} maxLength={2000}
         style={{ fontSize: 20, minHeight: 130, lineHeight: 1.5, padding: "16px 18px" }}
-        placeholder="e.g. Buy NIFTY 50 when the 20-day average crosses above the 50-day, with a 2% stop loss"
+        placeholder={ex.placeholder}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) build(); }} />
       <div className="spread" style={{ flexWrap: "wrap" }}>
@@ -116,7 +135,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
       <div className="stack" style={{ gap: 8, marginTop: 4 }}>
         <span className="small muted">Not sure what to write? Try one of these:</span>
         <div className="examples">
-          {EXAMPLES.map((ex) => (
+          {ex.list.map((ex) => (
             <button key={ex} type="button" disabled={busy} onClick={() => { setText(ex); build(ex); }}>
               <span aria-hidden="true">→</span>{ex}
             </button>

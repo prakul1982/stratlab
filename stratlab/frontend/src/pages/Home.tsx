@@ -150,7 +150,7 @@ export function NewNotebook() {
       <WhereToTest where={where} setWhere={setWhere} />
       <section className="card stack" style={{ gap: 14 }} aria-labelledby="idea-h">
         <h2 id="idea-h" className="h2">2. Describe your idea</h2>
-        <IdeaComposer key={prefill?.text ?? ""} initial={prefill?.text ?? ""} onBuilt={create} />
+        <IdeaComposer key={prefill?.text ?? ""} initial={prefill?.text ?? ""} onBuilt={create} market={where.market} symbol={where.instrument?.symbol} />
       </section>
       <div className="stack">
         <h2 className="h2">Or start from a classic idea</h2>

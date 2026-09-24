@@ -38,6 +38,22 @@ PRO_REFS = BASIC_REFS | {
 GRACE = timedelta(days=1)
 
 
+def payments_live() -> bool:
+    """Razorpay keys are set, so people can actually buy Pro."""
+    from .config import settings
+    return bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+
+
+def has_pro_features(plan: str) -> bool:
+    """Pro features (advanced indicators, F&O) are open to everyone until payments go live:
+    nobody can buy Pro yet, so gating them would just hide them."""
+    return PLANS[plan]["pro_features"] or not payments_live()
+
+
+def plan_info(plan: str) -> dict:
+    return {**PLANS[plan], "pro_features": has_pro_features(plan)}
+
+
 def _dt(v) -> datetime:
     return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
 
