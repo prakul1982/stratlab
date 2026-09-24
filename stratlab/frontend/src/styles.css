@@ -134,7 +134,7 @@ svg { display: block; }
 .side-nav a:hover { background: var(--card); color: var(--ink); }
 .side-nav a.active { background: var(--card); color: var(--ink); font-weight: 600; }
 .main { min-width: 0; padding: 40px clamp(24px, 4vw, 56px) 80px; }
-.page { max-width: 1240px; margin: 0 auto; }
+.page { max-width: 1320px; margin: 0 auto; }
 .topbar { display: none; }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
