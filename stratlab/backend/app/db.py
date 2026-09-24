@@ -65,6 +65,14 @@ def save_strategy(user_id: str, name: str, body: dict, token: int | None, sid: s
     return sb().table("strategies").insert(row).execute().data[0]
 
 
+def list_notebook_rows(user_id: str) -> list[dict]:
+    """Notebook list without the (large) experiment history."""
+    return (sb().table("strategies")
+            .select("id,name,instrument_token,updated_at,kind:body->>kind,question:body->>question,"
+                    "instrument:body->instrument,summary:body->summary,tf:body->>tf")
+            .eq("user_id", user_id).order("updated_at", desc=True).execute().data)
+
+
 def delete_strategy(user_id: str, sid: str) -> None:
     sb().table("strategies").delete().eq("user_id", user_id).eq("id", sid).execute()
 

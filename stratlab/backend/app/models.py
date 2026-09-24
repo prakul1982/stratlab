@@ -48,20 +48,70 @@ class Strategy(BaseModel):
     risk: Risk = Field(default_factory=Risk)
 
 
-class BacktestReq(BaseModel):
-    strategy: Strategy
-    instrument_token: int
+class Bar(BaseModel):
+    t: str = Field(..., max_length=40)
+    o: float
+    h: float
+    l: float
+    c: float
+    v: float = 0
+
+
+class UploadMeta(BaseModel):
+    name: str = Field("Uploaded data", max_length=60)
+    currency: str = Field("", max_length=8)
+    step: float = Field(1, gt=0, le=1e6)       # smallest quantity you can trade: 1 share, 0.0001 BTC
+
+
+class DataReq(BaseModel):
+    """Where the candles come from: a market instrument, or uploaded bars."""
+    instrument: Optional[str] = Field(None, max_length=60)      # "IN:256265", "CRYPTO:BTC-USD"
+    instrument_token: Optional[int] = None                      # older clients: a Kite token
     days: int = Field(365, ge=5, le=3650)
+    bars: Optional[list[Bar]] = Field(None, max_length=50000)
+    upload: Optional[UploadMeta] = None
+
+    @model_validator(mode="after")
+    def _source(self):
+        if self.instrument is None and self.instrument_token is not None:
+            self.instrument = f"IN:{self.instrument_token}"
+        return self
+
+
+class BacktestReq(DataReq):
+    strategy: Strategy
 
 
 class LiveStartReq(BaseModel):
     strategy: Strategy
-    instrument_token: int
+    instrument: Optional[str] = Field(None, max_length=60)
+    instrument_token: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _source(self):
+        if self.instrument is None and self.instrument_token is not None:
+            self.instrument = f"IN:{self.instrument_token}"
+        if self.instrument is None:
+            raise ValueError("Pick an instrument.")
+        return self
+
+
+class NotebookReq(BaseModel):
+    name: Optional[str] = Field(None, max_length=80)
+    question: Optional[str] = Field(None, max_length=300)
+    notes: Optional[str] = Field(None, max_length=4000)
+    strategy: Optional[Strategy] = None
+    instrument: Optional[str] = Field(None, max_length=60)
+
+
+class ExperimentReq(DataReq):
+    label: str = Field("", max_length=120)
 
 
 class SaveStrategyReq(BaseModel):
     strategy: Strategy
     instrument_token: Optional[int] = None
+    instrument: Optional[str] = Field(None, max_length=60)
 
 
 class AIReq(BaseModel):

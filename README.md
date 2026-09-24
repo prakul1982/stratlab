@@ -15,22 +15,28 @@ Describe a strategy in plain English, backtest it on NSE history, then paper tra
 </div>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/backtest-dark.png">
-  <img alt="Backtest results: return, drawdown, win rate, and a price chart with buy and sell markers" src="docs/images/backtest-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/verdict-dark.png">
+  <img alt="A verdict page: 'Likely a real edge', with four honesty checks: unseen data, nearby settings, bad-luck drawdown and enough trades" src="docs/images/verdict-light.png">
 </picture>
 
-## Features
+## What makes it different
 
-- **Plain-English strategy builder.** Type something like *"Buy when the 20 EMA crosses above the 50 EMA, stop loss 2%"*. The AI turns it into rules and asks about anything missing, such as the exit, timeframe or risk.
-- **Backtests on NSE data.** Covers Nifty 50, Bank Nifty, any NSE stock and F&O, on daily, hourly, 15-minute or 5-minute candles. Results show return, CAGR, drawdown, win rate, profit factor, Sharpe ratio, every trade and a buy-and-hold comparison.
-- **Live paper trading.** The same engine runs on live Kite ticks during market hours, with fake capital, and can send trade alerts on Telegram or email.
-- **Risk-first position sizing.** Quantity = (capital × risk %) ÷ distance to the stop, capped per trade, rounded to whole lots for F&O, with brokerage and slippage on every order.
-- **Guided and Expert modes.** Beginners get explanations at every step; experienced traders get every control.
-- **Subscriptions.** Free, Basic and Pro plans billed through Razorpay, with limits enforced on the server.
+Most backtesting tools show a flattering chart. StratLab tells you whether the edge is **real or luck**.
+
+- **A verdict on every experiment.** Each test ends in one plain answer: *Likely a real edge*, *Mixed evidence*, *Probably luck*, *Not enough evidence* or *No edge here*. Four checks back it up:
+  - **Unseen data:** the rules are tested separately on the last 30% of the period, which they were never tuned on.
+  - **Nearby settings:** 25 variations of your indicator lengths. If only your exact numbers make money, that's a lucky fit.
+  - **Bad-luck drawdown:** your trades reshuffled 1,000 times, to show how deep the losses could realistically get.
+  - **Enough trades:** under 15 trades, luck dominates.
+- **Real costs, in the market's own currency.** India: STT, exchange and SEBI fees, stamp duty, GST, plus a capital-gains estimate. US: SEC and FINRA fees. Crypto: exchange fees. You see what you'd actually keep.
+- **Lab notebooks.** Each idea is a notebook: a question, the rules written as sentences, numbered experiments you can compare, and your own lab notes.
+- **Any market.** Indian stocks, indices and F&O (Zerodha Kite), crypto (Coinbase, no key needed), or upload a CSV of candles from anywhere. US, UK, Europe, Japan and forex are next.
+- **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out.
+- **Paper trading.** Run the rules on live prices with fake money: Indian markets during market hours, crypto around the clock.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/build-dark.png">
-  <img alt="Strategy builder: instrument picker, step-by-step guide, trade flow diagram and risk per trade" src="docs/images/build-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/notebook-dark.png">
+  <img alt="A notebook: the question being tested, rules written as editable sentences, and lab notes" src="docs/images/notebook-light.png">
 </picture>
 
 <sub>Screenshots use synthetic sample prices, not real market data.</sub>
@@ -39,41 +45,50 @@ Describe a strategy in plain English, backtest it on NSE history, then paper tra
 
 ```mermaid
 flowchart LR
-    UI["Frontend<br/>static HTML + JS"] -- "REST, Supabase JWT" --> API["FastAPI backend"]
+    UI["Frontend<br/>React + Vite"] -- "REST, Supabase JWT" --> API["FastAPI backend"]
     UI -- "Google sign-in" --> SB[("Supabase<br/>Auth + Postgres")]
     API --> SB
-    API -- "instruments, candles" --> KITE["Zerodha Kite Connect"]
-    KITE -- "live ticks (WebSocket)" --> API
+    API -- "India: candles, live ticks" --> KITE["Zerodha Kite Connect"]
+    API -- "crypto: candles, prices" --> CB["Coinbase public data"]
     API -- "subscriptions" --> RZP["Razorpay"]
     RZP -- "webhooks" --> API
     API --> AI["Gemini or Claude<br/>(strategy writer)"]
     API --> ALERT["Telegram / email alerts"]
 ```
 
-The browser only talks to the backend. The backend owns every secret: the Supabase service key, Kite and Razorpay credentials, and the AI keys. Backtests and live paper trading use the same engine, so a strategy behaves the same in both.
+The browser only talks to the backend. The backend owns every secret: the Supabase service key, Kite and Razorpay credentials, and the AI keys. Backtests, verdict checks and live paper trading all use the same engine, so a strategy behaves the same everywhere.
 
 ## Repository layout
 
 ```
 stratlab/
-├── backend/                FastAPI app (deploys to Railway)
+├── backend/                  FastAPI app (deploys to Railway)
 │   ├── app/
-│   │   ├── main.py         API routes
-│   │   ├── engine/         indicators, rule evaluation, backtest engine
-│   │   ├── live.py         live paper trading on Kite ticks
-│   │   ├── kite_service.py market data (Kite Connect)
-│   │   ├── kite_auto.py    optional automatic daily Kite login
-│   │   ├── billing.py      Razorpay subscriptions and webhooks
-│   │   ├── plans.py        plan limits and prices
-│   │   ├── ai_writer.py    plain English → strategy rules
-│   │   └── alerts.py       Telegram and email alerts
-│   ├── tests/              pytest suite
-│   └── .env.example        every setting the server reads
-├── frontend/               single-page app (deploys to Vercel or Netlify)
-│   ├── index.html
-│   └── config.js           API URL and Supabase public key
+│   │   ├── main.py           API routes
+│   │   ├── engine/
+│   │   │   ├── core.py       rule evaluation and the trading engine
+│   │   │   ├── indicators.py SMA, EMA, RSI, MACD, Bollinger, VWAP, Supertrend
+│   │   │   ├── costs.py      per-market trading costs and tax estimates
+│   │   │   └── verdict.py    the four honesty checks and the verdict
+│   │   ├── data/             market data: markets list, Kite (India), Coinbase (crypto)
+│   │   ├── research.py       load candles, run an experiment, keep a compact record
+│   │   ├── live.py           paper trading on live ticks (India) or polled candles (crypto)
+│   │   ├── kite_service.py   Zerodha Kite Connect
+│   │   ├── kite_auto.py      optional automatic daily Kite login
+│   │   ├── billing.py        Razorpay subscriptions
+│   │   ├── plans.py          plan limits and prices
+│   │   ├── ai_writer.py      plain English → strategy rules
+│   │   └── alerts.py         Telegram and email alerts
+│   ├── tests/                pytest suite
+│   └── .env.example          every setting the server reads
+├── frontend/                 React + TypeScript app built with Vite (deploys to Vercel)
+│   ├── public/config.js      API URL and Supabase public key, read at runtime
+│   └── src/
+│       ├── pages/            notebook, verdict, markets, paper trading, plans, account
+│       ├── components/       rules editor, charts, sidebar, share image
+│       └── lib/              API client, formatting, rule parser, CSV import
 └── supabase/
-    └── schema.sql          tables, row-level security, sign-up trigger
+    └── schema.sql            tables, row-level security, sign-up trigger
 ```
 
 ## Quick start
@@ -88,22 +103,24 @@ uvicorn app.main:app --reload --port 8000
 
 # frontend (in another terminal)
 cd stratlab/frontend
-python -m http.server 5500    # open http://localhost:5500
+npm install
+npm run dev                   # open http://localhost:5500
 ```
 
-Run the tests with `cd stratlab/backend && pytest`.
+Run the tests with `cd stratlab/backend && pytest`, and check the frontend with `cd stratlab/frontend && npm run build`.
 
-The **[setup guide](stratlab/README.md)** covers Supabase, Kite Connect (including the automatic daily login), Razorpay, the AI writer, deployment and how the engine works.
+The **[setup guide](stratlab/README.md)** covers Supabase, Kite Connect (including the automatic daily login), Razorpay, the AI writer, deployment, and how the engine and the verdict work.
 
 ## Plans
 
 | | Free | Basic · ₹1,999/mo | Pro · ₹4,900/mo |
 |---|---|---|---|
-| Backtests | 5 / month | 50 / month | Unlimited |
+| Experiments (each with a full verdict) | 5 / month | 50 / month | Unlimited |
 | AI strategy builds | 10 / month | 100 / month | Unlimited |
-| Live paper trading | 24-hour trial | 1 strategy | 5 strategies |
+| Paper trading | 24-hour trial | 1 strategy | 5 strategies |
+| Markets | India, crypto, your own CSV | same | + Indian F&O |
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | + MACD, Bollinger, VWAP, Supertrend |
-| F&O, alerts, export | – | – | ✓ |
+| Alerts, export | – | – | ✓ |
 
 Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server.
 

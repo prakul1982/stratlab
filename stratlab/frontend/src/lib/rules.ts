@@ -1,0 +1,175 @@
+import type { Cond, Op, Ref, RefType, Risk, Strategy, Tf } from "./types";
+
+export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boolean }[] = [
+  { t: "price", name: "Price", friendly: "the price" },
+  { t: "sma", name: "SMA", friendly: "average price" },
+  { t: "ema", name: "EMA", friendly: "fast average" },
+  { t: "rsi", name: "RSI", friendly: "momentum (RSI)" },
+  { t: "macd", name: "MACD", friendly: "MACD line", pro: true },
+  { t: "macd_signal", name: "MACD signal", friendly: "MACD signal", pro: true },
+  { t: "macd_hist", name: "MACD histogram", friendly: "MACD histogram", pro: true },
+  { t: "bb_upper", name: "Bollinger upper", friendly: "upper Bollinger band", pro: true },
+  { t: "bb_mid", name: "Bollinger mid", friendly: "middle Bollinger band", pro: true },
+  { t: "bb_lower", name: "Bollinger lower", friendly: "lower Bollinger band", pro: true },
+  { t: "vwap", name: "VWAP", friendly: "VWAP", pro: true },
+  { t: "supertrend", name: "Supertrend", friendly: "Supertrend", pro: true },
+];
+export const PRO_TYPES = new Set(INDICATORS.filter((i) => i.pro).map((i) => i.t));
+export const DEFAULTS: Partial<Record<RefType, [number, number?]>> = {
+  sma: [20], ema: [20], rsi: [14], macd: [12, 26], macd_signal: [12, 26], macd_hist: [12, 26],
+  bb_upper: [20, 2], bb_mid: [20, 2], bb_lower: [20, 2], vwap: [20], supertrend: [10, 3],
+};
+export const OPS: { op: Op; say: string; short: string }[] = [
+  { op: "xa", say: "crosses above", short: "crosses above" },
+  { op: "xb", say: "crosses below", short: "crosses below" },
+  { op: "gt", say: "is above", short: "is above" },
+  { op: "lt", say: "is below", short: "is below" },
+];
+export const opSay = (op: Op) => OPS.find((o) => o.op === op)!.say;
+
+export function mkRef(t: RefType): Ref {
+  if (t === "price") return { t };
+  if (t === "num") return { t, v: 50 };
+  const d = DEFAULTS[t]!;
+  return d[1] != null ? { t, p: d[0], m: d[1] } : { t, p: d[0] };
+}
+
+export function refName(r: Ref): string {
+  const d = DEFAULTS[r.t] ?? [];
+  const p = r.p ?? d[0], m = r.m ?? d[1];
+  switch (r.t) {
+    case "price": return "Price";
+    case "num": return String(r.v ?? "");
+    case "sma": case "ema": case "rsi": case "vwap": return `${r.t.toUpperCase()} ${p}`;
+    case "macd": return `MACD ${p},${m}`;
+    case "macd_signal": return `MACD signal ${p},${m}`;
+    case "macd_hist": return `MACD hist ${p},${m}`;
+    case "bb_upper": case "bb_mid": case "bb_lower": return `BB ${r.t.slice(3)} ${p},${m}`;
+    default: return `Supertrend ${p},${m}`;
+  }
+}
+
+export const usesPro = (s: Strategy) => [...s.entry, ...s.exit].some((c) => PRO_TYPES.has(c.l.t) || PRO_TYPES.has(c.r.t));
+
+export const DEFAULT_RISK: Risk = { capital: 500000, riskPct: 1, maxAlloc: 100, sl: 2, tgt: 6, brokerage: 20, slippage: 0.05 };
+
+export function blankStrategy(name = "Untitled notebook"): Strategy {
+  return { name, tf: "1d", text: "", entry: [], exit: [], entryJoin: "all", risk: { ...DEFAULT_RISK } };
+}
+
+/** Capital and brokerage that make sense in each currency. */
+export function riskForCurrency(risk: Risk, currency?: string | null): Risk {
+  if (currency === "INR" || !currency) return risk;
+  const capital = risk.capital === DEFAULT_RISK.capital ? 10000 : risk.capital;
+  const brokerage = risk.brokerage === DEFAULT_RISK.brokerage ? 0 : risk.brokerage;
+  return { ...risk, capital, brokerage };
+}
+
+export const STARTERS = [
+  { title: "Ride the trend", level: "Easiest", question: "Does buying when the price climbs above its 50-day average catch real trends?",
+    why: "Buys when the price moves above its 50-day average; sells when it drops back below.",
+    text: "Buy when price crosses above 50 SMA. Sell when price crosses below 50 SMA. Stop loss 4%, target 10%, risk 1% of capital." },
+  { title: "Average crossover", level: "Easy", question: "Does the 20/50 moving-average crossover actually work?",
+    why: "Buys when the short-term average overtakes the longer one, a classic sign momentum is turning up.",
+    text: "Buy when 20 EMA crosses above 50 EMA. Sell when 20 EMA crosses below 50 EMA. Stop loss 2%, target 6%, risk 1% of capital." },
+  { title: "Buy the dip", level: "Moderate", question: "Does buying sharp dips in an uptrend pay off?",
+    why: "Buys after a sharp fall (low RSI) while the long-term trend is up, then sells on the bounce.",
+    text: "Buy when RSI 14 is below 35 and price is above 200 SMA. Sell when RSI 14 goes above 60. Stop loss 3%, risk 1% of capital." },
+];
+
+/* ---------- plain-English parser (no AI): SMA, EMA, RSI and price rules ---------- */
+function normInd(w: string): RefType { w = w.trim(); return w === "ema" ? "ema" : w === "rsi" ? "rsi" : "sma"; }
+function parseRef(s: string): Ref | null {
+  let m;
+  if ((m = s.match(/(\d+)\s*[- ]?\s*(?:day|period|bar|candle)?s?\s*(ema|sma|rsi|moving average|ma\b)/))) return { t: normInd(m[2]), p: +m[1] };
+  if ((m = s.match(/\b(ema|sma|rsi|ma)\s*\(?\s*(\d+)/))) return { t: normInd(m[1]), p: +m[2] };
+  if (/\brsi\b/.test(s)) return { t: "rsi", p: 14 };
+  if (/\b(price|close|ltp|it)\b/.test(s)) return { t: "price" };
+  return null;
+}
+export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; risk: Partial<Risk> } {
+  let t = " " + raw.toLowerCase().replace(/\s+/g, " ") + " ";
+  const out: { entry: Cond[]; exit: Cond[]; risk: Partial<Risk> } = { entry: [], exit: [], risk: {} };
+  const N = "(\\d+(?:\\.\\d+)?)";
+  let m;
+  if ((m = t.match(new RegExp("(?:stop[ -]?loss|\\bsl\\b|\\bstop\\b)(?: of| at| =|:)? ?" + N + " ?%")))) out.risk.sl = +m[1];
+  if ((m = t.match(new RegExp("(?:target|take[ -]?profit|\\btp\\b)(?: of| at| =|:)? ?" + N + " ?%")))) out.risk.tgt = +m[1];
+  if ((m = t.match(new RegExp("\\brisk(?:ing)?(?: of| =|:)? ?" + N + " ?%")))) out.risk.riskPct = +m[1];
+  if ((m = t.match(/(?:capital|₹|\$|\brs\.?|\binr|\busd)(?: of| =|:)? ?(\d[\d,]*(?:\.\d+)?) ?(lakhs?|lacs?|crores?|cr|k)?\b/))) {
+    let v = +m[1].replace(/,/g, "");
+    const u = m[2] || "";
+    if (u === "k") v *= 1e3; else if (u.startsWith("la")) v *= 1e5; else if (u.startsWith("cr")) v *= 1e7;
+    if (v > 0) out.risk.capital = v;
+  }
+  t = t.replace(/(?:with |and |, )?(?:an? )?(?:stop[ -]?loss|\bsl\b|\bstop\b|target|take[ -]?profit|\btp\b|\brisk(?:ing)?|capital)[^.;,]*?\d[\d,.]*\s*%?(?:\s*(?:lakhs?|lacs?|crores?|cr|k)\b)?(?: of (?:my |the )?capital)?/g, " ");
+  const clauses = t.split(/[.;\n]| then |,(?= ?(?:and )?(?:sell|exit|close|square|buy|enter|go long)\b)| and (?=(?:sell|exit|close|square off|buy|enter|go long)\b)/);
+  const opRe = /(cross(?:es|ing)? (?:above|over)\b|crossover\b|cross(?:es|ing)? (?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<)/;
+  let side: "entry" | "exit" = "entry";
+  let lastRef: Ref | null = null;
+  for (const cl of clauses) {
+    if (/\b(sell|exit|close|square off|book profit)/.test(cl)) side = "exit";
+    else if (/\b(buy|enter|go long)/.test(cl)) side = "entry";
+    for (const p of cl.split(/ and | & /)) {
+      const om = p.match(opRe);
+      if (!om || om.index == null) continue;
+      const leftText = p.slice(0, om.index);
+      let L = parseRef(leftText);
+      if (!L && lastRef && !/[a-z]{3,}/.test(leftText.replace(/\b(sell|exit|close|buy|when|if|and|then|it|is|goes|go|moves?|once|price)\b/g, ""))) L = lastRef;
+      if (!L && /\b(buy|sell|exit|close|when|if)\b/.test(leftText)) L = { t: "price" };
+      if (!L) continue;
+      lastRef = L;
+      const right = p.slice(om.index + om[0].length);
+      let R = parseRef(right);
+      if (!R) {
+        const nm = right.match(/-?\d+(?:\.\d+)?/);
+        if (!nm) continue;
+        R = { t: "num", v: +nm[0] };
+      }
+      const w = om[0];
+      const op: Op = /cross/.test(w) ? (/under|below/.test(w) ? "xb" : "xa") : /above|greater|more|over|>/.test(w) ? "gt" : "lt";
+      out[side].push({ l: L, op, r: R });
+    }
+  }
+  return out;
+}
+
+export function detectTf(t: string): Tf | null {
+  t = t.toLowerCase();
+  if (/\b5\s*-?\s*min/.test(t)) return "5m";
+  if (/\b15\s*-?\s*min/.test(t)) return "15m";
+  if (/\b(1\s*-?\s*hour|hourly|60\s*-?\s*min|1h)\b/.test(t)) return "1h";
+  if (/\b(daily|1\s*-?\s*day|day candles?|1d)\b/.test(t)) return "1d";
+  return null;
+}
+
+export function detectInstrument(t: string): string | null {
+  t = t.toLowerCase();
+  if (/bank\s*nifty|nifty\s*bank/.test(t)) return "NIFTY BANK";
+  if (/\bnifty(\s*50)?\b/.test(t)) return "NIFTY 50";
+  if (/\bbitcoin|\bbtc\b/.test(t)) return "BTC-USD";
+  if (/\bethereum|\beth\b/.test(t)) return "ETH-USD";
+  if (/\bsolana|\bsol\b/.test(t)) return "SOL-USD";
+  const m = t.match(/\b(?:buy|sell|trade)\s+([a-z&]{2,20}(?:\s+[a-z&]{2,20})?)\s+(?:when|if|on|at|once|after|whenever)\b/);
+  const stop = ["when", "if", "the", "at", "on", "it", "and", "only", "above", "below", "once", "after", "whenever", "stock", "shares"];
+  if (m && !stop.includes(m[1].split(" ")[0])) return m[1].toUpperCase();
+  return null;
+}
+
+/** A question for the notebook title, from the idea text. */
+export function questionFrom(text: string, instrument?: string | null): string {
+  const clean = text.trim().replace(/\s+/g, " ").replace(/[.!]+$/, "");
+  const first = clean.split(/(?<=[.!?])\s/)[0];
+  const short = first.length > 110 ? first.slice(0, 107).trimEnd() + "…" : first;
+  const lead = short.charAt(0).toLowerCase() + short.slice(1);
+  const named = !instrument || lead.toLowerCase().includes(instrument.toLowerCase().split(/[\s/-]/)[0]);
+  return `Does "${lead}" work${named ? "" : ` on ${instrument}`}?`;
+}
+
+const OP_SHORT: Record<Op, string> = { xa: "over", xb: "under", gt: "above", lt: "below" };
+
+/** A short notebook name from its first buy rule: "EMA 20 over EMA 50 · NIFTY 50". */
+export function nameFor(s: Strategy, instrument?: string | null): string {
+  const c = s.entry[0];
+  const rule = c ? `${refName(c.l)} ${OP_SHORT[c.op]} ${refName(c.r)}` : "New idea";
+  return (instrument ? `${rule} · ${instrument}` : rule).slice(0, 80);
+}

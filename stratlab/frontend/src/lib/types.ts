@@ -1,0 +1,96 @@
+export type RefType =
+  | "price" | "num" | "sma" | "ema" | "rsi" | "macd" | "macd_signal" | "macd_hist"
+  | "bb_upper" | "bb_mid" | "bb_lower" | "vwap" | "supertrend";
+export type Op = "xa" | "xb" | "gt" | "lt";
+export type Tf = "1d" | "1h" | "15m" | "5m";
+
+export interface Ref { t: RefType; p?: number | null; m?: number | null; v?: number | null }
+export interface Cond { l: Ref; op: Op; r: Ref }
+export interface Risk {
+  capital: number; riskPct: number; maxAlloc: number; sl: number; tgt: number; brokerage: number; slippage: number;
+}
+export interface Strategy {
+  name: string; tf: Tf; text: string; entry: Cond[]; exit: Cond[]; entryJoin: "all" | "any"; risk: Risk;
+}
+
+export interface Instrument {
+  id: string; token?: number | string | null; symbol: string; name?: string; exchange?: string; type?: string;
+  market?: string; currency?: string; step?: number; lot?: number; fno?: boolean; expiry?: string | null;
+  strike?: number | null; tz?: string;
+}
+
+export interface Market {
+  id: string; name: string; venues: string; currency: string | null; symbol: string; tz: string;
+  hours: { open: string | null; close: string | null; days: string } | null; what: string; costs: string;
+  provider: string | null; brokerage: number; status: "live" | "offline" | "soon"; max_days: Record<Tf, number> | null;
+}
+
+export type VerdictKind = "edge" | "mixed" | "luck" | "not_enough" | "no_edge";
+export type CheckStatus = "pass" | "warn" | "fail" | "skip";
+
+export interface Check {
+  id: "unseen" | "nearby" | "shuffle" | "sample"; title: string; status: CheckStatus; detail: string;
+  data: any;
+}
+export interface Verdict {
+  verdict: VerdictKind; headline: string; summary: string; passed: number; total: number; checks: Check[];
+  suggestions: { action: string; text: string }[];
+}
+export interface Stats {
+  ret: number; pnl: number; cagr: number; mdd: number; sharpe: number; n: number; win: number;
+  pf: number | null; avg: number; buy_hold_ret: number;
+}
+export interface Costs {
+  gross_pnl: number; total: number; items: { label: string; amount: number }[]; net_pnl: number;
+  tax: { amount: number | null; note: string }; kept: number;
+}
+export interface Trade {
+  entry_t: string; exit_t: string | null; entry: number; exit: number; qty: number; pnl: number;
+  costs?: number; ret: number; why: string;
+}
+export interface Experiment {
+  v: number; label: string; created_at: string; strategy: Strategy; instrument: Instrument; days: number; tf: Tf;
+  candles: number; range: { from: string; to: string }; stats: Stats; costs: Costs; verdict: Verdict;
+  series: { t: string[]; close: number[]; equity: (number | null)[]; buy_hold: (number | null)[];
+    overlays: Record<string, (number | null)[]>; split: number | null };
+  trades: Trade[];
+}
+export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null }
+export interface NotebookItem {
+  id: string; name: string; question: string | null; instrument: Instrument | { id: string } | null;
+  summary: NotebookSummary | null; updated_at: string; tf?: Tf | null;
+}
+export interface Notebook extends NotebookItem {
+  kind: "notebook"; notes: string; strategy: Strategy; instrument: Instrument | null; experiments: Experiment[];
+}
+
+export interface PlanInfo {
+  name: string; price: number; backtests_per_month: number | null; ai_builds_per_month: number | null;
+  live_limit: number; live_trial_hours: number | null; pro_features: boolean;
+}
+export interface Me {
+  id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
+  billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean };
+  usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null };
+  trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean } | null;
+  live_running: number; live_limit: number;
+  alerts: { enabled: boolean; telegram_chat_id: string | null; email: string | null };
+  data_online: boolean; billing_enabled?: boolean;
+}
+
+export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number }
+export interface LiveOrder { side: "buy" | "sell"; qty: number; price: number; reason: string | null; pnl: number | null; ts: string }
+export interface LiveSnapshot {
+  id: string; name: string; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
+  instrument: Instrument; strategy: Strategy; started_at: string; stopped_at?: string | null;
+  last_price?: number | null; last_tick_at?: string | null; feed_connected?: boolean;
+  bars: { t: string; o: number; h: number; l: number; c: number }[]; forming?: { t: string; c: number } | null;
+  overlays: Record<string, (number | null)[]>; events: LiveEvent[]; equity_curve: { t: string; eq: number }[];
+  account: { capital: number; equity: number; cash: number; qty: number; entry?: number | null; stop?: number | null;
+    target?: number | null; unrealised: number; realised: number; trades: number; wins: number };
+  orders: LiveOrder[];
+}
+export interface LiveRow {
+  id: string; name: string; instrument: Instrument; status: "running" | "stopped" | "paused";
+  started_at: string; stopped_at: string | null; stop_reason: string | null;
+}

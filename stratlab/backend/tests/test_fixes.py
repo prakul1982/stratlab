@@ -100,3 +100,15 @@ def test_billing_disabled_without_razorpay_keys(monkeypatch):
     assert billing.enabled() is False
     with pytest.raises(ValueError):
         billing.create_subscription({"id": "u"}, "pro")
+
+
+def test_crashes_return_json_with_cors(monkeypatch):
+    from app import main
+    main.app.dependency_overrides[main.current_profile] = lambda: {"id": "u", "_plan": "free"}
+    monkeypatch.setattr(main.db, "list_notebook_rows", lambda uid: 1 / 0)
+    try:
+        r = TestClient(main.app, raise_server_exceptions=False).get("/notebooks", headers={"Origin": "http://localhost:5500"})
+        assert r.status_code == 500 and r.json()["detail"]["code"] == "server_error"
+        assert r.headers.get("access-control-allow-origin") == "http://localhost:5500"
+    finally:
+        main.app.dependency_overrides.clear()

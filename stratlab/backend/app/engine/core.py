@@ -3,6 +3,7 @@ The same Engine drives backtests and live paper trading."""
 import math
 import numpy as np
 import pandas as pd
+from . import costs as C
 from .indicators import compute, ref_name, OSCILLATORS
 
 OP_NAME = {"xa": "crosses above", "xb": "crosses below", "gt": "is above", "lt": "is below"}
@@ -52,13 +53,18 @@ def cond_text(c) -> str:
 
 
 class Engine:
-    def __init__(self, strategy, lot: int = 1, state: dict | None = None):
-        self.s, self.r, self.lot = strategy, strategy.risk, max(1, int(lot or 1))
+    def __init__(self, strategy, lot: float = 1, state: dict | None = None, cost_kind: str = "flat"):
+        # `lot` is the quantity step: 1 share, an F&O lot of 75, or 0.0001 of a coin
+        self.s, self.r = strategy, strategy.risk
+        self.qty_step = float(lot) if lot and lot > 0 else 1.0
+        self.kind = cost_kind
         self.cash = self.r.capital
         self.qty, self.entry, self.sl, self.tg = 0, 0.0, 0.0, math.inf
         self.entry_t = None
+        self.entry_cost = 0.0
         self.trades: list[dict] = []
         self.events: list[dict] = []
+        self.cost_items: dict[str, float] = {}
         self.skipped_size = 0
         if state:
             self.load(state)
@@ -67,13 +73,22 @@ class Engine:
     def dump(self) -> dict:
         return {"cash": self.cash, "qty": self.qty, "entry": self.entry, "sl": self.sl,
                 "tg": None if math.isinf(self.tg) else self.tg, "entry_t": self.entry_t,
+                "entry_cost": self.entry_cost, "cost_items": self.cost_items,
                 "trades": self.trades[-500:], "events": self.events[-1000:]}
 
     def load(self, st: dict):
         self.cash, self.qty, self.entry, self.sl = st["cash"], st["qty"], st["entry"], st["sl"]
         self.tg = math.inf if st.get("tg") is None else st["tg"]
         self.entry_t = st.get("entry_t")
+        self.entry_cost = st.get("entry_cost", 0.0)
+        self.cost_items = st.get("cost_items", {})
         self.trades, self.events = st.get("trades", []), st.get("events", [])
+
+    def _pay(self, side: str, qty: float, px: float) -> float:
+        items = C.order_costs(self.kind, side, qty, px, self.r.brokerage)
+        for k, v in items.items():
+            self.cost_items[k] = self.cost_items.get(k, 0.0) + v
+        return C.total(items)
 
     def equity(self, px: float) -> float:
         return self.cash + self.qty * px
@@ -92,10 +107,13 @@ class Engine:
                 px, why = b["c"], "Exit rule"
             if px is not None:
                 px *= 1 - slip
-                pnl = self.qty * (px - self.entry) - 2 * brok
-                self.cash += self.qty * px - brok
+                exit_cost = self._pay("sell", self.qty, px)
+                trade_costs = self.entry_cost + exit_cost
+                pnl = self.qty * (px - self.entry) - trade_costs
+                self.cash += self.qty * px - exit_cost
                 self.trades.append({"entry_t": self.entry_t, "exit_t": b["t"], "entry": self.entry, "exit": px,
-                                    "qty": self.qty, "pnl": pnl, "ret": (px / self.entry - 1) * 100, "why": why})
+                                    "qty": self.qty, "pnl": pnl, "costs": trade_costs,
+                                    "ret": (px / self.entry - 1) * 100, "why": why})
                 ev = {"t": b["t"], "side": "sell", "px": px, "qty": self.qty, "why": why, "pnl": pnl}
                 self.events.append(ev); new.append(ev)
                 self.qty = 0
@@ -105,13 +123,17 @@ class Engine:
             if hit:
                 px = b["c"] * (1 + slip)
                 slp = r.sl / 100
-                q = math.floor(self.cash * r.riskPct / 100 / (px * slp)) if slp > 0 else math.inf
-                q = min(q, math.floor((self.cash * r.maxAlloc / 100 - brok) / px))
-                q = (q // self.lot) * self.lot
+                cap = self.cash * r.maxAlloc / 100
+                q = self.cash * r.riskPct / 100 / (px * slp) if slp > 0 else math.inf
+                q = C.floor_to(min(q, (cap - brok) / px), self.qty_step)
+                # percentage costs (STT, exchange fees) must fit in the budget too
+                while q > 0 and q * px + C.total(C.order_costs(self.kind, "buy", q, px, brok)) > cap:
+                    q = C.floor_to(q - max(self.qty_step, q * 0.002), self.qty_step)
                 if q <= 0:
                     self.skipped_size += 1
                 if q > 0:
-                    self.cash -= q * px + brok
+                    self.entry_cost = self._pay("buy", q, px)
+                    self.cash -= q * px + self.entry_cost
                     self.qty, self.entry, self.entry_t = q, px, b["t"]
                     self.sl = px * (1 - slp)
                     self.tg = px * (1 + r.tgt / 100) if r.tgt > 0 else math.inf
@@ -178,15 +200,24 @@ def period_key(t: pd.Timestamp, tf: str) -> str:
     return t.strftime("%b %y") if tf == "1d" else t.strftime("%d %b")
 
 
-def backtest(bars: list[dict], strategy, start: int, lot: int = 1) -> dict:
-    tf = strategy.tf
-    ctx = Ctx(bars, intraday=tf != "1d")
-    eng = Engine(strategy, lot)
-    cap = strategy.risk.capital
-    equity = [cap]
-    for i in range(start + 1, len(bars)):
+def simulate(bars: list[dict], strategy, start: int, end: int | None = None, lot: float = 1,
+             cost_kind: str = "flat", ctx: Ctx | None = None) -> tuple[Engine, list[float]]:
+    """Trade bars start+1 .. end-1 with fresh capital. Indicators use all earlier bars, so there is no warm-up gap."""
+    ctx = ctx or Ctx(bars, intraday=strategy.tf != "1d")
+    end = len(bars) if end is None else end
+    eng = Engine(strategy, lot, cost_kind=cost_kind)
+    equity = [strategy.risk.capital]
+    for i in range(start + 1, end):
         eng.step(bars, ctx, i)
         equity.append(eng.equity(bars[i]["c"]))
+    return eng, equity
+
+
+def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: str = "flat") -> dict:
+    tf = strategy.tf
+    ctx = Ctx(bars, intraday=tf != "1d")
+    eng, equity = simulate(bars, strategy, start, lot=lot, cost_kind=cost_kind, ctx=ctx)
+    cap = strategy.risk.capital
     view = bars[start:]
     open_trade = None
     if eng.qty > 0:
@@ -226,4 +257,14 @@ def backtest(bars: list[dict], strategy, start: int, lot: int = 1) -> dict:
         "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100},
         "trades": eng.trades, "open_trade": open_trade, "events": eng.events,
         "overlays": overlays, "oscillators": osc, "periods": periods[-60:],
+        "costs": cost_summary(eng, cost_kind, equity[-1] - cap),
     }
+
+
+def cost_summary(eng: Engine, cost_kind: str, net_pnl: float) -> dict:
+    """Profit before costs, each cost line, a tax estimate, and what is left."""
+    paid = sum(eng.cost_items.values())
+    tax = C.tax_estimate(cost_kind, eng.trades)
+    kept = net_pnl - (tax["amount"] or 0.0)
+    return {"gross_pnl": round(net_pnl + paid, 2), "total": round(paid, 2), "items": C.breakdown(eng.cost_items),
+            "net_pnl": round(net_pnl, 2), "tax": tax, "kept": round(kept, 2)}
