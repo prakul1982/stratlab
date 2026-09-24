@@ -5,10 +5,10 @@ import { dateOnly } from "../lib/format";
 
 const FEATURES: Record<string, string[]> = {
   free: ["5 experiments a month, each with a full verdict", "10 AI strategy builds a month", "24-hour paper trading trial",
-    "India, crypto and your own CSV data", "SMA, EMA, RSI and price rules"],
+    "Every market: India, crypto, the US, UK, Europe, Japan, forex and your own CSV", "SMA, EMA, RSI and price rules"],
   basic: ["50 experiments a month", "100 AI builds a month", "Paper trade 1 strategy at a time", "Every market, real costs and tax estimates",
     "SMA, EMA, RSI and price rules"],
-  pro: ["Unlimited experiments", "Unlimited AI builds", "Paper trade 5 strategies at a time", "MACD, Bollinger Bands, VWAP, Supertrend",
+  pro: ["Unlimited experiments", "Unlimited AI builds", "Paper trade 5 strategies at a time", "All 20+ indicators: MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, Donchian and more",
     "Indian F&O", "Telegram and email trade alerts", "Export rules and trades"],
 };
 const WHO: Record<string, string> = { free: "Test a few ideas", basic: "For traders testing one idea at a time", pro: "For active traders running several strategies" };
@@ -44,7 +44,7 @@ export function PlansPage() {
       <div className="stack" style={{ gap: 8 }}>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Plans</h1>
         <p className="muted" style={{ fontSize: 17 }}>
-          {billing ? "Billed monthly through Razorpay. Cancel any time; your plan stays active until the paid month ends." : "Paid plans are coming soon. Everyone is on the Free plan for now."}
+          {billing ? "Billed monthly through Razorpay. Cancel any time; your plan stays active until the paid month ends." : "Paid plans are coming soon. During early access every Pro feature (all indicators, F&O, alerts, export) is unlocked for everyone; the Free plan's monthly limits still apply."}
         </p>
       </div>
       <div className="grid4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>

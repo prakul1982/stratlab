@@ -8,7 +8,7 @@ Please report it privately through [GitHub's security advisories](https://github
 
 ## How secrets are kept
 
-- Every secret (the Supabase service key, Kite API secret, Kite password and TOTP secret, Razorpay keys, AI keys) lives only in the backend's environment variables. None are committed, and none reach the browser.
+- Every secret (the Supabase service key, Kite API secret, Kite password and TOTP secret, Razorpay keys, AI and Finnhub keys) lives only in the backend's environment variables. None are committed, and none reach the browser.
 - The browser talks only to the backend API, authenticated with the user's Supabase token. Database tables use row-level security.
 - Razorpay webhooks are verified with their signature before anything changes.
 
