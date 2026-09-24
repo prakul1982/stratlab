@@ -7,8 +7,11 @@ DEFAULTS = {
     "macd": (12, 26), "macd_signal": (12, 26), "macd_hist": (12, 26),
     "bb_upper": (20, 2), "bb_mid": (20, 2), "bb_lower": (20, 2),
     "vwap": (20, None), "supertrend": (10, 3),
+    "adx": (14, None), "stoch_k": (14, 3), "atr_pct": (14, None),
+    "dc_upper": (20, None), "dc_lower": (20, None), "volume": (None, None), "vol_sma": (20, None),
 }
-OSCILLATORS = {"rsi", "macd", "macd_signal", "macd_hist"}
+# drawn under the price chart rather than on it
+OSCILLATORS = {"rsi", "macd", "macd_signal", "macd_hist", "adx", "stoch_k", "atr_pct", "volume", "vol_sma"}
 
 
 def params(ref) -> tuple[int, float]:
@@ -55,6 +58,39 @@ def supertrend(df: pd.DataFrame, n: int, mult: float) -> pd.Series:
     return pd.Series(st, index=df.index)
 
 
+def true_range(df: pd.DataFrame) -> pd.Series:
+    prev = df.c.shift(1).fillna(df.c)
+    return pd.concat([df.h - df.l, (df.h - prev).abs(), (df.l - prev).abs()], axis=1).max(axis=1)
+
+
+def _wilder(s: pd.Series, n: int) -> pd.Series:
+    return s.ewm(alpha=1 / n, adjust=False, min_periods=n).mean()
+
+
+def atr_pct(df: pd.DataFrame, n: int) -> pd.Series:
+    """Average true range as a % of price: how much it typically moves in one candle."""
+    return _wilder(true_range(df), n) / df.c * 100
+
+
+def adx(df: pd.DataFrame, n: int) -> pd.Series:
+    """Trend strength, 0-100: above about 25 means a strong trend, whichever way."""
+    up, down = df.h.diff(), -df.l.diff()
+    plus = up.where((up > down) & (up > 0), 0.0)
+    minus = down.where((down > up) & (down > 0), 0.0)
+    tr = _wilder(true_range(df), n)
+    pdi = 100 * _wilder(plus, n) / tr.replace(0, np.nan)
+    mdi = 100 * _wilder(minus, n) / tr.replace(0, np.nan)
+    dx = (100 * (pdi - mdi).abs() / (pdi + mdi).replace(0, np.nan)).fillna(0.0)
+    return _wilder(dx, n).where(tr.notna())
+
+
+def stoch_k(df: pd.DataFrame, n: int, smooth: int) -> pd.Series:
+    """Slow stochastic %K, 0-100: where the close sits in the last n candles' range."""
+    lo, hi = df.l.rolling(n).min(), df.h.rolling(n).max()
+    raw = 100 * (df.c - lo) / (hi - lo).replace(0, np.nan)
+    return raw.rolling(max(1, smooth)).mean()
+
+
 def vwap(df: pd.DataFrame, n: int, intraday: bool) -> pd.Series:
     tp = (df.h + df.l + df.c) / 3
     vol = df.v.where(df.v > 0, 1.0)  # indices have no volume: fall back to equal weights
@@ -90,6 +126,19 @@ def compute(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
         return vwap(df, p, intraday)
     if t == "supertrend":
         return supertrend(df, p, m or 3)
+    if t == "adx":
+        return adx(df, p)
+    if t == "stoch_k":
+        return stoch_k(df, p, int(m or 3))
+    if t == "atr_pct":
+        return atr_pct(df, p)
+    if t == "dc_upper":        # the previous n candles' high, so "price crosses above" is a real breakout
+        return df.h.rolling(p).max().shift(1)
+    if t == "dc_lower":
+        return df.l.rolling(p).min().shift(1)
+    if t in ("volume", "vol_sma"):
+        vol = df.v.where(df.v > 0)        # indices have no volume: leave it blank rather than zero
+        return vol if t == "volume" else vol.rolling(p).mean()
     raise ValueError(f"Unknown indicator {t}")
 
 
@@ -107,4 +156,7 @@ def ref_name(ref) -> str:
         return f"{label} {p},{int(m)}"
     if t.startswith("bb_"):
         return f"BB {t[3:]} {p},{m:g}"
-    return f"Supertrend {p},{m:g}"
+    if t == "supertrend":
+        return f"Supertrend {p},{m:g}"
+    return {"adx": f"ADX {p}", "stoch_k": f"Stochastic {p}", "atr_pct": f"ATR% {p}", "dc_upper": f"Donchian high {p}",
+            "dc_lower": f"Donchian low {p}", "volume": "Volume", "vol_sma": f"Volume SMA {p}"}[t]

@@ -174,3 +174,21 @@ def test_us_stock_backtest_uses_us_costs(api):
     exp = r.json()["experiment"]
     labels = {i["label"] for i in exp["costs"]["items"]}
     assert exp["stats"]["n"] > 0 and ("SEC fee" in labels or "FINRA fee" in labels)
+
+
+def test_basket_robustness_check(api):
+    nb = api.post("/notebooks", json={"name": "Trend follower", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 1500})
+    r = api.post(f"/notebooks/{nb['id']}/experiments/1/basket")
+    assert r.status_code == 200, r.text
+    b = r.json()["basket"]
+    ids = [row["id"] for row in b["rows"]]
+    # its own instrument is left out, and coins the exchange doesn't list are skipped
+    assert ids and "CRYPTO:BTC-USD" not in ids and set(ids) <= {"CRYPTO:ETH-USD", "CRYPTO:SOL-USD"}
+    assert b["tested"] >= 1 and b["status"] in ("pass", "warn", "fail") and b["headline"]
+    tested = [row for row in b["rows"] if "error" not in row]
+    assert all({"ret", "buy_hold", "n", "win"} <= row.keys() for row in tested)
+    # the whole check counts as one test, and is kept on the experiment
+    assert len(api.usage) == 2
+    assert api.get(f"/notebooks/{nb['id']}").json()["experiments"][0]["basket"]["headline"] == b["headline"]
+    assert api.post(f"/notebooks/{nb['id']}/experiments/9/basket").status_code == 404

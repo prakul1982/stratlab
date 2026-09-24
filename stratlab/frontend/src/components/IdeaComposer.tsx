@@ -15,6 +15,7 @@ export interface Built {
 interface AIOut {
   entry: Cond[]; exit: Cond[]; entryJoin: "all" | "any"; tf: Tf | null; name: string | null; instrument: string | null;
   market?: string | null; risk: Partial<Risk>; mentioned: string[]; notes: string[]; usage?: { ai_used: number; ai_limit: number | null };
+  side?: "long" | "short";
 }
 
 const EXAMPLES = [
@@ -66,7 +67,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
         if (p.exit.length) mentioned.push("exit");
         if (tf) mentioned.push("tf");
         if (inst) mentioned.push("instrument");
-        out = { entry: p.entry, exit: p.exit, entryJoin: "all", tf, name: null, instrument: inst, risk: p.risk, mentioned, notes: [] };
+        out = { entry: p.entry, exit: p.exit, entryJoin: "all", tf, name: null, instrument: inst, risk: p.risk, mentioned, notes: [], side: p.side };
       } else {
         setBusy(false);
         fail(e);
@@ -76,14 +77,14 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
     if (usedAI) refreshMe();
     if (!out.entry?.length) {
       setBusy(false);
-      setNote((fallback ? fallback + " " : "") + "We couldn't find a buy rule. Say when to buy, e.g. \"Buy when the price is above the 50-day average\"." +
+      setNote((fallback ? fallback + " " : "") + "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." +
         (out.notes?.length ? " " + out.notes.join(" ") : ""));
       return;
     }
     const instrument = out.instrument ? await findInstrument(out.instrument, out.market) : null;
     const s = blankStrategy(out.name || nameFor({ ...blankStrategy(), entry: out.entry }, instrument?.symbol));
     const strategy: Strategy = {
-      ...s, text: idea, entry: out.entry, exit: out.exit || [], entryJoin: out.entryJoin || "all", tf: out.tf || "1d",
+      ...s, text: idea, entry: out.entry, exit: out.exit || [], entryJoin: out.entryJoin || "all", tf: out.tf || "1d", side: out.side === "short" ? "short" : "long",
       risk: riskForCurrency({ ...s.risk, ...out.risk }, instrument?.currency),
     };
     try {

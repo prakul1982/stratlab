@@ -72,6 +72,10 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Rewrite the idea from scratch | **Describe the idea again** at the top of a notebook |
 | Tweak a rule | Tap any highlighted word (marked ▾) in **The rules**: indicator, length, condition or number |
 | Run a test | **Run experiment** in a notebook; each run is saved and numbered so you can compare |
+| Short instead of buy | Tap **Buy** at the start of the rules and pick **Sell short** |
+| Trail the stop or cap how long a trade lasts | The **Trail the stop by … and close any trade after …** line in **The rules** |
+| Compare two runs | **Compare experiments →** in a notebook, or **Compare with the previous run** on a verdict |
+| Check it isn't one lucky chart | **Does it work on similar stocks?** on a verdict runs the same rules on about 10 similar instruments |
 | Understand a number | Every check, stat and setting has an **(i)** button that explains it in plain words |
 | Decide what to do next | The **Next** bar on a verdict: change the rules, try another market, paper trade, write a lab note |
 | Paper trade | **Paper trade** at the top of a notebook or verdict; running sessions are under **Paper trading** |
@@ -115,9 +119,10 @@ stratlab/
 │   │   ├── main.py           API routes
 │   │   ├── engine/
 │   │   │   ├── core.py       rule evaluation and the trading engine
-│   │   │   ├── indicators.py SMA, EMA, RSI, MACD, Bollinger, VWAP, Supertrend
+│   │   │   ├── indicators.py SMA, EMA, RSI, MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, Donchian
 │   │   │   ├── costs.py      per-market trading costs and tax estimates
 │   │   │   └── verdict.py    the four honesty checks and the verdict
+│   │   ├── basket.py         "does it work on similar stocks?": same rules on ~10 similar instruments
 │   │   ├── data/             market data: markets list, Coinbase (crypto), Yahoo (US, UK, EU, Japan, forex)
 │   │   ├── intel/            research: Finnhub, Yahoo, Screener.in, news, Wikipedia, AI reads, /research API
 │   │   ├── research.py       load candles, run an experiment, keep a compact record

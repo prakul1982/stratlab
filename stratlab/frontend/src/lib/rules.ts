@@ -13,11 +13,19 @@ export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boo
   { t: "bb_lower", name: "Bollinger lower", friendly: "lower Bollinger band", pro: true },
   { t: "vwap", name: "VWAP", friendly: "VWAP", pro: true },
   { t: "supertrend", name: "Supertrend", friendly: "Supertrend", pro: true },
+  { t: "adx", name: "ADX (trend strength)", friendly: "trend strength", pro: true },
+  { t: "stoch_k", name: "Stochastic %K", friendly: "stochastic", pro: true },
+  { t: "atr_pct", name: "ATR % (volatility)", friendly: "volatility", pro: true },
+  { t: "dc_upper", name: "Donchian high (breakout)", friendly: "recent high", pro: true },
+  { t: "dc_lower", name: "Donchian low (breakdown)", friendly: "recent low", pro: true },
+  { t: "volume", name: "Volume", friendly: "volume", pro: true },
+  { t: "vol_sma", name: "Volume average", friendly: "average volume", pro: true },
 ];
 export const PRO_TYPES = new Set(INDICATORS.filter((i) => i.pro).map((i) => i.t));
 export const DEFAULTS: Partial<Record<RefType, [number, number?]>> = {
   sma: [20], ema: [20], rsi: [14], macd: [12, 26], macd_signal: [12, 26], macd_hist: [12, 26],
   bb_upper: [20, 2], bb_mid: [20, 2], bb_lower: [20, 2], vwap: [20], supertrend: [10, 3],
+  adx: [14], stoch_k: [14, 3], atr_pct: [14], dc_upper: [20], dc_lower: [20], vol_sma: [20],
 };
 export const OPS: { op: Op; say: string; short: string }[] = [
   { op: "xa", say: "crosses above", short: "crosses above" },
@@ -30,7 +38,8 @@ export const opSay = (op: Op) => OPS.find((o) => o.op === op)!.say;
 export function mkRef(t: RefType): Ref {
   if (t === "price") return { t };
   if (t === "num") return { t, v: 50 };
-  const d = DEFAULTS[t]!;
+  const d = DEFAULTS[t];
+  if (!d) return { t };
   return d[1] != null ? { t, p: d[0], m: d[1] } : { t, p: d[0] };
 }
 
@@ -45,6 +54,13 @@ export function refName(r: Ref): string {
     case "macd_signal": return `MACD signal ${p},${m}`;
     case "macd_hist": return `MACD hist ${p},${m}`;
     case "bb_upper": case "bb_mid": case "bb_lower": return `BB ${r.t.slice(3)} ${p},${m}`;
+    case "adx": return `ADX ${p}`;
+    case "stoch_k": return `Stochastic ${p}`;
+    case "atr_pct": return `ATR% ${p}`;
+    case "dc_upper": return `${p}-candle high`;
+    case "dc_lower": return `${p}-candle low`;
+    case "volume": return "Volume";
+    case "vol_sma": return `Avg volume ${p}`;
     default: return `Supertrend ${p},${m}`;
   }
 }
@@ -87,11 +103,20 @@ function parseRef(s: string): Ref | null {
   if (/\b(price|close|ltp|it)\b/.test(s)) return { t: "price" };
   return null;
 }
-export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; risk: Partial<Risk> } {
+export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; risk: Partial<Risk>; side: "long" | "short" } {
   let t = " " + raw.toLowerCase().replace(/\s+/g, " ") + " ";
-  const out: { entry: Cond[]; exit: Cond[]; risk: Partial<Risk> } = { entry: [], exit: [], risk: {} };
+  const short = /\b(sell short|short sell|go short|short(?:ing)?\b(?! ?-?term))/.test(t);
+  const out: { entry: Cond[]; exit: Cond[]; risk: Partial<Risk>; side: "long" | "short" } = { entry: [], exit: [], risk: {}, side: short ? "short" : "long" };
   const N = "(\\d+(?:\\.\\d+)?)";
   let m;
+  if ((m = t.match(new RegExp("trailing(?: stop)?(?: loss)?(?: of| at| =|:)? ?" + N + " ?%"))) || (m = t.match(new RegExp(N + " ?% trailing")))) {
+    out.risk.trail = +m[1];
+    t = t.replace(m[0], " ");
+  }
+  if ((m = t.match(/(?:exit|close|sell|cover|square off)(?: the trade)? after (\d+) (?:days?|candles?|bars?|sessions?)/))) {
+    out.risk.maxBars = +m[1];
+    t = t.replace(m[0], " ");
+  }
   if ((m = t.match(new RegExp("(?:stop[ -]?loss|\\bsl\\b|\\bstop\\b)(?: of| at| =|:)? ?" + N + " ?%")))) out.risk.sl = +m[1];
   if ((m = t.match(new RegExp("(?:target|take[ -]?profit|\\btp\\b)(?: of| at| =|:)? ?" + N + " ?%")))) out.risk.tgt = +m[1];
   if ((m = t.match(new RegExp("\\brisk(?:ing)?(?: of| =|:)? ?" + N + " ?%")))) out.risk.riskPct = +m[1];
@@ -107,7 +132,11 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
   let side: "entry" | "exit" = "entry";
   let lastRef: Ref | null = null;
   for (const cl of clauses) {
-    if (/\b(sell|exit|close|square off|book profit)/.test(cl)) side = "exit";
+    if (short) {
+      // a short opens with a sell and closes with a buy
+      if (/\b(cover|buy back|buy to cover|exit|close|square off|book profit)/.test(cl)) side = "exit";
+      else if (/\b(short|sell|enter)/.test(cl)) side = "entry";
+    } else if (/\b(sell|exit|close|square off|book profit)/.test(cl)) side = "exit";
     else if (/\b(buy|enter|go long)/.test(cl)) side = "entry";
     for (const p of cl.split(/ and | & /)) {
       const om = p.match(opRe);

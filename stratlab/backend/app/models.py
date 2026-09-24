@@ -6,6 +6,7 @@ RefType = Literal[
     "macd", "macd_signal", "macd_hist",
     "bb_upper", "bb_mid", "bb_lower",
     "vwap", "supertrend",
+    "adx", "stoch_k", "atr_pct", "dc_upper", "dc_lower", "volume", "vol_sma",
 ]
 
 
@@ -36,6 +37,8 @@ class Risk(BaseModel):
     tgt: float = Field(0, ge=0, le=1000)
     brokerage: float = Field(20, ge=0)
     slippage: float = Field(0.05, ge=0, le=5)
+    trail: float = Field(0, ge=0, lt=100)       # trailing stop, % below the best price since entry (0 = off)
+    maxBars: int = Field(0, ge=0, le=5000)      # close the trade after this many candles (0 = off)
 
 
 class Strategy(BaseModel):
@@ -45,6 +48,7 @@ class Strategy(BaseModel):
     entry: list[Cond] = Field(default_factory=list, max_length=10)
     exit: list[Cond] = Field(default_factory=list, max_length=10)
     entryJoin: Literal["all", "any"] = "all"
+    side: Literal["long", "short"] = "long"     # short: sell first, buy back later
     risk: Risk = Field(default_factory=Risk)
 
 

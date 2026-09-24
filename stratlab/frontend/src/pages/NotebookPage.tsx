@@ -241,6 +241,7 @@ export function NotebookPage() {
         <section className="stack" aria-labelledby="exp-h" style={{ gap: 16 }}>
           <div className="spread" style={{ flexWrap: "wrap" }}>
             <h2 id="exp-h" className="h2 row" style={{ gap: 0 }}>Experiments<Info>{HELP.experiments}</Info></h2>
+            {nb.experiments.length >= 2 && <Link className="link" to={`/n/${nb.id}/compare`}>Compare experiments →</Link>}
           </div>
           <div className="card stack" style={{ gap: 18 }}>
             {!isUpload && (

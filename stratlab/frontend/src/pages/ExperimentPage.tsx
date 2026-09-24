@@ -1,13 +1,60 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, moneyShort, pct, periodName, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
-import type { Check, Experiment, Notebook } from "../lib/types";
+import type { Basket, Check, Experiment, Notebook } from "../lib/types";
 import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars, type Marker } from "../components/Charts";
 import { Info, Loading, STATUS_NAME } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { downloadShareImage } from "../components/shareImage";
 import { Book, Globe, Pencil, Pulse, Share } from "../components/Icons";
+
+const PEERS: Record<string, string> = { CRYPTO: "coins", FX: "currency pairs" };
+
+/** Same rules, same period, ~10 similar instruments: does the edge travel, or is it one lucky chart? */
+function BasketCheck({ nb, e }: { nb: Notebook; e: Experiment }) {
+  const { fail, refreshMe } = useApp();
+  const [b, setB] = useState<Basket | undefined>(e.basket);
+  const [busy, setBusy] = useState(false);
+  const peers = PEERS[e.instrument.market || ""] || "stocks";
+  if (!e.instrument.market || e.instrument.market === "CSV") return null;
+  const run = async () => {
+    setBusy(true);
+    try { setB((await api<{ basket: Basket }>(`/notebooks/${nb.id}/experiments/${e.v}/basket`, { method: "POST" })).basket); refreshMe(); }
+    catch (err) { fail(err); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="card stack" style={{ gap: 12 }}>
+      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
+        <h2 className="h2 row" style={{ gap: 0 }}>Does it work on similar {peers}?<Info>{HELP.basket}</Info></h2>
+        <button className="btn quiet sm" disabled={busy} onClick={run}>{busy ? `Testing ${peers}…` : b ? "Run again" : `Test on 10 similar ${peers}`}</button>
+      </div>
+      {!b && <p className="small muted">An edge that only works on one chart is often luck. This runs the same rules over the same period on about 10 well-known {peers} and counts how many make money. Counts as one experiment.</p>}
+      {b && <>
+        <div className="row wrap" style={{ gap: 12 }}>
+          <span className={`badge ${b.status}`}>{STATUS_NAME[b.status]}</span>
+          <span className="serif" style={{ fontSize: 20 }}>{b.headline}</span>
+        </div>
+        {b.tested > 0 && <p className="small muted">Median return {pct(b.median_ret ?? 0)} · beat buy and hold on {b.beat_buy_hold} of {b.tested}.</p>}
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Instrument</th><th>Return</th><th>Buy and hold</th><th>Trades</th><th>Win rate</th><th>Worst fall</th></tr></thead>
+            <tbody>{b.rows.map((r) => r.error
+              ? <tr key={r.id}><td>{r.symbol}</td><td colSpan={5} className="muted">{r.error}</td></tr>
+              : <tr key={r.id}><td title={r.name || undefined}>{r.symbol}</td>
+                  <td className={`num ${signClass(r.n ? r.ret! : null)}`}>{r.n ? pct(r.ret!) : "No trades"}</td>
+                  <td className="num">{pct(r.buy_hold!)}</td><td className="num">{r.n}</td>
+                  <td className="num">{r.n ? `${r.win!.toFixed(0)}%` : "–"}</td><td className="num">{r.n ? pct(-Math.abs(r.mdd!)) : "–"}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </>}
+    </section>
+  );
+}
 
 const yearSpan = (a: string, b: string) => (a === b ? a : `${a}–${b}`);
 const tradeCount = (n: number) => `${n} trade${n === 1 ? "" : "s"}`;
@@ -86,6 +133,9 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/market`)}><Globe size={17} />Try another market</button>
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "paper_trade" } })}><Pulse size={17} />Paper trade it</button>
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "note" } })}><Book size={17} />Write a lab note</button>
+        {nb.experiments.some((x) => x.v < e.v) && (
+          <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/compare?a=${Math.max(...nb.experiments.filter((x) => x.v < e.v).map((x) => x.v))}&b=${e.v}`)}>Compare with the previous run</button>
+        )}
       </div>
 
       <section className="row" style={{ gap: 40, alignItems: "flex-end", paddingBottom: 26, borderBottom: "1px solid var(--line-2)", flexWrap: "wrap" }}>
@@ -187,6 +237,8 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           </table>
         </div>
       </section>
+
+      <BasketCheck key={e.v} nb={nb} e={e} />
 
       <section className="card dashed row wrap" style={{ gap: 14 }}>
         <h2 className="serif" style={{ fontSize: 20, fontWeight: 600, fontStyle: "italic", marginRight: 8 }}>What to try next</h2>

@@ -2,6 +2,14 @@
 
 ## September 2026
 
+### More from every strategy
+- **Short selling**: tap *Buy* in the rules to switch to *Sell short*. Stops, targets, costs and paper trading all work the other way round.
+- **Trailing stop**: the stop follows the best price and locks in gains. **Time limit**: close a trade after N candles if nothing else has.
+- New indicators: **ADX** (trend strength), **Stochastic %K**, **ATR as % of price**, **Donchian channel** breakouts (highest high / lowest low of the previous N candles), and **Volume** with its average.
+- **Compare experiments**: any two runs side by side: what changed in plain words, both return curves on one chart, and every stat with the better one in bold.
+- **Does it work on similar stocks?**: one tap on a verdict runs the same rules over the same period on about 10 well-known instruments from the same market and counts how many make money. It counts as one experiment and is saved with the verdict.
+- The idea builder (AI and the simple converter) understands "short", "trailing stop" and "exit after N days".
+
 ### Research, and every market live
 - **Research a company** (India and US): live price and chart, where it sits in its 52-week range, key numbers with an industry-range dot, sales and profit by year, quarterly results, results against estimates, analyst ratings, insider trades, shareholding, Screener's strengths and concerns, news, and what the company does.
 - An **AI read** on every company: scores, valuation, bull and bear cases, segments, what to watch, and three **ideas to test** that open as a notebook with the market, company and rules filled in.

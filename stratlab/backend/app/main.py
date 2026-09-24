@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from kiteconnect import exceptions as kite_exc
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, billing, db
+from . import admin, basket, billing, db
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
 from .alerts import notify
@@ -459,6 +459,29 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     nb["experiments"], nb["summary"] = experiments, research.summary(experiments)
     save_notebook(profile, nb)
     return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"]})
+
+
+@app.post("/notebooks/{nid}/experiments/{version}/basket")
+def run_basket(nid: str, version: int, profile=Depends(current_profile)):
+    """Run one experiment's exact rules and period on ~10 similar instruments in the same market."""
+    nb = get_notebook(profile, nid)
+    exps = list(nb.get("experiments") or [])
+    exp = next((e for e in exps if e["v"] == version), None)
+    if exp is None:
+        err(404, "not_found", "Experiment not found.")
+    strategy = Strategy(**exp["strategy"])
+    inst = exp.get("instrument") or {}
+    limit = use_backtest(profile)          # the whole check counts as one experiment
+    check_features(profile, strategy, inst)
+    try:
+        out = basket.run(markets, strategy, inst.get("market", "IN"), inst.get("id"), exp.get("days") or 365)
+    except research.ResearchError as e:
+        err(e.status, e.code, e.message)
+    db.add_usage(profile["id"], "backtest")
+    exp["basket"] = out
+    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
+    save_notebook(profile, nb)
+    return ok({"basket": out, "usage": {"backtests_used": backtests_used(profile), "backtests_limit": limit}})
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}")

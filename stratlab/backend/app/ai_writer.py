@@ -12,10 +12,12 @@ from .models import Cond, Risk
 
 BASIC_TYPES = '"price", "num", "sma", "ema", "rsi"'
 PRO_TYPES = ('"price", "num", "sma", "ema", "rsi", "macd", "macd_signal", "macd_hist", '
-             '"bb_upper", "bb_mid", "bb_lower", "vwap", "supertrend"')
+             '"bb_upper", "bb_mid", "bb_lower", "vwap", "supertrend", "adx", "stoch_k", "atr_pct", '
+             '"dc_upper", "dc_lower", "volume", "vol_sma"')
 
 SYSTEM = """You turn a retail trader's strategy idea into JSON rules for a backtesting engine.
-The engine is LONG ONLY: it buys, then sells to close. Reply with ONLY a JSON object.
+The engine holds one position at a time, either long (buy, then sell) or short (sell first, then buy back).
+Reply with ONLY a JSON object.
 
 Schema:
 {
@@ -26,13 +28,15 @@ Schema:
                 listing, or a forex pair (e.g. "EURUSD=X"), or null if not named,
   "market": "IN" (Indian stocks and indices), "CRYPTO", "US", "UK", "EU", "JP" or "FX", or null if unclear,
   "tf": "1d" | "1h" | "15m" | "5m" or null if the user gave no timeframe,
+  "side": "long" | "short"  (short only if the user wants to short, sell first or bet on a fall),
   "entryJoin": "all" | "any",
   "entry": [Cond, ...],
   "exit": [Cond, ...],
-  "risk": {"sl": stop loss %, "tgt": target %, "riskPct": % of capital risked per trade, "capital": rupees}
+  "risk": {"sl": stop loss %, "tgt": target %, "trail": trailing stop %, "maxBars": close after this many candles,
+           "riskPct": % of capital risked per trade, "capital": amount}
           (include ONLY the fields the user actually stated),
   "mentioned": list of what the user explicitly specified, from:
-               "instrument", "tf", "exit", "sl", "tgt", "riskPct", "capital",
+               "instrument", "tf", "exit", "sl", "tgt", "trail", "maxBars", "riskPct", "capital",
   "notes": short plain-English notes on anything you could not express or had to assume
 }
 Cond = {"l": Ref, "op": "xa" | "xb" | "gt" | "lt", "r": Ref}
@@ -44,8 +48,12 @@ Allowed types for this user: %TYPES%
   "price" = close price, "num" = a constant in "v", sma/ema/rsi use "p" as the length,
   macd types: p = fast (12), m = slow (26); bb types: p = length, m = std-devs; vwap: p = length;
   supertrend: p = ATR length, m = multiplier.
+  adx: trend strength 0-100 (p = length); stoch_k: stochastic %K 0-100 (p = length, m = smoothing);
+  atr_pct: average true range as % of price (p = length); dc_upper / dc_lower: highest high / lowest low of the
+  previous p candles (use "price" "xa" "dc_upper" for a breakout); volume and vol_sma (p = length) compare volume
+  with its average.
+  For a short, the entry is when to sell and the exit is when to buy back.
 If the user asks for an indicator that is not allowed, leave it out and say so in notes.
-Short selling is not supported: note it and ignore that part.
 Never invent exits, stops or targets the user did not ask for; the app will ask them.
 If nothing can be expressed, return {"entry": [], "exit": [], "mentioned": [], "notes": ["reason"]}."""
 
@@ -194,7 +202,7 @@ def write_strategy(text: str, pro: bool) -> dict:
             except (ValidationError, TypeError):
                 continue
             if allowed and (cond.l.t not in allowed or cond.r.t not in allowed):
-                out["notes"].append("Advanced indicators (MACD, Bollinger, VWAP, Supertrend) need the Pro plan, so that part was left out.")
+                out["notes"].append("Advanced indicators (MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian, volume) need the Pro plan, so that part was left out.")
                 continue
             res.append(cond.model_dump(exclude_none=True))
         return res[:10]
@@ -202,20 +210,23 @@ def write_strategy(text: str, pro: bool) -> dict:
     out["entry"] = conds(data.get("entry"))
     out["exit"] = conds(data.get("exit"))
     out["entryJoin"] = data.get("entryJoin") if data.get("entryJoin") in ("all", "any") else "all"
+    out["side"] = "short" if data.get("side") == "short" else "long"
     out["tf"] = data.get("tf") if data.get("tf") in ("1d", "1h", "15m", "5m") else None
     out["name"] = str(data.get("name") or "")[:80] or None
     out["instrument"] = str(data["instrument"])[:40] if data.get("instrument") else None
     out["market"] = data.get("market") if data.get("market") in ("IN", "CRYPTO", "US", "UK", "EU", "JP", "FX") else None
     raw_risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
     risk = {k: v for k, v in raw_risk.items()
-            if k in ("sl", "tgt", "riskPct", "capital") and isinstance(v, (int, float)) and not isinstance(v, bool)}
+            if k in ("sl", "tgt", "trail", "maxBars", "riskPct", "capital") and isinstance(v, (int, float)) and not isinstance(v, bool)}
+    if "maxBars" in risk:
+        risk["maxBars"] = int(risk["maxBars"])
     try:
         Risk(**risk)
         out["risk"] = risk
     except ValidationError:
         out["risk"] = {}
         out["notes"].append("Some risk numbers were out of range and were skipped.")
-    valid = {"instrument", "tf", "exit", "sl", "tgt", "riskPct", "capital"}
+    valid = {"instrument", "tf", "exit", "sl", "tgt", "trail", "maxBars", "riskPct", "capital"}
     raw_m = data.get("mentioned") or []
     if isinstance(raw_m, str):
         raw_m = [x.strip() for x in raw_m.split(",")]
