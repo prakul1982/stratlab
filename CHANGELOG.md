@@ -2,6 +2,10 @@
 
 ## September 2026
 
+### Tidy up old runs
+- **Paper trading:** a stopped session has a **Delete** button, and **Clear stopped sessions** removes them all at once. Running sessions can't be deleted until they're stopped.
+- **Experiments:** **Delete this experiment** on a verdict page removes one run and keeps the notebook and its other experiments.
+
 ### Smarter AI ordering
 - Quick jobs (the idea builder) ask the fastest provider first; long research reads ask the providers with the biggest free allowance first (Cerebras, Mistral), saving Groq's daily token cap for quick jobs. Anthropic, the paid one, is always last.
 - Admin → AI builder shows both orders and which keys are still missing.

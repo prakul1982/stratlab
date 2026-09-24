@@ -9,7 +9,7 @@ import { Info, Loading, STATUS_NAME } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { downloadShareImage } from "../components/shareImage";
-import { Book, Globe, Pencil, Pulse, Share } from "../components/Icons";
+import { Book, Globe, Pencil, Pulse, Share, Trash } from "../components/Icons";
 
 const PEERS: Record<string, string> = { CRYPTO: "coins", FX: "currency pairs" };
 
@@ -106,7 +106,15 @@ function markersFor(e: Experiment): Marker[] {
 
 export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const nav = useNavigate();
-  const { notify } = useApp();
+  const { notify, fail, refreshNotebooks } = useApp();
+  const remove = async () => {
+    if (!confirm(`Delete experiment v${e.v} ("${e.label}")? The notebook and its other experiments stay. This can't be undone.`)) return;
+    try {
+      await api(`/notebooks/${nb.id}/experiments/${e.v}`, { method: "DELETE" });
+      await refreshNotebooks();
+      nav(`/n/${nb.id}`);
+    } catch (err) { fail(err); }
+  };
   const cur = e.instrument.currency || "";
   const tz = tzOf(e.instrument);
   const intraday = e.tf !== "1d";
@@ -136,6 +144,7 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         {nb.experiments.some((x) => x.v < e.v) && (
           <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/compare?a=${Math.max(...nb.experiments.filter((x) => x.v < e.v).map((x) => x.v))}&b=${e.v}`)}>Compare with the previous run</button>
         )}
+        <button className="btn danger sm" style={{ marginLeft: "auto" }} onClick={remove}><Trash size={17} />Delete this experiment</button>
       </div>
 
       <section className="row" style={{ gap: 40, alignItems: "flex-end", paddingBottom: 26, borderBottom: "1px solid var(--line-2)", flexWrap: "wrap" }}>
