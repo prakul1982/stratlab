@@ -76,7 +76,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
   - `GEMINI_API_KEY` from aistudio.google.com: free tier.
   - `OPENROUTER_API_KEY` from openrouter.ai: with `OPENROUTER_MODEL=auto` only free models are used.
   - `ANTHROPIC_API_KEY`: paid. Set `AI_PROVIDER=anthropic` to try Claude first.
-  - Each `<NAME>_MODEL=auto` picks a suitable chat model from that provider's list; set a model id to pin one. `AI_PROVIDERS=groq,gemini` sets your own order.
+  - Each `<NAME>_MODEL=auto` picks a suitable chat model from that provider's list; set a model id to pin one. `AI_PROVIDERS=groq,gemini` sets your own order. Quick jobs (the idea builder) default to Groq → Cerebras → Gemini → Mistral → SambaNova → OpenRouter → Anthropic; long research reads default to Cerebras → Mistral → Gemini → SambaNova → Groq → OpenRouter → Anthropic, to save Groq's daily token cap. `AI_PROVIDERS_RESEARCH` overrides the research order.
   - **Account → Connection check** sends a tiny test request to every provider with a key and shows the result for each: the model that answered and how fast, or the exact error (key rejected, out of free quota, no suitable model). With no provider working, the app falls back to its simple offline converter.
   - Paste only the key itself as the value. Stray quotes or a leading `GROQ_API_KEY=` are forgiven, but a key from the wrong account or a revoked key is not. After changing variables in Railway, redeploy so the server picks them up.
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.

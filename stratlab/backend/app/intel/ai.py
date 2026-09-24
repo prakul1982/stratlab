@@ -45,7 +45,7 @@ def peek(kind: str, key_parts: tuple) -> bool:
 
 def _ask(system: str, facts: dict | str, ai, max_tokens: int) -> dict:
     text = facts if isinstance(facts, str) else "FACTS:\n" + json.dumps(facts, ensure_ascii=False, default=str)
-    return extract_json(complete(system, text, gemini=ai[0], anthropic=ai[1], max_tokens=max_tokens))
+    return extract_json(complete(system, text, gemini=ai[0], anthropic=ai[1], max_tokens=max_tokens, kind="research"))
 
 
 def _clip(x, n: int, length: int = 400) -> list:

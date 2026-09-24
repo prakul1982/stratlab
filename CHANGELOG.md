@@ -2,6 +2,10 @@
 
 ## September 2026
 
+### Smarter AI ordering
+- Quick jobs (the idea builder) ask the fastest provider first; long research reads ask the providers with the biggest free allowance first (Cerebras, Mistral), saving Groq's daily token cap for quick jobs. Anthropic, the paid one, is always last.
+- Admin → AI builder shows both orders and which keys are still missing.
+
 ### A real landing page
 - The sign-in screen is now a full landing page: a hero with a live example (the idea you write, the rules StratLab reads, the verdict), the problem with most backtests, how it works, the four honesty checks with small illustrations, the "similar stocks" check, Research, the toolkit, all 7 markets, FAQ and a final call to action. Works in light and dark, and on phones.
 

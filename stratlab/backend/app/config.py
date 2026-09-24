@@ -39,6 +39,7 @@ class Settings:
 
     # AI strategy builder: providers are tried in order until one answers (see ai_providers.py)
     AI_PROVIDERS = _env("AI_PROVIDERS", "auto")         # "auto" = every provider with a key, or e.g. "groq,gemini"
+    AI_PROVIDERS_RESEARCH = _env("AI_PROVIDERS_RESEARCH", "auto")  # order for long research reads; "auto" = built-in order
     AI_PROVIDER = _env("AI_PROVIDER", "gemini")          # older setting: "anthropic" puts Claude first
     GROQ_API_KEY = _env("GROQ_API_KEY")
     GROQ_MODEL = _env("GROQ_MODEL", "auto")
