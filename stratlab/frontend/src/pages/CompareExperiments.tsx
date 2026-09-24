@@ -111,13 +111,13 @@ export function CompareExperiments() {
       </section>
       <section className="card" style={{ padding: 0 }}>
         <div className="table-wrap" style={{ margin: 0 }}>
-          <table>
+          <table className="cmp-table">
             <thead><tr><th>Measure</th><th>v{a.v}</th><th>v{b.v}</th></tr></thead>
             <tbody>{rows.map(([label, show, score, better]) => {
               const x = score(a), y = score(b);
               const winB = better && x != null && y != null && y > x, winA = better && x != null && y != null && x > y;
               return <tr key={label}><td>{label}</td>
-                <td className="num" style={{ textAlign: "left", fontWeight: winA ? 700 : 400 }}>{show(a)}</td>
+                <td className="num" style={{ fontWeight: winA ? 700 : 400 }}>{show(a)}</td>
                 <td className="num" style={{ fontWeight: winB ? 700 : 400 }}>{show(b)}</td></tr>;
             })}</tbody>
           </table>

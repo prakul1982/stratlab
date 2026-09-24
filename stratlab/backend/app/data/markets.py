@@ -9,9 +9,6 @@ MARKETS = [
      "tz": "UTC", "hours": {"open": None, "close": None, "days": "Every day, 24 hours"},
      "what": "BTC, ETH and hundreds of pairs", "costs": "0.1% exchange fee each way", "provider": "coinbase",
      "brokerage": 0},
-    {"id": "CSV", "name": "Your own data", "venues": "Upload a CSV of candles", "currency": None, "symbol": "+",
-     "tz": "UTC", "hours": None, "what": "Any instrument, any timeframe", "costs": "Brokerage you set",
-     "provider": "csv", "brokerage": 0},
     {"id": "US", "name": "United States", "venues": "NYSE and NASDAQ", "currency": "USD", "symbol": "$",
      "tz": "America/New_York", "hours": {"open": "09:30", "close": "16:00", "days": "Mon–Fri"},
      "what": "Stocks, ETFs", "costs": "Commission, SEC and FINRA fees", "provider": "yahoo", "brokerage": 0},
@@ -27,6 +24,9 @@ MARKETS = [
     {"id": "JP", "name": "Japan", "venues": "Tokyo Stock Exchange", "currency": "JPY", "symbol": "¥",
      "tz": "Asia/Tokyo", "hours": {"open": "09:00", "close": "15:30", "days": "Mon–Fri"},
      "what": "Stocks, ETFs", "costs": "Commission", "provider": "yahoo", "brokerage": 0},
+    {"id": "CSV", "name": "Your own data", "venues": "Upload a CSV of candles", "currency": None, "symbol": "+",
+     "tz": "UTC", "hours": None, "what": "Any instrument, any timeframe", "costs": "Brokerage you set",
+     "provider": "csv", "brokerage": 0},
 ]
 
 BY_ID = {m["id"]: m for m in MARKETS}

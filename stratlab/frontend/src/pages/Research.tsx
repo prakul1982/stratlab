@@ -433,12 +433,12 @@ export function ComparePage() {
           </div>
           <section className="card" style={{ padding: 0 }}>
             <div className="table-wrap" style={{ margin: 0 }}>
-              <table>
+              <table className="cmp-table">
                 <thead><tr><th>Measure</th><th>{res.a.symbol}</th><th>{res.b.symbol}</th></tr></thead>
                 <tbody>{labels.map((l) => {
                   const x = rows(res.a)[l], y = rows(res.b)[l];
                   const f = (m: typeof x, c: Company) => (m ? (m.unit.startsWith("%") ? `${m.value.toFixed(1)}%` : m.unit === "money" ? price(m.value, c.currency) : m.value.toFixed(2)) : "–");
-                  return <tr key={l}><td>{l}</td><td className="num" style={{ textAlign: "left" }}>{f(x, res.a)}</td><td className="num">{f(y, res.b)}</td></tr>;
+                  return <tr key={l}><td>{l}</td><td className="num">{f(x, res.a)}</td><td className="num">{f(y, res.b)}</td></tr>;
                 })}</tbody>
               </table>
             </div>

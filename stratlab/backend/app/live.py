@@ -9,7 +9,7 @@ from .engine import costs as C
 from .engine.core import Ctx, Engine, chart_series, clean, cond_text
 from .kite_service import IST, KiteService, TickHub, INTERVALS
 from .models import Strategy
-from .plans import PLANS, effective_plan, trial_state
+from .plans import PLANS, effective_plan, has_pro_features, trial_state
 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}
 POLL_SECONDS = 15          # how often polled markets (crypto) are checked for a newly closed candle
@@ -354,7 +354,7 @@ class LiveManager:
             limit = PLANS[plan]["live_limit"]
             for s in sorted(items, key=lambda x: x.started_at)[limit:]:
                 self.stop(s.id, "Plan limit reached after a plan change.")
-            if not PLANS[plan]["pro_features"]:
+            if not has_pro_features(plan):
                 for s in items:
                     if s.id in self.sessions and needs_pro(s.strategy, s.inst):
                         self.stop(s.id, "This strategy uses Pro features.")

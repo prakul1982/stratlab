@@ -13,7 +13,7 @@ from ..ai_providers import AIBusy, AIError
 from ..auth import current_profile
 from ..config import settings
 from ..kite_service import IST
-from ..plans import PLANS
+from ..plans import has_pro_features
 from . import ai as A
 from .company import Research
 from .net import SourceError
@@ -123,7 +123,7 @@ def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile))
 @router.get("/company/{region}/{symbol}/ai")
 def company_ai(region: str, symbol: str, refresh: bool = False, profile=Depends(current_profile)):
     r, s = region_of(region), symbol_of(symbol)
-    pro = bool(PLANS[profile["_plan"]].get("pro_features"))
+    pro = has_pro_features(profile["_plan"])
 
     def build():
         c = source_call(lambda: hub.company(r, s))

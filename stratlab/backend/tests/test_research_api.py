@@ -81,7 +81,10 @@ def test_bad_inputs(api):
     assert r.status_code == 502 and "No US company" in r.json()["detail"]["message"]
 
 
-def test_company_ai_is_cleaned_cached_and_counted(api):
+def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_test")        # payments live, so Pro is gated
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "s")
     r = api.get("/research/company/US/NVDA/ai").json()
     assert r["valuation"] == "RICH" and r["composite"] == 78 and r["segments"][1] == {"label": "Gaming", "share": 9}
     assert [i["title"] for i in r["ideas"]] == ["Trend rider"]          # blank and malformed ideas dropped

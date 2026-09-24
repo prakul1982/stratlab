@@ -119,7 +119,7 @@ export function Change({ q, currency }: { q: Quote | null; currency: string }) {
   if (!q || q.price == null) return null;
   const up = (q.change_pct ?? 0) >= 0;
   return (
-    <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}>
+    <div className="stack quote-big" style={{ gap: 4 }}>
       <span className="serif" style={{ fontSize: "clamp(30px, 4vw, 42px)", lineHeight: 1 }}>{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className={`badge ${up ? "next" : "fail"}`}>{up ? "▲" : "▼"} {q.change != null ? `${up ? "+" : "−"}${Math.abs(q.change).toFixed(2)} ` : ""}({pct(q.change_pct, 2)}) today</span>
@@ -254,9 +254,11 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
       <div className="tbars">
         {points.map((p, i) => (
           <div key={p.y} className="tbar">
-            <span className="num tiny">{trendValue(p.v, unit)}</span>
-            <div className="tbar-col"><div style={{ height: `${Math.max(3, (Math.abs(p.v) / max) * 100)}%`,
-              background: p.v < 0 ? "var(--orange)" : i === points.length - 1 ? (tone === "blue" ? "var(--blue)" : "var(--ink)") : "var(--dash)" }} /></div>
+            <div className="tbar-col">
+              <span className="num tiny">{trendValue(p.v, unit)}</span>
+              <div style={{ height: Math.max(3, (Math.abs(p.v) / max) * 92),
+                background: p.v < 0 ? "var(--orange)" : i === points.length - 1 ? (tone === "blue" ? "var(--blue)" : "var(--ink)") : "var(--dash)" }} />
+            </div>
             <span className="tiny muted">{p.y}</span>
           </div>
         ))}
@@ -269,20 +271,23 @@ export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
   if (rows.length < 2) return null;
   const max = Math.max(4, ...rows.map((r) => Math.abs(r.surprise_pct)));
   const beats = rows.filter((r) => r.surprise_pct >= 0).length;
+  // the zero line sits at the bottom when every quarter beat, at the top when every one missed, else in the middle
+  const zero = beats === rows.length ? 0 : beats === 0 ? 100 : 50;   // % from the bottom
+  const plotH = zero === 50 ? 150 : 100;
   return (
     <div className="stack" style={{ gap: 10 }}>
       <div className="eq">
         {rows.map((r) => {
-          const up = r.surprise_pct >= 0, h = (Math.abs(r.surprise_pct) / max) * 46;
+          const up = r.surprise_pct >= 0, h = (Math.abs(r.surprise_pct) / max) * (up ? 100 - zero : zero) * 0.78;
           return (
             <div key={r.period} className="eq-col">
-              <div className="eq-plot">
-                <div className="eq-zero" />
-                <div className="eq-bar" style={{ background: up ? "var(--blue)" : "var(--orange)", ...(up ? { bottom: "50%", height: `${h}%` } : { top: "50%", height: `${h}%` }) }} />
-                <span className={`eq-num ${up ? "pos" : "neg"}`} style={up ? { bottom: `calc(50% + ${h}% + 4px)` } : { top: `calc(50% + ${h}% + 4px)` }}>{pct(r.surprise_pct)}</span>
+              <div className="eq-plot" style={{ height: plotH }}>
+                <div className="eq-zero" style={{ top: "auto", bottom: `${zero}%` }} />
+                <div className="eq-bar" style={{ background: up ? "var(--blue)" : "var(--orange)", ...(up ? { bottom: `${zero}%`, height: `${h}%` } : { top: `${100 - zero}%`, height: `${h}%` }) }} />
+                <span className={`eq-num ${up ? "pos" : "neg"}`} style={up ? { bottom: `calc(${zero}% + ${h}% + 4px)` } : { top: `calc(${100 - zero}% + ${h}% + 4px)` }}>{pct(r.surprise_pct)}</span>
               </div>
               <span className="tiny muted">{r.period.slice(0, 7)}</span>
-              <span className="tiny num">{r.actual.toFixed(2)} <span className="muted">vs {r.estimate.toFixed(2)}</span></span>
+              <span className="tiny num" style={{ textAlign: "center", lineHeight: 1.35 }}>{r.actual.toFixed(2)}<br /><span className="muted">vs {r.estimate.toFixed(2)}</span></span>
             </div>
           );
         })}
