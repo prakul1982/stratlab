@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import razorpay
-from razorpay.errors import SignatureVerificationError
+from razorpay.errors import BadRequestError, SignatureVerificationError
 
 from . import db
 from .config import settings
@@ -36,6 +36,8 @@ def _ts(v) -> str:
 
 
 def create_subscription(profile: dict, plan: str) -> dict:
+    if not (settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET and plan_ids()[plan]):
+        raise ValueError("Payments aren't set up on the server yet.")
     sub = client().subscription.create({
         "plan_id": plan_ids()[plan],
         "total_count": 120,          # up to 10 years of monthly renewals; users can cancel any time
@@ -53,14 +55,15 @@ def activate(profile: dict, sub: dict):
     if not plan:
         return
     old = profile.get("razorpay_subscription_id")
+    # Save the new subscription first, so the "cancelled" webhook for the old one is ignored
+    db.update_profile(profile["id"], plan=plan, plan_status="active", razorpay_subscription_id=sub["id"],
+                      current_period_end=_ts(sub.get("current_end")), pending_subscription_id=None,
+                      cancel_at_period_end=False)
     if old and old != sub["id"] and profile.get("plan_status") == "active":
         try:  # switching plans: stop billing the old subscription now
             client().subscription.cancel(old, {"cancel_at_cycle_end": 0})
         except Exception as e:
             print("could not cancel old subscription:", e)
-    db.update_profile(profile["id"], plan=plan, plan_status="active", razorpay_subscription_id=sub["id"],
-                      current_period_end=_ts(sub.get("current_end")), pending_subscription_id=None,
-                      cancel_at_period_end=False)
 
 
 def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str):
@@ -74,6 +77,9 @@ def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str)
 
 
 def handle_webhook(body: bytes, signature: str):
+    if not settings.RAZORPAY_WEBHOOK_SECRET or not signature:
+        # an empty secret would let anyone forge a valid signature
+        raise SignatureVerificationError("Webhook secret is not configured.")
     client().utility.verify_webhook_signature(body.decode(), signature, settings.RAZORPAY_WEBHOOK_SECRET)
     event = json.loads(body)
     name = event.get("event", "")
@@ -96,7 +102,12 @@ def handle_webhook(body: bytes, signature: str):
 
 def cancel(profile: dict):
     sid = profile.get("razorpay_subscription_id")
-    if not sid:
+    if not sid or profile.get("plan_status") != "active":
         raise ValueError("No active subscription.")
-    client().subscription.cancel(sid, {"cancel_at_cycle_end": 1})
+    if profile.get("cancel_at_period_end"):
+        raise ValueError("Your subscription is already cancelled.")
+    try:
+        client().subscription.cancel(sid, {"cancel_at_cycle_end": 1})
+    except BadRequestError as e:
+        raise ValueError(f"Razorpay couldn't cancel the subscription: {e}")
     db.update_profile(profile["id"], cancel_at_period_end=True)

@@ -33,6 +33,7 @@ class KiteService:
     def __init__(self):
         self.kite = KiteConnect(api_key=settings.KITE_API_KEY)
         self.access_token: str | None = None
+        self.token_day: str | None = None
         self._lock = threading.Lock()
         self._last_call = 0.0
         self._inst: list[dict] = []
@@ -45,14 +46,15 @@ class KiteService:
     def load_saved_token(self):
         tok, day = db.get_setting("kite_access_token"), db.get_setting("kite_token_day")
         if tok and day == today_ist():
-            self._set_token(tok)
+            self._set_token(tok, day)
 
-    def _set_token(self, tok: str):
-        self.access_token = tok
+    def _set_token(self, tok: str, day: str):
+        self.access_token, self.token_day = tok, day
         self.kite.set_access_token(tok)
 
     def ready(self) -> bool:
-        return bool(self.access_token)
+        # Kite tokens expire every morning, so yesterday's token counts as offline
+        return bool(self.access_token) and self.token_day == today_ist()
 
     def login_url(self) -> str:
         self.login_state = secrets.token_urlsafe(16)
@@ -63,9 +65,10 @@ class KiteService:
         if not self.login_state or state != self.login_state:
             raise PermissionError("Login state did not match. Start the login again.")
         data = self.kite.generate_session(request_token, api_secret=settings.KITE_API_SECRET)
-        self._set_token(data["access_token"])
+        day = today_ist()
+        self._set_token(data["access_token"], day)
         db.set_setting("kite_access_token", data["access_token"])
-        db.set_setting("kite_token_day", today_ist())
+        db.set_setting("kite_token_day", day)
         self.login_state = None
         self._inst_day = None
         return data

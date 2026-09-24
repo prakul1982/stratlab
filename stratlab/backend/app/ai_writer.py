@@ -165,8 +165,14 @@ def _anthropic(system: str, text: str) -> str:
     try:
         msg = client.messages.create(model=settings.ANTHROPIC_MODEL, max_tokens=1500, system=system,
                                      messages=[{"role": "user", "content": text}])
-    except anthropic.RateLimitError:
+    except (anthropic.RateLimitError, anthropic.APIConnectionError):
         raise AIBusy("The AI builder is busy right now.")
+    except anthropic.AuthenticationError:
+        raise AIError("The Anthropic API key on the server is invalid. Check ANTHROPIC_API_KEY.")
+    except anthropic.APIStatusError as e:
+        if e.status_code >= 500:  # overloaded (529) or a server error
+            raise AIBusy("The AI builder is busy right now.")
+        raise AIError(f"The AI service returned an error ({e.status_code}).")
     return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
 
 
@@ -178,6 +184,8 @@ def write_strategy(text: str, pro: bool) -> dict:
         data = json.loads(raw)
     except json.JSONDecodeError:
         raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
+    if not isinstance(data, dict):
+        raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
     raw_notes = data.get("notes") or []
     if isinstance(raw_notes, str):
         raw_notes = [raw_notes]
@@ -188,7 +196,7 @@ def write_strategy(text: str, pro: bool) -> dict:
 
     def conds(items):
         res = []
-        for c in items or []:
+        for c in items if isinstance(items, list) else []:
             try:
                 cond = Cond(**c)
             except (ValidationError, TypeError):
@@ -205,7 +213,9 @@ def write_strategy(text: str, pro: bool) -> dict:
     out["tf"] = data.get("tf") if data.get("tf") in ("1d", "1h", "15m", "5m") else None
     out["name"] = str(data.get("name") or "")[:80] or None
     out["instrument"] = str(data["instrument"])[:40] if data.get("instrument") else None
-    risk = {k: v for k, v in (data.get("risk") or {}).items() if k in ("sl", "tgt", "riskPct", "capital") and isinstance(v, (int, float))}
+    raw_risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
+    risk = {k: v for k, v in raw_risk.items()
+            if k in ("sl", "tgt", "riskPct", "capital") and isinstance(v, (int, float)) and not isinstance(v, bool)}
     try:
         Risk(**risk)
         out["risk"] = risk

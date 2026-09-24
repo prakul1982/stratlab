@@ -53,9 +53,9 @@ Monthly backtest counts reset on the 1st of each month (IST). Limits are enforce
 4. Test everything in Test Mode first.
 
 ### 4. AI writer and alerts (Pro)
-- **AI writer:** set `ANTHROPIC_API_KEY`. The model is set in `ANTHROPIC_MODEL`.
+- **AI writer:** uses Google Gemini by default: set `GEMINI_API_KEY` (`GEMINI_MODEL=auto` picks the newest Flash model). To use Claude instead, set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`; the model is set in `ANTHROPIC_MODEL`.
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.
-- **Email:** fill in the SMTP settings. For Gmail, use an app password.
+- **Email:** fill in the SMTP settings. For Gmail, use an app password. Port 465 uses SSL, 587 uses STARTTLS.
 
 ### 5. Run locally
 ```bash
@@ -69,7 +69,14 @@ uvicorn app.main:app --reload --port 8000
 cd frontend
 python -m http.server 5500   # then open http://localhost:5500
 ```
-Set `FRONTEND_ORIGIN` in `.env` to match the frontend URL, for CORS.
+Set `FRONTEND_ORIGIN` in `.env` to match the frontend URL, for CORS. To allow several (say production and localhost), separate them with commas.
+
+Run the tests with:
+```bash
+cd backend
+pip install pytest
+pytest
+```
 
 ### 6. Deploy
 - **Backend:** Render, Railway or a small VPS. Run it as **one process**, e.g. `uvicorn app.main:app --host 0.0.0.0 --port 8000` with no multiple workers. Live sessions and the tick feed live in memory in that process.
