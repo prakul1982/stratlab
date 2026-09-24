@@ -23,7 +23,7 @@ Research a company, describe a strategy in plain English, test it honestly on In
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/verdict-dark.png">
-  <img alt="A verdict page: 'Likely a real edge', with four honesty checks: unseen data, nearby settings, bad-luck drawdown and enough trades" src="docs/images/verdict-light.png">
+  <img alt="A verdict page: 'No edge here', with four honesty checks: unseen data, nearby settings, bad-luck drawdown and enough trades" src="docs/images/verdict-light.png">
 </picture>
 
 ## What makes it different
@@ -35,12 +35,21 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
   - **Nearby settings:** 25 variations of your indicator lengths. If only your exact numbers make money, that's a lucky fit.
   - **Bad-luck drawdown:** your trades reshuffled 1,000 times, to show how deep the losses could realistically get.
   - **Enough trades:** under 15 trades, luck dominates.
-- **Real costs, in the market's own currency.** India: STT, exchange and SEBI fees, stamp duty, GST, plus a capital-gains estimate. US: SEC and FINRA fees. Crypto: exchange fees. You see what you'd actually keep.
-- **Lab notebooks.** Each idea is a notebook: a question, the rules written as sentences, numbered experiments you can compare, and your own lab notes.
+- **Two deeper checks, one tap each.**
+  - **Walk-forward test:** re-tunes your settings on a stretch of the past, trades them on the next stretch the tuning never saw, slides forward and repeats. It shows what re-tuning as you go would really have earned, without hindsight.
+  - **Does it work on similar stocks?** Runs the same rules on about 10 similar instruments from the same market. Real patterns travel; lucky charts don't.
+- **Real costs, in the market's own currency.** India: STT, exchange and SEBI fees, stamp duty, GST, plus a capital-gains estimate. US: SEC and FINRA fees. UK: stamp duty on share buys. Forex: the spread. Crypto: exchange fees. Slippage on every fill. You see what you'd actually keep.
+- **Lab notebooks.** Each idea is a notebook: a question, the rules written as sentences, numbered experiments you can compare side by side, and your own lab notes.
+- **A full toolkit.** Buy or sell short; stop loss, target, trailing stop and a time limit on each trade; 20+ indicators including moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian breakouts and volume.
 - **Any market.** Indian stocks, indices and F&O (Zerodha Kite), US, UK, European and Japanese stocks and ETFs and forex (Yahoo Finance), crypto (Coinbase), or upload a CSV of candles from anywhere. No extra keys needed.
 - **Research built in.** Company pages for India and the US: live price and chart, valuation and growth with context, sales and profit history, results against estimates, who owns it, insider trades, news, and an AI read whose trading ideas open as a notebook in one click. Plus AI theme maps, a daily market pulse, side-by-side comparisons and a watchlist.
-- **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free models in turn (Groq, Cerebras, Gemini, OpenRouter), with Claude as an optional fallback, and a simple built-in converter if all of them are down.
-- **Paper trading.** Run the rules on live prices with fake money: Indian markets during market hours, crypto around the clock.
+- **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
+- **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/walkforward-dark.png">
+  <img alt="A walk-forward test: re-tuned on the past and traded on unseen blocks, it made money in 5 of 5, with the settings picked at each step" src="docs/images/walkforward-light.png">
+</picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/notebook-dark.png">
@@ -58,7 +67,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/tour-dark.png">
-  <img alt="The feature tour: step 3 of 8, 'Test on any market', with where to find it" src="docs/images/tour-light.png">
+  <img alt="The feature tour: step 3 of 9, 'Research a company first', with where to find it" src="docs/images/tour-light.png">
 </picture>
 
 | You want to… | Where it is |
@@ -89,6 +98,11 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
   <img alt="The New notebook page: choose the market and instrument first, then describe the idea" src="docs/images/new-light.png">
 </picture>
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/landing-dark.png">
+  <img alt="The landing page: 'Is your trading idea real, or just lucky?', with an example idea, the rules StratLab reads from it, and its verdict" src="docs/images/landing-light.png">
+</picture>
+
 <sub>Screenshots use synthetic sample prices, not real market data.</sub>
 
 ## How it works
@@ -105,7 +119,7 @@ flowchart LR
     API -- "research: Indian fundamentals, news" --> SC["Screener.in, Google News, Wikipedia"]
     API -- "subscriptions (coming soon)" --> RZP["Razorpay"]
     RZP -- "webhooks" --> API
-    API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini,<br/>OpenRouter, Claude"]
+    API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini, Mistral,<br/>SambaNova, OpenRouter, Claude"]
     API --> ALERT["Telegram / email alerts"]
 ```
 
@@ -122,18 +136,20 @@ stratlab/
 │   │   │   ├── core.py       rule evaluation and the trading engine
 │   │   │   ├── indicators.py SMA, EMA, RSI, MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, Donchian
 │   │   │   ├── costs.py      per-market trading costs and tax estimates
-│   │   │   └── verdict.py    the four honesty checks and the verdict
+│   │   │   ├── verdict.py    the four honesty checks and the verdict
+│   │   │   └── walkforward.py walk-forward test: re-tune on the past, trade the unseen next block
 │   │   ├── basket.py         "does it work on similar stocks?": same rules on ~10 similar instruments
 │   │   ├── data/             market data: markets list, Coinbase (crypto), Yahoo (US, UK, EU, Japan, forex)
 │   │   ├── intel/            research: Finnhub, Yahoo, Screener.in, news, Wikipedia, AI reads, /research API
 │   │   ├── research.py       load candles, run an experiment, keep a compact record
-│   │   ├── live.py           paper trading on live ticks (India) or polled candles (crypto)
+│   │   ├── live.py           paper trading on live ticks (India) or polled candles (every other market)
 │   │   ├── kite_service.py   Zerodha Kite Connect
 │   │   ├── kite_auto.py      optional automatic daily Kite login
+│   │   ├── admin.py          owner-only admin page API
 │   │   ├── billing.py        Razorpay subscriptions
-│   │   ├── plans.py          plan limits and prices
+│   │   ├── plans.py          plan limits and prices (Pro features open to all until payments go live)
 │   │   ├── ai_writer.py      plain English → strategy rules
-│   │   ├── ai_providers.py   the free AI provider chain (Groq, Cerebras, Gemini, OpenRouter, Claude)
+│   │   ├── ai_providers.py   the AI provider chain and its order for quick jobs and research reads
 │   │   └── alerts.py         Telegram and email alerts
 │   ├── tests/                pytest suite
 │   └── .env.example          every setting the server reads
@@ -169,16 +185,19 @@ The **[setup guide](stratlab/README.md)** covers Supabase, Kite Connect (includi
 
 ## Plans
 
+**Early access: StratLab is free, and every feature is unlocked for everyone** (all indicators, all markets including Indian F&O, walk-forward, alerts and export). Monthly limits still apply. The paid plans below switch on automatically once Razorpay is connected.
+
 | | Free | Basic · ₹1,999/mo | Pro · ₹4,900/mo |
 |---|---|---|---|
 | Experiments (each with a full verdict) | 5 / month | 50 / month | Unlimited |
 | AI strategy builds | 10 / month | 100 / month | Unlimited |
+| Research AI reads | 60 / day | 60 / day | 60 / day |
 | Paper trading | 24-hour trial | 1 strategy | 5 strategies |
-| Markets | India, crypto, your own CSV | same | + Indian F&O |
-| Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | + MACD, Bollinger, VWAP, Supertrend |
+| Markets | All, except Indian F&O | same | + Indian F&O |
+| Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
 | Alerts, export | – | – | ✓ |
 
-Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server. **Paid plans are coming soon:** until Razorpay is connected, everyone is on Free and the Plans page says so.
+Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server.
 
 ## What's new
 

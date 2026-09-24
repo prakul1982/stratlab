@@ -12,14 +12,16 @@ A research notebook for traders: describe a strategy in plain words, test it on 
 
 | | Free | Basic, ₹1,999/mo | Pro, ₹4,900/mo |
 |---|---|---|---|
-| Experiments (backtest + verdict) | 5 per month | 50 per month | Unlimited |
+| Experiments (backtest + verdict; walk-forward and the similar-stocks check count as one each) | 5 per month | 50 per month | Unlimited |
 | Live paper trading | 24-hour trial from first use, 1 strategy | 1 strategy at a time | 5 at a time |
-| Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | + MACD, Bollinger, VWAP, Supertrend |
-| Markets | Indian stocks and indices, crypto, your own CSV | same | + Indian F&O (futures and options) |
+| Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
+| Markets | Every market except Indian F&O | same | + Indian F&O (futures and options) |
 | AI strategy builds | 10 per month | 100 per month | Unlimited |
 | Alerts, export | – | – | Yes |
 
-Monthly backtest counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them.
+Monthly counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them.
+
+**Early access:** while Razorpay isn't configured (`RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` empty), every plan gets the Pro features (all indicators, F&O, alerts, export), because nobody can buy Pro yet. The monthly limits above still apply. As soon as the Razorpay keys are set, the Pro features lock to the Pro plan again, with no code change.
 
 ---
 
@@ -68,7 +70,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 4. Test everything in Test Mode first.
 
 ### 4. AI builder (all plans) and alerts (Pro)
-- **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order (Groq, Cerebras, SambaNova, Gemini, Mistral, OpenRouter, then Anthropic) until one answers, so a rate limit or outage at one moves on to the next. All but Anthropic have free tiers. Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
+- **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order until one answers, so a rate limit or outage at one moves on to the next (the order for each kind of job is below). All but Anthropic have free tiers. Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
   - `GROQ_API_KEY` from console.groq.com: free and the fastest. A good first choice.
   - `CEREBRAS_API_KEY` from cloud.cerebras.ai: free and very fast.
   - `SAMBANOVA_API_KEY` from cloud.sambanova.ai: free tier, fast Llama 70B.
@@ -116,13 +118,13 @@ cd frontend && npm run build                   # typecheck and production build
 ```
 
 ### 8. Deploy
-- **Backend:** Render, Railway or a small VPS. Run it as **one process**, e.g. `uvicorn app.main:app --host 0.0.0.0 --port 8000` with no multiple workers. Live sessions and the tick feed live in memory in that process.
+- **Backend:** Railway (Hobby plan, about $5 a month) or a small always-on VPS. Run it as **one process**, e.g. `uvicorn app.main:app --host 0.0.0.0 --port 8000` with no multiple workers. Live sessions, the tick feed and the daily Kite login live in memory in that process, so hosts that sleep when idle (free tiers of Render, Cloud Run) break paper trading.
 - **Frontend:** Vercel or Netlify, with the project's root directory set to `stratlab/frontend`. `vercel.json` and `netlify.toml` set the build (`npm run build`, output `dist`) and send every page to `index.html`, so links like `/n/…` work on refresh. On Vercel, clear any Build Command or Output Directory overrides in the project settings so `vercel.json` applies. Put the production API URL in `public/config.js`.
 
 ### 9. Admin page
 Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and redeploy. Signed in with that account, you get an **Admin** link in the sidebar with:
 - Kite status and a **Log in to Kite** button (no more typing `?key=` URLs), plus a button to run the automatic login now.
-- A live test of every AI provider, and whether payments are set up.
+- A live test of every AI provider, the order each kind of job asks them in, which keys are missing, whether the Finnhub key is set, and whether payments are set up.
 - Users, their plan and this month's usage, with **Change plan** to grant Basic or Pro by hand (for 30 days, 90 days, a year or with no end date).
 - Paper trading sessions running now, each with a Stop button.
 
@@ -135,8 +137,10 @@ The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, wh
 
 ## How it works
 
-- **Engine** (`backend/app/engine/core.py`): long-only and candle-based. Each candle it checks the stop loss first, then the target, then the exit rules; entries fill at the candle's close.
-  - Position size = (capital × risk %) ÷ (price × stop %), capped by max capital per trade.
+- **Engine** (`backend/app/engine/core.py`): candle-based, long or short. Each candle it checks the stop loss first (a trailing stop once it has moved), then the target, then the time limit, then the exit rules; entries fill at the candle's close.
+  - Short strategies sell first and buy back later: stops sit above the entry, targets below, and costs are charged on each side as the market charges them.
+  - A trailing stop follows the best price since entry by the set percentage and never moves back. A time limit closes a trade after N candles.
+  - Position size = (capital × risk %) ÷ (price × stop %), using the trailing stop when there's no fixed stop, capped by max capital per trade.
   - Quantities round down to the instrument's step: 1 share, a whole F&O lot, or a fraction of a coin.
   - About 210 extra candles are loaded before the test period so indicators are warmed up.
 - **Costs** (`engine/costs.py`): every order pays your brokerage plus the market's own charges. India equity: STT 0.1% each side, exchange and SEBI fees, stamp duty 0.015% on buys, GST on brokerage and fees; futures and options use their own rates. US: SEC and FINRA fees on sells. Crypto: 0.1% exchange fee each side. Slippage applies to every fill. For Indian equity there's also a tax estimate (20% short-term, 12.5% long-term above ₹1.25 lakh). Rates change from time to time and all live in this one file.
@@ -146,17 +150,19 @@ The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, wh
   - *Bad-luck drawdown:* the closed trades are reshuffled 1,000 times (same seed every time). Warns if the 95th-percentile drawdown is well above the backtest's; fails above 35%.
   - *Enough trades:* 30+ passes, 15–29 warns, under 15 fails.
   - The verdict: under 15 trades is *not enough evidence*; a loss after costs is *no edge*; a failed unseen-data or nearby-settings check is *probably luck*; passing both (with no failed drawdown check) is *likely a real edge*; anything else is *mixed*.
+- **Walk-forward test** (`engine/walkforward.py`, run from a verdict page): the tradeable period is cut into 8 blocks. In each of 5 steps, up to 25 nearby settings of the first two indicator lengths are tried on 3 blocks of the past, the best is kept, and it trades the next block with fresh capital. The unseen blocks are compounded into one return and compared with the fixed settings and buy and hold. It fails if that return is a loss, passes if 60%+ of blocks are profitable and the unseen yearly return is at least half the tuned one, and warns otherwise (or when there were fewer than 10 unseen trades).
+- **Does it work on similar stocks?** (`basket.py`, run from a verdict page): the same rules and period on about 10 well-known instruments from the same market (four at a time), skipping any the market no longer lists. 60%+ profitable passes; under 40% fails.
 - **Notebooks** (`/notebooks` routes): stored in the existing `strategies` table, so no database migration is needed. Each experiment keeps a compact record (up to 240 chart points, the trades, costs and verdict), capped at 50 per notebook.
 - **Live paper trading** (`backend/app/live.py`):
   - India: one KiteTicker connection feeds every session, and ticks become candles for your timeframe (market hours 09:15–15:30 IST).
-  - Crypto: each session checks Coinbase every 15 seconds for newly closed candles.
+  - Every other market (crypto, US, UK, Europe, Japan, forex): each session checks its source (Coinbase, or Yahoo Finance) every 15 seconds for newly closed candles. Yahoo prices can run a few minutes behind.
   - On each closed candle, the same engine decides whether to trade.
   - Session state is saved every 30 seconds and resumes after a restart.
   - Free trials and plan limits are re-checked every minute.
 - **API routes:** see `backend/app/main.py`. The browser only ever talks to this API; it never touches the database or Kite directly.
 
 ## Known limits
-- Long only; no short selling yet.
+- Short selling is simulated without borrowing fees or margin interest. In India, cash-market shorts must be closed the same day; holding a short overnight is only possible through futures, so treat multi-day shorts on Indian stocks as a what-if.
 - Historical data for **expired** option and futures contracts isn't available from Kite, so F&O backtests only work on currently listed contracts. Continuous data is used for daily futures candles.
 - Backtests don't model intra-candle order (if stop and target fall in the same candle, the stop is assumed to hit first).
 - Yahoo Finance and Screener.in are public but unofficial sources: they can change without notice, and their terms don't cover commercial redistribution. Before charging users for data from them, move to a licensed vendor; each source lives in one file (`app/data/yahoo_markets.py`, `app/intel/*.py`), so it's a contained swap. The AI's company and theme reads are opinions for research, not investment advice.

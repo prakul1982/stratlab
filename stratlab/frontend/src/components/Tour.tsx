@@ -24,7 +24,7 @@ const STEPS: Step[] = [
     body: "Highlighted words in the rules (marked ▾) are dropdowns. Tap one to change the indicator, its length, the condition or a number. Stop-loss, target and position size are right below.",
     where: "The Rules card in any notebook." },
   { icon: <Compass size={34} />, title: "Run experiments, get an honest verdict",
-    body: "Each run is saved as an experiment. The verdict comes from four checks: does it work on years it never saw, with nearby settings, against shuffled luck, and with enough trades?",
+    body: "Each run is saved as an experiment. The verdict comes from four checks: does it work on years it never saw, with nearby settings, against shuffled luck, and with enough trades? From a verdict you can go further: a walk-forward test, or the same rules on similar stocks.",
     where: "Press \"Run experiment\" in a notebook, then open any result. Every number has an (i) button explaining it." },
   { icon: <Pulse size={34} />, title: "Paper trade what survives",
     body: "When an idea earns a real verdict, run it live on paper: real prices, fake money, same rules. You get alerts when it would trade.",
