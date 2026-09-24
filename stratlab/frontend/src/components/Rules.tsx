@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import { money, TF_NAME } from "../lib/format";
 import { DEFAULTS, INDICATORS, mkRef, OPS, opSay, refName } from "../lib/rules";
+import { HELP } from "../lib/help";
+import { Info } from "./ui";
 import type { Cond, Op, Ref, RefType, Risk, Strategy, Tf } from "../lib/types";
 
 /* A highlighted word in a rule sentence that opens a small editor when clicked. */
@@ -126,8 +128,8 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
   return (
     <section className="card stack" aria-labelledby="rules-h" style={{ gap: 12 }}>
       <div className="spread" style={{ flexWrap: "wrap" }}>
-        <h2 id="rules-h" className="h2">The rules</h2>
-        <span className="small muted">Checked once per closed candle. Click any highlighted word to change it.</span>
+        <h2 id="rules-h" className="h2 row" style={{ gap: 0 }}>The rules<Info>{HELP.rules}</Info></h2>
+        <span className="small muted">Click any highlighted word to change it.</span>
       </div>
 
       {s.entry.length > 1 && (
@@ -147,6 +149,9 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
           onChange={(nc) => set({ entry: s.entry.map((x, k) => (k === i ? nc : x)) })}
           onDelete={() => set({ entry: s.entry.filter((_, k) => k !== i) })} />
       ))}
+      {s.entry.length > 0 && (
+        <p className="hint row" style={{ gap: 0, marginTop: -6 }}>"Crosses above" or "is above"? They trade very differently.<Info>{HELP.crosses}</Info></p>
+      )}
       {s.exit.map((c, i) => (
         <CondSentence key={`x${i}`} c={c} lead={i === 0 ? <b>Sell when</b> : <b>or when</b>} isPro={isPro}
           onChange={(nc) => set({ exit: s.exit.map((x, k) => (k === i ? nc : x)) })}
@@ -158,6 +163,7 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
           hint="Sells if the price falls this far below where you bought. 0 turns it off." />{" "}or a{" "}
         <NumTok title="Target (%)" value={r.tgt} suffix="% target" missing="no target" max={1000} onChange={(v) => setRisk({ tgt: v })}
           hint="Sells if the price rises this far above where you bought. 0 turns it off." />.
+        <Info label="What are a stop loss and a target?"><b>Stop loss:</b> {HELP.stop}<br /><br /><b>Target:</b> {HELP.target}</Info>
       </p>
       <p className="sentence">
         Risk{" "}<NumTok title="Risk per trade (%)" value={r.riskPct} suffix="%" min={0.1} max={100} onChange={(v) => setRisk({ riskPct: v })}
@@ -174,6 +180,7 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
             </div>
           )}
         </Pop>.
+        <Info label="What do risk, capital and candles mean?"><b>Risk:</b> {HELP.risk}<br /><br /><b>Capital:</b> {HELP.capital}<br /><br /><b>Candles:</b> {HELP.candles}</Info>
       </p>
       <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
         <button className="btn quiet sm" onClick={() => set({ entry: [...s.entry, { l: { t: "price" }, op: "gt", r: { t: "sma", p: 50 } }] })}>Add a buy rule</button>

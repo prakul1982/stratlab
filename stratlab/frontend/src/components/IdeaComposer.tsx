@@ -3,6 +3,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, detectInstrument, detectTf, nameFor, parseStrategyText, questionFrom, riskForCurrency } from "../lib/rules";
 import type { Cond, Instrument, Risk, Strategy, Tf } from "../lib/types";
+import { Info } from "./ui";
 
 export interface Built {
   strategy: Strategy;
@@ -58,7 +59,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
         usedAI = false;
         fallback = err.code === "ai_limit" || err.code === "ai_daily_limit"
           ? `${err.message} We used the simple converter instead.`
-          : "The AI builder couldn't run just now, so we used the simple converter (it understands SMA, EMA, RSI and price rules).";
+          : `The AI builder couldn't run just now, so we used the simple converter (it understands SMA, EMA, RSI and price rules).`;
         const p = parseStrategyText(idea);
         const mentioned = Object.keys(p.risk);
         const tf = detectTf(idea), inst = detectInstrument(idea);
@@ -107,15 +108,19 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) build(); }} />
       <div className="spread" style={{ flexWrap: "wrap" }}>
         <button className="btn" disabled={busy} onClick={() => build()}>{busy ? "Building…" : busyLabel}</button>
-        {u && <span className="small muted">{u.ai_limit == null ? "Unlimited AI builds" : `${Math.max(0, u.ai_limit - u.ai_used)} of ${u.ai_limit} AI builds left this month`}</span>}
+        {u && <span className="small muted row" style={{ gap: 0 }}>{u.ai_limit == null ? "Unlimited AI builds" : `${Math.max(0, u.ai_limit - u.ai_used)} of ${u.ai_limit} AI builds left this month`}
+          <Info>The AI turns your sentence into exact rules. If it's unavailable, a simple built-in converter takes over (it understands SMA, EMA, RSI and price rules).</Info></span>}
       </div>
       {note && <p className="small" style={{ color: "var(--orange-ink)" }} role="alert">{note}</p>}
-      <div className="row wrap small muted" style={{ gap: 8 }}>
-        <span>Try:</span>
-        {EXAMPLES.map((ex) => (
-          <button key={ex} className="btn quiet sm" style={{ whiteSpace: "normal", textAlign: "left" }} disabled={busy}
-            onClick={() => { setText(ex); build(ex); }}>{ex}</button>
-        ))}
+      <div className="stack" style={{ gap: 8, marginTop: 4 }}>
+        <span className="small muted">Not sure what to write? Try one of these:</span>
+        <div className="examples">
+          {EXAMPLES.map((ex) => (
+            <button key={ex} type="button" disabled={busy} onClick={() => { setText(ex); build(ex); }}>
+              <span aria-hidden="true">→</span>{ex}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

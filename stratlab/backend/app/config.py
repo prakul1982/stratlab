@@ -31,7 +31,15 @@ class Settings:
     RAZORPAY_PLAN_BASIC = _env("RAZORPAY_PLAN_BASIC")
     RAZORPAY_PLAN_PRO = _env("RAZORPAY_PLAN_PRO")
 
-    AI_PROVIDER = _env("AI_PROVIDER", "gemini")          # "gemini" or "anthropic"
+    # AI strategy builder: providers are tried in order until one answers (see ai_providers.py)
+    AI_PROVIDERS = _env("AI_PROVIDERS", "auto")         # "auto" = every provider with a key, or e.g. "groq,gemini"
+    AI_PROVIDER = _env("AI_PROVIDER", "gemini")          # older setting: "anthropic" puts Claude first
+    GROQ_API_KEY = _env("GROQ_API_KEY")
+    GROQ_MODEL = _env("GROQ_MODEL", "auto")
+    CEREBRAS_API_KEY = _env("CEREBRAS_API_KEY")
+    CEREBRAS_MODEL = _env("CEREBRAS_MODEL", "auto")
+    OPENROUTER_API_KEY = _env("OPENROUTER_API_KEY")
+    OPENROUTER_MODEL = _env("OPENROUTER_MODEL", "auto")  # "auto" uses only models marked :free
     GEMINI_API_KEY = _env("GEMINI_API_KEY")
     GEMINI_MODEL = _env("GEMINI_MODEL", "auto")        # "auto" picks the newest Flash model your key can use
     ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")

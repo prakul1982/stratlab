@@ -5,7 +5,8 @@ import { useApp } from "../lib/app";
 import { money, moneyShort, pct, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
 import { LineChart, type Marker } from "../components/Charts";
-import { Empty, Loading } from "../components/ui";
+import { Empty, Info, Loading } from "../components/ui";
+import { HELP } from "../lib/help";
 
 function SessionView({ sid, onStopped }: { sid: string; onStopped: () => void }) {
   const { fail, refreshMe } = useApp();
@@ -48,7 +49,7 @@ function SessionView({ sid, onStopped }: { sid: string; onStopped: () => void })
           <h2 className="serif" style={{ fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em" }}>{snap.name}</h2>
         </div>
         <div className="row" style={{ gap: 12 }}>
-          {running && <span className="row small" style={{ gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: snap.feed_connected && snap.last_tick_at ? "var(--blue)" : "var(--dash)" }} />{feed}</span>}
+          {running && <span className="row small" style={{ gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: snap.feed_connected && snap.last_tick_at ? "var(--blue)" : "var(--dash)" }} />{feed}<Info>{HELP.feed}</Info></span>}
           {running ? <button className="btn danger" onClick={stop}>Stop session</button> : <span className={`badge ${snap.status}`}>{snap.status}</span>}
         </div>
       </div>
@@ -68,7 +69,7 @@ function SessionView({ sid, onStopped }: { sid: string; onStopped: () => void })
             ) : <p className="muted">The chart fills in as candles close.</p>}
           </section>
           <section className="card stack" style={{ gap: 10 }}>
-            <h3 className="h3">Paper equity</h3>
+            <h3 className="h3 row" style={{ gap: 0 }}>Paper equity<Info>{HELP.equityLive}</Info></h3>
             {snap.equity_curve.length > 1 ? (
               <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, intraday))} height={160}
                 format={(x) => moneyShort(x, cur)} baseline={a.capital} lines={[{ label: "Equity", values: snap.equity_curve.map((p) => p.eq), color: "var(--blue)", width: 2 }]} />
@@ -79,16 +80,16 @@ function SessionView({ sid, onStopped }: { sid: string; onStopped: () => void })
           <section className="card stack" style={{ gap: 0 }}>
             <div className="spread" style={{ marginBottom: 8 }}><h3 className="h3">Account</h3><span className="small muted">Fake money</span></div>
             {([
-              ["Equity", money(a.equity, cur), null],
-              ["Return", pct((a.equity / a.capital - 1) * 100, 2), a.equity - a.capital],
-              ["Cash", money(a.cash, cur), null],
-              ["Open position", a.qty ? `${qty(a.qty)} at ${price(a.entry ?? 0, cur)}` : "None", null],
-              ["Unrealised P&L", money(a.unrealised, cur), a.unrealised],
-              ["Realised P&L", money(a.realised, cur), a.realised],
-              ["Closed trades", a.trades ? `${a.trades} (${a.wins} won)` : "0", null],
-            ] as [string, string, number | null][]).map(([k, v, sign]) => (
-              <div key={k} className="spread" style={{ padding: "9px 0", borderBottom: "1px solid var(--line)" }}>
-                <span className="muted">{k}</span><b className={`mono ${signClass(sign)}`}>{v}</b>
+              ["Equity", money(a.equity, cur), null, HELP.equityLive],
+              ["Return", pct((a.equity / a.capital - 1) * 100, 2), a.equity - a.capital, null],
+              ["Cash", money(a.cash, cur), null, HELP.cash],
+              ["Open position", a.qty ? `${qty(a.qty)} at ${price(a.entry ?? 0, cur)}` : "None", null, null],
+              ["Unrealised P&L", money(a.unrealised, cur), a.unrealised, HELP.unrealised],
+              ["Realised P&L", money(a.realised, cur), a.realised, HELP.realised],
+              ["Closed trades", a.trades ? `${a.trades} (${a.wins} won)` : "0", null, null],
+            ] as [string, string, number | null, string | null][]).map(([k, v, sign, help]) => (
+              <div key={k} className="spread" style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
+                <span className="muted row" style={{ gap: 0 }}>{k}{help && <Info label={`What is ${k}?`}>{help}</Info>}</span><b className={`mono ${signClass(sign)}`}>{v}</b>
               </div>
             ))}
           </section>
@@ -131,7 +132,7 @@ export function PaperPage() {
   return (
     <div className="stack" style={{ gap: 24 }}>
       <div className="stack" style={{ gap: 8 }}>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Paper trading</h1>
+        <h1 className="serif row" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", gap: 0 }}>Paper trading<Info>{HELP.paper}</Info></h1>
         <p className="muted" style={{ fontSize: 17, maxWidth: "70ch" }}>
           Your rules on live prices with fake money. Indian markets trade 9:15 am to 3:30 pm IST on weekdays; crypto trades around the clock. {sub}
         </p>

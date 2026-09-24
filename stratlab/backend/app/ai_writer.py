@@ -1,7 +1,6 @@
 """AI strategy builder (all plans, monthly limits in plans.py).
 Plain English -> validated rules, plus what the user did and didn't specify,
 so the app can ask follow-up questions for the missing parts."""
-import json
 import re
 import time
 
@@ -50,12 +49,7 @@ Never invent exits, stops or targets the user did not ask for; the app will ask 
 If nothing can be expressed, return {"entry": [], "exit": [], "mentioned": [], "notes": ["reason"]}."""
 
 
-class AIError(Exception):
-    pass
-
-
-class AIBusy(AIError):
-    """Quota or rate limit hit; the app falls back to the simple converter."""
+from .ai_providers import AIBusy, AIConfig, AIError, complete, extract_json  # noqa: E402  (shared error types)
 
 
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -112,7 +106,7 @@ def _candidates() -> list[str]:
 
 def _gemini(system: str, text: str) -> str:
     if not settings.GEMINI_API_KEY:
-        raise AIError("The AI builder isn't set up yet: GEMINI_API_KEY is missing in Railway.")
+        raise AIConfig("GEMINI_API_KEY is missing.")
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": text}]}],
@@ -145,7 +139,7 @@ def _gemini(system: str, text: str) -> str:
                 except ValueError:
                     detail = r.text[:200]
                 if r.status_code in (400, 403) and "key" in detail.lower():
-                    raise AIError("The Gemini API key on the server is invalid. Check GEMINI_API_KEY in Railway.")
+                    raise AIConfig("Google rejected GEMINI_API_KEY.")
                 raise AIError(f"The AI service returned an error ({r.status_code}) on model {model}: {detail[:160]}")
             try:
                 parts = r.json()["candidates"][0]["content"]["parts"]
@@ -156,7 +150,7 @@ def _gemini(system: str, text: str) -> str:
             return "".join(p.get("text", "") for p in parts if not p.get("thought"))
     if last_err == "empty":
         raise AIError("The AI didn't return a strategy. Try rephrasing it.")
-    raise AIBusy("Google's AI models are overloaded right now.")
+    raise AIBusy("Google's models are busy or out of free quota.")
 
 
 def _anthropic(system: str, text: str) -> str:
@@ -170,7 +164,7 @@ def _anthropic(system: str, text: str) -> str:
     except (anthropic.RateLimitError, anthropic.APIConnectionError):
         raise AIBusy("The AI builder is busy right now.")
     except anthropic.AuthenticationError:
-        raise AIError("The Anthropic API key on the server is invalid. Check ANTHROPIC_API_KEY.")
+        raise AIConfig("Anthropic rejected ANTHROPIC_API_KEY.")
     except anthropic.APIStatusError as e:
         if e.status_code >= 500:  # overloaded (529) or a server error
             raise AIBusy("The AI builder is busy right now.")
@@ -180,14 +174,7 @@ def _anthropic(system: str, text: str) -> str:
 
 def write_strategy(text: str, pro: bool) -> dict:
     system = SYSTEM.replace("%TYPES%", PRO_TYPES if pro else BASIC_TYPES)
-    raw = (_anthropic if settings.AI_PROVIDER == "anthropic" else _gemini)(system, text)
-    raw = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.M).strip()
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
-    if not isinstance(data, dict):
-        raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
+    data = extract_json(complete(system, text, gemini=_gemini, anthropic=_anthropic))
     raw_notes = data.get("notes") or []
     if isinstance(raw_notes, str):
         raw_notes = [raw_notes]

@@ -1,0 +1,223 @@
+"""A chain of AI providers for the strategy builder: the first that answers wins.
+
+The task is small (turn one sentence into JSON rules), so fast free-tier models do it
+well. Providers with an OpenAI-style API (Groq, Cerebras, OpenRouter) share one client;
+Gemini and Anthropic have their own. Each provider is used only when its key is set.
+
+AI_PROVIDERS sets the order, e.g. "groq,gemini". Left as "auto", every provider with a
+key is tried in the default order below. Each provider's model can be pinned with
+<NAME>_MODEL; "auto" picks a suitable chat model from the provider's own list."""
+import json
+import re
+import time
+from dataclasses import dataclass, field
+
+import httpx
+
+from .config import settings
+
+DEFAULT_ORDER = ["groq", "cerebras", "gemini", "openrouter", "anthropic"]
+
+OPENAI_STYLE = {
+    "groq": {"base": "https://api.groq.com/openai/v1", "label": "Groq"},
+    "cerebras": {"base": "https://api.cerebras.ai/v1", "label": "Cerebras"},
+    "openrouter": {"base": "https://openrouter.ai/api/v1", "label": "OpenRouter", "free_only": True},
+}
+LABELS = {**{k: v["label"] for k, v in OPENAI_STYLE.items()}, "gemini": "Google Gemini", "anthropic": "Anthropic"}
+
+# models that aren't general chat models
+SKIP = ("whisper", "tts", "guard", "embed", "vision", "audio", "transcrib", "moderation", "image", "playai",
+        "compound", "search", "safety", "rerank", "ocr")
+
+
+class AIError(Exception):
+    pass
+
+
+class AIBusy(AIError):
+    """Quota or rate limit hit, or the service is down: try the next provider."""
+
+
+class AIConfig(AIError):
+    """A setting is wrong (bad key, unknown model): skip this provider until it's fixed."""
+
+
+@dataclass
+class Status:
+    name: str
+    last_ok: float | None = None
+    last_error: str | None = None
+    model: str | None = None
+    cooldown_until: float = 0.0
+    models: list[str] = field(default_factory=list)
+    models_at: float = 0.0
+
+
+_status: dict[str, Status] = {}
+
+
+def status(name: str) -> Status:
+    return _status.setdefault(name, Status(name))
+
+
+def key_for(name: str) -> str:
+    return getattr(settings, f"{name.upper()}_API_KEY", "") or ""
+
+
+def model_setting(name: str) -> str:
+    return (getattr(settings, f"{name.upper()}_MODEL", "") or "auto").strip()
+
+
+def order() -> list[str]:
+    raw = (settings.AI_PROVIDERS or "auto").strip().lower()
+    if raw == "auto":
+        names = list(DEFAULT_ORDER)
+        if settings.AI_PROVIDER == "anthropic":  # older setting: Claude first
+            names.remove("anthropic")
+            names.insert(0, "anthropic")
+    else:
+        names = [n.strip() for n in raw.split(",") if n.strip() in LABELS]
+    return [n for n in names if key_for(n)]
+
+
+def rank(model_id: str) -> int:
+    """Lower is tried first: capable-but-fast models, then small ones as a fallback."""
+    m = model_id.lower()
+    if any(k in m for k in ("versatile", "70b", "gpt-oss", "llama-3.3", "llama3.3")):
+        return 0
+    if any(k in m for k in ("scout", "maverick", "qwen", "mistral", "gemma", "deepseek")):
+        return 1
+    if any(k in m for k in ("instant", "8b", "mini", "flash", "lite", "small")):
+        return 2
+    return 3
+
+
+def pick_models(name: str, ids: list[str]) -> list[str]:
+    ids = [i for i in ids if not any(s in i.lower() for s in SKIP)]
+    if OPENAI_STYLE[name].get("free_only"):
+        ids = [i for i in ids if i.endswith(":free")]
+    return sorted(ids, key=lambda i: (rank(i), i))[:4]
+
+
+def extract_json(raw: str) -> dict:
+    """The JSON object in a reply, even if it's wrapped in ``` fences or a sentence."""
+    text = re.sub(r"^```(?:json)?|```$", "", (raw or "").strip(), flags=re.M).strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        a, b = text.find("{"), text.rfind("}")
+        if a < 0 or b <= a:
+            raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
+        try:
+            data = json.loads(text[a:b + 1])
+        except json.JSONDecodeError:
+            raise AIError("The AI reply couldn't be read. Try rephrasing the idea.") from None
+    if not isinstance(data, dict):
+        raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
+    return data
+
+
+class OpenAIStyle:
+    def __init__(self, name: str, transport: httpx.BaseTransport | None = None):
+        self.name = name
+        self.base = OPENAI_STYLE[name]["base"]
+        self.transport = transport
+
+    def _client(self) -> httpx.Client:
+        headers = {"Authorization": f"Bearer {key_for(self.name)}"}
+        if self.name == "openrouter":
+            headers.update({"HTTP-Referer": "https://stratlab.studio", "X-Title": "StratLab"})
+        return httpx.Client(base_url=self.base, headers=headers, timeout=25, transport=self.transport)
+
+    def models(self) -> list[str]:
+        pinned = model_setting(self.name)
+        if pinned.lower() != "auto":
+            return [pinned]
+        st = status(self.name)
+        if st.models and time.time() - st.models_at < 6 * 3600:
+            return st.models
+        with self._client() as c:
+            r = c.get("/models")
+        if r.status_code in (401, 403):
+            raise AIConfig(f"{LABELS[self.name]} rejected the API key.")
+        if r.status_code >= 400:
+            raise AIBusy(f"{LABELS[self.name]} couldn't list its models ({r.status_code}).")
+        ids = [m.get("id", "") for m in r.json().get("data", []) if m.get("id")]
+        st.models, st.models_at = pick_models(self.name, ids), time.time()
+        if not st.models:
+            raise AIConfig(f"{LABELS[self.name]} has no suitable free chat model for this key.")
+        return st.models
+
+    def complete(self, system: str, text: str) -> str:
+        last: AIError | None = None
+        for model in self.models():
+            body = {"model": model, "temperature": 0.1, "max_tokens": 1500,
+                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
+                    "response_format": {"type": "json_object"}}
+            try:
+                with self._client() as c:
+                    r = c.post("/chat/completions", json=body)
+                    if r.status_code == 400 and "response_format" in r.text:
+                        body.pop("response_format")   # some models don't support JSON mode
+                        r = c.post("/chat/completions", json=body)
+            except httpx.HTTPError as e:
+                raise AIBusy(f"{LABELS[self.name]} couldn't be reached ({e.__class__.__name__}).") from None
+            if r.status_code in (401, 403):
+                raise AIConfig(f"{LABELS[self.name]} rejected the API key.")
+            if r.status_code in (404, 400, 422):
+                last = AIConfig(f"{LABELS[self.name]} couldn't use model {model} ({r.status_code}).")
+                continue
+            if r.status_code == 429 or r.status_code >= 500:
+                raise AIBusy(f"{LABELS[self.name]} is busy or out of free quota ({r.status_code}).")
+            try:
+                out = r.json()["choices"][0]["message"]["content"] or ""
+            except (KeyError, IndexError, ValueError, TypeError):
+                last = AIError(f"{LABELS[self.name]} sent an empty reply.")
+                continue
+            status(self.name).model = model
+            return out
+        raise last or AIError(f"{LABELS[self.name]} had no model to try.")
+
+
+def complete(system: str, text: str, gemini=None, anthropic=None, transport=None) -> str:
+    """Ask each configured provider in turn and return the first reply that holds a JSON object."""
+    names = order()
+    if not names:
+        raise AIConfig("No AI provider is set up on the server. Add a free key such as GROQ_API_KEY or GEMINI_API_KEY.")
+    errors = []
+    for name in names:
+        st = status(name)
+        if st.cooldown_until > time.time():
+            errors.append(f"{LABELS[name]}: cooling down after a rate limit")
+            continue
+        try:
+            if name in OPENAI_STYLE:
+                raw = OpenAIStyle(name, transport).complete(system, text)
+            elif name == "gemini":
+                raw = gemini(system, text)
+            else:
+                raw = anthropic(system, text)
+            extract_json(raw)  # a reply we can't read counts as a failure: try the next provider
+        except AIError as e:
+            st.last_error = str(e)
+            if isinstance(e, AIBusy):
+                st.cooldown_until = time.time() + 60
+            errors.append(f"{LABELS[name]}: {e}")
+            continue
+        except Exception as e:  # a provider bug must not break the chain
+            st.last_error = f"Unexpected error: {e.__class__.__name__}"
+            errors.append(f"{LABELS[name]}: {st.last_error}")
+            continue
+        st.last_ok, st.last_error = time.time(), None
+        return raw
+    raise AIBusy("None of the AI providers could answer. " + " · ".join(errors))
+
+
+def health() -> list[dict]:
+    names = order()
+    out = []
+    for name in DEFAULT_ORDER:
+        st = status(name)
+        out.append({"name": name, "label": LABELS[name], "configured": bool(key_for(name)), "in_use": name in names,
+                    "model": st.model, "last_ok": st.last_ok, "last_error": st.last_error})
+    return out

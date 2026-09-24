@@ -3,7 +3,8 @@ import { useApp } from "../lib/app";
 import { money, moneyShort, pct, periodName, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import type { Check, Experiment, Notebook } from "../lib/types";
 import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars, type Marker } from "../components/Charts";
-import { Loading, STATUS_NAME } from "../components/ui";
+import { Info, Loading, STATUS_NAME } from "../components/ui";
+import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { downloadShareImage } from "../components/shareImage";
 
@@ -14,7 +15,7 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
   const d = c.data;
   return (
     <div className="card stack" style={{ gap: 12, padding: 20 }}>
-      <div className="spread"><h3 className="h3">{c.title}</h3><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
+      <div className="spread" style={{ alignItems: "flex-start" }}><h3 className="h3 row" style={{ gap: 0 }}>{c.title}<Info>{HELP[c.id]}</Info></h3><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
       {c.id === "unseen" && d && (
         <SplitBars built={d.built_ret} unseen={d.unseen_ret}
           builtLabel={`Built on ${yearSpan(d.built_from, d.built_to)} · ${tradeCount(d.built_trades)}`} unseenLabel={`Tested on ${yearSpan(d.unseen_from, d.unseen_to)} · ${tradeCount(d.unseen_trades)}`} />
@@ -84,11 +85,11 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           <span className="eyebrow">
             {e.label} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(String(new Date(e.range.from).getFullYear()), String(new Date(e.range.to).getFullYear()))} · {tradeCount(st.n)}
           </span>
-          <h1 className={`verdict-head ${v.verdict}`}>{v.headline}</h1>
+          <h1 className={`verdict-head ${v.verdict}`}>{v.headline}<Info label="How is the verdict decided?">{HELP.verdict}</Info></h1>
           <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, color: "var(--ink-2)", maxWidth: 820 }}>{v.summary}</p>
         </div>
         <div className="card stack" style={{ gap: 10, width: 250, flex: "none", padding: 20 }}>
-          <span className="small muted" style={{ fontWeight: 600 }}>Strength of evidence</span>
+          <span className="small muted row" style={{ fontWeight: 600, gap: 0 }}>Strength of evidence<Info>{HELP.strength}</Info></span>
           <div className="dots" aria-label={`${v.passed} of ${v.total} checks passed`}>
             {Array.from({ length: v.total }, (_, k) => <span key={k} className={k < v.passed ? "on" : ""} />)}
           </div>
@@ -101,7 +102,7 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <section className="row" style={{ gap: 16, alignItems: "stretch", flexWrap: "wrap" }}>
         <div className="card stack" style={{ flex: "1 1 520px", minWidth: 0, gap: 12 }}>
           <div className="spread" style={{ flexWrap: "wrap" }}>
-            <h2 className="h2">Where the money came from, and went</h2>
+            <h2 className="h2 row" style={{ gap: 0 }}>Where the money came from, and went<Info>{HELP.equity}</Info></h2>
             <span className="mono small muted">{money(cap, cur)} start</span>
           </div>
           <LineChart ariaLabel="Account value over the test, with the unseen part shaded" labels={labels} axisLabels={years} height={260}
@@ -114,7 +115,7 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           <Legend items={[{ label: "Strategy", color: "var(--ink)" }, { label: "Buy and hold", color: "var(--dash)", dash: true }]} />
         </div>
         <div className="card stack" style={{ flex: "0 1 400px", gap: 12 }}>
-          <div className="spread"><h2 className="h2">What you'd keep</h2><span className="small muted">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span></div>
+          <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>What you'd keep<Info>{HELP.keep}</Info></h2><span className="small muted">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span></div>
           <div className="costs-table">
             <div><span>Profit before costs</span><span>{money(e.costs.gross_pnl, cur)}</span></div>
             {e.costs.items.map((i) => <div key={i.label} className="sub"><span>{i.label}</span><span>−{money(i.amount, cur)}</span></div>)}
@@ -127,7 +128,7 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <section className="card stack" style={{ gap: 12 }}>
         <div className="spread" style={{ flexWrap: "wrap" }}>
-          <h2 className="h2">Price and trades</h2>
+          <h2 className="h2 row" style={{ gap: 0 }}>Price and trades<Info>{HELP.priceChart}</Info></h2>
           <span className="small muted">▲ buy &nbsp; ▼ sell</span>
         </div>
         <LineChart ariaLabel={`${e.instrument.symbol} price with buy and sell points`} labels={labels} axisLabels={years} height={300}
@@ -141,25 +142,25 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <section className="stats-grid">
         {[
-          ["Total return", pct(st.ret), st.ret],
-          ["Buy and hold", pct(st.buy_hold_ret), st.buy_hold_ret],
-          ["Worst fall", pct(st.mdd), st.mdd],
-          ["Win rate", st.n ? `${st.win.toFixed(0)}%` : "–", null],
-          ["Profit factor", st.pf == null ? "∞" : st.n ? st.pf.toFixed(2) : "–", null],
-          ["Sharpe ratio", st.sharpe.toFixed(2), null],
-          ["Average trade", money(st.avg, cur), st.avg],
-          ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString()} candles`, null],
-        ].map(([k, val, sign]) => (
-          <div key={k as string} className="stack" style={{ gap: 2, padding: "4px 2px" }}>
-            <span className={`serif ${signClass(sign as number | null)}`} style={{ fontSize: 26 }}>{val as string}</span>
-            <span className="small muted">{k as string}</span>
+          ["Total return", pct(st.ret), st.ret, HELP.totalReturn],
+          ["Buy and hold", pct(st.buy_hold_ret), st.buy_hold_ret, HELP.buyHold],
+          ["Worst fall", pct(st.mdd), st.mdd, HELP.worstFall],
+          ["Win rate", st.n ? `${st.win.toFixed(0)}%` : "–", null, HELP.winRate],
+          ["Profit factor", st.pf == null ? "∞" : st.n ? st.pf.toFixed(2) : "–", null, HELP.profitFactor],
+          ["Sharpe ratio", st.sharpe.toFixed(2), null, HELP.sharpe],
+          ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
+          ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString()} candles`, null, HELP.period],
+        ].map(([k, val, sign, help]) => (
+          <div key={k as string} className="card stack" style={{ gap: 4, padding: "16px 18px" }}>
+            <span className={`serif ${signClass(sign as number | null)}`} style={{ fontSize: 26, lineHeight: 1.15 }}>{val as string}</span>
+            <span className="small muted row" style={{ gap: 0 }}>{k as string}<Info label={`What is ${k}?`}>{help as string}</Info></span>
           </div>
         ))}
       </section>
 
       <section className="card">
         <div className="spread" style={{ marginBottom: 12 }}>
-          <h2 className="h2">Every trade</h2>
+          <h2 className="h2 row" style={{ gap: 0 }}>Every trade<Info>{HELP.trades}</Info></h2>
           <span className="small muted">{e.trades.length} shown, after costs</span>
         </div>
         <div className="table-wrap">

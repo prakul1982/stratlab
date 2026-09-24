@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import type { CheckStatus, VerdictKind } from "../lib/types";
 import { Close } from "./Icons";
@@ -67,4 +67,34 @@ export function AutoGrow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
     el.style.height = el.scrollHeight + "px";
   });
   return <textarea ref={ref} rows={1} {...props} />;
+}
+
+/** A small (i) button that explains the thing next to it. Click or tap to open; Escape or a click outside closes. */
+export function Info({ children, label = "What does this mean?" }: { children: ReactNode; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const [side, setSide] = useState<"left" | "right">("left");
+  const wrap = useRef<HTMLSpanElement>(null);
+  const id = useId();
+  useEffect(() => {
+    if (!open) return;
+    const r = wrap.current?.getBoundingClientRect();
+    if (r) setSide(r.left + 300 > window.innerWidth - 12 ? "right" : "left");
+    const out = (e: MouseEvent | TouchEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", out);
+    document.addEventListener("touchstart", out);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", out);
+      document.removeEventListener("touchstart", out);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <span ref={wrap} className="info">
+      <button type="button" className="info-btn" aria-label={label} aria-expanded={open} aria-controls={id}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}>i</button>
+      {open && <span id={id} role="note" className={`info-pop ${side}`}>{children}</span>}
+    </span>
+  );
 }

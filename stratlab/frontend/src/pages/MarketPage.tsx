@@ -6,7 +6,8 @@ import { riskForCurrency } from "../lib/rules";
 import type { Instrument, Market } from "../lib/types";
 import { parseCsv, saveUpload, type Candle } from "../lib/upload";
 import { Search } from "../components/Icons";
-import { Loading } from "../components/ui";
+import { Info, Loading } from "../components/ui";
+import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 
 function localHours(m: Market): string {
@@ -97,7 +98,7 @@ export function MarketPage() {
       <div className="stack" style={{ gap: 8 }}>
         <Link to={`/n/${nb.id}`} className="link" style={{ textDecoration: "none", alignSelf: "flex-start" }}>← {nb.name}</Link>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Where do you want to test it?</h1>
-        <p className="muted" style={{ fontSize: 17 }}>The same rules run on any market. Prices, trading hours, currency and costs switch to match it.</p>
+        <p className="muted row" style={{ fontSize: 17, gap: 0 }}>The same rules run on any market. Prices, trading hours, currency and costs switch to match it.<Info>{HELP.markets}</Info></p>
       </div>
 
       <div className="grid4" role="radiogroup" aria-label="Market">
@@ -157,7 +158,7 @@ export function MarketPage() {
 
       {market?.id === "CSV" && (
         <div className="card stack" style={{ gap: 14 }}>
-          <h2 className="h2">Upload candles as a CSV</h2>
+          <h2 className="h2 row" style={{ gap: 0 }}>Upload candles as a CSV<Info label="What should the file look like?">{HELP.csv}</Info></h2>
           <p className="muted">Any market, any timeframe. The first row should be headings: <span className="mono">date, open, high, low, close, volume</span>. Most charting sites and brokers can export this.</p>
           <label className="btn outline" style={{ alignSelf: "flex-start" }}>
             Choose a CSV file
@@ -173,7 +174,7 @@ export function MarketPage() {
                 <label className="field">Name<input value={upName} maxLength={60} onChange={(e) => setUpName(e.target.value)} /></label>
                 <label className="field">Currency<select value={upCur} onChange={(e) => setUpCur(e.target.value)}>
                   {["USD", "INR", "EUR", "GBP", "JPY", "USDT"].map((c) => <option key={c}>{c}</option>)}</select></label>
-                <label className="field">Quantities<select value={upStep} onChange={(e) => setUpStep(+e.target.value)}>
+                <label className="field"><span className="row" style={{ gap: 0 }}>Quantities<Info>{HELP.quantities}</Info></span><select value={upStep} onChange={(e) => setUpStep(+e.target.value)}>
                   <option value={1}>Whole units (shares, lots)</option><option value={0.0001}>Fractions (coins, forex)</option></select></label>
               </div>
               <button className="btn blue" style={{ alignSelf: "flex-start" }} onClick={useUpload}>Test on this data</button>

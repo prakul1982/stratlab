@@ -77,7 +77,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main">{children}</main>
+      <main className="main"><div className="page">{children}</div></main>
     </div>
   );
 }

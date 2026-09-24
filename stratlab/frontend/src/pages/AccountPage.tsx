@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { api, CFG, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { Loading } from "../components/ui";
+import { Info, Loading } from "../components/ui";
+import { HELP } from "../lib/help";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
@@ -40,14 +41,20 @@ export function AccountPage() {
     try {
       const { data } = await supabase.auth.getSession();
       add({ t: "Signed in", s: data.session ? "pass" : "fail", d: data.session?.user.email || "Not signed in. Sign out and in again." });
-      let health: { data_online: boolean; ai_configured: boolean } | null = null;
+      let health: { data_online: boolean; ai_configured: boolean;
+        ai?: { label: string; configured: boolean; in_use: boolean; model: string | null; last_ok: number | null; last_error: string | null }[] } | null = null;
       try { health = await (await fetch(CFG.API_BASE + "/health")).json(); add({ t: "StratLab server", s: "pass", d: CFG.API_BASE.replace("https://", "") }); }
       catch { add({ t: "StratLab server", s: "fail", d: "Can't reach the server. Check the Railway service is running and FRONTEND_ORIGIN lists this site." }); return; }
       const markets = await api<{ name: string; status: string }[]>("/markets");
       for (const m of markets.filter((x) => x.status !== "soon")) {
         add({ t: `${m.name} data`, s: m.status === "live" ? "pass" : "warn", d: m.status === "live" ? "Online" : "Offline right now" });
       }
-      add({ t: "AI strategy builder", s: health?.ai_configured ? "pass" : "warn", d: health?.ai_configured ? "Configured" : "No AI key on the server: the simple converter is used instead." });
+      const ai = (health?.ai ?? []).filter((p) => p.configured);
+      if (!ai.length) add({ t: "AI strategy builder", s: "warn", d: "No AI key on the server, so the simple converter is used. Add a free GROQ_API_KEY or GEMINI_API_KEY in Railway." });
+      for (const p of ai) {
+        add({ t: `AI: ${p.label}`, s: p.last_error ? "warn" : "pass",
+          d: p.last_error ? `Last try failed: ${p.last_error}` : p.last_ok ? `Working${p.model ? ` (${p.model})` : ""}` : "Key set, not used yet" });
+      }
       add({ t: "Your account", s: "pass", d: `${me.plan_info.name} plan, ${u.backtests_used} experiments this month` });
     } catch (e) { fail(e); } finally { setChecking(false); }
   };
@@ -65,7 +72,7 @@ export function AccountPage() {
       <div className="grid2">
         <div className="stack">
           <section className="card stack" style={{ gap: 0 }}>
-            <h2 className="h2" style={{ marginBottom: 10 }}>Plan and usage</h2>
+            <h2 className="h2 row" style={{ marginBottom: 10, gap: 0 }}>Plan and usage<Info>{HELP.experimentsQuota}</Info></h2>
             {[
               ["Plan", me.plan_info.name],
               ...(me.plan !== "free" ? [[b.cancel_at_period_end ? "Ends on" : "Renews on", dateOnly(b.renews_or_ends)]] : []),
@@ -90,7 +97,7 @@ export function AccountPage() {
             </div>
           </section>
           <section className="card stack" style={{ gap: 12 }}>
-            <div className="spread"><h2 className="h2">Connection check</h2><button className="btn quiet sm" disabled={checking} onClick={runCheck}>{checking ? "Checking…" : "Run check"}</button></div>
+            <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>Connection check<Info>{HELP.connection}</Info></h2><button className="btn quiet sm" disabled={checking} onClick={runCheck}>{checking ? "Checking…" : "Run check"}</button></div>
             {!checks && <p className="small muted">Checks your sign-in, the server, each market's data and the AI builder. Run it if something isn't loading.</p>}
             {checks?.map((r) => (
               <div key={r.t} className="spread" style={{ padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
@@ -101,7 +108,7 @@ export function AccountPage() {
           </section>
         </div>
         <section className="card stack" style={{ gap: 14, alignSelf: "start" }}>
-          <div className="spread"><h2 className="h2">Trade alerts</h2>{!isPro && <span className="badge next">Pro</span>}</div>
+          <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>Trade alerts<Info>{HELP.alerts}</Info></h2>{!isPro && <span className="badge next">Pro</span>}</div>
           <p className="small muted">Get a message whenever a paper trading session buys or sells. For Telegram, open the StratLab bot and press Start, then paste your chat ID (message @userinfobot to find it).</p>
           <label className="row" style={{ gap: 10, fontWeight: 600 }}>
             <input type="checkbox" style={{ width: 20, height: 20 }} checked={alerts.enabled} disabled={!isPro} onChange={(e) => setAlerts({ ...alerts, enabled: e.target.checked })} />
