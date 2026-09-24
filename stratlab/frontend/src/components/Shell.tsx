@@ -2,8 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import type { Market } from "../lib/types";
-import { Book, Compass, Flask, Menu, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
+import { Book, Compass, Menu, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
 import { Tour, tourSeen } from "./Tour";
+import { Logo } from "./Logo";
 import { VerdictBadge } from "./ui";
 
 function marketNow(m: Market): string {
@@ -30,7 +31,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const sidebar = (
     <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
-      <Link to="/" className="brand"><Flask />StratLab</Link>
+      <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
       <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>
       <nav className="stack" style={{ gap: 4 }} aria-label="Notebooks">
         <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Notebooks</div>
@@ -76,7 +77,7 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="shell">
       <header className="topbar">
         <button className="icon-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Menu /></button>
-        <Link to="/" className="brand" style={{ fontSize: 21 }}><Flask size={24} />StratLab</Link>
+        <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
         <button className="icon-btn" aria-label="New notebook" onClick={() => nav("/new")}><Plus /></button>
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}

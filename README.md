@@ -1,6 +1,9 @@
 <div align="center">
 
-# StratLab
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.png">
+  <img alt="StratLab" src="docs/images/logo-light.png" width="340">
+</picture>
 
 **Test your trading idea before your money does.**
 

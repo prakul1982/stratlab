@@ -1,9 +1,20 @@
 import { pct } from "../lib/format";
+import { MARK_RATIO, markSvg } from "../lib/brand";
 import type { Experiment, Notebook } from "../lib/types";
 
 /* A 1200×630 image of a verdict, sized for WhatsApp, X and LinkedIn previews. */
+function loadMark(): Promise<HTMLImageElement> {
+  return new Promise((ok, bad) => {
+    const im = new Image();
+    im.onload = () => ok(im); im.onerror = bad;
+    im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(markSvg());
+  });
+}
+
 export async function downloadShareImage(nb: Notebook, e: Experiment) {
+  await Promise.all([document.fonts.load("800 30px Montserrat"), document.fonts.load("300 30px Montserrat")]).catch(() => {});
   await document.fonts.ready;
+  const mark = await loadMark().catch(() => null);
   const W = 1200, H = 630, c = document.createElement("canvas");
   c.width = W * 2; c.height = H * 2;
   const g = c.getContext("2d")!;
@@ -15,7 +26,11 @@ export async function downloadShareImage(nb: Notebook, e: Experiment) {
 
   const v = e.verdict;
   const tone = v.verdict === "edge" ? colors.blue : v.verdict === "luck" || v.verdict === "no_edge" ? colors.orange : colors.ink;
-  g.fillStyle = colors.ink; g.font = "600 28px Fraunces, Georgia, serif"; g.fillText("StratLab", 64, 84);
+  // logo: mark plus "Strat" (heavy) "Lab" (light)
+  let lx = 64;
+  if (mark) { g.drawImage(mark, lx, 44, 50 * MARK_RATIO, 50); lx += 50 * MARK_RATIO + 10; }
+  g.fillStyle = colors.ink; g.font = "800 30px Montserrat, sans-serif"; g.fillText("Strat", lx, 81);
+  lx += g.measureText("Strat").width; g.font = "300 30px Montserrat, sans-serif"; g.fillText("Lab", lx, 81);
   g.fillStyle = colors.muted; g.font = "500 16px 'IBM Plex Mono', monospace"; g.textAlign = "right";
   g.fillText(`${nb.name} · ${e.instrument.symbol}`.toUpperCase().slice(0, 60), W - 64, 82);
   g.textAlign = "left";
