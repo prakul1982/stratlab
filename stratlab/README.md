@@ -53,7 +53,8 @@ To test the credentials straight away, send a POST request to `https://YOUR-BACK
 
 > **Data licensing:** this build serves data from your single Kite subscription. Before charging users, confirm with Zerodha that this is allowed. Redistributing exchange data usually needs a licence. All data access is in `backend/app/kite_service.py`, so you can swap in a licensed vendor without touching the rest.
 
-### 3. Razorpay
+### 3. Razorpay (optional, for paid plans)
+Leave the Razorpay settings empty and the Plans page shows the paid plans as "Coming soon", with everyone on Free. To take payments:
 1. In the dashboard, create two **monthly plans**: Basic ₹1,999 and Pro ₹4,900. Put their plan IDs in `.env`.
 2. Enable **Subscriptions** on your account.
 3. Add a webhook to `https://YOUR-BACKEND/billing/webhook` with a secret, and put that secret in `.env`. Subscribe to these events:
@@ -66,7 +67,7 @@ To test the credentials straight away, send a POST request to `https://YOUR-BACK
    - `subscription.paused`
 4. Test everything in Test Mode first.
 
-### 4. AI writer and alerts (Pro)
+### 4. AI builder (all plans) and alerts (Pro)
 - **AI strategy builder:** set a key for one or more providers. They're tried in order (Groq, Cerebras, Gemini, OpenRouter, then Anthropic) until one answers, so a rate limit or outage at one moves on to the next. All but Anthropic have free tiers, and the job (turning one sentence into rules) suits small, fast models.
   - `GROQ_API_KEY` from console.groq.com: free and the fastest. A good first choice.
   - `CEREBRAS_API_KEY` from cloud.cerebras.ai: free and very fast.
@@ -106,6 +107,9 @@ cd frontend && npm run build                   # typecheck and production build
 ### 7. Deploy
 - **Backend:** Render, Railway or a small VPS. Run it as **one process**, e.g. `uvicorn app.main:app --host 0.0.0.0 --port 8000` with no multiple workers. Live sessions and the tick feed live in memory in that process.
 - **Frontend:** Vercel or Netlify, with the project's root directory set to `stratlab/frontend`. `vercel.json` and `netlify.toml` set the build (`npm run build`, output `dist`) and send every page to `index.html`, so links like `/n/…` work on refresh. On Vercel, clear any Build Command or Output Directory overrides in the project settings so `vercel.json` applies. Put the production API URL in `public/config.js`.
+
+### 8. Logo and icons
+The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, which feeds the in-app logo (`components/Logo.tsx`) and the share image. The static files in `frontend/public/` (`favicon.svg`, `logo.svg`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `og-image.png`) are rendered from the same shapes; regenerate them if the logo changes.
 
 ---
 

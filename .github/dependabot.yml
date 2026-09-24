@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /stratlab/backend
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    groups:
+      python-minor:
+        update-types: [minor, patch]
+    ignore:
+      # pinned by kiteconnect; see "Known limits" in stratlab/README.md
+      - dependency-name: autobahn
+  - package-ecosystem: npm
+    directory: /stratlab/frontend
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

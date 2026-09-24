@@ -1,0 +1,34 @@
+name: Bug report
+description: Something in StratLab doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a notebook on BTC/USD
+        2. Change RSI 14 to RSI 7
+        3. Run experiment
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Idea builder (AI), Rules, Experiments and verdicts, Markets and data, Paper trading, Plans and billing, Account and alerts, Other]
+  - type: input
+    id: where
+    attributes:
+      label: Browser and device
+      placeholder: Chrome on Android, Safari on Mac…
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or error messages
+      description: Account → Connection check output helps with data and AI problems. Never paste API keys, passwords or TOTP secrets.
