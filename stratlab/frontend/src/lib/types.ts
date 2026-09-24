@@ -75,7 +75,7 @@ export interface Me {
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean } | null;
   live_running: number; live_limit: number;
   alerts: { enabled: boolean; telegram_chat_id: string | null; email: string | null };
-  data_online: boolean; billing_enabled?: boolean;
+  data_online: boolean; billing_enabled?: boolean; is_admin?: boolean;
 }
 
 export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number }

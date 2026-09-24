@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import type { Market } from "../lib/types";
-import { Book, Compass, Menu, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
+import { Book, Compass, Menu, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
 import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { VerdictBadge } from "./ui";
@@ -53,6 +53,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <NavLink to="/plans"><Star />Plans</NavLink>
         <NavLink to="/account"><User />Account{me && <span className="badge skip" style={{ marginLeft: "auto" }}>{me.plan_info.name}</span>}</NavLink>
         <NavLink to="/" end><Book />All notebooks</NavLink>
+        {me?.is_admin && <NavLink to="/admin"><Shield />Admin</NavLink>}
         <button className="tour-link" onClick={() => { setOpen(false); setTour(true); }}><Compass />What can I do here?</button>
       </nav>
       <div className="stack small muted" style={{ marginTop: "auto", gap: 8 }}>

@@ -62,6 +62,7 @@ class Settings:
     # comma-separated, e.g. "https://stratlab.studio,http://localhost:5500"
     FRONTEND_ORIGINS = origins(FRONTEND_ORIGIN)
     ADMIN_KEY = _env("ADMIN_KEY")
+    ADMIN_EMAILS = _env("ADMIN_EMAILS")                           # comma-separated Google emails that can open /admin
     ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails
 
 
