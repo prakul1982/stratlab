@@ -22,6 +22,10 @@ def plan_ids() -> dict:
     return {"basic": settings.RAZORPAY_PLAN_BASIC, "pro": settings.RAZORPAY_PLAN_PRO}
 
 
+def enabled() -> bool:
+    return bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET and all(plan_ids().values()))
+
+
 def plan_for(sub: dict) -> str | None:
     notes = sub.get("notes") or {}
     if isinstance(notes, dict) and notes.get("plan") in ("basic", "pro"):
@@ -36,7 +40,7 @@ def _ts(v) -> str:
 
 
 def create_subscription(profile: dict, plan: str) -> dict:
-    if not (settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET and plan_ids()[plan]):
+    if not enabled():
         raise ValueError("Payments aren't set up on the server yet.")
     sub = client().subscription.create({
         "plan_id": plan_ids()[plan],

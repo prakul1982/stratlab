@@ -625,7 +625,7 @@ details.gloss dd{margin:0;color:var(--muted)}
 
 <!-- PLANS -->
 <section class="page" id="page-plans" hidden>
-  <div class="page-h"><div><h1>Plans</h1><p class="muted">Billed monthly through Razorpay. Cancel any time; your plan stays active until the paid month ends.</p></div></div>
+  <div class="page-h"><div><h1>Plans</h1><p class="muted" id="plansSub">Billed monthly through Razorpay. Cancel any time; your plan stays active until the paid month ends.</p></div></div>
   <div class="plans" id="plansGrid"></div>
   <p class="small muted" style="margin-top:16px;max-width:80ch">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past backtest results don't predict future returns.</p>
 </section>
@@ -1635,10 +1635,13 @@ const PLAN_FEATURES = {
 function renderPlans(){
   const me = state.me;
   if(!me) return;
+  if(me.billing_enabled === false) $("plansSub").textContent = "Paid plans are coming soon. Everyone is on the Free plan for now.";
   $("plansGrid").innerHTML = ["free","basic","pro"].map(p => {
     const cur = me.plan === p;
     const btn = p === "free" ? (cur ? `<button class="btn" disabled>Current plan</button>` : `<span class="small muted">Included when a paid plan ends</span>`)
-      : cur ? `<button class="btn" disabled>Current plan</button>` : `<button class="btn primary" data-sub="${p}">${me.plan === "pro" && p === "basic" ? "Switch to Basic" : "Upgrade to " + (p === "pro" ? "Pro" : "Basic")}</button>`;
+      : cur ? `<button class="btn" disabled>Current plan</button>`
+      : me.billing_enabled === false ? `<button class="btn" disabled>Coming soon</button>`
+      : `<button class="btn primary" data-sub="${p}">${me.plan === "pro" && p === "basic" ? "Switch to Basic" : "Upgrade to " + (p === "pro" ? "Pro" : "Basic")}</button>`;
     const price = {free: 0, basic: 1999, pro: 4900}[p];
     const who = {free: "Try the builder and a few backtests", basic: "For traders testing one idea at a time", pro: "For active traders running several strategies"}[p];
     return `<div class="plan${p === "pro" ? " featured" : ""}"><h2>${{free: "Free", basic: "Basic", pro: "Pro"}[p]}</h2><p class="who">${who}</p>
