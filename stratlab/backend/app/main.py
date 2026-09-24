@@ -162,6 +162,7 @@ def me(profile=Depends(current_profile)):
         "alerts": {"enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email")},
         "data_online": kite.ready(),
+        "billing_enabled": billing.enabled(),
     })
 
 

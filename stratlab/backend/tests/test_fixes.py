@@ -93,3 +93,10 @@ def test_bad_ids_are_404_not_500(monkeypatch):
 def test_cors_accepts_comma_separated_origins():
     from app.config import origins
     assert origins("https://a.example, http://localhost:5500/") == ["https://a.example", "http://localhost:5500"]
+
+
+def test_billing_disabled_without_razorpay_keys(monkeypatch):
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
+    assert billing.enabled() is False
+    with pytest.raises(ValueError):
+        billing.create_subscription({"id": "u"}, "pro")

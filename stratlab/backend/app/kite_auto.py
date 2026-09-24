@@ -10,6 +10,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import struct
 import threading
 import time
@@ -30,21 +31,34 @@ def configured() -> bool:
     return bool(settings.KITE_USER_ID and settings.KITE_PASSWORD and settings.KITE_TOTP_SECRET)
 
 
+class AutoLoginError(Exception):
+    def __init__(self, message: str, retry: bool = True):
+        super().__init__(message)
+        self.retry = retry
+
+
+def clean_secret(raw: str) -> str:
+    """Accept the key as Zerodha shows it: spaced, lower case, quoted, or inside an otpauth:// link."""
+    s = raw.strip().strip("\"'")
+    if s.lower().startswith("otpauth://"):
+        s = parse_qs(urlparse(s).query).get("secret", [""])[0]
+    s = re.sub(r"[\s-]", "", s).upper().rstrip("=")
+    if not re.fullmatch(r"[A-Z2-7]{16,}", s):
+        hint = " That looks like a 6-digit code from the app." if re.fullmatch(r"\d{6}", s) else ""
+        raise AutoLoginError("KITE_TOTP_SECRET isn't a valid TOTP secret." + hint + " Use the key shown under the QR "
+                             "code when setting up 2FA in Kite: 16 or more letters A-Z and digits 2-7.", retry=False)
+    return s
+
+
 def totp(secret: str, at: float | None = None, step: int = 30, digits: int = 6) -> str:
     """RFC 6238 code, the same one an authenticator app shows for this secret."""
-    s = secret.replace(" ", "").upper()
+    s = clean_secret(secret)
     key = base64.b32decode(s + "=" * (-len(s) % 8))
     counter = int((time.time() if at is None else at) // step)
     mac = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
     o = mac[-1] & 0x0F
     code = (struct.unpack(">I", mac[o:o + 4])[0] & 0x7FFFFFFF) % 10 ** digits
     return str(code).zfill(digits)
-
-
-class AutoLoginError(Exception):
-    def __init__(self, message: str, retry: bool = True):
-        super().__init__(message)
-        self.retry = retry
 
 
 def _json(r: httpx.Response) -> dict:
@@ -56,6 +70,7 @@ def _json(r: httpx.Response) -> dict:
 
 
 def fetch_request_token(login_url: str, transport: httpx.BaseTransport | None = None) -> str:
+    clean_secret(settings.KITE_TOTP_SECRET)
     with httpx.Client(timeout=20, transport=transport, follow_redirects=False,
                       headers={"User-Agent": "Mozilla/5.0 (StratLab auto-login)"}) as c:
         c.get(login_url, follow_redirects=True)  # picks up Kite's session cookies
