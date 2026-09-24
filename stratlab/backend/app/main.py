@@ -17,17 +17,19 @@ from .ai_writer import AIBusy, AIError, _model_cache, write_strategy
 from .alerts import notify
 from .auth import current_profile
 from .config import settings
-from .engine.core import backtest
+from . import research
+from .data import DataError, Registry
 from .kite_auto import AutoLogin, AutoLoginError, restart_process
-from .kite_service import IST, KiteNotReady, KiteService, TickHub, INTERVALS
+from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
-from .models import (AIReq, AlertsReq, BacktestReq, LiveStartReq, SaveStrategyReq, Strategy,
-                     SubscribeReq, VerifyReq)
+from .models import (AIReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+                     Strategy, SubscribeReq, VerifyReq)
 from .plans import PLANS, trial_state
 
 kite = KiteService()
 hub = TickHub(kite)
-manager = LiveManager(kite, hub)
+markets = Registry(kite)
+manager = LiveManager(kite, hub, markets)
 
 
 def after_login() -> str:
@@ -44,17 +46,17 @@ def after_login() -> str:
 
 auto_login = AutoLogin(kite, after_login)
 
-MAX_DAYS = {"1d": 3650, "1h": 730, "15m": 365, "5m": 120}
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         kite.load_saved_token()
-        if kite.ready():
-            manager.resume()
     except Exception as e:
         print("startup: Kite not ready:", e)
+    try:
+        manager.resume()  # crypto sessions always; India ones once Kite is logged in
+    except Exception as e:
+        print("startup: could not resume sessions:", e)
     manager.start_loop()
     auto_login.start()
     yield
@@ -108,11 +110,15 @@ def check_id(sid: str) -> str:
         err(404, "not_found", "Not found.")
 
 
-def get_instrument(token: int) -> dict:
-    inst = kite.instrument(token)
+def get_instrument(inst_id: str) -> tuple:
+    prov, inst = markets.resolve(inst_id)
+    if prov is None:
+        err(400, "market_unavailable", "That market isn't connected yet.")
+    if not prov.ready():
+        raise KiteNotReady("Market data for this market is offline right now.")
     if not inst:
         err(404, "instrument_not_found", "That instrument was not found. Search again.")
-    return inst
+    return prov, inst
 
 
 def check_features(profile, strategy: Strategy, inst: dict | None):
@@ -123,6 +129,16 @@ def check_features(profile, strategy: Strategy, inst: dict | None):
 @app.exception_handler(KiteNotReady)
 def _kite_not_ready(request, exc):
     return JSONResponse(status_code=503, content={"detail": {"code": "data_offline", "message": str(exc)}})
+
+
+@app.exception_handler(research.ResearchError)
+def _research_error(request, exc):
+    return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": exc.message}})
+
+
+@app.exception_handler(DataError)
+def _data_error(request, exc):
+    return JSONResponse(status_code=502, content={"detail": {"code": "data_error", "message": str(exc)}})
 
 
 @app.exception_handler(kite_exc.KiteException)
@@ -188,25 +204,32 @@ def test_alert(profile=Depends(current_profile)):
     return {"sent": sent}
 
 
-# ---------- instruments ----------
+# ---------- markets and instruments ----------
+@app.get("/markets")
+def list_markets():
+    return markets.markets()
+
+
 @app.get("/instruments/defaults")
 def instrument_defaults(profile=Depends(current_profile)):
-    return kite.defaults()
+    return markets.defaults()
 
 
 @app.get("/instruments/search")
-def instrument_search(q: str = Query(..., min_length=2, max_length=40), profile=Depends(current_profile)):
-    return kite.search(q, allow_fno=is_pro(profile))
+def instrument_search(q: str = Query(..., min_length=2, max_length=40), market: str | None = Query(None, max_length=10),
+                      profile=Depends(current_profile)):
+    return markets.search(q, market.upper() if market else None, allow_fno=is_pro(profile))
 
 
-@app.get("/instruments/{token}")
-def instrument_info(token: int, profile=Depends(current_profile)):
-    return get_instrument(token)
+@app.get("/instruments/{inst_id}")
+def instrument_info(inst_id: str, profile=Depends(current_profile)):
+    return get_instrument(inst_id)[1]
 
 
-@app.get("/instruments/{token}/ltp")
-def instrument_ltp(token: int, profile=Depends(current_profile)):
-    return {"token": token, "ltp": kite.ltp(token)}
+@app.get("/instruments/{inst_id}/ltp")
+def instrument_ltp(inst_id: str, profile=Depends(current_profile)):
+    prov, inst = get_instrument(inst_id)
+    return {"id": inst["id"], "ltp": prov.ltp(inst)}
 
 
 # ---------- strategies ----------
@@ -240,7 +263,8 @@ def remove_strategy(sid: str, profile=Depends(current_profile)):
 def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
     if not is_pro(profile):
         upgrade("Strategy export is on the Pro plan.")
-    inst = kite.instrument(req.instrument_token) if req.instrument_token else None
+    iid = req.instrument or (f"IN:{req.instrument_token}" if req.instrument_token else None)
+    inst = markets.resolve(iid)[1] if iid else None
     payload = {"format": "stratlab-strategy-v1", "exported_at": datetime.now(IST).isoformat(),
                "instrument": inst, "summary": describe(req.strategy), "strategy": req.strategy.model_dump()}
     name = "".join(ch if ch.isalnum() else "-" for ch in req.strategy.name).strip("-") or "strategy"
@@ -268,31 +292,146 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
     return out
 
 
-# ---------- backtest ----------
+# ---------- backtests and notebooks ----------
+def use_backtest(profile) -> int | None:
+    """Check the monthly backtest limit before running one; returns the limit."""
+    limit = PLANS[profile["_plan"]]["backtests_per_month"]
+    if limit is not None and backtests_used(profile) >= limit:
+        upgrade(f"You've used all {limit} backtests for this month.", "backtest_limit")
+    return limit
+
+
+def run_test(profile, strategy: Strategy, req) -> dict:
+    if not strategy.entry:
+        err(400, "no_entry_rules", "Add at least one buy rule first.")
+    limit = use_backtest(profile)
+    data = research.load(markets, strategy, req)
+    check_features(profile, strategy, data["inst"])
+    out = research.run(strategy, data)
+    db.add_usage(profile["id"], "backtest")
+    used = backtests_used(profile)
+    out["usage"] = {"backtests_used": used, "backtests_limit": limit}
+    return out
+
+
 @app.post("/backtest")
 def run_backtest(req: BacktestReq, profile=Depends(current_profile)):
-    s = req.strategy
-    if not s.entry:
-        err(400, "no_entry_rules", "Add at least one entry rule before backtesting.")
-    inst = get_instrument(req.instrument_token)
-    check_features(profile, s, inst)
-    limit = PLANS[profile["_plan"]]["backtests_per_month"]
-    used = backtests_used(profile)
-    if limit is not None and used >= limit:
-        upgrade(f"You've used all {limit} backtests for this month.", "backtest_limit")
-    days = min(req.days, MAX_DAYS[s.tf])
-    bars = kite.history(inst["token"], s.tf, days + KiteService.warmup_days(s.tf))
-    cutoff = (datetime.now(IST) - timedelta(days=days)).isoformat()
-    start = next((i for i, b in enumerate(bars) if b["t"] >= cutoff), len(bars))
-    if len(bars) - start < 10:
-        err(400, "not_enough_data", "Not enough price history for this period. Pick a longer period or another instrument.")
-    lot = inst["lot"] if inst["fno"] else 1
-    out = backtest(bars, s, start, lot)
-    db.add_usage(profile["id"], "backtest")
-    out.update({"instrument": inst, "lot": lot, "days": days,
-                "warmup_short": start < 200,
-                "usage": {"backtests_used": used + 1, "backtests_limit": limit}})
-    return ok(out)
+    return ok(run_test(profile, req.strategy, req))
+
+
+def notebook_from_row(row: dict) -> dict:
+    """Notebooks live in the strategies table. Rows saved before notebooks existed hold a bare strategy."""
+    body = row.get("body") or {}
+    if body.get("kind") != "notebook":
+        token = row.get("instrument_token")
+        body = {"kind": "notebook", "question": row.get("name") or "", "notes": "", "strategy": body,
+                "instrument": {"id": f"IN:{token}"} if token else None, "experiments": [],
+                "summary": research.summary([])}
+    return {"id": row["id"], "name": row.get("name"), "updated_at": row.get("updated_at"), **body}
+
+
+def get_notebook(profile, nid: str) -> dict:
+    row = db.get_strategy(profile["id"], check_id(nid))
+    if not row:
+        err(404, "not_found", "Notebook not found.")
+    return notebook_from_row(row)
+
+
+def save_notebook(profile, nb: dict) -> dict:
+    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary")}
+    body["kind"] = "notebook"
+    body["tf"] = (nb.get("strategy") or {}).get("tf")
+    inst = nb.get("instrument") or {}
+    token = inst.get("token") if inst.get("market") == "IN" else None
+    row = db.save_strategy(profile["id"], nb.get("name") or "Untitled notebook", body, token, nb.get("id"))
+    if not row:
+        err(404, "not_found", "Notebook not found.")
+    return notebook_from_row(row)
+
+
+def instrument_summary(inst_id: str | None) -> dict | None:
+    if not inst_id:
+        return None
+    if inst_id.startswith("CSV:"):
+        return {"id": inst_id, "symbol": "Uploaded data", "market": "CSV"}
+    try:
+        return get_instrument(inst_id)[1]
+    except (HTTPException, KiteNotReady, DataError):
+        # market data is briefly offline: keep the id, details fill in on the next save
+        return {"id": inst_id}
+
+
+@app.get("/notebooks")
+def list_notebooks(profile=Depends(current_profile)):
+    out = []
+    for r in db.list_notebook_rows(profile["id"]):
+        if r.get("kind") != "notebook":  # an older saved strategy
+            r.update({"question": r.get("name"), "summary": research.summary([]),
+                      "instrument": {"id": f"IN:{r['instrument_token']}"} if r.get("instrument_token") else None})
+        out.append({k: r.get(k) for k in ("id", "name", "question", "instrument", "summary", "updated_at", "tf")})
+    return out
+
+
+@app.post("/notebooks")
+def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
+    strategy = req.strategy or Strategy(name=req.name or "Untitled notebook")
+    nb = {"name": req.name or strategy.name, "question": req.question or "", "notes": req.notes or "",
+          "strategy": strategy.model_dump(), "instrument": instrument_summary(req.instrument),
+          "experiments": [], "summary": research.summary([])}
+    return save_notebook(profile, nb)
+
+
+@app.get("/notebooks/{nid}")
+def read_notebook(nid: str, profile=Depends(current_profile)):
+    return ok(get_notebook(profile, nid))
+
+
+@app.put("/notebooks/{nid}")
+def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)):
+    nb = get_notebook(profile, nid)
+    if req.name is not None:
+        nb["name"] = req.name or "Untitled notebook"
+    if req.question is not None:
+        nb["question"] = req.question
+    if req.notes is not None:
+        nb["notes"] = req.notes
+    if req.strategy is not None:
+        nb["strategy"] = req.strategy.model_dump()
+    if req.instrument is not None:
+        nb["instrument"] = instrument_summary(req.instrument or None)
+    return ok(save_notebook(profile, nb))
+
+
+@app.delete("/notebooks/{nid}")
+def delete_notebook(nid: str, profile=Depends(current_profile)):
+    db.delete_strategy(profile["id"], check_id(nid))
+    return {"deleted": True}
+
+
+@app.post("/notebooks/{nid}/experiments")
+def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile)):
+    """Test the notebook's current rules and keep the result as its next experiment."""
+    nb = get_notebook(profile, nid)
+    strategy = Strategy(**(nb.get("strategy") or {}))
+    if not req.bars and not req.instrument:
+        req.instrument = (nb.get("instrument") or {}).get("id")
+    out = run_test(profile, strategy, req)
+    experiments = list(nb.get("experiments") or [])
+    version = (experiments[-1]["v"] + 1) if experiments else 1
+    rec = research.record(out, strategy, req.label, version, db.now_iso())
+    experiments = (experiments + [rec])[-50:]
+    nb["experiments"], nb["summary"] = experiments, research.summary(experiments)
+    save_notebook(profile, nb)
+    return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"]})
+
+
+@app.delete("/notebooks/{nid}/experiments/{version}")
+def delete_experiment(nid: str, version: int, profile=Depends(current_profile)):
+    nb = get_notebook(profile, nid)
+    nb["experiments"] = [e for e in nb.get("experiments") or [] if e["v"] != version]
+    nb["summary"] = research.summary(nb["experiments"])
+    save_notebook(profile, nb)
+    return {"deleted": True}
 
 
 # ---------- live paper trading ----------
@@ -301,10 +440,8 @@ def start_live(req: LiveStartReq, profile=Depends(current_profile)):
     s = req.strategy
     if not s.entry:
         err(400, "no_entry_rules", "Add at least one entry rule before going live.")
-    inst = get_instrument(req.instrument_token)
+    _, inst = get_instrument(req.instrument)
     check_features(profile, s, inst)
-    if not kite.ready():
-        raise KiteNotReady("Market data is offline. The admin needs to complete today's Kite login.")
     start_trial = False
     if profile["_plan"] == "free":
         t = trial_state(profile)
@@ -356,8 +493,14 @@ def get_live(sid: str, profile=Depends(current_profile)):
                 "account": {"capital": cap, "equity": st.get("cash", cap), "cash": st.get("cash", cap), "qty": 0,
                             "unrealised": 0, "realised": realised, "trades": len(st.get("trades", [])),
                             "wins": sum(1 for t in st.get("trades", []) if t["pnl"] > 0)}}
-    snap["orders"] = db.session_orders(sid)
+    snap["orders"] = orders_from(snap.get("events") or [])
     return ok(snap)
+
+
+def orders_from(events: list[dict]) -> list[dict]:
+    """The session's orders, newest first, in the shape the app shows."""
+    return [{"side": e["side"], "qty": e["qty"], "price": e["px"], "reason": e.get("why"), "pnl": e.get("pnl"),
+             "ts": e["t"]} for e in reversed(events[-200:])]
 
 
 @app.post("/live/sessions/{sid}/stop")

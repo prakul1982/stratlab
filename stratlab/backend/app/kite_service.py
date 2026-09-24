@@ -101,16 +101,20 @@ class KiteService:
                 itype = x.get("instrument_type")
                 if exch == "NSE" and itype != "EQ" and x.get("segment") != "INDICES":
                     continue
+                token, lot = int(x["instrument_token"]), int(x.get("lot_size") or 1)
                 rows.append({
-                    "token": int(x["instrument_token"]),
+                    "id": f"IN:{token}",
+                    "token": token,
                     "symbol": x["tradingsymbol"],
                     "name": x.get("name") or x["tradingsymbol"],
                     "exchange": exch,
                     "type": "INDEX" if x.get("segment") == "INDICES" else itype,
-                    "lot": int(x.get("lot_size") or 1),
+                    "lot": lot,
+                    "step": lot if exch == "NFO" else 1,
                     "expiry": x["expiry"].isoformat() if x.get("expiry") else None,
                     "strike": x.get("strike") or None,
                     "fno": exch == "NFO",
+                    "market": "IN", "currency": "INR", "tz": "Asia/Kolkata",
                 })
         self._inst = rows
         self._by_token = {r["token"]: r for r in rows}

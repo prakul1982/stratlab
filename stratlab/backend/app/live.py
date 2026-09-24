@@ -5,18 +5,25 @@ from datetime import datetime, timedelta
 
 from . import db
 from .alerts import notify
+from .engine import costs as C
 from .engine.core import Ctx, Engine, chart_series, clean, cond_text
 from .kite_service import IST, KiteService, TickHub, INTERVALS
 from .models import Strategy
 from .plans import PLANS, effective_plan, trial_state
 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}
+POLL_SECONDS = 15          # how often polled markets (crypto) are checked for a newly closed candle
 
 
 def _session_bounds(ts: datetime):
     open_ = ts.replace(hour=9, minute=15, second=0, microsecond=0)
     close = ts.replace(hour=15, minute=30, second=0, microsecond=0)
     return open_, close
+
+
+def _closed(bar: dict, tf: str) -> bool:
+    secs = {"1d": 86400, "1h": 3600, "15m": 900, "5m": 300}[tf]
+    return datetime.fromisoformat(bar["t"]).timestamp() + secs <= time.time()
 
 
 def drop_forming(bars: list[dict], tf: str) -> list[dict]:
@@ -86,13 +93,25 @@ class LiveSession:
         self.strategy = Strategy(**row["strategy"])
         self.inst = row["instrument"]
         self.tf = self.strategy.tf
-        bars = mgr.kite.history(self.inst["token"], self.tf, KiteService.warmup_days(self.tf, 300))
-        self.bars = drop_forming(bars, self.tf)[-400:]
+        self.market = self.inst.get("market", "IN")
+        # India streams ticks from Kite; other markets are polled for closed candles
+        self.polled = self.market != "IN"
+        self.prov = mgr.markets.provider(self.market) if mgr.markets else None
+        if self.polled:
+            if self.prov is None:
+                raise ValueError("That market isn't connected.")
+            bars = self.prov.history(self.inst, self.tf, self.prov.warmup_days(self.tf, 300))
+            bars = [b for b in bars if _closed(b, self.tf)]
+        else:
+            bars = drop_forming(mgr.kite.history(self.inst["token"], self.tf, KiteService.warmup_days(self.tf, 300)), self.tf)
+        self.bars = bars[-400:]
         if len(self.bars) < 30:
             raise ValueError("Not enough price history to start this strategy.")
         state = row.get("state") or {}
-        lot = self.inst.get("lot", 1) if self.inst.get("fno") else 1
-        self.engine = Engine(self.strategy, lot, state=state or None)
+        lot = self.inst.get("step") or (self.inst.get("lot", 1) if self.inst.get("fno") else 1)
+        self.engine = Engine(self.strategy, lot, state=state or None, cost_kind=C.kind_of(self.inst))
+        self.next_poll = 0.0
+        self.poll_ok = True
         self.equity_curve: list[dict] = state.get("equity_curve", [])
         self.builder = CandleBuilder(self.tf)
         self.last_price = self.bars[-1]["c"]
@@ -114,9 +133,31 @@ class LiveSession:
                 self._on_candle(c)
 
     def on_timer(self, now: datetime):
+        if self.polled:
+            self._poll()
+            return
         with self.lock:
             for c in self.builder.flush(now):
                 self._on_candle(c)
+
+    def _poll(self):
+        if time.time() < self.next_poll:
+            return
+        self.next_poll = time.time() + POLL_SECONDS
+        try:
+            new = self.prov.closed_candles(self.inst, self.tf, self.bars[-1]["t"])
+            px = self.prov.ltp(self.inst)
+            self.poll_ok = True
+        except Exception as e:
+            self.poll_ok = False
+            print("poll failed:", self.id, e)
+            return
+        with self.lock:
+            for c in new:
+                self._on_candle(c)
+            if px is not None:
+                self.last_price = float(px)
+            self.last_tick_at = datetime.now(IST).isoformat()
 
     def _on_candle(self, c: dict):
         self.bars.append(c)
@@ -148,7 +189,7 @@ class LiveSession:
                 "id": self.id, "name": self.name, "status": "running", "instrument": self.inst,
                 "strategy": self.strategy.model_dump(), "started_at": self.started_at,
                 "last_price": px, "last_tick_at": self.last_tick_at,
-                "feed_connected": self.mgr.hub.connected,
+                "feed_connected": self.poll_ok if self.polled else self.mgr.hub.connected,
                 "bars": [{k: b[k] for k in ("t", "o", "h", "l", "c")} for b in view],
                 "forming": None if not forming else {"t": forming["start"].isoformat(), "c": forming["c"]},
                 "overlays": overlays, "oscillators": osc,
@@ -171,8 +212,8 @@ class LimitError(Exception):
 
 
 class LiveManager:
-    def __init__(self, kite: KiteService, hub: TickHub):
-        self.kite, self.hub = kite, hub
+    def __init__(self, kite: KiteService, hub: TickHub, markets=None):
+        self.kite, self.hub, self.markets = kite, hub, markets
         self.sessions: dict[str, LiveSession] = {}
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -187,6 +228,8 @@ class LiveManager:
         for row in db.running_sessions():
             if row["id"] in self.sessions:
                 continue
+            if (row.get("instrument") or {}).get("market", "IN") == "IN" and not self.kite.ready():
+                continue  # resumes after today's Kite login; shown as paused until then
             try:
                 self._attach(row)
             except Exception as e:
@@ -197,7 +240,8 @@ class LiveManager:
         s = LiveSession(self, row)
         with self._lock:
             self.sessions[s.id] = s
-        self.hub.add(s.id, int(s.inst["token"]), s.on_tick)
+        if not s.polled:
+            self.hub.add(s.id, int(s.inst["token"]), s.on_tick)
         return s
 
     def user_running(self, user_id: str) -> list[LiveSession]:
@@ -223,7 +267,8 @@ class LiveManager:
             s = self.sessions.pop(sid, None)
         if not s:
             return
-        self.hub.remove(sid)
+        if not s.polled:
+            self.hub.remove(sid)
         with s.lock:
             st = s.state()
         db.update_session(sid, status="stopped", stopped_at=db.now_iso(), stop_reason=reason, state=st)
@@ -232,17 +277,18 @@ class LiveManager:
     def on_order(self, s: LiveSession, ev: dict):
         def work():
             try:
-                db.add_order({"session_id": s.id, "user_id": s.user_id, "side": ev["side"], "qty": ev["qty"],
-                              "price": round(ev["px"], 2), "reason": ev.get("why"), "pnl": ev.get("pnl"),
-                              "candle_time": ev["t"]})
+                if isinstance(ev["qty"], int):  # the orders table stores whole quantities; the session keeps every order
+                    db.add_order({"session_id": s.id, "user_id": s.user_id, "side": ev["side"], "qty": ev["qty"],
+                                  "price": round(ev["px"], 2), "reason": ev.get("why"), "pnl": ev.get("pnl"),
+                                  "candle_time": ev["t"]})
                 profile = db.get_profile(s.user_id)
                 if effective_plan(profile) == "pro" and profile.get("alerts_enabled"):
-                    sym = s.inst["symbol"]
+                    sym, cur = s.inst["symbol"], s.inst.get("currency", "INR")
                     if ev["side"] == "buy":
-                        text = f"StratLab paper trade: BUY {ev['qty']} {sym} at Rs {ev['px']:.2f} ({s.name})"
+                        text = f"StratLab paper trade: BUY {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur} ({s.name})"
                     else:
-                        text = (f"StratLab paper trade: SELL {ev['qty']} {sym} at Rs {ev['px']:.2f}, "
-                                f"{ev['why'].lower()}, P&L Rs {ev['pnl']:,.0f} ({s.name})")
+                        text = (f"StratLab paper trade: SELL {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur}, "
+                                f"{ev['why'].lower()}, P&L {ev['pnl']:,.0f} {cur} ({s.name})")
                     notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False)
             except Exception as e:
                 print("order record failed:", e)

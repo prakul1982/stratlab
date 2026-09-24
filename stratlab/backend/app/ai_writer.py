@@ -15,14 +15,16 @@ BASIC_TYPES = '"price", "num", "sma", "ema", "rsi"'
 PRO_TYPES = ('"price", "num", "sma", "ema", "rsi", "macd", "macd_signal", "macd_hist", '
              '"bb_upper", "bb_mid", "bb_lower", "vwap", "supertrend"')
 
-SYSTEM = """You turn an Indian retail trader's strategy idea into JSON rules for a backtesting engine.
+SYSTEM = """You turn a retail trader's strategy idea into JSON rules for a backtesting engine.
 The engine is LONG ONLY: it buys, then sells to close. Reply with ONLY a JSON object.
 
 Schema:
 {
   "name": short strategy name (max 6 words),
-  "instrument": the stock or index the user named, as an NSE trading symbol or index name
-                (e.g. "NIFTY 50", "NIFTY BANK", "RELIANCE", "TATAMOTORS"), or null if not named,
+  "instrument": the stock, index or coin the user named: an NSE trading symbol or index name
+                (e.g. "NIFTY 50", "NIFTY BANK", "RELIANCE"), or a crypto pair (e.g. "BTC-USD", "ETH-USD"),
+                or null if not named,
+  "market": "IN" for Indian stocks and indices, "CRYPTO" for coins, or null if unclear,
   "tf": "1d" | "1h" | "15m" | "5m" or null if the user gave no timeframe,
   "entryJoin": "all" | "any",
   "entry": [Cond, ...],
@@ -213,6 +215,7 @@ def write_strategy(text: str, pro: bool) -> dict:
     out["tf"] = data.get("tf") if data.get("tf") in ("1d", "1h", "15m", "5m") else None
     out["name"] = str(data.get("name") or "")[:80] or None
     out["instrument"] = str(data["instrument"])[:40] if data.get("instrument") else None
+    out["market"] = data.get("market") if data.get("market") in ("IN", "CRYPTO") else None
     raw_risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
     risk = {k: v for k, v in raw_risk.items()
             if k in ("sl", "tgt", "riskPct", "capital") and isinstance(v, (int, float)) and not isinstance(v, bool)}
