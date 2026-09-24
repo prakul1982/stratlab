@@ -18,6 +18,7 @@ from .alerts import notify
 from .auth import current_profile
 from .config import settings
 from .engine.core import backtest
+from .kite_auto import AutoLogin, AutoLoginError, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub, INTERVALS
 from .live import LimitError, LiveManager, describe, needs_pro
 from .models import (AIReq, AlertsReq, BacktestReq, LiveStartReq, SaveStrategyReq, Strategy,
@@ -27,6 +28,21 @@ from .plans import PLANS, trial_state
 kite = KiteService()
 hub = TickHub(kite)
 manager = LiveManager(kite, hub)
+
+
+def after_login() -> str:
+    """Bring market data and live sessions online with the new Kite token."""
+    if hub.started:
+        if settings.KITE_RESTART_AFTER_LOGIN:
+            manager.persist(only_dirty=False)
+            restart_process()
+            return "Kite login saved. The server is restarting to reconnect the live feed; it's back in about a minute."
+        return "Kite login saved. The live feed was already running on yesterday's token: restart the server now."
+    manager.resume()
+    return "Kite login saved. Market data and live sessions are online."
+
+
+auto_login = AutoLogin(kite, after_login)
 
 MAX_DAYS = {"1d": 3650, "1h": 730, "15m": 365, "5m": 120}
 
@@ -40,6 +56,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print("startup: Kite not ready:", e)
     manager.start_loop()
+    auto_login.start()
     yield
 
 
@@ -416,16 +433,25 @@ def kite_callback(request_token: str = "", status: str = "", state: str = ""):
         kite.complete_login(request_token, state)
     except PermissionError as e:
         return HTMLResponse(f"<p>{e}</p>", status_code=403)
-    if hub.started:
-        msg = "Kite login saved. The live feed was already running on yesterday's token: restart the server now."
-    else:
-        manager.resume()
-        msg = "Kite login saved. Market data and live sessions are online."
-    return HTMLResponse(f"<p>{msg}</p>")
+    return HTMLResponse(f"<p>{after_login()}</p>")
+
+
+@app.post("/admin/kite/auto-login")
+def kite_auto_login(key: str = ""):
+    """Run the automatic login now, e.g. to test the credentials after setting them."""
+    _admin(key)
+    try:
+        auto_login.run_once()
+    except AutoLoginError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"Kite login failed: {e}")
+    return auto_login.last
 
 
 @app.get("/admin/status")
 def admin_status(key: str = ""):
     _admin(key)
     return {"kite_ready": kite.ready(), "feed_started": hub.started, "feed_connected": hub.connected,
-            "live_sessions": len(manager.sessions), "subscribed_tokens": len(hub.listeners)}
+            "live_sessions": len(manager.sessions), "subscribed_tokens": len(hub.listeners),
+            "auto_login": auto_login.last}

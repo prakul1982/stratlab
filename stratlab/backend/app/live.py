@@ -270,19 +270,26 @@ class LiveManager:
         t = time.time()
         if t - self._last_persist > 30:
             self._last_persist = t
-            for s in sessions:
-                if s.dirty:
-                    s.dirty = False
-                    try:
-                        with s.lock:
-                            st = s.state()
-                        db.update_session(s.id, state=st)
-                    except Exception as e:
-                        s.dirty = True  # try again next time
-                        print("persist failed:", e)
+            self.persist(sessions)
         if t - self._last_plan > 60:
             self._last_plan = t
             self._enforce_plans(sessions)
+
+    def persist(self, sessions: list[LiveSession] | None = None, only_dirty: bool = True):
+        if sessions is None:
+            with self._lock:
+                sessions = list(self.sessions.values())
+        for s in sessions:
+            if only_dirty and not s.dirty:
+                continue
+            s.dirty = False
+            try:
+                with s.lock:
+                    st = s.state()
+                db.update_session(s.id, state=st)
+            except Exception as e:
+                s.dirty = True  # try again next time
+                print("persist failed:", e)
 
     def _enforce_plans(self, sessions: list[LiveSession]):
         by_user: dict[str, list[LiveSession]] = {}

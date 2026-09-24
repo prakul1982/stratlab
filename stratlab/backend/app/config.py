@@ -18,6 +18,12 @@ class Settings:
 
     KITE_API_KEY = _env("KITE_API_KEY")
     KITE_API_SECRET = _env("KITE_API_SECRET")
+    # Optional automatic daily login (see kite_auto.py). Leave empty to log in by hand.
+    KITE_USER_ID = _env("KITE_USER_ID")
+    KITE_PASSWORD = _env("KITE_PASSWORD")
+    KITE_TOTP_SECRET = _env("KITE_TOTP_SECRET")
+    KITE_AUTO_LOGIN_AT = _env("KITE_AUTO_LOGIN_AT", "08:00")        # IST, after Kite's ~6 am token reset
+    KITE_RESTART_AFTER_LOGIN = _env("KITE_RESTART_AFTER_LOGIN", "true").lower() != "false"
 
     RAZORPAY_KEY_ID = _env("RAZORPAY_KEY_ID")
     RAZORPAY_KEY_SECRET = _env("RAZORPAY_KEY_SECRET")
@@ -42,6 +48,7 @@ class Settings:
     # comma-separated, e.g. "https://stratlab.netlify.app,http://localhost:5500"
     FRONTEND_ORIGINS = origins(FRONTEND_ORIGIN)
     ADMIN_KEY = _env("ADMIN_KEY")
+    ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails
 
 
 settings = Settings()

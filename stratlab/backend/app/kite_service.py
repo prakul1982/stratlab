@@ -64,12 +64,16 @@ class KiteService:
     def complete_login(self, request_token: str, state: str | None):
         if not self.login_state or state != self.login_state:
             raise PermissionError("Login state did not match. Start the login again.")
+        self.login_state = None
+        return self.accept_request_token(request_token)
+
+    def accept_request_token(self, request_token: str) -> dict:
+        """Swap a request token (from the manual or automatic login) for today's access token and save it."""
         data = self.kite.generate_session(request_token, api_secret=settings.KITE_API_SECRET)
         day = today_ist()
         self._set_token(data["access_token"], day)
         db.set_setting("kite_access_token", data["access_token"])
         db.set_setting("kite_token_day", day)
-        self.login_state = None
         self._inst_day = None
         return data
 

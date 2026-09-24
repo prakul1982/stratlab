@@ -34,8 +34,19 @@ Monthly backtest counts reset on the 1st of each month (IST). Limits are enforce
 ### 2. Kite Connect
 1. In the Kite developer console, set the app's redirect URL to `https://YOUR-BACKEND/admin/kite/callback`.
 2. Put the API key and secret in `backend/.env`.
-3. **Every trading day**, open `https://YOUR-BACKEND/admin/kite/login?key=YOUR_ADMIN_KEY` and log in with Zerodha. Kite access tokens expire each morning.
-4. If the server was already running with the previous day's token, restart it after logging in. The Kite ticker library can't reconnect with a new token inside the same process. A scheduled restart just after your morning login works.
+3. Log in once by hand: open `https://YOUR-BACKEND/admin/kite/login?key=YOUR_ADMIN_KEY` and log in with Zerodha. This also authorises the app for the automatic login.
+4. Kite access tokens expire every morning. After a login the server restarts itself (it exits and the host starts it again), because the Kite ticker can't switch to a new token inside a running process. Live sessions are saved first and resume after the restart.
+
+#### Automatic daily login (optional)
+Set these and the server logs in to Kite by itself every day at `KITE_AUTO_LOGIN_AT` (IST, default `08:00`):
+- `KITE_USER_ID`: your Zerodha client ID
+- `KITE_PASSWORD`: your Zerodha password
+- `KITE_TOTP_SECRET`: the secret key shown when you set up an authenticator app for Kite 2FA (the text under the QR code, not a 6-digit code). If you already set up 2FA without saving it, reset external 2FA in Kite to get a new one.
+- `ADMIN_TELEGRAM_CHAT_ID` (optional): your Telegram chat ID, to get a message if the login fails
+
+To test the credentials straight away, send a POST request to `https://YOUR-BACKEND/admin/kite/auto-login?key=YOUR_ADMIN_KEY`. `/admin/status` shows the last result.
+
+> **Read before enabling.** Zerodha's Kite Connect terms expect the daily login to be done by hand, so automating it risks your API key or account being restricted. Your password and TOTP secret also give full trading access to your Zerodha account: keep them only in the host's environment variables and never commit them. If Zerodha rejects the password or code, the server doesn't retry until the next day, so it can't lock your account with repeated attempts. Leave these variables empty to keep logging in by hand.
 
 > **Data licensing:** this build serves data from your single Kite subscription. Before charging users, confirm with Zerodha that this is allowed. Redistributing exchange data usually needs a licence. All data access is in `backend/app/kite_service.py`, so you can swap in a licensed vendor without touching the rest.
 
