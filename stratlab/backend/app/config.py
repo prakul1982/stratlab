@@ -5,7 +5,13 @@ load_dotenv()
 
 
 def _env(name: str, default: str = "") -> str:
-    return os.getenv(name, default).strip()
+    value = os.getenv(name, default).strip()
+    # forgive common pasting mistakes: NAME=value, or the value wrapped in quotes
+    if value.startswith(f"{name}="):
+        value = value[len(name) + 1:].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1].strip()
+    return value
 
 
 def origins(value: str) -> list[str]:

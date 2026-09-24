@@ -47,13 +47,26 @@ export function AccountPage() {
       catch { add({ t: "StratLab server", s: "fail", d: "Can't reach the server. Check the Railway service is running and FRONTEND_ORIGIN lists this site." }); return; }
       const markets = await api<{ name: string; status: string }[]>("/markets");
       for (const m of markets.filter((x) => x.status !== "soon")) {
-        add({ t: `${m.name} data`, s: m.status === "live" ? "pass" : "warn", d: m.status === "live" ? "Online" : "Offline right now" });
+        add({ t: /data$/i.test(m.name) ? m.name : `${m.name} data`, s: m.status === "live" ? "pass" : "warn", d: m.status === "live" ? "Online" : "Offline right now" });
       }
       const ai = (health?.ai ?? []).filter((p) => p.configured);
-      if (!ai.length) add({ t: "AI strategy builder", s: "warn", d: "No AI key on the server, so the simple converter is used. Add a free GROQ_API_KEY or GEMINI_API_KEY in Railway." });
-      for (const p of ai) {
-        add({ t: `AI: ${p.label}`, s: p.last_error ? "warn" : "pass",
-          d: p.last_error ? `Last try failed: ${p.last_error}` : p.last_ok ? `Working${p.model ? ` (${p.model})` : ""}` : "Key set, not used yet" });
+      if (!ai.length) add({ t: "AI strategy builder", s: "fail", d: "No AI key on the server, so the simple converter is used. Add a free GROQ_API_KEY (console.groq.com) in Railway → Variables, then redeploy." });
+      else {
+        add({ t: "AI strategy builder", s: "warn", d: `Testing ${ai.map((p) => p.label).join(", ")}…` });
+        try {
+          const r = await api<{ providers: { label: string; ok: boolean; error: string | null; model: string | null; ms: number }[] }>("/ai/test", { method: "POST" });
+          rows.pop();
+          const working = r.providers.filter((p) => p.ok).length;
+          add({ t: "AI strategy builder", s: working ? "pass" : "fail",
+            d: working ? `${working} of ${r.providers.length} providers working` : "No provider answered, so the simple converter is used. See the reasons below." });
+          for (const p of r.providers) {
+            add({ t: `AI: ${p.label}`, s: p.ok ? "pass" : "fail",
+              d: p.ok ? `Working${p.model ? ` with ${p.model}` : ""}, answered in ${(p.ms / 1000).toFixed(1)}s` : p.error || "Failed" });
+          }
+        } catch (e) {
+          rows.pop();
+          add({ t: "AI strategy builder", s: "warn", d: `Couldn't run the AI test: ${(e as Error).message}` });
+        }
       }
       add({ t: "Your account", s: "pass", d: `${me.plan_info.name} plan, ${u.backtests_used} experiments this month` });
     } catch (e) { fail(e); } finally { setChecking(false); }

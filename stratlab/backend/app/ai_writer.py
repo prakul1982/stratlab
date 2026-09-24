@@ -49,7 +49,7 @@ Never invent exits, stops or targets the user did not ask for; the app will ask 
 If nothing can be expressed, return {"entry": [], "exit": [], "mentioned": [], "notes": ["reason"]}."""
 
 
-from .ai_providers import AIBusy, AIConfig, AIError, complete, extract_json  # noqa: E402  (shared error types)
+from .ai_providers import AIBusy, AIConfig, AIError, complete, extract_json, status  # noqa: E402  (shared error types)
 
 
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -147,6 +147,7 @@ def _gemini(system: str, text: str) -> str:
                 last_err = "empty"
                 break
             _model_cache["name"] = model
+            status("gemini").model = model
             return "".join(p.get("text", "") for p in parts if not p.get("thought"))
     if last_err == "empty":
         raise AIError("The AI didn't return a strategy. Try rephrasing it.")
@@ -169,6 +170,7 @@ def _anthropic(system: str, text: str) -> str:
         if e.status_code >= 500:  # overloaded (529) or a server error
             raise AIBusy("The AI builder is busy right now.")
         raise AIError(f"The AI service returned an error ({e.status_code}).")
+    status("anthropic").model = settings.ANTHROPIC_MODEL
     return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
 
 

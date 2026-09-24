@@ -2,6 +2,11 @@
 
 ## September 2026
 
+### AI builder you can diagnose
+- **Account → Connection check** now tests every AI provider live and shows exactly what's wrong with any that fail.
+- Keys pasted with quotes or a `NAME=` prefix still work.
+- If a model's JSON mode fails, it retries without it; on OpenRouter, a rate-limited free model moves on to the next free model.
+
 ### New logo
 - The S-candlestick logo across the app, the favicon, phone home-screen icons, link previews and the share image.
 

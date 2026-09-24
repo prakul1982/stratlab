@@ -59,7 +59,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
         usedAI = false;
         fallback = err.code === "ai_limit" || err.code === "ai_daily_limit"
           ? `${err.message} We used the simple converter instead.`
-          : `The AI builder couldn't run just now, so we used the simple converter (it understands SMA, EMA, RSI and price rules).`;
+          : `The AI builder couldn't run just now, so we used the simple converter (it understands SMA, EMA, RSI and price rules). Account → Connection check shows why.`;
         const p = parseStrategyText(idea);
         const mentioned = Object.keys(p.risk);
         const tf = detectTf(idea), inst = detectInstrument(idea);
