@@ -2,6 +2,14 @@
 
 ## September 2026
 
+### Import, pins and small things that add up
+- **Import a strategy** you already have: a StratLab export (loads exactly), TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words. Drop a file or paste it; it becomes a notebook, and anything that couldn't be translated is listed there. Pine Script imports even when the AI is down.
+- **Pin** notebooks to keep them at the top of the sidebar and the list.
+- **Make a copy** of a notebook to try a variation without touching the original. **Rename** a notebook by clicking its name.
+- All notebooks: **search**, and **sort** by recent, name or best verdict. The sidebar shows each notebook's last verdict as a coloured dot.
+- The sidebar's **Markets now** lists all seven markets, open or closed.
+- **Ctrl/⌘ + Enter** runs the next experiment. New notebooks start in the market you used last.
+
 ### Docs brought up to date
 - README and setup guide now cover everything built this month: short selling, trailing stops and time limits, 20+ indicators, walk-forward, the similar-stocks check, paper trading in every market, the AI order for each kind of job, and early access (Pro features open to everyone until payments go live). New screenshots, including the landing page and walk-forward.
 - The Plans page and the feature tour say the same.

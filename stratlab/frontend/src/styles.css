@@ -476,3 +476,28 @@ a.chip-link:hover { border-color: var(--ink); color: var(--ink); }
   .lp-cta, .lp-cta-2 { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .lp-demo-body { animation: none; } }
+
+/* sidebar: markets now, verdict dots */
+.mkt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; }
+.mkt-now { display: flex; align-items: center; gap: 7px; color: var(--ink-2); font-size: 13px; padding: 2px 0; cursor: default; }
+.vdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--chip); border: 1.5px solid var(--dash); box-sizing: border-box; }
+.vdot.edge { background: var(--blue); border-color: var(--blue); }
+.vdot.mixed { background: var(--dash); border-color: var(--dash); }
+.vdot.luck, .vdot.no_edge { background: var(--orange); border-color: var(--orange); }
+.vdot.not_enough { background: transparent; border-color: var(--orange); }
+.import-drop { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 16px; border: 1.5px dashed var(--line-2); border-radius: 12px; background: var(--paper); color: var(--ink-2); }
+.nb-card { padding: 0; }
+.nb-card-body { all: unset; box-sizing: border-box; display: flex; flex-direction: column; padding: 22px 24px; cursor: pointer; border-radius: inherit; }
+.nb-card-body:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.nb-card:hover { border-color: var(--line-2); }
+.pin-btn { position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: 1px solid transparent;
+  background: transparent; color: var(--muted); cursor: pointer; z-index: 1; }
+.pin-btn:hover { border-color: var(--line-2); color: var(--ink); background: var(--paper); }
+.pin-btn.on { color: var(--ink); }
+.nb-link b span { font-family: inherit; font-size: inherit; color: inherit; white-space: nowrap; }
+.nb-link b .muted { color: var(--muted); }
+.nb-name { font: inherit; letter-spacing: inherit; text-transform: none; color: var(--ink-2); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 1px 6px; margin-left: -6px; min-width: 0; max-width: 100%; }
+.nb-name:hover { border-color: var(--line-2); }
+.nb-name:focus { outline: none; border-color: var(--blue); background: var(--card); color: var(--ink); }
+kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--paper); }
+@media (max-width: 640px) { .kbd-hint { display: none; } }

@@ -77,10 +77,15 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | See the market's mood | **Research → Market pulse**: index levels, headlines and an AI read of what's moving |
 | Keep an eye on companies | **Watch** on a company page; they're listed under **Research → Watchlist** |
 | Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
+| Bring a strategy you already have | **Import a strategy** on your notebooks page or New notebook: a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
+| Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
+| Find a notebook | Search and sort (recent, name, best verdict) on **All notebooks**; the dot beside each name in the sidebar is its last verdict |
+| Try a variation without losing the original | **Make a copy** at the top of a notebook |
+| Rename a notebook | Click its name at the top of the notebook |
 | Choose or change the market | Step 1 on a new notebook, or the **Testing on** button at the top of any notebook |
 | Rewrite the idea from scratch | **Describe the idea again** at the top of a notebook |
 | Tweak a rule | Tap any highlighted word (marked ▾) in **The rules**: indicator, length, condition or number |
-| Run a test | **Run experiment** in a notebook; each run is saved and numbered so you can compare |
+| Run a test | **Run experiment** in a notebook (or press Ctrl/⌘ + Enter); each run is saved and numbered so you can compare |
 | Short instead of buy | Tap **Buy** at the start of the rules and pick **Sell short** |
 | Trail the stop or cap how long a trade lasts | The **Trail the stop by … and close any trade after …** line in **The rules** |
 | Compare two runs | **Compare experiments →** in a notebook, or **Compare with the previous run** on a verdict |

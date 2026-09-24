@@ -64,6 +64,7 @@ const FAQ: [string, string][] = [
   ["Do I need to know how to code?", "No. You describe the idea in plain words. If something is missing, like when to sell, StratLab asks. You can also tap any rule to change it."],
   ["Where do the prices come from?", "Indian prices from Zerodha Kite, crypto from Coinbase, and US, UK, European, Japanese and forex prices from Yahoo Finance. Company research uses Finnhub, Screener.in, news and Wikipedia."],
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
+  ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, and lists anything it couldn't translate."],
   ["What does it cost?", "It's free to start, and every indicator and market is unlocked while StratLab is in early access."],
 ];
 

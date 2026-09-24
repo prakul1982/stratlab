@@ -7,7 +7,7 @@ import { riskForCurrency, usesPro } from "../lib/rules";
 import type { Experiment, Instrument, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
 import { GapsCard, type GapInfo } from "../components/Gaps";
-import { Download, Pulse, Sparkle, Trash } from "../components/Icons";
+import { Copy, Download, Pin, Pulse, Sparkle, Trash } from "../components/Icons";
 import { RulesCard } from "../components/Rules";
 import { AutoGrow, Info, Loading, Modal, VerdictBadge } from "../components/ui";
 import { HELP } from "../lib/help";
@@ -94,6 +94,7 @@ export function NotebookPage() {
 
   useEffect(() => { setGaps((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null); }, [id, loc.state]);
   const applyRef = useRef<(action: string) => void>();
+  const runRef = useRef<() => void>();
   const pendingAction = useRef<string | null>(null);
   useEffect(() => { pendingAction.current = (loc.state as { action?: string } | null)?.action ?? null; }, [loc.state]);
   useEffect(() => {
@@ -103,6 +104,14 @@ export function NotebookPage() {
     pendingAction.current = null;
     setTimeout(() => applyRef.current?.(act), 50);
   }, [nb?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !document.querySelector(".modal")) { e.preventDefault(); runRef.current?.(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   if (!nb) return <Loading label="Opening notebook" />;
   const s = nb.strategy;
@@ -120,6 +129,7 @@ export function NotebookPage() {
   const setStrategy = (st: Strategy) => patch({ strategy: st, name: st.name });
 
   const run = async () => {
+    if (running) return;
     if (!inst) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
     if (!s.entry.length) { notify("Add at least one buy rule first."); return; }
     if (!isPro && (usesPro(s) || inst.fno)) { notify("This uses Pro features (advanced indicators or F&O).", { label: "See plans", run: () => nav("/plans") }); return; }
@@ -141,9 +151,28 @@ export function NotebookPage() {
     } catch (e) { fail(e); } finally { setRunning(false); }
   };
 
+  runRef.current = run;
+
   const del = async () => {
     if (!confirm(`Delete the notebook "${nb.name}" and all its experiments? This can't be undone.`)) return;
     try { await api(`/notebooks/${nb.id}`, { method: "DELETE" }); await refreshNotebooks(); nav("/"); } catch (e) { fail(e); }
+  };
+
+  const togglePin = async () => {
+    const pinned = !nb.pinned;
+    setNb({ ...nb, pinned });
+    try { await api(`/notebooks/${nb.id}`, { method: "PUT", body: { pinned } }); await refreshNotebooks(); notify(pinned ? "Pinned to the top of your notebooks." : "Unpinned."); }
+    catch (e) { setNb({ ...nb, pinned: !pinned }); fail(e); }
+  };
+
+  const duplicate = async () => {
+    try {
+      await flush();   // copy the rules as they are on screen, including an edit that hasn't saved yet
+      const copy = await api<Notebook>(`/notebooks/${nb.id}/duplicate`, { method: "POST" });
+      await refreshNotebooks();
+      nav(`/n/${copy.id}`);
+      notify("Made a copy with the same rules and market. Its experiments start fresh.");
+    } catch (e) { fail(e); }
   };
 
   const exportStrategy = async () => {
@@ -192,7 +221,12 @@ export function NotebookPage() {
       <div className="stack" style={{ gap: 32, minWidth: 0 }}>
         <div className="stack" style={{ gap: 14 }}>
           <div className="spread" style={{ flexWrap: "wrap" }}>
-            <span className="eyebrow row" style={{ gap: 0 }}>Notebook · {nb.name}<Info>{HELP.notebook}</Info></span>
+            <span className="eyebrow row" style={{ gap: 0, minWidth: 0, flex: 1 }}>Notebook ·&nbsp;
+              <input className="nb-name" aria-label="Notebook name (click to rename)" title="Click to rename" value={nb.name} maxLength={80}
+                size={Math.max(8, Math.min(nb.name.length + 1, 48))}
+                onChange={(e) => patch({ name: e.target.value })} onBlur={(e) => { if (!e.target.value.trim()) patch({ name: "Untitled notebook" }, true); }}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+              <Info>{HELP.notebook}</Info></span>
             <span className="small muted" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>
           </div>
           <AutoGrow className="question" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
@@ -211,6 +245,8 @@ export function NotebookPage() {
           <div className="toolbar" role="toolbar" aria-label="Notebook actions">
             <button className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
             <button className="btn quiet sm" onClick={paperTrade} disabled={!inst || isUpload}><Pulse size={17} />Paper trade</button>
+            <button className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
+            <button className="btn quiet sm" onClick={duplicate}><Copy size={17} />Make a copy</button>
             <button className="btn quiet sm" onClick={exportStrategy}><Download size={17} />Export{isPro ? "" : " (Pro)"}</button>
             <button className="btn quiet sm danger" onClick={del}><Trash size={17} />Delete</button>
           </div>
@@ -258,6 +294,7 @@ export function NotebookPage() {
                 <input id="exp-label" className="input" style={{ flex: "1 1 240px" }} value={label} maxLength={120}
                   placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
                 <button className="btn blue" disabled={running} onClick={run}>{running ? "Running 4 honesty checks…" : `Run experiment v${nextV}`}</button>
+                <span className="small muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>
                 <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
               </div>
             </div>

@@ -40,7 +40,7 @@ function examplesFor(market?: string, symbol?: string | null): { placeholder: st
   };
 }
 
-async function findInstrument(name: string, market?: string | null): Promise<Instrument | null> {
+export async function findInstrument(name: string, market?: string | null): Promise<Instrument | null> {
   const up = name.toUpperCase().replace(/\s+/g, " ").trim();
   const alias: Record<string, string> = { NIFTY: "NIFTY 50", BANKNIFTY: "NIFTY BANK", "BANK NIFTY": "NIFTY BANK", BITCOIN: "BTC-USD", BTC: "BTC-USD", ETHEREUM: "ETH-USD", ETH: "ETH-USD" };
   const q = alias[up] || up;

@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from kiteconnect import exceptions as kite_exc
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, basket, billing, db
+from . import admin, basket, billing, db, importer
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
 from .alerts import notify
@@ -28,7 +28,7 @@ from .intel.company import Research
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
-from .models import (AdminPlanReq, AIReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import PLANS, has_pro_features, plan_info, trial_state
 
@@ -295,8 +295,8 @@ def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
                     headers={"Content-Disposition": f'attachment; filename="{name}.json"'})
 
 
-@app.post("/ai/strategy")
-def ai_strategy(req: AIReq, profile=Depends(current_profile)):
+def ai_allowance(profile) -> tuple[int, int | None]:
+    """AI builds used this month and the plan's limit; errors out when either cap is reached."""
     limit = PLANS[profile["_plan"]]["ai_builds_per_month"]
     used = db.count_usage(profile["id"], "ai", month_start_iso())
     if limit is not None and used >= limit:
@@ -304,6 +304,43 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
     since = (datetime.now(IST) - timedelta(days=1)).isoformat()
     if db.count_usage(profile["id"], "ai", since) >= 200:
         err(429, "ai_daily_limit", "You've used the AI builder 200 times today. Try again tomorrow.")
+    return used, limit
+
+
+@app.post("/import/strategy")
+def import_strategy(req: ImportReq, profile=Depends(current_profile)):
+    """Turn an existing strategy (StratLab export, Pine Script, Python, MQL, AFL or plain words) into rules."""
+    fmt = importer.detect(req.text, req.filename)
+    base = {"source": fmt, "source_name": importer.FORMATS[fmt]}
+    if fmt in ("stratlab", "json"):
+        try:
+            return {**base, **importer.from_json(req.text), "used_ai": False}
+        except ValueError as e:
+            if fmt == "stratlab":
+                err(400, "bad_import", str(e))
+            fmt = "text"   # some other JSON: let the AI make sense of it
+    used, limit = ai_allowance(profile)
+    try:
+        out = write_strategy(importer.ai_prompt(fmt, req.text), pro=is_pro(profile))
+        db.add_usage(profile["id"], "ai")
+        used_ai, usage = True, {"ai_used": used + 1, "ai_limit": limit}
+        if not out["entry"] and fmt == "pine":
+            out, used_ai = importer.pine(req.text), False
+    except AIError as e:
+        if fmt != "pine":
+            err(503 if isinstance(e, AIBusy) else 422, "ai_busy" if isinstance(e, AIBusy) else "ai_failed",
+                "The AI translator couldn't run just now, so this couldn't be imported. Try again in a minute. "
+                "(TradingView Pine Script can be read without the AI.)")
+        out, used_ai, usage = importer.pine(req.text), False, None
+    if not out["entry"]:
+        err(422, "nothing_imported", "No entry rules could be found in that. "
+            "Check it's a strategy (with buy or short conditions), or describe the idea in words instead.")
+    return {**base, **out, "used_ai": used_ai, "usage": usage}
+
+
+@app.post("/ai/strategy")
+def ai_strategy(req: AIReq, profile=Depends(current_profile)):
+    used, limit = ai_allowance(profile)
     try:
         out = write_strategy(req.text, pro=is_pro(profile))
     except AIBusy as e:
@@ -374,7 +411,7 @@ def get_notebook(profile, nid: str) -> dict:
 
 
 def save_notebook(profile, nb: dict) -> dict:
-    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary")}
+    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned")}
     body["kind"] = "notebook"
     body["tf"] = (nb.get("strategy") or {}).get("tf")
     inst = nb.get("instrument") or {}
@@ -405,7 +442,9 @@ def list_notebooks(profile=Depends(current_profile)):
         if r.get("kind") != "notebook":  # an older saved strategy
             r.update({"question": r.get("name"), "summary": research.summary([]),
                       "instrument": {"id": f"IN:{r['instrument_token']}"} if r.get("instrument_token") else None})
-        out.append({k: r.get(k) for k in ("id", "name", "question", "instrument", "summary", "updated_at", "tf")})
+        out.append({**{k: r.get(k) for k in ("id", "name", "question", "instrument", "summary", "updated_at", "tf")},
+                    "pinned": r.get("pinned") in (True, "true")})
+    out.sort(key=lambda n: not n["pinned"])      # pinned first, most recent first within each group
     return out
 
 
@@ -436,7 +475,19 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
         nb["strategy"] = req.strategy.model_dump()
     if req.instrument is not None:
         nb["instrument"] = instrument_summary(req.instrument or None)
+    if req.pinned is not None:
+        nb["pinned"] = req.pinned
     return ok(save_notebook(profile, nb))
+
+
+@app.post("/notebooks/{nid}/duplicate")
+def duplicate_notebook(nid: str, profile=Depends(current_profile)):
+    """A fresh copy of the notebook's question, rules, market and notes, without its experiments."""
+    nb = get_notebook(profile, nid)
+    copy = {"name": f"{nb.get('name') or 'Notebook'} (copy)"[:80], "question": nb.get("question") or "",
+            "notes": nb.get("notes") or "", "strategy": nb.get("strategy"), "instrument": nb.get("instrument"),
+            "experiments": [], "summary": research.summary([])}
+    return ok(save_notebook(profile, copy))
 
 
 @app.delete("/notebooks/{nid}")

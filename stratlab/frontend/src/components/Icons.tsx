@@ -31,3 +31,8 @@ export const Pencil = ({ size }: P) => <svg {...base(size)}><path d="M4 20h4L19 
 export const Lens = ({ size }: P) => <svg {...base(size)}><path d="M4 20V13M8 20V9M12 20v-4" /><circle cx="16" cy="9" r="4.2" /><path d="m19 12 3 3" /></svg>;
 export const Shield = ({ size }: P) => <svg {...base(size)}><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z" /><path d="m9 12 2 2 4-4" /></svg>;
 export const Compass = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></svg>;
+export const Pin = ({ size, filled }: P & { filled?: boolean }) => (
+  <svg {...base(size)}><path d="M9 3h6l-1 6 4 4H6l4-4z" fill={filled ? "currentColor" : "none"} /><path d="M12 13v8" /></svg>
+);
+export const Copy = ({ size }: P) => <svg {...base(size)}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></svg>;
+export const Upload = ({ size }: P) => <svg {...base(size)}><path d="M12 16V4M7 9l5-5 5 5" /><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>;

@@ -78,7 +78,7 @@ export interface Basket {
 export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null }
 export interface NotebookItem {
   id: string; name: string; question: string | null; instrument: Instrument | { id: string } | null;
-  summary: NotebookSummary | null; updated_at: string; tf?: Tf | null;
+  summary: NotebookSummary | null; updated_at: string; tf?: Tf | null; pinned?: boolean;
 }
 export interface Notebook extends NotebookItem {
   kind: "notebook"; notes: string; strategy: Strategy; instrument: Instrument | null; experiments: Experiment[];

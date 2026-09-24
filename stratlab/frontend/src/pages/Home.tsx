@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -8,6 +8,8 @@ import type { Instrument, Notebook } from "../lib/types";
 import { HELP } from "../lib/help";
 import { InstrumentSearch } from "../components/InstrumentSearch";
 import { IdeaComposer, type Built } from "../components/IdeaComposer";
+import { ImportStrategy } from "../components/ImportStrategy";
+import { Pin, Search, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
 
 export type Where = { market: string; instrument: Instrument | null };
@@ -93,6 +95,8 @@ export function Starters({ where }: { where?: Where | null }) {
   );
 }
 
+const LAST_MARKET = "stratlab.lastMarket";
+
 type Prefill = { market: string; symbol?: string; instrumentId?: string | null; text?: string };
 
 /** When Research hands over a company (and maybe an idea), pick its market and instrument up front. */
@@ -124,9 +128,19 @@ export function NewNotebook() {
   const { markets } = useApp();
   const [where, setWhere] = useState<Where>({ market: "", instrument: null });
   const prefill = usePrefill(setWhere);
+  const loc = useLocation();
+  const [importing, setImporting] = useState(new URLSearchParams(loc.search).has("import"));
+  const importRef = useRef<HTMLElement>(null);
+  useEffect(() => { if (importing && new URLSearchParams(loc.search).has("import")) importRef.current?.scrollIntoView({ behavior: "smooth" }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!where.market && markets.length) setWhere({ market: markets.find((m) => m.id === "IN" && m.status === "live") ? "IN" : "CRYPTO", instrument: null });
+    if (where.market || !markets.length) return;
+    // start where you left off last time, if that market is usable
+    let last = "";
+    try { last = localStorage.getItem(LAST_MARKET) || ""; } catch { /* private mode */ }
+    const usable = (id: string) => markets.some((m) => m.id === id && m.status !== "soon");
+    setWhere({ market: usable(last) ? last : markets.find((m) => m.id === "IN" && m.status === "live") ? "IN" : "CRYPTO", instrument: null });
   }, [markets, where.market]);
+  useEffect(() => { if (where.market) try { localStorage.setItem(LAST_MARKET, where.market); } catch { /* private mode */ } }, [where.market]);
   const create = useCreateNotebook(where);
   return (
     <div className="stack" style={{ gap: 28, maxWidth: 960, margin: "0 auto" }}>
@@ -152,6 +166,14 @@ export function NewNotebook() {
         <h2 id="idea-h" className="h2">2. Describe your idea</h2>
         <IdeaComposer key={prefill?.text ?? ""} initial={prefill?.text ?? ""} onBuilt={create} market={where.market} symbol={where.instrument?.symbol} />
       </section>
+      <section ref={importRef} className="card stack" style={{ gap: 14 }} aria-labelledby="import-h">
+        <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+          <h2 id="import-h" className="h2 row" style={{ gap: 10 }}><Upload size={20} />Already have a strategy? Import it</h2>
+          {!importing && <button className="btn quiet sm" onClick={() => setImporting(true)}>Import a strategy</button>}
+        </div>
+        {!importing ? <p className="small muted">From a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker, or a written description. It becomes a notebook you can test like any other.</p>
+          : <ImportStrategy onBuilt={create} market={where.market} />}
+      </section>
       <div className="stack">
         <h2 className="h2">Or start from a classic idea</h2>
         <Starters where={where} />
@@ -160,33 +182,74 @@ export function NewNotebook() {
   );
 }
 
+const VERDICT_RANK: Record<string, number> = { edge: 0, mixed: 1, not_enough: 2, luck: 3, no_edge: 4 };
+type Sort = "recent" | "name" | "verdict";
+
 export function Home() {
-  const { notebooks, me } = useApp();
+  const { notebooks, me, refreshNotebooks, fail } = useApp();
   const nav = useNavigate();
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<Sort>(() => { try { return (localStorage.getItem("stratlab.nbSort") as Sort) || "recent"; } catch { return "recent"; } });
+  useEffect(() => { try { localStorage.setItem("stratlab.nbSort", sort); } catch { /* private mode */ } }, [sort]);
+  const shown = useMemo(() => {
+    const words = q.trim().toLowerCase();
+    const rows = (notebooks ?? []).filter((n) => !words || [n.name, n.question, n.instrument && "symbol" in n.instrument ? n.instrument.symbol : ""]
+      .join(" ").toLowerCase().includes(words));
+    const key = (n: (typeof rows)[number]) => sort === "name" ? n.name.toLowerCase()
+      : sort === "verdict" ? String(VERDICT_RANK[n.summary?.last_verdict ?? ""] ?? 9) : "";
+    // pinned first; within each group keep the server's most-recent-first order unless sorting by name or verdict
+    return [...rows].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (sort === "recent" ? 0 : key(a).localeCompare(key(b))));
+  }, [notebooks, q, sort]);
   if (notebooks === null) return <Loading label="Opening your notebooks" />;
   if (notebooks.length === 0) return <NewNotebook />;
+
+  const togglePin = async (id: string, pinned: boolean) => {
+    try { await api(`/notebooks/${id}`, { method: "PUT", body: { pinned } }); await refreshNotebooks(); } catch (e) { fail(e); }
+  };
+
   return (
-    <div className="stack" style={{ gap: 28 }}>
-      <div className="spread" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+    <div className="stack" style={{ gap: 24 }}>
+      <div className="spread" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 14 }}>
         <div className="stack" style={{ gap: 8 }}>
           <span className="eyebrow">{me?.email ?? "Your lab"}</span>
           <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Your notebooks</h1>
         </div>
-        <button className="btn" onClick={() => nav("/new")}>Test a new idea</button>
+        <div className="row wrap" style={{ gap: 10 }}>
+          <button className="btn quiet" onClick={() => nav("/new?import=1")}><Upload size={18} />Import a strategy</button>
+          <button className="btn" onClick={() => nav("/new")}>Test a new idea</button>
+        </div>
       </div>
+      {notebooks.length > 3 && (
+        <div className="row wrap" style={{ gap: 10 }}>
+          <label className="search-box" style={{ flex: "1 1 260px" }}>
+            <Search size={18} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, question or instrument" aria-label="Search notebooks" />
+          </label>
+          <div className="seg" role="radiogroup" aria-label="Sort notebooks">
+            {([["recent", "Recent"], ["name", "Name"], ["verdict", "Best verdict"]] as [Sort, string][]).map(([k, label]) => (
+              <button key={k} role="radio" aria-checked={sort === k} aria-pressed={sort === k} onClick={() => setSort(k)}>{label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {shown.length === 0 && <p className="muted">No notebooks match "{q}".</p>}
       <div className="grid2">
-        {notebooks.map((n) => {
+        {shown.map((n) => {
           const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : "No instrument yet";
           const count = n.summary?.experiments ?? 0;
           return (
-            <button key={n.id} className="card stack" style={{ textAlign: "left", cursor: "pointer", gap: 12 }} onClick={() => nav(`/n/${n.id}`)}>
-              <span className="eyebrow">{n.name} · {inst}</span>
-              <span className="serif" style={{ fontSize: 22, lineHeight: 1.25 }}>{n.question || n.name}</span>
-              <div className="spread" style={{ flexWrap: "wrap" }}>
-                <VerdictBadge v={n.summary?.last_verdict} />
-                <span className="small muted">{count} experiment{count === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
-              </div>
-            </button>
+            <div key={n.id} className="card stack nb-card" style={{ gap: 12, position: "relative" }}>
+              <button className={`pin-btn${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
+                title={n.pinned ? "Unpin" : "Pin to the top"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>
+              <button className="nb-card-body stack" style={{ gap: 12 }} onClick={() => nav(`/n/${n.id}`)}>
+                <span className="eyebrow" style={{ paddingRight: 36 }}>{n.name} · {inst}</span>
+                <span className="serif" style={{ fontSize: 22, lineHeight: 1.25 }}>{n.question || n.name}</span>
+                <div className="spread" style={{ flexWrap: "wrap" }}>
+                  <VerdictBadge v={n.summary?.last_verdict} />
+                  <span className="small muted">{count} experiment{count === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
+                </div>
+              </button>
+            </div>
           );
         })}
       </div>
