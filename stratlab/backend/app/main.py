@@ -14,8 +14,8 @@ from kiteconnect import exceptions as kite_exc
 from razorpay.errors import SignatureVerificationError
 
 from . import billing, db
-from .ai_providers import health as ai_health
-from .ai_writer import AIBusy, AIError, write_strategy
+from .ai_providers import health as ai_health, test_all as ai_test_all
+from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
 from .alerts import notify
 from .auth import current_profile
 from .config import settings
@@ -304,6 +304,19 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
     db.add_usage(profile["id"], "ai")
     out["usage"] = {"ai_used": used + 1, "ai_limit": limit}
     return out
+
+
+_ai_tests: dict[str, float] = {}
+
+
+@app.post("/ai/test")
+def ai_test(profile=Depends(current_profile)):
+    """Try every configured AI provider once and report exactly what happened (for the connection check)."""
+    last = _ai_tests.get(profile["id"], 0.0)
+    if datetime.now().timestamp() - last < 20:
+        err(429, "ai_test_wait", "Wait a few seconds before testing again.")
+    _ai_tests[profile["id"]] = datetime.now().timestamp()
+    return {"providers": ai_test_all(gemini=_gemini, anthropic=_anthropic)}
 
 
 # ---------- backtests and notebooks ----------

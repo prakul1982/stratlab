@@ -157,8 +157,8 @@ class OpenAIStyle:
             try:
                 with self._client() as c:
                     r = c.post("/chat/completions", json=body)
-                    if r.status_code == 400 and "response_format" in r.text:
-                        body.pop("response_format")   # some models don't support JSON mode
+                    if r.status_code == 400 and ("response_format" in r.text or "json" in r.text.lower()):
+                        body.pop("response_format")   # JSON mode unsupported, or the model's JSON failed validation
                         r = c.post("/chat/completions", json=body)
             except httpx.HTTPError as e:
                 raise AIBusy(f"{LABELS[self.name]} couldn't be reached ({e.__class__.__name__}).") from None
@@ -167,6 +167,9 @@ class OpenAIStyle:
             if r.status_code in (404, 400, 422):
                 last = AIConfig(f"{LABELS[self.name]} couldn't use model {model} ({r.status_code}).")
                 continue
+            if r.status_code == 429 and self.name == "openrouter":
+                last = AIBusy(f"{LABELS[self.name]} model {model} is rate limited (429).")
+                continue   # free models there have their own limits: try the next one
             if r.status_code == 429 or r.status_code >= 500:
                 raise AIBusy(f"{LABELS[self.name]} is busy or out of free quota ({r.status_code}).")
             try:
@@ -186,31 +189,51 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
         raise AIConfig("No AI provider is set up on the server. Add a free key such as GROQ_API_KEY or GEMINI_API_KEY.")
     errors = []
     for name in names:
-        st = status(name)
-        if st.cooldown_until > time.time():
+        if status(name).cooldown_until > time.time():
             errors.append(f"{LABELS[name]}: cooling down after a rate limit")
             continue
-        try:
-            if name in OPENAI_STYLE:
-                raw = OpenAIStyle(name, transport).complete(system, text)
-            elif name == "gemini":
-                raw = gemini(system, text)
-            else:
-                raw = anthropic(system, text)
-            extract_json(raw)  # a reply we can't read counts as a failure: try the next provider
-        except AIError as e:
-            st.last_error = str(e)
-            if isinstance(e, AIBusy):
-                st.cooldown_until = time.time() + 60
-            errors.append(f"{LABELS[name]}: {e}")
-            continue
-        except Exception as e:  # a provider bug must not break the chain
-            st.last_error = f"Unexpected error: {e.__class__.__name__}"
-            errors.append(f"{LABELS[name]}: {st.last_error}")
-            continue
-        st.last_ok, st.last_error = time.time(), None
-        return raw
+        raw, error = _try(name, system, text, gemini, anthropic, transport)
+        if error is None:
+            return raw
+        errors.append(f"{LABELS[name]}: {error}")
     raise AIBusy("None of the AI providers could answer. " + " · ".join(errors))
+
+
+def _try(name, system, text, gemini, anthropic, transport) -> tuple[str | None, str | None]:
+    """One provider, one request. Returns (reply, None) or (None, error) and records the outcome."""
+    st = status(name)
+    try:
+        if name in OPENAI_STYLE:
+            raw = OpenAIStyle(name, transport).complete(system, text)
+        elif name == "gemini":
+            raw = gemini(system, text)
+        else:
+            raw = anthropic(system, text)
+        extract_json(raw)  # a reply we can't read counts as a failure: try the next provider
+    except AIError as e:
+        st.last_error = str(e)
+        if isinstance(e, AIBusy):
+            st.cooldown_until = time.time() + 60
+        return None, st.last_error
+    except Exception as e:  # a provider bug must not break the chain
+        st.last_error = f"Unexpected error: {e.__class__.__name__}"
+        return None, st.last_error
+    st.last_ok, st.last_error, st.cooldown_until = time.time(), None, 0.0
+    return raw, None
+
+
+TEST_SYSTEM = 'Reply with ONLY this JSON object and nothing else: {"ok": true}'
+
+
+def test_all(gemini=None, anthropic=None, transport=None) -> list[dict]:
+    """Send a tiny request to every provider that has a key, ignoring cooldowns, and report each result."""
+    out = []
+    for name in order():
+        t0 = time.time()
+        _, error = _try(name, TEST_SYSTEM, "ping", gemini, anthropic, transport)
+        out.append({"name": name, "label": LABELS[name], "ok": error is None, "error": error,
+                    "model": status(name).model if error is None else None, "ms": round((time.time() - t0) * 1000)})
+    return out
 
 
 def health() -> list[dict]:

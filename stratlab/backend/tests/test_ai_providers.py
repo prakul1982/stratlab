@@ -106,3 +106,64 @@ def test_health_lists_every_provider(monkeypatch):
     monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
     h = {p["name"]: p for p in P.health()}
     assert h["groq"]["configured"] and h["groq"]["in_use"] and not h["gemini"]["configured"]
+
+
+def test_test_all_reports_every_provider(monkeypatch):
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "g")
+
+    def gemini(system, text):
+        raise P.AIConfig("Google rejected GEMINI_API_KEY.")
+    out = P.test_all(gemini=gemini, transport=fake(["llama-3.3-70b-versatile"], reply='{"ok": true}'))
+    assert [(r["name"], r["ok"]) for r in out] == [("groq", True), ("gemini", False)]
+    assert out[0]["model"] == "llama-3.3-70b-versatile"
+    assert out[1]["error"] == "Google rejected GEMINI_API_KEY."
+
+
+def test_test_all_ignores_cooldown(monkeypatch):
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
+    P.status("groq").cooldown_until = 1e12
+    out = P.test_all(transport=fake(["llama-3.3-70b-versatile"], reply='{"ok": true}'))
+    assert out[0]["ok"] and P.status("groq").cooldown_until == 0
+
+
+def test_json_validation_failure_retries_without_json_mode(monkeypatch):
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
+    calls = []
+
+    def handler(req):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "llama-3.3-70b-versatile"}]})
+        body = json.loads(req.content)
+        calls.append("response_format" in body)
+        if "response_format" in body:
+            return httpx.Response(400, json={"error": {"code": "json_validate_failed", "message": "Failed to generate JSON"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}}]})
+    assert json.loads(P.complete("s", "t", transport=httpx.MockTransport(handler)))["entry"]
+    assert calls == [True, False]
+
+
+def test_openrouter_rate_limit_tries_next_free_model(monkeypatch):
+    monkeypatch.setattr(settings, "OPENROUTER_API_KEY", "o")
+    tried = []
+
+    def handler(req):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "a/one:free"}, {"id": "b/two:free"}]})
+        model = json.loads(req.content)["model"]
+        tried.append(model)
+        if model == "a/one:free":
+            return httpx.Response(429, json={"error": "rate limited"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}}]})
+    P.complete("s", "t", transport=httpx.MockTransport(handler))
+    assert tried == ["a/one:free", "b/two:free"]
+
+
+def test_env_forgives_pasting_mistakes(monkeypatch):
+    from app.config import _env
+    monkeypatch.setenv("X_KEY", ' "gsk_abc" ')
+    assert _env("X_KEY") == "gsk_abc"
+    monkeypatch.setenv("X_KEY", "X_KEY=gsk_abc")
+    assert _env("X_KEY") == "gsk_abc"
+    monkeypatch.setenv("X_KEY", "gsk_abc")
+    assert _env("X_KEY") == "gsk_abc"
