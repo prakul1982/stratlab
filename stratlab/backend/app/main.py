@@ -1,6 +1,8 @@
 """StratLab API."""
 import json
 import math
+import secrets
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
@@ -16,6 +18,7 @@ from .alerts import notify
 from .auth import current_profile
 from .config import settings
 from .engine.core import backtest
+from .kite_auto import AutoLogin, AutoLoginError, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub, INTERVALS
 from .live import LimitError, LiveManager, describe, needs_pro
 from .models import (AIReq, AlertsReq, BacktestReq, LiveStartReq, SaveStrategyReq, Strategy,
@@ -25,6 +28,21 @@ from .plans import PLANS, trial_state
 kite = KiteService()
 hub = TickHub(kite)
 manager = LiveManager(kite, hub)
+
+
+def after_login() -> str:
+    """Bring market data and live sessions online with the new Kite token."""
+    if hub.started:
+        if settings.KITE_RESTART_AFTER_LOGIN:
+            manager.persist(only_dirty=False)
+            restart_process()
+            return "Kite login saved. The server is restarting to reconnect the live feed; it's back in about a minute."
+        return "Kite login saved. The live feed was already running on yesterday's token: restart the server now."
+    manager.resume()
+    return "Kite login saved. Market data and live sessions are online."
+
+
+auto_login = AutoLogin(kite, after_login)
 
 MAX_DAYS = {"1d": 3650, "1h": 730, "15m": 365, "5m": 120}
 
@@ -38,11 +56,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print("startup: Kite not ready:", e)
     manager.start_loop()
+    auto_login.start()
     yield
 
 
 app = FastAPI(title="StratLab API", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=[settings.FRONTEND_ORIGIN],
+app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"])
 
 
@@ -79,6 +98,14 @@ def backtests_used(profile) -> int:
 
 def is_pro(profile) -> bool:
     return PLANS[profile["_plan"]]["pro_features"]
+
+
+def check_id(sid: str) -> str:
+    """Saved strategy and session ids are UUIDs; anything else would make Postgres error out."""
+    try:
+        return str(uuid.UUID(sid))
+    except ValueError:
+        err(404, "not_found", "Not found.")
 
 
 def get_instrument(token: int) -> dict:
@@ -171,6 +198,11 @@ def instrument_search(q: str = Query(..., min_length=2, max_length=40), profile=
     return kite.search(q, allow_fno=is_pro(profile))
 
 
+@app.get("/instruments/{token}")
+def instrument_info(token: int, profile=Depends(current_profile)):
+    return get_instrument(token)
+
+
 @app.get("/instruments/{token}/ltp")
 def instrument_ltp(token: int, profile=Depends(current_profile)):
     return {"token": token, "ltp": kite.ltp(token)}
@@ -189,6 +221,7 @@ def create_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
 
 @app.put("/strategies/{sid}")
 def update_strategy(sid: str, req: SaveStrategyReq, profile=Depends(current_profile)):
+    sid = check_id(sid)
     row = db.save_strategy(profile["id"], req.strategy.name, req.strategy.model_dump(), req.instrument_token, sid)
     if not row:
         err(404, "not_found", "Strategy not found.")
@@ -197,6 +230,7 @@ def update_strategy(sid: str, req: SaveStrategyReq, profile=Depends(current_prof
 
 @app.delete("/strategies/{sid}")
 def remove_strategy(sid: str, profile=Depends(current_profile)):
+    sid = check_id(sid)
     db.delete_strategy(profile["id"], sid)
     return {"deleted": True}
 
@@ -270,18 +304,24 @@ def start_live(req: LiveStartReq, profile=Depends(current_profile)):
     check_features(profile, s, inst)
     if not kite.ready():
         raise KiteNotReady("Market data is offline. The admin needs to complete today's Kite login.")
+    start_trial = False
     if profile["_plan"] == "free":
         t = trial_state(profile)
         if t["started"] and not t["active"]:
             upgrade("Your 24-hour live trial has ended. Upgrade to Basic or Pro to keep paper trading.", "trial_ended")
-        if not t["started"]:
+        start_trial = not t["started"]
+        if start_trial:
             db.update_profile(profile["id"], live_trial_started_at=db.now_iso())
     try:
         sess = manager.start(profile, profile["_plan"], s, inst)
-    except LimitError as e:
-        upgrade(str(e), "live_limit")
-    except ValueError as e:
-        err(400, "cannot_start", str(e))
+    except Exception as e:
+        if start_trial:  # the session never ran, so don't use up the free trial
+            db.update_profile(profile["id"], live_trial_started_at=None)
+        if isinstance(e, LimitError):
+            upgrade(str(e), "live_limit")
+        if isinstance(e, ValueError):
+            err(400, "cannot_start", str(e))
+        raise
     return ok(sess.snapshot())
 
 
@@ -297,6 +337,7 @@ def list_live(profile=Depends(current_profile)):
 
 @app.get("/live/sessions/{sid}")
 def get_live(sid: str, profile=Depends(current_profile)):
+    sid = check_id(sid)
     s = manager.sessions.get(sid)
     if s and s.user_id == profile["id"]:
         snap = s.snapshot()
@@ -320,6 +361,7 @@ def get_live(sid: str, profile=Depends(current_profile)):
 
 @app.post("/live/sessions/{sid}/stop")
 def stop_live(sid: str, profile=Depends(current_profile)):
+    sid = check_id(sid)
     s = manager.sessions.get(sid)
     if s and s.user_id == profile["id"]:
         manager.stop(sid, "Stopped by you.")
@@ -335,7 +377,10 @@ def stop_live(sid: str, profile=Depends(current_profile)):
 def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
     if profile["_plan"] == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
-    return billing.create_subscription(profile, req.plan)
+    try:
+        return billing.create_subscription(profile, req.plan)
+    except ValueError as e:
+        err(503, "billing_offline", str(e))
 
 
 @app.post("/billing/verify")
@@ -363,12 +408,14 @@ async def webhook(request: Request):
         billing.handle_webhook(body, request.headers.get("X-Razorpay-Signature", ""))
     except SignatureVerificationError:
         raise HTTPException(400, "bad signature")
+    except ValueError:  # malformed JSON
+        raise HTTPException(400, "bad payload")
     return {"ok": True}
 
 
 # ---------- admin: daily Kite login ----------
 def _admin(key: str):
-    if not settings.ADMIN_KEY or key != settings.ADMIN_KEY:
+    if not settings.ADMIN_KEY or not secrets.compare_digest(key.encode(), settings.ADMIN_KEY.encode()):
         raise HTTPException(403, "Forbidden")
 
 
@@ -386,16 +433,25 @@ def kite_callback(request_token: str = "", status: str = "", state: str = ""):
         kite.complete_login(request_token, state)
     except PermissionError as e:
         return HTMLResponse(f"<p>{e}</p>", status_code=403)
-    if hub.started:
-        msg = "Kite login saved. The live feed was already running on yesterday's token: restart the server now."
-    else:
-        manager.resume()
-        msg = "Kite login saved. Market data and live sessions are online."
-    return HTMLResponse(f"<p>{msg}</p>")
+    return HTMLResponse(f"<p>{after_login()}</p>")
+
+
+@app.post("/admin/kite/auto-login")
+def kite_auto_login(key: str = ""):
+    """Run the automatic login now, e.g. to test the credentials after setting them."""
+    _admin(key)
+    try:
+        auto_login.run_once()
+    except AutoLoginError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"Kite login failed: {e}")
+    return auto_login.last
 
 
 @app.get("/admin/status")
 def admin_status(key: str = ""):
     _admin(key)
     return {"kite_ready": kite.ready(), "feed_started": hub.started, "feed_connected": hub.connected,
-            "live_sessions": len(manager.sessions), "subscribed_tokens": len(hub.listeners)}
+            "live_sessions": len(manager.sessions), "subscribed_tokens": len(hub.listeners),
+            "auto_login": auto_login.last}

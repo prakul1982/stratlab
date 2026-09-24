@@ -224,7 +224,9 @@ class LiveManager:
         if not s:
             return
         self.hub.remove(sid)
-        db.update_session(sid, status="stopped", stopped_at=db.now_iso(), stop_reason=reason, state=s.state())
+        with s.lock:
+            st = s.state()
+        db.update_session(sid, status="stopped", stopped_at=db.now_iso(), stop_reason=reason, state=st)
 
     # ---------- orders and alerts ----------
     def on_order(self, s: LiveSession, ev: dict):
@@ -248,30 +250,46 @@ class LiveManager:
 
     # ---------- background loop ----------
     def _loop(self):
-        last_persist = last_plan = 0.0
+        self._last_persist = self._last_plan = 0.0
         while True:
             time.sleep(5)
-            now = datetime.now(IST)
+            try:
+                self._tick()
+            except Exception as e:  # never let one bad pass kill the loop
+                print("live loop error:", e)
+
+    def _tick(self):
+        now = datetime.now(IST)
+        with self._lock:
+            sessions = list(self.sessions.values())
+        for s in sessions:
+            try:
+                s.on_timer(now)
+            except Exception as e:
+                print("timer error:", e)
+        t = time.time()
+        if t - self._last_persist > 30:
+            self._last_persist = t
+            self.persist(sessions)
+        if t - self._last_plan > 60:
+            self._last_plan = t
+            self._enforce_plans(sessions)
+
+    def persist(self, sessions: list[LiveSession] | None = None, only_dirty: bool = True):
+        if sessions is None:
             with self._lock:
                 sessions = list(self.sessions.values())
-            for s in sessions:
-                try:
-                    s.on_timer(now)
-                except Exception as e:
-                    print("timer error:", e)
-            t = time.time()
-            if t - last_persist > 30:
-                last_persist = t
-                for s in sessions:
-                    if s.dirty:
-                        s.dirty = False
-                        try:
-                            db.update_session(s.id, state=s.state())
-                        except Exception as e:
-                            print("persist failed:", e)
-            if t - last_plan > 60:
-                last_plan = t
-                self._enforce_plans(sessions)
+        for s in sessions:
+            if only_dirty and not s.dirty:
+                continue
+            s.dirty = False
+            try:
+                with s.lock:
+                    st = s.state()
+                db.update_session(s.id, state=st)
+            except Exception as e:
+                s.dirty = True  # try again next time
+                print("persist failed:", e)
 
     def _enforce_plans(self, sessions: list[LiveSession]):
         by_user: dict[str, list[LiveSession]] = {}

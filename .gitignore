@@ -8,3 +8,4 @@ venv/
 .vscode/
 .idea/
 .netlify/
+.pytest_cache/

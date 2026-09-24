@@ -1302,9 +1302,10 @@ $("savedSel").onchange = async e => {
   const row = (state.saved || []).find(r => r.id === e.target.value); if(!row) return;
   S = JSON.parse(JSON.stringify(row.body)); state.strategyId = row.id;
   if(row.instrument_token && (!state.instrument || state.instrument.token !== row.instrument_token)){
-    const found = state.defaults.find(i => i.token === row.instrument_token);
+    let found = state.defaults.find(i => i.token === row.instrument_token);
+    if(!found){ try { found = await api(`/instruments/${row.instrument_token}`); } catch(e){} }
     if(found) selectInstrument(found);
-    else toast("Saved instrument isn't in the quick list. Search for it again if needed.");
+    else toast("The saved instrument couldn't be found, possibly an expired contract. Search for it again.");
   }
   fillForm(); renderBuild();
 };
