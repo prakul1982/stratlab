@@ -2,6 +2,9 @@
 
 ## September 2026
 
+### Admin page
+- An **Admin** page for the site owner (set by `ADMIN_EMAILS`): server and Kite status, Kite login button, live AI test, user list with usage, plan grants by hand, and running paper sessions with a Stop button.
+
 ### AI builder you can diagnose
 - **Account → Connection check** now tests every AI provider live and shows exactly what's wrong with any that fail.
 - Keys pasted with quotes or a `NAME=` prefix still work.

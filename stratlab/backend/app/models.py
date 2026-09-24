@@ -114,6 +114,11 @@ class SaveStrategyReq(BaseModel):
     instrument: Optional[str] = Field(None, max_length=60)
 
 
+class AdminPlanReq(BaseModel):
+    plan: Literal["free", "basic", "pro"]
+    days: int | None = Field(None, ge=1, le=3650)   # None = no end date
+
+
 class AIReq(BaseModel):
     text: str = Field(..., min_length=5, max_length=2000)
 

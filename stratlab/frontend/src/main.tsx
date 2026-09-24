@@ -23,6 +23,7 @@ import { MarketPage } from "./pages/MarketPage";
 import { PaperPage } from "./pages/PaperPage";
 import { PlansPage } from "./pages/PlansPage";
 import { AccountPage } from "./pages/AccountPage";
+import { AdminPage } from "./pages/AdminPage";
 
 function Routed() {
   const { session, ready, dataOffline, meError } = useApp();
@@ -47,6 +48,7 @@ function Routed() {
         <Route path="/paper/:sid" element={<PaperPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

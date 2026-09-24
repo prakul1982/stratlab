@@ -1,5 +1,6 @@
 """StratLab API."""
 import json
+import logging
 import math
 import secrets
 import traceback
@@ -13,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from kiteconnect import exceptions as kite_exc
 from razorpay.errors import SignatureVerificationError
 
-from . import billing, db
+from . import admin, billing, db
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
 from .alerts import notify
@@ -21,10 +22,10 @@ from .auth import current_profile
 from .config import settings
 from . import research
 from .data import DataError, Registry
-from .kite_auto import AutoLogin, AutoLoginError, restart_process
+from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
-from .models import (AIReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import PLANS, trial_state
 
@@ -64,6 +65,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
+log = logging.getLogger("stratlab")
 app = FastAPI(title="StratLab API", lifespan=lifespan)
 
 
@@ -193,6 +195,7 @@ def me(profile=Depends(current_profile)):
                    "email": profile.get("alert_email")},
         "data_online": kite.ready(),
         "billing_enabled": billing.enabled(),
+        "is_admin": admin.is_admin(profile),
     })
 
 
@@ -624,6 +627,73 @@ def kite_auto_login(key: str = ""):
 @app.get("/admin/status")
 def admin_status(key: str = ""):
     _admin(key)
-    return {"kite_ready": kite.ready(), "feed_started": hub.started, "feed_connected": hub.connected,
-            "live_sessions": len(manager.sessions), "subscribed_tokens": len(hub.listeners),
-            "auto_login": auto_login.last}
+    return server_status()
+
+
+def server_status() -> dict:
+    return {"kite_ready": kite.ready(), "kite_token_day": kite.token_day, "feed_started": hub.started,
+            "feed_connected": hub.connected, "live_sessions": len(manager.sessions),
+            "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
+            "auto_login_configured": auto_login_configured(),
+            "billing_enabled": billing.enabled(), "ai": ai_health()}
+
+
+# ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
+@app.get("/admin/overview")
+def admin_overview(_=Depends(admin.admin_profile)):
+    return {"server": server_status(), "stats": admin.stats(month_start_iso())}
+
+
+@app.get("/admin/users")
+def admin_users(q: str = "", _=Depends(admin.admin_profile)):
+    return admin.users(q, month_start_iso())
+
+
+@app.post("/admin/users/{user_id}/plan")
+def admin_set_plan(user_id: str, req: AdminPlanReq, who=Depends(admin.admin_profile)):
+    row = admin.set_plan(user_id, req.plan, req.days)
+    log.info("admin %s set %s to %s (%s days)", who.get("email"), row.get("email"), req.plan, req.days)
+    return {"ok": True}
+
+
+@app.get("/admin/sessions")
+def admin_sessions(_=Depends(admin.admin_profile)):
+    emails = {}
+    out = []
+    for s in list(manager.sessions.values()):
+        if s.user_id not in emails:
+            emails[s.user_id] = db.get_profile(s.user_id).get("email")
+        account = s.snapshot().get("account") or {}
+        out.append({"id": s.id, "name": s.name, "email": emails[s.user_id], "symbol": s.inst.get("symbol"),
+                    "market": s.market, "started_at": s.started_at, "capital": account.get("capital"),
+                    "equity": account.get("equity"), "trades": account.get("trades")})
+    return out
+
+
+@app.post("/admin/sessions/{sid}/stop")
+def admin_stop_session(sid: str, _=Depends(admin.admin_profile)):
+    if sid not in manager.sessions:
+        err(404, "not_found", "That session isn't running.")
+    manager.stop(sid, "Stopped by the site owner.")
+    return {"ok": True}
+
+
+@app.post("/admin/ai/test")
+def admin_ai_test(_=Depends(admin.admin_profile)):
+    return {"providers": ai_test_all(gemini=_gemini, anthropic=_anthropic)}
+
+
+@app.post("/admin/kite/login-url")
+def admin_kite_login_url(_=Depends(admin.admin_profile)):
+    return {"url": kite.login_url()}
+
+
+@app.post("/admin/kite/auto-login-now")
+def admin_kite_auto_login(_=Depends(admin.admin_profile)):
+    try:
+        auto_login.run_once()
+    except AutoLoginError as e:
+        err(400, "auto_login_failed", str(e))
+    except Exception as e:
+        err(502, "auto_login_failed", f"Kite login failed: {e}")
+    return auto_login.last
