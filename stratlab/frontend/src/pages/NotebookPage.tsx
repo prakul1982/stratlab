@@ -7,6 +7,7 @@ import { riskForCurrency, usesPro } from "../lib/rules";
 import type { Experiment, Instrument, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
 import { GapsCard, type GapInfo } from "../components/Gaps";
+import { Download, Pulse, Sparkle, Trash } from "../components/Icons";
 import { RulesCard } from "../components/Rules";
 import { AutoGrow, Info, Loading, Modal, VerdictBadge } from "../components/ui";
 import { HELP } from "../lib/help";
@@ -172,6 +173,7 @@ export function NotebookPage() {
     else if (action === "other_instrument") nav(`/n/${nb.id}/market`);
     else if (action === "paper_trade") paperTrade();
     else if (action === "note") notesRef.current?.focus();
+    else if (action === "edit_rules") document.getElementById("rules-h")?.scrollIntoView({ behavior: "smooth", block: "start" });
     else if (action === "loosen_entry") setStrategy({ ...s, entry: s.entry.map((c) => ({ ...c, op: c.op === "xa" ? "gt" : c.op === "xb" ? "lt" : c.op })) });
     else if (action === "trend_filter") setStrategy({ ...s, entryJoin: "all", entry: [...s.entry, { l: { t: "price" }, op: "gt", r: { t: "sma", p: 200 } }] });
     if (["loosen_entry", "trend_filter", "longer_period"].includes(action)) notify("Rules updated. Run the next experiment to compare.");
@@ -195,18 +197,22 @@ export function NotebookPage() {
           </div>
           <AutoGrow className="question" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
             placeholder="What are you trying to find out?" onChange={(e) => patch({ question: e.target.value })} />
-          <div className="row wrap" style={{ gap: 8 }}>
-            {inst ? (
-              <>
-                <span className="pill">{inst.symbol}{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}</span>
-                {currency && <span className="pill">{currency}</span>}
-                <span className="pill">{TF_NAME[s.tf]} candles</span>
-                <Link to={`/n/${nb.id}/market`} className="link">Change market</Link>
-                <Info>{HELP.market}</Info>
-              </>
-            ) : (
-              <Link to={`/n/${nb.id}/market`} className="btn blue sm">Pick what to test it on</Link>
-            )}
+          <div className="row" style={{ gap: 10 }}>
+            <Link to={`/n/${nb.id}/market`} className={`market-btn${inst ? "" : " empty"}`} aria-label={inst ? `Testing on ${inst.symbol}. Change market or instrument` : "Pick what to test it on"}>
+              <span className="eyebrow" style={{ fontSize: 11 }}>{inst ? "Testing on" : "Not chosen yet"}</span>
+              <span className="market-btn-main">
+                {inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
+                  : "Pick a market and instrument"}
+              </span>
+              <span className="market-btn-cta">{inst ? "Change market" : "Choose"} →</span>
+            </Link>
+            <Info>{HELP.market}</Info>
+          </div>
+          <div className="toolbar" role="toolbar" aria-label="Notebook actions">
+            <button className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
+            <button className="btn quiet sm" onClick={paperTrade} disabled={!inst || isUpload}><Pulse size={17} />Paper trade</button>
+            <button className="btn quiet sm" onClick={exportStrategy}><Download size={17} />Export{isPro ? "" : " (Pro)"}</button>
+            <button className="btn quiet sm danger" onClick={del}><Trash size={17} />Delete</button>
           </div>
         </div>
 
@@ -235,7 +241,6 @@ export function NotebookPage() {
         <section className="stack" aria-labelledby="exp-h" style={{ gap: 16 }}>
           <div className="spread" style={{ flexWrap: "wrap" }}>
             <h2 id="exp-h" className="h2 row" style={{ gap: 0 }}>Experiments<Info>{HELP.experiments}</Info></h2>
-            <button className="link" onClick={() => setRewrite(true)}>Describe the idea again</button>
           </div>
           <div className="card stack" style={{ gap: 18 }}>
             {!isUpload && (
@@ -289,11 +294,6 @@ export function NotebookPage() {
               "Try these rules on live prices with fake money. Best once a verdict says the edge looks real."}
           </p>
           <button className="btn outline sm" onClick={paperTrade} disabled={!inst || isUpload}>Paper trade these rules</button>
-        </section>
-        <section className="card stack" style={{ gap: 10 }}>
-          <h2 className="h3">More</h2>
-          <button className="btn quiet sm" style={{ justifyContent: "flex-start" }} onClick={exportStrategy}>Export rules as a file{isPro ? "" : " (Pro)"}</button>
-          <button className="btn danger sm" style={{ justifyContent: "flex-start" }} onClick={del}>Delete this notebook</button>
         </section>
       </aside>
 

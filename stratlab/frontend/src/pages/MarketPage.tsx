@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { riskForCurrency } from "../lib/rules";
 import type { Instrument, Market } from "../lib/types";
 import { parseCsv, saveUpload, type Candle } from "../lib/upload";
-import { Search } from "../components/Icons";
+import { InstrumentSearch } from "../components/InstrumentSearch";
 import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
@@ -33,36 +32,21 @@ const STATUS: Record<Market["status"], string> = { live: "Live", offline: "Offli
 export function MarketPage() {
   const { id } = useParams();
   const nav = useNavigate();
-  const { markets, fail, notify } = useApp();
+  const { markets, notify } = useApp();
   const { nb, patch, flush } = useNotebook(id);
   const [sel, setSel] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<Instrument[] | null>(null);
-  const [defaults, setDefaults] = useState<Instrument[]>([]);
   const [upload, setUpload] = useState<{ bars: Candle[]; skipped: number; file: string } | null>(null);
   const [upName, setUpName] = useState("");
   const [upCur, setUpCur] = useState("USD");
   const [upStep, setUpStep] = useState(1);
-  const timer = useRef<number>();
+  const loc = useLocation();
 
   useEffect(() => {
     if (!nb || sel) return;
+    const asked = (loc.state as { market?: string } | null)?.market;
     const current = nb.instrument && "market" in nb.instrument ? nb.instrument.market : null;
-    setSel(current || markets.find((m) => m.status === "live" && m.id !== "CSV")?.id || "CRYPTO");
-  }, [nb, markets, sel]);
-
-  useEffect(() => {
-    api<Instrument[]>("/instruments/defaults").then(setDefaults).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    window.clearTimeout(timer.current);
-    if (q.trim().length < 2 || !sel) { setResults(null); return; }
-    timer.current = window.setTimeout(async () => {
-      try { setResults(await api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(q.trim())}&market=${sel}`)); }
-      catch (e) { fail(e); }
-    }, 250);
-  }, [q, sel, fail]);
+    setSel(asked || current || markets.find((m) => m.status === "live" && m.id !== "CSV")?.id || "CRYPTO");
+  }, [nb, markets, sel, loc.state]);
 
   if (!nb) return <Loading label="Opening markets" />;
   const market = markets.find((m) => m.id === sel);
@@ -91,8 +75,6 @@ export function MarketPage() {
     nav(`/n/${nb.id}`);
   };
 
-  const shownDefaults = defaults.filter((d) => d.market === sel);
-
   return (
     <div className="stack" style={{ gap: 26 }}>
       <div className="stack" style={{ gap: 8 }}>
@@ -103,7 +85,7 @@ export function MarketPage() {
 
       <div className="grid4" role="radiogroup" aria-label="Market">
         {markets.map((m) => (
-          <button key={m.id} role="radio" aria-checked={sel === m.id} className="card" onClick={() => { setSel(m.id); setQ(""); }}
+          <button key={m.id} role="radio" aria-checked={sel === m.id} className="card" onClick={() => setSel(m.id)}
             style={{ textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", gap: 12, minHeight: 210,
               border: sel === m.id ? "2px solid var(--ink)" : undefined, opacity: m.status === "soon" ? 0.72 : 1 }}>
             <div className="spread" style={{ alignItems: "flex-start" }}>
@@ -128,33 +110,7 @@ export function MarketPage() {
         <div className="banner">Market data for {market.name} is offline right now. It usually comes back after the daily data login; try again in a few minutes.</div>
       )}
 
-      {market && market.status === "live" && market.id !== "CSV" && (
-        <div className="stack" style={{ gap: 14 }}>
-          <label style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, minHeight: 58, padding: "0 18px", background: "var(--card)", border: "1.5px solid var(--ink)", borderRadius: 14 }}>
-            <Search />
-            <span className="sr-only">Search {market.name}</span>
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={market.id === "IN" ? "Search any NSE stock, index or F&O contract: RELIANCE, NIFTY 50…" : "Search any coin: BTC, ETH, SOL…"}
-              style={{ flex: 1, border: 0, background: "transparent", fontSize: 18, outline: "none", minWidth: 0 }} />
-            {results && (
-              <div className="results">
-                {results.length === 0 && <p className="small muted" style={{ padding: 14 }}>No matches in {market.name}.</p>}
-                {results.map((r) => (
-                  <button key={r.id} onClick={() => choose(r)}>
-                    <span><b>{r.symbol}</b> <span className="small muted">{r.name !== r.symbol ? r.name : ""}</span></span>
-                    <span className="small muted">{r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </label>
-          {shownDefaults.length > 0 && (
-            <div className="row wrap" style={{ gap: 8 }}>
-              <span className="small muted">Popular:</span>
-              {shownDefaults.map((d) => <button key={d.id} className="btn quiet sm" onClick={() => choose(d)}>{d.symbol}</button>)}
-            </div>
-          )}
-        </div>
-      )}
+      {market && market.status === "live" && market.id !== "CSV" && <InstrumentSearch market={market} onPick={choose} autoFocus />}
 
       {market?.id === "CSV" && (
         <div className="card stack" style={{ gap: 14 }}>

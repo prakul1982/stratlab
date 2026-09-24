@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import type { Market } from "../lib/types";
-import { Book, Flask, Menu, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
+import { Book, Compass, Flask, Menu, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
+import { Tour, tourSeen } from "./Tour";
 import { VerdictBadge } from "./ui";
 
 function marketNow(m: Market): string {
@@ -19,6 +20,8 @@ function marketNow(m: Market): string {
 export function Shell({ children }: { children: ReactNode }) {
   const { notebooks, markets, theme, setTheme, me } = useApp();
   const [open, setOpen] = useState(false);
+  const [tour, setTour] = useState(false);
+  useEffect(() => { if (!tourSeen()) setTour(true); }, []);
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
@@ -49,6 +52,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <NavLink to="/plans"><Star />Plans</NavLink>
         <NavLink to="/account"><User />Account{me && <span className="badge skip" style={{ marginLeft: "auto" }}>{me.plan_info.name}</span>}</NavLink>
         <NavLink to="/" end><Book />All notebooks</NavLink>
+        <button className="tour-link" onClick={() => { setOpen(false); setTour(true); }}><Compass />What can I do here?</button>
       </nav>
       <div className="stack small muted" style={{ marginTop: "auto", gap: 8 }}>
         {live.length > 0 && <div className="eyebrow">Markets now</div>}
@@ -78,6 +82,7 @@ export function Shell({ children }: { children: ReactNode }) {
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
       <main className="main"><div className="page">{children}</div></main>
+      {tour && <Tour onClose={() => setTour(false)} />}
     </div>
   );
 }

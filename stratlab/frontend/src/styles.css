@@ -256,3 +256,37 @@ td.num, .num { font-family: var(--mono); }
 .how li { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 12px; background: var(--paper-2); border: 1px solid var(--line); }
 .how span { font-size: 14px; color: var(--muted); line-height: 1.45; }
 @media (max-width: 760px) { .how { grid-template-columns: minmax(0, 1fr); } }
+
+.search-box { position: relative; display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 18px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 14px; }
+.search-box input { flex: 1; border: 0; background: transparent; font-size: 17px; outline: none; min-width: 0; }
+
+/* ---------- notebook header: market button and toolbar ---------- */
+.market-btn {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label cta" "main cta"; column-gap: 18px; row-gap: 2px;
+  align-items: center; min-height: 64px; padding: 10px 18px; border-radius: 14px; background: var(--card); border: 1.5px solid var(--ink);
+  color: var(--ink); text-decoration: none; max-width: 100%; min-width: 0; flex: 0 1 auto;
+}
+.market-btn:hover { color: var(--ink); background: var(--paper-2); }
+.market-btn .eyebrow { grid-area: label; }
+.market-btn-main { grid-area: main; font-weight: 600; font-size: 17px; overflow: hidden; text-overflow: ellipsis; }
+.market-btn-main .muted { font-weight: 400; }
+.market-btn-cta { grid-area: cta; font-weight: 600; color: var(--blue); white-space: nowrap; }
+.market-btn.empty { border-style: dashed; border-color: var(--blue); }
+@media (max-width: 640px) { .market-btn { grid-template-areas: "label" "main" "cta"; grid-template-columns: minmax(0, 1fr); } .market-btn-main { white-space: normal; } }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.toolbar .btn.danger { color: var(--orange-ink); }
+/* rule words look editable */
+.token::after { content: "▾"; font-size: .7em; margin-left: 5px; opacity: .6; }
+.edit-hint svg { flex: none; }
+.edit-hint { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--blue-soft); color: var(--blue-ink); font-size: 14px; font-weight: 500; }
+
+/* ---------- feature tour ---------- */
+.tour { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 20px; align-items: start; min-height: 230px; }
+.tour-icon { width: 72px; height: 72px; border-radius: 18px; display: grid; place-items: center; background: var(--blue-soft); color: var(--blue-ink); }
+.tour-where { padding: 10px 14px; border-radius: 10px; background: var(--paper-2); border: 1px solid var(--line); font-size: 15px; }
+.tour-dots { display: flex; gap: 6px; justify-content: center; margin-top: 18px; }
+.tour-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1.5px solid var(--muted); background: transparent; cursor: pointer; }
+.tour-dots button[aria-selected="true"] { background: var(--ink); border-color: var(--ink); width: 22px; border-radius: 6px; }
+@media (max-width: 560px) { .tour { grid-template-columns: minmax(0, 1fr); } .tour-icon { width: 56px; height: 56px; } }
+.tour-link { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 6px; padding: 9px 12px; border-radius: 10px; border: 1.5px dashed var(--blue); background: var(--blue-soft); color: var(--blue-ink); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+.tour-link:hover { background: var(--card); }

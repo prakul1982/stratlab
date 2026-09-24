@@ -1,0 +1,71 @@
+import { useState, type ReactNode } from "react";
+import { Compass, Flask, Globe, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
+import { Modal } from "./ui";
+
+const SEEN = "stratlab.tour.v1";
+
+type Step = { icon: ReactNode; title: string; body: string; where: string };
+
+const STEPS: Step[] = [
+  { icon: <Flask size={34} />, title: "Welcome to your trading lab",
+    body: "StratLab tests trading ideas honestly. You describe an idea, we run it on years of real prices after real costs, and tell you if the edge is real or just luck. Here is everything you can do, in about a minute.",
+    where: "Each idea lives in its own notebook, listed in the sidebar (the ☰ menu on phones)." },
+  { icon: <Sparkle size={34} />, title: "Describe ideas in plain English",
+    body: "Type an idea the way you'd tell a friend: \"buy when RSI drops under 30, sell at 5% profit\". The builder turns it into exact rules and asks about anything it had to guess.",
+    where: "New notebook, then \"Describe your idea\". To start over later, use \"Describe the idea again\" at the top of a notebook." },
+  { icon: <Globe size={34} />, title: "Test on any market",
+    body: "The same rules run on Indian stocks, indices and F&O, on crypto, or on any market you have a CSV for. Prices, hours, currency and costs switch to match.",
+    where: "Pick the market first on a new notebook, or press the \"Testing on\" button at the top of any notebook to change it." },
+  { icon: <Pencil size={34} />, title: "Every rule is editable",
+    body: "Highlighted words in the rules (marked ▾) are dropdowns. Tap one to change the indicator, its length, the condition or a number. Stop-loss, target and position size are right below.",
+    where: "The Rules card in any notebook." },
+  { icon: <Compass size={34} />, title: "Run experiments, get an honest verdict",
+    body: "Each run is saved as an experiment. The verdict comes from four checks: does it work on years it never saw, with nearby settings, against shuffled luck, and with enough trades?",
+    where: "Press \"Run experiment\" in a notebook, then open any result. Every number has an (i) button explaining it." },
+  { icon: <Pulse size={34} />, title: "Paper trade what survives",
+    body: "When an idea earns a real verdict, run it live on paper: real prices, fake money, same rules. You get alerts when it would trade.",
+    where: "\"Paper trade\" at the top of a notebook or verdict page. Running sessions are under Paper trading in the sidebar." },
+  { icon: <Share size={34} />, title: "Share, export and keep notes",
+    body: "Save a verdict as an image to post anywhere, export the rules as a file, and jot lab notes so you remember why you changed something.",
+    where: "\"Share verdict\" on a result, \"Export\" and Lab notes in a notebook." },
+  { icon: <User size={34} />, title: "Make it yours",
+    body: "Switch to night mode, see your plan and usage, and run the connection check if prices or the idea builder ever look stuck.",
+    where: "Account and Night mode in the sidebar. You can reopen this tour any time from \"What can I do here?\"." },
+];
+
+export function tourSeen(): boolean {
+  try { return localStorage.getItem(SEEN) === "1"; } catch { return true; }
+}
+
+export function Tour({ onClose }: { onClose: () => void }) {
+  const [i, setI] = useState(0);
+  const step = STEPS[i];
+  const last = i === STEPS.length - 1;
+  const close = () => { try { localStorage.setItem(SEEN, "1"); } catch { /* private window */ } onClose(); };
+  return (
+    <Modal title="What you can do here" onClose={close}>
+      <div className="tour" aria-live="polite">
+        <div className="tour-icon">{step.icon}</div>
+        <div className="stack" style={{ gap: 10 }}>
+          <span className="eyebrow">{i + 1} of {STEPS.length}</span>
+          <h3 className="serif" style={{ fontSize: 28, fontWeight: 400, lineHeight: 1.15 }}>{step.title}</h3>
+          <p style={{ fontSize: 16.5 }}>{step.body}</p>
+          <p className="tour-where"><b>Where:</b> {step.where}</p>
+        </div>
+      </div>
+      <div className="tour-dots" role="tablist" aria-label="Tour steps">
+        {STEPS.map((s, k) => (
+          <button key={s.title} role="tab" tabIndex={-1} aria-selected={k === i} aria-label={`Step ${k + 1}: ${s.title}`} onClick={() => setI(k)} />
+        ))}
+      </div>
+      <div className="spread" style={{ marginTop: 18, flexWrap: "wrap", gap: 10 }}>
+        <button className="link" onClick={close}>{last ? "Close" : "Skip the tour"}</button>
+        <div className="row" style={{ gap: 8 }}>
+          {i > 0 && <button className="btn quiet" onClick={() => setI(i - 1)}>Back</button>}
+          {last ? <button className="btn" onClick={close}>Start testing</button>
+            : <button className="btn" onClick={() => setI(i + 1)}>Next</button>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
