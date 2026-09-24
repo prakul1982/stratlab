@@ -8,7 +8,7 @@ import { LineChart, type Marker } from "../components/Charts";
 import { Empty, Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 
-function SessionView({ sid, onStopped }: { sid: string; onStopped: () => void }) {
+function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
   const { fail, refreshMe } = useApp();
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
 
@@ -41,6 +41,11 @@ function SessionView({ sid, onStopped }: { sid: string; onStopped: () => void })
     try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); }
   };
 
+  const remove = async () => {
+    if (!confirm(`Delete "${snap.name}" and its orders? This can't be undone.`)) return;
+    try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); }
+  };
+
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -50,7 +55,8 @@ function SessionView({ sid, onStopped }: { sid: string; onStopped: () => void })
         </div>
         <div className="row" style={{ gap: 12 }}>
           {running && <span className="row small" style={{ gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: snap.feed_connected && snap.last_tick_at ? "var(--blue)" : "var(--dash)" }} />{feed}<Info>{HELP.feed}</Info></span>}
-          {running ? <button className="btn danger" onClick={stop}>Stop session</button> : <span className={`badge ${snap.status}`}>{snap.status}</span>}
+          {running ? <button className="btn danger" onClick={stop}>Stop session</button>
+            : <><span className={`badge ${snap.status}`}>{snap.status}</span><button className="btn danger sm" onClick={remove}>Delete</button></>}
         </div>
       </div>
       {!running && snap.stop_reason && <div className="banner">Stopped: {snap.stop_reason}</div>}
@@ -122,6 +128,16 @@ export function PaperPage() {
   }, [fail]);
   useEffect(() => { load(); }, [load, sid]);
 
+  const stopped = (rows ?? []).filter((r) => r.status !== "running" && r.status !== "paused");
+  const clearStopped = async () => {
+    if (!confirm(`Delete ${stopped.length} stopped session${stopped.length === 1 ? "" : "s"} and their orders? Running ones stay. This can't be undone.`)) return;
+    try {
+      await api("/live/sessions", { method: "DELETE" });
+      if (sid && stopped.some((r) => r.id === sid)) nav("/paper");
+      await load();
+    } catch (e) { fail(e); }
+  };
+
   let sub = me ? `Your plan runs ${me.live_limit} paper strateg${me.live_limit === 1 ? "y" : "ies"} at a time.` : "";
   if (me?.plan === "free" && me.trial) {
     sub = !me.trial.started ? "Free plan: starting a session begins your 24-hour paper trading trial."
@@ -143,6 +159,13 @@ export function PaperPage() {
           <Link to="/" className="btn">Go to your notebooks</Link>
         </Empty>
       ) : (
+        <>
+        {stopped.length > 1 && (
+          <div className="spread" style={{ marginBottom: -12 }}>
+            <span className="small muted">{rows.length} session{rows.length === 1 ? "" : "s"} · {stopped.length} stopped</span>
+            <button className="btn quiet sm" onClick={clearStopped}>Clear stopped sessions</button>
+          </div>
+        )}
         <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
           {rows.map((r) => (
             <button key={r.id} className="card" onClick={() => nav(`/paper/${r.id}`)} aria-current={r.id === sid}
@@ -154,8 +177,9 @@ export function PaperPage() {
             </button>
           ))}
         </div>
+        </>
       )}
-      {sid && <SessionView sid={sid} onStopped={load} />}
+      {sid && <SessionView sid={sid} onStopped={load} onDeleted={() => { nav("/paper"); load(); }} />}
       {!sid && rows && rows.length > 0 && <p className="muted">Pick a session above to see its chart, account and orders.</p>}
     </div>
   );

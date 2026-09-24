@@ -101,6 +101,16 @@ def get_session_row(user_id: str, sid: str) -> dict | None:
     return r.data[0] if r.data else None
 
 
+def delete_session(user_id: str, sid: str) -> None:
+    """Remove one of the user's sessions; its orders go with it (on delete cascade)."""
+    sb().table("live_sessions").delete().eq("user_id", user_id).eq("id", sid).neq("status", "running").execute()
+
+
+def delete_stopped_sessions(user_id: str) -> int:
+    r = sb().table("live_sessions").delete().eq("user_id", user_id).neq("status", "running").execute()
+    return len(r.data or [])
+
+
 def add_order(row: dict) -> None:
     sb().table("live_orders").insert(row).execute()
 

@@ -575,6 +575,26 @@ def stop_live(sid: str, profile=Depends(current_profile)):
     return {"stopped": True}
 
 
+@app.delete("/live/sessions/{sid}")
+def delete_live(sid: str, profile=Depends(current_profile)):
+    """Delete a stopped session and its orders. A running one has to be stopped first."""
+    sid = check_id(sid)
+    s = manager.sessions.get(sid)
+    row = db.get_session_row(profile["id"], sid)
+    if not row:
+        err(404, "not_found", "Session not found.")
+    if (s and s.user_id == profile["id"]) or row["status"] == "running":
+        err(409, "still_running", "Stop this session before deleting it.")
+    db.delete_session(profile["id"], sid)
+    return {"deleted": True}
+
+
+@app.delete("/live/sessions")
+def clear_stopped_live(profile=Depends(current_profile)):
+    """Delete every stopped session. Running ones are left alone."""
+    return {"deleted": db.delete_stopped_sessions(profile["id"])}
+
+
 # ---------- billing ----------
 @app.post("/billing/subscribe")
 def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
