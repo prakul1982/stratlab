@@ -75,6 +75,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Short instead of buy | Tap **Buy** at the start of the rules and pick **Sell short** |
 | Trail the stop or cap how long a trade lasts | The **Trail the stop by … and close any trade after …** line in **The rules** |
 | Compare two runs | **Compare experiments →** in a notebook, or **Compare with the previous run** on a verdict |
+| Check a tuned idea without hindsight | **Walk-forward test** on a verdict: re-tunes on the past, trades the next unseen stretch, and repeats |
 | Check it isn't one lucky chart | **Does it work on similar stocks?** on a verdict runs the same rules on about 10 similar instruments |
 | Understand a number | Every check, stat and setting has an **(i)** button that explains it in plain words |
 | Decide what to do next | The **Next** bar on a verdict: change the rules, try another market, paper trade, write a lab note |

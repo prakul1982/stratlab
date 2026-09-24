@@ -150,7 +150,7 @@ export function PaperPage() {
       <div className="stack" style={{ gap: 8 }}>
         <h1 className="serif row" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", gap: 0 }}>Paper trading<Info>{HELP.paper}</Info></h1>
         <p className="muted" style={{ fontSize: 17, maxWidth: "70ch" }}>
-          Your rules on live prices with fake money. Indian markets trade 9:15 am to 3:30 pm IST on weekdays; crypto trades around the clock. {sub}
+          Your rules on live prices with fake money, in every market: India, crypto, the US, UK, Europe, Japan and forex. Each runs in its own market hours; crypto trades around the clock. {sub}
         </p>
       </div>
       {rows === null ? <Loading /> : rows.length === 0 ? (
