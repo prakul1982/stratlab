@@ -2,10 +2,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import type { Market } from "../lib/types";
-import { Book, Compass, Lens, Menu, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
+import { Book, Compass, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
 import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { VerdictBadge } from "./ui";
+
+const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US", UK: "UK", EU: "Europe", JP: "Japan", FX: "Forex" };
 
 function marketNow(m: Market): string {
   if (m.status === "offline") return "offline";
@@ -27,8 +29,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
   const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-  // the sidebar only has room for the main markets; the rest are on the market page
-  const live = markets.filter((m) => m.status !== "soon" && ["IN", "US", "CRYPTO"].includes(m.id));
+  const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
 
   const sidebar = (
     <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
@@ -44,7 +45,11 @@ export function Shell({ children }: { children: ReactNode }) {
           const count = n.summary?.experiments ?? 0;
           return (
             <NavLink key={n.id} to={`/n/${n.id}`} className={({ isActive }) => `nb-link${isActive || loc.pathname.startsWith(`/n/${n.id}/`) ? " active" : ""}`}>
-              <b>{n.name}</b>
+              <b className="row" style={{ gap: 7 }}>
+                <span className={`vdot ${n.summary?.last_verdict ?? "none"}`} title={n.summary?.last_verdict ? `Last verdict: ${n.summary.last_verdict.replace("_", " ")}` : "No experiments yet"} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>{n.name}</span>
+                {n.pinned && <span className="muted" title="Pinned" style={{ flex: "none", display: "inline-flex" }}><Pin size={14} filled /></span>}
+              </b>
               <span>{[inst, `${count} experiment${count === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}</span>
             </NavLink>
           );
@@ -60,18 +65,21 @@ export function Shell({ children }: { children: ReactNode }) {
       </nav>
       <div className="stack small muted" style={{ marginTop: "auto", gap: 8 }}>
         {live.length > 0 && <div className="eyebrow">Markets now</div>}
-        {live.map((m) => {
-          const s = marketNow(m);
-          return (
-            <div key={m.id} className="row" style={{ gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", flex: "none", boxSizing: "border-box",
-                background: s === "open" || s === "always open" ? "var(--blue)" : "transparent", border: `1.5px solid ${s === "offline" ? "var(--orange)" : "var(--muted)"}` }} />
-              {m.name} · {s}
-            </div>
-          );
-        })}
+        <div className="mkt-grid">
+          {live.map((m) => {
+            const s = marketNow(m);
+            const on = s === "open" || s === "always open";
+            return (
+              <div key={m.id} className="mkt-now" title={`${m.name}: ${s}${m.hours?.open ? ` (${m.hours.open}–${m.hours.close} local time, ${m.hours.days})` : ""}`}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", flex: "none", boxSizing: "border-box",
+                  background: on ? "var(--blue)" : "transparent", border: `1.5px solid ${s === "offline" ? "var(--orange)" : on ? "var(--blue)" : "var(--muted)"}` }} />
+                {SHORT[m.id] ?? m.name}<span className={on ? "" : "muted"} style={{ marginLeft: "auto", fontSize: 11.5 }}>{s === "always open" ? "24/7" : s}</span>
+              </div>
+            );
+          })}
+        </div>
         <button className="link" style={{ alignSelf: "flex-start", display: "flex", gap: 8, alignItems: "center", color: "var(--muted)" }}
-          onClick={() => setTheme(dark ? "light" : "dark")}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? "Light pages" : "Night mode"}</button>
+          onClick={() => setTheme(dark ? "light" : "dark")}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? "Light mode" : "Night mode"}</button>
       </div>
     </aside>
   );

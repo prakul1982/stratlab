@@ -57,7 +57,8 @@ def api(monkeypatch):
             b = r["body"]
             out.append({"id": r["id"], "name": r["name"], "instrument_token": r["instrument_token"],
                         "updated_at": r["updated_at"], "kind": b.get("kind"), "question": b.get("question"),
-                        "instrument": b.get("instrument"), "summary": b.get("summary"), "tf": b.get("tf")})
+                        "instrument": b.get("instrument"), "summary": b.get("summary"), "tf": b.get("tf"),
+                        "pinned": b.get("pinned")})
         return out
 
     monkeypatch.setattr(db, "save_strategy", save_strategy)
@@ -222,3 +223,18 @@ def test_walkforward_skips_rules_with_nothing_to_tune():
     assert out["status"] == "skip" and "nothing" in out["detail"].lower()
     short = Strategy(**{k: EMA[k] for k in ("entry", "exit", "risk")})
     assert walkforward.run(bars[:120], short, 50)["status"] == "skip"
+
+
+def test_pin_and_duplicate(api):
+    a = api.post("/notebooks", json={"name": "First", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    b = api.post("/notebooks", json={"name": "Second", "strategy": EMA}).json()
+    api.post(f"/notebooks/{a['id']}/experiments", json={"days": 1500})
+    api.put(f"/notebooks/{b['id']}", json={"pinned": True})
+    listed = api.get("/notebooks").json()
+    assert listed[0]["id"] == b["id"] and listed[0]["pinned"] and not listed[1]["pinned"]
+    api.put(f"/notebooks/{b['id']}", json={"name": "Renamed"})           # an unrelated edit keeps the pin
+    assert api.get(f"/notebooks/{b['id']}").json()["pinned"] is True
+    copy = api.post(f"/notebooks/{a['id']}/duplicate").json()
+    assert copy["name"] == "First (copy)" and copy["experiments"] == [] and copy["id"] != a["id"]
+    assert copy["strategy"]["entry"] == api.get(f"/notebooks/{a['id']}").json()["strategy"]["entry"]
+    assert copy["instrument"]["symbol"] == "BTC/USD"

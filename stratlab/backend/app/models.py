@@ -106,6 +106,12 @@ class NotebookReq(BaseModel):
     notes: Optional[str] = Field(None, max_length=4000)
     strategy: Optional[Strategy] = None
     instrument: Optional[str] = Field(None, max_length=60)
+    pinned: Optional[bool] = None
+
+
+class ImportReq(BaseModel):
+    text: str = Field(..., min_length=5, max_length=20000)
+    filename: str = Field("", max_length=120)
 
 
 class ExperimentReq(DataReq):
