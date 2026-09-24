@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Compass, Globe, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
+import { Compass, Globe, Lens, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
 import { Modal } from "./ui";
 import { LogoMark } from "./Logo";
 
@@ -14,8 +14,11 @@ const STEPS: Step[] = [
   { icon: <Sparkle size={34} />, title: "Describe ideas in plain English",
     body: "Type an idea the way you'd tell a friend: \"buy when RSI drops under 30, sell at 5% profit\". The builder turns it into exact rules and asks about anything it had to guess.",
     where: "New notebook, then \"Describe your idea\". To start over later, use \"Describe the idea again\" at the top of a notebook." },
+  { icon: <Lens size={34} />, title: "Research a company first",
+    body: "Look up any Indian or US company: price, valuation, growth, who owns it, news, and an AI read that ends with trading ideas you can test in one click. Themes, the market pulse and side-by-side comparisons are there too.",
+    where: "\"Research a company\" at the top of the sidebar. Press Watch on a company to keep it on your watchlist." },
   { icon: <Globe size={34} />, title: "Test on any market",
-    body: "The same rules run on Indian stocks, indices and F&O, on crypto, or on any market you have a CSV for. Prices, hours, currency and costs switch to match.",
+    body: "The same rules run on Indian stocks, indices and F&O, US, UK, European and Japanese stocks, forex, crypto, or any market you have a CSV for. Prices, hours, currency and costs switch to match.",
     where: "Pick the market first on a new notebook, or press the \"Testing on\" button at the top of any notebook to change it." },
   { icon: <Pencil size={34} />, title: "Every rule is editable",
     body: "Highlighted words in the rules (marked ▾) are dropdowns. Tap one to change the indicator, its length, the condition or a number. Stop-loss, target and position size are right below.",

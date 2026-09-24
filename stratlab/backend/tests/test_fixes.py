@@ -68,7 +68,7 @@ def only_gemini(monkeypatch):
 @pytest.mark.parametrize("reply", ["[]", '"text"', '{"entry": "oops", "risk": [1, 2]}'])
 def test_ai_writer_handles_malformed_replies(monkeypatch, reply):
     only_gemini(monkeypatch)
-    monkeypatch.setattr(ai_writer, "_gemini", lambda system, text: reply)
+    monkeypatch.setattr(ai_writer, "_gemini", lambda system, text, **k: reply)
     try:
         out = ai_writer.write_strategy("buy when rsi below 30", pro=False)
     except ai_writer.AIError:
@@ -81,7 +81,7 @@ def test_ai_writer_keeps_valid_rules(monkeypatch):
                         "exit": [{"l": {"t": "macd"}, "op": "gt", "r": {"t": "num", "v": 0}}],
                         "risk": {"sl": 2, "capital": True}, "mentioned": ["sl"]})
     only_gemini(monkeypatch)
-    monkeypatch.setattr(ai_writer, "_gemini", lambda system, text: reply)
+    monkeypatch.setattr(ai_writer, "_gemini", lambda system, text, **k: reply)
     out = ai_writer.write_strategy("x", pro=False)
     assert len(out["entry"]) == 1
     assert out["exit"] == []           # MACD is Pro-only

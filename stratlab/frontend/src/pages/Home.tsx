@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago } from "../lib/format";
@@ -93,9 +93,37 @@ export function Starters({ where }: { where?: Where | null }) {
   );
 }
 
+type Prefill = { market: string; symbol?: string; instrumentId?: string | null; text?: string };
+
+/** When Research hands over a company (and maybe an idea), pick its market and instrument up front. */
+function usePrefill(setWhere: (w: Where) => void): Prefill | null {
+  const loc = useLocation();
+  const prefill = (loc.state as { prefill?: Prefill } | null)?.prefill ?? null;
+  useEffect(() => {
+    if (!prefill) return;
+    let live = true;
+    setWhere({ market: prefill.market, instrument: null });
+    (async () => {
+      let inst: Instrument | null = null;
+      try {
+        if (prefill.instrumentId) inst = await api<Instrument>(`/instruments/${encodeURIComponent(prefill.instrumentId)}`);
+        else if (prefill.symbol) {
+          const rows = await api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(prefill.symbol)}&market=${prefill.market}`);
+          inst = rows.find((r) => r.symbol.toUpperCase() === prefill.symbol!.toUpperCase() && !r.fno) ?? null;
+        }
+      } catch { inst = null; }
+      if (live && inst) setWhere({ market: prefill.market, instrument: inst });
+    })();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc.key]);
+  return prefill;
+}
+
 export function NewNotebook() {
   const { markets } = useApp();
   const [where, setWhere] = useState<Where>({ market: "", instrument: null });
+  const prefill = usePrefill(setWhere);
   useEffect(() => {
     if (!where.market && markets.length) setWhere({ market: markets.find((m) => m.id === "IN" && m.status === "live") ? "IN" : "CRYPTO", instrument: null });
   }, [markets, where.market]);
@@ -108,6 +136,11 @@ export function NewNotebook() {
           What trading idea do you want to test?
         </h1>
         <p className="muted" style={{ fontSize: 17 }}>Write it the way you'd explain it to a friend. We'll turn it into exact rules and ask about anything that's missing.</p>
+        {prefill?.symbol ? (
+          <p className="edit-hint">From Research: testing {prefill.text ? "an idea" : "a strategy"} on {prefill.symbol}. Check the rules below, then build.</p>
+        ) : (
+          <p className="small muted">Not sure what to test? <Link to="/research" className="link">Research a company first</Link>: its AI read suggests ideas you can test in one click.</p>
+        )}
       </div>
       <ol className="how" aria-label="How StratLab works">
         <li><b>1. Describe it</b><span>In plain words. We turn it into rules you can read and edit.</span></li>
@@ -117,7 +150,7 @@ export function NewNotebook() {
       <WhereToTest where={where} setWhere={setWhere} />
       <section className="card stack" style={{ gap: 14 }} aria-labelledby="idea-h">
         <h2 id="idea-h" className="h2">2. Describe your idea</h2>
-        <IdeaComposer onBuilt={create} />
+        <IdeaComposer key={prefill?.text ?? ""} initial={prefill?.text ?? ""} onBuilt={create} />
       </section>
       <div className="stack">
         <h2 className="h2">Or start from a classic idea</h2>

@@ -56,7 +56,7 @@ function RefEditor({ value, onChange, allowNum, isPro }: { value: Ref; onChange:
           }} /></label>
       )}
       {def && def[1] != null && (
-        <label className="field">{value.t.startsWith("macd") ? "Slow length" : value.t.startsWith("bb") ? "Std devs" : "Multiplier"}
+        <label className="field">{value.t.startsWith("macd") ? "Slow length" : value.t.startsWith("bb") ? "Std devs" : value.t === "stoch_k" ? "Smoothing" : "Multiplier"}
           <input type="number" min={0.1} step="0.1" value={value.m ?? def[1]} onChange={(e) => {
             const m = parseFloat(e.target.value);
             if (m > 0 && m <= 500) onChange({ ...value, m });
@@ -123,8 +123,21 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
   const set = (patch: Partial<Strategy>) => onChange({ ...s, ...patch });
   const setRisk = (patch: Partial<Risk>) => onChange({ ...s, risk: { ...s.risk, ...patch } });
   const r = s.risk;
+  const short = s.side === "short";
+  const open = short ? "Sell short" : "Buy", close = short ? "Buy back" : "Sell";
+  const sideTok = (
+    <Pop title="Long or short" label={open} cls="plain">
+      {(done) => (
+        <div className="stack" style={{ gap: 6 }}>
+          <button className={`btn sm ${!short ? "" : "quiet"}`} onClick={() => { set({ side: "long" }); done(); }}>Buy (go long): profit when it rises</button>
+          <button className={`btn sm ${short ? "" : "quiet"}`} onClick={() => { set({ side: "short" }); done(); }}>Sell short: profit when it falls</button>
+          <p className="hint">{HELP.short}</p>
+        </div>
+      )}
+    </Pop>
+  );
   const lead = (i: number, side: "entry" | "exit") =>
-    side === "exit" ? <b>Sell when</b> : i === 0 ? <b>Buy when</b> : <b>{s.entryJoin === "all" ? "and when" : "or when"}</b>;
+    side === "exit" ? <b>{close} when</b> : i === 0 ? <b>{sideTok} when</b> : <b>{s.entryJoin === "all" ? "and when" : "or when"}</b>;
 
   return (
     <section className="card stack" aria-labelledby="rules-h" style={{ gap: 12 }}>
@@ -134,8 +147,8 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
       <p className="edit-hint"><Pencil size={16} />Tap any highlighted word below to change it: the indicator, its length, the condition or a number.</p>
 
       {s.entry.length > 1 && (
-        <p className="sentence">Buy when{" "}
-          <Pop title="How buy rules combine" label={s.entryJoin === "all" ? "all of these" : "any of these"} cls="plain">
+        <p className="sentence"><b>{sideTok}</b> when{" "}
+          <Pop title="How entry rules combine" label={s.entryJoin === "all" ? "all of these" : "any of these"} cls="plain">
             {(close) => (
               <div className="stack" style={{ gap: 6 }}>
                 <button className={`btn sm ${s.entryJoin === "all" ? "" : "quiet"}`} onClick={() => { set({ entryJoin: "all" }); close(); }}>All of these (every rule at once)</button>
@@ -144,7 +157,7 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
             )}
           </Pop>{" "}happen:</p>
       )}
-      {s.entry.length === 0 && <p className="sentence muted">No buy rule yet. Add one below, or describe your idea again.</p>}
+      {s.entry.length === 0 && <p className="sentence muted">No entry rule yet. Add one below, or describe your idea again.</p>}
       {s.entry.map((c, i) => (
         <CondSentence key={`e${i}`} c={c} lead={s.entry.length > 1 ? <span className="muted">{i + 1}.</span> : lead(i, "entry")} isPro={isPro}
           onChange={(nc) => set({ entry: s.entry.map((x, k) => (k === i ? nc : x)) })}
@@ -154,17 +167,25 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
         <p className="hint row" style={{ gap: 0, marginTop: -6 }}>"Crosses above" or "is above"? They trade very differently.<Info>{HELP.crosses}</Info></p>
       )}
       {s.exit.map((c, i) => (
-        <CondSentence key={`x${i}`} c={c} lead={i === 0 ? <b>Sell when</b> : <b>or when</b>} isPro={isPro}
+        <CondSentence key={`x${i}`} c={c} lead={i === 0 ? <b>{close} when</b> : <b>or when</b>} isPro={isPro}
           onChange={(nc) => set({ exit: s.exit.map((x, k) => (k === i ? nc : x)) })}
           onDelete={() => set({ exit: s.exit.filter((_, k) => k !== i) })} />
       ))}
       <p className="sentence">
-        {s.exit.length ? "Also sell" : <b>Sell</b>} at a{" "}
+        {s.exit.length ? `Also ${close.toLowerCase()}` : <b>{close}</b>} at a{" "}
         <NumTok title="Stop loss (%)" value={r.sl} suffix="% stop" missing="no stop loss" max={99} onChange={(v) => setRisk({ sl: v })}
-          hint="Sells if the price falls this far below where you bought. 0 turns it off." />{" "}or a{" "}
+          hint={short ? "Buys back if the price rises this far above where you sold. 0 turns it off." : "Sells if the price falls this far below where you bought. 0 turns it off."} />{" "}or a{" "}
         <NumTok title="Target (%)" value={r.tgt} suffix="% target" missing="no target" max={1000} onChange={(v) => setRisk({ tgt: v })}
-          hint="Sells if the price rises this far above where you bought. 0 turns it off." />.
+          hint={short ? "Buys back if the price falls this far below where you sold. 0 turns it off." : "Sells if the price rises this far above where you bought. 0 turns it off."} />.
         <Info label="What are a stop loss and a target?"><b>Stop loss:</b> {HELP.stop}<br /><br /><b>Target:</b> {HELP.target}</Info>
+      </p>
+      <p className="sentence">
+        Trail the stop by{" "}
+        <NumTok title="Trailing stop (%)" value={r.trail ?? 0} suffix="%" missing="nothing (off)" max={50} onChange={(v) => setRisk({ trail: v })}
+          hint={short ? "Moves the stop down as the price falls, staying this far above the lowest price since you sold. It never moves back up. 0 turns it off." : "Moves the stop up as the price rises, staying this far below the highest price since you bought. It never moves back down. 0 turns it off."} />{" "}and close any trade after{" "}
+        <NumTok title="Close after (candles)" value={r.maxBars ?? 0} step={1} max={5000} missing="no time limit" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
+          onChange={(v) => setRisk({ maxBars: Math.round(v) })} hint="Closes a trade that's still open after this many candles, at the close. 0 turns it off." />.
+        <Info label="Trailing stops and time limits"><b>Trailing stop:</b> {HELP.trail}<br /><br /><b>Time limit:</b> {HELP.maxBars}</Info>
       </p>
       <p className="sentence">
         Risk{" "}<NumTok title="Risk per trade (%)" value={r.riskPct} suffix="%" min={0.1} max={100} onChange={(v) => setRisk({ riskPct: v })}
@@ -184,8 +205,8 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
         <Info label="What do risk, capital and candles mean?"><b>Risk:</b> {HELP.risk}<br /><br /><b>Capital:</b> {HELP.capital}<br /><br /><b>Candles:</b> {HELP.candles}</Info>
       </p>
       <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
-        <button className="btn quiet sm" onClick={() => set({ entry: [...s.entry, { l: { t: "price" }, op: "gt", r: { t: "sma", p: 50 } }] })}>Add a buy rule</button>
-        <button className="btn quiet sm" onClick={() => set({ exit: [...s.exit, { l: { t: "rsi", p: 14 }, op: "gt", r: { t: "num", v: 70 } }] })}>Add a sell rule</button>
+        <button className="btn quiet sm" onClick={() => set({ entry: [...s.entry, { l: { t: "price" }, op: short ? "lt" : "gt", r: { t: "sma", p: 50 } }] })}>Add {short ? "a short" : "a buy"} rule</button>
+        <button className="btn quiet sm" onClick={() => set({ exit: [...s.exit, { l: { t: "rsi", p: 14 }, op: short ? "lt" : "gt", r: { t: "num", v: short ? 30 : 70 } }] })}>Add {short ? "a buy-back" : "a sell"} rule</button>
       </div>
       <details>
         <summary className="small" style={{ cursor: "pointer", fontWeight: 600, color: "var(--blue)" }}>Costs and position size</summary>

@@ -5,7 +5,7 @@
 A research notebook for traders: describe a strategy in plain words, test it on real market data, get an honest verdict (real edge or luck), then paper trade it with fake capital.
 
 - **Frontend:** `frontend/`, a React + TypeScript app built with Vite. Supabase login, Razorpay Checkout, charts drawn as SVG.
-- **Backend:** `backend/`, built with FastAPI. It handles market data (Kite for India, Coinbase for crypto, uploaded CSVs), the backtest engine, the verdict checks, trading costs, live paper trading, billing, alerts and the AI writer.
+- **Backend:** `backend/`, built with FastAPI. It handles market data (Kite for India, Coinbase for crypto, Yahoo Finance for the US, UK, Europe, Japan and forex, uploaded CSVs), company research, the backtest engine, the verdict checks, trading costs, live paper trading, billing, alerts and the AI writer.
 - **Database and login:** Supabase (Postgres plus Google sign-in). The schema is in `supabase/schema.sql`.
 
 ## Plans (edit in `backend/app/plans.py`)
@@ -68,9 +68,11 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 4. Test everything in Test Mode first.
 
 ### 4. AI builder (all plans) and alerts (Pro)
-- **AI strategy builder:** set a key for one or more providers. They're tried in order (Groq, Cerebras, Gemini, OpenRouter, then Anthropic) until one answers, so a rate limit or outage at one moves on to the next. All but Anthropic have free tiers, and the job (turning one sentence into rules) suits small, fast models.
+- **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order (Groq, Cerebras, SambaNova, Gemini, Mistral, OpenRouter, then Anthropic) until one answers, so a rate limit or outage at one moves on to the next. All but Anthropic have free tiers. Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
   - `GROQ_API_KEY` from console.groq.com: free and the fastest. A good first choice.
   - `CEREBRAS_API_KEY` from cloud.cerebras.ai: free and very fast.
+  - `SAMBANOVA_API_KEY` from cloud.sambanova.ai: free tier, fast Llama 70B.
+  - `MISTRAL_API_KEY` from console.mistral.ai: free "Experiment" plan.
   - `GEMINI_API_KEY` from aistudio.google.com: free tier.
   - `OPENROUTER_API_KEY` from openrouter.ai: with `OPENROUTER_MODEL=auto` only free models are used.
   - `ANTHROPIC_API_KEY`: paid. Set `AI_PROVIDER=anthropic` to try Claude first.
@@ -80,10 +82,18 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.
 - **Email:** fill in the SMTP settings. For Gmail, use an app password. Port 465 uses SSL, 587 uses STARTTLS.
 
-### 5. Crypto and uploaded data
-Nothing to set up. Crypto prices come from Coinbase's public market data, which needs no account or key. Uploaded CSVs are read in the browser and sent with each test; they aren't stored on the server.
+### 5. Crypto, global markets and uploaded data
+Nothing to set up. Crypto prices come from Coinbase's public market data. US, UK, European and Japanese stocks and ETFs, and forex pairs, come from Yahoo Finance's public chart data (London prices are converted from pence to pounds). Neither needs an account or key. Yahoo keeps about 2 years of hourly and 60 days of 15- and 5-minute candles, so intraday tests on those markets are shorter. Uploaded CSVs are read in the browser and sent with each test; they aren't stored on the server.
 
-### 6. Run locally
+### 6. Research
+The **Research** section (company pages, themes, market pulse, compare, watchlist) needs one key for US companies:
+- `FINNHUB_API_KEY` from finnhub.io (free, 60 calls a minute). Company pages are cached (profiles for a day, fundamentals for 6 hours, prices for a minute), and peer and watchlist prices come from Yahoo, so the free limit goes a long way.
+- Indian companies need no key: fundamentals come from Screener.in's public pages, prices from Kite (or Yahoo when Kite is offline), and news from Google News.
+- AI reads use the provider chain above. `RESEARCH_AI_PER_DAY` (default 60) caps fresh AI reads per user per day; cached reads don't count.
+
+Admin → AI builder shows whether the Finnhub key is set, and each company page lists any source that didn't answer.
+
+### 7. Run locally
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
@@ -105,11 +115,11 @@ cd backend && pip install pytest && pytest     # backend tests
 cd frontend && npm run build                   # typecheck and production build
 ```
 
-### 7. Deploy
+### 8. Deploy
 - **Backend:** Render, Railway or a small VPS. Run it as **one process**, e.g. `uvicorn app.main:app --host 0.0.0.0 --port 8000` with no multiple workers. Live sessions and the tick feed live in memory in that process.
 - **Frontend:** Vercel or Netlify, with the project's root directory set to `stratlab/frontend`. `vercel.json` and `netlify.toml` set the build (`npm run build`, output `dist`) and send every page to `index.html`, so links like `/n/…` work on refresh. On Vercel, clear any Build Command or Output Directory overrides in the project settings so `vercel.json` applies. Put the production API URL in `public/config.js`.
 
-### 8. Admin page
+### 9. Admin page
 Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and redeploy. Signed in with that account, you get an **Admin** link in the sidebar with:
 - Kite status and a **Log in to Kite** button (no more typing `?key=` URLs), plus a button to run the automatic login now.
 - A live test of every AI provider, and whether payments are set up.
@@ -118,7 +128,7 @@ Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and red
 
 Everyone else gets a 403 from the `/admin` API and never sees the link. The older `?key=ADMIN_KEY` URLs keep working.
 
-### 9. Logo and icons
+### 10. Logo and icons
 The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, which feeds the in-app logo (`components/Logo.tsx`) and the share image. The static files in `frontend/public/` (`favicon.svg`, `logo.svg`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `og-image.png`) are rendered from the same shapes; regenerate them if the logo changes.
 
 ---
@@ -149,7 +159,8 @@ The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, wh
 - Long only; no short selling yet.
 - Historical data for **expired** option and futures contracts isn't available from Kite, so F&O backtests only work on currently listed contracts. Continuous data is used for daily futures candles.
 - Backtests don't model intra-candle order (if stop and target fall in the same candle, the stop is assumed to hit first).
-- Only India and crypto have live data so far. Other markets can be tested with an uploaded CSV; adding one means writing a provider in `backend/app/data/` (see `coinbase.py`) and a cost model in `engine/costs.py`.
+- Yahoo Finance and Screener.in are public but unofficial sources: they can change without notice, and their terms don't cover commercial redistribution. Before charging users for data from them, move to a licensed vendor; each source lives in one file (`app/data/yahoo_markets.py`, `app/intel/*.py`), so it's a contained swap. The AI's company and theme reads are opinions for research, not investment advice.
+- European costs cover your brokerage only (no local transaction taxes such as France's), and Japanese costs likewise.
 - The tax figure is a rough estimate for Indian equity only, not tax advice.
 - `kiteconnect` (even its latest release, 5.2.2) pins `autobahn==19.11.2`, which has known advisories, so security scanners will keep flagging it until Zerodha updates the package. StratLab only uses it for the outgoing connection to Zerodha's own price feed, not to serve anything. Replacing Kite's ticker client with our own is the way to clear it if needed.
 - This is a paper trading tool: no real orders are placed. If you add live execution later, review SEBI's retail algo trading framework first.

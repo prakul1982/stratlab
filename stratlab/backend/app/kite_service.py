@@ -180,6 +180,36 @@ class KiteService:
         v = data.get(key) or data.get(str(token)) or next(iter(data.values()), None)
         return v["last_price"] if v else None
 
+    def by_symbol(self, symbol: str, exchange: str = "NSE") -> dict | None:
+        """The cash stock or index with this trading symbol."""
+        self._load_instruments()
+        symbol = symbol.strip().upper()
+        for r in self._inst:
+            if r["exchange"] == exchange and r["symbol"] == symbol:
+                return r
+        return None
+
+    def quote(self, symbols: list[str]) -> dict[str, dict]:
+        """Last price, day range and previous close for NSE symbols, in one call (Kite allows 500)."""
+        self._require()
+        keys = [f"NSE:{s.strip().upper()}" for s in symbols if s.strip()][:500]
+        if not keys:
+            return {}
+        self._throttle()
+        data = self.kite.quote(keys)
+        out = {}
+        for k, v in data.items():
+            ohlc = v.get("ohlc") or {}
+            prev = ohlc.get("close") or None
+            last = v.get("last_price")
+            out[k.split(":", 1)[1]] = {
+                "price": last, "prev_close": prev, "open": ohlc.get("open"), "high": ohlc.get("high"),
+                "low": ohlc.get("low"), "volume": v.get("volume"),
+                "change": (last - prev) if last is not None and prev else None,
+                "change_pct": ((last / prev - 1) * 100) if last is not None and prev else None,
+            }
+        return out
+
     # ---------- historical candles ----------
     def history(self, token: int, tf: str, days: int) -> list[dict]:
         self._require()

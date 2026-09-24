@@ -11,7 +11,7 @@ GOOD = json.dumps({"entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "sma",
 
 @pytest.fixture(autouse=True)
 def clean(monkeypatch):
-    for k in ("GROQ_API_KEY", "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"):
+    for k in ("GROQ_API_KEY", "CEREBRAS_API_KEY", "SAMBANOVA_API_KEY", "MISTRAL_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"):
         monkeypatch.setattr(settings, k, "")
     for k in ("GROQ_MODEL", "CEREBRAS_MODEL", "OPENROUTER_MODEL"):
         monkeypatch.setattr(settings, k, "auto")
@@ -79,12 +79,12 @@ def test_retries_without_json_mode(monkeypatch):
 def test_falls_through_to_next_provider_and_cools_down(monkeypatch):
     monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
     monkeypatch.setattr(settings, "GEMINI_API_KEY", "g")
-    out = P.complete("s", "t", gemini=lambda s, t: "```json\n" + GOOD + "\n```", transport=fake(["m-70b"], status=429))
+    out = P.complete("s", "t", gemini=lambda s, t, **k: "```json\n" + GOOD + "\n```", transport=fake(["m-70b"], status=429))
     assert "entry" in out
     assert P.status("groq").cooldown_until > 0 and "busy" in P.status("groq").last_error
     # while cooling down, groq isn't even asked
     seen = []
-    P.complete("s", "t", gemini=lambda s, t: GOOD, transport=fake(["m-70b"], seen=seen))
+    P.complete("s", "t", gemini=lambda s, t, **k: GOOD, transport=fake(["m-70b"], seen=seen))
     assert seen == []
 
 
@@ -92,7 +92,7 @@ def test_bad_key_and_unreadable_replies_move_on(monkeypatch):
     monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
     monkeypatch.setattr(settings, "GEMINI_API_KEY", "g")
     with pytest.raises(P.AIBusy) as e:
-        P.complete("s", "t", gemini=lambda s, t: "sorry, I can't", transport=fake(["m-70b"], status=401))
+        P.complete("s", "t", gemini=lambda s, t, **k: "sorry, I can't", transport=fake(["m-70b"], status=401))
     assert "rejected the API key" in str(e.value) and "Google Gemini" in str(e.value)
 
 
@@ -112,7 +112,7 @@ def test_test_all_reports_every_provider(monkeypatch):
     monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
     monkeypatch.setattr(settings, "GEMINI_API_KEY", "g")
 
-    def gemini(system, text):
+    def gemini(system, text, **k):
         raise P.AIConfig("Google rejected GEMINI_API_KEY.")
     out = P.test_all(gemini=gemini, transport=fake(["llama-3.3-70b-versatile"], reply='{"ok": true}'))
     assert [(r["name"], r["ok"]) for r in out] == [("groq", True), ("gemini", False)]

@@ -5,6 +5,7 @@ A bare number is treated as a Kite token, for older saved strategies."""
 from ..kite_service import KiteService
 from .coinbase import CoinbaseProvider, DataError
 from .markets import BY_ID, MARKETS
+from .yahoo_markets import YahooProvider
 
 KITE_MAX_DAYS = {"1d": 3650, "1h": 730, "15m": 365, "5m": 120}
 
@@ -51,8 +52,11 @@ def split_id(inst_id: str) -> tuple[str, str]:
 
 
 class Registry:
-    def __init__(self, kite: KiteService, crypto: CoinbaseProvider | None = None):
-        self.providers = {"IN": KiteProvider(kite), "CRYPTO": crypto or CoinbaseProvider()}
+    def __init__(self, kite: KiteService, crypto: CoinbaseProvider | None = None, yahoo=None):
+        from ..intel.yahoo import Yahoo
+        yahoo = yahoo or Yahoo()
+        self.providers = {"IN": KiteProvider(kite), "CRYPTO": crypto or CoinbaseProvider(),
+                          **{m: YahooProvider(m, yahoo) for m in ("US", "UK", "EU", "JP", "FX")}}
 
     def provider(self, market: str):
         return self.providers.get(market)
@@ -69,7 +73,12 @@ class Registry:
         for m in markets:
             prov = self.providers.get(m)
             if prov and prov.ready():
-                out += prov.search(q, allow_fno=allow_fno, limit=25 if market else 12)
+                try:
+                    out += prov.search(q, allow_fno=allow_fno, limit=25 if market else 12)
+                except Exception as e:  # one source being down shouldn't break search in the others
+                    if market:
+                        raise
+                    print("search failed:", m, e)
         return out
 
     def defaults(self) -> list[dict]:

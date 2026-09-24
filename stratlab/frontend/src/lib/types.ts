@@ -1,6 +1,7 @@
 export type RefType =
   | "price" | "num" | "sma" | "ema" | "rsi" | "macd" | "macd_signal" | "macd_hist"
-  | "bb_upper" | "bb_mid" | "bb_lower" | "vwap" | "supertrend";
+  | "bb_upper" | "bb_mid" | "bb_lower" | "vwap" | "supertrend"
+  | "adx" | "stoch_k" | "atr_pct" | "dc_upper" | "dc_lower" | "volume" | "vol_sma";
 export type Op = "xa" | "xb" | "gt" | "lt";
 export type Tf = "1d" | "1h" | "15m" | "5m";
 
@@ -8,9 +9,11 @@ export interface Ref { t: RefType; p?: number | null; m?: number | null; v?: num
 export interface Cond { l: Ref; op: Op; r: Ref }
 export interface Risk {
   capital: number; riskPct: number; maxAlloc: number; sl: number; tgt: number; brokerage: number; slippage: number;
+  trail?: number; maxBars?: number;
 }
 export interface Strategy {
   name: string; tf: Tf; text: string; entry: Cond[]; exit: Cond[]; entryJoin: "all" | "any"; risk: Risk;
+  side?: "long" | "short";
 }
 
 export interface Instrument {
@@ -54,6 +57,12 @@ export interface Experiment {
   series: { t: string[]; close: number[]; equity: (number | null)[]; buy_hold: (number | null)[];
     overlays: Record<string, (number | null)[]>; split: number | null };
   trades: Trade[];
+  basket?: Basket;
+}
+export interface BasketRow { id: string; symbol: string; name?: string | null; ret?: number; buy_hold?: number; n?: number; win?: number; mdd?: number; error?: string }
+export interface Basket {
+  status: "pass" | "warn" | "fail"; headline: string; market: string; days: number; tested: number; profitable: number;
+  beat_buy_hold: number; median_ret: number | null; rows: BasketRow[];
 }
 export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null }
 export interface NotebookItem {

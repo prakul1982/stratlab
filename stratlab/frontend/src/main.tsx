@@ -24,6 +24,8 @@ import { PaperPage } from "./pages/PaperPage";
 import { PlansPage } from "./pages/PlansPage";
 import { AccountPage } from "./pages/AccountPage";
 import { AdminPage } from "./pages/AdminPage";
+import { CompareExperiments } from "./pages/CompareExperiments";
+import { ComparePage, CompanyPage, PulsePage, ResearchHome, ThemesPage, WatchlistPage } from "./pages/Research";
 
 function Routed() {
   const { session, ready, dataOffline, meError } = useApp();
@@ -43,12 +45,19 @@ function Routed() {
         <Route path="/new" element={<NewNotebook />} />
         <Route path="/n/:id" element={<NotebookPage />} />
         <Route path="/n/:id/market" element={<MarketPage />} />
+        <Route path="/n/:id/compare" element={<CompareExperiments />} />
         <Route path="/n/:id/e/:v" element={<ExperimentPage />} />
         <Route path="/paper" element={<PaperPage />} />
         <Route path="/paper/:sid" element={<PaperPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/research" element={<ResearchHome />} />
+        <Route path="/research/themes" element={<ThemesPage />} />
+        <Route path="/research/pulse" element={<PulsePage />} />
+        <Route path="/research/compare" element={<ComparePage />} />
+        <Route path="/research/watchlist" element={<WatchlistPage />} />
+        <Route path="/research/:region/:symbol" element={<CompanyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

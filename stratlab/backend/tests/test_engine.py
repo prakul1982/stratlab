@@ -98,3 +98,11 @@ def test_engine_state_round_trip():
     eng.cash, eng.qty, eng.entry, eng.sl, eng.entry_t = 5000.0, 3, 100.0, 95.0, "t"
     again = Engine(strat(), state=eng.dump())
     assert (again.cash, again.qty, again.entry, again.sl, again.tg) == (5000.0, 3, 100.0, 95.0, math.inf)
+
+
+def test_bars_across_a_daylight_saving_change():
+    from app.engine.core import Ctx
+    bars = [{"t": "2026-03-06T00:00:00-05:00", "o": 1, "h": 1, "l": 1, "c": 1},
+            {"t": "2026-03-09T00:00:00-04:00", "o": 1, "h": 1, "l": 1, "c": 1}]
+    ctx = Ctx(bars, intraday=False)
+    assert [d.day for d in ctx.df.t] == [6, 9]

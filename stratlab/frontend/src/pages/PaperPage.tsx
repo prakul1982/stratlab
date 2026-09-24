@@ -31,7 +31,7 @@ function SessionView({ sid, onStopped }: { sid: string; onStopped: () => void })
   const a = snap.account;
   const idx = new Map(snap.bars.map((b, i) => [b.t, i]));
   const markers: Marker[] = snap.events.map((e) => ({ i: idx.get(e.t) ?? -1, side: e.side })).filter((m) => m.i >= 0);
-  const alwaysOpen = snap.instrument.market && snap.instrument.market !== "IN";
+  const alwaysOpen = snap.instrument.market === "CRYPTO";
   const feed = !running ? "" : snap.feed_connected
     ? (snap.last_tick_at ? "Live prices" : alwaysOpen ? "Fetching the latest prices" : "Waiting for the market to open")
     : "Reconnecting to prices";

@@ -1,0 +1,158 @@
+"""Indian company fundamentals from Screener.in's public company pages.
+
+Screener has no API, so this reads the page the way Hindsight did, but from the
+server (no public CORS proxies). If Screener changes its layout, the parser
+degrades to whatever it can still find instead of failing the whole page."""
+import re
+
+import httpx
+from bs4 import BeautifulSoup
+
+from .net import BROWSER_UA, Source, SourceError, num
+
+
+def _text(el) -> str:
+    return re.sub(r"\s+", " ", el.get_text(" ", strip=True)).replace(" ", " ").strip() if el else ""
+
+
+def _label(el) -> str:
+    return re.sub(r"\s*\+\s*$", "", _text(el)).strip()
+
+
+def _table(section) -> dict | None:
+    """{"cols": [...], "rows": {label: [numbers]}} from a section's first data table."""
+    if section is None:
+        return None
+    table = section.find("table", class_="data-table") or section.find("table")
+    if table is None:
+        return None
+    head = table.find("thead")
+    cols = [_text(th) for th in (head.find_all("th") if head else [])][1:]
+    rows = {}
+    body = table.find("tbody") or table
+    for tr in body.find_all("tr"):
+        tds = tr.find_all("td")
+        if len(tds) < 2:
+            continue
+        label = _label(tds[0])
+        if label:
+            rows[label] = [num(_text(td)) for td in tds[1:]]
+    return {"cols": cols, "rows": rows} if rows else None
+
+
+def _row(table: dict | None, *prefixes: str) -> list:
+    if not table:
+        return []
+    for label, vals in table["rows"].items():
+        if any(label.lower().startswith(p.lower()) for p in prefixes):
+            return vals
+    return []
+
+
+def parse(html: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    out: dict = {"name": _text(soup.find("h1")), "ratios": {}, "growth": {}, "pros": [], "cons": []}
+
+    ratios = soup.find(id="top-ratios")
+    for li in ratios.find_all("li") if ratios else []:
+        n, v = li.find(class_="name"), li.find(class_="value")
+        if n and v:
+            out["ratios"][_text(n)] = _text(v)
+
+    prof = soup.find(class_="company-profile")
+    if prof:
+        paras = [_text(p) for p in prof.find_all("p")]
+        paras = [p for p in paras if len(p) > 30]
+        if paras:
+            out["about"] = " ".join(paras[:2])[:1200]
+        for a in prof.find_all("a", href=True):
+            href = a["href"]
+            if href.startswith("http") and "screener.in" not in href and "bseindia" not in href and "nseindia" not in href:
+                out.setdefault("website", href)
+
+    for sec_id, key in (("quarters", "quarters"), ("profit-loss", "pl"), ("balance-sheet", "balance"),
+                        ("cash-flow", "cashflow"), ("ratios", "ratios_table"), ("shareholding", "shareholding")):
+        t = _table(soup.find(id=sec_id))
+        if t:
+            out[key] = t
+
+    for tb in soup.find_all("table", class_="ranges-table"):
+        th = tb.find("th")
+        title = _text(th)
+        rows = {}
+        for tr in tb.find_all("tr"):
+            tds = tr.find_all("td")
+            if len(tds) >= 2:
+                rows[_text(tds[0]).rstrip(":").strip()] = _text(tds[1])
+        key = ("sales" if "Sales" in title else "profit" if "Profit" in title
+               else "price" if "Price" in title else "roe" if "Equity" in title else None)
+        if key:
+            out["growth"][key] = rows
+
+    for cls in ("pros", "cons"):
+        box = soup.find(class_=cls)
+        if box:
+            out[cls] = [_text(li) for li in box.find_all("li") if _text(li)][:6]
+    return out
+
+
+def summary(p: dict) -> dict:
+    """The handful of numbers the research page and the AI need."""
+    r = p.get("ratios", {})
+    pl, bal = p.get("pl"), p.get("balance")
+    sales = [v for v in _row(pl, "Sales", "Revenue") if v is not None]
+    profit = [v for v in _row(pl, "Net Profit") if v is not None]
+    opm = [v for v in _row(pl, "OPM", "Financing Margin") if v is not None]
+    borrow = [v for v in _row(bal, "Borrowings") if v is not None]
+    reserves = [v for v in _row(bal, "Reserves") if v is not None]
+    equity = [v for v in _row(bal, "Equity Capital") if v is not None]
+    price = num(r.get("Current Price"))
+    book = num(r.get("Book Value"))
+    hl = r.get("High / Low", "")
+    hi_lo = [num(x) for x in hl.split("/")] if "/" in hl else [None, None]
+    net_margin = (profit[-1] / sales[-1] * 100) if sales and profit and sales[-1] else None
+    net_worth = (reserves[-1] + (equity[-1] if equity else 0)) if reserves else None
+    return {
+        "market_cap_cr": num(r.get("Market Cap")), "price": price,
+        "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
+        "pe": num(r.get("Stock P/E")), "book_value": book, "pb": (price / book) if price and book else None,
+        "div_yield": num(r.get("Dividend Yield")), "roce": num(r.get("ROCE")), "roe": num(r.get("ROE")),
+        "face_value": num(r.get("Face Value")),
+        "net_margin": net_margin, "opm": opm[-1] if opm else None,
+        "sales_yoy": ((sales[-1] / sales[-2] - 1) * 100) if len(sales) > 1 and sales[-2] else None,
+        "profit_yoy": ((profit[-1] / profit[-2] - 1) * 100) if len(profit) > 1 and profit[-2] else None,
+        "debt_cr": borrow[-1] if borrow else None,
+        "debt_equity": (borrow[-1] / net_worth) if borrow and net_worth else None,
+        "sales_cr": sales[-1] if sales else None, "profit_cr": profit[-1] if profit else None,
+    }
+
+
+class Screener(Source):
+    name = "Screener.in"
+
+    def __init__(self, transport: httpx.BaseTransport | None = None):
+        super().__init__("https://www.screener.in", per_minute=20, burst=6, transport=transport,
+                         headers={"User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml"})
+
+    def company(self, symbol: str) -> dict:
+        sym = re.sub(r"[^A-Z0-9&\-]", "", symbol.upper())
+        last, fallback = None, None
+        # consolidated first; companies without subsidiaries only have standalone numbers
+        for path in (f"/company/{sym}/consolidated/", f"/company/{sym}/"):
+            try:
+                html = self.fetch(path, ttl=6 * 3600, kind="text")
+            except SourceError as e:
+                last = e
+                continue
+            if "top-ratios" not in html:
+                continue
+            p = parse(html)
+            if not p["ratios"]:
+                continue
+            p["url"] = f"https://www.screener.in{path}"
+            if p.get("pl"):
+                return p
+            fallback = fallback or p
+        if fallback:
+            return fallback
+        raise last or SourceError(self.name, f"Screener.in has no page for {sym}.")

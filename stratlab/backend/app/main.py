@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from kiteconnect import exceptions as kite_exc
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, billing, db
+from . import admin, basket, billing, db
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
 from .alerts import notify
@@ -22,6 +22,8 @@ from .auth import current_profile
 from .config import settings
 from . import research
 from .data import DataError, Registry
+from .intel import routes as research_routes
+from .intel.company import Research
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
@@ -33,6 +35,7 @@ kite = KiteService()
 hub = TickHub(kite)
 markets = Registry(kite)
 manager = LiveManager(kite, hub, markets)
+research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
 
 
 def after_login() -> str:
@@ -67,6 +70,8 @@ async def lifespan(app: FastAPI):
 
 log = logging.getLogger("stratlab")
 app = FastAPI(title="StratLab API", lifespan=lifespan)
+research_routes.setup(research_hub, _gemini, _anthropic)
+app.include_router(research_routes.router)
 
 
 @app.middleware("http")
@@ -456,6 +461,29 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"]})
 
 
+@app.post("/notebooks/{nid}/experiments/{version}/basket")
+def run_basket(nid: str, version: int, profile=Depends(current_profile)):
+    """Run one experiment's exact rules and period on ~10 similar instruments in the same market."""
+    nb = get_notebook(profile, nid)
+    exps = list(nb.get("experiments") or [])
+    exp = next((e for e in exps if e["v"] == version), None)
+    if exp is None:
+        err(404, "not_found", "Experiment not found.")
+    strategy = Strategy(**exp["strategy"])
+    inst = exp.get("instrument") or {}
+    limit = use_backtest(profile)          # the whole check counts as one experiment
+    check_features(profile, strategy, inst)
+    try:
+        out = basket.run(markets, strategy, inst.get("market", "IN"), inst.get("id"), exp.get("days") or 365)
+    except research.ResearchError as e:
+        err(e.status, e.code, e.message)
+    db.add_usage(profile["id"], "backtest")
+    exp["basket"] = out
+    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
+    save_notebook(profile, nb)
+    return ok({"basket": out, "usage": {"backtests_used": backtests_used(profile), "backtests_limit": limit}})
+
+
 @app.delete("/notebooks/{nid}/experiments/{version}")
 def delete_experiment(nid: str, version: int, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
@@ -635,7 +663,8 @@ def server_status() -> dict:
             "feed_connected": hub.connected, "live_sessions": len(manager.sessions),
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
-            "billing_enabled": billing.enabled(), "ai": ai_health()}
+            "billing_enabled": billing.enabled(), "ai": ai_health(),
+            "research": {"finnhub": bool(settings.FINNHUB_API_KEY)}}
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
