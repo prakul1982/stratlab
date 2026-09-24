@@ -4,6 +4,7 @@ import { money, TF_NAME } from "../lib/format";
 import { DEFAULTS, INDICATORS, mkRef, OPS, opSay, refName } from "../lib/rules";
 import { HELP } from "../lib/help";
 import { Info } from "./ui";
+import { Pencil } from "./Icons";
 import type { Cond, Op, Ref, RefType, Risk, Strategy, Tf } from "../lib/types";
 
 /* A highlighted word in a rule sentence that opens a small editor when clicked. */
@@ -129,8 +130,8 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
     <section className="card stack" aria-labelledby="rules-h" style={{ gap: 12 }}>
       <div className="spread" style={{ flexWrap: "wrap" }}>
         <h2 id="rules-h" className="h2 row" style={{ gap: 0 }}>The rules<Info>{HELP.rules}</Info></h2>
-        <span className="small muted">Click any highlighted word to change it.</span>
       </div>
+      <p className="edit-hint"><Pencil size={16} />Tap any highlighted word below to change it: the indicator, its length, the condition or a number.</p>
 
       {s.entry.length > 1 && (
         <p className="sentence">Buy when{" "}

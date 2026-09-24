@@ -7,6 +7,7 @@ import { Info, Loading, STATUS_NAME } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { downloadShareImage } from "../components/shareImage";
+import { Book, Globe, Pencil, Pulse, Share } from "../components/Icons";
 
 const yearSpan = (a: string, b: string) => (a === b ? a : `${a}–${b}`);
 const tradeCount = (n: number) => `${n} trade${n === 1 ? "" : "s"}`;
@@ -75,9 +76,16 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <div className="spread" style={{ flexWrap: "wrap" }}>
         <Link to={`/n/${nb.id}`} className="link" style={{ textDecoration: "none" }}>← {nb.name}</Link>
         <div className="row wrap" style={{ gap: 10 }}>
-          <button className="btn outline" onClick={async () => { await downloadShareImage(nb, e); notify("Share image saved. Post it anywhere."); }}>Share verdict</button>
-          <button className="btn" onClick={() => nav(`/n/${nb.id}`)}>Next experiment</button>
+          <button className="btn outline" onClick={async () => { await downloadShareImage(nb, e); notify("Share image saved. Post it anywhere."); }}><Share size={17} />Share verdict</button>
+          <button className="btn" onClick={() => nav(`/n/${nb.id}`)}>Next experiment →</button>
         </div>
+      </div>
+      <div className="toolbar" role="toolbar" aria-label="What next">
+        <span className="small muted" style={{ alignSelf: "center" }}>Next:</span>
+        <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "edit_rules" } })}><Pencil size={17} />Change the rules</button>
+        <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/market`)}><Globe size={17} />Try another market</button>
+        <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "paper_trade" } })}><Pulse size={17} />Paper trade it</button>
+        <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "note" } })}><Book size={17} />Write a lab note</button>
       </div>
 
       <section className="row" style={{ gap: 40, alignItems: "flex-end", paddingBottom: 26, borderBottom: "1px solid var(--line-2)", flexWrap: "wrap" }}>

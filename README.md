@@ -4,7 +4,7 @@
 
 **Test your trading idea before your money does.**
 
-Describe a strategy in plain English, backtest it on NSE history, then paper trade it on the live market with fake capital.
+Describe a strategy in plain English, test it honestly on Indian stocks, crypto or any market you have data for, then paper trade it on live prices with fake money.
 
 ### [🌐 stratlab.studio](https://stratlab.studio)
 
@@ -31,12 +31,40 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 - **Real costs, in the market's own currency.** India: STT, exchange and SEBI fees, stamp duty, GST, plus a capital-gains estimate. US: SEC and FINRA fees. Crypto: exchange fees. You see what you'd actually keep.
 - **Lab notebooks.** Each idea is a notebook: a question, the rules written as sentences, numbered experiments you can compare, and your own lab notes.
 - **Any market.** Indian stocks, indices and F&O (Zerodha Kite), crypto (Coinbase, no key needed), or upload a CSV of candles from anywhere. US, UK, Europe, Japan and forex are next.
-- **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out.
+- **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free models in turn (Groq, Cerebras, Gemini, OpenRouter), with Claude as an optional fallback, and a simple built-in converter if all of them are down.
 - **Paper trading.** Run the rules on live prices with fake money: Indian markets during market hours, crypto around the clock.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/notebook-dark.png">
   <img alt="A notebook: the question being tested, rules written as editable sentences, and lab notes" src="docs/images/notebook-light.png">
+</picture>
+
+## Everything you can do, and where to find it
+
+New here? A short tour pops up the first time you sign in. You can reopen it any time from **What can I do here?** in the sidebar.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/tour-dark.png">
+  <img alt="The feature tour: step 3 of 8, 'Test on any market', with where to find it" src="docs/images/tour-light.png">
+</picture>
+
+| You want to… | Where it is |
+| --- | --- |
+| Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
+| Choose or change the market | Step 1 on a new notebook, or the **Testing on** button at the top of any notebook |
+| Rewrite the idea from scratch | **Describe the idea again** at the top of a notebook |
+| Tweak a rule | Tap any highlighted word (marked ▾) in **The rules**: indicator, length, condition or number |
+| Run a test | **Run experiment** in a notebook; each run is saved and numbered so you can compare |
+| Understand a number | Every check, stat and setting has an **(i)** button that explains it in plain words |
+| Decide what to do next | The **Next** bar on a verdict: change the rules, try another market, paper trade, write a lab note |
+| Paper trade | **Paper trade** at the top of a notebook or verdict; running sessions are under **Paper trading** |
+| Share or save | **Share verdict** saves an image; **Export** saves the rules as a file |
+| Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
+| Read at night | **Night mode** at the bottom of the sidebar |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/new-dark.png">
+  <img alt="The New notebook page: choose the market and instrument first, then describe the idea" src="docs/images/new-light.png">
 </picture>
 
 <sub>Screenshots use synthetic sample prices, not real market data.</sub>
@@ -52,7 +80,7 @@ flowchart LR
     API -- "crypto: candles, prices" --> CB["Coinbase public data"]
     API -- "subscriptions" --> RZP["Razorpay"]
     RZP -- "webhooks" --> API
-    API --> AI["Gemini or Claude<br/>(strategy writer)"]
+    API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini,<br/>OpenRouter, Claude"]
     API --> ALERT["Telegram / email alerts"]
 ```
 
