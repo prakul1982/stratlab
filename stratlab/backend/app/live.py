@@ -12,7 +12,7 @@ from .models import Strategy
 from .daily_report import Reporter
 from .data.markets import MARKETS
 from .errors import report
-from .plans import PLANS, effective_plan, has_pro_features, trial_state
+from .plans import PLANS, allows, effective_plan, has_pro_features, trial_state
 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}
 POLL_SECONDS = 15          # how often polled markets (crypto) are checked for a newly closed candle
@@ -340,7 +340,7 @@ class LiveManager:
             self._last_plan = t
             self._enforce_plans(sessions)
             try:
-                self.reporter.run(sessions, can_alert=alerts_on, market_name=market_name,
+                self.reporter.run(sessions, can_alert=report_on, market_name=market_name,
                                   send=lambda p, subj, body: notify(p, subj, body, background=False))
             except Exception as e:
                 print("daily reports failed:", e)
@@ -383,11 +383,37 @@ class LiveManager:
                 for s in items:
                     if s.id in self.sessions and isinstance(s, LiveSession) and needs_pro(s.strategy, s.inst):
                         self.stop(s.id, "This strategy uses Pro features.")
+            for s in items:
+                missing = session_needs(s, plan)
+                if missing and s.id in self.sessions:
+                    self.stop(s.id, f"{missing} isn't on your plan any more.")
+
+
+def session_needs(s, plan: str) -> str | None:
+    """The first feature a running session uses that the plan doesn't include, in words, or None."""
+    kind = getattr(s, "kind", "single")
+    if kind == "group":
+        if not allows(plan, "group_live"):
+            return "Paper trading a group"
+        f = getattr(s, "fast", {}) or {}
+        if (f.get("ticks") or f.get("maxSpreadPct")) and not allows(plan, "fast_entries"):
+            return "Faster group entries"
+    if kind == "options":
+        if not allows(plan, "options"):
+            return "Options paper trading"
+        if getattr(s.strategy, "signal", None) and not allows(plan, "options_signal"):
+            return "Options on a signal"
+    return None
 
 
 def alerts_on(profile: dict) -> bool:
-    """Trade alerts and daily reports: on for anyone who turned alerts on and has Pro features."""
-    return bool(profile.get("alerts_enabled")) and has_pro_features(effective_plan(profile))
+    """A message for every paper trade: for anyone who turned alerts on and whose plan has them."""
+    return bool(profile.get("alerts_enabled")) and allows(effective_plan(profile), "alerts")
+
+
+def report_on(profile: dict) -> bool:
+    """The daily report goes wherever alerts are set up (Telegram or email), on plans that include it."""
+    return bool(profile.get("telegram_chat_id") or profile.get("alert_email")) and allows(effective_plan(profile), "daily_report")
 
 
 def market_name(mid: str) -> str:

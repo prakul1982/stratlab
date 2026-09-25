@@ -3,30 +3,37 @@ from datetime import datetime, timedelta, timezone
 
 PLANS = {
     "free": {
-        "name": "Free", "price": 0,
+        "name": "Free", "price": 0, "price_year": 0,
         "backtests_per_month": 5,
         "ai_builds_per_month": 10,
         "live_limit": 1,              # only during the trial
         "live_trial_days": 5,         # market days (Mon–Fri), counted in India time from the first start
-        "pro_features": False,
+        "group_size": 10,             # instruments in one group test
+        "features": set(),
     },
     "basic": {
-        "name": "Basic", "price": 1999,
+        "name": "Basic", "price": 999, "price_year": 9990,
         "backtests_per_month": 50,
         "ai_builds_per_month": 100,
-        "live_limit": 1,
+        "live_limit": 2,
         "live_trial_days": None,
-        "pro_features": False,
+        "group_size": 25,
+        "features": {"group_live", "options", "daily_report"},
     },
     "pro": {
-        "name": "Pro", "price": 4900,
+        "name": "Pro", "price": 2999, "price_year": 29990,
         "backtests_per_month": None,  # unlimited
         "ai_builds_per_month": None,  # unlimited (a daily safety cap still applies)
-        "live_limit": 5,
+        "live_limit": 10,
         "live_trial_days": None,
-        "pro_features": True,         # advanced indicators, F&O, alerts, export
+        "group_size": 50,
+        # pro_features: advanced indicators and Indian F&O
+        "features": {"group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features"},
     },
 }
+FEATURES = ("group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features")
+# the smallest plan with each feature, for upgrade messages
+FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
 BASIC_REFS = {"price", "sma", "ema", "rsi", "num"}
 PRO_REFS = BASIC_REFS | {
@@ -44,14 +51,30 @@ def payments_live() -> bool:
     return bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
 
 
+def allows(plan: str, feature: str) -> bool:
+    """Paid features are open to everyone until payments go live: nobody can buy a plan yet,
+    so gating them would just hide them."""
+    return feature in PLANS[plan]["features"] or not payments_live()
+
+
 def has_pro_features(plan: str) -> bool:
-    """Pro features (advanced indicators, F&O) are open to everyone until payments go live:
-    nobody can buy Pro yet, so gating them would just hide them."""
-    return PLANS[plan]["pro_features"] or not payments_live()
+    """Advanced indicators and Indian F&O."""
+    return allows(plan, "pro_features")
+
+
+def group_size(plan: str) -> int:
+    return PLANS[plan]["group_size"] if payments_live() else PLANS["pro"]["group_size"]
 
 
 def plan_info(plan: str) -> dict:
-    return {**PLANS[plan], "pro_features": has_pro_features(plan)}
+    info = {k: v for k, v in PLANS[plan].items() if k != "features"}
+    return {**info, "group_size": group_size(plan), "pro_features": has_pro_features(plan),
+            "features": {f: allows(plan, f) for f in FEATURES}}
+
+
+def public_plans() -> dict:
+    """What each plan includes, for the Plans page (independent of early access)."""
+    return {k: {**{x: v for x, v in p.items() if x != "features"}, "features": sorted(p["features"])} for k, p in PLANS.items()}
 
 
 def _dt(v) -> datetime:

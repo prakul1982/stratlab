@@ -2,6 +2,27 @@
 
 ## September 2026
 
+### New plans
+- **Prices:** Basic is now **₹999 a month** and Pro **₹2,999 a month**. Yearly billing gives two months free (₹9,990 and ₹29,990).
+- **Free:** 5 experiments and 10 AI builds a month, group tests of up to 10 instruments, and 5 market days of paper trading.
+- **Basic** adds:
+  - 50 experiments and 100 AI builds a month
+  - groups of up to 25 instruments
+  - 2 paper trading sessions at a time
+  - group paper trading
+  - options at set times
+  - the daily report
+- **Pro** adds:
+  - unlimited experiments and AI builds
+  - groups of up to 50 instruments
+  - 10 sessions at a time
+  - options on a notebook's signal
+  - faster group entries and the spread limit
+  - alerts for every trade
+  - every indicator, Indian F&O, and export
+- **Enforced on the server:** each feature is checked by the server. After a downgrade, a session the new plan doesn't cover is stopped with a clear reason.
+- **Early access:** everything stays unlocked until payments go live.
+
 ### Faster group entries and a spread limit
 - Pressing **Paper trade** on a group now opens a short set of options before it starts:
   - **Faster entries** (India): the entry rules are checked on the live price every 15 seconds, so a momentum signal on hourly candles doesn't wait up to an hour for the candle to close. Exits still wait for the close.

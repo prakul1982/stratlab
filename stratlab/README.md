@@ -10,18 +10,17 @@ A research notebook for traders: describe a strategy in plain words, test it on 
 
 ## Plans (edit in `backend/app/plans.py`)
 
-| | Free | Basic, ₹1,999/mo | Pro, ₹4,900/mo |
+| | Free | Basic, ₹999/mo (₹9,990/yr) | Pro, ₹2,999/mo (₹29,990/yr) |
 |---|---|---|---|
 | Experiments (backtest + verdict; walk-forward and the similar-stocks check count as one each) | 5 per month | 50 per month | Unlimited |
-| Live paper trading | 5 market days (Mon–Fri) from first use, 1 strategy | 1 strategy at a time | 5 at a time |
-| Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
-| Markets | Every market except Indian F&O | same | + Indian F&O (futures and options) |
 | AI strategy builds | 10 per month | 100 per month | Unlimited |
-| Alerts, export | – | – | Yes |
+| Group size (tests and paper trading) | 10 | 25 | 50 |
+| Live paper trading | 5 market days (Mon–Fri) from first use, 1 session | 2 at a time | 10 at a time |
+| Feature flags (`features` in plans.py) | – | `group_live`, `options`, `daily_report` | all, plus `options_signal`, `fast_entries`, `alerts`, `export`, `pro_features` (indicators, F&O) |
 
 Monthly counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them.
 
-**Early access:** while Razorpay isn't configured (`RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` empty), every plan gets the Pro features (all indicators, F&O, alerts, export), because nobody can buy Pro yet. The monthly limits above still apply. As soon as the Razorpay keys are set, the Pro features lock to the Pro plan again, with no code change.
+**Early access:** while Razorpay isn't configured (`RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` empty), every plan gets every feature and groups of up to 50, because nobody can buy a plan yet. The monthly limits and paper-trading counts still apply. As soon as the Razorpay keys are set, each feature locks to its plan, with no code change. The server checks every gate (`allows()` in plans.py), and a session a plan no longer covers after a downgrade is stopped within a minute.
 
 ---
 
@@ -61,7 +60,7 @@ To test the credentials straight away, send a POST request to `https://YOUR-BACK
 
 ### 3. Razorpay (optional, for paid plans)
 Leave the Razorpay settings empty and the Plans page shows the paid plans as "Coming soon", with everyone on Free. To take payments:
-1. In the dashboard, create two **monthly plans**: Basic ₹1,999 and Pro ₹4,900. Put their plan IDs in `.env`.
+1. In the dashboard, create two **monthly plans**, Basic ₹999 and Pro ₹2,999, and put their IDs in `RAZORPAY_PLAN_BASIC` and `RAZORPAY_PLAN_PRO`. For yearly billing (two months free), also create **yearly plans**, Basic ₹9,990 and Pro ₹29,990, in `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`. The Plans page shows the Monthly/Yearly switch only when both yearly IDs are set.
 2. Enable **Subscriptions** on your account.
 3. Add a webhook to `https://YOUR-BACKEND/billing/webhook` with a secret, and put that secret in `.env`. Subscribe to these events:
    - `subscription.activated`

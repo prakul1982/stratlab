@@ -41,7 +41,7 @@ from . import daily_report, public
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
-from .plans import PLANS, has_pro_features, plan_info, trial_state
+from .plans import FEATURE_PLAN, PLANS, allows, group_size, has_pro_features, plan_info, public_plans, trial_state
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -156,6 +156,20 @@ def upgrade(message: str, code: str = "upgrade_required"):
     err(402, code, message)
 
 
+def need(profile, feature: str, what: str):
+    """Stop with an upgrade message when the plan doesn't include a feature."""
+    if not allows(profile["_plan"], feature):
+        upgrade(f"{what} {'is' if not what.endswith('s') else 'are'} on the {PLANS[FEATURE_PLAN[feature]]['name']} plan.")
+
+
+def check_group_size(profile, n: int):
+    cap = group_size(profile["_plan"])
+    if n > cap:
+        bigger = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["group_size"] >= n), None)
+        upgrade(f"Your plan tests groups of up to {cap} instruments; this one has {n}."
+                + (f" {bigger} goes up to {PLANS['pro' if bigger == 'Pro' else 'basic']['group_size']}." if bigger else ""))
+
+
 def safe(obj):
     if isinstance(obj, float):
         return obj if math.isfinite(obj) else None
@@ -257,15 +271,16 @@ def me(profile=Depends(current_profile)):
         "alerts": {"enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
         "data_online": kite.ready(),
-        "billing_enabled": billing.enabled(),
+        "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "is_admin": admin.is_admin(profile),
     })
 
 
 @app.put("/me/alerts")
 def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
-    if not is_pro(profile):
-        upgrade("Telegram and email alerts are on the Pro plan.")
+    need(profile, "daily_report", "Alerts and the daily report")
+    if req.alerts_enabled:
+        need(profile, "alerts", "Trade alerts")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
     if req.daily_report is not None:
@@ -276,8 +291,7 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
 
 @app.post("/me/alerts/test")
 def test_alert(profile=Depends(current_profile)):
-    if not is_pro(profile):
-        upgrade("Telegram and email alerts are on the Pro plan.")
+    need(profile, "daily_report", "Alerts and the daily report")
     try:
         sent = notify(profile, "StratLab test alert", "StratLab test alert: your alerts are working.", background=False)
     except Exception as e:
@@ -311,8 +325,7 @@ def instrument_info(inst_id: str, profile=Depends(current_profile)):
 
 @app.post("/export/strategy")
 def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
-    if not is_pro(profile):
-        upgrade("Strategy export is on the Pro plan.")
+    need(profile, "export", "Strategy export")
     iid = req.instrument or (f"IN:{req.instrument_token}" if req.instrument_token else None)
     inst = markets.resolve(iid)[1] if iid else None
     payload = {"format": "stratlab-strategy-v1", "exported_at": datetime.now(IST).isoformat(),
@@ -424,6 +437,7 @@ def run_group_test(profile, strategy: Strategy, group: dict, req, version: int) 
     prov = markets.provider(market)
     if prov is None or not prov.ready():
         err(503, "data_offline", "Market data for this market is offline right now. Try again soon.")
+    check_group_size(profile, len(group.get("members") or []))
     limit = use_backtest(profile)
     ids, missing = universes.resolve(markets, market, group.get("members") or [])
     datasets, problems = universes.load_all(markets, strategy, ids, req.days)
@@ -750,6 +764,10 @@ def start_live_group(req: GroupLiveReq, profile=Depends(current_profile)):
     ids, missing = universes.resolve(markets, g.market, [m.model_dump() for m in g.members])
     insts = [markets.resolve(i)[1] for i in ids]
     insts = [i for i in insts if i]
+    need(profile, "group_live", "Paper trading a group")
+    if req.fast.ticks or req.fast.maxSpreadPct:
+        need(profile, "fast_entries", "Faster entries and the spread limit")
+    check_group_size(profile, len(insts))
     if len(insts) < 2:
         err(400, "group_empty", "Fewer than two of this group's instruments could be found.")
     for i in insts:
@@ -905,8 +923,11 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
 
 @app.post("/options/sessions")
 def start_options(req: OptionStartReq, profile=Depends(current_profile)):
-    options_ready()
+    need(profile, "options", "Options paper trading")
     s = req.strategy
+    if s.signal:
+        need(profile, "options_signal", "Options entered on a notebook's signal")
+    options_ready()
     if not options_data.contracts(s.exchange, s.underlying, s.expiry):
         err(404, "no_contracts", f"No {s.underlying} options are listed on {s.exchange} for that expiry.")
     inst = {"id": f"OPT:{s.exchange}:{s.underlying}", "type": "OPTIONS", "market": "IN", "currency": "INR",
@@ -944,7 +965,7 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
     if profile["_plan"] == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
     try:
-        return billing.create_subscription(profile, req.plan)
+        return billing.create_subscription(profile, req.plan, req.period)
     except ValueError as e:
         err(503, "billing_offline", str(e))
 

@@ -36,6 +36,8 @@ class Settings:
     RAZORPAY_WEBHOOK_SECRET = _env("RAZORPAY_WEBHOOK_SECRET")
     RAZORPAY_PLAN_BASIC = _env("RAZORPAY_PLAN_BASIC")
     RAZORPAY_PLAN_PRO = _env("RAZORPAY_PLAN_PRO")
+    RAZORPAY_PLAN_BASIC_YEAR = _env("RAZORPAY_PLAN_BASIC_YEAR")     # optional: yearly plans (two months free)
+    RAZORPAY_PLAN_PRO_YEAR = _env("RAZORPAY_PLAN_PRO_YEAR")
 
     # AI strategy builder: providers are tried in order until one answers (see ai_providers.py)
     AI_PROVIDERS = _env("AI_PROVIDERS", "auto")         # "auto" = every provider with a key, or e.g. "groq,gemini"
