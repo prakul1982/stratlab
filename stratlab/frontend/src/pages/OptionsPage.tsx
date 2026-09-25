@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -41,7 +41,7 @@ function Num({ label, value, onChange, min = 0, max, step = 1, width = 110, suff
 }
 
 function Time({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return <label className="field" style={{ width: 130 }}>{label}<input type="time" value={value} onChange={(e) => e.target.value && onChange(e.target.value)} /></label>;
+  return <label className="field" style={{ width: 130 }}><span>{label}</span><input type="time" value={value} onChange={(e) => e.target.value && onChange(e.target.value)} /></label>;
 }
 
 function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string }) {
@@ -143,39 +143,6 @@ function Chain({ s }: { s: OptionStrategy }) {
   );
 }
 
-function ImportBox({ onLoaded }: { onLoaded: (s: OptionStrategy, notes: string[]) => void }) {
-  const { refreshMe } = useApp();
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  const file = useRef<HTMLInputElement>(null);
-  const go = async () => {
-    if (text.trim().length < 10) { setNote("Paste or choose your options strategy first."); return; }
-    setBusy(true); setNote(null);
-    try {
-      const out = await api<{ strategy: OptionStrategy; notes: string[]; used_ai: boolean }>("/options/import", { method: "POST", body: { text } });
-      if (out.used_ai) refreshMe();
-      onLoaded(out.strategy, out.notes);
-      setText("");
-    } catch (e) { setNote((e as ApiError).message); } finally { setBusy(false); }
-  };
-  return (
-    <details className="card">
-      <summary className="h3">Import an options strategy</summary>
-      <div className="stack" style={{ gap: 10, marginTop: 12 }}>
-        <p className="small muted">A config file, code or a description of a straddle, strangle, condor or any multi-leg structure. A StratLab options export loads exactly; anything else is translated by the AI, and whatever it can't carry over is listed.</p>
-        <textarea className="input" rows={5} value={text} placeholder="Paste it here, or choose a file" onChange={(e) => setText(e.target.value)} aria-label="Options strategy to import" />
-        <div className="row wrap" style={{ gap: 8 }}>
-          <input ref={file} type="file" accept=".json,.txt,.py,.md" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setText((await f.text()).slice(0, 60000)); }} />
-          <button className="btn quiet sm" onClick={() => file.current?.click()}>Choose a file</button>
-          <button className="btn sm" disabled={busy} onClick={go}>{busy ? "Reading…" : "Import"}</button>
-        </div>
-        {note && <p className="small neg">{note}</p>}
-      </div>
-    </details>
-  );
-}
-
 export function OptionsPage() {
   const { fail, notify, refreshMe } = useApp();
   const nav = useNavigate();
@@ -258,7 +225,7 @@ export function OptionsPage() {
       <div className="stack" style={{ gap: 6 }}>
         <h1 className="serif row" style={{ fontSize: "clamp(30px, 4vw, 42px)", fontWeight: 400, letterSpacing: "-0.02em", gap: 0 }}>Options<Info>{HELP.options}</Info></h1>
         <p className="muted" style={{ maxWidth: "62ch" }}>Paper trade option structures on live NSE, BSE and MCX prices. Fills use the real bid and ask.</p>
-        <p className="small muted row wrap" style={{ gap: 6 }}><span className="pill">Live paper trading</span><span className="pill soon-pill">Backtesting coming soon</span><Info>{HELP.optBacktest}</Info></p>
+        <p className="small muted row wrap" style={{ gap: 6 }}><span className="pill soon-pill">Backtesting coming soon</span><Info>{HELP.optBacktest}</Info></p>
       </div>
 
       {offline && <div className="banner">{offline}</div>}
@@ -403,13 +370,13 @@ export function OptionsPage() {
         )}
       </section>
 
-      <div className="opt-extras">
+      <div className="opt-extras one">
         <Chain key={`${s.exchange}${s.underlying}${s.expiry}`} s={s} />
-        <ImportBox onLoaded={(x, n) => { setS({ ...blankOptions(), ...x }); setNotes(n); setPreview(null); }} />
       </div>
       <div className="row" style={{ gap: 8 }}>
         <button className="btn quiet sm" onClick={exportIt}>Export</button>
         <button className="btn quiet sm" onClick={() => { if (confirm("Start over with a fresh short straddle?")) { setS(blankOptions()); setPreview(null); } }}>Start over</button>
+        <Link to="/import" className="btn quiet sm">Import a structure</Link>
       </div>
 
       {rows && rows.length > 0 && (

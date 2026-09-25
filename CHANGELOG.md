@@ -2,6 +2,18 @@
 
 ## September 2026
 
+### A full UI pass
+- Narrow pages (Options, Import) now sit in the middle of the screen instead of hugging the left edge.
+- Every dropdown in the app has one look in every browser. Safari had been drawing its own boxes, on Compare, in the rules editor and on Options.
+- The time and number labels on the Options form line up.
+- **Duplicates removed:**
+  - **Sidebar:** Research and Import a strategy are now ordinary links in the menu instead of two more big buttons, and New notebook stays the one main button.
+  - **Your notebooks page:** the Import button there is gone, since the sidebar has it.
+  - **Notebook page:** the "Paper trading" side card is gone, since the toolbar has Paper trade. Make a copy, Export and Delete moved into a **More** menu, so the toolbar fits on one line.
+  - **Options page:** its own import box is gone, since Import a strategy sends option structures there. The "Live paper trading" pill repeated the line above it.
+  - **Account page:** the "Look" card is gone, since the sidebar has the Night mode switch.
+- On phones, the verdict page's long suggestions now wrap instead of running off the screen.
+
 ### Tidier Options controls, market hours in the sidebar
 - On the Options page, every control is the same height, so the rows line up. The **More…** menus now look like the other buttons in every browser (Safari showed a plain box before) and fill in when you've picked from them. The Stop loss and Target labels line up.
 - **Markets now** shows when a closed market opens ("opens 6h 31m", "opens Mon"). Hover or tap a market for its hours in exchange time and in your time, and how long until it opens or closes.

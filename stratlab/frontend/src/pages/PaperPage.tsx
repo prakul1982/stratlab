@@ -164,7 +164,7 @@ export function PaperPage() {
       </div>
       {rows === null ? <Loading /> : rows.length === 0 ? (
         <Empty title="No paper trades yet">
-          <p className="muted">Open a notebook and choose <b>Paper trade these rules</b>. Best once a verdict says the edge looks real.</p>
+          <p className="muted">Open a notebook and choose <b>Paper trade</b>. Best once a verdict says the edge looks real.</p>
           <Link to="/" className="btn">Go to your notebooks</Link>
         </Empty>
       ) : (

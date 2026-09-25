@@ -524,7 +524,7 @@ ul.orders { list-style: none; margin: 0; padding: 0; display: flex; flex-directi
 ul.orders li { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; }
 table.legs th, table.legs td { padding-left: 6px; padding-right: 6px; }
 table.legs input[type=number] { width: 72px !important; }
-.opt-page { max-width: 880px; }
+.page-narrow, .opt-page { max-width: 960px; margin-left: auto; margin-right: auto; width: 100%; }
 .opt-form .opt-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: center; }
 .opt-label { font-size: 13px; font-weight: 600; color: var(--muted); }
 @media (max-width: 560px) { .opt-form .opt-row { grid-template-columns: 1fr; gap: 6px; } }
@@ -577,3 +577,19 @@ table.legs input[type=number] { width: 72px !important; }
 .mkt-grid > .mkt-now:nth-child(2n) .mkt-tip { left: auto; right: -6px; }
 .mkt-now:hover .mkt-tip, .mkt-now:focus .mkt-tip { display: flex; }
 .mkt-tip b { color: var(--ink); font-size: 13px; }
+/* one look for every dropdown, in every browser (Safari otherwise draws its own box) */
+.field select, select.input, table.legs select, .cmp-pick select {
+  -webkit-appearance: none; appearance: none; padding-right: 34px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+.cmp-table th:not(:first-child), .cmp-table td:not(:first-child) { text-align: right; }
+.opt-extras.one { grid-template-columns: 1fr; }
+.more-menu { position: relative; display: inline-flex; }
+.more-caret { display: inline-block; width: 6px; height: 6px; margin-left: 2px; margin-top: -3px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+.more-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 190px; display: flex; flex-direction: column; padding: 6px;
+  background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .18); }
+.more-pop button { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
+.more-pop button:hover, .more-pop button:focus-visible { background: var(--chip); outline: none; }
+.more-pop button.danger { color: var(--orange-ink); }

@@ -372,7 +372,7 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <section className="card dashed row wrap" style={{ gap: 14 }}>
         <h2 className="serif" style={{ fontSize: 20, fontWeight: 600, fontStyle: "italic", marginRight: 8 }}>What to try next</h2>
         {v.suggestions.map((sg) => (
-          <button key={sg.action} className="btn quiet" onClick={() => nav(`/n/${nb.id}`, { state: { action: sg.action } })}>{sg.text}</button>
+          <button key={sg.action} className="btn quiet" style={{ whiteSpace: "normal", textAlign: "left", height: "auto", minHeight: 40 }} onClick={() => nav(`/n/${nb.id}`, { state: { action: sg.action } })}>{sg.text}</button>
         ))}
       </section>
       <p className="small muted">Paper trading and research only. Past results don't predict future returns, and nothing here is investment advice.</p>

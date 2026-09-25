@@ -8,6 +8,7 @@ import type { Experiment, Instrument, Notebook, Strategy, Tf } from "../lib/type
 import { getUpload } from "../lib/upload";
 import { GapsCard, type GapInfo } from "../components/Gaps";
 import { Copy, Download, Pin, Pulse, Sparkle, Trash } from "../components/Icons";
+import { MoreMenu } from "../components/MoreMenu";
 import { RulesCard } from "../components/Rules";
 import { AutoGrow, Info, Loading, Modal, VerdictBadge } from "../components/ui";
 import { HELP } from "../lib/help";
@@ -257,9 +258,11 @@ export function NotebookPage() {
             <button className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
             <button className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade</button>
             <button className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
-            <button className="btn quiet sm" onClick={duplicate}><Copy size={17} />Make a copy</button>
-            <button className="btn quiet sm" onClick={exportStrategy}><Download size={17} />Export{isPro ? "" : " (Pro)"}</button>
-            <button className="btn quiet sm danger" onClick={del}><Trash size={17} />Delete</button>
+            <MoreMenu items={[
+              { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
+              { label: `Export${isPro ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
+              { label: "Delete notebook", icon: <Trash size={16} />, run: del, danger: true },
+            ]} />
           </div>
         </div>
 
@@ -336,14 +339,6 @@ export function NotebookPage() {
             ))}
           </section>
         )}
-        <section className="card stack" style={{ gap: 10 }}>
-          <h2 className="h3 row" style={{ gap: 0 }}>Paper trading<Info>{HELP.paper}</Info></h2>
-          <p className="small muted">
-            {last?.verdict.verdict === "edge" ? "The last verdict looks like a real edge. Try it on live prices with fake money." :
-              "Try these rules on live prices with fake money. Best once a verdict says the edge looks real."}
-          </p>
-          <button className="btn outline sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}>Paper trade these rules</button>
-        </section>
       </aside>
 
       {rewrite && (

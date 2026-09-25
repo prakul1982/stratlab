@@ -75,7 +75,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 
 | You want to… | Where it is |
 | --- | --- |
-| Find an idea | **Research a company** in the sidebar: a company's AI read ends with ideas to test in one click |
+| Find an idea | **Research** in the sidebar: a company's AI read ends with ideas to test in one click |
 | Explore a sector | **Research → Themes**: a map of who's involved, where the margin sits, and a ranked shortlist |
 | See the market's mood | **Research → Market pulse**: index levels, headlines and an AI read of what's moving |
 | Keep an eye on companies | **Watch** on a company page; they're listed under **Research → Watchlist** |
@@ -83,7 +83,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Bring a strategy you already have | **Import a strategy** in the sidebar (or on New notebook): it sets up a notebook, a group notebook or an Options structure depending on what you bring; a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
 | Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
 | Find a notebook | Search and sort (recent, name, best verdict) on **All notebooks**; the dot beside each name in the sidebar is its last verdict |
-| Try a variation without losing the original | **Make a copy** at the top of a notebook |
+| Try a variation without losing the original | **More → Make a copy** at the top of a notebook (Export and Delete are there too) |
 | Rename a notebook | Click its name at the top of the notebook |
 | Choose or change the market | Step 1 on a new notebook, or the **Testing on** button at the top of any notebook |
 | Rewrite the idea from scratch | **Describe the idea again** at the top of a notebook |

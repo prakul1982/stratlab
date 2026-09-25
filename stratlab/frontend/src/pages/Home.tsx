@@ -218,7 +218,6 @@ export function Home() {
           <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Your notebooks</h1>
         </div>
         <div className="row wrap" style={{ gap: 10 }}>
-          <button className="btn quiet" onClick={() => nav("/new?import=1")}><Upload size={18} />Import a strategy</button>
           <button className="btn" onClick={() => nav("/new")}>Test a new idea</button>
         </div>
       </div>
