@@ -2,6 +2,14 @@
 
 ## September 2026
 
+### Simpler to read, just as powerful
+- **The rules are edited in blocks: Entry, Exit, Size.**
+  - Every rule has a visible × to remove it, and each list has its own **+ Add** button.
+  - **Edit in words** rewrites the whole strategy from a sentence. Your market and capital stay.
+- **Detailed settings stay folded away:** trailing stops, time limits, intraday limits, costs and sizing sit in **More settings**. It shows how many are switched on (for example "2 on") and stays open once you've opened it.
+- **Options is three steps:** what to trade, the structure, then when and how much risk. Re-centring, trailing, caps, sizing and costs are under **More settings**.
+- **"I trade actively" no longer opens everything at once.**
+
 ### Ask or do anything
 - The search box now does things instead of just finding them. Type a line and press Enter:
   - **"Test: buy NIFTY when RSI drops below 30…"** builds the rules, saves a notebook, runs the test and opens the verdict

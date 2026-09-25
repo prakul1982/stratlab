@@ -5,6 +5,8 @@ import { DEFAULTS, INDICATORS, mkRef, NO_SESSION, OPS, opSay, refName } from "..
 import { HELP } from "../lib/help";
 import { Info } from "./ui";
 import { Pencil } from "./Icons";
+import { Block, More } from "./More";
+import { buildIdea } from "./IdeaComposer";
 import type { Cond, HigherTf, Op, Ref, RefType, Risk, Session, Strategy, Tf } from "../lib/types";
 
 /* A highlighted word in a rule sentence that opens a small editor when clicked. */
@@ -105,6 +107,7 @@ function CondSentence({ c, lead, onChange, onDelete, isPro, tf, scored }: {
     </Pop>
   );
   return (
+    <div className="cond-row">
     <p className="sentence">
       {lead} {refTok("l")}{" "}
       <Pop title="Condition" label={opSay(c.op)} cls="plain">
@@ -116,7 +119,6 @@ function CondSentence({ c, lead, onChange, onDelete, isPro, tf, scored }: {
               ))}
             </div>
             <p className="hint">"Crosses" is true only on the candle where it happens. "Is above" is true on every candle while it stays above.</p>
-            <button className="btn danger sm" onClick={() => { onDelete(); close(); }}>Remove this rule</button>
           </>
         )}
       </Pop>{" "}
@@ -124,6 +126,8 @@ function CondSentence({ c, lead, onChange, onDelete, isPro, tf, scored }: {
       {scored && <>{" "}<NumTok title="Weight in the score" value={c.w ?? 1} min={0.1} max={10} step={0.5} render={(v) => `(worth ${v})`}
         onChange={(v) => onChange({ ...c, w: v })} hint="How many points this rule adds to the score when it's true." /></>}.
     </p>
+    <button type="button" className="cond-x" onClick={onDelete} aria-label="Remove this rule" title="Remove this rule">×</button>
+    </div>
   );
 }
 
@@ -192,7 +196,25 @@ const TGT_UNITS: [NonNullable<Risk["tgtType"]>, string, string][] = [
 ];
 
 export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: string; onChange: (s: Strategy) => void }) {
-  const { isPro, level } = useApp();
+  const { isPro, refreshMe } = useApp();
+  const [rewrite, setRewrite] = useState<string | null>(null);
+  const [rebuilding, setRebuilding] = useState(false);
+  const [rewriteNote, setRewriteNote] = useState("");
+  const rebuild = async () => {
+    if (rewrite === null) return;
+    setRebuilding(true); setRewriteNote("");
+    try {
+      const out = await buildIdea(rewrite.trim());
+      if (out.usedAI) refreshMe();
+      if (!out.built) { setRewriteNote(out.note); return; }
+      const n = out.built.strategy;
+      onChange({ ...s, text: n.text, entry: n.entry, exit: n.exit, entryJoin: n.entryJoin, side: n.side, shortEntry: n.shortEntry, shortExit: n.shortExit,
+        minScore: n.minScore, tf: n.tf, session: n.session, product: n.product,
+        risk: { ...s.risk, sl: n.risk.sl, tgt: n.risk.tgt, stopType: n.risk.stopType, tgtType: n.risk.tgtType, trail: n.risk.trail, maxBars: n.risk.maxBars } });
+      setRewrite(null);
+      if (out.note) setRewriteNote(out.note);
+    } catch (e) { setRewriteNote((e as Error).message); } finally { setRebuilding(false); }
+  };
   const set = (patch: Partial<Strategy>) => onChange({ ...s, ...patch });
   const setRisk = (patch: Partial<Risk>) => onChange({ ...s, risk: { ...s.risk, ...patch } });
   const sess: Session = { ...NO_SESSION, ...(s.session ?? {}) };
@@ -236,104 +258,119 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
     : <Choice title="Target measured in" value={tgtType} onChange={(v) => setRisk({ tgtType: v })} options={TGT_UNITS.map(([v, l, h]) => [v, l, h])} />;
   const addRule = (key: "entry" | "exit" | "shortEntry" | "shortExit", c: Cond) => set({ [key]: [...((s[key] as Cond[] | undefined) ?? []), c] } as Partial<Strategy>);
 
+  // how many advanced settings are in use, so "More settings" says so while closed
+  const moreOn = [r.trail, r.maxBars, intraday && (sess.start || sess.end), intraday && sess.squareoff, intraday && sess.maxTradesDay,
+    intraday && sess.cooldown, intraday && sess.dailyLossPct, (r.sizing ?? "risk") === "capital"].filter(Boolean).length;
+  const addBtn = (key: "entry" | "exit" | "shortEntry" | "shortExit", c: Cond, label: string) => (
+    <button type="button" className="add-rule" onClick={() => addRule(key, c)}>+ {label}</button>
+  );
+
   return (
-    <section className="card stack" aria-labelledby="rules-h" style={{ gap: 12 }}>
-      <div className="spread" style={{ flexWrap: "wrap" }}>
+    <section className="card stack" aria-labelledby="rules-h" style={{ gap: 18 }}>
+      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
         <h2 id="rules-h" className="h2 row" style={{ gap: 0 }}>The rules<Info>{HELP.rules}</Info></h2>
+        <button type="button" className="btn quiet sm" onClick={() => setRewrite(rewrite === null ? (s.text || "") : null)}>
+          <Pencil size={15} />{rewrite === null ? "Edit in words" : "Close"}
+        </button>
       </div>
-      <p className="edit-hint"><Pencil size={16} />Tap any highlighted word below to change it: the indicator, its length, the condition or a number.</p>
+      {rewrite !== null && (
+        <div className="rewrite stack" style={{ gap: 10 }}>
+          <label className="small muted" htmlFor="rewrite">Describe the whole strategy the way you'd like it. The rules below are rebuilt from it; the market and your capital stay.</label>
+          <textarea id="rewrite" className="input" rows={3} value={rewrite} onChange={(e) => setRewrite(e.target.value)}
+            placeholder="e.g. Buy when the 20 EMA crosses above the 50 EMA and RSI is above 50, sell when it crosses back, 2% stop" />
+          <div className="row wrap" style={{ gap: 8 }}>
+            <button type="button" className="btn sm" disabled={rebuilding || rewrite.trim().length < 5} onClick={rebuild}>{rebuilding ? "Rebuilding…" : "Rebuild the rules"}</button>
+            {rewriteNote && <span className="small" style={{ color: "var(--orange-ink)" }}>{rewriteNote}</span>}
+          </div>
+        </div>
+      )}
+      <p className="small muted">Tap any highlighted word to change it: the indicator, its length, the condition or a number.</p>
 
-      {!both && <>
+      <Block title={both ? "Entry: long" : "Entry"}>
         {joinLine(s.entry, sideTok("long"))}
-        {s.entry.length === 0 && <p className="sentence muted">{sideTok("long")} when… no entry rule yet. Add one below, or describe your idea again.</p>}
+        {s.entry.length === 0 && <p className="sentence muted">{sideTok("long")} when… no entry rule yet.</p>}
         {list("entry", s.entry, (i) => s.entry.length > 1 || scored ? <span className="muted">{i + 1}.</span> : <b>{sideTok("long")} when</b>, true)}
-        {list("exit", s.exit, (i) => i === 0 ? <b>{short ? "Buy back" : "Sell"} when</b> : <b>or when</b>, false)}
-      </>}
-      {both && <>
-        <h3 className="h3 side-h">Going long</h3>
-        {joinLine(s.entry, sideTok("long"))}
-        {s.entry.length === 0 && <p className="sentence muted">No long entry rule yet.</p>}
-        {list("entry", s.entry, entryLead(s.entry, sideTok("long")), true)}
-        {list("exit", s.exit, (i) => i === 0 ? <b>Sell when</b> : <b>or when</b>, false)}
-        <h3 className="h3 side-h">Going short</h3>
-        {joinLine(shortEntry, "Sell short")}
-        {shortEntry.length === 0 && <p className="sentence muted">No short entry rule yet.</p>}
-        {list("shortEntry", shortEntry, entryLead(shortEntry, "Sell short"), true)}
-        {list("shortExit", shortExit, (i) => i === 0 ? <b>Buy back when</b> : <b>or when</b>, false)}
-      </>}
-      {s.entry.length > 0 && (
-        <p className="hint row" style={{ gap: 0, marginTop: -6 }}>"Crosses above" or "is above"? They trade very differently.<Info>{HELP.crosses}</Info></p>
+        {addBtn("entry", { l: { t: "price" }, op: short ? "lt" : "gt", r: { t: "sma", p: 50 } }, "Add an entry rule")}
+      </Block>
+      {both && (
+        <Block title="Entry: short">
+          {joinLine(shortEntry, "Sell short")}
+          {shortEntry.length === 0 && <p className="sentence muted">No short entry rule yet.</p>}
+          {list("shortEntry", shortEntry, entryLead(shortEntry, "Sell short"), true)}
+          {addBtn("shortEntry", { l: { t: "price" }, op: "lt", r: { t: "sma", p: 50 } }, "Add a short entry rule")}
+        </Block>
       )}
 
-      <p className="sentence">
-        {s.exit.length || shortExit.length ? "Also close" : <b>Close</b>} at a{" "}
-        <NumTok title="Stop loss" value={r.sl} missing="no stop loss" max={stopType === "pct" ? 99 : 100000} step={stopType === "swing" ? 1 : 0.1}
-          render={(v) => `${v}`} onChange={(v) => setRisk({ sl: v })} hint="0 turns it off. Tap the word after the number to change the unit." />
-        {r.sl > 0 && <>{" "}{unitTok("stop")}</>}{" "}or a{" "}
-        <NumTok title="Target" value={r.tgt} missing="no target" max={100000} render={(v) => `${v}`}
-          onChange={(v) => setRisk({ tgt: v })} hint={tgtType === "r" ? "A multiple of the stop distance: 2 means twice what you risk." : "0 turns it off."} />
-        {r.tgt > 0 && <>{" "}{unitTok("tgt")}</>}.
-        <Info label="What are a stop loss and a target?"><b>Stop loss:</b> {HELP.stop}<br /><br /><b>Target:</b> {HELP.target}<br /><br /><b>Units:</b> {HELP.stopUnits}</Info>
-      </p>
-      <p className="sentence">
-        Trail the stop by{" "}
-        <NumTok title="Trailing stop (%)" value={r.trail ?? 0} suffix="%" missing="nothing (off)" max={50} onChange={(v) => setRisk({ trail: v })}
-          hint="Moves the stop with the best price since the trade opened, staying this far behind it. It never moves back. 0 turns it off." />{" "}and close any trade after{" "}
-        <NumTok title="Close after (candles)" value={r.maxBars ?? 0} step={1} max={5000} missing="no time limit" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
-          onChange={(v) => setRisk({ maxBars: Math.round(v) })} hint="Closes a trade that's still open after this many candles, at the close. 0 turns it off." />.
-        <Info label="Trailing stops and time limits"><b>Trailing stop:</b> {HELP.trail}<br /><br /><b>Time limit:</b> {HELP.maxBars}</Info>
-      </p>
-      {intraday && (
+      <Block title="Exit" info={s.entry.length > 0 ? <Info label="Crosses or is above?">{HELP.crosses}</Info> : undefined}>
+        {list("exit", s.exit, (i) => i === 0 ? <b>{short ? "Buy back" : "Sell"} when</b> : <b>or when</b>, false)}
+        {both && list("shortExit", shortExit, (i) => i === 0 ? <b>Buy back a short when</b> : <b>or when</b>, false)}
+        <div className="row wrap" style={{ gap: 14 }}>
+          {addBtn("exit", { l: { t: "rsi", p: 14 }, op: short ? "lt" : "gt", r: { t: "num", v: short ? 30 : 70 } }, both ? "Add a sell rule" : "Add an exit rule")}
+          {both && addBtn("shortExit", { l: { t: "rsi", p: 14 }, op: "lt", r: { t: "num", v: 30 } }, "Add a buy-back rule")}
+        </div>
         <p className="sentence">
-          <b>During the day:</b> enter only between{" "}
-          <TimeTok title="First entry time" value={sess.start} empty="the open" onChange={(v) => setSess({ start: v })}
-            hint="No new trades on candles that close before this time (the exchange's local time)." />{" "}and{" "}
-          <TimeTok title="Last entry time" value={sess.end} empty="the close" onChange={(v) => setSess({ end: v })}
-            hint="No new trades on candles that close after this time." />, square off at{" "}
-          <TimeTok title="Square-off time" value={sess.squareoff} empty="never (hold overnight)" onChange={(v) => setSess({ squareoff: v })}
-            hint="Any open trade closes on the candle that ends at this time. Indian intraday (MIS) costs apply when set." />, at most{" "}
-          <NumTok title="Trades per day" value={sess.maxTradesDay} step={1} max={100} missing="any number of" render={(v) => `${v}`}
-            onChange={(v) => setSess({ maxTradesDay: Math.round(v) })} hint="0 means no limit." />{" "}trade{sess.maxTradesDay === 1 ? "" : "s"} a day, wait{" "}
-          <NumTok title="Cooldown (candles)" value={sess.cooldown} step={1} max={500} missing="no candles" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
-            onChange={(v) => setSess({ cooldown: Math.round(v) })} hint="After a trade closes, skip this many candles before entering again." />{" "}after each trade, and stop for the day after losing{" "}
-          <NumTok title="Daily loss cap (% of capital)" value={sess.dailyLossPct} max={100} missing="any amount" suffix="%"
-            onChange={(v) => setSess({ dailyLossPct: v })} hint="Once the day's loss (including the open trade) reaches this % of capital, the trade is closed and nothing more happens until tomorrow." />.
-          <Info label="Intraday session rules">{HELP.session}</Info>
+          {s.exit.length || shortExit.length ? "Also close" : <b>Close</b>} at a{" "}
+          <NumTok title="Stop loss" value={r.sl} missing="no stop loss" max={stopType === "pct" ? 99 : 100000} step={stopType === "swing" ? 1 : 0.1}
+            render={(v) => `${v}`} onChange={(v) => setRisk({ sl: v })} hint="0 turns it off. Tap the word after the number to change the unit." />
+          {r.sl > 0 && <>{" "}{unitTok("stop")}</>}{" "}or a{" "}
+          <NumTok title="Target" value={r.tgt} missing="no target" max={100000} render={(v) => `${v}`}
+            onChange={(v) => setRisk({ tgt: v })} hint={tgtType === "r" ? "A multiple of the stop distance: 2 means twice what you risk." : "0 turns it off."} />
+          {r.tgt > 0 && <>{" "}{unitTok("tgt")}</>}.
+          <Info label="What are a stop loss and a target?"><b>Stop loss:</b> {HELP.stop}<br /><br /><b>Target:</b> {HELP.target}<br /><br /><b>Units:</b> {HELP.stopUnits}</Info>
         </p>
-      )}
-      <p className="sentence">
-        {(r.sizing ?? "risk") === "risk" ? <>Risk{" "}<NumTok title="Risk per trade (%)" value={r.riskPct} suffix="%" min={0.1} max={100} onChange={(v) => setRisk({ riskPct: v })}
-          hint="How much of your capital you'd lose if the stop loss hits. Most traders keep this at 1% or less." />{" "}of</>
-          : <>Put{" "}<NumTok title="Capital per trade" value={r.perTrade ?? 0} min={0} step={1000} missing="all" render={(v) => money(v, currency)}
-            onChange={(v) => setRisk({ perTrade: v })} hint="The margin each trade uses. 0 uses the max capital per trade % below." />
-            {(r.leverage ?? 1) > 1 && <>{" "}× <NumTok title="Leverage" value={r.leverage ?? 1} min={1} max={20} step={0.5} render={(v) => `${v} leverage`} onChange={(v) => setRisk({ leverage: v })} hint="The position is this many times the capital per trade (intraday margin)." /></>}{" "}of</>}{" "}
-        <NumTok title="Capital" value={r.capital} min={1} step={1000} render={(v) => money(v, currency)} onChange={(v) => setRisk({ capital: v })}
-          hint="Pretend money the test starts with." />{" "}on each trade, checked on{" "}
-        <Pop title="Candle size" label={`${TF_NAME[s.tf].toLowerCase()} candles`} cls="plain">
-          {(close) => (
-            <div className="stack" style={{ gap: 6 }}>
-              {(["1d", "1h", "15m", "5m"] as Tf[]).map((tf) => (
-                <button key={tf} className={`btn sm ${tf === s.tf ? "" : "quiet"}`} onClick={() => { set({ tf }); close(); }}>{TF_NAME[tf]} candles</button>
-              ))}
-              <p className="hint">Daily candles suit swing trades that last days to weeks. Shorter candles mean more trades and more noise, and unlock the intraday session rules.</p>
-            </div>
-          )}
-        </Pop>.
-        <Info label="What do risk, capital and candles mean?"><b>Risk:</b> {HELP.risk}<br /><br /><b>Capital:</b> {HELP.capital}<br /><br /><b>Candles:</b> {HELP.candles}</Info>
-      </p>
-      <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
-        {!both ? <>
-          <button className="btn quiet sm" onClick={() => addRule("entry", { l: { t: "price" }, op: short ? "lt" : "gt", r: { t: "sma", p: 50 } })}>Add {short ? "a short" : "a buy"} rule</button>
-          <button className="btn quiet sm" onClick={() => addRule("exit", { l: { t: "rsi", p: 14 }, op: short ? "lt" : "gt", r: { t: "num", v: short ? 30 : 70 } })}>Add {short ? "a buy-back" : "a sell"} rule</button>
-        </> : <>
-          <button className="btn quiet sm" onClick={() => addRule("entry", { l: { t: "price" }, op: "gt", r: { t: "sma", p: 50 } })}>Add a long rule</button>
-          <button className="btn quiet sm" onClick={() => addRule("exit", { l: { t: "rsi", p: 14 }, op: "gt", r: { t: "num", v: 70 } })}>Add a sell rule</button>
-          <button className="btn quiet sm" onClick={() => addRule("shortEntry", { l: { t: "price" }, op: "lt", r: { t: "sma", p: 50 } })}>Add a short rule</button>
-          <button className="btn quiet sm" onClick={() => addRule("shortExit", { l: { t: "rsi", p: 14 }, op: "lt", r: { t: "num", v: 30 } })}>Add a buy-back rule</button>
-        </>}
-      </div>
-      <details open={level === "pro" || undefined}>
-        <summary className="small" style={{ cursor: "pointer", fontWeight: 600, color: "var(--blue)" }}>Costs and position size</summary>
+      </Block>
+
+      <Block title="Size and candles">
+        <p className="sentence">
+          {(r.sizing ?? "risk") === "risk" ? <>Risk{" "}<NumTok title="Risk per trade (%)" value={r.riskPct} suffix="%" min={0.1} max={100} onChange={(v) => setRisk({ riskPct: v })}
+            hint="How much of your capital you'd lose if the stop loss hits. Most traders keep this at 1% or less." />{" "}of</>
+            : <>Put{" "}<NumTok title="Capital per trade" value={r.perTrade ?? 0} min={0} step={1000} missing="all" render={(v) => money(v, currency)}
+              onChange={(v) => setRisk({ perTrade: v })} hint="The margin each trade uses. 0 uses the max capital per trade % below." />
+              {(r.leverage ?? 1) > 1 && <>{" "}× <NumTok title="Leverage" value={r.leverage ?? 1} min={1} max={20} step={0.5} render={(v) => `${v} leverage`} onChange={(v) => setRisk({ leverage: v })} hint="The position is this many times the capital per trade (intraday margin)." /></>}{" "}of</>}{" "}
+          <NumTok title="Capital" value={r.capital} min={1} step={1000} render={(v) => money(v, currency)} onChange={(v) => setRisk({ capital: v })}
+            hint="Pretend money the test starts with." />{" "}on each trade, checked on{" "}
+          <Pop title="Candle size" label={`${TF_NAME[s.tf].toLowerCase()} candles`} cls="plain">
+            {(close) => (
+              <div className="stack" style={{ gap: 6 }}>
+                {(["1d", "1h", "15m", "5m"] as Tf[]).map((tf) => (
+                  <button key={tf} className={`btn sm ${tf === s.tf ? "" : "quiet"}`} onClick={() => { set({ tf }); close(); }}>{TF_NAME[tf]} candles</button>
+                ))}
+                <p className="hint">Daily candles suit swing trades that last days to weeks. Shorter candles mean more trades and more noise, and unlock the intraday session rules.</p>
+              </div>
+            )}
+          </Pop>.
+          <Info label="What do risk, capital and candles mean?"><b>Risk:</b> {HELP.risk}<br /><br /><b>Capital:</b> {HELP.capital}<br /><br /><b>Candles:</b> {HELP.candles}</Info>
+        </p>
+      </Block>
+
+      <More id="rules" what={intraday ? "trailing stop, time limit, intraday limits, costs" : "trailing stop, time limit, costs, sizing"} on={moreOn}>
+        <p className="sentence">
+          Trail the stop by{" "}
+          <NumTok title="Trailing stop (%)" value={r.trail ?? 0} suffix="%" missing="nothing (off)" max={50} onChange={(v) => setRisk({ trail: v })}
+            hint="Moves the stop with the best price since the trade opened, staying this far behind it. It never moves back. 0 turns it off." />{" "}and close any trade after{" "}
+          <NumTok title="Close after (candles)" value={r.maxBars ?? 0} step={1} max={5000} missing="no time limit" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
+            onChange={(v) => setRisk({ maxBars: Math.round(v) })} hint="Closes a trade that's still open after this many candles, at the close. 0 turns it off." />.
+          <Info label="Trailing stops and time limits"><b>Trailing stop:</b> {HELP.trail}<br /><br /><b>Time limit:</b> {HELP.maxBars}</Info>
+        </p>
+        {intraday && (
+          <p className="sentence">
+            <b>During the day:</b> enter only between{" "}
+            <TimeTok title="First entry time" value={sess.start} empty="the open" onChange={(v) => setSess({ start: v })}
+              hint="No new trades on candles that close before this time (the exchange's local time)." />{" "}and{" "}
+            <TimeTok title="Last entry time" value={sess.end} empty="the close" onChange={(v) => setSess({ end: v })}
+              hint="No new trades on candles that close after this time." />, square off at{" "}
+            <TimeTok title="Square-off time" value={sess.squareoff} empty="never (hold overnight)" onChange={(v) => setSess({ squareoff: v })}
+              hint="Any open trade closes on the candle that ends at this time. Indian intraday (MIS) costs apply when set." />, at most{" "}
+            <NumTok title="Trades per day" value={sess.maxTradesDay} step={1} max={100} missing="any number of" render={(v) => `${v}`}
+              onChange={(v) => setSess({ maxTradesDay: Math.round(v) })} hint="0 means no limit." />{" "}trade{sess.maxTradesDay === 1 ? "" : "s"} a day, wait{" "}
+            <NumTok title="Cooldown (candles)" value={sess.cooldown} step={1} max={500} missing="no candles" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
+              onChange={(v) => setSess({ cooldown: Math.round(v) })} hint="After a trade closes, skip this many candles before entering again." />{" "}after each trade, and stop for the day after losing{" "}
+            <NumTok title="Daily loss cap (% of capital)" value={sess.dailyLossPct} max={100} missing="any amount" suffix="%"
+              onChange={(v) => setSess({ dailyLossPct: v })} hint="Once the day's loss (including the open trade) reaches this % of capital, the trade is closed and nothing more happens until tomorrow." />.
+            <Info label="Intraday session rules">{HELP.session}</Info>
+          </p>
+        )}
+        <span className="eyebrow">Costs and position size</span>
         <div className="grid4" style={{ marginTop: 12 }}>
           <label className="field">Position size<select value={r.sizing ?? "risk"} onChange={(e) => setRisk({ sizing: e.target.value as Risk["sizing"] })}>
             <option value="risk">By risk (% of capital at the stop)</option>
@@ -360,7 +397,7 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
           )}
         </div>
         <p className="hint" style={{ marginTop: 8 }}>By risk: quantity = risk amount ÷ distance to the stop, capped by max capital per trade. Fixed capital: quantity = capital per trade × leverage ÷ price. Taxes and exchange fees are added for you per market.</p>
-      </details>
+      </More>
     </section>
   );
 }
