@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
-from app.plans import effective_plan, trial_state
+from datetime import datetime
+
+from app.plans import IST, effective_plan, trial_end, trial_state
 
 NOW = datetime.now(timezone.utc)
 
@@ -21,7 +23,17 @@ def test_paid_plan_lapses_after_period_end_plus_grace():
 def test_trial_window():
     assert trial_state({})["available"] is True
     assert trial_state({"live_trial_started_at": (NOW - timedelta(hours=1)).isoformat()})["active"] is True
-    assert trial_state({"live_trial_started_at": (NOW - timedelta(hours=25)).isoformat()})["active"] is False
+    assert trial_state({"live_trial_started_at": (NOW - timedelta(hours=25)).isoformat()})["active"] is True
+    assert trial_state({"live_trial_started_at": (NOW - timedelta(days=8)).isoformat()})["active"] is False
+
+
+def test_trial_counts_market_days():
+    # Wednesday 24 Sep 2025 10:00 IST: Wed, Thu, Fri, Mon, Tue → ends at midnight after Tuesday 30 Sep
+    assert trial_end(datetime(2025, 9, 24, 10, 0, tzinfo=IST), 5) == datetime(2025, 10, 1, tzinfo=IST)
+    # Saturday: the weekend doesn't count, Mon to Fri does
+    assert trial_end(datetime(2025, 9, 27, 10, 0, tzinfo=IST), 5) == datetime(2025, 10, 4, tzinfo=IST)
+    # Monday late at night still counts Monday as day one
+    assert trial_end(datetime(2025, 9, 22, 23, 0, tzinfo=IST), 5) == datetime(2025, 9, 27, tzinfo=IST)
 
 
 def test_pro_features_are_open_until_payments_go_live(monkeypatch):

@@ -221,7 +221,7 @@ The **[setup guide](stratlab/README.md)** covers Supabase, Kite Connect (includi
 | Experiments (each with a full verdict) | 5 / month | 50 / month | Unlimited |
 | AI strategy builds | 10 / month | 100 / month | Unlimited |
 | Research AI reads | 60 / day | 60 / day | 60 / day |
-| Paper trading | 24-hour trial | 1 strategy | 5 strategies |
+| Paper trading | 5-market-day trial | 1 strategy | 5 strategies |
 | Markets | All, except Indian F&O | same | + Indian F&O |
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
 | Alerts, export | – | – | ✓ |

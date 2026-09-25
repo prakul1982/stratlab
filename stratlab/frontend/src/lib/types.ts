@@ -102,15 +102,15 @@ export interface Notebook extends NotebookItem {
 
 export interface PlanInfo {
   name: string; price: number; backtests_per_month: number | null; ai_builds_per_month: number | null;
-  live_limit: number; live_trial_hours: number | null; pro_features: boolean;
+  live_limit: number; live_trial_days: number | null; pro_features: boolean;
 }
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
   billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean };
   usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null };
-  trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean } | null;
+  trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
-  alerts: { enabled: boolean; telegram_chat_id: string | null; email: string | null };
+  alerts: { enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
   data_online: boolean; billing_enabled?: boolean; is_admin?: boolean;
 }
 
