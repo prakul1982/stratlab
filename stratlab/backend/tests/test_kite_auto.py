@@ -61,7 +61,8 @@ def test_full_login_returns_request_token():
 
 
 @pytest.mark.parametrize("kw", [{"password_ok": False}, {"totp_ok": False}, {"gives_token": False}])
-def test_rejections_are_not_retried(kw):
+def test_rejections_are_not_retried(kw, monkeypatch):
+    monkeypatch.setattr(kite_auto.time, "sleep", lambda s: None)
     transport, _ = fake_zerodha(**kw)
     with pytest.raises(AutoLoginError) as e:
         fetch_request_token(LOGIN_URL, transport)
@@ -128,3 +129,57 @@ def test_invalid_secret_fails_before_contacting_zerodha(monkeypatch):
     with pytest.raises(AutoLoginError):
         fetch_request_token(LOGIN_URL, transport)
     assert calls == []
+
+
+def test_a_used_code_gets_one_more_try_with_the_next_code(monkeypatch):
+    monkeypatch.setattr(kite_auto.time, "sleep", lambda s: None)
+    tries = {"n": 0}
+    transport, seen = fake_zerodha()
+    inner = transport.handler
+
+    def handler(req):
+        if req.url.path == "/api/twofa":
+            tries["n"] += 1
+            if tries["n"] == 1:
+                return httpx.Response(403, json={"status": "error", "message": "Invalid TOTP"})
+        return inner(req)
+    assert fetch_request_token(LOGIN_URL, httpx.MockTransport(handler)) == "TOKEN42" and tries["n"] == 2
+
+
+def test_result_survives_a_restart(monkeypatch):
+    store = {}
+    from app import db
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    k = type("K", (), {"kite": type("C", (), {"login_url": staticmethod(lambda: LOGIN_URL)})()})()
+    monkeypatch.setattr(kite_auto, "fetch_request_token", lambda url: (_ for _ in ()).throw(AutoLoginError("Zerodha rejected the TOTP code twice", retry=False)))
+    with pytest.raises(AutoLoginError):
+        kite_auto.AutoLogin(k, lambda: None).run_once()
+    fresh = kite_auto.AutoLogin(k, lambda: None)
+    fresh.load_last()
+    assert fresh.last["ok"] is False and "TOTP" in fresh.last["message"]
+
+
+def test_cancelled_token_goes_offline_and_alerts_once(monkeypatch):
+    from kiteconnect.exceptions import TokenException
+    from app import db
+    from app.kite_service import KiteNotReady, KiteService, today_ist
+    monkeypatch.setattr(db, "set_setting", lambda k, v: None)
+    ks = KiteService()
+    ks._set_token("tok", today_ist())
+    alerts = []
+    ks.on_invalid = alerts.append
+
+    def rejected(*a, **kw):
+        raise TokenException("Incorrect `api_key` or `access_token`.")
+    monkeypatch.setattr(ks.kite._inner, "ltp", rejected)
+    ks._inst, ks._inst_day = [{"token": 1, "exchange": "NSE", "symbol": "X"}], today_ist()
+    ks._by_token = {1: ks._inst[0]}
+    with pytest.raises(TokenException):
+        ks.ltp(1)
+    assert not ks.ready() and len(alerts) == 1 and "somewhere else" in alerts[0]
+    with pytest.raises(KiteNotReady):
+        ks.ltp(1)
+    assert len(alerts) == 1
+    ks._set_token("new", today_ist())   # a fresh login brings it back
+    assert ks.ready()

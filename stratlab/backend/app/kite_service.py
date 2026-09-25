@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 
 from kiteconnect import KiteConnect, KiteTicker
+from kiteconnect.exceptions import TokenException
 
 from .config import settings
 from . import db
@@ -29,9 +30,31 @@ class KiteNotReady(Exception):
     pass
 
 
+class _Guarded:
+    """KiteConnect, noticing when Zerodha has cancelled the access token mid-day."""
+
+    def __init__(self, inner, on_token_error):
+        self._inner, self._on = inner, on_token_error
+
+    def __getattr__(self, name):
+        attr = getattr(self._inner, name)
+        if not callable(attr) or name in ("generate_session", "login_url", "set_access_token"):
+            return attr
+
+        def call(*a, **kw):
+            try:
+                return attr(*a, **kw)
+            except TokenException as e:
+                self._on(e)
+                raise
+        return call
+
+
 class KiteService:
     def __init__(self):
-        self.kite = KiteConnect(api_key=settings.KITE_API_KEY)
+        self.kite = _Guarded(KiteConnect(api_key=settings.KITE_API_KEY), self._token_rejected)
+        self.invalid_reason: str | None = None
+        self.on_invalid = None        # called once with a message when the token is cancelled
         self.access_token: str | None = None
         self.token_day: str | None = None
         self._lock = threading.Lock()
@@ -50,11 +73,28 @@ class KiteService:
 
     def _set_token(self, tok: str, day: str):
         self.access_token, self.token_day = tok, day
+        self.invalid_reason = None
         self.kite.set_access_token(tok)
+
+    def _token_rejected(self, e):
+        """Zerodha refused today's token, usually because the account logged in to this API key somewhere else.
+        Go offline rather than failing every request, and don't log in again automatically: that would cancel
+        the other login's token in turn."""
+        if not self.ready():
+            return
+        self.invalid_reason = (f"Zerodha cancelled today's Kite token at {datetime.now(IST):%H:%M}. This usually means the "
+                               "same Zerodha account logged in to this Kite Connect app somewhere else (another bot or "
+                               "script using the same API key). Log in again from the admin page.")
+        print("Kite token rejected:", e)
+        if self.on_invalid:
+            try:
+                self.on_invalid(self.invalid_reason)
+            except Exception as x:
+                print("token alert failed:", x)
 
     def ready(self) -> bool:
         # Kite tokens expire every morning, so yesterday's token counts as offline
-        return bool(self.access_token) and self.token_day == today_ist()
+        return bool(self.access_token) and self.token_day == today_ist() and not self.invalid_reason
 
     def login_url(self) -> str:
         self.login_state = secrets.token_urlsafe(16)
@@ -78,6 +118,8 @@ class KiteService:
         return data
 
     def _require(self):
+        if self.invalid_reason:
+            raise KiteNotReady("Indian market data is offline: the broker login was cancelled. The admin needs to log in again.")
         if not self.ready():
             raise KiteNotReady("Market data is offline. The admin needs to complete today's Kite login.")
 

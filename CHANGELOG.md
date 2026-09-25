@@ -2,6 +2,11 @@
 
 ## September 2026
 
+### Kite login reliability
+- If Zerodha rejects the automatic login's 2FA code, it now tries once more with the next code. The usual cause is another program using the same code on the account moments earlier. A rejected password still stops for the day, so the account can't get locked.
+- If Zerodha cancels today's token mid-day, StratLab now notices. That usually happens when another login to the same Kite Connect app replaces it. Indian data goes offline with a clear message instead of failing every request, the admin page says what happened, and a Telegram alert goes out. It doesn't log in again by itself, which would cancel the other program's token in turn.
+- The last automatic-login result is saved, so it's still on the admin page after a restart.
+
 ### Options tab (live paper trading)
 - A new **Options** tab for NSE, BSE and MCX options: NIFTY, BANKNIFTY, SENSEX, FINNIFTY, MIDCPNIFTY, BANKEX, crude, natural gas, gold and silver, plus any stock with options.
 - **Structures**: short and long straddle, short strangle, iron fly, iron condor, bull call and bear put spreads, single calls and puts, or custom structures up to eight legs. Legs are placed by strikes or points from the money.
