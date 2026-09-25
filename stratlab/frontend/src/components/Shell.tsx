@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Book, Compass, Layers, Library, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sun, User } from "./Icons";
+import { Book, Compass, Layers, Library, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
 import { SearchPalette } from "./SearchPalette";
 import { LevelPrompt } from "./LevelPrompt";
 import { Tour, tourSeen } from "./Tour";
@@ -41,8 +41,8 @@ export function Shell({ children }: { children: ReactNode }) {
     <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
       <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
       <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>
-      <button className="search-btn" onClick={() => setSearch(true)} aria-label="Search or ask anything (Ctrl+K)">
-        <Search size={17} /><span>Search or ask</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+      <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
+        <Sparkle size={17} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
       </button>
       <nav className="side-nav" aria-label="Research">
         <NavLink to="/research" className={() => (loc.pathname.startsWith("/research") ? "active" : "")}><Lens />Research</NavLink>

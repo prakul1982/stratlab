@@ -38,7 +38,7 @@ export function LibraryPage() {
   const nav = useNavigate();
   const [rows, setRows] = useState<LibEntry[] | null>(null);
   const [total, setTotal] = useState(0);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => new URLSearchParams(location.search).get("q") ?? "");
   const [market, setMarket] = useState("");
   const [verdict, setVerdict] = useState("");
   const [sort, setSort] = useState("best");

@@ -10,7 +10,7 @@ import { HELP } from "../lib/help";
 import { InstrumentSearch } from "../components/InstrumentSearch";
 import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
-import { Pin, Search, Upload } from "../components/Icons";
+import { Pin, Search, Sparkle, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
 
 export type Where = { market: string; instrument: Instrument | null };
@@ -39,6 +39,20 @@ export function useCreateNotebook(where?: Where | null) {
       fail(e);
     }
   };
+}
+
+/** The big "type anything" bar: opens the search box, which works out what you mean and does it. */
+export function AskBar() {
+  return (
+    <button className="ask-bar" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}>
+      <Sparkle size={20} />
+      <span className="stack" style={{ gap: 2, minWidth: 0 }}>
+        <b>Ask or do anything</b>
+        <span className="small muted">"Test: buy NIFTY when RSI drops below 30" · "Paper trade an EMA cross on BTC" · "Research HDFC Bank" · "What is walk-forward?"</span>
+      </span>
+      <kbd className="small muted">{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+    </button>
+  );
 }
 
 /** Step 1 of a new notebook: the market and instrument to test on. */
@@ -170,6 +184,7 @@ export function NewNotebook() {
           <p className="small muted">Not sure what to test? <Link to="/research" className="link">Research a company first</Link>: its AI read suggests ideas you can test in one click.</p>
         )}
       </div>
+      <AskBar />
       <ol className="how" aria-label="How StratLab works">
         <li><b>1. Describe it</b><span>In plain words. We turn it into rules you can read and edit.</span></li>
         <li><b>2. Test it honestly</b><span>On years of real prices, after real costs, with four checks for luck.</span></li>
@@ -235,6 +250,7 @@ export function Home() {
           <button className="btn" onClick={() => nav("/new")}>Test a new idea</button>
         </div>
       </div>
+      <AskBar />
       {notebooks.length > 3 && (
         <div className="row wrap" style={{ gap: 10 }}>
           <label className="search-box" style={{ flex: "1 1 260px" }}>

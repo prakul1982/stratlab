@@ -38,7 +38,7 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import daily_report, ideas, library, public, push, risk
+from . import ask, daily_report, ideas, library, public, push, risk
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -416,6 +416,21 @@ def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
     except HTTPException as e:
         if e.status_code in (422, 503):
             return {"ideas": ideas.fallback(q), "fallback": True}
+        raise
+
+
+@app.post("/ask")
+def ask_route(req: IdeasReq, profile=Depends(current_profile)):
+    """One line from the search box, turned into one action the app then carries out."""
+    q = req.q.strip()
+    if ask.looks_like_code(q):
+        return {"action": "import", "text": q, "title": "Import this strategy", "fallback": False}
+    try:
+        out = research_routes.ai_call(profile, "ask", ask.key(q), 7 * 86400, False, lambda: ask.build(ask_json, q))
+        return {**out, "fallback": False}
+    except HTTPException as e:
+        if e.status_code in (422, 429, 503):
+            return {**ask.guess(q), "fallback": True}
         raise
 
 

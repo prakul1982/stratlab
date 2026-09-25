@@ -2,6 +2,22 @@
 
 ## September 2026
 
+### Ask or do anything
+- The search box now does things instead of just finding them. Type a line and press Enter:
+  - **"Test: buy NIFTY when RSI drops below 30…"** builds the rules, saves a notebook, runs the test and opens the verdict
+  - **"Paper trade a 20/50 EMA cross on Bitcoin"** builds it and starts paper trading
+  - **"Research HDFC Bank"** opens its research page
+  - **"What is a walk-forward test?"** answers right in the box
+  - **"Momentum ideas for bank stocks"** gives ideas you can test in one click
+- Each step shows as it happens. If something can't be done (say, your plan's session limit), the reason shows in the box.
+- It's in the sidebar as **Ask or do anything**, and as a big bar on your notebooks page (Ctrl+K or ⌘K anywhere). When the AI is unavailable, simple word rules decide what to do.
+
+### Tidier navigation
+- **Sidebar:** Research sits under the search box, then All notebooks, Paper trading, Options, Import a strategy, Strategy library and Account. Plans now lives inside Account.
+- **Markets now:** it says "weekend" for every exchange that's shut for the weekend, and "holiday" on exchange holidays.
+- **Group testing:** "Test on a whole group" works before you have a notebook.
+- **Import:** it's a button at the top of New notebook.
+
 ### Weekends, holidays and overnight
 - **Exchange holidays are known now**, for India (NSE/BSE), the US, UK, Europe and Japan:
   - **Markets now** in the sidebar says **weekend** or **holiday**, and "opens in" skips closed days.

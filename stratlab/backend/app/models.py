@@ -217,7 +217,7 @@ class PrefsReq(BaseModel):
 
 
 class IdeasReq(BaseModel):
-    q: str = Field(..., min_length=2, max_length=300)
+    q: str = Field(..., min_length=2, max_length=4000)
 
 
 class SubscribeReq(BaseModel):
