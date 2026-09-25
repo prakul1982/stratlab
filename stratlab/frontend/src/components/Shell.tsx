@@ -27,8 +27,6 @@ export function Shell({ children }: { children: ReactNode }) {
     <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
       <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
       <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>
-      <NavLink to="/research" className={({ isActive }) => `btn quiet research-link${isActive || loc.pathname.startsWith("/research") ? " on" : ""}`}><Lens size={18} />Research a company</NavLink>
-      <NavLink to="/import" className={({ isActive }) => `btn quiet research-link${isActive ? " on" : ""}`}><Upload size={18} />Import a strategy</NavLink>
       <nav className="stack" style={{ gap: 4 }} aria-label="Notebooks">
         <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Notebooks</div>
         {notebooks === null && <span className="small muted" style={{ padding: "0 12px" }}>Loading…</span>}
@@ -49,11 +47,13 @@ export function Shell({ children }: { children: ReactNode }) {
         })}
       </nav>
       <nav className="side-nav stack" style={{ gap: 2 }} aria-label="Main">
+        <NavLink to="/research" className={() => (loc.pathname.startsWith("/research") ? "active" : "")}><Lens />Research</NavLink>
+        <NavLink to="/import"><Upload />Import a strategy</NavLink>
         <NavLink to="/options"><Layers />Options</NavLink>
         <NavLink to="/paper"><Pulse />Paper trading</NavLink>
+        <NavLink to="/" end><Book />All notebooks</NavLink>
         <NavLink to="/plans"><Star />Plans</NavLink>
         <NavLink to="/account"><User />Account{me && <span className="badge skip" style={{ marginLeft: "auto" }}>{me.plan_info.name}</span>}</NavLink>
-        <NavLink to="/" end><Book />All notebooks</NavLink>
         {me?.is_admin && <NavLink to="/admin"><Shield />Admin</NavLink>}
       </nav>
       <div className="stack small muted" style={{ marginTop: "auto", gap: 8 }}>

@@ -9,7 +9,7 @@ import { HELP } from "../lib/help";
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
 export function AccountPage() {
-  const { me, isPro, fail, notify, refreshMe, theme, setTheme } = useApp();
+  const { me, isPro, fail, notify, refreshMe } = useApp();
   const [alerts, setAlerts] = useState({ enabled: false, tg: "", email: "" });
   const [checks, setChecks] = useState<Row[] | null>(null);
   const [checking, setChecking] = useState(false);
@@ -99,14 +99,6 @@ export function AccountPage() {
               {me.plan === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
                 : b.cancel_at_period_end ? <span className="small muted">Cancelled. You keep {me.plan_info.name} until {dateOnly(b.renews_or_ends)}.</span>
                   : <><Link to="/plans" className="btn outline">Change plan</Link><button className="btn danger" onClick={cancel}>Cancel subscription</button></>}
-            </div>
-          </section>
-          <section className="card stack" style={{ gap: 12 }}>
-            <h2 className="h2">Look</h2>
-            <div className="seg" role="group" aria-label="Theme">
-              {(["system", "light", "dark"] as const).map((t) => (
-                <button key={t} aria-pressed={theme === t} onClick={() => setTheme(t)}>{{ system: "Match my device", light: "Paper", dark: "Night" }[t]}</button>
-              ))}
             </div>
           </section>
           <section className="card stack" style={{ gap: 12 }}>
