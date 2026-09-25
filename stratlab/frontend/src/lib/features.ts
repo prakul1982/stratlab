@@ -20,6 +20,8 @@ export const FEATURES: Feature[] = [
     words: "library community shared strategies browse copy others public published marketplace", home: true },
   { id: "publish", title: "Publish to the library", what: "Share a strategy's rules with its verdict. From a verdict: Share verdict → Publish.", to: "@verdict",
     words: "publish library share rules community" },
+  { id: "phone", title: "Install on your phone", what: "Put StratLab on your home screen and get trade alerts and the daily report as notifications.", to: "/account",
+    words: "install app phone mobile home screen notifications push alerts pwa android iphone" },
   { id: "import", title: "Import a strategy", what: "Pine Script, Python, MetaTrader, AmiBroker, a config file or plain words.", to: "/import",
     words: "import pine script tradingview python metatrader amibroker config json bot code upload", home: true },
   { id: "paper", title: "Paper trade", what: "Run rules live on real prices with fake money, until you stop them.", to: "/paper",

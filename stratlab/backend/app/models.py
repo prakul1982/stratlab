@@ -197,6 +197,21 @@ class LibraryReq(BaseModel):
     author: str = Field("", max_length=40)       # a display name; empty means "A StratLab user"
 
 
+class PushKeys(BaseModel):
+    p256dh: str = Field(..., max_length=200)
+    auth: str = Field(..., max_length=100)
+
+
+class PushSubscription(BaseModel):
+    endpoint: str = Field(..., max_length=1000, pattern=r"^https://")
+    keys: PushKeys
+    expirationTime: Optional[float] = None
+
+
+class PushReq(BaseModel):
+    subscription: PushSubscription
+
+
 class PrefsReq(BaseModel):
     level: Literal["new", "some", "pro"]
 

@@ -79,6 +79,10 @@ class Settings:
     # option chains recorded every few minutes in market hours, for options backtesting later ("" turns it off)
     OPTION_SNAPSHOTS = _env("OPTION_SNAPSHOTS", "NFO:NIFTY,NFO:BANKNIFTY,BFO:SENSEX") or ""
     OPTION_SNAPSHOT_MINUTES = int(_env("OPTION_SNAPSHOT_MINUTES", "5") or 5)
+    # phone and browser notifications: generate a pair with `python -m app.push keys`
+    VAPID_PUBLIC_KEY = _env("VAPID_PUBLIC_KEY")
+    VAPID_PRIVATE_KEY = _env("VAPID_PRIVATE_KEY")
+    VAPID_SUBJECT = _env("VAPID_SUBJECT")
     SENTRY_DSN = _env("SENTRY_DSN")                               # optional: send server errors to Sentry
     SENTRY_ENV = _env("SENTRY_ENV", "production")
 

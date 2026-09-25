@@ -13,6 +13,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import { AppProvider, useApp } from "./lib/app";
+import { registerPwa } from "./lib/pwa";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { Login } from "./pages/Login";
@@ -98,6 +99,8 @@ function App() {
     </AppProvider>
   );
 }
+
+if (import.meta.env.PROD) registerPwa();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

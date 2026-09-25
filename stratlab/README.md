@@ -84,9 +84,14 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
   - Each `<NAME>_MODEL=auto` picks a suitable chat model from that provider's list; set a model id to pin one. `AI_PROVIDERS=groq,gemini` sets your own order. Quick jobs (the idea builder) default to Groq → Cerebras → Gemini → Mistral → SambaNova → OpenRouter → Anthropic; long research reads default to Cerebras → Mistral → Gemini → SambaNova → Groq → OpenRouter → Anthropic, to save Groq's daily token cap. `AI_PROVIDERS_RESEARCH` overrides the research order.
   - **Account → Connection check** sends a tiny test request to every provider with a key and shows the result for each: the model that answered and how fast, or the exact error (key rejected, out of free quota, no suitable model). With no provider working, the app falls back to its simple offline converter.
   - Paste only the key itself as the value. Stray quotes or a leading `GROQ_API_KEY=` are forgiven, but a key from the wrong account or a revoked key is not. After changing variables in Railway, redeploy so the server picks them up.
+- **Phone notifications (Web Push):** lets people install StratLab on their phone and get alerts and the daily report as notifications, with no Telegram. Generate a key pair once:
+  ```
+  cd backend && python -m app.push keys
+  ```
+  Put the three printed lines in Railway as `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:` address push services can reach you on), then redeploy. Keep the private key only in Railway: never commit it or paste it into the frontend. Changing the keys later signs everyone's devices out of notifications, and they turn them on again from **Account → On your phone**. Without the keys the button explains that notifications aren't set up. Devices that uninstall are forgotten automatically.
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.
 - **Email:** fill in the SMTP settings. For Gmail, use an app password. Port 465 uses SSL, 587 uses STARTTLS.
-- **Daily report:** anyone with alerts on also gets a short report a few minutes after each market closes (15:40 in India, 16:10 New York, 23:55 UTC for crypto). It lists each paper trading session in that market: trades closed that day, their P&L, what's still open, and the result since the start. People can turn it off on the Account page. Nothing extra to set up.
+- **Daily report:** anyone with alerts on (or a phone with notifications on) also gets a short report a few minutes after each market closes (15:40 in India, 16:10 New York, 23:55 UTC for crypto). It lists each paper trading session in that market: trades closed that day, their P&L, what's still open, and the result since the start. People can turn it off on the Account page. Nothing extra to set up.
 
 ### Recording option chains (for options backtesting)
 Kite has no price history for expired options, so StratLab records its own.
