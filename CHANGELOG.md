@@ -2,6 +2,23 @@
 
 ## September 2026
 
+### Your experience, your defaults
+- After the first sign-in StratLab asks once how much trading you've done: **New to trading**, **I've traded a bit** or **I trade actively**.
+- It only changes defaults:
+  - Newcomers see the tour and a simpler "What you can do here", without the advanced tools.
+  - Active traders get the costs and sizing, and the Options "More settings", open from the start.
+- Every tool stays available whatever you pick, including through search. Change it any time under **Account → Experience**.
+
+### Search or ask anything
+- **One box for everything:** at the top of the sidebar, the magnifier on phones, or **Ctrl+K** (⌘K) anywhere. It takes:
+  - a stock or coin → its research page, or straight to testing an idea on it
+  - an idea in plain words → a new notebook with the rules built
+  - a question ("momentum ideas for bank stocks") → 4 testable ideas, each one click from a verdict
+  - a feature's name ("walk forward", "iron condor", "alerts") → straight there
+  - a pasted Pine Script, Python or config file → Import, already filled in
+- **"What you can do here":** the home page and the new-notebook page now show every major tool, one tap each, so groups, options on a signal, import and research aren't hidden.
+- **A verdict's Next bar** now offers **Test on a group** and, for Indian instruments, **Trade it with options**, which opens Options with that notebook's rules as the signal.
+
 ### New plans
 - **Prices:** Basic is now **₹999 a month** and Pro **₹2,999 a month**. Yearly billing gives two months free (₹9,990 and ₹29,990).
 - **Free:** 5 experiments and 10 AI builds a month, group tests of up to 10 instruments, and 5 market days of paper trading.

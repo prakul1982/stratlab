@@ -10,7 +10,7 @@ import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
 import { MoreMenu } from "../components/MoreMenu";
-import { Book, Globe, Pencil, Pulse, Share, Trash } from "../components/Icons";
+import { Book, Globe, Layers, Pencil, Pulse, Share, Trash } from "../components/Icons";
 
 const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 
@@ -255,7 +255,11 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         <span className="small muted" style={{ alignSelf: "center" }}>Next:</span>
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "edit_rules" } })}><Pencil size={17} />Change the rules</button>
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/market`)}><Globe size={17} />Try another market</button>
+        {!nb.group && <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/market#group`)}><Layers size={17} />Test on a group</button>}
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "paper_trade" } })}><Pulse size={17} />Paper trade it</button>
+        {(e.instrument.market ?? nb.instrument?.market) === "IN" && !nb.group && (
+          <button className="btn quiet sm" title="Use these rules as the signal for an option structure" onClick={() => nav(`/options?enter=rules&nb=${nb.id}`)}><Layers size={17} />Trade it with options</button>
+        )}
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "note" } })}><Book size={17} />Write a lab note</button>
         {nb.experiments.some((x) => x.v < e.v) && (
           <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/compare?a=${Math.max(...nb.experiments.filter((x) => x.v < e.v).map((x) => x.v))}&b=${e.v}`)}>Compare with the previous run</button>

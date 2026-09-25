@@ -192,6 +192,14 @@ class AlertsReq(BaseModel):
     daily_report: Optional[bool] = None
 
 
+class PrefsReq(BaseModel):
+    level: Literal["new", "some", "pro"]
+
+
+class IdeasReq(BaseModel):
+    q: str = Field(..., min_length=2, max_length=300)
+
+
 class SubscribeReq(BaseModel):
     plan: Literal["basic", "pro"]
     period: Literal["month", "year"] = "month"

@@ -1,3 +1,4 @@
+import { Explore } from "../components/Explore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -181,6 +182,7 @@ export function NewNotebook() {
         <h2 className="h2">Or start from a classic idea</h2>
         <Starters where={where} />
       </div>
+      <Explore title="More you can do" />
     </div>
   );
 }
@@ -255,6 +257,7 @@ export function Home() {
           );
         })}
       </div>
+      <Explore />
     </div>
   );
 }

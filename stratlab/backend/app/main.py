@@ -19,7 +19,7 @@ from razorpay.errors import SignatureVerificationError
 from . import admin, basket, billing, db, importer, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
-from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
+from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
 from .alerts import notify
 from .auth import current_profile
 from .config import settings
@@ -37,9 +37,9 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import daily_report, public
+from . import daily_report, ideas, public
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, IdeasReq, PrefsReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -270,10 +270,27 @@ def me(profile=Depends(current_profile)):
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
+        "prefs": {"level": prefs_of(profile["id"]).get("level")},
         "data_online": kite.ready(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "is_admin": admin.is_admin(profile),
     })
+
+
+def prefs_of(uid: str) -> dict:
+    try:
+        p = json.loads(db.get_setting(daily_report.PREFS + uid) or "{}")
+        return p if isinstance(p, dict) else {}
+    except Exception:
+        return {}
+
+
+@app.put("/me/prefs")
+def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
+    """Experience level: only changes defaults (what's expanded, which tools are suggested), never what's allowed."""
+    prefs = {**prefs_of(profile["id"]), "level": req.level}
+    db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
+    return {"prefs": {"level": req.level}}
 
 
 @app.put("/me/alerts")
@@ -345,6 +362,19 @@ def ai_allowance(profile) -> tuple[int, int | None]:
     if db.count_usage(profile["id"], "ai", since) >= 200:
         err(429, "ai_daily_limit", "You've used the AI builder 200 times today. Try again tomorrow.")
     return used, limit
+
+
+@app.post("/search/ideas")
+def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
+    """Testable strategy ideas for anything typed into search. Shared cache; built-in ideas if the AI is down."""
+    q = req.q.strip()
+    try:
+        out = research_routes.ai_call(profile, "ideas", ideas.key(q), 7 * 86400, False, lambda: ideas.build(ask_json, q))
+        return {"ideas": out["ideas"], "fallback": False}
+    except HTTPException as e:
+        if e.status_code in (422, 503):
+            return {"ideas": ideas.fallback(q), "fallback": True}
+        raise
 
 
 @app.post("/import/strategy")

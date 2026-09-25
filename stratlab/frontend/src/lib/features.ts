@@ -1,0 +1,64 @@
+/** Everything StratLab can do, with the words people might search for. Used by search and the home page grid.
+ * `to` is a route; "@notebook", "@market" and "@verdict" mean the notebook you're in (or your latest one). */
+export interface Feature {
+  id: string; title: string; what: string; to: string; words: string; home?: boolean;
+  state?: Record<string, unknown>; level?: "all" | "advanced";
+}
+
+export const FEATURES: Feature[] = [
+  { id: "idea", title: "Test an idea", what: "Describe a strategy in plain words and get an honest verdict on years of real prices.", to: "/new",
+    words: "new notebook backtest test idea strategy rules describe plain english build", home: true },
+  { id: "research", title: "Research a company", what: "Price, key numbers, results, news and an AI read that ends with ideas to test.", to: "/research",
+    words: "company stock fundamentals analysis ai read valuation news research", home: true },
+  { id: "group", title: "Test on a whole group", what: "Run one set of rules on NIFTY 50, F&O stocks, US mega caps, big coins or your own list.", to: "@market",
+    words: "group basket portfolio universe scanner momentum nifty 50 many stocks list", home: true },
+  { id: "options", title: "Paper trade options", what: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask.", to: "/options",
+    words: "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o", home: true },
+  { id: "options_signal", title: "Options on your own signal", what: "Let a notebook's rules decide: long buys your structure, short buys its mirror.", to: "/options?enter=rules",
+    words: "options signal ema rsi rules trigger buy call put directional", home: true, level: "advanced" },
+  { id: "import", title: "Import a strategy", what: "Pine Script, Python, MetaTrader, AmiBroker, a config file or plain words.", to: "/import",
+    words: "import pine script tradingview python metatrader amibroker config json bot code upload", home: true },
+  { id: "paper", title: "Paper trade", what: "Run rules live on real prices with fake money, until you stop them.", to: "/paper",
+    words: "paper trading live forward test sessions running fake money simulate", home: true },
+  { id: "walkforward", title: "Walk-forward test", what: "Re-tune on the past, trade the next unseen stretch, repeat. On any verdict.", to: "@verdict",
+    words: "walk forward walkforward out of sample optimise optimize tune robust", level: "advanced" },
+  { id: "similar", title: "Does it work on similar stocks?", what: "Run the same rules on about 10 similar instruments. On any verdict.", to: "@verdict",
+    words: "similar stocks peers other instruments robustness generalise", level: "advanced" },
+  { id: "compare", title: "Compare experiments", what: "Two runs side by side: what changed and whether it helped.", to: "@notebook",
+    words: "compare experiments runs versions diff side by side" },
+  { id: "fast", title: "Faster group entries and a spread limit", what: "Enter on the live price, skip stocks whose spread is too wide. When you paper trade a group.", to: "@notebook",
+    words: "fast entries tick live price spread liquidity filter minimum price group", level: "advanced" },
+  { id: "share", title: "Share a verdict", what: "A card from your phone or a public link. Your rules stay private.", to: "@verdict",
+    words: "share link card image whatsapp twitter public verdict" },
+  { id: "alerts", title: "Alerts and the daily report", what: "Telegram or email for each trade, and a report after the market closes.", to: "/account",
+    words: "alerts telegram email notifications daily report close" },
+  { id: "themes", title: "Themes", what: "Map a sector and get a ranked shortlist.", to: "/research/themes", words: "themes sector industry shortlist ev defence banks" },
+  { id: "pulse", title: "Market pulse", what: "Index levels, headlines and today's mood.", to: "/research/pulse", words: "market pulse today news mood indices" },
+  { id: "rcompare", title: "Compare two companies", what: "Side by side, with an AI read.", to: "/research/compare", words: "compare companies versus vs" },
+  { id: "watchlist", title: "Watchlist", what: "Companies you're keeping an eye on.", to: "/research/watchlist", words: "watchlist saved favourites" },
+  { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },
+  { id: "account", title: "Account and connection check", what: "Your plan, usage and a check of every data and AI service.", to: "/account",
+    words: "account settings usage connection check theme" },
+];
+
+export function match(q: string, limit = 6): Feature[] {
+  const words = q.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  if (!words.length) return [];
+  const scored = FEATURES.map((f) => {
+    const hay = `${f.title} ${f.words}`.toLowerCase();
+    const s = words.reduce((n, w) => n + (hay.includes(w) ? (f.title.toLowerCase().includes(w) ? 3 : 1) : 0), 0);
+    return [s, f] as const;
+  }).filter(([s]) => s > 0);
+  return scored.sort((a, b) => b[0] - a[0]).slice(0, limit).map(([, f]) => f);
+}
+
+/** Resolve "@notebook", "@market" and "@verdict" against where you are and your latest notebook. */
+export function resolve(to: string, path: string, latest: { id: string } | null): string {
+  if (!to.startsWith("@")) return to;
+  const m = path.match(/^\/n\/([^/]+)(?:\/e\/(\d+))?/);
+  const id = m?.[1] ?? latest?.id;
+  if (!id) return "/new";
+  if (to === "@market") return `/n/${id}/market`;
+  if (to === "@verdict" && m?.[2]) return path;
+  return `/n/${id}`;
+}

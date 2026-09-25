@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Book, Compass, Layers, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
+import { Book, Compass, Layers, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Star, Sun, User } from "./Icons";
+import { SearchPalette } from "./SearchPalette";
+import { LevelPrompt } from "./LevelPrompt";
 import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
@@ -10,12 +12,25 @@ const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US",
 
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, theme, setTheme, me } = useApp();
+  const { notebooks, markets, theme, setTheme, me, level } = useApp();
   const [open, setOpen] = useState(false);
   const [tour, setTour] = useState(false);
+  const [search, setSearch] = useState(false);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setSearch((x) => !x); }
+      else if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName) && !(e.target as HTMLElement).isContentEditable) { e.preventDefault(); setSearch(true); }
+    };
+    const open = () => setSearch(true);
+    window.addEventListener("keydown", k);
+    window.addEventListener("stratlab:search", open);
+    return () => { window.removeEventListener("keydown", k); window.removeEventListener("stratlab:search", open); };
+  }, []);
   const [, tick] = useState(0);
   useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
-  useEffect(() => { if (!tourSeen()) setTour(true); }, []);
+  // ask the experience level once, then show the tour to anyone who hasn't seen it
+  const askLevel = !!me && !level;
+  useEffect(() => { if (me && level && !tourSeen()) setTour(true); }, [me, level]);
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
@@ -26,6 +41,9 @@ export function Shell({ children }: { children: ReactNode }) {
     <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
       <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
       <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>
+      <button className="search-btn" onClick={() => setSearch(true)} aria-label="Search or ask anything (Ctrl+K)">
+        <Search size={17} /><span>Search or ask</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+      </button>
       <nav className="stack" style={{ gap: 4 }} aria-label="Notebooks">
         <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Notebooks</div>
         {notebooks === null && <span className="small muted" style={{ padding: "0 12px" }}>Loading…</span>}
@@ -95,12 +113,17 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className="topbar">
         <button className="icon-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Menu /></button>
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
-        <button className="icon-btn" aria-label="New notebook" onClick={() => nav("/new")}><Plus /></button>
+        <span className="row" style={{ gap: 4 }}>
+          <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
+          <button className="icon-btn" aria-label="New notebook" onClick={() => nav("/new")}><Plus /></button>
+        </span>
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
       <main className="main"><div className="page">{children}</div></main>
       {tour && <Tour onClose={() => setTour(false)} />}
+      {search && <SearchPalette onClose={() => setSearch(false)} />}
+      {askLevel && !tour && <LevelPrompt onDone={() => undefined} />}
     </div>
   );
 }

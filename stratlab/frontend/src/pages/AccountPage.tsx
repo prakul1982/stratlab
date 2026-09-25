@@ -5,11 +5,12 @@ import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
 import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
+import { LEVELS } from "../components/LevelPrompt";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
 export function AccountPage() {
-  const { me, fail, notify, refreshMe } = useApp();
+  const { me, fail, notify, refreshMe, level, setLevel } = useApp();
   const feats = me?.plan_info.features;
   const canReport = feats ? !!feats.daily_report : true, canAlert = feats ? !!feats.alerts : true;
   const [alerts, setAlerts] = useState({ enabled: false, tg: "", email: "", daily: true });
@@ -102,6 +103,14 @@ export function AccountPage() {
                 : b.cancel_at_period_end ? <span className="small muted">Cancelled. You keep {me.plan_info.name} until {dateOnly(b.renews_or_ends)}.</span>
                   : <><Link to="/plans" className="btn outline">Change plan</Link><button className="btn danger" onClick={cancel}>Cancel subscription</button></>}
             </div>
+          </section>
+          <section className="card stack" style={{ gap: 12 }}>
+            <h2 className="h2">Experience</h2>
+            <p className="small muted">Changes only what starts open and which tools are suggested. Everything stays available.</p>
+            <div className="seg" role="radiogroup" aria-label="Experience" style={{ alignSelf: "flex-start" }}>
+              {LEVELS.map(([l, title]) => <button key={l} role="radio" aria-checked={level === l} aria-pressed={level === l} onClick={() => setLevel(l)}>{title}</button>)}
+            </div>
+            {level && <p className="small muted">{LEVELS.find(([l]) => l === level)?.[2]}</p>}
           </section>
           <section className="card stack" style={{ gap: 12 }}>
             <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>Connection check<Info>{HELP.connection}</Info></h2><button className="btn quiet sm" disabled={checking} onClick={runCheck}>{checking ? "Checking…" : "Run check"}</button></div>
