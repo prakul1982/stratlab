@@ -116,3 +116,18 @@ def test_import_routes_option_structures(monkeypatch):
         assert r["strategy"]["underlying"] == "NIFTY" and not r["used_ai"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_admin_lists_options_sessions(monkeypatch):
+    from app import admin
+    setup(monkeypatch)
+    app.dependency_overrides[admin.admin_profile] = lambda: {"id": "u", "is_admin": True}
+    try:
+        c = TestClient(app)
+        sid = c.post("/options/sessions", json={"strategy": STRAT}).json()["id"]
+        rows = c.get("/admin/sessions").json()
+        row = next(r for r in rows if r["id"] == sid)
+        assert row["market"] == "IN" and row["kind"] == "options" and row["capital"] == 500000
+    finally:
+        main.manager.sessions.clear()
+        app.dependency_overrides.clear()

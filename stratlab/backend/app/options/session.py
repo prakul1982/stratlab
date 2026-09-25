@@ -21,6 +21,7 @@ class OptionSession:
         self.id, self.user_id, self.name = row["id"], row["user_id"], row["name"]
         self.strategy = OptionStrategy(**row["strategy"])
         self.inst = row["instrument"]
+        self.market = self.inst.get("market", "IN")
         self.started_at = row["started_at"]
         state = row.get("state") or {}
         s = self.strategy
