@@ -78,7 +78,7 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/search-dark.png">
-  <img alt="Search or ask (Ctrl+K): a question like 'momentum ideas for bank stocks' returns four testable ideas, plus matching features" src="docs/images/search-light.png">
+  <img alt="Ask or do anything (Ctrl+K): a question like 'momentum ideas for bank stocks' returns four testable ideas, plus matching features" src="docs/images/search-light.png">
 </picture>
 
 <picture>
@@ -88,7 +88,7 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 
 ## Everything you can do, and where to find it
 
-New here? A short tour pops up the first time you sign in. You can reopen it any time from **Tour** at the bottom of the sidebar. Hover (or tap) a market under **Markets now** to see when it opens or closes.
+New here? A short tour pops up the first time you sign in. You can reopen it any time from **Tour** at the bottom of the sidebar. Hover (or tap) a market under **Markets now** to see when it opens or closes: it says **weekend** or **holiday** when an exchange is shut.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/tour-dark.png">
@@ -109,7 +109,9 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Rename a notebook | Click its name at the top of the notebook |
 | Choose or change the market | Step 1 on a new notebook, or the **Testing on** button at the top of any notebook |
 | Rewrite the idea from scratch | **Describe the idea again** at the top of a notebook |
-| Tweak a rule | Tap any highlighted word (marked ▾) in **The rules**: indicator, length, condition or number |
+| Tweak a rule | Tap any highlighted word (marked ▾) in **The rules**: indicator, length, condition or number. The **×** at the end of a rule removes it; **+ Add** under Entry or Exit adds one |
+| Rewrite the whole strategy | **Edit in words** on **The rules**: describe it again and the rules are rebuilt, keeping the market and capital |
+| Fine-tune (trailing stop, time limit, intraday limits, costs, sizing) | **More settings** at the bottom of **The rules**. It stays closed until you open it, remembers, and shows how many are switched on |
 | Run a test | **Run experiment** in a notebook (or press Ctrl/⌘ + Enter); each run is saved and numbered so you can compare |
 | Short instead of buy, or trade both ways | Tap **Buy** at the start of the rules and pick **Sell short** or **Trade both ways** |
 | Trade intraday | Pick 5- or 15-minute or 1-hour candles; a **During the day** line appears for the entry window, square-off, trades a day, cooldown and daily loss cap |
@@ -122,7 +124,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Understand a number | Every check, stat and setting has an **(i)** button that explains it in plain words |
 | Decide what to do next | The **Next** bar on a verdict: change the rules, try another market, paper trade, write a lab note |
 | Test on a whole group of stocks | **Testing on → Or test on a group**: a ready-made group (NIFTY 50, Bank NIFTY, F&O stocks, US mega caps, large coins) or your own list, with a limit on positions open at once; **Paper trade** runs the whole group live on intraday candles. For Indian groups you can turn on **faster entries** (enter on the live price instead of waiting for the candle to close) and a **spread limit**, and for any group a **minimum price** |
-| Paper trade options | **Options** in the sidebar: pick the underlying, expiry and structure, press **Price it now** for live fills, payoff and margin, then **Start paper trading**; stops, targets, re-centring and sizing are under **More settings** |
+| Paper trade options | **Options** in the sidebar: pick the underlying, expiry and structure, press **Price it now** for live fills, payoff and margin, then **Start paper trading**; three steps (what to trade, structure, when and risk); re-centring, trailing, caps, sizing and costs are under **More settings** |
 | Trade options on your own signal | On **Options**, set **Enter** to **When a notebook's rules say so** and pick a notebook with rules on 5-minute, 15-minute or hourly candles, for example a 7 EMA crossover. When the rules go long it enters your structure (say, buy the ATM NIFTY call); when they go short it can enter the mirror (buy the put); when they exit, it closes |
 | Paper trade | **Paper trade** at the top of a notebook or verdict; running sessions are under **Paper trading** |
 | Share a result | **Share verdict** on a verdict: send the card (chart, the four checks, the numbers) straight to an app on your phone or save it on a computer, or **Make a public link**: a read-only page anyone can open without an account. It shows the verdict, not your rules, and you can turn it off at any time |
@@ -130,7 +132,8 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Set how much is shown up front | **Account → Experience**: New to trading, I've traded a bit, or I trade actively. It changes only what starts open; every tool stays available |
 | See all your paper trading at once | **Paper trading** shows **All running sessions** on top: open position value, today, total P&L, the worst day and the deepest fall for everything together, per currency, with each session's share |
 | Borrow a strategy, or share yours | **Strategy library** in the sidebar: rules other traders published with their honest verdict (luck included). **Copy and re-test** puts them in a notebook of your own. Publish yours from a verdict: **Share verdict → Publish to the strategy library** |
-| Find anything, or ask for ideas | **Search or ask** at the top of the sidebar, or **Ctrl+K** (⌘K) anywhere: type a stock, an idea to test, a question ("momentum ideas for bank stocks") for 4 testable ideas, a feature's name ("walk forward"), or paste a strategy to import it |
+| Ask or do anything | **Ask or do anything** at the top of the sidebar or on your notebooks page, or **Ctrl+K** (⌘K) anywhere. Type a line and press Enter: "Test: buy NIFTY when RSI drops below 30" builds the rules and shows the verdict, "paper trade an EMA cross on BTC" starts paper trading, "research HDFC Bank" opens research, "what is walk-forward?" is answered in place, "momentum ideas for banks" gives testable ideas. Pasting a strategy imports it |
+| See your plan or upgrade | **Account → Plan and usage** (Plans lives inside Account) |
 | Put it on your phone | **Account → On your phone**: install StratLab to the home screen (its own icon, full screen) and **Turn on notifications** to get trade alerts and the daily report on that device, no Telegram needed. On an iPhone, first Share → Add to Home Screen |
 | Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
 | Read at night | **Night mode** at the bottom of the sidebar |

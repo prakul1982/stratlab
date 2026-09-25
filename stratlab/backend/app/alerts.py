@@ -1,9 +1,25 @@
-"""Telegram and email trade alerts (Pro)."""
+"""Trade alerts and the daily report: phone notifications, Telegram and email.
+
+A channel the server isn't set up for (no Telegram bot token, no SMTP settings) is skipped rather than failing
+the others, and the Account page doesn't offer it."""
 import smtplib
 import threading
 from email.message import EmailMessage
 import httpx
 from .config import settings
+
+
+def telegram_ready() -> bool:
+    return bool(settings.TELEGRAM_BOT_TOKEN)
+
+
+def email_ready() -> bool:
+    return bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)
+
+
+def ready_channels() -> dict:
+    from . import push
+    return {"push": push.enabled(), "telegram": telegram_ready(), "email": email_ready()}
 
 
 def send_telegram(chat_id: str, text: str) -> None:
@@ -43,20 +59,24 @@ def send_email(to: str, subject: str, body: str) -> None:
         s.send_message(msg)
 
 
-def notify(profile: dict, subject: str, text: str, background: bool = True, url: str = "/paper") -> list[str]:
-    """Send to every channel the user set up. Returns the channels attempted."""
+def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper") -> list[tuple[str, object]]:
+    """(channel, send) for every channel the user set up that the server can use."""
     from . import push
-    channels = []
     jobs = []
     if profile.get("id") and push.enabled() and push.devices(profile["id"]):
-        channels.append("push")
-        jobs.append(lambda: push.send(profile["id"], subject, text, url))
-    if profile.get("telegram_chat_id"):
-        channels.append("telegram")
-        jobs.append(lambda: send_telegram(profile["telegram_chat_id"], text))
-    if profile.get("alert_email"):
-        channels.append("email")
-        jobs.append(lambda: send_email(profile["alert_email"], subject, text))
+        jobs.append(("push", lambda: push.send(profile["id"], subject, text, url)))
+    if profile.get("telegram_chat_id") and telegram_ready():
+        jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
+    if profile.get("alert_email") and email_ready():
+        jobs.append(("email", lambda: send_email(profile["alert_email"], subject, text)))
+    return jobs
+
+
+def notify(profile: dict, subject: str, text: str, background: bool = True, url: str = "/paper") -> list[str]:
+    """Send to every usable channel the user set up. Returns the channels attempted."""
+    pairs = jobs_for(profile, subject, text, url)
+    channels = [c for c, _ in pairs]
+    jobs = [j for _, j in pairs]
 
     def run():
         for j in jobs:
@@ -68,6 +88,17 @@ def notify(profile: dict, subject: str, text: str, background: bool = True, url:
     if background:
         threading.Thread(target=run, daemon=True).start()
     else:
-        for j in jobs:
-            j()
+        run()
     return channels
+
+
+def test(profile: dict) -> tuple[list[str], dict[str, str]]:
+    """Send a test on each channel separately: which worked, and why the others didn't."""
+    sent, failed = [], {}
+    for channel, job in jobs_for(profile, "StratLab test alert", "StratLab test alert: your alerts are working.", "/account"):
+        try:
+            job()
+            sent.append(channel)
+        except Exception as e:
+            failed[channel] = str(e)[:200]
+    return sent, failed

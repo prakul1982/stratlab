@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timedelta
 
 from . import db
+from . import alerts
 from .alerts import notify
 from .engine import costs as C
 from .engine.core import Ctx, Engine, chart_series, cond_text
@@ -412,9 +413,8 @@ def alerts_on(profile: dict) -> bool:
 
 
 def report_on(profile: dict) -> bool:
-    """The daily report goes wherever alerts are set up (Telegram or email), on plans that include it."""
-    from . import push
-    has_channel = profile.get("telegram_chat_id") or profile.get("alert_email") or (push.enabled() and push.devices(profile.get("id") or ""))
+    """The daily report goes wherever alerts are set up (phone, Telegram or email), on plans that include it."""
+    has_channel = bool(alerts.jobs_for(profile, "", ""))      # only channels the server can actually use
     return bool(has_channel) and allows(effective_plan(profile), "daily_report")
 
 

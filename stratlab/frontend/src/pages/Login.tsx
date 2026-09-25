@@ -43,13 +43,16 @@ const CHECKS: { title: string; body: string; art: JSX.Element }[] = [
 ];
 
 const TOOLS: [string, string][] = [
-  ["Plain-English rules", "Write the idea the way you'd say it. AI turns it into exact rules you can read, and tap any word to change it."],
+  ["Ask or do anything", "One box for everything. \"Test: buy NIFTY when RSI drops below 30\" runs the test and shows the verdict; \"paper trade it on BTC\", \"research HDFC Bank\" or \"what is walk-forward?\" work too."],
+  ["Plain-English rules", "Write the idea the way you'd say it. AI turns it into exact rules you can read. Tap any word to change it, add or remove a rule, or rewrite the whole thing in words."],
   ["Real trading costs", "STT, stamp duty, GST, exchange fees, SEC and FINRA fees, UK stamp duty, forex spread and slippage, per market."],
   ["Long, short or both", "Buy, short, or both ways in one strategy. Stops in %, points, ATR or swing lows; targets in % or R; trailing stops and time limits."],
   ["Built for intraday", "Entry windows, square-off time, trades per day, cooldowns and a daily loss cap, with intraday (MIS) costs."],
   ["20+ indicators", "Moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian breakouts and volume."],
   ["Compare experiments", "Every run is saved and numbered. Put two side by side to see exactly what changed and whether it helped."],
-  ["Paper trading", "When a verdict holds up, run it live on real prices with fake money: one stock, a whole group, or an option structure. It keeps running until you stop it, with Telegram or email alerts and a short report after each market closes."],
+  ["Paper trading", "When a verdict holds up, run it live on real prices with fake money: one stock, a whole group, or an option structure. One view shows everything at stake across your sessions, and a short report arrives after each market closes."],
+  ["On your phone", "Install StratLab on your home screen like an app and get every paper trade and the daily report as a notification. No Telegram needed."],
+  ["Strategy library", "Rules other traders published with the verdict they earned, luck included. Copy one into your own notebook and test it yourself."],
   ["Walk-forward test", "Re-tune the settings on the past, trade them on the next stretch the tuning never saw, slide forward, repeat. The strictest test there is."],
   ["Share the verdict", "Send a card with the chart and all four checks straight from your phone, or a public link anyone can open. Your rules stay private."],
 ];
@@ -74,6 +77,8 @@ const FAQ: [string, string][] = [
   ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a config file from your own bot, TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, sets up a group if it trades a list of stocks, opens option structures in the Options tab, and lists anything it couldn't translate."],
   ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE and MCX option prices, with fills at the real bid and ask. You can also let a notebook's rules decide when: long signals buy your structure and short signals its mirror. Backtesting options needs real historical prices for every strike, which nobody keeps for expired options, so StratLab is recording the NIFTY, BANKNIFTY and SENSEX chains every 5 minutes to build that history. We won't stand in a pricing model."],
   ["What does it cost?", "It's free to start: experiments every month, AI strategy builds, and 5 market days of paper trading. Basic (₹999 a month) adds group and options paper trading and a daily report; Pro (₹2,999) adds options on your own signals, faster group entries, alerts for every trade, every indicator and F&O. Everything is unlocked while StratLab is in early access."],
+  ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon, and sends paper trades and the daily report as notifications."],
+  ["Does it know market holidays?", "Yes. Exchange holidays in India, the US, UK, Europe and Japan are built in: the markets panel shows weekends and holidays, the daily report skips them, and they don't count toward the free trial."],
   ["Can I share a result?", "Yes. Share a verdict as an image from your phone, or make a public link. It shows the verdict, the chart and the checks, never your rules, and you can turn it off at any time."],
 ];
 
@@ -154,7 +159,7 @@ export function Login() {
           <div className="lp-head"><span className="eyebrow">How it works</span><h2 className="serif lp-h2">From a sentence to a verdict in a minute.</h2></div>
           <ol className="lp-steps">
             <li className="card"><span className="lp-num">1</span><b>Describe it</b><p className="small muted">"Buy Reliance when it's above its 200-day average and RSI crosses 50." Pick the market, or let StratLab find the stock in your sentence.</p></li>
-            <li className="card"><span className="lp-num">2</span><b>Check the rules</b><p className="small muted">The idea becomes plain-English rules. Tap any highlighted word to change an indicator, a number or the stop loss.</p></li>
+            <li className="card"><span className="lp-num">2</span><b>Check the rules</b><p className="small muted">The idea becomes plain-English rules. Tap any highlighted word to change an indicator, a number or the stop loss, or rewrite it in words.</p></li>
             <li className="card"><span className="lp-num">3</span><b>Get an honest verdict</b><p className="small muted">Years of real prices, real costs and four honesty checks. Every number has an (i) that explains it.</p></li>
             <li className="card"><span className="lp-num">4</span><b>Improve, or paper trade</b><p className="small muted">Change one thing and run again, compare the two, and when it holds up, watch it live with fake money.</p></li>
           </ol>

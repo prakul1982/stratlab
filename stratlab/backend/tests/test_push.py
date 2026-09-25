@@ -75,3 +75,20 @@ def test_keys_are_made_once_saved_and_sign_real_pushes(kv, monkeypatch):
     push.add("u1", {"endpoint": "https://fcm.googleapis.com/fcm/send/abc", "keys": {"p256dh": p256, "auth": "tBHItJI5svbpez7KI4CCXg"}})
     assert push.send("u1", "StratLab", "hello") == 1
     assert posted and f"k={pub}" in posted[0][1]["Authorization"].replace(" ", "")
+
+
+def test_unset_channels_are_skipped_and_tests_report_each_channel(kv, monkeypatch):
+    monkeypatch.setattr(settings, "SMTP_HOST", ""); monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "t")
+    prof = {"id": "u1", "alert_email": "a@b.c", "telegram_chat_id": "42"}
+    sent = []
+    monkeypatch.setattr(alerts, "send_telegram", lambda chat, text: sent.append(("tg", chat)))
+    monkeypatch.setattr(alerts, "send_email", lambda *a: (_ for _ in ()).throw(AssertionError("email must be skipped")))
+    assert alerts.notify(prof, "s", "t", background=False) == ["telegram"] and sent == [("tg", "42")]   # no SMTP: email skipped
+    assert alerts.ready_channels()["email"] is False
+    def boom(chat, text):
+        raise RuntimeError("Telegram refused the message (400).")
+    monkeypatch.setattr(alerts, "send_telegram", boom)
+    push.add("u1", SUB(1))
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    ok, failed = alerts.test(prof)
+    assert ok == ["push"] and failed == {"telegram": "Telegram refused the message (400)."}          # one failure doesn't block the rest

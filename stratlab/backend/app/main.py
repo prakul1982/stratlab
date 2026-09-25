@@ -20,7 +20,7 @@ from . import admin, basket, billing, db, importer, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
-from .alerts import notify
+from . import alerts
 from .auth import current_profile
 from .config import settings
 from .errors import report
@@ -270,7 +270,7 @@ def me(profile=Depends(current_profile)):
                   "ai_used": db.count_usage(profile["id"], "ai", month_start_iso()), "ai_limit": info["ai_builds_per_month"]},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
-        "alerts": {"enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
+        "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
         "prefs": {"level": prefs_of(profile["id"]).get("level")},
         "data_online": kite.ready(),
@@ -351,13 +351,13 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
 @app.post("/me/alerts/test")
 def test_alert(profile=Depends(current_profile)):
     need(profile, "daily_report", "Alerts and the daily report")
-    try:
-        sent = notify(profile, "StratLab test alert", "StratLab test alert: your alerts are working.", background=False)
-    except Exception as e:
-        err(502, "alert_failed", f"Alert could not be sent: {e}")
+    sent, failed = alerts.test(profile)
+    if not sent and not failed:
+        err(400, "no_channels", "Turn on phone notifications on this device, or add a Telegram chat ID"
+            + (" or an email" if alerts.email_ready() else "") + ", first.")
     if not sent:
-        err(400, "no_channels", "Add a Telegram chat ID or an email, or turn on phone notifications, first.")
-    return {"sent": sent}
+        err(502, "alert_failed", "The test couldn't be sent: " + "; ".join(f"{k}: {v}" for k, v in failed.items()))
+    return {"sent": sent, "failed": failed}
 
 
 # ---------- markets and instruments ----------
