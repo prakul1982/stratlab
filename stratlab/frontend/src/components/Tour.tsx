@@ -34,7 +34,7 @@ const STEPS: Step[] = [
     where: "\"Share verdict\" on a result, \"Export\" and Lab notes in a notebook." },
   { icon: <User size={34} />, title: "Make it yours",
     body: "Switch to night mode, see your plan and usage, and run the connection check if prices or the idea builder ever look stuck.",
-    where: "Account and Night mode in the sidebar. You can reopen this tour any time from \"What can I do here?\"." },
+    where: "Account and Night mode in the sidebar. You can reopen this tour any time from \"Tour\" at the bottom of the sidebar." },
 ];
 
 export function tourSeen(): boolean {

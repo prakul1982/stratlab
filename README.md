@@ -66,7 +66,7 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 
 ## Everything you can do, and where to find it
 
-New here? A short tour pops up the first time you sign in. You can reopen it any time from **What can I do here?** in the sidebar.
+New here? A short tour pops up the first time you sign in. You can reopen it any time from **Tour** at the bottom of the sidebar. Hover (or tap) a market under **Markets now** to see when it opens or closes.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/tour-dark.png">
