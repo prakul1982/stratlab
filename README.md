@@ -76,6 +76,16 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
   <img alt="A research page for Reliance Industries: price chart, 52-week range and a button to test a strategy on it" src="docs/images/research-light.png">
 </picture>
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/search-dark.png">
+  <img alt="Search or ask (Ctrl+K): a question like 'momentum ideas for bank stocks' returns four testable ideas, plus matching features" src="docs/images/search-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/library-dark.png">
+  <img alt="The strategy library: published rules with their honest verdicts, 'Likely real edge' next to 'No edge', each with a Copy and re-test button" src="docs/images/library-light.png">
+</picture>
+
 ## Everything you can do, and where to find it
 
 New here? A short tour pops up the first time you sign in. You can reopen it any time from **Tour** at the bottom of the sidebar. Hover (or tap) a market under **Markets now** to see when it opens or closes.
