@@ -101,7 +101,7 @@ export function AccountPage() {
             ))}
             <div className="row wrap" style={{ gap: 8, marginTop: 14 }}>
               {me.plan === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
-                : b.cancel_at_period_end ? <span className="small muted">Cancelled. You keep {me.plan_info.name} until {dateOnly(b.renews_or_ends)}.</span>
+                : b.cancel_at_period_end ? <><span className="small muted">Cancelled. You keep {me.plan_info.name} until {dateOnly(b.renews_or_ends)}.</span><Link to="/plans" className="btn outline">Compare plans</Link></>
                   : <><Link to="/plans" className="btn outline">Change plan</Link><button className="btn danger" onClick={cancel}>Cancel subscription</button></>}
             </div>
           </section>

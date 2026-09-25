@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api, loadRazorpay } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
@@ -49,6 +50,7 @@ export function PlansPage() {
   return (
     <div className="stack" style={{ gap: 26 }}>
       <div className="stack" style={{ gap: 8 }}>
+        <Link to="/account" className="link small" style={{ alignSelf: "flex-start" }}>← Account</Link>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Plans</h1>
         <p className="muted" style={{ fontSize: 17 }}>
           {billing ? "Billed through Razorpay. Cancel any time; your plan stays active until the paid period ends." : "Paid plans are coming soon. During early access every feature is unlocked for everyone; the Free plan's monthly limits still apply."}

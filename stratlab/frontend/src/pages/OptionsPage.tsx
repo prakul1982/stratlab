@@ -250,7 +250,7 @@ export function OptionsPage() {
   return (
     <div className="stack opt-page" style={{ gap: 20 }}>
       <div className="stack" style={{ gap: 6 }}>
-        <h1 className="serif row" style={{ fontSize: "clamp(30px, 4vw, 42px)", fontWeight: 400, letterSpacing: "-0.02em", gap: 0 }}>Options<Info>{HELP.options}</Info></h1>
+        <h1 className="page-title">Options<Info>{HELP.options}</Info></h1>
         <p className="muted" style={{ maxWidth: "62ch" }}>Paper trade option structures on live NSE, BSE and MCX prices. Fills use the real bid and ask.</p>
         <p className="small muted row wrap" style={{ gap: 6 }}><span className="pill soon-pill">Backtesting coming soon</span><Info>{HELP.optBacktest}</Info></p>
       </div>

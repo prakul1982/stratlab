@@ -216,6 +216,29 @@ td.num, .num { font-family: var(--mono); }
 @keyframes sh { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
+/* ---------- ask anything: progress and answers in the search box ---------- */
+.palette-work { display: grid; gap: 10px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.palette-answer { display: grid; gap: 8px; padding: 16px 22px; border-bottom: 1px solid var(--line); background: var(--paper-2); }
+.palette-answer p { font-size: 15.5px; line-height: 1.55; }
+.palette-answer.problem p { color: var(--orange-ink); }
+.spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ask-bar { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; cursor: text; padding: 16px 20px;
+  border: 1.5px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); font: inherit; }
+.ask-bar:hover, .ask-bar:focus-visible { border-color: var(--ink); }
+.ask-bar > .stack { flex: 1; }
+.ask-bar .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-bar kbd { flex: none; }
+@media (max-width: 640px) { .ask-bar .small { white-space: normal; } .ask-bar kbd { display: none; } }
+
+/* ---------- page titles ---------- */
+.page-title { font: 400 clamp(32px, 4vw, 46px)/1.1 var(--serif); letter-spacing: -0.02em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
+.page-title .info { margin-left: 0; align-self: center; position: relative; top: 0.08em; }
+.page-sub { color: var(--muted); font-size: 17px; max-width: 62ch; }
+.page-chip { align-self: flex-start; max-width: 100%; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--muted); font: 500 13.5px/1.4 var(--sans); }
+
 /* ---------- (i) explanations ---------- */
 .info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
 .info-btn {

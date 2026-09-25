@@ -17,7 +17,11 @@ export function Explore({ title = "What you can do here" }: { title?: string }) 
       </div>
       <div className="explore-grid">
         {FEATURES.filter((f) => f.home && !(level === "new" && f.level === "advanced")).map((f) => (
-          <button key={f.id} className="card explore-card" onClick={() => nav(resolve(f.to, loc.pathname, latest))}>
+          <button key={f.id} className="card explore-card" onClick={() => {
+            const to = resolve(f.to, loc.pathname, latest);
+            if (to === loc.pathname + loc.search) { const box = document.getElementById("idea"); box?.scrollIntoView({ behavior: "smooth", block: "center" }); box?.focus(); }
+            else nav(to);
+          }}>
             <b>{f.title}</b>
             <span className="small muted">{f.what}</span>
             {f.to.startsWith("@") && !latest && <span className="small muted">Starts with a notebook</span>}

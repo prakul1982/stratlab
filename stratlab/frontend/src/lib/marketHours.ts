@@ -60,17 +60,19 @@ export function marketState(m: Market, now = new Date()): MarketState {
   const shut = new Set(m.holidays ?? []);
   const trades = (n: number) => weekday((w.wd + n) % 7) && !shut.has(w.iso(n));
   const open = trades(0) && w.min >= o && w.min < c;
-  const closedFor = trades(0) ? null : weekday(w.wd) ? "holiday" : "weekend";
-  let until: number;
+  let until: number, days = 0;
   if (open) until = c - w.min;
   else {
-    let days = 0;
     if (!(trades(0) && w.min < o)) {
       days = 1;
       while (!trades(days) && days < 30) days++;
     }
     until = days * DAY + o - w.min;
   }
+  // shut until a later day: say why, the same way for every exchange (Friday evening counts as the weekend)
+  const skipped = Array.from({ length: days }, (_, n) => n).filter((n) => n > 0 || !trades(0));
+  const first = skipped[0];       // the first closed day decides: a holiday, or the weekend
+  const closedFor = open || first === undefined ? null : weekday((w.wd + first) % 7) ? "holiday" : "weekend";
   const change = at(until);
   const todayOpen = new Date(now.getTime() + (o - w.min) * 60000), todayClose = new Date(now.getTime() + (c - w.min) * 60000);
   const short = open ? "open" : closedFor ?? (until < DAY ? `opens ${inWords(until)}` : `opens ${change.toLocaleDateString([], { weekday: "short" })}`);

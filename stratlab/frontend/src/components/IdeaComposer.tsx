@@ -56,6 +56,46 @@ export async function findInstrument(name: string, market?: string | null): Prom
   }
 }
 
+/** Turn a sentence into rules: the AI builder, or the simple converter when the AI can't run.
+ * Returns the built strategy, or a note saying what's missing. Throws only on errors worth showing as-is. */
+export async function buildIdea(idea: string, market?: string): Promise<{ built: Built | null; note: string; usedAI: boolean }> {
+  let out: AIOut, usedAI = true, fallback = "";
+  try {
+    out = await api<AIOut>("/ai/strategy", { method: "POST", body: { text: idea } });
+  } catch (e) {
+    const err = e as ApiError;
+    if (!(["ai_busy", "ai_limit", "ai_daily_limit", "ai_failed", "no_backend", "network"].includes(err.code || "") || err.status >= 500)) throw e;
+    usedAI = false;
+    fallback = err.code === "ai_limit" || err.code === "ai_daily_limit"
+      ? `${err.message} We used the simple converter instead.`
+      : `The AI builder couldn't run just now, so we used the simple converter (it understands SMA, EMA, RSI and price rules). Account → Connection check shows why.`;
+    const p = parseStrategyText(idea);
+    const mentioned = Object.keys(p.risk);
+    const tf = detectTf(idea), inst = detectInstrument(idea);
+    if (p.exit.length) mentioned.push("exit");
+    if (tf) mentioned.push("tf");
+    if (inst) mentioned.push("instrument");
+    out = { entry: p.entry, exit: p.exit, entryJoin: "all", tf, name: null, instrument: inst, risk: p.risk, mentioned, notes: [], side: p.side };
+  }
+  if (!out.entry?.length) {
+    return { built: null, usedAI, note: (fallback ? fallback + " " : "") + "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." +
+      (out.notes?.length ? " " + out.notes.join(" ") : "") };
+  }
+  const instrument = out.instrument ? await findInstrument(out.instrument, out.market || (market && market !== "CSV" ? market : null)) : null;
+  const s = blankStrategy(out.name || nameFor({ ...blankStrategy(), entry: out.entry }, instrument?.symbol));
+  const strategy: Strategy = {
+    ...s, text: idea, entry: out.entry, exit: out.exit || [], entryJoin: out.entryJoin || "all", tf: out.tf || "1d",
+    side: out.side === "short" || out.side === "both" ? out.side : "long", shortEntry: out.shortEntry ?? [], shortExit: out.shortExit ?? [],
+    minScore: out.minScore ?? 0, session: out.session ?? s.session, product: out.product ?? "auto",
+    risk: riskForCurrency({ ...s.risk, ...out.risk }, instrument?.currency),
+  };
+  return {
+    usedAI, note: fallback,
+    built: { strategy, instrument, question: questionFrom(idea, instrument?.symbol),
+      gaps: { mentioned: out.mentioned || [], notes: out.notes || [], instName: out.instrument, usedAI, fallback } },
+  };
+}
+
 export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFocus, initial = "", market, symbol }: {
   onBuilt: (b: Built) => Promise<void> | void; busyLabel?: string; autoFocus?: boolean; initial?: string;
   /** The market and instrument already chosen: the examples use them, and names in the idea are looked up there. */
@@ -72,50 +112,14 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
     if (idea.length < 5) { setNote("Describe your idea first, for example: \"Buy NIFTY 50 when it's above the 50-day average\"."); return; }
     setBusy(true);
     setNote(null);
-    let out: AIOut, usedAI = true, fallback = "";
     try {
-      out = await api<AIOut>("/ai/strategy", { method: "POST", body: { text: idea } });
-    } catch (e) {
-      const err = e as ApiError;
-      if (["ai_busy", "ai_limit", "ai_daily_limit", "ai_failed", "no_backend", "network"].includes(err.code || "") || err.status >= 500) {
-        usedAI = false;
-        fallback = err.code === "ai_limit" || err.code === "ai_daily_limit"
-          ? `${err.message} We used the simple converter instead.`
-          : `The AI builder couldn't run just now, so we used the simple converter (it understands SMA, EMA, RSI and price rules). Account → Connection check shows why.`;
-        const p = parseStrategyText(idea);
-        const mentioned = Object.keys(p.risk);
-        const tf = detectTf(idea), inst = detectInstrument(idea);
-        if (p.exit.length) mentioned.push("exit");
-        if (tf) mentioned.push("tf");
-        if (inst) mentioned.push("instrument");
-        out = { entry: p.entry, exit: p.exit, entryJoin: "all", tf, name: null, instrument: inst, risk: p.risk, mentioned, notes: [], side: p.side };
-      } else {
-        setBusy(false);
-        fail(e);
-        return;
-      }
-    }
-    if (usedAI) refreshMe();
-    if (!out.entry?.length) {
-      setBusy(false);
-      setNote((fallback ? fallback + " " : "") + "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." +
-        (out.notes?.length ? " " + out.notes.join(" ") : ""));
-      return;
-    }
-    const instrument = out.instrument ? await findInstrument(out.instrument, out.market || (market && market !== "CSV" ? market : null)) : null;
-    const s = blankStrategy(out.name || nameFor({ ...blankStrategy(), entry: out.entry }, instrument?.symbol));
-    const strategy: Strategy = {
-      ...s, text: idea, entry: out.entry, exit: out.exit || [], entryJoin: out.entryJoin || "all", tf: out.tf || "1d",
-      side: out.side === "short" || out.side === "both" ? out.side : "long", shortEntry: out.shortEntry ?? [], shortExit: out.shortExit ?? [],
-      minScore: out.minScore ?? 0, session: out.session ?? s.session, product: out.product ?? "auto",
-      risk: riskForCurrency({ ...s.risk, ...out.risk }, instrument?.currency),
-    };
-    try {
-      await onBuilt({
-        strategy, instrument, question: questionFrom(idea, instrument?.symbol),
-        gaps: { mentioned: out.mentioned || [], notes: out.notes || [], instName: out.instrument, usedAI, fallback },
-      });
+      const r = await buildIdea(idea, market);
+      if (r.usedAI) refreshMe();
+      if (!r.built) { setNote(r.note); return; }
+      await onBuilt(r.built);
       setText("");
+    } catch (e) {
+      fail(e);
     } finally {
       setBusy(false);
     }
