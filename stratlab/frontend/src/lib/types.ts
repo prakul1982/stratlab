@@ -103,6 +103,7 @@ export interface Notebook extends NotebookItem {
 export interface PlanInfo {
   name: string; price: number; backtests_per_month: number | null; ai_builds_per_month: number | null;
   live_limit: number; live_trial_days: number | null; pro_features: boolean;
+  price_year?: number; group_size?: number; features?: Record<string, boolean>;
 }
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
@@ -111,7 +112,7 @@ export interface Me {
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
   alerts: { enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
-  data_online: boolean; billing_enabled?: boolean; is_admin?: boolean;
+  data_online: boolean; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
 }
 
 export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number }

@@ -1,4 +1,4 @@
-"""Razorpay subscriptions: Basic (Rs 1,999/month) and Pro (Rs 4,900/month)."""
+"""Razorpay subscriptions: Basic and Pro, monthly or (when those plans are set up) yearly. Prices live in plans.py."""
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -18,7 +18,9 @@ def client() -> razorpay.Client:
     return _client
 
 
-def plan_ids() -> dict:
+def plan_ids(period: str = "month") -> dict:
+    if period == "year":
+        return {"basic": settings.RAZORPAY_PLAN_BASIC_YEAR, "pro": settings.RAZORPAY_PLAN_PRO_YEAR}
     return {"basic": settings.RAZORPAY_PLAN_BASIC, "pro": settings.RAZORPAY_PLAN_PRO}
 
 
@@ -26,11 +28,16 @@ def enabled() -> bool:
     return bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET and all(plan_ids().values()))
 
 
+def yearly_enabled() -> bool:
+    return enabled() and all(plan_ids("year").values())
+
+
 def plan_for(sub: dict) -> str | None:
     notes = sub.get("notes") or {}
     if isinstance(notes, dict) and notes.get("plan") in ("basic", "pro"):
         return notes["plan"]
-    return next((k for k, v in plan_ids().items() if v == sub.get("plan_id")), None)
+    ids = {v: k for period in ("month", "year") for k, v in plan_ids(period).items() if v}
+    return ids.get(sub.get("plan_id"))
 
 
 def _ts(v) -> str:
@@ -39,15 +46,17 @@ def _ts(v) -> str:
     return (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
 
 
-def create_subscription(profile: dict, plan: str) -> dict:
+def create_subscription(profile: dict, plan: str, period: str = "month") -> dict:
     if not enabled():
         raise ValueError("Payments aren't set up on the server yet.")
+    if period == "year" and not yearly_enabled():
+        raise ValueError("Yearly billing isn't set up yet; pick monthly.")
     sub = client().subscription.create({
-        "plan_id": plan_ids()[plan],
-        "total_count": 120,          # up to 10 years of monthly renewals; users can cancel any time
+        "plan_id": plan_ids(period)[plan],
+        "total_count": 10 if period == "year" else 120,   # up to 10 years of renewals; users can cancel any time
         "quantity": 1,
         "customer_notify": 1,
-        "notes": {"user_id": profile["id"], "plan": plan},
+        "notes": {"user_id": profile["id"], "plan": plan, "period": period},
     })
     db.update_profile(profile["id"], pending_subscription_id=sub["id"])
     return {"subscription_id": sub["id"], "key_id": settings.RAZORPAY_KEY_ID,

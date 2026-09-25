@@ -216,17 +216,23 @@ The **[setup guide](stratlab/README.md)** covers Supabase, Kite Connect (includi
 
 ## Plans
 
-**Early access: StratLab is free, and every feature is unlocked for everyone** (all indicators, all markets including Indian F&O, walk-forward, alerts and export). Monthly limits still apply. The paid plans below switch on automatically once Razorpay is connected.
+**Early access: StratLab is free, and every feature is unlocked for everyone** (all indicators, Indian F&O, group and options paper trading, alerts and export, and groups of up to 50). Monthly limits still apply. The paid plans below switch on automatically once Razorpay is connected.
 
-| | Free | Basic · ₹1,999/mo | Pro · ₹4,900/mo |
+| | Free | Basic · ₹999/mo | Pro · ₹2,999/mo |
 |---|---|---|---|
+| Yearly (two months free) | – | ₹9,990 | ₹29,990 |
 | Experiments (each with a full verdict) | 5 / month | 50 / month | Unlimited |
 | AI strategy builds | 10 / month | 100 / month | Unlimited |
-| Research AI reads | 60 / day | 60 / day | 60 / day |
-| Paper trading | 5-market-day trial | 1 strategy | 5 strategies |
-| Markets | All, except Indian F&O | same | + Indian F&O |
+| Group tests | Up to 10 instruments | Up to 25 | Up to 50 |
+| Paper trading | 5-market-day trial, 1 session | 2 at a time | 10 at a time |
+| Group paper trading | – | ✓ | ✓ with faster entries and a spread limit |
+| Options paper trading | – | At set times | At set times or on a notebook's signal |
+| Daily report after the close | – | ✓ | ✓ |
+| Telegram and email alerts for every trade | – | – | ✓ |
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
-| Trade alerts, daily report, export | – | – | ✓ |
+| Markets | All, except Indian F&O | same | + Indian F&O |
+| Export rules and trades | – | – | ✓ |
+| Research AI reads | 60 / day | 60 / day | 60 / day |
 | Share cards and public links | ✓ | ✓ | ✓ |
 
 Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server.

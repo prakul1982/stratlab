@@ -194,6 +194,7 @@ class AlertsReq(BaseModel):
 
 class SubscribeReq(BaseModel):
     plan: Literal["basic", "pro"]
+    period: Literal["month", "year"] = "month"
 
 
 class VerifyReq(BaseModel):
