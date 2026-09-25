@@ -4,6 +4,7 @@ import logging
 import math
 import re
 import secrets
+import threading
 import traceback
 import uuid
 from contextlib import asynccontextmanager
@@ -66,6 +67,7 @@ kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     auto_login.load_last()
+    _load_errors()
     try:
         kite.load_saved_token()
     except Exception as e:
@@ -102,9 +104,31 @@ async def unexpected_errors(request: Request, call_next):
         RECENT_ERRORS.append({"ref": ref, "at": datetime.now(IST).isoformat(), "method": request.method,
                               "path": request.url.path, "error": f"{type(e).__name__}: {str(e)[:300]}", "where": where})
         del RECENT_ERRORS[:-25]
+        _save_errors()
         return JSONResponse(status_code=500, content={"detail": {"code": "server_error",
-                            "message": f"Something went wrong on our side (ref {ref}). Try again in a moment; "
-                                       "if it keeps happening, the admin page lists what failed."}})
+                            "message": f"Something went wrong on our side ({request.method} {request.url.path}, ref {ref}). "
+                                       "Try again in a moment; the admin page lists what failed."}})
+
+
+def _save_errors():
+    """Keep the error list in the database too, so a restart doesn't wipe it."""
+    snapshot = json.dumps(RECENT_ERRORS[-25:])
+
+    def work():
+        try:
+            db.set_setting("recent_errors", snapshot)
+        except Exception as x:
+            print("could not save errors:", x)
+    threading.Thread(target=work, daemon=True).start()
+
+
+def _load_errors():
+    try:
+        saved = json.loads(db.get_setting("recent_errors") or "[]")
+        if isinstance(saved, list):
+            RECENT_ERRORS[:0] = [e for e in saved if isinstance(e, dict)][-25:]
+    except Exception as x:
+        print("could not load errors:", x)
 
 
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,

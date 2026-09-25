@@ -125,7 +125,10 @@ def test_crashes_return_json_with_cors(monkeypatch):
 
 def test_crashes_get_a_ref_and_show_on_the_admin_page(monkeypatch):
     from fastapi.testclient import TestClient
-    from app import main
+    from app import db, main
+    saved = {}
+    monkeypatch.setattr(db, "set_setting", lambda k, v: saved.__setitem__(k, v))
+    monkeypatch.setattr(db, "get_setting", lambda k: saved.get(k))
 
     def boom():
         raise KeyError("expiry")
@@ -135,6 +138,11 @@ def test_crashes_get_a_ref_and_show_on_the_admin_page(monkeypatch):
     body = r.json()["detail"]
     assert r.status_code == 500 and body["code"] == "server_error"
     ref = main.RECENT_ERRORS[-1]["ref"]
-    assert f"ref {ref}" in body["message"]
+    assert f"ref {ref}" in body["message"] and "GET /__boom" in body["message"]
     err = main.server_status()["recent_errors"][0]
     assert err["path"] == "/__boom" and err["error"].startswith("KeyError") and "boom" in err["where"]
+    import time
+    time.sleep(0.2)
+    main.RECENT_ERRORS.clear()
+    main._load_errors()                     # after a restart the list comes back from the database
+    assert main.RECENT_ERRORS[-1]["ref"] == ref
