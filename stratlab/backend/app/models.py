@@ -192,6 +192,11 @@ class AlertsReq(BaseModel):
     daily_report: Optional[bool] = None
 
 
+class LibraryReq(BaseModel):
+    description: str = Field("", max_length=600)
+    author: str = Field("", max_length=40)       # a display name; empty means "A StratLab user"
+
+
 class PrefsReq(BaseModel):
     level: Literal["new", "some", "pro"]
 

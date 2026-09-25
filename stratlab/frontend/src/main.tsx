@@ -32,6 +32,7 @@ const PaperPage = page(() => import("./pages/PaperPage"), "PaperPage");
 const PlansPage = page(() => import("./pages/PlansPage"), "PlansPage");
 const AccountPage = page(() => import("./pages/AccountPage"), "AccountPage");
 const AdminPage = page(() => import("./pages/AdminPage"), "AdminPage");
+const LibraryPage = page(() => import("./pages/LibraryPage"), "LibraryPage");
 const CompareExperiments = page(() => import("./pages/CompareExperiments"), "CompareExperiments");
 const research = () => import("./pages/Research");
 const ResearchHome = page(research, "ResearchHome");
@@ -66,6 +67,7 @@ function Routed() {
         <Route path="/n/:id/compare" element={<CompareExperiments />} />
         <Route path="/n/:id/e/:v" element={<ExperimentPage />} />
         <Route path="/import" element={<ImportPage />} />
+        <Route path="/library" element={<LibraryPage />} />
         <Route path="/options" element={<OptionsPage />} />
         <Route path="/options/s/:sid" element={<OptionsSession />} />
         <Route path="/paper" element={<PaperPage />} />

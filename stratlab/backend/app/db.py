@@ -133,3 +133,9 @@ def option_snapshots(name: str, expiry: str, since_iso: str, until_iso: str) -> 
     r = (sb().table("option_snapshots").select("taken_at,spot,lot,chain").eq("name", name).eq("expiry", expiry)
          .gte("taken_at", since_iso).lt("taken_at", until_iso).order("taken_at").limit(2000).execute())
     return r.data
+
+
+def settings_with_prefix(prefix: str, limit: int = 1000) -> list[str]:
+    r = (sb().table("app_settings").select("value").like("key", prefix + "%")
+         .order("updated_at", desc=True).limit(limit).execute())
+    return [x["value"] for x in r.data]

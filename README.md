@@ -118,6 +118,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Share a result | **Share verdict** on a verdict: send the card (chart, the four checks, the numbers) straight to an app on your phone or save it on a computer, or **Make a public link**: a read-only page anyone can open without an account. It shows the verdict, not your rules, and you can turn it off at any time |
 | Save the rules | **Export** in a notebook saves the rules as a file |
 | Set how much is shown up front | **Account → Experience**: New to trading, I've traded a bit, or I trade actively. It changes only what starts open; every tool stays available |
+| Borrow a strategy, or share yours | **Strategy library** in the sidebar: rules other traders published with their honest verdict (luck included). **Copy and re-test** puts them in a notebook of your own. Publish yours from a verdict: **Share verdict → Publish to the strategy library** |
 | Find anything, or ask for ideas | **Search or ask** at the top of the sidebar, or **Ctrl+K** (⌘K) anywhere: type a stock, an idea to test, a question ("momentum ideas for bank stocks") for 4 testable ideas, a feature's name ("walk forward"), or paste a strategy to import it |
 | Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
 | Read at night | **Night mode** at the bottom of the sidebar |
