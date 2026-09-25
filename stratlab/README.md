@@ -29,7 +29,7 @@ Monthly counts reset on the 1st of each month (IST). Limits are enforced on the 
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. Open **SQL Editor**, paste `supabase/schema.sql` and run it.
+2. Open **SQL Editor**, paste `supabase/schema.sql` and run it. It is safe to run again after an update: it only adds what is missing. (The `option_snapshots` table added in September 2026 needs this.)
 3. Under **Authentication > Providers > Google**, enable Google. Create an OAuth client in Google Cloud Console and paste its ID and secret into Supabase.
 4. Under **Authentication > URL Configuration**, add your frontend URL, for example `http://localhost:5500` and your production domain (`https://stratlab.studio`).
 5. Copy these from **Project settings > API**:
@@ -88,6 +88,16 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.
 - **Email:** fill in the SMTP settings. For Gmail, use an app password. Port 465 uses SSL, 587 uses STARTTLS.
 - **Daily report:** anyone with alerts on also gets a short report a few minutes after each market closes (15:40 in India, 16:10 New York, 23:55 UTC for crypto). It lists each paper trading session in that market: trades closed that day, their P&L, what's still open, and the result since the start. People can turn it off on the Account page. Nothing extra to set up.
+
+### Recording option chains (for options backtesting)
+Kite has no price history for expired options, so StratLab records its own.
+- **What it saves:** every 5 minutes in Indian market hours it saves the chain of NIFTY, BANKNIFTY and SENSEX: the current and next expiry, and 15 strikes either side of the money, with bid, ask, last price and open interest for each call and put, plus the spot price.
+- **Storage:** that's about 1 MB a day in the `option_snapshots` table, so the free Supabase tier holds more than a year.
+- **Settings:**
+  - `OPTION_SNAPSHOTS` picks the underlyings, for example `NFO:NIFTY,NFO:BANKNIFTY,NFO:FINNIFTY,BFO:SENSEX`. Set it to an empty value to turn recording off.
+  - `OPTION_SNAPSHOT_MINUTES` sets how often it records.
+- **Status:** the Admin page shows what is recorded, how many were saved today and any problem.
+- The longer it runs, the more history options backtests will have, so it is worth starting early.
 
 ### 5. Crypto, global markets and uploaded data
 Nothing to set up. Crypto prices come from Coinbase's public market data. US, UK, European and Japanese stocks and ETFs, and forex pairs, come from Yahoo Finance's public chart data (London prices are converted from pence to pounds). Neither needs an account or key. Yahoo keeps about 2 years of hourly and 60 days of 15- and 5-minute candles, so intraday tests on those markets are shorter. Uploaded CSVs are read in the browser and sent with each test; they aren't stored on the server.

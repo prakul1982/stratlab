@@ -132,3 +132,14 @@ def set_setting(key: str, value: str) -> None:
 
 def delete_setting(key: str) -> None:
     sb().table("app_settings").delete().eq("key", key).execute()
+
+
+# ---------- recorded option chains ----------
+def add_option_snapshot(row: dict) -> None:
+    sb().table("option_snapshots").insert(row).execute()
+
+
+def option_snapshots(name: str, expiry: str, since_iso: str, until_iso: str) -> list[dict]:
+    r = (sb().table("option_snapshots").select("taken_at,spot,lot,chain").eq("name", name).eq("expiry", expiry)
+         .gte("taken_at", since_iso).lt("taken_at", until_iso).order("taken_at").limit(2000).execute())
+    return r.data

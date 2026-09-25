@@ -2,6 +2,13 @@
 
 ## September 2026
 
+### Recording option chains for options backtesting
+- Kite keeps no prices for expired options, so StratLab now records its own.
+- **What:** every 5 minutes in market hours it saves the NIFTY, BANKNIFTY and SENSEX chains (current and next expiry, 15 strikes either side of the money): bid, ask, last price and open interest for each call and put, plus the spot price. That's about 1 MB a day.
+- **Settings:** choose the underlyings and how often with `OPTION_SNAPSHOTS` and `OPTION_SNAPSHOT_MINUTES`.
+- **Status:** the Admin page shows what was saved today.
+- **One setup step:** run `supabase/schema.sql` again to add the `option_snapshots` table.
+
 ### A longer free trial, a daily report, and error alerts
 - **Free trial:** the free plan's paper trading trial now lasts **5 market days** (Monday to Friday, counted from the day you start) instead of 24 hours. Starting on a weekend doesn't use any of it.
 - **Daily report:**
