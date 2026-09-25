@@ -7,6 +7,8 @@ import threading
 import time
 from datetime import datetime, time as dtime, timedelta, timezone
 
+from ..data.calendar import is_trading_day
+
 IST = timezone(timedelta(hours=5, minutes=30))
 OPEN, CLOSE = dtime(9, 15), dtime(15, 30)
 AROUND = 15                     # strikes each side of the money
@@ -24,7 +26,7 @@ def parse_targets(text: str) -> list[tuple[str, str]]:
 
 def in_hours(now: datetime) -> bool:
     local = now.astimezone(IST)
-    return local.weekday() < 5 and OPEN <= local.time() <= CLOSE
+    return is_trading_day("IN", local.date()) and OPEN <= local.time() <= CLOSE
 
 
 def compact(chain: dict) -> list[list]:

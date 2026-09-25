@@ -27,6 +27,7 @@ from .errors import report
 from . import research
 from .engine import walkforward
 from .data import DataError, Registry
+from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
@@ -83,6 +84,7 @@ async def lifespan(app: FastAPI):
     manager.start_loop()
     auto_login.start()
     recorder.start()
+    threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     yield
 
 
@@ -272,9 +274,21 @@ def me(profile=Depends(current_profile)):
                    "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
         "prefs": {"level": prefs_of(profile["id"]).get("level")},
         "data_online": kite.ready(),
+        "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "is_admin": admin.is_admin(profile),
     })
+
+
+def data_note() -> dict | None:
+    """While Indian data is offline: whether India is closed today anyway, and when data comes back by itself."""
+    if kite.ready():
+        return None
+    now = datetime.now(IST)
+    today = now.date()
+    closed = "weekend" if today.weekday() >= 5 else "holiday" if trading_calendar.is_holiday("IN", today) else None
+    back = auto_login.next_login(now)
+    return {"closed": closed, "back_at": back.isoformat() if back else None}
 
 
 def prefs_of(uid: str) -> dict:

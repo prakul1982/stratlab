@@ -33,6 +33,7 @@ export interface Market {
   id: string; name: string; venues: string; currency: string | null; symbol: string; tz: string;
   hours: { open: string | null; close: string | null; days: string } | null; what: string; costs: string;
   provider: string | null; brokerage: number; status: "live" | "offline" | "soon"; max_days: Record<Tf, number> | null;
+  holidays?: string[];      // weekday closures in the next few weeks, as dates in the exchange's own calendar
 }
 
 export type VerdictKind = "edge" | "mixed" | "luck" | "not_enough" | "no_edge";
@@ -116,7 +117,8 @@ export interface Me {
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
   alerts: { enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
-  data_online: boolean; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
+  data_online: boolean;
+  data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
   prefs?: { level: Level | null };
 }
 

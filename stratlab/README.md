@@ -15,7 +15,7 @@ A research notebook for traders: describe a strategy in plain words, test it on 
 | Experiments (backtest + verdict; walk-forward and the similar-stocks check count as one each) | 5 per month | 50 per month | Unlimited |
 | AI strategy builds | 10 per month | 100 per month | Unlimited |
 | Group size (tests and paper trading) | 10 | 25 | 50 |
-| Live paper trading | 5 market days (Mon–Fri) from first use, 1 session | 2 at a time | 10 at a time |
+| Live paper trading | 5 market days from first use (holidays don't count), 1 session | 2 at a time | 10 at a time |
 | Feature flags (`features` in plans.py) | – | `group_live`, `options`, `daily_report` | all, plus `options_signal`, `fast_entries`, `alerts`, `export`, `pro_features` (indicators, F&O) |
 
 Monthly counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them.
@@ -88,6 +88,9 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.
 - **Email:** fill in the SMTP settings. For Gmail, use an app password. Port 465 uses SSL, 587 uses STARTTLS.
 - **Daily report:** anyone with alerts on (or a phone with notifications on) also gets a short report a few minutes after each market closes (15:40 in India, 16:10 New York, 23:55 UTC for crypto). It lists each paper trading session in that market: trades closed that day, their P&L, what's still open, and the result since the start. People can turn it off on the Account page. Nothing extra to set up.
+
+### Market holidays
+Weekends and exchange holidays come from the `exchange_calendars` package: BSE for India (NSE closes on the same days), NYSE, LSE, Xetra and Tokyo. Exchanges publish the next year's holidays late in the year, and a redeploy picks up the package update with them. For dates the installed version doesn't know yet, every weekday counts as a trading day.
 
 ### Recording option chains (for options backtesting)
 Kite has no price history for expired options, so StratLab records its own.

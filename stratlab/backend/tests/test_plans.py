@@ -29,8 +29,9 @@ def test_trial_window():
 def test_trial_counts_market_days():
     # Wednesday 24 Sep 2025 10:00 IST: Wed, Thu, Fri, Mon, Tue → ends at midnight after Tuesday 30 Sep
     assert trial_end(datetime(2025, 9, 24, 10, 0, tzinfo=IST), 5) == datetime(2025, 10, 1, tzinfo=IST)
-    # Saturday: the weekend doesn't count, Mon to Fri does
-    assert trial_end(datetime(2025, 9, 27, 10, 0, tzinfo=IST), 5) == datetime(2025, 10, 4, tzinfo=IST)
+    # Saturday: the weekend doesn't count, and neither does Thursday 2 Oct (Gandhi Jayanti, markets shut):
+    # Mon 29, Tue 30, Wed 1, Fri 3, Mon 6 → ends at midnight after Monday 6 Oct
+    assert trial_end(datetime(2025, 9, 27, 10, 0, tzinfo=IST), 5) == datetime(2025, 10, 7, tzinfo=IST)
     # Monday late at night still counts Monday as day one
     assert trial_end(datetime(2025, 9, 22, 23, 0, tzinfo=IST), 5) == datetime(2025, 9, 27, tzinfo=IST)
 

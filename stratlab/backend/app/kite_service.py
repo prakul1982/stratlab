@@ -26,6 +26,19 @@ def today_ist() -> str:
     return datetime.now(IST).date().isoformat()
 
 
+RESET_HOUR = 6        # Zerodha expires every token at about 6 am India time the next morning
+
+
+def token_valid(token_day: str | None, now: datetime | None = None) -> bool:
+    """Today's token, or yesterday's until the 6 am reset (so the app doesn't go offline at midnight)."""
+    now = (now or datetime.now(IST)).astimezone(IST)
+    if not token_day:
+        return False
+    if token_day == now.date().isoformat():
+        return True
+    return now.hour < RESET_HOUR and token_day == (now.date() - timedelta(days=1)).isoformat()
+
+
 class KiteNotReady(Exception):
     pass
 
@@ -68,7 +81,7 @@ class KiteService:
     # ---------- auth ----------
     def load_saved_token(self):
         tok, day = db.get_setting("kite_access_token"), db.get_setting("kite_token_day")
-        if tok and day == today_ist():
+        if tok and token_valid(day):
             self._set_token(tok, day)
 
     def _set_token(self, tok: str, day: str):
@@ -93,8 +106,7 @@ class KiteService:
                 print("token alert failed:", x)
 
     def ready(self) -> bool:
-        # Kite tokens expire every morning, so yesterday's token counts as offline
-        return bool(self.access_token) and self.token_day == today_ist() and not self.invalid_reason
+        return bool(self.access_token) and token_valid(self.token_day) and not self.invalid_reason
 
     def login_url(self) -> str:
         self.login_state = secrets.token_urlsafe(16)
