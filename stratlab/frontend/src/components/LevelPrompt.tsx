@@ -5,7 +5,7 @@ import { Modal } from "./ui";
 export const LEVELS: [Level, string, string][] = [
   ["new", "New to trading", "Guided start: classic ideas to test, explanations up front, advanced settings folded away."],
   ["some", "I've traded a bit", "The standard layout: every tool one tap away, advanced settings folded until you need them."],
-  ["pro", "I trade actively", "Everything open: costs, sizing, re-centring and the advanced tools shown by default."],
+  ["pro", "I trade actively", "Every tool in view, including the advanced ones. Detailed settings stay tidy: open them once and they stay open."],
 ];
 
 /** Asked once, after the first sign-in. It only changes defaults; every tool stays available either way. */

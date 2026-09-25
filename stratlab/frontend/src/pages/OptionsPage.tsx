@@ -7,6 +7,7 @@ import { HELP } from "../lib/help";
 import { blankOptions, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
 import { LineChart } from "../components/Charts";
+import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
 
 const DRAFT = "stratlab.options.draft.v1";
@@ -144,7 +145,7 @@ function Chain({ s }: { s: OptionStrategy }) {
 }
 
 export function OptionsPage() {
-  const { fail, notify, refreshMe, notebooks, level } = useApp();
+  const { fail, notify, refreshMe, notebooks } = useApp();
   const nav = useNavigate();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
@@ -265,6 +266,7 @@ export function OptionsPage() {
       )}
 
       <section className="card stack opt-form" style={{ gap: 18 }} aria-label="Set up the structure">
+        <Block title="1. What to trade">
         <div className="opt-row">
           <span className="opt-label">Trade</span>
           <div className="row wrap" style={{ gap: 8 }}>
@@ -290,6 +292,9 @@ export function OptionsPage() {
             {und && <span className="small muted">lot {und.lot}</span>}
           </div>
         </div>
+        </Block>
+
+        <Block title="2. Structure">
 
         <div className="opt-row">
           <span className="opt-label">Structure</span>
@@ -316,6 +321,9 @@ export function OptionsPage() {
             <LegsEditor s={s} preview={preview} set={(legs) => patch({ legs, structure: "custom" })} />
           </div>
         </details>
+        </Block>
+
+        <Block title="3. When and how much risk">
 
         <div className="opt-row">
           <span className="opt-label">Enter</span>
@@ -367,10 +375,11 @@ export function OptionsPage() {
             </div>
           </div>
         </div>
+        </Block>
 
-        <details className="more-box" open={level === "pro" || undefined}>
-          <summary className="small">More settings <span className="muted">(re-centring, trailing, caps, sizing, costs)</span></summary>
-          <div className="stack" style={{ gap: 18, marginTop: 14 }}>
+        <More id="options" what="entries a day, daily loss cap, trailing, re-centring, sizing, costs"
+          on={[t.maxEntries > 1, t.cooldown > 0, r.dailyLoss > 0, hasShort && r.legStopPct > 0, r.trailAfter > 0, hasShort && rc.enabled, z.mode === "margin", c.brokerage > 0 && c.brokerage !== 20].filter(Boolean).length}>
+          <div className="stack" style={{ gap: 18 }}>
             <div className="opt-grid">
               <Num label="Entries a day" value={t.maxEntries} min={1} max={20} width={120} onChange={(v) => setTiming({ maxEntries: Math.round(v) })} />
               <Num label="Wait after a trade" value={t.cooldown} max={600} suffix="min" width={140} onChange={(v) => setTiming({ cooldown: Math.round(v) })} />
@@ -407,7 +416,7 @@ export function OptionsPage() {
             </div>
             {!c.freeze && und?.freeze ? <span className="hint">Freeze limit 0 uses the exchange's: {und.freeze.toLocaleString("en-IN")} for {und.name}.</span> : null}
           </div>
-        </details>
+        </More>
       </section>
 
       <section className="card stack" style={{ gap: 14 }} aria-label="Price and start">

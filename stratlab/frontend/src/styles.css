@@ -232,6 +232,27 @@ td.num, .num { font-family: var(--mono); }
 .ask-bar kbd { flex: none; }
 @media (max-width: 640px) { .ask-bar .small { white-space: normal; } .ask-bar kbd { display: none; } }
 
+/* ---------- calm forms: one idea per block, advanced settings folded away ---------- */
+.block { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+.block:first-of-type { border-top: 0; padding-top: 0; }
+.block-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.cond-row { display: flex; align-items: flex-start; gap: 8px; }
+.cond-row .sentence { flex: 1; min-width: 0; }
+.cond-x { flex: none; width: 30px; height: 30px; margin-top: 4px; border-radius: 8px; border: 1px solid transparent; background: none;
+  color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; opacity: .55; }
+.cond-row:hover .cond-x, .cond-x:focus-visible { opacity: 1; border-color: var(--line); }
+.cond-x:hover { color: var(--orange-ink); }
+@media (hover: none) { .cond-x { opacity: .8; } }
+.add-rule { justify-self: start; background: none; border: 0; padding: 4px 0; color: var(--blue); font: 600 14.5px var(--sans); cursor: pointer; }
+.add-rule:hover { text-decoration: underline; }
+.rewrite { padding: 14px; border-radius: 12px; background: var(--paper-2); }
+.more { border-top: 1px solid var(--line); padding-top: 14px; }
+.more-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; background: none; border: 0; padding: 4px 0;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.more-chev { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 600; flex: none; }
+.more-what { flex: 1; min-width: 180px; }
+.more-body { display: grid; gap: 16px; padding-top: 14px; }
+
 /* ---------- page titles ---------- */
 .page-title { font: 400 clamp(32px, 4vw, 46px)/1.1 var(--serif); letter-spacing: -0.02em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
 .page-title .info { margin-left: 0; align-self: center; position: relative; top: 0.08em; }
