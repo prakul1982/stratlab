@@ -213,8 +213,8 @@ class LimitError(Exception):
 
 
 class LiveManager:
-    def __init__(self, kite: KiteService, hub: TickHub, markets=None):
-        self.kite, self.hub, self.markets = kite, hub, markets
+    def __init__(self, kite: KiteService, hub: TickHub, markets=None, options=None):
+        self.kite, self.hub, self.markets, self.options = kite, hub, markets, options
         self.sessions: dict[str, LiveSession] = {}
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -237,8 +237,12 @@ class LiveManager:
                 db.update_session(row["id"], status="stopped", stopped_at=db.now_iso(),
                                   stop_reason=f"Could not resume after restart: {e}")
 
-    def _attach(self, row: dict) -> LiveSession:
-        s = LiveSession(self, row)
+    def _attach(self, row: dict):
+        if (row.get("instrument") or {}).get("type") == "OPTIONS":
+            from .options.session import OptionSession
+            s = OptionSession(self, row, self.options)
+        else:
+            s = LiveSession(self, row)
         with self._lock:
             self.sessions[s.id] = s
         if not s.polled:
@@ -249,7 +253,7 @@ class LiveManager:
         with self._lock:
             return [s for s in self.sessions.values() if s.user_id == user_id]
 
-    def start(self, profile: dict, plan: str, strategy: Strategy, inst: dict) -> LiveSession:
+    def start(self, profile: dict, plan: str, strategy, inst: dict):
         limit = PLANS[plan]["live_limit"]
         if len(self.user_running(profile["id"])) >= limit:
             raise LimitError(f"Your plan runs {limit} live strateg{'y' if limit == 1 else 'ies'} at a time. Stop one first.")
@@ -284,7 +288,7 @@ class LiveManager:
                                   "candle_time": ev["t"]})
                 profile = db.get_profile(s.user_id)
                 if effective_plan(profile) == "pro" and profile.get("alerts_enabled"):
-                    sym, cur = s.inst["symbol"], s.inst.get("currency", "INR")
+                    sym, cur = ev.get("sym") or s.inst["symbol"], s.inst.get("currency", "INR")
                     if ev["side"] == "buy":
                         text = f"StratLab paper trade: BUY {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur} ({s.name})"
                     else:
@@ -357,7 +361,7 @@ class LiveManager:
                 self.stop(s.id, "Plan limit reached after a plan change.")
             if not has_pro_features(plan):
                 for s in items:
-                    if s.id in self.sessions and needs_pro(s.strategy, s.inst):
+                    if s.id in self.sessions and isinstance(s, LiveSession) and needs_pro(s.strategy, s.inst):
                         self.stop(s.id, "This strategy uses Pro features.")
 
 

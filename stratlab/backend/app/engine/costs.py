@@ -12,6 +12,7 @@ IN_EQUITY = {"stt": 0.001, "exchange": 0.0000297, "sebi": 0.000001, "stamp_buy":
 IN_EQUITY_MIS = {"stt_sell": 0.00025, "exchange": 0.0000297, "sebi": 0.000001, "stamp_buy": 0.00003}   # intraday
 IN_FUTURES = {"stt_sell": 0.0002, "exchange": 0.0000173, "sebi": 0.000001, "stamp_buy": 0.00002}
 IN_OPTIONS = {"stt_sell": 0.001, "exchange": 0.0003503, "sebi": 0.000001, "stamp_buy": 0.00003}
+IN_MCX_OPTIONS = {"stt_sell": 0.0005, "exchange": 0.000418, "sebi": 0.000001, "stamp_buy": 0.00003}   # CTT, not STT
 GST = 0.18
 IN_STCG, IN_LTCG, IN_LTCG_EXEMPT = 0.20, 0.125, 125000
 
@@ -44,7 +45,7 @@ def order_costs(kind: str, side: str, qty: float, price: float, brokerage: float
     value = qty * price
     c = {"brokerage": brokerage}
     if kind.startswith("in_"):
-        r = {"in_eq": IN_EQUITY, "in_eq_mis": IN_EQUITY_MIS, "in_fut": IN_FUTURES, "in_opt": IN_OPTIONS}[kind]
+        r = {"in_eq": IN_EQUITY, "in_eq_mis": IN_EQUITY_MIS, "in_fut": IN_FUTURES, "in_opt": IN_OPTIONS, "in_mcx_opt": IN_MCX_OPTIONS}[kind]
         stt = r.get("stt", 0) + (r.get("stt_sell", 0) if side == "sell" else 0)
         c["stt"] = value * stt
         exch = value * (r["exchange"] + r["sebi"])

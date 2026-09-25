@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { IMPORTED } from "../pages/OptionsPage";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, riskForCurrency } from "../lib/rules";
@@ -8,7 +10,7 @@ import { Upload } from "./Icons";
 import { Info } from "./ui";
 
 interface ImportOut {
-  source: string; source_name: string; used_ai: boolean;
+  source: string; source_name: string; used_ai: boolean; kind?: "options";
   strategy?: Strategy; instrument_id?: string | null;                       // a StratLab export
   entry?: Cond[]; exit?: Cond[]; entryJoin?: "all" | "any" | "score"; side?: "long" | "short" | "both"; tf?: Tf | null; name?: string | null;
   shortEntry?: Cond[]; shortExit?: Cond[]; minScore?: number; session?: Session; product?: Strategy["product"];
@@ -16,11 +18,12 @@ interface ImportOut {
 }
 
 const ACCEPT = ".json,.pine,.txt,.py,.afl,.mq4,.mq5,.md";
-const HELP_TEXT = "Bring in a strategy you already have. A StratLab export loads exactly as it was. TradingView Pine Script, Python (Backtrader, backtesting.py and the like), MetaTrader, AmiBroker or a written description are translated into StratLab rules by the AI; Pine Script also works without it. Anything that can't be translated is listed on the notebook so you can decide what to do.";
+const HELP_TEXT = "Bring in a strategy you already have. A StratLab export loads exactly as it was. TradingView Pine Script, Python (Backtrader, backtesting.py and the like), MetaTrader, AmiBroker or a written description are translated into StratLab rules by the AI; Pine Script also works without it. Anything that can't be translated is listed on the notebook so you can decide what to do. Option structures (straddles, strangles, condors and the like) open in the Options tab instead.";
 
 /** Import a strategy from a file or pasted text, then hand it over like an idea the AI built. */
 export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Promise<void> | void; market?: string }) {
-  const { refreshMe, fail } = useApp();
+  const { refreshMe, fail, notify } = useApp();
+  const nav = useNavigate();
   const [text, setText] = useState("");
   const [file, setFile] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,6 +45,13 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
     try {
       const out = await api<ImportOut>("/import/strategy", { method: "POST", body: { text, filename: file } });
       if (out.used_ai) refreshMe();
+      if (out.kind === "options") {
+        // option structures run in the Options tab
+        try { sessionStorage.setItem(IMPORTED, JSON.stringify({ strategy: out.strategy, notes: out.notes || [] })); } catch { /* storage off */ }
+        notify("That's an options structure, so it opened in the Options tab.");
+        nav("/options");
+        return;
+      }
       let strategy: Strategy, instrument: Instrument | null = null;
       if (out.strategy) {
         instrument = out.instrument_id ? await api<Instrument>(`/instruments/${encodeURIComponent(out.instrument_id)}`).catch(() => null) : null;

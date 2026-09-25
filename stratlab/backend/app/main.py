@@ -2,6 +2,7 @@
 import json
 import logging
 import math
+import re
 import secrets
 import traceback
 import uuid
@@ -16,6 +17,7 @@ from razorpay.errors import SignatureVerificationError
 
 from . import admin, basket, billing, db, importer, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
+from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
 from .alerts import notify
 from .auth import current_profile
@@ -28,6 +30,11 @@ from .intel.company import Research
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
+from .options import importer as opt_importer
+from .options.data import FREEZE, OptionsData
+from .options.engine import fill_price
+from .options.session import stopped_snapshot as options_stopped
+from .models import (OptionImportReq, OptionStartReq, OptionStrategy)
 from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import PLANS, has_pro_features, plan_info, trial_state
@@ -35,7 +42,8 @@ from .plans import PLANS, has_pro_features, plan_info, trial_state
 kite = KiteService()
 hub = TickHub(kite)
 markets = Registry(kite)
-manager = LiveManager(kite, hub, markets)
+options_data = OptionsData(kite)
+manager = LiveManager(kite, hub, markets, options_data)
 research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
 
 
@@ -312,6 +320,8 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
     """Turn an existing strategy (StratLab export, Pine Script, Python, MQL, AFL or plain words) into rules."""
     fmt = importer.detect(req.text, req.filename)
     base = {"source": fmt, "source_name": importer.FORMATS[fmt]}
+    if opt_importer.from_json(req.text) or opt_importer.is_options(req.text, fmt):
+        return {**base, **import_options(req.text, profile)}
     if fmt in ("stratlab", "json"):
         try:
             return {**base, **importer.from_json(req.text), "used_ai": False}
@@ -626,6 +636,11 @@ def start_live(req: LiveStartReq, profile=Depends(current_profile)):
         err(400, "no_entry_rules", "Add at least one entry rule before going live.")
     _, inst = get_instrument(req.instrument)
     check_features(profile, s, inst)
+    return ok(start_session(profile, s, inst).snapshot())
+
+
+def start_session(profile, s, inst):
+    """Start paper trading, using up the free plan's one-off live trial on the first start."""
     start_trial = False
     if profile["_plan"] == "free":
         t = trial_state(profile)
@@ -644,7 +659,7 @@ def start_live(req: LiveStartReq, profile=Depends(current_profile)):
         if isinstance(e, ValueError):
             err(400, "cannot_start", str(e))
         raise
-    return ok(sess.snapshot())
+    return sess
 
 
 @app.get("/live/sessions")
@@ -667,6 +682,10 @@ def get_live(sid: str, profile=Depends(current_profile)):
         row = db.get_session_row(profile["id"], sid)
         if not row:
             err(404, "not_found", "Session not found.")
+        if (row.get("instrument") or {}).get("type") == "OPTIONS":
+            snap = options_stopped(row)
+            snap["orders"] = orders_from(snap["events"])
+            return ok(snap)
         st = row.get("state") or {}
         realised = sum(t["pnl"] for t in st.get("trades", []))
         cap = row["strategy"]["risk"]["capital"]
@@ -718,6 +737,100 @@ def delete_live(sid: str, profile=Depends(current_profile)):
 def clear_stopped_live(profile=Depends(current_profile)):
     """Delete every stopped session. Running ones are left alone."""
     return {"deleted": db.delete_stopped_sessions(profile["id"])}
+
+
+# ---------- options (live paper trading only) ----------
+def options_ready():
+    if not options_data.ready():
+        err(503, "data_offline", "Option quotes come from the broker's live feed, which is offline until today's Kite login. "
+            "Try again after the market data comes back.")
+
+
+@app.get("/options/underlyings")
+def options_underlyings(profile=Depends(current_profile)):
+    options_ready()
+    return options_data.underlyings()
+
+
+@app.get("/options/chain")
+def options_chain(exchange: str = "NFO", underlying: str = "NIFTY", expiry: str = "current", profile=Depends(current_profile)):
+    options_ready()
+    if exchange not in ("NFO", "BFO", "MCX") or not re.fullmatch(r"[A-Z0-9&-]{1,30}", underlying) or \
+            not re.fullmatch(r"current|next|month|\d{4}-\d{2}-\d{2}", expiry):
+        err(400, "bad_request", "Pick an exchange, an underlying and an expiry.")
+    return options_data.chain(exchange, underlying, expiry)
+
+
+@app.post("/options/preview")
+def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
+    """The structure at today's at-the-money strike, priced on live bid and ask, with margin and costs."""
+    options_ready()
+    s = req.strategy
+    c = options_data.contracts(s.exchange, s.underlying, s.expiry)
+    if not c:
+        err(404, "no_contracts", f"No {s.underlying} options are listed on {s.exchange} for that expiry.")
+    sk = options_data.spot_key(s.exchange, s.underlying, c.expiry)
+    spot = (options_data.quotes([sk]).get(sk) or {}).get("ltp") if sk else None
+    if not spot:
+        err(503, "no_spot", f"Couldn't get the {s.underlying} price just now.")
+    atm = c.atm(spot)
+    legs = []
+    for lg in s.legs:
+        k = c.strike_for(atm, lg.opt, lg.offset, s.offsetUnit)
+        legs.append({"side": lg.side, "opt": lg.opt, "lots": lg.lots, "strike": k, "key": c.key(lg.opt, k) if k is not None else None})
+    q = options_data.quotes([l["key"] for l in legs if l["key"]])
+    for l in legs:
+        l["quote"] = q.get(l["key"]) if l["key"] else None
+        l["fill"] = fill_price(l["quote"], l["side"], s.costs.slippageTicks)
+        l["sym"] = l["key"].split(":", 1)[1] if l["key"] else None
+    freeze = s.costs.freeze or FREEZE.get(s.underlying, 0)
+    units = s.sizing.lots
+    margin_one = margin_all = None
+    if all(l["key"] for l in legs):
+        basket = [{"key": l["key"], "side": l["side"], "qty": l["lots"] * c.lot} for l in legs]
+        margin_one = options_data.margin(basket)
+        if s.sizing.mode == "margin" and margin_one:
+            units = max(0, int(s.sizing.capital * s.sizing.safety // margin_one))
+        if margin_one and units:
+            margin_all = options_data.margin([{**b, "qty": b["qty"] * units} for b in basket])
+    return {"spot": spot, "atm": atm, "step": c.step(spot), "expiry": c.expiry, "lot": c.lot, "freeze": freeze,
+            "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs,
+            "strikes": c.strikes, "spot_ts": (options_data.quotes([sk]).get(sk) or {}).get("ts")}
+
+
+@app.post("/options/sessions")
+def start_options(req: OptionStartReq, profile=Depends(current_profile)):
+    options_ready()
+    s = req.strategy
+    if not options_data.contracts(s.exchange, s.underlying, s.expiry):
+        err(404, "no_contracts", f"No {s.underlying} options are listed on {s.exchange} for that expiry.")
+    inst = {"id": f"OPT:{s.exchange}:{s.underlying}", "type": "OPTIONS", "market": "IN", "currency": "INR",
+            "tz": "Asia/Kolkata", "symbol": f"{s.underlying} options", "exchange": s.exchange, "underlying": s.underlying}
+    return ok(start_session(profile, s, inst).snapshot())
+
+
+def import_options(text: str, profile) -> dict:
+    exact = opt_importer.from_json(text)
+    if exact:
+        return {"kind": "options", "strategy": exact.model_dump(), "notes": [], "used_ai": False}
+    used, limit = ai_allowance(profile)
+    try:
+        data = ai_writer.ask_json(opt_importer.SYSTEM, text[:30000])
+        strategy, notes = opt_importer.parse_ai(data if isinstance(data, dict) else {})
+    except AIError as e:
+        err(503 if isinstance(e, AIBusy) else 422, "ai_busy" if isinstance(e, AIBusy) else "ai_failed",
+            "The AI translator couldn't run just now, so this options strategy couldn't be imported. Try again in a minute.")
+    except ValueError as e:
+        err(422, "nothing_imported", str(e))
+    db.add_usage(profile["id"], "ai")
+    return {"kind": "options", "strategy": strategy.model_dump(), "notes": notes, "used_ai": True,
+            "usage": {"ai_used": used + 1, "ai_limit": limit}}
+
+
+@app.post("/options/import")
+def options_import(req: OptionImportReq, profile=Depends(current_profile)):
+    fmt = importer.detect(req.text, "")
+    return {"source": fmt, "source_name": importer.FORMATS[fmt], **import_options(req.text, profile)}
 
 
 # ---------- billing ----------
