@@ -73,6 +73,20 @@ create table if not exists public.app_settings (
   updated_at timestamptz not null default now()
 );
 
+-- Option chains recorded every few minutes in market hours, for options backtesting later.
+-- chain: one [strike, ce bid, ce ask, ce ltp, ce oi, pe bid, pe ask, pe ltp, pe oi] per strike. Server only.
+create table if not exists public.option_snapshots (
+  id bigserial primary key,
+  taken_at timestamptz not null,
+  exchange text not null,
+  name text not null,
+  expiry date not null,
+  spot double precision,
+  lot integer,
+  chain jsonb not null
+);
+create index if not exists option_snapshots_lookup on public.option_snapshots (name, expiry, taken_at);
+
 -- Create a profile row for every new sign-up
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -92,6 +106,7 @@ alter table public.strategies    enable row level security;
 alter table public.live_sessions enable row level security;
 alter table public.live_orders   enable row level security;
 alter table public.app_settings  enable row level security;
+alter table public.option_snapshots enable row level security;
 
 drop policy if exists "own profile" on public.profiles;
 create policy "own profile" on public.profiles for select using (auth.uid() = id);

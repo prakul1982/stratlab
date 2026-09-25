@@ -74,6 +74,9 @@ class Settings:
     ADMIN_KEY = _env("ADMIN_KEY")
     ADMIN_EMAILS = _env("ADMIN_EMAILS")                           # comma-separated Google emails that can open /admin
     ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails
+    # option chains recorded every few minutes in market hours, for options backtesting later ("" turns it off)
+    OPTION_SNAPSHOTS = _env("OPTION_SNAPSHOTS", "NFO:NIFTY,NFO:BANKNIFTY,BFO:SENSEX") or ""
+    OPTION_SNAPSHOT_MINUTES = int(_env("OPTION_SNAPSHOT_MINUTES", "5") or 5)
     SENTRY_DSN = _env("SENTRY_DSN")                               # optional: send server errors to Sentry
     SENTRY_ENV = _env("SENTRY_ENV", "production")
 

@@ -13,6 +13,7 @@ interface Overview {
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     recent_errors?: { ref: string; at: string; method: string; path: string; error: string; where: string }[];
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean };
+    option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number };
 }
@@ -170,6 +171,12 @@ export function AdminPage() {
               {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error} label={a.label} detail={a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
               {aiKeys.length > 0 && <AIOrder rows={sv!.ai} />}
               <Status ok={!!sv!.research?.finnhub} label="US company data (Finnhub)" detail={sv!.research?.finnhub ? "FINNHUB_API_KEY is set" : "Add FINNHUB_API_KEY in Railway for US company pages (free at finnhub.io). India needs no key."} />
+              {sv!.option_recorder && (() => {
+                const r = sv!.option_recorder!;
+                return <Status ok={r.enabled && !r.last_error} warn={!r.enabled || !!r.last_error} label="Option chain recording"
+                  detail={!r.enabled ? "Off. Set OPTION_SNAPSHOTS (for example NFO:NIFTY,NFO:BANKNIFTY) to record chains for options backtesting."
+                    : `${r.targets.join(", ")} every ${r.every_minutes} min in market hours. ${r.today} saved today${r.last_at ? `, last ${ago(r.last_at)}` : ""}.${r.last_error ? ` Last problem: ${r.last_error}` : ""}`} />;
+              })()}
               <Status ok={sv!.billing_enabled} warn label="Payments" detail={sv!.billing_enabled ? "Razorpay is connected" : "Razorpay not set up, so paid plans show \"Coming soon\". Grant plans by hand below."} />
             </section>
           </div>

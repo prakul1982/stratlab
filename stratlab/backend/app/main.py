@@ -36,6 +36,7 @@ from .options import importer as opt_importer
 from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
+from .options.recorder import Recorder, parse_targets
 from . import daily_report, public
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq, OptionStrategy)
 from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
@@ -47,6 +48,7 @@ hub = TickHub(kite)
 markets = Registry(kite)
 options_data = OptionsData(kite)
 manager = LiveManager(kite, hub, markets, options_data)
+recorder = Recorder(options_data, db.add_option_snapshot, parse_targets(settings.OPTION_SNAPSHOTS), settings.OPTION_SNAPSHOT_MINUTES)
 research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
 
 
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI):
         print("startup: could not resume sessions:", e)
     manager.start_loop()
     auto_login.start()
+    recorder.start()
     yield
 
 
@@ -1061,7 +1064,7 @@ def server_status() -> dict:
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
-            "research": {"finnhub": bool(settings.FINNHUB_API_KEY)}, "recent_errors": list(reversed(RECENT_ERRORS))}
+            "research": {"finnhub": bool(settings.FINNHUB_API_KEY)}, "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS))}
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
