@@ -128,3 +128,41 @@ def summary(experiments: list[dict]) -> dict:
     return {"experiments": len(experiments),
             "last_verdict": last["verdict"]["verdict"] if last else None,
             "last_label": last["label"] if last else None}
+
+
+def run_group(datasets: list[dict], strategy, group: dict, days: int, max_days: int) -> dict:
+    """A portfolio backtest over a group of instruments, with its verdict."""
+    from .engine import portfolio
+    from .engine.verdict import evaluate_portfolio
+    max_open = max(1, int(group.get("maxOpen") or len(datasets)))
+    go = lambda t_from=None, t_to=None: portfolio.run(datasets, strategy, max_open, t_from, t_to)  # noqa: E731
+    base = go()
+    base["verdict"] = evaluate_portfolio(go, base, strategy, days, max_days)
+    base["days"], base["max_open"] = days, max_open
+    return base
+
+
+def record_group(result: dict, strategy, label: str, version: int, now: str, group: dict, datasets: list[dict], problems: list[str]) -> dict:
+    """The storable form of a group experiment: equity rather than one price chart, plus each member's result."""
+    times = result["times"]
+    idx = _pick(len(times)) if times else []
+    ds = lambda xs: [xs[i] for i in idx]
+    split = next((c["data"]["split_index"] for c in result["verdict"]["checks"] if c["id"] == "unseen" and c.get("data")), None)
+    split_ds = None if split is None or not idx else min(range(len(idx)), key=lambda k: abs(idx[k] - split))
+    first = datasets[0]["inst"] if datasets else {}
+    trades = list(result["trades"][-MAX_TRADES:]) + result["open_trades"]
+    return {
+        "v": version, "label": label or f"Experiment v{version}", "created_at": now,
+        "strategy": strategy.model_dump(),
+        "instrument": {"id": f"GROUP:{group.get('id') or 'custom'}", "symbol": group.get("name") or "My group", "name": group.get("name"),
+                       "market": group.get("market") or first.get("market"), "currency": first.get("currency"), "tz": first.get("tz"),
+                       "type": "GROUP"},
+        "days": result["days"], "tf": strategy.tf, "candles": len(times),
+        "range": {"from": times[0] if times else now, "to": times[-1] if times else now},
+        "stats": result["stats"], "costs": result["costs"], "verdict": result["verdict"],
+        "series": {"t": ds(times), "close": [], "equity": ds(result["equity"]), "buy_hold": ds(result["buy_hold"]),
+                   "overlays": {}, "split": split_ds},
+        "trades": trades,
+        "group": {"name": group.get("name"), "members": result["members"], "max_open": result["max_open"],
+                  "most_open": result["most_open"], "skipped": problems},
+    }

@@ -15,6 +15,11 @@ const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { month
 
 /** Re-tune on the past, trade the next unseen block, slide forward, repeat. */
 function WalkForwardCheck({ nb, e }: { nb: Notebook; e: Experiment }) {
+  if (e.group) return null;
+  return <WalkForwardInner nb={nb} e={e} />;
+}
+
+function WalkForwardInner({ nb, e }: { nb: Notebook; e: Experiment }) {
   const { fail, refreshMe } = useApp();
   const [w, setW] = useState<WalkForward | undefined>(e.walkforward);
   const [busy, setBusy] = useState(false);
@@ -92,6 +97,11 @@ const PEERS: Record<string, string> = { CRYPTO: "coins", FX: "currency pairs" };
 
 /** Same rules, same period, ~10 similar instruments: does the edge travel, or is it one lucky chart? */
 function BasketCheck({ nb, e }: { nb: Notebook; e: Experiment }) {
+  if (e.group) return null;
+  return <BasketInner nb={nb} e={e} />;
+}
+
+function BasketInner({ nb, e }: { nb: Notebook; e: Experiment }) {
   const { fail, refreshMe } = useApp();
   const [b, setB] = useState<Basket | undefined>(e.basket);
   const [busy, setBusy] = useState(false);
@@ -164,6 +174,33 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
   );
 }
 
+/** How each member of a group did, best first. */
+function GroupMembers({ e, cur }: { e: Experiment; cur: string }) {
+  const g = e.group!;
+  return (
+    <section className="card stack" style={{ gap: 12 }}>
+      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+        <h2 className="h2 row" style={{ gap: 0 }}>{g.name}: one by one<Info>{HELP.group}</Info></h2>
+        <span className="small muted">Up to {g.max_open} positions at once · most at once: {g.most_open}</span>
+      </div>
+      {g.skipped.length > 0 && <p className="hint">Left out ({g.skipped.length}): {g.skipped.slice(0, 6).join(" · ")}{g.skipped.length > 6 ? " …" : ""}</p>}
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Symbol</th><th>Trades</th><th>Win rate</th><th>P&amp;L after costs</th><th>Buy and hold</th></tr></thead>
+          <tbody>{g.members.map((m) => (
+            <tr key={m.id}>
+              <td className="num" style={{ textAlign: "left" }}>{m.symbol}</td><td className="num">{m.trades}</td>
+              <td className="num">{m.win == null ? "–" : `${m.win.toFixed(0)}%`}</td>
+              <td className={`num ${signClass(m.pnl)}`}>{money(m.pnl, cur)}</td>
+              <td className={`num ${signClass(m.buy_hold)}`}>{m.buy_hold == null ? "–" : pct(m.buy_hold)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function markersFor(e: Experiment): Marker[] {
   const ts = e.series.t.map((t) => new Date(t).getTime());
   const idx = (iso: string | null) => {
@@ -202,6 +239,7 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const cap = e.strategy.risk.capital;
   const st = e.stats;
   const allTrades = [...e.trades].reverse();
+  const twoWay = e.strategy.side === "both" || e.strategy.side === "short" || e.trades.some((t) => t.side === "short");
 
   return (
     <div className="stack" style={{ gap: 28 }}>
@@ -270,7 +308,8 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         </div>
       </section>
 
-      <section className="card stack" style={{ gap: 12 }}>
+      {e.group && <GroupMembers e={e} cur={cur} />}
+      {!e.group && <section className="card stack" style={{ gap: 12 }}>
         <div className="spread" style={{ flexWrap: "wrap" }}>
           <h2 className="h2 row" style={{ gap: 0 }}>Price and trades<Info>{HELP.priceChart}</Info></h2>
           <span className="small muted">▲ buy &nbsp; ▼ sell</span>
@@ -282,7 +321,7 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
             ...Object.entries(e.series.overlays).map(([k, vals], i) => ({ label: k, values: vals, color: ["var(--blue)", "var(--orange)", "var(--muted)", "var(--dash)"][i % 4], width: 1.3 })),
           ]} />
         <Legend items={[{ label: "Close", color: "var(--ink)" }, ...Object.keys(e.series.overlays).map((k, i) => ({ label: k, color: ["var(--blue)", "var(--orange)", "var(--muted)", "var(--dash)"][i % 4] }))]} />
-      </section>
+      </section>}
 
       <section className="stats-grid">
         {[
@@ -309,12 +348,14 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Bought</th><th>Sold</th><th>Qty</th><th>Buy</th><th>Sell</th><th>P&amp;L</th><th>Return</th><th>Why it sold</th></tr></thead>
+            <thead><tr>{e.group && <th>Symbol</th>}<th>Opened</th><th>Closed</th>{twoWay && <th>Side</th>}<th>Qty</th><th>In</th><th>Out</th><th>P&amp;L</th><th>Return</th><th>Why it closed</th></tr></thead>
             <tbody>
-              {allTrades.length === 0 && <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No trades in this period.</td></tr>}
+              {allTrades.length === 0 && <tr><td colSpan={10} className="muted" style={{ textAlign: "center", padding: 24 }}>No trades in this period.</td></tr>}
               {allTrades.map((t, k) => (
                 <tr key={k}>
+                  {e.group && <td className="num" style={{ textAlign: "left" }}>{t.symbol}</td>}
                   <td>{when(t.entry_t, tz, intraday)}</td><td>{t.exit_t ? when(t.exit_t, tz, intraday) : "Still open"}</td>
+                  {twoWay && <td>{t.side === "short" ? "Short" : "Long"}</td>}
                   <td className="num">{qty(t.qty)}</td><td className="num">{price(t.entry, cur)}</td><td className="num">{price(t.exit, cur)}</td>
                   <td className={`num ${signClass(t.pnl)}`}>{money(t.pnl, cur)}</td><td className={`num ${signClass(t.ret)}`}>{pct(t.ret, 2)}</td><td>{t.why}</td>
                 </tr>

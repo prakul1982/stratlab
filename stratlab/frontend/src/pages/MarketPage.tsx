@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { api } from "../lib/api";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { riskForCurrency } from "../lib/rules";
-import type { Instrument, Market } from "../lib/types";
+import type { GroupMember, Instrument, Market, Notebook } from "../lib/types";
 import { parseCsv, saveUpload, type Candle } from "../lib/upload";
 import { InstrumentSearch } from "../components/InstrumentSearch";
 import { Info, Loading } from "../components/ui";
@@ -28,6 +29,76 @@ function localHours(m: Market): string {
 }
 
 const STATUS: Record<Market["status"], string> = { live: "Live", offline: "Offline", soon: "Coming soon" };
+
+type Preset = { id: string; name: string; market: string; symbols: string[]; count: number };
+
+/** Test on a group of instruments: a ready-made list, or your own picks. */
+function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onDone: () => void }) {
+  const { fail, notify, refreshNotebooks } = useApp();
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const current = nb.group && nb.group.market === market.id ? nb.group : null;
+  const [pick, setPick] = useState<string | null>(current ? current.id : null);
+  const [custom, setCustom] = useState<GroupMember[]>(current?.id === "custom" ? current.members : []);
+  const [name, setName] = useState(current?.id === "custom" ? current.name : "My group");
+  const [maxOpen, setMaxOpen] = useState(current?.maxOpen ?? 10);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<Preset[]>(`/groups?market=${market.id}`).then(setPresets).catch(() => setPresets([])); }, [market.id]);
+  const preset = presets.find((p) => p.id === pick);
+  const members: GroupMember[] = pick === "custom" ? custom : preset ? preset.symbols.map((symbol) => ({ symbol })) : [];
+  const noun = market.id === "CRYPTO" ? "coins" : market.id === "FX" ? "pairs" : "stocks";
+
+  const save = async () => {
+    if (members.length < 2) { notify(`Add at least two ${noun} to the group.`); return; }
+    setBusy(true);
+    try {
+      await api(`/notebooks/${nb.id}`, { method: "PUT", body: { group: {
+        id: pick === "custom" ? "custom" : pick, name: pick === "custom" ? (name.trim() || "My group") : preset!.name, market: market.id,
+        maxOpen: Math.max(1, Math.min(maxOpen, members.length)), members } } });
+      await refreshNotebooks();
+      onDone();
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  return (
+    <section className="card stack" style={{ gap: 14 }} aria-labelledby="group-h">
+      <h2 id="group-h" className="h2 row" style={{ gap: 0 }}>Or test on a group of {noun}<Info>{HELP.groupPick}</Info></h2>
+      <p className="small muted">The same rules run on every {noun.slice(0, -1)} in the group at once, sharing one pot of capital, like a real intraday or momentum book.</p>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {presets.map((p) => (
+          <button key={p.id} className={`btn sm ${pick === p.id ? "" : "quiet"}`} aria-pressed={pick === p.id} onClick={() => setPick(p.id)}>{p.name} ({p.count})</button>
+        ))}
+        <button className={`btn sm ${pick === "custom" ? "" : "quiet"}`} aria-pressed={pick === "custom"} onClick={() => setPick("custom")}>Build my own</button>
+      </div>
+      {pick === "custom" && (
+        <div className="stack" style={{ gap: 10 }}>
+          <label className="field" style={{ maxWidth: 360 }}>Group name<input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} /></label>
+          <InstrumentSearch market={market} compact onPick={(i) => {
+            if (custom.length >= 50) { notify("A group can hold up to 50."); return; }
+            if (!custom.some((m) => m.id === i.id)) setCustom([...custom, { id: i.id, symbol: i.symbol }]);
+          }} />
+        </div>
+      )}
+      {members.length > 0 && (
+        <>
+          <div className="chip-row">
+            {members.map((m) => (
+              <span key={m.id ?? m.symbol} className="pill">{m.symbol}{pick === "custom" &&
+                <button className="chip-x" aria-label={`Remove ${m.symbol}`} onClick={() => setCustom(custom.filter((x) => x !== m))}>×</button>}</span>
+            ))}
+          </div>
+          <div className="row wrap" style={{ gap: 14, alignItems: "flex-end" }}>
+            <label className="field" style={{ width: 220 }}>Positions open at once (max)
+              <input type="number" min={1} max={members.length} value={Math.min(maxOpen, members.length)} onChange={(e) => {
+                const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) setMaxOpen(n);
+              }} /></label>
+            <button className="btn blue" disabled={busy} onClick={save}>{busy ? "Saving…" : `Test on these ${members.length} ${noun}`}</button>
+          </div>
+          <p className="hint">For a portfolio, size trades by <b>fixed capital per trade</b> in the rules' costs and position size, so each position gets its share.</p>
+        </>
+      )}
+    </section>
+  );
+}
 
 export function MarketPage() {
   const { id } = useParams();
@@ -111,6 +182,7 @@ export function MarketPage() {
       )}
 
       {market && market.status === "live" && market.id !== "CSV" && <InstrumentSearch market={market} onPick={choose} autoFocus />}
+      {market && market.status === "live" && market.id !== "CSV" && <GroupPicker key={market.id} nb={nb} market={market} onDone={() => nav(`/n/${nb.id}`)} />}
 
       {market?.id === "CSV" && (
         <div className="card stack" style={{ gap: 14 }}>

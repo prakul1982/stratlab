@@ -56,7 +56,13 @@ export interface Costs {
 }
 export interface Trade {
   entry_t: string; exit_t: string | null; entry: number; exit: number; qty: number; pnl: number;
-  costs?: number; ret: number; why: string;
+  costs?: number; ret: number; why: string; side?: "long" | "short"; symbol?: string;
+}
+export interface GroupMember { id?: string; symbol: string }
+export interface Group { id: string; name: string; market: string; maxOpen: number; members: GroupMember[] }
+export interface GroupResult {
+  name: string; max_open: number; most_open: number; skipped: string[];
+  members: { symbol: string; id: string; trades: number; pnl: number; win: number | null; buy_hold: number | null }[];
 }
 export interface Experiment {
   v: number; label: string; created_at: string; strategy: Strategy; instrument: Instrument; days: number; tf: Tf;
@@ -65,6 +71,7 @@ export interface Experiment {
     overlays: Record<string, (number | null)[]>; split: number | null };
   trades: Trade[];
   basket?: Basket;
+  group?: GroupResult;
   walkforward?: WalkForward;
 }
 export interface WFWindow {
@@ -89,6 +96,7 @@ export interface NotebookItem {
 }
 export interface Notebook extends NotebookItem {
   kind: "notebook"; notes: string; strategy: Strategy; instrument: Instrument | null; experiments: Experiment[];
+  group?: Group | null;
 }
 
 export interface PlanInfo {

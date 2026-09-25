@@ -2,6 +2,12 @@
 
 ## September 2026
 
+### Test on a group of stocks
+- **Groups**: on the market page, pick a ready-made group (NIFTY 50, Bank NIFTY, 25 liquid F&O stocks, 20 US mega caps, 10 large coins) or build your own from search, up to 50. The same rules then run on every member at once.
+- One pot of capital, a limit on **positions open at once**, and a daily loss cap that counts the whole group, so a momentum or scanner strategy is tested the way it trades.
+- The verdict shows each member's trades, P&L, win rate and buy-and-hold, and the trades list names the symbol. Members the market no longer lists are skipped and named.
+- Walk-forward, the similar-stocks check and paper trading still work on one instrument at a time.
+
 ### Intraday strategies
 - **Trade both ways**: separate long and short rules in one strategy; whichever fires first opens the trade.
 - **During the day**: an entry window, a square-off time, a cap on trades per day, a cooldown after each trade, and a daily loss cap. Indian intraday trades use MIS costs.

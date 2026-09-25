@@ -106,6 +106,7 @@ class Engine:
         self.skipped_size = 0
         # the trading day, for session limits
         self.day, self.day_trades, self.day_pnl, self.cool, self.halted = None, 0, 0.0, 0, False
+        self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
         if state:
             self.load(state)
 
@@ -251,6 +252,8 @@ class Engine:
             self.cool -= 1
             return new
         if self.intraday and not self._may_enter(closes_at):
+            return new
+        if self.gate is not None and not self.gate():
             return new
         for d in self.sides:
             if not self._hit(self._rules(d, exit=False), ctx, i):

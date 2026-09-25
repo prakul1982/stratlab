@@ -140,6 +140,20 @@ class LiveStartReq(BaseModel):
         return self
 
 
+class GroupMember(BaseModel):
+    id: Optional[str] = Field(None, max_length=60)
+    symbol: str = Field(..., min_length=1, max_length=40)
+
+
+class GroupReq(BaseModel):
+    """Test on a group of instruments together (one market) instead of one."""
+    id: str = Field("custom", max_length=40)
+    name: str = Field("My group", min_length=1, max_length=60)
+    market: str = Field(..., max_length=10)
+    members: list[GroupMember] = Field(..., min_length=2, max_length=50)
+    maxOpen: int = Field(10, ge=1, le=50)       # positions open at once, across the group
+
+
 class NotebookReq(BaseModel):
     name: Optional[str] = Field(None, max_length=80)
     question: Optional[str] = Field(None, max_length=300)
@@ -147,6 +161,8 @@ class NotebookReq(BaseModel):
     strategy: Optional[Strategy] = None
     instrument: Optional[str] = Field(None, max_length=60)
     pinned: Optional[bool] = None
+    group: Optional[GroupReq] = None
+    clearGroup: bool = False
 
 
 class ImportReq(BaseModel):

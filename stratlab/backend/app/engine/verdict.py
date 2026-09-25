@@ -205,8 +205,12 @@ def evaluate(bars: list[dict], strategy, start: int, base: dict, lot: float = 1,
         check_shuffle(trades, strategy.risk.capital),
         check_sample(len(trades)),
     ]
+    return decide(checks, len(trades), base["stats"]["ret"], strategy, days, max_days)
+
+
+def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int) -> dict:
+    """The verdict from the checks, the trade count and the return after costs."""
     by = {c["id"]: c["status"] for c in checks}
-    n, ret = len(trades), base["stats"]["ret"]
     if n < 15:
         verdict = "not_enough"
         summary = (f"Only {n} trade{'s' if n != 1 else ''} in this period. That's too few to tell a real edge "
@@ -233,3 +237,31 @@ def evaluate(bars: list[dict], strategy, start: int, base: dict, lot: float = 1,
             "passed": sum(1 for c in checks if c["status"] == "pass"),
             "total": sum(1 for c in checks if c["status"] != "skip"),
             "checks": checks, "suggestions": suggestions(verdict, strategy, days, max_days)}
+
+
+def evaluate_portfolio(run, base: dict, strategy, days: int, max_days: int) -> dict:
+    """The checks for a group of instruments. `run(t_from, t_to)` re-runs the portfolio on part of the period."""
+    times, cap = base["times"], strategy.risk.capital
+    checks = []
+    if len(times) > 20:
+        k = int(len(times) * SPLIT)
+        split = times[k]
+        a, b = run(None, split), run(split, None)
+        r1, r2 = a["stats"]["ret"], b["stats"]["ret"]
+        data = {"built_ret": r1, "unseen_ret": r2, "built_trades": len(a["trades"]), "unseen_trades": len(b["trades"]),
+                "built_from": times[0][:4], "built_to": split[:4], "unseen_from": split[:4], "unseen_to": times[-1][:4], "split_index": k}
+        if not b["trades"] and not b["open_trades"]:
+            status, detail = "warn", "No trades happened in the unseen part, so it couldn't be tested there."
+        elif r2 > 0:
+            status, detail = "pass", "The portfolio kept making money on the part of the period it wasn't tuned on."
+        else:
+            status, detail = "fail", "The portfolio lost money on the part of the period it hadn't seen."
+        checks.append({"id": "unseen", "title": "Unseen data", "status": status, "detail": detail, "data": data})
+    else:
+        checks.append({"id": "unseen", "title": "Unseen data", "status": "skip", "detail": "Too short a period to split.", "data": None})
+    checks.append({"id": "nearby", "title": "Nearby settings", "status": "skip",
+                   "detail": "Not run on a group of instruments yet: it would mean hundreds of backtests. Test the idea on one stock to see this check.",
+                   "data": None})
+    checks.append(check_shuffle(base["trades"], cap))
+    checks.append(check_sample(len(base["trades"])))
+    return decide(checks, len(base["trades"]), base["stats"]["ret"], strategy, days, max_days)

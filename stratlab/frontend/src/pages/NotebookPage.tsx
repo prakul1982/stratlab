@@ -116,8 +116,9 @@ export function NotebookPage() {
   if (!nb) return <Loading label="Opening notebook" />;
   const s = nb.strategy;
   const inst = nb.instrument && "symbol" in nb.instrument ? nb.instrument : null;
-  const currency = inst?.currency || (inst?.market === "IN" || !inst ? "INR" : "");
-  const market = markets.find((m) => m.id === inst?.market);
+  const group = nb.group && nb.group.members?.length ? nb.group : null;
+  const market = markets.find((m) => m.id === (group?.market ?? inst?.market));
+  const currency = group ? (market?.currency ?? "") : inst?.currency || (inst?.market === "IN" || !inst ? "INR" : "");
   const maxDays = market?.max_days?.[s.tf] ?? 3650;
   const periods = PERIODS[s.tf].filter((d) => d <= maxDays);
   const period = periods.includes(days) ? days : periods[Math.min(1, periods.length - 1)] ?? 365;
@@ -130,9 +131,9 @@ export function NotebookPage() {
 
   const run = async () => {
     if (running) return;
-    if (!inst) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
-    if (!s.entry.length) { notify("Add at least one buy rule first."); return; }
-    if (!isPro && (usesPro(s) || inst.fno)) { notify("This uses Pro features (advanced indicators or F&O).", { label: "See plans", run: () => nav("/plans") }); return; }
+    if (!inst && !group) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
+    if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
+    if (!isPro && (usesPro(s) || inst?.fno)) { notify("This uses Pro features (advanced indicators or F&O).", { label: "See plans", run: () => nav("/plans") }); return; }
     const body: Record<string, unknown> = { label: label.trim(), days: period };
     if (isUpload) {
       const up = getUpload(nb.id);
@@ -188,6 +189,7 @@ export function NotebookPage() {
   };
 
   const paperTrade = async () => {
+    if (group) { notify("Paper trading runs on one instrument at a time. Pick one stock from the group to paper trade it."); return; }
     if (!inst || isUpload) { notify(isUpload ? "Paper trading needs live prices, so it doesn't work on uploaded data." : "Pick what to trade first."); return; }
     try {
       const snap = await api<{ id: string }>("/live/sessions", { method: "POST", body: { strategy: { ...s, name: nb.name }, instrument: inst.id } });
@@ -232,13 +234,14 @@ export function NotebookPage() {
           <AutoGrow className="question" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
             placeholder="What are you trying to find out?" onChange={(e) => patch({ question: e.target.value })} />
           <div className="row" style={{ gap: 10 }}>
-            <Link to={`/n/${nb.id}/market`} className={`market-btn${inst ? "" : " empty"}`} aria-label={inst ? `Testing on ${inst.symbol}. Change market or instrument` : "Pick what to test it on"}>
-              <span className="eyebrow" style={{ fontSize: 11 }}>{inst ? "Testing on" : "Not chosen yet"}</span>
+            <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`} aria-label={group ? `Testing on the group ${group.name}. Change it` : inst ? `Testing on ${inst.symbol}. Change market or instrument` : "Pick what to test it on"}>
+              <span className="eyebrow" style={{ fontSize: 11 }}>{inst || group ? "Testing on" : "Not chosen yet"}</span>
               <span className="market-btn-main">
-                {inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
+                {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span></>
+                  : inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
                   : "Pick a market and instrument"}
               </span>
-              <span className="market-btn-cta">{inst ? "Change market" : "Choose"} →</span>
+              <span className="market-btn-cta">{inst || group ? "Change" : "Choose"} →</span>
             </Link>
             <Info>{HELP.market}</Info>
           </div>
