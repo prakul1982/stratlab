@@ -253,6 +253,20 @@ class OptCosts(BaseModel):
     freeze: int = Field(0, ge=0, le=100000)         # most units in one order; 0 = the exchange default
 
 
+class OptSignal(BaseModel):
+    """Enter when a notebook's rules, run on the underlying's own candles, open a trade; exit when they close it."""
+    rules: Strategy
+    notebook: Optional[str] = Field(None, max_length=60)
+    name: str = Field("", max_length=80)
+    short: Literal["mirror", "none"] = "mirror"     # on a short signal: the same legs with calls and puts swapped, or stay out
+
+    @model_validator(mode="after")
+    def _intraday(self):
+        if self.rules.tf not in ("5m", "15m", "1h"):
+            raise ValueError("Option trades close every day, so the rules need 5-minute, 15-minute or hourly candles.")
+        return self
+
+
 class OptionStrategy(BaseModel):
     name: str = Field("Options strategy", max_length=80)
     structure: str = Field("custom", max_length=40)
@@ -267,6 +281,7 @@ class OptionStrategy(BaseModel):
     sizing: OptSizing = Field(default_factory=OptSizing)
     costs: OptCosts = Field(default_factory=OptCosts)
     notes: str = Field("", max_length=2000)
+    signal: Optional[OptSignal] = None               # None: enter at the set time
 
     @model_validator(mode="after")
     def _times(self):

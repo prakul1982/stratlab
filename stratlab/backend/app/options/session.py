@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from ..models import OptionStrategy
 from .data import FREEZE, OptionsData
 from .engine import OptionsEngine
+from .signal import SignalFeed
 
 IST = ZoneInfo("Asia/Kolkata")
 POLL = 5
@@ -39,6 +40,10 @@ class OptionSession:
         self._contracts_day = None
         if not data.expiries(s.exchange, s.underlying):
             raise ValueError(f"No {s.underlying} options are listed on {s.exchange}.")
+        self.signal = None
+        if s.signal:
+            sk = data.spot_key(s.exchange, s.underlying, data.pick_expiry(s.exchange, s.underlying, s.expiry))
+            self.signal = SignalFeed(data.kite, s.signal.rules, sk, state.get("signal"))
 
     def _keys(self, spot_key: str | None) -> list[str]:
         keys = [spot_key] if spot_key else []
@@ -47,7 +52,10 @@ class OptionSession:
             keys += [l["key"] for l in e.pos["legs"] if l["open"]]
         if c and self.spot:
             atm = c.atm(self.spot)
-            for lg in self.strategy.legs:
+            legs = list(self.strategy.legs)
+            if self.signal and self.strategy.signal.short == "mirror":
+                legs += e.legs_for("short")        # quote both, so either signal can enter at once
+            for lg in legs:
                 k = c.strike_for(atm, lg.opt, lg.offset, self.strategy.offsetUnit)
                 if k is not None:
                     keys.append(c.key(lg.opt, k))
@@ -71,6 +79,8 @@ class OptionSession:
             q2 = self.data.quotes(self._keys(sk))   # strikes near the new spot, mostly from the cache
             q.update(q2)
             self.poll_ok = True
+            if self.signal:
+                self.signal.poll(now)
         except Exception as e:
             self.poll_ok = False
             print("options poll failed:", self.id, e)
@@ -80,7 +90,8 @@ class OptionSession:
             self.fresh = self.data.fresh(sq, now)
             if self.fresh:
                 self.last_tick_at = now.isoformat()
-            new = self.engine.step(now, self.spot, self.contracts, q, self.fresh)
+            want = self.signal.want() if self.signal else None
+            new = self.engine.step(now, self.spot, self.contracts, q, self.fresh, want)
             minute = now.replace(second=0, microsecond=0).isoformat()
             if self.fresh and (not self.equity_curve or self.equity_curve[-1]["t"] != minute):
                 self.equity_curve.append({"t": minute, "eq": round(self.engine.equity(q), 2)})
@@ -92,6 +103,8 @@ class OptionSession:
     def state(self) -> dict:
         d = self.engine.dump()
         d["equity_curve"] = self.equity_curve
+        if self.signal:
+            d["signal"] = self.signal.dump()
         return d
 
     def snapshot(self) -> dict:
@@ -106,6 +119,8 @@ class OptionSession:
                 "legs": e.legs_view(q), "position": _position(e, q),
                 "events": e.events[-200:], "trades": e.trades[-100:], "equity_curve": self.equity_curve,
                 "account": account(e, q),
+                "signal": None if not self.signal else {**self.signal.view(), "name": self.strategy.signal.name,
+                                                        "short": self.strategy.signal.short},
             }
 
 
@@ -117,7 +132,7 @@ def _position(e: OptionsEngine, q: dict) -> dict | None:
     return {"opened": p["opened"], "center": p["center"], "spot_in": p["spot_in"], "credit": p["credit"],
             "mtm": round(m, 2), "costs": round(p["costs"], 2), "net": round(m - p["costs"], 2),
             "best": p["peak"], "worst": p["low"], "rolls": p["rolls"], "units": p["units"], "orders": p["orders"],
-            "expiry": p["expiry"]}
+            "expiry": p["expiry"], "dir": p.get("dir")}
 
 
 def account(e: OptionsEngine, q: dict | None) -> dict:

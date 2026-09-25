@@ -66,6 +66,16 @@ export function OptionsSession() {
       {!running && snap.stop_reason && <div className="banner">Stopped: {snap.stop_reason}</div>}
       {running && a.halted && <div className="banner">The daily loss cap was hit. No more trades today; it starts again tomorrow.</div>}
       {running && snap.note && !p && <div className="banner">{snap.note}</div>}
+      {snap.signal && (
+        <div className="card row wrap" style={{ gap: 12, padding: "12px 16px", alignItems: "center" }}>
+          <span className="eyebrow">Signal</span>
+          <span><b>{snap.signal.name}</b> on {snap.instrument.underlying} {snap.signal.tf} candles</span>
+          <span className={`badge ${snap.signal.position === "long" ? "pass" : snap.signal.position === "short" ? "warn" : "skip"}`}>
+            {snap.signal.position === "long" ? "Rules long" : snap.signal.position === "short" ? "Rules short" : "Rules flat"}</span>
+          {snap.signal.last_candle && <span className="small muted">last candle {new Date(snap.signal.last_candle).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}{snap.signal.price != null ? ` · ${price(snap.signal.price, "INR")}` : ""}</span>}
+          {!snap.signal.ok && <span className="small" style={{ color: "var(--orange)" }}>Couldn't fetch the latest candles; retrying.</span>}
+        </div>
+      )}
 
       <div className="stats-grid opt-stats">
         {stats.map(([k, v, n]) => <div key={k} className="card"><span className="eyebrow">{k}</span><b className={`mono ${signClass(n)}`} style={{ fontSize: 22 }}>{v}</b></div>)}
@@ -76,7 +86,7 @@ export function OptionsSession() {
           <section className="card stack" style={{ gap: 10 }}>
             <div className="spread"><h3 className="h3">Position</h3>
               {snap.spot != null && <span className="mono small">{snap.instrument.underlying} {price(snap.spot, "INR")}</span>}</div>
-            {!p ? <p className="muted">{running ? `Flat. ${a.entries_today >= s.timing.maxEntries ? "Done for today." : `Enters at ${s.timing.entry} on market days.`}` : "Nothing open."}</p> : (
+            {!p ? <p className="muted">{running ? `Flat. ${a.entries_today >= s.timing.maxEntries ? "Done for today." : s.signal ? `Enters when ${s.signal.name} signals (from ${s.timing.entry}).` : `Enters at ${s.timing.entry} on market days.`}` : "Nothing open."}</p> : (
               <>
                 <p className="small muted">Opened {t(p.opened)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"} {inr(Math.abs(p.credit))}.
                   {" "}Best {inr(p.best)}, worst {inr(p.worst)} so far.{p.rolls ? ` Re-centred ${p.rolls} time${p.rolls === 1 ? "" : "s"}.` : ""} Costs so far {inr(p.costs)} over {p.orders} orders.</p>
