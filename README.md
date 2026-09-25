@@ -113,7 +113,8 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Test on a whole group of stocks | **Testing on → Or test on a group**: a ready-made group (NIFTY 50, Bank NIFTY, F&O stocks, US mega caps, large coins) or your own list, with a limit on positions open at once; **Paper trade** runs the whole group live on intraday candles |
 | Paper trade options | **Options** in the sidebar: pick the underlying, expiry and structure, press **Price it now** for live fills, payoff and margin, then **Start paper trading**; stops, targets, re-centring and sizing are under **More settings** |
 | Paper trade | **Paper trade** at the top of a notebook or verdict; running sessions are under **Paper trading** |
-| Share or save | **Share verdict** saves an image; **Export** saves the rules as a file |
+| Share a result | **Share verdict** on a verdict: send the card (chart, the four checks, the numbers) straight to an app on your phone or save it on a computer, or **Make a public link**: a read-only page anyone can open without an account. It shows the verdict, not your rules, and you can turn it off at any time |
+| Save the rules | **Export** in a notebook saves the rules as a file |
 | Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
 | Read at night | **Night mode** at the bottom of the sidebar |
 

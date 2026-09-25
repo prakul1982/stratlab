@@ -8,7 +8,8 @@ import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars, type Marker } from
 import { Info, Loading, STATUS_NAME } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
-import { downloadShareImage } from "../components/shareImage";
+import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
+import { MoreMenu } from "../components/MoreMenu";
 import { Book, Globe, Pencil, Pulse, Share, Trash } from "../components/Icons";
 
 const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
@@ -220,7 +221,7 @@ function markersFor(e: Experiment): Marker[] {
 
 export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const nav = useNavigate();
-  const { notify, fail, refreshNotebooks } = useApp();
+  const { fail, refreshNotebooks } = useApp();
   const remove = async () => {
     if (!confirm(`Delete experiment v${e.v} ("${e.label}")? The notebook and its other experiments stay. This can't be undone.`)) return;
     try {
@@ -246,7 +247,7 @@ export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <div className="spread" style={{ flexWrap: "wrap" }}>
         <Link to={`/n/${nb.id}`} className="link" style={{ textDecoration: "none" }}>← {nb.name}</Link>
         <div className="row wrap" style={{ gap: 10 }}>
-          <button className="btn outline" onClick={async () => { await downloadShareImage(nb, e); notify("Share image saved. Post it anywhere."); }}><Share size={17} />Share verdict</button>
+          <ShareMenu nb={nb} e={e} />
           <button className="btn" onClick={() => nav(`/n/${nb.id}`)}>Next experiment →</button>
         </div>
       </div>
@@ -387,4 +388,45 @@ export function ExperimentPage() {
   const e = nb.experiments.find((x) => String(x.v) === v);
   if (!e) return <div className="stack"><p>That experiment wasn't found.</p><Link to={`/n/${nb.id}`}>Back to the notebook</Link></div>;
   return <ExperimentView nb={nb} e={e} />;
+}
+
+
+const siteUrl = () => (location.hostname === "localhost" ? location.origin : "https://stratlab.studio");
+
+/** Share a verdict: an image for chats and posts, or a public link that previews as the same card. */
+function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
+  const { notify, fail, theme } = useApp();
+  const [token, setToken] = useState<string | null>(e.public ?? null);
+  const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  const link = token ? `${siteUrl()}/v/${token}` : null;
+  const image = async () => {
+    try {
+      const r = await shareVerdict(nb, e, dark ? "dark" : "light", link);
+      if (r === "saved") notify("Share card saved (and copied, where your browser allows). Post it anywhere.");
+    } catch (x) { fail(x); }
+  };
+  const makeLink = async () => {
+    try {
+      const blob = await renderCard(cardFromExperiment(nb, e), "light");
+      const b64 = await new Promise<string>((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.readAsDataURL(blob); });
+      const out = await api<{ token: string }>(`/notebooks/${nb.id}/experiments/${e.v}/share`, { method: "POST", body: { image: b64 } });
+      setToken(out.token);
+      const url = `${siteUrl()}/v/${out.token}`;
+      try { await navigator.clipboard.writeText(url); notify(`Public link copied: ${url}`); } catch { notify(`Public link: ${url}`); }
+    } catch (x) { fail(x); }
+  };
+  const copy = async () => { if (!link) return; try { await navigator.clipboard.writeText(link); notify("Link copied."); } catch { notify(link); } };
+  const off = async () => {
+    if (!confirm("Turn off the public link? Anyone who has it will see that it's gone.")) return;
+    try { await api(`/notebooks/${nb.id}/experiments/${e.v}/share`, { method: "DELETE" }); setToken(null); notify("Public link turned off."); } catch (x) { fail(x); }
+  };
+  return (
+    <MoreMenu label="Share verdict" icon={<Share size={17} />} buttonClass="btn outline" align="right" items={[
+      { label: "Share the card as an image", icon: <Share size={16} />, run: image },
+      ...(token ? [
+        { label: "Copy the public link", run: copy },
+        { label: "Turn off the public link", run: off, danger: true },
+      ] : [{ label: "Make a public link", run: makeLink }]),
+    ]} />
+  );
 }

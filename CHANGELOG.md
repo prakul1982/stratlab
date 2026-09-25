@@ -2,6 +2,21 @@
 
 ## September 2026
 
+### A new share card, and public links to a verdict
+- **The share card** now shows:
+  - an equity chart against buy and hold, with the unseen years shaded
+  - all four honesty checks, each marked passed, failed, warning or skipped
+  - the timeframe, dates and side
+  - a disclaimer
+- Long names and questions end in "…" instead of being cut off mid-word.
+- **Group verdicts get their own card:** the group's name, the number of positions allowed at once, and how many members made money.
+- **Sharing on a phone:** **Share verdict** opens the phone's share sheet, so the card goes straight to WhatsApp, X or anywhere else. On a computer it saves the image and copies it where the browser allows.
+- **Public links:**
+  - **Share verdict → Make a public link** copies a link anyone can open without an account.
+  - The page shows the verdict, the chart, the checks and, for groups, each member's result. It never shows your rules.
+  - In chats and on social sites the link previews with the card.
+  - **Turn off the public link** removes it, and so does deleting the experiment or the notebook.
+
 ### Docs, landing page and tour brought up to date
 - **Landing page:**
   - A new **Beyond one chart** section covers options (live paper trading, with backtesting coming soon), whole-group tests and paper trading, and importing any strategy, and the top menu links to it.

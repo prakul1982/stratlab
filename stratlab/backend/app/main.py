@@ -35,7 +35,8 @@ from .options import importer as opt_importer
 from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
-from .models import (GroupLiveReq, OptionImportReq, OptionStartReq, OptionStrategy)
+from . import public
+from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq, OptionStrategy)
 from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import PLANS, has_pro_features, plan_info, trial_state
@@ -579,6 +580,10 @@ def duplicate_notebook(nid: str, profile=Depends(current_profile)):
 
 @app.delete("/notebooks/{nid}")
 def delete_notebook(nid: str, profile=Depends(current_profile)):
+    row = db.get_strategy(profile["id"], check_id(nid))
+    for e in (notebook_from_row(row).get("experiments") or []) if row else []:
+        if e.get("public"):
+            public.unpublish(e["public"])   # its public links go with it
     db.delete_strategy(profile["id"], check_id(nid))
     return {"deleted": True}
 
@@ -656,9 +661,64 @@ def run_walkforward(nid: str, version: int, profile=Depends(current_profile)):
     return ok({"walkforward": out, "usage": {"backtests_used": backtests_used(profile), "backtests_limit": limit}})
 
 
+@app.post("/notebooks/{nid}/experiments/{version}/share")
+def share_experiment(nid: str, version: int, req: ShareReq, profile=Depends(current_profile)):
+    """Turn on (or refresh) a public link to this verdict."""
+    nb = get_notebook(profile, nid)
+    exps = list(nb.get("experiments") or [])
+    exp = next((e for e in exps if e["v"] == version), None)
+    if exp is None:
+        err(404, "not_found", "Experiment not found.")
+    token = public.publish(nb, exp, req.image)
+    exp["public"] = token
+    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
+    save_notebook(profile, nb)
+    return {"token": token, "url": public.url(token)}
+
+
+@app.delete("/notebooks/{nid}/experiments/{version}/share")
+def unshare_experiment(nid: str, version: int, profile=Depends(current_profile)):
+    nb = get_notebook(profile, nid)
+    exps = list(nb.get("experiments") or [])
+    exp = next((e for e in exps if e["v"] == version), None)
+    if exp is None:
+        err(404, "not_found", "Experiment not found.")
+    public.unpublish(exp.pop("public", None))
+    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
+    save_notebook(profile, nb)
+    return {"shared": False}
+
+
+@app.get("/public/v/{token}")
+def public_verdict(token: str):
+    snap = public.load(token)
+    if not snap:
+        err(404, "not_found", "This link was turned off or never existed.")
+    return snap
+
+
+@app.get("/v/{token}.png")
+def public_verdict_image(token: str):
+    png = public.image(token)
+    if not png:
+        err(404, "not_found", "No image for this link.")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/v/{token}")
+def public_verdict_page(token: str):
+    snap = public.load(token)
+    if not snap:
+        return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
+    return HTMLResponse(public.preview_html(token, snap, public.image(token) is not None))
+
+
 @app.delete("/notebooks/{nid}/experiments/{version}")
 def delete_experiment(nid: str, version: int, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
+    for e in nb.get("experiments") or []:
+        if e["v"] == version and e.get("public"):
+            public.unpublish(e["public"])
     nb["experiments"] = [e for e in nb.get("experiments") or [] if e["v"] != version]
     nb["summary"] = research.summary(nb["experiments"])
     save_notebook(profile, nb)
