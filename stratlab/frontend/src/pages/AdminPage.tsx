@@ -11,6 +11,7 @@ interface Overview {
   server: {
     kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number;
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
+    recent_errors?: { ref: string; at: string; method: string; path: string; error: string; where: string }[];
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean };
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number };
@@ -172,6 +173,20 @@ export function AdminPage() {
               <Status ok={sv!.billing_enabled} warn label="Payments" detail={sv!.billing_enabled ? "Razorpay is connected" : "Razorpay not set up, so paid plans show \"Coming soon\". Grant plans by hand below."} />
             </section>
           </div>
+
+          {!!sv?.recent_errors?.length && (
+            <section className="card stack" style={{ gap: 12 }}>
+              <h2 className="h2">Recent server errors <span className="muted" style={{ fontSize: 18 }}>({sv.recent_errors.length})</span></h2>
+              <p className="small muted">Crashes since the server last started, newest first. Users see the ref code in the error message.</p>
+              <div className="table-wrap"><table>
+                <thead><tr><th>Ref</th><th>When</th><th>Request</th><th>Error</th><th>Where</th></tr></thead>
+                <tbody>{sv.recent_errors.map((x) => (
+                  <tr key={x.ref}><td className="mono">{x.ref}</td><td>{new Date(x.at).toLocaleString()}</td><td className="mono small">{x.method} {x.path}</td>
+                    <td className="small" style={{ maxWidth: 380 }}>{x.error}</td><td className="mono small">{x.where}</td></tr>
+                ))}</tbody>
+              </table></div>
+            </section>
+          )}
 
           <section className="card stack" style={{ gap: 12 }}>
             <h2 className="h2">Paper trading now <span className="muted" style={{ fontSize: 18 }}>({sessions?.length ?? 0})</span></h2>
