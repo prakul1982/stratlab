@@ -795,7 +795,8 @@ def start_live_group(req: GroupLiveReq, profile=Depends(current_profile)):
     cur = insts[0].get("currency") or ("INR" if g.market == "IN" else "")
     inst = {"id": f"GROUP:{g.id}", "type": "GROUP", "symbol": f"{g.name} ({len(insts)})", "market": g.market,
             "currency": cur, "tz": insts[0].get("tz"), "maxOpen": min(g.maxOpen, len(insts)),
-            "members": [i["id"] for i in insts], "names": {i["id"]: i.get("symbol") for i in insts}, "missing": missing}
+            "members": [i["id"] for i in insts], "names": {i["id"]: i.get("symbol") for i in insts}, "missing": missing,
+            "fast": req.fast.model_dump() if g.market == "IN" else {**req.fast.model_dump(), "ticks": False, "maxSpreadPct": 0}}
     return ok(start_session(profile, s, inst).snapshot())
 
 

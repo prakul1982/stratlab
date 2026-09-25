@@ -2,6 +2,13 @@
 
 ## September 2026
 
+### Faster group entries and a spread limit
+- Pressing **Paper trade** on a group now opens a short set of options before it starts:
+  - **Faster entries** (India): the entry rules are checked on the live price every 15 seconds, so a momentum signal on hourly candles doesn't wait up to an hour for the candle to close. Exits still wait for the close.
+  - **Spread limit** (India): skip an entry when the gap between the best bid and ask is wider than a % of the price, so thin stocks don't eat the edge.
+  - **Minimum price** (any market): skip anything cheaper.
+- The session page shows which options are on, how many entries were skipped and why, and each member's live spread.
+
 ### Options on your own signal
 - **Setup:** on the Options tab, set **Enter** to **When a notebook's rules say so** and pick a notebook with rules on 5-minute, 15-minute or hourly candles, for example a 7 EMA crossover.
 - **How it trades:**

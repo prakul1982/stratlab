@@ -7,12 +7,13 @@ export interface GroupSnapshot {
   id: string; name: string; kind: "group"; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
   instrument: { symbol: string; market: string; currency?: string; tz?: string; maxOpen?: number };
   strategy: { tf: string; risk: { capital: number } }; started_at: string; last_tick_at?: string | null; feed_connected?: boolean;
-  members: { symbol: string; id: string; price: number; trades: number; pnl: number;
+  members: { symbol: string; id: string; price: number; trades: number; pnl: number; skipped?: number; spread?: number | null;
     position: { side: "long" | "short"; qty: number; entry: number; unrealised: number; stop: number | null; target: number | null } | null }[];
   skipped: string[]; events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number }[];
   equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; realised: number; unrealised: number; open: number; max_open: number; halted: boolean;
-    today: number; trades: number; wins: number };
+    today: number; trades: number; wins: number; skipped?: { spread: number; price: number } };
+  fast?: { ticks?: boolean; maxSpreadPct?: number; minPrice?: number };
 }
 
 export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; onStop: () => void; onDelete: () => void }) {
@@ -44,6 +45,13 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
       {!running && snap.stop_reason && <div className="banner">Stopped: {snap.stop_reason}</div>}
       {running && a.halted && <div className="banner">The group's daily loss cap was hit: everything was closed and nothing new opens until tomorrow.</div>}
       {snap.skipped.length > 0 && <p className="hint">Left out (not enough live history): {snap.skipped.join(" · ")}</p>}
+      {(() => {
+        const f = snap.fast || {}, sk = a.skipped || { spread: 0, price: 0 };
+        const on = [f.ticks && "faster entries on the live price", f.maxSpreadPct && `spread limit ${f.maxSpreadPct}%`, f.minPrice && `nothing under ${price(f.minPrice, cur)}`].filter(Boolean);
+        if (!on.length) return null;
+        const skipped = [sk.spread && `${sk.spread} for a wide or unknown spread`, sk.price && `${sk.price} for price`].filter(Boolean);
+        return <p className="hint">On: {on.join(" · ")}.{skipped.length ? ` Entries skipped: ${skipped.join(", ")}.` : ""}</p>;
+      })()}
       <div className="stats-grid opt-stats">
         {stats.map(([k, v, n]) => <div key={k} className="card"><span className="eyebrow">{k}</span><b className={`mono ${signClass(n)}`} style={{ fontSize: 20 }}>{v}</b></div>)}
       </div>
@@ -75,9 +83,11 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
             <details className="card">
               <summary className="h3">Every member ({snap.members.length})</summary>
               <div className="table-wrap" style={{ marginTop: 10 }}><table>
-                <thead><tr><th>Symbol</th><th>Price</th><th>Trades</th><th>Closed P&amp;L</th></tr></thead>
+                <thead><tr><th>Symbol</th><th>Price</th>{snap.fast?.maxSpreadPct ? <th>Spread</th> : null}<th>Trades</th><th>Skipped</th><th>Closed P&amp;L</th></tr></thead>
                 <tbody>{snap.members.map((m) => (
-                  <tr key={m.id}><td className="mono">{m.symbol}</td><td className="mono">{price(m.price, cur)}</td><td className="mono">{m.trades}</td>
+                  <tr key={m.id}><td className="mono">{m.symbol}</td><td className="mono">{price(m.price, cur)}</td>
+                    {snap.fast?.maxSpreadPct ? <td className="mono">{m.spread == null ? "–" : `${m.spread.toFixed(2)}%`}</td> : null}
+                    <td className="mono">{m.trades}</td><td className="mono">{m.skipped || "–"}</td>
                     <td className={`mono ${signClass(m.pnl)}`}>{money(m.pnl, cur)}</td></tr>
                 ))}</tbody>
               </table></div>
