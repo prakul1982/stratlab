@@ -24,6 +24,8 @@ export const FEATURES: Feature[] = [
     words: "import pine script tradingview python metatrader amibroker config json bot code upload", home: true },
   { id: "paper", title: "Paper trade", what: "Run rules live on real prices with fake money, until you stop them.", to: "/paper",
     words: "paper trading live forward test sessions running fake money simulate", home: true },
+  { id: "risk", title: "All running sessions together", what: "Open value, today, total P&L, worst day and deepest fall across every paper session.", to: "/paper",
+    words: "risk exposure portfolio overview all sessions combined drawdown worst day total pnl" },
   { id: "walkforward", title: "Walk-forward test", what: "Re-tune on the past, trade the next unseen stretch, repeat. On any verdict.", to: "@verdict",
     words: "walk forward walkforward out of sample optimise optimize tune robust", level: "advanced" },
   { id: "similar", title: "Does it work on similar stocks?", what: "Run the same rules on about 10 similar instruments. On any verdict.", to: "@verdict",

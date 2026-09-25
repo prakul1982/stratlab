@@ -1,3 +1,4 @@
+import { RiskOverview } from "../components/RiskOverview";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
@@ -187,6 +188,9 @@ export function PaperPage() {
           ))}
         </div>
         </>
+      )}
+      {!sid && rows && rows.some((r) => r.status === "running") && (
+        <RiskOverview onOpen={(id, kind) => nav(kind === "options" ? `/options/s/${id}` : `/paper/${id}`)} />
       )}
       {sid && <SessionView sid={sid} onStopped={load} onDeleted={() => { nav("/paper"); load(); }} />}
       {!sid && rows && rows.length > 0 && <p className="muted">Pick a session above to see its chart, account and orders.</p>}

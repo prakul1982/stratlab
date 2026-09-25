@@ -37,7 +37,7 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import daily_report, ideas, library, public
+from . import daily_report, ideas, library, public, risk
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, IdeasReq, LibraryReq, PrefsReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -876,6 +876,18 @@ def start_live_group(req: GroupLiveReq, profile=Depends(current_profile)):
             "members": [i["id"] for i in insts], "names": {i["id"]: i.get("symbol") for i in insts}, "missing": missing,
             "fast": req.fast.model_dump() if g.market == "IN" else {**req.fast.model_dump(), "ticks": False, "maxSpreadPct": 0}}
     return ok(start_session(profile, s, inst).snapshot())
+
+
+@app.get("/live/overview")
+def live_overview(profile=Depends(current_profile)):
+    """Every running paper session together: open value, today, total P&L, worst day, deepest fall."""
+    snaps = []
+    for s in manager.user_running(profile["id"]):
+        try:
+            snaps.append(s.snapshot())
+        except Exception as e:
+            print("overview: snapshot failed:", s.id, e)
+    return risk.summary(snaps, datetime.now(IST).date().isoformat())
 
 
 @app.get("/live/sessions")

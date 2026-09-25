@@ -2,6 +2,13 @@
 
 ## September 2026
 
+### All your paper trading at once
+- The top of **Paper trading** now shows every running session added up, per currency (rupees and dollars are never mixed):
+  - what the open positions are worth now, and how much of your paper capital that is
+  - today's result, and the result since the start
+  - the worst day and the deepest fall for all of them together, which is what you'd feel if this were one account
+- A combined P&L chart and a table show each session's share. Tap a row to open that session.
+
 ### The strategy library
 - **Browse:** a new **Strategy library** in the sidebar lists strategies other traders published, each with the verdict it earned. "Probably luck" is shown as plainly as "Likely a real edge". Filter by market or verdict, search, and sort by best verdict, newest or most copied.
 - **Copy and re-test:** puts the rules in a notebook of your own, so you judge them on your own run.
