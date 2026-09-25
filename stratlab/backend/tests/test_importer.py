@@ -116,9 +116,11 @@ def test_ai_writer_keeps_intraday_features(monkeypatch):
              "shortEntry": [{"l": {"t": "day_chg"}, "op": "lt", "r": {"t": "num", "v": -2}}],
              "session": {"start": "09:30", "end": "14:45", "squareoff": "15:00", "maxTradesDay": 2, "cooldown": 6, "dailyLossPct": 2},
              "risk": {"sl": 0.5, "tgt": 1, "sizing": "capital", "perTrade": 200000, "leverage": 5, "capital": 5000000},
-             "notes": ["The 25-stock universe was left out: pick one stock."]}
+             "instrument": "RELIANCE", "market": "IN", "universe": {"preset": "fno_liquid", "maxOpen": 25},
+             "notes": ["Spread filter left out."]}
     monkeypatch.setattr(ai_writer, "complete", lambda *a, **k: json.dumps(reply))
     out = ai_writer.write_strategy("momentum json", pro=True)
+    assert out["universe"] == {"preset": "fno_liquid", "symbols": [], "maxOpen": 25} and out["instrument"] is None
     assert out["side"] == "both" and out["shortEntry"][0]["r"]["v"] == -2 and out["product"] == "intraday"
     assert out["session"]["squareoff"] == "15:00" and out["session"]["maxTradesDay"] == 2
     assert out["risk"]["sizing"] == "capital" and out["risk"]["leverage"] == 5
@@ -135,3 +137,9 @@ def test_ai_writer_keeps_intraday_features(monkeypatch):
     out = ai_writer.write_strategy("ema7", pro=True)
     assert out["entryJoin"] == "score" and out["minScore"] == 5 and out["entry"][1]["r"]["k"] == 1.5
     assert out["entry"][2]["l"]["tf"] == "1h" and out["risk"]["stopType"] == "swing" and out["risk"]["tgtType"] == "r"
+
+
+def test_universe_needs_a_preset_or_a_list():
+    assert ai_writer._universe({"preset": "made_up"}) is None
+    assert ai_writer._universe({"symbols": ["SBIN"]}) is None
+    assert ai_writer._universe({"symbols": ["sbin", "tcs"], "maxOpen": 5}) == {"preset": None, "symbols": ["SBIN", "TCS"], "maxOpen": 5}

@@ -26,6 +26,9 @@ export function useCreateNotebook(where?: Where | null) {
         method: "POST",
         body: { name: strategy.name, question: b.question, strategy, instrument: instrument?.id ?? null },
       });
+      if (b.group && !where?.instrument) {
+        await api(`/notebooks/${nb.id}`, { method: "PUT", body: { group: b.group } });
+      }
       await refreshNotebooks();
       if (where?.market === "CSV") nav(`/n/${nb.id}/market`, { state: { market: "CSV" } });
       else nav(`/n/${nb.id}`, { state: { gaps: { ...b.gaps, mentioned: instrument ? [...b.gaps.mentioned, "instrument"] : b.gaps.mentioned } } });

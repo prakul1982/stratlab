@@ -34,7 +34,7 @@ from .options import importer as opt_importer
 from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
-from .models import (OptionImportReq, OptionStartReq, OptionStrategy)
+from .models import (GroupLiveReq, OptionImportReq, OptionStartReq, OptionStrategy)
 from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import PLANS, has_pro_features, plan_info, trial_state
@@ -664,6 +664,32 @@ def start_session(profile, s, inst):
     return sess
 
 
+@app.post("/live/groups")
+def start_live_group(req: GroupLiveReq, profile=Depends(current_profile)):
+    """Paper trade a strategy on a whole group of instruments with one pot of capital."""
+    s, g = req.strategy, req.group
+    if not s.entry and not s.shortEntry:
+        err(400, "no_entry_rules", "Add at least one entry rule before going live.")
+    if s.tf == "1d":
+        err(400, "group_daily", "Paper trading a group needs intraday candles (5-minute, 15-minute or 1-hour). "
+            "Daily groups can be tested with experiments.")
+    prov = markets.provider(g.market)
+    if prov is None or not prov.ready():
+        err(503, "data_offline", "Market data for this market is offline right now. Try again soon.")
+    ids, missing = universes.resolve(markets, g.market, [m.model_dump() for m in g.members])
+    insts = [markets.resolve(i)[1] for i in ids]
+    insts = [i for i in insts if i]
+    if len(insts) < 2:
+        err(400, "group_empty", "Fewer than two of this group's instruments could be found.")
+    for i in insts:
+        check_features(profile, s, i)
+    cur = insts[0].get("currency") or ("INR" if g.market == "IN" else "")
+    inst = {"id": f"GROUP:{g.id}", "type": "GROUP", "symbol": f"{g.name} ({len(insts)})", "market": g.market,
+            "currency": cur, "tz": insts[0].get("tz"), "maxOpen": min(g.maxOpen, len(insts)),
+            "members": [i["id"] for i in insts], "names": {i["id"]: i.get("symbol") for i in insts}, "missing": missing}
+    return ok(start_session(profile, s, inst).snapshot())
+
+
 @app.get("/live/sessions")
 def list_live(profile=Depends(current_profile)):
     running = {s.id for s in manager.user_running(profile["id"])}
@@ -684,6 +710,11 @@ def get_live(sid: str, profile=Depends(current_profile)):
         row = db.get_session_row(profile["id"], sid)
         if not row:
             err(404, "not_found", "Session not found.")
+        if (row.get("instrument") or {}).get("type") == "GROUP":
+            from .group_live import stopped_snapshot as group_stopped
+            snap = group_stopped(row)
+            snap["orders"] = orders_from(snap["events"])
+            return ok(snap)
         if (row.get("instrument") or {}).get("type") == "OPTIONS":
             snap = options_stopped(row)
             snap["orders"] = orders_from(snap["events"])

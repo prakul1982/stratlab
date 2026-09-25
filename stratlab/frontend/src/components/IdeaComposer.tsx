@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, detectInstrument, detectTf, nameFor, parseStrategyText, questionFrom, riskForCurrency } from "../lib/rules";
-import type { Cond, Instrument, Risk, Session, Strategy, Tf } from "../lib/types";
+import type { Cond, Instrument, Risk, Session, Strategy, Tf, Group } from "../lib/types";
 import { Info } from "./ui";
 
 export interface Built {
@@ -10,6 +10,7 @@ export interface Built {
   instrument: Instrument | null;
   question: string;
   gaps: { mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string };
+  group?: Group | null;   // a strategy that trades a list of instruments together
 }
 
 interface AIOut {

@@ -2,6 +2,18 @@
 
 ## September 2026
 
+### Import any strategy, and paper trade whole groups
+- A new **Import a strategy** tab in the sidebar takes any strategy (a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words) and sets it up in the right place:
+  - rules on one instrument become a notebook
+  - rules that scan a list of stocks become a notebook already set up on that group
+  - option structures open in the Options tab
+- Imports recognise **universes**: "F&O stocks" maps to the liquid F&O group, "NIFTY 50 stocks" to NIFTY 50, and a source that lists its symbols becomes your own group. The "max concurrent" setting becomes positions open at once.
+- **Paper trade a group live**:
+  - one pot of capital, a limit on positions open at once, and a group-wide daily loss cap that closes everything
+  - India uses live ticks for every member; other markets are polled a few members at a time
+  - the session page shows open positions with stops and targets, today's P&L, every member and all orders
+  - it needs intraday candles
+
 ### A simpler Options page
 - One column instead of two, and no sticky panel overlapping the option chain.
 - The main choices sit up front: what to trade, expiry, structure, times, units, stop and target. Legs open with **Edit legs**. Caps, trailing, re-centring, sizing and costs moved into **More settings**.

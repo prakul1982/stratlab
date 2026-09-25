@@ -21,6 +21,7 @@ import { NotebookPage } from "./pages/NotebookPage";
 import { ExperimentPage } from "./pages/ExperimentPage";
 import { MarketPage } from "./pages/MarketPage";
 import { OptionsPage } from "./pages/OptionsPage";
+import { ImportPage } from "./pages/ImportPage";
 import { OptionsSession } from "./pages/OptionsSession";
 import { PaperPage } from "./pages/PaperPage";
 import { PlansPage } from "./pages/PlansPage";
@@ -49,6 +50,7 @@ function Routed() {
         <Route path="/n/:id/market" element={<MarketPage />} />
         <Route path="/n/:id/compare" element={<CompareExperiments />} />
         <Route path="/n/:id/e/:v" element={<ExperimentPage />} />
+        <Route path="/import" element={<ImportPage />} />
         <Route path="/options" element={<OptionsPage />} />
         <Route path="/options/s/:sid" element={<OptionsSession />} />
         <Route path="/paper" element={<PaperPage />} />

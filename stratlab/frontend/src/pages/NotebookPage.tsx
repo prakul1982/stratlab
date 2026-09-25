@@ -189,7 +189,15 @@ export function NotebookPage() {
   };
 
   const paperTrade = async () => {
-    if (group) { notify("Paper trading runs on one instrument at a time. Pick one stock from the group to paper trade it."); return; }
+    if (group) {
+      if (s.tf === "1d") { notify("Paper trading a group needs intraday candles. Switch the rules to 5-minute, 15-minute or 1-hour candles first."); return; }
+      try {
+        const snap = await api<{ id: string }>("/live/groups", { method: "POST", body: { strategy: { ...s, name: nb.name }, group } });
+        refreshMe();
+        nav(`/paper/${snap.id}`);
+      } catch (e) { fail(e); }
+      return;
+    }
     if (!inst || isUpload) { notify(isUpload ? "Paper trading needs live prices, so it doesn't work on uploaded data." : "Pick what to trade first."); return; }
     try {
       const snap = await api<{ id: string }>("/live/sessions", { method: "POST", body: { strategy: { ...s, name: nb.name }, instrument: inst.id } });
@@ -247,7 +255,7 @@ export function NotebookPage() {
           </div>
           <div className="toolbar" role="toolbar" aria-label="Notebook actions">
             <button className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
-            <button className="btn quiet sm" onClick={paperTrade} disabled={!inst || isUpload}><Pulse size={17} />Paper trade</button>
+            <button className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade</button>
             <button className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
             <button className="btn quiet sm" onClick={duplicate}><Copy size={17} />Make a copy</button>
             <button className="btn quiet sm" onClick={exportStrategy}><Download size={17} />Export{isPro ? "" : " (Pro)"}</button>
@@ -334,7 +342,7 @@ export function NotebookPage() {
             {last?.verdict.verdict === "edge" ? "The last verdict looks like a real edge. Try it on live prices with fake money." :
               "Try these rules on live prices with fake money. Best once a verdict says the edge looks real."}
           </p>
-          <button className="btn outline sm" onClick={paperTrade} disabled={!inst || isUpload}>Paper trade these rules</button>
+          <button className="btn outline sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}>Paper trade these rules</button>
         </section>
       </aside>
 

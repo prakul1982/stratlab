@@ -29,6 +29,10 @@ Schema:
                 (e.g. "AAPL", "SPY"), a London (e.g. "VOD.L"), European (e.g. "SAP.DE") or Tokyo (e.g. "7203.T")
                 listing, or a forex pair (e.g. "EURUSD=X"), or null if not named or if it's a whole universe of stocks,
   "market": "IN" (Indian stocks and indices), "CRYPTO", "US", "UK", "EU", "JP" or "FX", or null if unclear,
+  "universe": when the strategy scans or trades a LIST of instruments at once (a watchlist, "F&O stocks", "NIFTY 50
+              stocks", several coins): {"preset": "nifty50" | "banknifty" | "fno_liquid" (liquid F&O stocks) |
+              "us_mega" | "top_coins" | null, "symbols": [trading symbols, when the source lists them],
+              "maxOpen": most positions open at once (e.g. max_concurrent)}; otherwise omit,
   "tf": "1d" | "1h" | "15m" | "5m" or null if the user gave no timeframe,
   "side": "long" | "short" | "both",
   "entryJoin": "all" | "any" | "score",
@@ -74,8 +78,12 @@ Examples:
   price tf "1h" gt ema p 7 tf "1h".  "up 2% on the day" = day_chg gt num 2.  "long if up 2%, short if down 2%" =
   side "both", entry day_chg gt 2, shortEntry day_chg lt -2.
   A conviction score of weighted checks with a minimum = entryJoin "score" with "w" on each Cond and minScore.
-If the user asks for something that can't be expressed (options legs, position sizing ladders, a universe of many
-stocks, order types), express the rest and explain what was left out in notes.
+For a universe strategy, write the rules as they apply to each instrument, and set "universe". A minimum price
+filter is a rule (price gt num 50) in every entry list. A cooldown in minutes is converted to candles of the chosen
+timeframe (30 min on 5m candles = 6). A daily loss cap in money is a % of capital. Pick "5m" for intraday
+strategies that act on live ticks.
+If the user asks for something that can't be expressed (options legs, position sizing ladders, spread filters,
+order types), express the rest and explain what was left out in notes.
 If the user asks for an indicator that is not allowed, leave it out and say so in notes.
 Never invent exits, stops or targets the user did not ask for; the app will ask them.
 If nothing can be expressed, return {"entry": [], "exit": [], "mentioned": [], "notes": ["reason"]}."""
@@ -254,6 +262,9 @@ def write_strategy(text: str, pro: bool) -> dict:
     out["name"] = str(data.get("name") or "")[:80] or None
     out["instrument"] = str(data["instrument"])[:40] if data.get("instrument") else None
     out["market"] = data.get("market") if data.get("market") in ("IN", "CRYPTO", "US", "UK", "EU", "JP", "FX") else None
+    out["universe"] = _universe(data.get("universe"))
+    if out["universe"]:
+        out["instrument"] = None
     raw_risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
     risk = {k: v for k, v in raw_risk.items()
             if k in ("sl", "tgt", "trail", "maxBars", "riskPct", "capital", "perTrade", "leverage") and isinstance(v, (int, float)) and not isinstance(v, bool)}
@@ -289,3 +300,19 @@ def write_strategy(text: str, pro: bool) -> dict:
 def ask_json(system: str, text: str, max_tokens: int = 2500):
     """Any JSON answer from the provider chain (used by the options importer)."""
     return extract_json(complete(system, text, gemini=_gemini, anthropic=_anthropic, max_tokens=max_tokens))
+
+
+PRESET_IDS = ("nifty50", "banknifty", "fno_liquid", "us_mega", "top_coins")
+
+
+def _universe(u) -> dict | None:
+    """A group of instruments the strategy trades together, or None."""
+    if not isinstance(u, dict):
+        return None
+    preset = u.get("preset") if u.get("preset") in PRESET_IDS else None
+    symbols = [str(x).strip().upper()[:30] for x in (u.get("symbols") or []) if isinstance(x, str) and x.strip()][:50]
+    if not preset and len(symbols) < 2:
+        return None
+    mo = u.get("maxOpen")
+    max_open = int(mo) if isinstance(mo, (int, float)) and not isinstance(mo, bool) and mo >= 1 else None
+    return {"preset": preset, "symbols": symbols, "maxOpen": max_open}
