@@ -121,3 +121,20 @@ def test_crashes_return_json_with_cors(monkeypatch):
         assert r.headers.get("access-control-allow-origin") == "http://localhost:5500"
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_crashes_get_a_ref_and_show_on_the_admin_page(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+
+    def boom():
+        raise KeyError("expiry")
+    main.app.add_api_route("/__boom", boom)
+    main.RECENT_ERRORS.clear()
+    r = TestClient(main.app, raise_server_exceptions=False).get("/__boom")
+    body = r.json()["detail"]
+    assert r.status_code == 500 and body["code"] == "server_error"
+    ref = main.RECENT_ERRORS[-1]["ref"]
+    assert f"ref {ref}" in body["message"]
+    err = main.server_status()["recent_errors"][0]
+    assert err["path"] == "/__boom" and err["error"].startswith("KeyError") and "boom" in err["where"]

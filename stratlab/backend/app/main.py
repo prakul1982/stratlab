@@ -85,15 +85,26 @@ research_routes.setup(research_hub, _gemini, _anthropic)
 app.include_router(research_routes.router)
 
 
+RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
+
+
 @app.middleware("http")
 async def unexpected_errors(request: Request, call_next):
     """Turn crashes into a normal JSON error. Registered before CORS, so the browser can still read it."""
     try:
         return await call_next(request)
-    except Exception:
+    except Exception as e:
         traceback.print_exc()
+        ref = secrets.token_hex(3).upper()
+        tb = traceback.extract_tb(e.__traceback__)
+        own = [f for f in tb if "site-packages" not in f.filename and f.name != "unexpected_errors"] or tb   # the deepest frame of our own code
+        where = f"{own[-1].filename.rsplit('/', 1)[-1]}:{own[-1].lineno} in {own[-1].name}" if own else ""
+        RECENT_ERRORS.append({"ref": ref, "at": datetime.now(IST).isoformat(), "method": request.method,
+                              "path": request.url.path, "error": f"{type(e).__name__}: {str(e)[:300]}", "where": where})
+        del RECENT_ERRORS[:-25]
         return JSONResponse(status_code=500, content={"detail": {"code": "server_error",
-                            "message": "Something went wrong on our side. Try again in a moment."}})
+                            "message": f"Something went wrong on our side (ref {ref}). Try again in a moment; "
+                                       "if it keeps happening, the admin page lists what failed."}})
 
 
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
@@ -955,7 +966,7 @@ def server_status() -> dict:
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
-            "research": {"finnhub": bool(settings.FINNHUB_API_KEY)}}
+            "research": {"finnhub": bool(settings.FINNHUB_API_KEY)}, "recent_errors": list(reversed(RECENT_ERRORS))}
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------

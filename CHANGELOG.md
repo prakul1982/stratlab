@@ -2,6 +2,10 @@
 
 ## September 2026
 
+### Easier to trace server errors
+- An unexpected server error now shows a short reference code, like "Something went wrong on our side (ref 3FA9C1)".
+- The Admin page lists recent errors: the code, when it happened, which request, the error, and where in the code it failed. You can match a user's report to its cause without digging through the host's logs.
+
 ### A full UI pass
 - Narrow pages (Options, Import) now sit in the middle of the screen instead of hugging the left edge.
 - Every dropdown in the app has one look in every browser. Safari had been drawing its own boxes, on Compare, in the rules editor and on Options.
