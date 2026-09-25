@@ -2,6 +2,12 @@
 
 ## September 2026
 
+### The strategy library
+- **Browse:** a new **Strategy library** in the sidebar lists strategies other traders published, each with the verdict it earned. "Probably luck" is shown as plainly as "Likely a real edge". Filter by market or verdict, search, and sort by best verdict, newest or most copied.
+- **Copy and re-test:** puts the rules in a notebook of your own, so you judge them on your own run.
+- **Publish:** from any verdict, **Share verdict → Publish to the strategy library**. Add a line on the idea and, if you like, a display name. Your email and notes are never shown, and you can update or take it down any time.
+- **Not included:** strategies tested on uploaded data can't be published, because nobody else could re-test them.
+
 ### Your experience, your defaults
 - After the first sign-in StratLab asks once how much trading you've done: **New to trading**, **I've traded a bit** or **I trade actively**.
 - It only changes defaults:

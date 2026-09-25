@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { money, moneyShort, pct, periodName, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import type { Basket, Check, Experiment, Notebook, WalkForward } from "../lib/types";
 import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars, type Marker } from "../components/Charts";
-import { Info, Loading, STATUS_NAME } from "../components/ui";
+import { Info, Loading, Modal, STATUS_NAME } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
@@ -424,13 +424,50 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
     if (!confirm("Turn off the public link? Anyone who has it will see that it's gone.")) return;
     try { await api(`/notebooks/${nb.id}/experiments/${e.v}/share`, { method: "DELETE" }); setToken(null); notify("Public link turned off."); } catch (x) { fail(x); }
   };
+  const nav = useNavigate();
+  const [lib, setLib] = useState<string | null>(e.library ?? null);
+  const [publishing, setPublishing] = useState(false);
+  const [desc, setDesc] = useState("");
+  const [author, setAuthor] = useState(() => { try { return localStorage.getItem("stratlab.libAuthor") ?? ""; } catch { return ""; } });
+  const upload = e.instrument?.market === "CSV";
+  const publish = async () => {
+    try {
+      try { localStorage.setItem("stratlab.libAuthor", author.trim()); } catch { /* private mode */ }
+      const out = await api<{ id: string }>(`/notebooks/${nb.id}/experiments/${e.v}/library`, { method: "POST", body: { description: desc, author } });
+      setLib(out.id); setPublishing(false);
+      notify(lib ? "Updated in the library." : "Published to the strategy library.", { label: "View the library", run: () => nav("/library") });
+    } catch (x) { fail(x); }
+  };
+  const unpublish = async () => {
+    if (!lib || !confirm("Take this strategy out of the library? Copies people already made stay theirs.")) return;
+    try { await api(`/library/${lib}`, { method: "DELETE" }); setLib(null); notify("Taken out of the library."); } catch (x) { fail(x); }
+  };
   return (
-    <MoreMenu label="Share verdict" icon={<Share size={17} />} buttonClass="btn outline" align="right" items={[
-      { label: "Share the card as an image", icon: <Share size={16} />, run: image },
-      ...(token ? [
-        { label: "Copy the public link", run: copy },
-        { label: "Turn off the public link", run: off, danger: true },
-      ] : [{ label: "Make a public link", run: makeLink }]),
-    ]} />
+    <>
+      <MoreMenu label="Share verdict" icon={<Share size={17} />} buttonClass="btn outline" align="right" items={[
+        { label: "Share the card as an image", icon: <Share size={16} />, run: image },
+        ...(token ? [
+          { label: "Copy the public link", run: copy },
+          { label: "Turn off the public link", run: off, danger: true },
+        ] : [{ label: "Make a public link", run: makeLink }]),
+        ...(upload ? [] : lib ? [
+          { label: "Update it in the strategy library", run: () => setPublishing(true) },
+          { label: "Take it out of the library", run: unpublish, danger: true },
+        ] : [{ label: "Publish to the strategy library", run: () => setPublishing(true) }]),
+      ]} />
+      {publishing && (
+        <Modal title={lib ? "Update in the strategy library" : "Publish to the strategy library"} onClose={() => setPublishing(false)}>
+          <div className="stack" style={{ gap: 14 }}>
+            <p className="muted">Other traders will see these rules, this verdict ({e.verdict.headline.replace(/\.$/, "")}) and its numbers, and can copy the rules to test themselves. Your email and notes are never shown.</p>
+            <label className="field">What's the idea? (optional)<textarea className="input" rows={3} maxLength={600} value={desc} onChange={(x) => setDesc(x.target.value)} placeholder="A few words on why it might work, or what you learned." /></label>
+            <label className="field">Show it as by (optional)<input className="input" maxLength={40} value={author} onChange={(x) => setAuthor(x.target.value)} placeholder="A StratLab user" /></label>
+            <div className="row" style={{ gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn quiet" onClick={() => setPublishing(false)}>Cancel</button>
+              <button className="btn blue" onClick={publish}>{lib ? "Update" : "Publish"}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

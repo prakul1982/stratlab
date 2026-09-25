@@ -73,7 +73,8 @@ export interface Experiment {
   basket?: Basket;
   group?: GroupResult;
   walkforward?: WalkForward;
-  public?: string;          // the token of its public link, when one is on
+  public?: string;
+  library?: string;         // its entry in the strategy library, when published          // the token of its public link, when one is on
 }
 export interface WFWindow {
   train_from: string; train_to: string; test_from: string; test_to: string;

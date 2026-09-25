@@ -37,3 +37,4 @@ export const Pin = ({ size, filled }: P & { filled?: boolean }) => (
 );
 export const Copy = ({ size }: P) => <svg {...base(size)}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></svg>;
 export const Upload = ({ size }: P) => <svg {...base(size)}><path d="M12 16V4M7 9l5-5 5 5" /><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>;
+export const Library = ({ size }: P) => <svg {...base(size)}><path d="M4 4h4v16H4zM10 4h4v16h-4z" /><path d="m15.5 5.3 3.8-1 3.4 14.6-3.8 1z" /></svg>;

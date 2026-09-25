@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Book, Compass, Layers, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Star, Sun, User } from "./Icons";
+import { Book, Compass, Layers, Library, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Star, Sun, User } from "./Icons";
 import { SearchPalette } from "./SearchPalette";
 import { LevelPrompt } from "./LevelPrompt";
 import { Tour, tourSeen } from "./Tour";
@@ -65,6 +65,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </nav>
       <nav className="side-nav stack" style={{ gap: 2 }} aria-label="Main">
         <NavLink to="/research" className={() => (loc.pathname.startsWith("/research") ? "active" : "")}><Lens />Research</NavLink>
+        <NavLink to="/library"><Library />Strategy library</NavLink>
         <NavLink to="/import"><Upload />Import a strategy</NavLink>
         <NavLink to="/options"><Layers />Options</NavLink>
         <NavLink to="/paper"><Pulse />Paper trading</NavLink>

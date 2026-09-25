@@ -37,9 +37,9 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import daily_report, ideas, public
+from . import daily_report, ideas, library, public
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, IdeasReq, PrefsReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, IdeasReq, LibraryReq, PrefsReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -694,6 +694,74 @@ def share_experiment(nid: str, version: int, req: ShareReq, profile=Depends(curr
     nb["experiments"] = [exp if e["v"] == version else e for e in exps]
     save_notebook(profile, nb)
     return {"token": token, "url": public.url(token)}
+
+
+# ---------- the public strategy library ----------
+@app.post("/notebooks/{nid}/experiments/{version}/library")
+def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(current_profile)):
+    """Publish this experiment's rules with its verdict. Publishing again updates the same entry."""
+    nb = get_notebook(profile, nid)
+    exps = list(nb.get("experiments") or [])
+    exp = next((e for e in exps if e["v"] == version), None)
+    if exp is None:
+        err(404, "not_found", "Experiment not found.")
+    if (exp.get("instrument") or {}).get("market") == "CSV":
+        err(400, "library_upload", "Strategies tested on uploaded data can't go in the library: nobody else has that data to re-test on.")
+    old = library.load(exp.get("library") or "")
+    e = library.entry(nb, exp, profile["id"], req.author, req.description,
+                      entry_id=old["id"] if old and old.get("owner") == profile["id"] else None)
+    if old and old.get("owner") == profile["id"]:
+        e["copies"], e["published_at"] = old.get("copies", 0), old.get("published_at", e["published_at"])
+    library.save(e)
+    exp["library"] = e["id"]
+    nb["experiments"] = [exp if x["v"] == version else x for x in exps]
+    save_notebook(profile, nb)
+    return library.public(e, profile["id"])
+
+
+@app.get("/library")
+def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", profile=Depends(current_profile)):
+    rows = library.search(library.all_entries(), market.upper()[:10], verdict[:12], q[:80], sort)
+    return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows)}
+
+
+@app.get("/library/{eid}")
+def library_entry(eid: str, profile=Depends(current_profile)):
+    e = library.load(eid)
+    if not e:
+        err(404, "not_found", "That strategy isn't in the library any more.")
+    return library.public(e, profile["id"])
+
+
+@app.post("/library/{eid}/copy")
+def copy_from_library(eid: str, profile=Depends(current_profile)):
+    """Put the rules in a new notebook of your own, ready to re-test."""
+    e = library.load(eid)
+    if not e or not e.get("strategy"):
+        err(404, "not_found", "That strategy isn't in the library any more.")
+    inst = (e.get("instrument") or {}).get("id")
+    nb = {"name": e["name"][:80], "question": e.get("question") or e.get("description") or "",
+          "notes": f"Copied from the strategy library: \"{e['name']}\" by {e.get('author')}. Its verdict there: {(e.get('verdict') or {}).get('headline', '')}",
+          "strategy": {**e["strategy"], "name": e["name"][:80]}, "instrument": instrument_summary(inst) if inst else None,
+          "experiments": [], "summary": research.summary([])}
+    if e.get("group"):
+        nb["group"] = e["group"]
+    out = save_notebook(profile, nb)
+    if e.get("owner") != profile["id"]:
+        e["copies"] = (e.get("copies") or 0) + 1
+        library.save(e)
+    return out
+
+
+@app.delete("/library/{eid}")
+def unpublish_from_library(eid: str, profile=Depends(current_profile)):
+    e = library.load(eid)
+    if not e:
+        return {"deleted": True}
+    if e.get("owner") != profile["id"] and not admin.is_admin(profile):
+        err(403, "not_yours", "Only the author can take this strategy down.")
+    library.remove(eid)
+    return {"deleted": True}
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}/share")
