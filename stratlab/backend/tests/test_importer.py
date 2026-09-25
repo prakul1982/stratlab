@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app import ai_writer, db, importer, main
 from app.ai_providers import AIBusy
 from app.main import app
+from app.models import Strategy
 
 PINE = """
 //@version=5
@@ -107,3 +108,30 @@ def test_import_api(client, monkeypatch):
     assert r.status_code == 503 and "Pine Script" in r.json()["detail"]["message"]
     r = client.post("/import/strategy", json={"text": '{"format": "stratlab-strategy-v1", "strategy": {"entry": []}}'})
     assert r.status_code == 400
+
+
+def test_ai_writer_keeps_intraday_features(monkeypatch):
+    reply = {"name": "Intraday momentum", "tf": "5m", "side": "both", "product": "intraday",
+             "entry": [{"l": {"t": "day_chg"}, "op": "gt", "r": {"t": "num", "v": 2}}],
+             "shortEntry": [{"l": {"t": "day_chg"}, "op": "lt", "r": {"t": "num", "v": -2}}],
+             "session": {"start": "09:30", "end": "14:45", "squareoff": "15:00", "maxTradesDay": 2, "cooldown": 6, "dailyLossPct": 2},
+             "risk": {"sl": 0.5, "tgt": 1, "sizing": "capital", "perTrade": 200000, "leverage": 5, "capital": 5000000},
+             "notes": ["The 25-stock universe was left out: pick one stock."]}
+    monkeypatch.setattr(ai_writer, "complete", lambda *a, **k: json.dumps(reply))
+    out = ai_writer.write_strategy("momentum json", pro=True)
+    assert out["side"] == "both" and out["shortEntry"][0]["r"]["v"] == -2 and out["product"] == "intraday"
+    assert out["session"]["squareoff"] == "15:00" and out["session"]["maxTradesDay"] == 2
+    assert out["risk"]["sizing"] == "capital" and out["risk"]["leverage"] == 5
+    s = Strategy(**{k: out[k] for k in ("entry", "exit", "shortEntry", "shortExit", "side", "session", "product")},
+                 tf=out["tf"], risk=out["risk"])
+    assert s.session.dailyLossPct == 2
+    # a 7-EMA rejection with a higher timeframe, candle shape and a score
+    reply2 = {"tf": "15m", "side": "long", "entryJoin": "score", "minScore": 5,
+              "entry": [{"l": {"t": "price", "ago": 1}, "op": "gt", "r": {"t": "ema", "p": 7, "ago": 1}, "w": 2},
+                        {"l": {"t": "lower_wick"}, "op": "gt", "r": {"t": "body", "k": 1.5}, "w": 3},
+                        {"l": {"t": "price", "tf": "1h"}, "op": "gt", "r": {"t": "ema", "p": 7, "tf": "1h"}, "w": 2}],
+              "risk": {"sl": 5, "stopType": "swing", "tgt": 3, "tgtType": "r"}}
+    monkeypatch.setattr(ai_writer, "complete", lambda *a, **k: json.dumps(reply2))
+    out = ai_writer.write_strategy("ema7", pro=True)
+    assert out["entryJoin"] == "score" and out["minScore"] == 5 and out["entry"][1]["r"]["k"] == 1.5
+    assert out["entry"][2]["l"]["tf"] == "1h" and out["risk"]["stopType"] == "swing" and out["risk"]["tgtType"] == "r"

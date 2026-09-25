@@ -1,10 +1,10 @@
-"""Rule evaluation, trading engine (long only) and backtest statistics.
+"""Rule evaluation, the trading engine and backtest statistics.
 The same Engine drives backtests and live paper trading."""
 import math
 import numpy as np
 import pandas as pd
 from . import costs as C
-from .indicators import compute, ref_name, OSCILLATORS
+from .indicators import compute_full, ref_name, OSCILLATORS
 
 OP_NAME = {"xa": "crosses above", "xb": "crosses below", "gt": "is above", "lt": "is below"}
 
@@ -25,9 +25,9 @@ class Ctx:
         self.df, self.intraday, self._cache = df, intraday, {}
 
     def series(self, ref) -> np.ndarray:
-        key = (ref.t, ref.p, ref.m)
+        key = (ref.t, ref.p, ref.m, getattr(ref, "ago", None), getattr(ref, "k", None), getattr(ref, "tf", None))
         if key not in self._cache:
-            self._cache[key] = compute(ref, self.df, self.intraday).to_numpy(dtype=float)
+            self._cache[key] = compute_full(ref, self.df, self.intraday).to_numpy(dtype=float)
         return self._cache[key]
 
     def val(self, ref, i: int):
@@ -57,14 +57,43 @@ def cond_text(c) -> str:
     return f"{ref_name(c.l)} {OP_NAME[c.op]} {ref_name(c.r)}"
 
 
+TF_MIN = {"5m": 5, "15m": 15, "1h": 60, "1d": 1440}
+
+
+def _minutes(hhmm: str) -> int | None:
+    if not hhmm:
+        return None
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def bar_clock(t: str, tf_min: int) -> tuple[str, int]:
+    """The candle's trading date and the minute of the day it closes at, in the exchange's local time."""
+    s = str(t)
+    return s[:10], int(s[11:13]) * 60 + int(s[14:16]) + tf_min if len(s) >= 16 else 0
+
+
 class Engine:
-    """Trades one position at a time, long or short, with stop, target, trailing stop and time exit."""
+    """Trades one position at a time, long or short (or either, when a strategy trades both ways), with stops,
+    targets, trailing stops, time exits and optional intraday session rules."""
 
     def __init__(self, strategy, lot: float = 1, state: dict | None = None, cost_kind: str = "flat"):
         # `lot` is the quantity step: 1 share, an F&O lot of 75, or 0.0001 of a coin
         self.s, self.r = strategy, strategy.risk
-        self.dir = -1 if getattr(strategy, "side", "long") == "short" else 1
+        side = getattr(strategy, "side", "long")
+        self.sides = [1, -1] if side == "both" else [-1] if side == "short" else [1]
+        self.dir = self.sides[0]
         self.qty_step = float(lot) if lot and lot > 0 else 1.0
+        self.sess = getattr(strategy, "session", None)
+        self.tf_min = TF_MIN.get(strategy.tf, 1440)
+        self.intraday = self.tf_min < 1440 and self.sess is not None
+        sess = self.sess
+        self.t_start = _minutes(sess.start) if sess else None
+        self.t_end = _minutes(sess.end) if sess else None
+        self.t_sq = _minutes(sess.squareoff) if sess and self.intraday else None
+        product = getattr(strategy, "product", "auto")
+        if cost_kind == "in_eq" and (product == "intraday" or (product == "auto" and self.t_sq is not None)):
+            cost_kind = "in_eq_mis"
         self.kind = cost_kind
         self.cash = self.r.capital
         self.qty, self.entry, self.sl, self.tg = 0, 0.0, 0.0, math.inf
@@ -75,6 +104,9 @@ class Engine:
         self.events: list[dict] = []
         self.cost_items: dict[str, float] = {}
         self.skipped_size = 0
+        # the trading day, for session limits
+        self.day, self.day_trades, self.day_pnl, self.cool, self.halted = None, 0, 0.0, 0, False
+        self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
         if state:
             self.load(state)
 
@@ -83,8 +115,9 @@ class Engine:
         return {"cash": self.cash, "qty": self.qty, "entry": self.entry, "sl": self.sl,
                 "tg": None if math.isinf(self.tg) else self.tg, "entry_t": self.entry_t,
                 "entry_cost": self.entry_cost, "cost_items": self.cost_items,
-                "init_sl": self.init_sl, "best": self.best, "held": self.held,
-                "trades": self.trades[-500:], "events": self.events[-1000:]}
+                "init_sl": self.init_sl, "best": self.best, "held": self.held, "dir": self.dir,
+                "day": self.day, "day_trades": self.day_trades, "day_pnl": self.day_pnl, "cool": self.cool,
+                "halted": self.halted, "trades": self.trades[-500:], "events": self.events[-1000:]}
 
     def load(self, st: dict):
         self.cash, self.qty, self.entry, self.sl = st["cash"], st["qty"], st["entry"], st["sl"]
@@ -95,6 +128,9 @@ class Engine:
         self.init_sl = st.get("init_sl", self.sl)
         self.best = st.get("best", self.entry)
         self.held = st.get("held", 0)
+        self.dir = st.get("dir", self.dir)
+        self.day, self.day_trades = st.get("day"), st.get("day_trades", 0)
+        self.day_pnl, self.cool, self.halted = st.get("day_pnl", 0.0), st.get("cool", 0), st.get("halted", False)
         self.trades, self.events = st.get("trades", []), st.get("events", [])
 
     def _pay(self, side: str, qty: float, px: float) -> float:
@@ -106,8 +142,44 @@ class Engine:
     def equity(self, px: float) -> float:
         return self.cash + self.dir * self.qty * px
 
+    def _rules(self, d: int, exit: bool) -> list:
+        """Entry or exit rules for a direction. A one-way strategy keeps its rules in entry/exit."""
+        s = self.s
+        if d == -1 and len(self.sides) == 2:
+            return s.shortExit if exit else s.shortEntry
+        return s.exit if exit else s.entry
+
+    def _hit(self, conds: list, ctx: Ctx, i: int) -> bool:
+        if not conds:
+            return False
+        join = self.s.entryJoin
+        if join == "score":
+            got = sum((c.w or 1) for c in conds if eval_cond(ctx, c, i))
+            need = self.s.minScore or sum((c.w or 1) for c in conds)
+            return got >= need
+        checks = (eval_cond(ctx, c, i) for c in conds)
+        return any(checks) if join == "any" else all(checks)
+
+    def _stop_distance(self, bars: list[dict], ctx: Ctx, i: int, px: float, d: int) -> float:
+        """How far the stop sits from the entry price, in price points (0 = no stop)."""
+        r = self.r
+        if r.sl <= 0:
+            return px * r.trail / 100 if r.trail > 0 else 0.0
+        if r.stopType == "points":
+            return r.sl
+        if r.stopType == "atr":
+            from ..models import Ref
+            a = ctx.val(Ref(t="atr", p=14), i)
+            return r.sl * a if a else px * 0.01
+        if r.stopType == "swing":
+            n = max(1, int(r.sl))
+            window = bars[max(0, i - n + 1): i + 1]
+            level = min(b["l"] for b in window) if d == 1 else max(b["h"] for b in window)
+            return max(d * (px - level), px * 0.0005)   # at least 0.05%, so a flat candle can't mean no risk
+        return px * r.sl / 100
+
     def _exit_price(self, b: dict) -> tuple[float | None, str]:
-        """Where an open trade closes on this candle, checked in order: stop, target, time, exit rule."""
+        """Where an open trade closes on this candle, checked in order: stop, target, time."""
         r, long = self.r, self.dir == 1
         stop_on = r.sl > 0 or r.trail > 0
         trailed = r.trail > 0 and self.sl != self.init_sl
@@ -120,64 +192,127 @@ class Engine:
             return b["c"], "Time exit"
         return None, ""
 
+    def _close(self, b: dict, px: float, why: str) -> dict:
+        d = self.dir
+        close_side = "sell" if d == 1 else "buy"
+        px *= 1 - self.r.slippage / 100 * d      # selling a long fills lower, buying back a short fills higher
+        exit_cost = self._pay(close_side, self.qty, px)
+        trade_costs = self.entry_cost + exit_cost
+        pnl = d * self.qty * (px - self.entry) - trade_costs
+        self.cash += d * self.qty * px - exit_cost
+        self.trades.append({"entry_t": self.entry_t, "exit_t": b["t"], "entry": self.entry, "exit": px,
+                            "qty": self.qty, "pnl": pnl, "costs": trade_costs, "side": "short" if d == -1 else "long",
+                            "ret": d * (px / self.entry - 1) * 100, "why": why})
+        ev = {"t": b["t"], "side": close_side, "px": px, "qty": self.qty, "why": why, "pnl": pnl}
+        self.events.append(ev)
+        self.qty = 0
+        self.day_pnl += pnl
+        self.cool = self.sess.cooldown if self.sess else 0
+        if self._loss_cap() and self.day_pnl <= -self._loss_cap():
+            self.halted = True
+        return ev
+
+    def _loss_cap(self) -> float:
+        return self.r.capital * self.sess.dailyLossPct / 100 if self.sess and self.sess.dailyLossPct else 0.0
+
     def step(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
         b, r = bars[i], self.r
-        slip, brok, d = r.slippage / 100, r.brokerage, self.dir
-        open_side, close_side = ("buy", "sell") if d == 1 else ("sell", "buy")
+        slip, brok = r.slippage / 100, r.brokerage
+        date, closes_at = bar_clock(b["t"], self.tf_min)
+        if date != self.day:
+            self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
         new = []
         if self.qty > 0:
             self.held += 1
+            d = self.dir
             px, why = self._exit_price(b)
-            if px is None and self.s.exit and any(eval_cond(ctx, c, i) for c in self.s.exit):
+            if px is None and self.t_sq is not None:
+                if str(self.entry_t)[:10] != date:          # a gap in the data: close at this candle's open
+                    px, why = b["o"], "Square-off"
+                elif closes_at >= self.t_sq:
+                    px, why = b["c"], "Square-off"
+            if px is None and self._hit_exit(ctx, i):
                 px, why = b["c"], "Exit rule"
+            cap = self._loss_cap()
+            if px is None and cap and self.day_pnl + d * self.qty * (b["c"] - self.entry) - self.entry_cost <= -cap:
+                px, why = b["c"], "Daily loss cap"
             if px is not None:
-                px *= 1 - slip * d            # selling a long fills lower, buying back a short fills higher
-                exit_cost = self._pay(close_side, self.qty, px)
-                trade_costs = self.entry_cost + exit_cost
-                pnl = d * self.qty * (px - self.entry) - trade_costs
-                self.cash += d * self.qty * px - exit_cost
-                self.trades.append({"entry_t": self.entry_t, "exit_t": b["t"], "entry": self.entry, "exit": px,
-                                    "qty": self.qty, "pnl": pnl, "costs": trade_costs, "side": "short" if d == -1 else "long",
-                                    "ret": d * (px / self.entry - 1) * 100, "why": why})
-                ev = {"t": b["t"], "side": close_side, "px": px, "qty": self.qty, "why": why, "pnl": pnl}
-                self.events.append(ev); new.append(ev)
-                self.qty = 0
-            else:
+                new.append(self._close(b, px, why))
+            elif r.trail > 0:
                 # ratchet the trailing stop with the best price so far; it applies from the next candle
-                if r.trail > 0:
-                    t = r.trail / 100
-                    if d == 1:
-                        self.best = max(self.best, b["h"])
-                        self.sl = max(self.sl, self.best * (1 - t))
-                    else:
-                        self.best = min(self.best, b["l"])
-                        self.sl = min(self.sl, self.best * (1 + t)) if self.sl > 0 else self.best * (1 + t)
-        elif self.s.entry:
-            checks = (eval_cond(ctx, c, i) for c in self.s.entry)
-            hit = any(checks) if self.s.entryJoin == "any" else all(checks)
-            if hit:
-                px = b["c"] * (1 + slip * d)
-                risk_dist = (r.sl or r.trail) / 100
-                cap = self.cash * r.maxAlloc / 100
-                q = self.cash * r.riskPct / 100 / (px * risk_dist) if risk_dist > 0 else math.inf
-                q = C.floor_to(min(q, (cap - brok) / px), self.qty_step)
-                # percentage costs (STT, exchange fees) must fit in the budget too
-                while q > 0 and q * px + C.total(C.order_costs(self.kind, open_side, q, px, brok)) > cap:
-                    q = C.floor_to(q - max(self.qty_step, q * 0.002), self.qty_step)
-                if q <= 0:
-                    self.skipped_size += 1
-                if q > 0:
-                    self.entry_cost = self._pay(open_side, q, px)
-                    self.cash -= d * q * px + self.entry_cost
-                    self.qty, self.entry, self.entry_t, self.held, self.best = q, px, b["t"], 0, px
-                    stop = r.sl or r.trail
-                    self.sl = px * (1 - d * stop / 100) if stop > 0 else 0.0
-                    self.init_sl = self.sl
-                    self.tg = px * (1 + d * r.tgt / 100) if r.tgt > 0 else math.inf
-                    ev = {"t": b["t"], "side": open_side, "px": px, "qty": q,
-                          "why": "Entry rule" if d == 1 else "Short entry"}
-                    self.events.append(ev); new.append(ev)
+                t = r.trail / 100
+                if d == 1:
+                    self.best = max(self.best, b["h"])
+                    self.sl = max(self.sl, self.best * (1 - t))
+                else:
+                    self.best = min(self.best, b["l"])
+                    self.sl = min(self.sl, self.best * (1 + t)) if self.sl > 0 else self.best * (1 + t)
+            return new
+        if self.cool > 0:
+            self.cool -= 1
+            return new
+        if self.intraday and not self._may_enter(closes_at):
+            return new
+        if self.gate is not None and not self.gate():
+            return new
+        for d in self.sides:
+            if not self._hit(self._rules(d, exit=False), ctx, i):
+                continue
+            ev = self._open(bars, ctx, i, d, slip, brok)
+            if ev:
+                new.append(ev)
+            break
         return new
+
+    def _hit_exit(self, ctx: Ctx, i: int) -> bool:
+        return any(eval_cond(ctx, c, i) for c in self._rules(self.dir, exit=True))
+
+    def _may_enter(self, closes_at: int) -> bool:
+        s = self.sess
+        if self.halted or (s.maxTradesDay and self.day_trades >= s.maxTradesDay):
+            return False
+        if self.t_start is not None and closes_at < self.t_start:
+            return False
+        if self.t_end is not None and closes_at > self.t_end:
+            return False
+        return not (self.t_sq is not None and closes_at >= self.t_sq)
+
+    def _open(self, bars: list[dict], ctx: Ctx, i: int, d: int, slip: float, brok: float) -> dict | None:
+        b, r = bars[i], self.r
+        open_side = "buy" if d == 1 else "sell"
+        px = b["c"] * (1 + slip * d)
+        dist = self._stop_distance(bars, ctx, i, px, d)
+        if r.sizing == "capital":
+            per = r.perTrade or r.capital * r.maxAlloc / 100
+            cap = min(per, max(self.equity(b["c"]), 0)) * r.leverage       # margin can't exceed what you have
+            q = cap / px
+        else:
+            cap = self.cash * r.maxAlloc / 100
+            q = self.cash * r.riskPct / 100 / dist if dist > 0 else math.inf
+            q = min(q, (cap - brok) / px)
+        q = C.floor_to(q, self.qty_step)
+        # percentage costs (STT, exchange fees) must fit in the budget too
+        while q > 0 and q * px + C.total(C.order_costs(self.kind, open_side, q, px, brok)) > cap:
+            q = C.floor_to(q - max(self.qty_step, q * 0.002), self.qty_step)
+        if q <= 0:
+            self.skipped_size += 1
+            return None
+        self.dir = d
+        self.entry_cost = self._pay(open_side, q, px)
+        self.cash -= d * q * px + self.entry_cost
+        self.qty, self.entry, self.entry_t, self.held, self.best = q, px, b["t"], 0, px
+        self.sl = px - d * dist if dist > 0 else 0.0
+        self.init_sl = self.sl
+        if r.tgt > 0:
+            reach = r.tgt if r.tgtType == "points" else r.tgt * dist if r.tgtType == "r" else px * r.tgt / 100
+            self.tg = px + d * reach if reach > 0 else math.inf
+        else:
+            self.tg = math.inf
+        self.day_trades += 1
+        ev = {"t": b["t"], "side": open_side, "px": px, "qty": q, "why": "Entry rule" if d == 1 else "Short entry"}
+        self.events.append(ev)
+        return ev
+
 
 def stats(eq: list[float], trades: list[dict], capital: float, per_year: float) -> dict:
     arr = np.asarray(eq, dtype=float)
@@ -207,7 +342,7 @@ PER_YEAR = {"1d": 252, "1h": 252 * 7, "15m": 252 * 25, "5m": 252 * 75}
 
 def chart_series(strategy, ctx: Ctx, start: int) -> tuple[dict, dict]:
     overlays, osc = {}, {}
-    for c in [*strategy.entry, *strategy.exit]:
+    for c in strategy.all_conds():
         for ref in (c.l, c.r):
             if ref.t in ("price", "num"):
                 continue
@@ -278,13 +413,16 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
     periods.append({"k": cur, "ret": (equity[-1] / s_eq - 1) * 100})
     overlays, osc = chart_series(strategy, ctx, start)
     rng = range(start + 1, len(bars))
-    ent = [[eval_cond(ctx, c, i) for i in rng] for c in strategy.entry]
-    comb = [(any if strategy.entryJoin == "any" else all)(col) for col in zip(*ent)] if ent else []
+    entries = [*strategy.entry, *(strategy.shortEntry if strategy.side == "both" else [])]
+    ent = [[eval_cond(ctx, c, i) for i in rng] for c in entries]
+    comb = [eng._hit(entries if strategy.side != "both" else strategy.entry, ctx, i)
+            or (strategy.side == "both" and eng._hit(strategy.shortEntry, ctx, i)) for i in rng] if ent else []
     diagnostics = {
-        "entry": [{"text": cond_text(c), "true_on": sum(v), "never_computed": _never(ctx, c, start)} for c, v in zip(strategy.entry, ent)],
+        "entry": [{"text": cond_text(c), "true_on": sum(v), "never_computed": _never(ctx, c, start)} for c, v in zip(entries, ent)],
         "entry_join": strategy.entryJoin,
         "all_true_on": sum(comb),
-        "exit": [{"text": cond_text(c), "true_on": sum(eval_cond(ctx, c, i) for i in rng)} for c in strategy.exit],
+        "exit": [{"text": cond_text(c), "true_on": sum(eval_cond(ctx, c, i) for i in rng)}
+                 for c in [*strategy.exit, *(strategy.shortExit if strategy.side == "both" else [])]],
         "skipped_size": eng.skipped_size,
         "candles": len(rng),
     }

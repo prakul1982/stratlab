@@ -198,9 +198,10 @@ class LiveSession:
                 "account": {
                     "capital": self.strategy.risk.capital, "equity": e.equity(px), "cash": e.cash,
                     "qty": e.qty, "entry": e.entry if e.qty else None,
-                    "stop": e.sl if e.qty and self.strategy.risk.sl > 0 else None,
+                    "stop": e.sl if e.qty and e.sl > 0 else None,
+                    "side": "short" if e.dir == -1 else "long",
                     "target": e.tg if e.qty and e.tg != float("inf") else None,
-                    "unrealised": e.qty * (px - e.entry) if e.qty else 0.0,
+                    "unrealised": e.dir * e.qty * (px - e.entry) if e.qty else 0.0,
                     "realised": sum(t["pnl"] for t in e.trades),
                     "trades": len(e.trades), "wins": sum(1 for t in e.trades if t["pnl"] > 0),
                 },
@@ -364,13 +365,28 @@ def needs_pro(strategy: Strategy, inst: dict | None) -> bool:
     from .plans import BASIC_REFS
     if inst and inst.get("fno"):
         return True
-    return any(r.t not in BASIC_REFS for c in [*strategy.entry, *strategy.exit] for r in (c.l, c.r))
+    return any(r.t not in BASIC_REFS for c in strategy.all_conds() for r in (c.l, c.r))
 
 
 def describe(strategy: Strategy) -> str:
-    join = " OR " if strategy.entryJoin == "any" else " AND "
-    lines = [f"Entry: {join.join(cond_text(c) for c in strategy.entry) or 'none'}",
-             f"Exit: {' OR '.join(cond_text(c) for c in strategy.exit) or 'stop loss / target only'}"]
-    r = strategy.risk
-    lines.append(f"Risk: {r.riskPct}% per trade, stop {r.sl}%, target {r.tgt}%, capital Rs {r.capital:,.0f}")
+    join = {"any": " OR ", "score": " + "}.get(strategy.entryJoin, " AND ")
+    both = strategy.side == "both"
+    go = "Short" if strategy.side == "short" else "Long"
+    lines = [f"{go} entry: {join.join(cond_text(c) for c in strategy.entry) or 'none'}",
+             f"{go} exit: {' OR '.join(cond_text(c) for c in strategy.exit) or 'stop / target only'}"]
+    if both:
+        lines += [f"Short entry: {join.join(cond_text(c) for c in strategy.shortEntry) or 'none'}",
+                  f"Short exit: {' OR '.join(cond_text(c) for c in strategy.shortExit) or 'stop / target only'}"]
+    if strategy.entryJoin == "score":
+        lines.append(f"Enter when the score reaches {strategy.minScore or 'every rule'}")
+    r, ss = strategy.risk, strategy.session
+    unit = {"pct": "%", "points": " pts", "atr": "x ATR", "swing": "-candle swing"}[r.stopType]
+    tunit = {"pct": "%", "points": " pts", "r": "R"}[r.tgtType]
+    size = (f"{r.riskPct}% risk per trade" if r.sizing == "risk"
+            else f"{r.perTrade or r.capital * r.maxAlloc / 100:,.0f} per trade x{r.leverage:g}")
+    lines.append(f"Risk: {size}, stop {r.sl:g}{unit}, target {r.tgt:g}{tunit}, capital {r.capital:,.0f}")
+    if strategy.tf != "1d" and (ss.start or ss.end or ss.squareoff or ss.maxTradesDay or ss.cooldown or ss.dailyLossPct):
+        lines.append(f"Session: entries {ss.start or 'open'}-{ss.end or 'close'}, square-off {ss.squareoff or 'none'}, "
+                     f"{ss.maxTradesDay or 'unlimited'} trades a day, cooldown {ss.cooldown} candles, "
+                     f"daily loss cap {ss.dailyLossPct:g}%")
     return "\n".join(lines)

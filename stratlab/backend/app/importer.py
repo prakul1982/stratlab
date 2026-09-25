@@ -14,7 +14,7 @@ from .models import Cond, Strategy
 
 FORMATS = {
     "stratlab": "StratLab export",
-    "json": "JSON",
+    "json": "a JSON strategy config",
     "pine": "TradingView Pine Script",
     "python": "Python",
     "mql": "MetaTrader (MQL)",

@@ -2,6 +2,22 @@
 
 ## September 2026
 
+### Test on a group of stocks
+- **Groups**: on the market page, pick a ready-made group (NIFTY 50, Bank NIFTY, 25 liquid F&O stocks, 20 US mega caps, 10 large coins) or build your own from search, up to 50. The same rules then run on every member at once.
+- One pot of capital, a limit on **positions open at once**, and a daily loss cap that counts the whole group, so a momentum or scanner strategy is tested the way it trades.
+- The verdict shows each member's trades, P&L, win rate and buy-and-hold, and the trades list names the symbol. Members the market no longer lists are skipped and named.
+- Walk-forward, the similar-stocks check and paper trading still work on one instrument at a time.
+
+### Intraday strategies
+- **Trade both ways**: separate long and short rules in one strategy; whichever fires first opens the trade.
+- **During the day**: an entry window, a square-off time, a cap on trades per day, a cooldown after each trade, and a daily loss cap. Indian intraday trades use MIS costs.
+- **New rule values**: the candle (open, high, low, body, upper and lower wick, range, ATR in points) and the trading day (previous close, day open/high/low, **day change %**). Any value can be taken **N candles ago**, **multiplied** ("lower wick > 1.5 × body"), or computed on a **higher timeframe** ("1-hour close above the 1-hour 7 EMA") using completed candles only.
+- **Conviction score**: combine entry rules as "enough of these", each with a weight, and set the score needed to enter.
+- **Stops and targets in other units**: points, ATR multiples or the recent swing low/high for stops; points or R-multiples for targets.
+- **Fixed capital per trade with leverage**, alongside sizing by risk.
+- The AI builder and Import understand all of it, including JSON configs from your own trading systems.
+- Live paper trading's unrealised P&L now accounts for short trades.
+
 ### Import, pins and small things that add up
 - **Import a strategy** you already have: a StratLab export (loads exactly), TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words. Drop a file or paste it; it becomes a notebook, and anything that couldn't be translated is listed there. Pine Script imports even when the AI is down.
 - **Pin** notebooks to keep them at the top of the sidebar and the list.

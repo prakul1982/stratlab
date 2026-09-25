@@ -58,7 +58,7 @@ def api(monkeypatch):
             out.append({"id": r["id"], "name": r["name"], "instrument_token": r["instrument_token"],
                         "updated_at": r["updated_at"], "kind": b.get("kind"), "question": b.get("question"),
                         "instrument": b.get("instrument"), "summary": b.get("summary"), "tf": b.get("tf"),
-                        "pinned": b.get("pinned")})
+                        "pinned": b.get("pinned"), "group": b.get("group")})
         return out
 
     monkeypatch.setattr(db, "save_strategy", save_strategy)

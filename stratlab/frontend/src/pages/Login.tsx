@@ -45,9 +45,9 @@ const CHECKS: { title: string; body: string; art: JSX.Element }[] = [
 const TOOLS: [string, string][] = [
   ["Plain-English rules", "Write the idea the way you'd say it. AI turns it into exact rules you can read, and tap any word to change it."],
   ["Real trading costs", "STT, stamp duty, GST, exchange fees, SEC and FINRA fees, UK stamp duty, forex spread and slippage, per market."],
-  ["Long or short", "Test buying or short selling, with stop loss, target, trailing stop and a time limit on each trade."],
+  ["Long, short or both", "Buy, short, or both ways in one strategy. Stops in %, points, ATR or swing lows; targets in % or R; trailing stops and time limits."],
+  ["Built for intraday", "Entry windows, square-off time, trades per day, cooldowns and a daily loss cap, with intraday (MIS) costs."],
   ["20+ indicators", "Moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian breakouts and volume."],
-  ["Does it travel?", "One tap runs the same rules on about 10 similar stocks or coins. An edge that works on one chart only is usually luck."],
   ["Compare experiments", "Every run is saved and numbered. Put two side by side to see exactly what changed and whether it helped."],
   ["Paper trading", "When a verdict holds up, run it live on real prices with fake money, and get alerts when it trades."],
   ["Walk-forward test", "Re-tune the settings on the past, trade them on the next stretch the tuning never saw, slide forward, repeat. The strictest test there is."],

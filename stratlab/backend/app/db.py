@@ -69,7 +69,7 @@ def list_notebook_rows(user_id: str) -> list[dict]:
     """Notebook list without the (large) experiment history."""
     return (sb().table("strategies")
             .select("id,name,instrument_token,updated_at,kind:body->>kind,question:body->>question,"
-                    "instrument:body->instrument,summary:body->summary,tf:body->>tf,pinned:body->>pinned")
+                    "instrument:body->instrument,summary:body->summary,tf:body->>tf,pinned:body->>pinned,group:body->group")
             .eq("user_id", user_id).order("updated_at", desc=True).execute().data)
 
 

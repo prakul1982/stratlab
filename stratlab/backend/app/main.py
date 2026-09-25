@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from kiteconnect import exceptions as kite_exc
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, basket, billing, db, importer
+from . import admin, basket, billing, db, importer, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
 from .alerts import notify
@@ -318,7 +318,7 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
         except ValueError as e:
             if fmt == "stratlab":
                 err(400, "bad_import", str(e))
-            fmt = "text"   # some other JSON: let the AI make sense of it
+            # a config from another system: the AI reads it as a strategy spec
     used, limit = ai_allowance(profile)
     try:
         out = write_strategy(importer.ai_prompt(fmt, req.text), pro=is_pro(profile))
@@ -392,6 +392,30 @@ def run_backtest(req: BacktestReq, profile=Depends(current_profile)):
     return ok(run_test(profile, req.strategy, req))
 
 
+def run_group_test(profile, strategy: Strategy, group: dict, req, version: int) -> tuple[dict, dict]:
+    """A portfolio experiment over the notebook's group of instruments."""
+    if not strategy.entry and not strategy.shortEntry:
+        err(400, "no_entry_rules", "Add at least one entry rule first.")
+    market = group.get("market") or "IN"
+    prov = markets.provider(market)
+    if prov is None or not prov.ready():
+        err(503, "data_offline", "Market data for this market is offline right now. Try again soon.")
+    limit = use_backtest(profile)
+    ids, missing = universes.resolve(markets, market, group.get("members") or [])
+    datasets, problems = universes.load_all(markets, strategy, ids, req.days)
+    problems = [f"{m}: not listed any more" for m in missing] + problems
+    if len(datasets) < 2:
+        err(400, "group_empty", "Fewer than two of this group's instruments had data for this period. "
+            + (" ".join(problems[:3]) if problems else ""))
+    for d in datasets:
+        check_features(profile, strategy, d["inst"])
+    max_days = min(d["max_days"] for d in datasets)
+    result = research.run_group(datasets, strategy, group, min(req.days, max_days), max_days)
+    db.add_usage(profile["id"], "backtest")
+    rec = research.record_group(result, strategy, req.label, version, db.now_iso(), group, datasets, problems)
+    return rec, {"backtests_used": backtests_used(profile), "backtests_limit": limit}
+
+
 def notebook_from_row(row: dict) -> dict:
     """Notebooks live in the strategies table. Rows saved before notebooks existed hold a bare strategy."""
     body = row.get("body") or {}
@@ -411,7 +435,7 @@ def get_notebook(profile, nid: str) -> dict:
 
 
 def save_notebook(profile, nb: dict) -> dict:
-    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned")}
+    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group")}
     body["kind"] = "notebook"
     body["tf"] = (nb.get("strategy") or {}).get("tf")
     inst = nb.get("instrument") or {}
@@ -442,8 +466,12 @@ def list_notebooks(profile=Depends(current_profile)):
         if r.get("kind") != "notebook":  # an older saved strategy
             r.update({"question": r.get("name"), "summary": research.summary([]),
                       "instrument": {"id": f"IN:{r['instrument_token']}"} if r.get("instrument_token") else None})
-        out.append({**{k: r.get(k) for k in ("id", "name", "question", "instrument", "summary", "updated_at", "tf")},
-                    "pinned": r.get("pinned") in (True, "true")})
+        row = {**{k: r.get(k) for k in ("id", "name", "question", "instrument", "summary", "updated_at", "tf")},
+               "pinned": r.get("pinned") in (True, "true")}
+        g = r.get("group")
+        if isinstance(g, dict) and g.get("members"):
+            row["instrument"] = {"id": f"GROUP:{g.get('id')}", "symbol": f"{g.get('name')} ({len(g['members'])})", "market": g.get("market"), "type": "GROUP"}
+        out.append(row)
     out.sort(key=lambda n: not n["pinned"])      # pinned first, most recent first within each group
     return out
 
@@ -477,7 +505,19 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
         nb["instrument"] = instrument_summary(req.instrument or None)
     if req.pinned is not None:
         nb["pinned"] = req.pinned
+    if req.instrument is not None or req.clearGroup:
+        nb.pop("group", None)                 # picking one instrument replaces a group
+    if req.group is not None:
+        g = req.group
+        nb["group"] = {"id": g.id, "name": g.name, "market": g.market.upper(), "maxOpen": min(g.maxOpen, len(g.members)),
+                       "members": [m.model_dump(exclude_none=True) for m in g.members]}
     return ok(save_notebook(profile, nb))
+
+
+@app.get("/groups")
+def list_groups(market: str = "IN", profile=Depends(current_profile)):
+    """Ready-made groups of instruments for a market."""
+    return universes.presets(market.upper())
 
 
 @app.post("/notebooks/{nid}/duplicate")
@@ -501,12 +541,17 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     """Test the notebook's current rules and keep the result as its next experiment."""
     nb = get_notebook(profile, nid)
     strategy = Strategy(**(nb.get("strategy") or {}))
-    if not req.bars and not req.instrument:
-        req.instrument = (nb.get("instrument") or {}).get("id")
-    out = run_test(profile, strategy, req)
     experiments = list(nb.get("experiments") or [])
     version = (experiments[-1]["v"] + 1) if experiments else 1
-    rec = research.record(out, strategy, req.label, version, db.now_iso())
+    group = nb.get("group")
+    if group and not req.bars:
+        rec, usage = run_group_test(profile, strategy, group, req, version)
+        out = {"usage": usage}
+    else:
+        if not req.bars and not req.instrument:
+            req.instrument = (nb.get("instrument") or {}).get("id")
+        out = run_test(profile, strategy, req)
+        rec = research.record(out, strategy, req.label, version, db.now_iso())
     experiments = (experiments + [rec])[-50:]
     nb["experiments"], nb["summary"] = experiments, research.summary(experiments)
     save_notebook(profile, nb)
@@ -521,6 +566,8 @@ def run_basket(nid: str, version: int, profile=Depends(current_profile)):
     exp = next((e for e in exps if e["v"] == version), None)
     if exp is None:
         err(404, "not_found", "Experiment not found.")
+    if (exp.get("instrument") or {}).get("type") == "GROUP":
+        err(400, "group_experiment", "This check runs on one instrument. Open the notebook on a single stock to use it.")
     strategy = Strategy(**exp["strategy"])
     inst = exp.get("instrument") or {}
     limit = use_backtest(profile)          # the whole check counts as one experiment
@@ -548,6 +595,8 @@ def run_walkforward(nid: str, version: int, profile=Depends(current_profile)):
     inst = exp.get("instrument") or {}
     if not inst.get("id") or inst.get("market") == "CSV":
         err(400, "no_walkforward", "Walk-forward needs market data StratLab can fetch again, so it isn't available for uploaded CSVs.")
+    if (exp.get("instrument") or {}).get("type") == "GROUP":
+        err(400, "group_experiment", "This check runs on one instrument. Open the notebook on a single stock to use it.")
     strategy = Strategy(**exp["strategy"])
     limit = use_backtest(profile)
     check_features(profile, strategy, inst)

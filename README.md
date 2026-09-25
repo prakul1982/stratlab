@@ -40,7 +40,9 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
   - **Does it work on similar stocks?** Runs the same rules on about 10 similar instruments from the same market. Real patterns travel; lucky charts don't.
 - **Real costs, in the market's own currency.** India: STT, exchange and SEBI fees, stamp duty, GST, plus a capital-gains estimate. US: SEC and FINRA fees. UK: stamp duty on share buys. Forex: the spread. Crypto: exchange fees. Slippage on every fill. You see what you'd actually keep.
 - **Lab notebooks.** Each idea is a notebook: a question, the rules written as sentences, numbered experiments you can compare side by side, and your own lab notes.
-- **A full toolkit.** Buy or sell short; stop loss, target, trailing stop and a time limit on each trade; 20+ indicators including moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian breakouts and volume.
+- **A full toolkit.** Buy, sell short, or trade both ways with separate long and short rules. Stops in %, points, ATR or the recent swing low/high; targets in %, points or R-multiples; trailing stops and time limits. 20+ indicators (moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian, volume) plus the candle itself (open, high, low, body, wicks, range) and the trading day (previous close, day open/high/low, day change %). Any value can be taken N candles ago, multiplied, or computed on a higher timeframe.
+- **Test on a whole group.** Run the rules on a ready-made group (NIFTY 50, Bank NIFTY, liquid F&O stocks, US mega caps, large coins) or your own list of up to 50, sharing one pot of capital with a limit on positions open at once. The verdict breaks the result down member by member.
+- **Built for intraday.** An entry window, a square-off time, a cap on trades per day, a cooldown after each trade and a daily loss cap. Entry rules can be combined as a weighted conviction score. Size by risk or by fixed capital per trade with leverage; Indian intraday trades use MIS costs.
 - **Any market.** Indian stocks, indices and F&O (Zerodha Kite), US, UK, European and Japanese stocks and ETFs and forex (Yahoo Finance), crypto (Coinbase), or upload a CSV of candles from anywhere. No extra keys needed.
 - **Research built in.** Company pages for India and the US: live price and chart, valuation and growth with context, sales and profit history, results against estimates, who owns it, insider trades, news, and an AI read whose trading ideas open as a notebook in one click. Plus AI theme maps, a daily market pulse, side-by-side comparisons and a watchlist.
 - **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
@@ -86,7 +88,10 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Rewrite the idea from scratch | **Describe the idea again** at the top of a notebook |
 | Tweak a rule | Tap any highlighted word (marked ▾) in **The rules**: indicator, length, condition or number |
 | Run a test | **Run experiment** in a notebook (or press Ctrl/⌘ + Enter); each run is saved and numbered so you can compare |
-| Short instead of buy | Tap **Buy** at the start of the rules and pick **Sell short** |
+| Short instead of buy, or trade both ways | Tap **Buy** at the start of the rules and pick **Sell short** or **Trade both ways** |
+| Trade intraday | Pick 5- or 15-minute or 1-hour candles; a **During the day** line appears for the entry window, square-off, trades a day, cooldown and daily loss cap |
+| Use the candle's shape, an earlier candle or a higher timeframe | Tap a value in a rule → **More**: candles ago, multiply by, timeframe |
+| Score your entry conditions | Tap **all of these** and pick **enough of these**: each rule gets a weight and the trade needs a minimum score |
 | Trail the stop or cap how long a trade lasts | The **Trail the stop by … and close any trade after …** line in **The rules** |
 | Compare two runs | **Compare experiments →** in a notebook, or **Compare with the previous run** on a verdict |
 | Check a tuned idea without hindsight | **Walk-forward test** on a verdict: re-tunes on the past, trades the next unseen stretch, and repeats |

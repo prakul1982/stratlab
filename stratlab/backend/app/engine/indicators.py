@@ -9,9 +9,14 @@ DEFAULTS = {
     "vwap": (20, None), "supertrend": (10, 3),
     "adx": (14, None), "stoch_k": (14, 3), "atr_pct": (14, None),
     "dc_upper": (20, None), "dc_lower": (20, None), "volume": (None, None), "vol_sma": (20, None),
+    "atr": (14, None),
 }
+# values that live on the candle or the trading day rather than being an indicator with a length
+CANDLE = {"open", "high", "low", "body", "upper_wick", "lower_wick", "range"}
+DAY = {"prev_close", "day_open", "day_high", "day_low", "day_chg"}
 # drawn under the price chart rather than on it
-OSCILLATORS = {"rsi", "macd", "macd_signal", "macd_hist", "adx", "stoch_k", "atr_pct", "volume", "vol_sma"}
+OSCILLATORS = {"rsi", "macd", "macd_signal", "macd_hist", "adx", "stoch_k", "atr_pct", "volume", "vol_sma",
+               "body", "upper_wick", "lower_wick", "range", "atr", "day_chg"}
 
 
 def params(ref) -> tuple[int, float]:
@@ -100,6 +105,57 @@ def vwap(df: pd.DataFrame, n: int, intraday: bool) -> pd.Series:
     return (tp * vol).rolling(n).sum() / vol.rolling(n).sum()
 
 
+def day_values(df: pd.DataFrame, t: str, intraday: bool) -> pd.Series:
+    """Values of the trading day each candle belongs to. The day's high and low are so far, not the whole day."""
+    if not intraday:
+        prev = df.c.shift(1)
+        day = {"prev_close": prev, "day_open": df.o, "day_high": df.h, "day_low": df.l}
+    else:
+        date = df.t.dt.date
+        closes = df.groupby(date).c.last()
+        prev = date.map(closes.shift(1))
+        day = {"prev_close": prev, "day_open": df.groupby(date).o.transform("first"),
+               "day_high": df.groupby(date).h.cummax(), "day_low": df.groupby(date).l.cummin()}
+    if t == "day_chg":
+        return (df.c / prev - 1) * 100
+    return day[t].astype(float)
+
+
+def higher_tf(df: pd.DataFrame, tf: str) -> tuple[pd.DataFrame, np.ndarray]:
+    """Candles of a higher timeframe built from these ones, and for each original candle the index of the
+    last higher-timeframe candle that had closed by then (-1 if none), so nothing peeks at the future."""
+    if tf == "1d":
+        key = df.t.dt.normalize()
+    else:
+        step = pd.Timedelta(minutes={"15m": 15, "1h": 60}[tf])
+        day = df.t.dt.normalize()
+        first = df.groupby(day).t.transform("min")          # buckets start at each session's open (09:15 in India)
+        key = first + ((df.t - first) // step) * step
+    codes, uniq = pd.factorize(key, sort=True)
+    g = df.groupby(codes, sort=True)
+    hdf = pd.DataFrame({"t": g.t.first(), "o": g.o.first(), "h": g.h.max(), "l": g.l.min(),
+                        "c": g.c.last(), "v": g.v.sum()}).reset_index(drop=True)
+    last_of_bucket = np.append(codes[1:] != codes[:-1], False)   # the final candle's bucket may still be open
+    return hdf, np.where(last_of_bucket, codes, codes - 1)
+
+
+def compute_full(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
+    """compute(), plus the higher timeframe, "candles ago" and multiplier options a rule can add."""
+    tf = getattr(ref, "tf", None)
+    if tf and len(df):
+        hdf, idx = higher_tf(df, tf)
+        base = ref.model_copy(update={"tf": None, "ago": None, "k": None})
+        vals = compute(base, hdf, intraday=tf != "1d").to_numpy(dtype=float)
+        out = pd.Series(np.where(idx >= 0, vals[np.clip(idx, 0, None)], np.nan), index=df.index)
+    else:
+        out = compute(ref, df, intraday)
+    if getattr(ref, "ago", None):
+        out = out.shift(int(ref.ago))
+    if getattr(ref, "k", None) and ref.t != "num":
+        out = out * float(ref.k)
+    return out
+
+
 def compute(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
     t = ref.t
     c = df.c
@@ -136,14 +192,51 @@ def compute(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
         return df.h.rolling(p).max().shift(1)
     if t == "dc_lower":
         return df.l.rolling(p).min().shift(1)
+    if t == "open":
+        return df.o
+    if t == "high":
+        return df.h
+    if t == "low":
+        return df.l
+    if t == "body":
+        return (df.c - df.o).abs()
+    if t == "upper_wick":
+        return df.h - np.maximum(df.o, df.c)
+    if t == "lower_wick":
+        return np.minimum(df.o, df.c) - df.l
+    if t == "range":
+        return df.h - df.l
+    if t == "atr":                 # average true range in price points
+        return _wilder(true_range(df), p)
+    if t in DAY:
+        return day_values(df, t, intraday)
     if t in ("volume", "vol_sma"):
         vol = df.v.where(df.v > 0)        # indices have no volume: leave it blank rather than zero
         return vol if t == "volume" else vol.rolling(p).mean()
     raise ValueError(f"Unknown indicator {t}")
 
 
+NAMES = {"open": "Open", "high": "High", "low": "Low", "body": "Candle body", "upper_wick": "Upper wick",
+         "lower_wick": "Lower wick", "range": "Candle range", "prev_close": "Previous close", "day_open": "Day open",
+         "day_high": "Day high", "day_low": "Day low", "day_chg": "Day change %"}
+TF_WORD = {"15m": "15-min", "1h": "1-hour", "1d": "daily"}
+
+
 def ref_name(ref) -> str:
+    name = _base_name(ref)
+    if getattr(ref, "tf", None):
+        name += f" ({TF_WORD[ref.tf]})"
+    if getattr(ref, "ago", None):
+        name += f" {ref.ago} candle{'s' if ref.ago != 1 else ''} ago"
+    if getattr(ref, "k", None) and ref.t != "num":
+        name = f"{ref.k:g} × {name}"
+    return name
+
+
+def _base_name(ref) -> str:
     t = ref.t
+    if t in NAMES:
+        return NAMES[t]
     if t == "price":
         return "Price"
     if t == "num":
@@ -159,4 +252,4 @@ def ref_name(ref) -> str:
     if t == "supertrend":
         return f"Supertrend {p},{m:g}"
     return {"adx": f"ADX {p}", "stoch_k": f"Stochastic {p}", "atr_pct": f"ATR% {p}", "dc_upper": f"Donchian high {p}",
-            "dc_lower": f"Donchian low {p}", "volume": "Volume", "vol_sma": f"Volume SMA {p}"}[t]
+            "dc_lower": f"Donchian low {p}", "volume": "Volume", "vol_sma": f"Volume SMA {p}", "atr": f"ATR {p}"}[t]

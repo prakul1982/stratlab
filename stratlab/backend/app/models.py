@@ -7,7 +7,11 @@ RefType = Literal[
     "bb_upper", "bb_mid", "bb_lower",
     "vwap", "supertrend",
     "adx", "stoch_k", "atr_pct", "dc_upper", "dc_lower", "volume", "vol_sma",
+    # the candle itself, and the trading day it belongs to
+    "open", "high", "low", "body", "upper_wick", "lower_wick", "range", "atr",
+    "prev_close", "day_open", "day_high", "day_low", "day_chg",
 ]
+HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
 
 
 class Ref(BaseModel):
@@ -15,6 +19,9 @@ class Ref(BaseModel):
     p: Optional[float] = Field(None, ge=1, le=500)   # period (MACD: fast length)
     m: Optional[float] = Field(None, gt=0, le=500)   # MACD slow length, BB std-devs, Supertrend multiplier
     v: Optional[float] = None                         # value when t == "num"
+    ago: Optional[int] = Field(None, ge=0, le=100)   # the value this many candles ago (0 or empty = this candle)
+    k: Optional[float] = Field(None, gt=0, le=100)   # multiply the value, e.g. 1.5 x candle body
+    tf: Optional[Literal["15m", "1h", "1d"]] = None   # compute on a higher timeframe (completed candles only)
 
     @model_validator(mode="after")
     def _num_needs_value(self):
@@ -27,29 +34,62 @@ class Cond(BaseModel):
     l: Ref
     op: Literal["xa", "xb", "gt", "lt"]
     r: Ref
+    w: Optional[float] = Field(None, gt=0, le=10)    # weight when entry rules are scored
 
 
 class Risk(BaseModel):
     capital: float = Field(500000, gt=0, le=1e10)
     riskPct: float = Field(1, gt=0, le=100)
     maxAlloc: float = Field(100, gt=0, le=100)
-    sl: float = Field(2, ge=0, lt=100)
-    tgt: float = Field(0, ge=0, le=1000)
+    sl: float = Field(2, ge=0, le=100000)
+    tgt: float = Field(0, ge=0, le=100000)
     brokerage: float = Field(20, ge=0)
     slippage: float = Field(0.05, ge=0, le=5)
     trail: float = Field(0, ge=0, lt=100)       # trailing stop, % below the best price since entry (0 = off)
     maxBars: int = Field(0, ge=0, le=5000)      # close the trade after this many candles (0 = off)
+    # what `sl` means: % of price, price points, a multiple of ATR(14), or the swing low/high of the last N candles
+    stopType: Literal["pct", "points", "atr", "swing"] = "pct"
+    # what `tgt` means: % of price, price points, or a multiple of the stop distance (R)
+    tgtType: Literal["pct", "points", "r"] = "pct"
+    # size by risk (riskPct of capital lost at the stop) or a fixed capital per trade, times leverage
+    sizing: Literal["risk", "capital"] = "risk"
+    perTrade: float = Field(0, ge=0, le=1e10)   # capital per trade when sizing == "capital" (0 = maxAlloc % of capital)
+    leverage: float = Field(1, ge=1, le=20)
+
+    @model_validator(mode="after")
+    def _units(self):
+        if self.stopType == "pct" and self.sl >= 100:
+            raise ValueError("A stop loss in percent must be under 100%.")
+        return self
+
+
+class Session(BaseModel):
+    """Intraday rules. Times are the exchange's local time and refer to when a candle closes."""
+    start: str = Field("", pattern=r"^$|" + HHMM)        # no new trades before this time
+    end: str = Field("", pattern=r"^$|" + HHMM)          # no new trades after this time
+    squareoff: str = Field("", pattern=r"^$|" + HHMM)    # close any open trade at this time
+    maxTradesDay: int = Field(0, ge=0, le=100)           # 0 = no limit
+    cooldown: int = Field(0, ge=0, le=500)               # candles to wait after a trade closes
+    dailyLossPct: float = Field(0, ge=0, le=100)         # stop for the day after losing this % of capital
 
 
 class Strategy(BaseModel):
     name: str = Field("Untitled strategy", max_length=80)
     tf: Literal["1d", "1h", "15m", "5m"] = "1d"
     text: str = Field("", max_length=4000)
-    entry: list[Cond] = Field(default_factory=list, max_length=10)
-    exit: list[Cond] = Field(default_factory=list, max_length=10)
-    entryJoin: Literal["all", "any"] = "all"
-    side: Literal["long", "short"] = "long"     # short: sell first, buy back later
+    entry: list[Cond] = Field(default_factory=list, max_length=12)
+    exit: list[Cond] = Field(default_factory=list, max_length=12)
+    entryJoin: Literal["all", "any", "score"] = "all"
+    minScore: float = Field(0, ge=0, le=120)             # with entryJoin == "score" (0 = every rule)
+    side: Literal["long", "short", "both"] = "long"      # both: `entry`/`exit` go long, `shortEntry`/`shortExit` go short
+    shortEntry: list[Cond] = Field(default_factory=list, max_length=12)
+    shortExit: list[Cond] = Field(default_factory=list, max_length=12)
+    session: Session = Field(default_factory=Session)
+    product: Literal["auto", "delivery", "intraday"] = "auto"   # India cash: intraday (MIS) costs; auto = intraday when squaring off
     risk: Risk = Field(default_factory=Risk)
+
+    def all_conds(self) -> list[Cond]:
+        return [*self.entry, *self.exit, *self.shortEntry, *self.shortExit]
 
 
 class Bar(BaseModel):
@@ -100,6 +140,20 @@ class LiveStartReq(BaseModel):
         return self
 
 
+class GroupMember(BaseModel):
+    id: Optional[str] = Field(None, max_length=60)
+    symbol: str = Field(..., min_length=1, max_length=40)
+
+
+class GroupReq(BaseModel):
+    """Test on a group of instruments together (one market) instead of one."""
+    id: str = Field("custom", max_length=40)
+    name: str = Field("My group", min_length=1, max_length=60)
+    market: str = Field(..., max_length=10)
+    members: list[GroupMember] = Field(..., min_length=2, max_length=50)
+    maxOpen: int = Field(10, ge=1, le=50)       # positions open at once, across the group
+
+
 class NotebookReq(BaseModel):
     name: Optional[str] = Field(None, max_length=80)
     question: Optional[str] = Field(None, max_length=300)
@@ -107,6 +161,8 @@ class NotebookReq(BaseModel):
     strategy: Optional[Strategy] = None
     instrument: Optional[str] = Field(None, max_length=60)
     pinned: Optional[bool] = None
+    group: Optional[GroupReq] = None
+    clearGroup: bool = False
 
 
 class ImportReq(BaseModel):

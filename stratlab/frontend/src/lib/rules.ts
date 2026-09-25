@@ -1,6 +1,6 @@
 import type { Cond, Op, Ref, RefType, Risk, Strategy, Tf } from "./types";
 
-export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boolean }[] = [
+export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boolean; group?: "candle" | "day" }[] = [
   { t: "price", name: "Price", friendly: "the price" },
   { t: "sma", name: "SMA", friendly: "average price" },
   { t: "ema", name: "EMA", friendly: "fast average" },
@@ -20,12 +20,25 @@ export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boo
   { t: "dc_lower", name: "Donchian low (breakdown)", friendly: "recent low", pro: true },
   { t: "volume", name: "Volume", friendly: "volume", pro: true },
   { t: "vol_sma", name: "Volume average", friendly: "average volume", pro: true },
+  { t: "atr", name: "ATR (points)", friendly: "average range", pro: true, group: "candle" },
+  { t: "open", name: "Open", friendly: "the open", pro: true, group: "candle" },
+  { t: "high", name: "High", friendly: "the high", pro: true, group: "candle" },
+  { t: "low", name: "Low", friendly: "the low", pro: true, group: "candle" },
+  { t: "body", name: "Candle body", friendly: "the candle body", pro: true, group: "candle" },
+  { t: "upper_wick", name: "Upper wick", friendly: "the upper wick", pro: true, group: "candle" },
+  { t: "lower_wick", name: "Lower wick", friendly: "the lower wick", pro: true, group: "candle" },
+  { t: "range", name: "Candle range (high − low)", friendly: "the candle range", pro: true, group: "candle" },
+  { t: "day_chg", name: "Day change %", friendly: "the day's change", pro: true, group: "day" },
+  { t: "prev_close", name: "Previous day's close", friendly: "yesterday's close", pro: true, group: "day" },
+  { t: "day_open", name: "Day open", friendly: "today's open", pro: true, group: "day" },
+  { t: "day_high", name: "Day high (so far)", friendly: "today's high", pro: true, group: "day" },
+  { t: "day_low", name: "Day low (so far)", friendly: "today's low", pro: true, group: "day" },
 ];
 export const PRO_TYPES = new Set(INDICATORS.filter((i) => i.pro).map((i) => i.t));
 export const DEFAULTS: Partial<Record<RefType, [number, number?]>> = {
   sma: [20], ema: [20], rsi: [14], macd: [12, 26], macd_signal: [12, 26], macd_hist: [12, 26],
   bb_upper: [20, 2], bb_mid: [20, 2], bb_lower: [20, 2], vwap: [20], supertrend: [10, 3],
-  adx: [14], stoch_k: [14, 3], atr_pct: [14], dc_upper: [20], dc_lower: [20], vol_sma: [20],
+  adx: [14], stoch_k: [14, 3], atr_pct: [14], dc_upper: [20], dc_lower: [20], vol_sma: [20], atr: [14],
 };
 export const OPS: { op: Op; say: string; short: string }[] = [
   { op: "xa", say: "crosses above", short: "crosses above" },
@@ -43,7 +56,24 @@ export function mkRef(t: RefType): Ref {
   return d[1] != null ? { t, p: d[0], m: d[1] } : { t, p: d[0] };
 }
 
+const PLAIN: Partial<Record<RefType, string>> = {
+  open: "Open", high: "High", low: "Low", body: "Candle body", upper_wick: "Upper wick", lower_wick: "Lower wick",
+  range: "Candle range", prev_close: "Prev close", day_open: "Day open", day_high: "Day high", day_low: "Day low", day_chg: "Day change %",
+};
+const TF_WORD: Record<string, string> = { "15m": "15m", "1h": "1h", "1d": "daily" };
+
+/** A rule value's name with its modifiers: "1.5 × Candle body", "EMA 7 (1h)", "Price 1 ago". */
 export function refName(r: Ref): string {
+  let name = baseName(r);
+  if (r.tf) name += ` (${TF_WORD[r.tf]})`;
+  if (r.ago) name += ` ${r.ago} candle${r.ago === 1 ? "" : "s"} ago`;
+  if (r.k && r.t !== "num") name = `${r.k} × ${name}`;
+  return name;
+}
+
+function baseName(r: Ref): string {
+  if (PLAIN[r.t]) return PLAIN[r.t]!;
+  if (r.t === "atr") return `ATR ${r.p ?? 14}`;
   const d = DEFAULTS[r.t] ?? [];
   const p = r.p ?? d[0], m = r.m ?? d[1];
   switch (r.t) {
@@ -65,12 +95,15 @@ export function refName(r: Ref): string {
   }
 }
 
-export const usesPro = (s: Strategy) => [...s.entry, ...s.exit].some((c) => PRO_TYPES.has(c.l.t) || PRO_TYPES.has(c.r.t));
+export const allConds = (s: Strategy) => [...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])];
+export const usesPro = (s: Strategy) => allConds(s).some((c) => PRO_TYPES.has(c.l.t) || PRO_TYPES.has(c.r.t));
 
+export const NO_SESSION = { start: "", end: "", squareoff: "", maxTradesDay: 0, cooldown: 0, dailyLossPct: 0 };
 export const DEFAULT_RISK: Risk = { capital: 500000, riskPct: 1, maxAlloc: 100, sl: 2, tgt: 6, brokerage: 20, slippage: 0.05 };
 
 export function blankStrategy(name = "Untitled notebook"): Strategy {
-  return { name, tf: "1d", text: "", entry: [], exit: [], entryJoin: "all", risk: { ...DEFAULT_RISK } };
+  return { name, tf: "1d", text: "", entry: [], exit: [], entryJoin: "all", risk: { ...DEFAULT_RISK }, side: "long", shortEntry: [], shortExit: [],
+    session: { ...NO_SESSION }, product: "auto", minScore: 0 };
 }
 
 /** Capital and brokerage that make sense in each currency. */

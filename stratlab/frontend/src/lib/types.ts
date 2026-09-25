@@ -1,19 +1,26 @@
 export type RefType =
   | "price" | "num" | "sma" | "ema" | "rsi" | "macd" | "macd_signal" | "macd_hist"
   | "bb_upper" | "bb_mid" | "bb_lower" | "vwap" | "supertrend"
-  | "adx" | "stoch_k" | "atr_pct" | "dc_upper" | "dc_lower" | "volume" | "vol_sma";
+  | "adx" | "stoch_k" | "atr_pct" | "dc_upper" | "dc_lower" | "volume" | "vol_sma"
+  | "open" | "high" | "low" | "body" | "upper_wick" | "lower_wick" | "range" | "atr"
+  | "prev_close" | "day_open" | "day_high" | "day_low" | "day_chg";
 export type Op = "xa" | "xb" | "gt" | "lt";
 export type Tf = "1d" | "1h" | "15m" | "5m";
+export type HigherTf = "15m" | "1h" | "1d";
 
-export interface Ref { t: RefType; p?: number | null; m?: number | null; v?: number | null }
-export interface Cond { l: Ref; op: Op; r: Ref }
+export interface Ref { t: RefType; p?: number | null; m?: number | null; v?: number | null; ago?: number | null; k?: number | null; tf?: HigherTf | null }
+export interface Cond { l: Ref; op: Op; r: Ref; w?: number | null }
 export interface Risk {
   capital: number; riskPct: number; maxAlloc: number; sl: number; tgt: number; brokerage: number; slippage: number;
   trail?: number; maxBars?: number;
+  stopType?: "pct" | "points" | "atr" | "swing"; tgtType?: "pct" | "points" | "r";
+  sizing?: "risk" | "capital"; perTrade?: number; leverage?: number;
 }
+export interface Session { start: string; end: string; squareoff: string; maxTradesDay: number; cooldown: number; dailyLossPct: number }
 export interface Strategy {
-  name: string; tf: Tf; text: string; entry: Cond[]; exit: Cond[]; entryJoin: "all" | "any"; risk: Risk;
-  side?: "long" | "short";
+  name: string; tf: Tf; text: string; entry: Cond[]; exit: Cond[]; entryJoin: "all" | "any" | "score"; risk: Risk;
+  side?: "long" | "short" | "both"; minScore?: number; shortEntry?: Cond[]; shortExit?: Cond[];
+  session?: Session; product?: "auto" | "delivery" | "intraday";
 }
 
 export interface Instrument {
@@ -49,7 +56,13 @@ export interface Costs {
 }
 export interface Trade {
   entry_t: string; exit_t: string | null; entry: number; exit: number; qty: number; pnl: number;
-  costs?: number; ret: number; why: string;
+  costs?: number; ret: number; why: string; side?: "long" | "short"; symbol?: string;
+}
+export interface GroupMember { id?: string; symbol: string }
+export interface Group { id: string; name: string; market: string; maxOpen: number; members: GroupMember[] }
+export interface GroupResult {
+  name: string; max_open: number; most_open: number; skipped: string[];
+  members: { symbol: string; id: string; trades: number; pnl: number; win: number | null; buy_hold: number | null }[];
 }
 export interface Experiment {
   v: number; label: string; created_at: string; strategy: Strategy; instrument: Instrument; days: number; tf: Tf;
@@ -58,6 +71,7 @@ export interface Experiment {
     overlays: Record<string, (number | null)[]>; split: number | null };
   trades: Trade[];
   basket?: Basket;
+  group?: GroupResult;
   walkforward?: WalkForward;
 }
 export interface WFWindow {
@@ -82,6 +96,7 @@ export interface NotebookItem {
 }
 export interface Notebook extends NotebookItem {
   kind: "notebook"; notes: string; strategy: Strategy; instrument: Instrument | null; experiments: Experiment[];
+  group?: Group | null;
 }
 
 export interface PlanInfo {

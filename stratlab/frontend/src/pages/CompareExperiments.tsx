@@ -16,7 +16,7 @@ function changes(a: Experiment, b: Experiment): string[] {
   if ((sa.side ?? "long") !== (sb.side ?? "long")) out.push(`Direction: ${sa.side === "short" ? "short" : "long"} → ${sb.side === "short" ? "short" : "long"}`);
   if (sa.tf !== sb.tf) out.push(`Candles: ${TF_NAME[sa.tf]} → ${TF_NAME[sb.tf]}`);
   if (a.days !== b.days) out.push(`Test period: ${a.days} → ${b.days} days`);
-  const rules = (s: Strategy, k: "entry" | "exit") => s[k].map(condText).join(" · ") || "none";
+  const rules = (s: Strategy, k: "entry" | "exit") => (s[k] ?? []).map(condText).join(" · ") || "none";
   if (rules(sa, "entry") !== rules(sb, "entry") || sa.entryJoin !== sb.entryJoin) out.push(`Entry: ${rules(sa, "entry")} → ${rules(sb, "entry")}`);
   if (rules(sa, "exit") !== rules(sb, "exit")) out.push(`Exit: ${rules(sa, "exit")} → ${rules(sb, "exit")}`);
   const risk: [keyof Strategy["risk"], string, string][] = [["sl", "Stop loss", "%"], ["tgt", "Target", "%"], ["trail", "Trailing stop", "%"],
@@ -24,6 +24,19 @@ function changes(a: Experiment, b: Experiment): string[] {
   for (const [k, label, unit] of risk) {
     const x = sa.risk[k] ?? 0, y = sb.risk[k] ?? 0;
     if (x !== y) out.push(`${label}: ${x || "off"}${x ? unit : ""} → ${y || "off"}${y ? unit : ""}`);
+  }
+  const say = (v: unknown) => (v === "" || v == null || v === 0 ? "off" : String(v));
+  if ((sa.risk.stopType ?? "pct") !== (sb.risk.stopType ?? "pct")) out.push(`Stop measured in: ${sa.risk.stopType ?? "pct"} → ${sb.risk.stopType ?? "pct"}`);
+  if ((sa.risk.tgtType ?? "pct") !== (sb.risk.tgtType ?? "pct")) out.push(`Target measured in: ${sa.risk.tgtType ?? "pct"} → ${sb.risk.tgtType ?? "pct"}`);
+  if ((sa.risk.sizing ?? "risk") !== (sb.risk.sizing ?? "risk") || (sa.risk.perTrade ?? 0) !== (sb.risk.perTrade ?? 0) || (sa.risk.leverage ?? 1) !== (sb.risk.leverage ?? 1))
+    out.push(`Position size: ${sa.risk.sizing ?? "risk"} → ${sb.risk.sizing ?? "risk"}`);
+  if (rules(sa, "shortEntry" as "entry") !== rules(sb, "shortEntry" as "entry")) out.push(`Short entry: ${(sa.shortEntry ?? []).map(condText).join(" · ") || "none"} → ${(sb.shortEntry ?? []).map(condText).join(" · ") || "none"}`);
+  if (sa.entryJoin !== sb.entryJoin || (sa.minScore ?? 0) !== (sb.minScore ?? 0)) out.push(`Rules combine: ${sa.entryJoin}${sa.entryJoin === "score" ? ` ≥ ${sa.minScore}` : ""} → ${sb.entryJoin}${sb.entryJoin === "score" ? ` ≥ ${sb.minScore}` : ""}`);
+  const labels: [keyof NonNullable<Strategy["session"]>, string][] = [["start", "First entry"], ["end", "Last entry"], ["squareoff", "Square-off"],
+    ["maxTradesDay", "Trades a day"], ["cooldown", "Cooldown (candles)"], ["dailyLossPct", "Daily loss cap %"]];
+  for (const [k, label] of labels) {
+    const x = sa.session?.[k] ?? "", y = sb.session?.[k] ?? "";
+    if (say(x) !== say(y)) out.push(`${label}: ${say(x)} → ${say(y)}`);
   }
   return out;
 }
