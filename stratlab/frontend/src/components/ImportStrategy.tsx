@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { IMPORTED } from "../pages/OptionsPage";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -37,7 +37,8 @@ const HELP_TEXT = "Bring in a strategy you already have. A StratLab export loads
 export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Promise<void> | void; market?: string }) {
   const { refreshMe, fail, notify } = useApp();
   const nav = useNavigate();
-  const [text, setText] = useState("");
+  const loc = useLocation();
+  const [text, setText] = useState(() => ((loc.state as { importText?: string } | null)?.importText ?? "").slice(0, 20000));
   const [file, setFile] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);

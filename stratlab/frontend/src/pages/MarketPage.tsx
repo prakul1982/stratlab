@@ -43,6 +43,11 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
   const [maxOpen, setMaxOpen] = useState(current?.maxOpen ?? 10);
   const [busy, setBusy] = useState(false);
   useEffect(() => { api<Preset[]>(`/groups?market=${market.id}`).then(setPresets).catch(() => setPresets([])); }, [market.id]);
+  useEffect(() => {
+    if (location.hash !== "#group") return;
+    const t = window.setTimeout(() => document.getElementById("group-h")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+    return () => window.clearTimeout(t);
+  }, [presets]);
   const preset = presets.find((p) => p.id === pick);
   const members: GroupMember[] = pick === "custom" ? custom : preset ? preset.symbols.map((symbol) => ({ symbol })) : [];
   const noun = market.id === "CRYPTO" ? "coins" : market.id === "FX" ? "pairs" : "stocks";

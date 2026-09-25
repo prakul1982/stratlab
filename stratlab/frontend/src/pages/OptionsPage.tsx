@@ -211,7 +211,7 @@ export function OptionsPage() {
   };
 
   const [sigBusy, setSigBusy] = useState(false);
-  const [ruleMode, setRuleMode] = useState(!!s.signal);
+  const [ruleMode, setRuleMode] = useState(() => !!s.signal || new URLSearchParams(location.search).get("enter") === "rules");
   const pickRules = async (id: string) => {
     if (!id) return;
     setSigBusy(true);
@@ -230,6 +230,11 @@ export function OptionsPage() {
       } else patch({ signal, name: `${s.underlying} options on ${nb.name}` });
     } catch (e) { fail(e); } finally { setSigBusy(false); }
   };
+  useEffect(() => {   // "Trade it with options" on a verdict hands over its notebook
+    const id = new URLSearchParams(location.search).get("nb");
+    if (id && id !== s.signal?.notebook) pickRules(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const sigTf = s.signal ? ({ "5m": "5-minute", "15m": "15-minute", "1h": "hourly" } as Record<string, string>)[s.signal.rules.tf] : "";
   const r = s.risk, t = s.timing, rc = s.recenter, z = s.sizing, c = s.costs;
   const setRisk = (p: Partial<OptionStrategy["risk"]>) => patch({ risk: { ...r, ...p } });
