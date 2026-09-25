@@ -90,7 +90,7 @@ function Payoff({ p }: { p: OptPreview }) {
   const f = useMemo(() => payoff(p), [p]);
   return (
     <div className="stack" style={{ gap: 10 }}>
-      <div className="opt-stats two">
+      <div className="opt-stats">
         <div><span className="eyebrow">{f.credit >= 0 ? "Premium collected" : "Premium paid"}</span><b className="mono">{inr(Math.abs(f.credit))}</b></div>
         <div><span className="eyebrow">Most it can make</span><b className="mono pos">{f.maxProfit == null ? "Unlimited" : inr(f.maxProfit)}</b></div>
         <div><span className="eyebrow">Most it can lose</span><b className="mono neg">{f.maxLoss == null ? "Unlimited" : inr(f.maxLoss)}</b></div>
@@ -248,24 +248,20 @@ export function OptionsPage() {
   const setRc = (p: Partial<OptionStrategy["recenter"]>) => patch({ recenter: { ...rc, ...p } });
   const setZ = (p: Partial<OptionStrategy["sizing"]>) => patch({ sizing: { ...z, ...p } });
   const setC = (p: Partial<OptionStrategy["costs"]>) => patch({ costs: { ...c, ...p } });
-  const lossWord = () => [["none", "None"], ["amount", "₹ amount"], ["credit_pct", hasShort ? "% of premium" : "% of cost"]] as [OptionStrategy["risk"]["stopType"], string][];
+  const lossOpts: [OptionStrategy["risk"]["stopType"], string][] = [["none", "Off"], ["amount", "₹"], ["credit_pct", "% of premium"]];
+  const MAIN = ["short_straddle", "short_strangle", "iron_fly", "iron_condor"];
+  const inMain = MAIN.includes(s.structure);
+  const legsText = s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + "× " : ""}${l.offset === 0 ? "ATM" : `${Math.abs(l.offset)}${s.offsetUnit === "points" ? " pts" : ""} ${l.offset > 0 ? "OTM" : "ITM"}`} ${l.opt}`).join(" · ");
 
   return (
-    <div className="stack" style={{ gap: 24 }}>
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">NSE · BSE · MCX</span>
-        <h1 className="serif row" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", gap: 0 }}>Options<Info>{HELP.options}</Info></h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: "72ch" }}>
-          Build a straddle, strangle, iron fly, condor or any structure up to eight legs, and paper trade it on <b>live option prices</b>. Every fill is the real bid or ask at that moment. Nothing is modelled.
-        </p>
+    <div className="stack opt-page" style={{ gap: 20 }}>
+      <div className="stack" style={{ gap: 6 }}>
+        <h1 className="serif row" style={{ fontSize: "clamp(30px, 4vw, 42px)", fontWeight: 400, letterSpacing: "-0.02em", gap: 0 }}>Options<Info>{HELP.options}</Info></h1>
+        <p className="muted" style={{ maxWidth: "62ch" }}>Paper trade option structures on live NSE, BSE and MCX prices. Fills use the real bid and ask.</p>
+        <p className="small muted row wrap" style={{ gap: 6 }}><span className="pill">Live paper trading</span><span className="pill soon-pill">Backtesting coming soon</span><Info>{HELP.optBacktest}</Info></p>
       </div>
 
-      <div className="row wrap" style={{ gap: 12 }}>
-        <div className="mode-card on"><b>Live paper trading</b><span className="small muted">Runs every market day on live quotes</span></div>
-        <div className="mode-card soon" aria-disabled="true"><b>Backtesting <span className="pill">Coming soon</span></b><span className="small muted">{HELP.optBacktest}</span></div>
-      </div>
-
-      {offline && <div className="banner">{offline} You can still build and save a structure; pricing and starting need live quotes.</div>}
+      {offline && <div className="banner">{offline}</div>}
       {notes.length > 0 && (
         <div className="banner stack" style={{ gap: 6 }}>
           <b>Imported. Check these before you start:</b>
@@ -274,165 +270,162 @@ export function OptionsPage() {
         </div>
       )}
 
-      <div className="nb-grid" style={{ gap: 16 }}>
-        <div className="stack" style={{ gap: 16, minWidth: 0 }}>
-          <section className="card stack" style={{ gap: 14 }} aria-labelledby="o-und">
-            <h2 id="o-und" className="h2">1. What to trade</h2>
-            <div className="row wrap" style={{ gap: 8 }}>
-              {popular.map((u) => (
-                <button key={u.exchange + u.name} className={`btn sm ${u.exchange === s.exchange && u.name === s.underlying ? "" : "quiet"}`}
-                  aria-pressed={u.exchange === s.exchange && u.name === s.underlying} onClick={() => pickUnderlying(u.exchange, u.name)}>
-                  {u.name}<span className="small" style={{ opacity: 0.6, marginLeft: 6 }}>{u.venue}</span></button>
-              ))}
-            </div>
+      <section className="card stack opt-form" style={{ gap: 18 }} aria-label="Set up the structure">
+        <div className="opt-row">
+          <span className="opt-label">Trade</span>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {popular.slice(0, 5).map((u) => {
+              const on = u.exchange === s.exchange && u.name === s.underlying;
+              return <button key={u.exchange + u.name} className={`chip${on ? " on" : ""}`} aria-pressed={on} onClick={() => pickUnderlying(u.exchange, u.name)}>{u.name}</button>;
+            })}
             {!!unds?.length && (
-              <label className="field" style={{ maxWidth: 360 }}>Or any other underlying, including stock options
-                <select value={`${s.exchange}:${s.underlying}`} onChange={(e) => { const [ex, n] = e.target.value.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); }}>
-                  {!und && <option value={`${s.exchange}:${s.underlying}`}>{s.underlying}</option>}
-                  {unds.map((u) => <option key={u.exchange + u.name} value={`${u.exchange}:${u.name}`}>{u.name} ({u.venue})</option>)}
-                </select></label>
+              <select className="chip-select" aria-label="Other underlyings" value={popular.slice(0, 5).some((u) => u.exchange === s.exchange && u.name === s.underlying) ? "" : `${s.exchange}:${s.underlying}`}
+                onChange={(e) => { if (e.target.value) { const [ex, n] = e.target.value.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); } }}>
+                <option value="">More…</option>
+                {unds.map((u) => <option key={u.exchange + u.name} value={`${u.exchange}:${u.name}`}>{u.name} ({u.venue})</option>)}
+              </select>
             )}
-            <div className="stack" style={{ gap: 6 }}>
-              <span className="field">Expiry</span>
-              <div className="row wrap" style={{ gap: 8 }}>
-                <Seg label="Expiry" value={["current", "next", "month"].includes(s.expiry) ? s.expiry : "date"}
-                  options={[["current", "Nearest"], ["next", "Next"], ["month", "Monthly"], ...(und?.expiries.length ? [["date", "Pick a date"] as [string, string]] : [])]}
-                  onChange={(v) => patch({ expiry: v === "date" ? (und?.expiries[0] ?? "current") : v })} />
-                {und && /\d/.test(s.expiry) && (
-                  <select aria-label="Expiry date" value={s.expiry} onChange={(e) => patch({ expiry: e.target.value })}>
-                    {und.expiries.map((e) => <option key={e} value={e}>{expiryName(e)}</option>)}
-                  </select>)}
-              </div>
-              <span className="hint">Nearest rolls to the next expiry each day, so the session keeps trading week after week.{und ? ` Lot size ${und.lot}.` : ""}</span>
-            </div>
-          </section>
+          </div>
+        </div>
 
-          <section className="card stack" style={{ gap: 14 }} aria-labelledby="o-str">
-            <h2 id="o-str" className="h2">2. The structure</h2>
-            <div className="row wrap" style={{ gap: 8 }}>
-              {STRUCTURES.map((x) => <button key={x.id} title={x.hint} className={`btn sm ${s.structure === x.id ? "" : "quiet"}`} aria-pressed={s.structure === x.id}
-                onClick={() => pickStructure(x.id)}>{x.name}</button>)}
-              <button className={`btn sm ${s.structure === "custom" ? "" : "quiet"}`} aria-pressed={s.structure === "custom"} onClick={() => patch({ structure: "custom" })}>Custom</button>
-            </div>
-            <div className="row wrap" style={{ gap: 10, alignItems: "center" }}>
-              <span className="small muted">Measure distance in</span>
+        <div className="opt-row">
+          <span className="opt-label">Expiry</span>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <Seg label="Expiry" value={["current", "next", "month"].includes(s.expiry) ? s.expiry : "date"}
+              options={[["current", "Nearest"], ["next", "Next"], ["month", "Monthly"]]} onChange={(v) => patch({ expiry: v })} />
+            {und && <span className="small muted">lot {und.lot}</span>}
+          </div>
+        </div>
+
+        <div className="opt-row">
+          <span className="opt-label">Structure</span>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {MAIN.map((id) => { const x = STRUCTURES.find((y) => y.id === id)!; return (
+              <button key={id} title={x.hint} className={`chip${s.structure === id ? " on" : ""}`} aria-pressed={s.structure === id} onClick={() => pickStructure(id)}>{x.name}</button>); })}
+            <select className={`chip-select${inMain ? "" : " on"}`} aria-label="Other structures" value={inMain ? "" : s.structure}
+              onChange={(e) => { const v = e.target.value; if (v === "custom") patch({ structure: "custom" }); else if (v) pickStructure(v); }}>
+              <option value="">More…</option>
+              {STRUCTURES.filter((x) => !MAIN.includes(x.id)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              <option value="custom">Custom legs</option>
+            </select>
+          </div>
+        </div>
+
+        <details className="legs-box" open={s.structure === "custom" || undefined}>
+          <summary><span className="small">{legsText}</span><span className="small link-ish">Edit legs</span></summary>
+          <div className="stack" style={{ gap: 10, marginTop: 12 }}>
+            <div className="row" style={{ gap: 8, alignItems: "center" }}>
+              <span className="small muted">Distance in</span>
               <Seg label="Distance unit" value={s.offsetUnit} options={[["strikes", "Strikes"], ["points", "Points"]]}
                 onChange={(v) => patch({ offsetUnit: v, legs: s.legs.map((l) => ({ ...l, offset: v === "points" ? l.offset * (preview?.step ?? 50) : Math.round(l.offset / (preview?.step ?? 50)) })) })} />
             </div>
             <LegsEditor s={s} preview={preview} set={(legs) => patch({ legs, structure: "custom" })} />
-          </section>
+          </div>
+        </details>
 
-          <section className="card stack" style={{ gap: 14 }} aria-labelledby="o-time">
-            <h2 id="o-time" className="h2 row" style={{ gap: 0 }}>3. When<Info>{HELP.optTiming}</Info></h2>
-            <div className="row wrap" style={{ gap: 12 }}>
-              <Time label="Enter at" value={t.entry} onChange={(v) => setTiming({ entry: v })} />
-              <Time label="No new entries after" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />
-              <Time label="Square off at" value={t.squareoff} onChange={(v) => setTiming({ squareoff: v })} />
-              <Num label="Entries a day" value={t.maxEntries} min={1} max={20} onChange={(v) => setTiming({ maxEntries: Math.round(v) })} />
-              <Num label="Wait after a trade" value={t.cooldown} max={600} suffix="min" width={130} onChange={(v) => setTiming({ cooldown: Math.round(v) })} />
-            </div>
-          </section>
-
-          <section className="card stack" style={{ gap: 14 }} aria-labelledby="o-risk">
-            <h2 id="o-risk" className="h2 row" style={{ gap: 0 }}>4. Exits and risk<Info>{HELP.optRisk}</Info></h2>
-            <div className="row wrap" style={{ gap: 14, alignItems: "flex-end" }}>
-              <div className="stack" style={{ gap: 6 }}><span className="field">Stop loss on the whole trade</span>
-                <Seg label="Stop type" value={r.stopType} options={lossWord()} onChange={(v) => setRisk({ stopType: v })} /></div>
-              {r.stopType !== "none" && <Num label={r.stopType === "amount" ? "Lose (₹)" : "Lose (%)"} value={r.stop} step={r.stopType === "amount" ? 500 : 5} width={130} onChange={(v) => setRisk({ stop: v })} />}
-            </div>
-            <div className="row wrap" style={{ gap: 14, alignItems: "flex-end" }}>
-              <div className="stack" style={{ gap: 6 }}><span className="field">Target</span>
-                <Seg label="Target type" value={r.tgtType} options={lossWord()} onChange={(v) => setRisk({ tgtType: v })} /></div>
-              {r.tgtType !== "none" && <Num label={r.tgtType === "amount" ? "Make (₹)" : "Make (%)"} value={r.tgt} step={r.tgtType === "amount" ? 500 : 5} width={130} onChange={(v) => setRisk({ tgt: v })} />}
-            </div>
-            <div className="row wrap" style={{ gap: 12 }}>
-              <Num label="Trail once up (₹)" value={r.trailAfter} step={500} width={150} help={HELP.optTrail} onChange={(v) => setRisk({ trailAfter: v })} />
-              <Num label="…by giving back (₹)" value={r.trailBy} step={500} width={150} onChange={(v) => setRisk({ trailBy: v })} />
-              {hasShort && <Num label="Stop a sold leg at +%" value={r.legStopPct} step={5} width={150} help={HELP.optLegStop} onChange={(v) => setRisk({ legStopPct: v })} />}
-              <Num label="Daily loss cap (₹)" value={r.dailyLoss} step={1000} width={150} onChange={(v) => setRisk({ dailyLoss: v })} />
-            </div>
-            <span className="hint">0 turns a setting off.</span>
-          </section>
-
-          {hasShort && (
-            <section className="card stack" style={{ gap: 14 }} aria-labelledby="o-rc">
-              <div className="spread">
-                <h2 id="o-rc" className="h2 row" style={{ gap: 0 }}>5. Re-centre<Info>{HELP.optRecenter}</Info></h2>
-                <label className="row small" style={{ gap: 8 }}><input type="checkbox" checked={rc.enabled} onChange={(e) => setRc({ enabled: e.target.checked })} />Roll when the market moves</label>
-              </div>
-              {rc.enabled && (
-                <div className="row wrap" style={{ gap: 12, alignItems: "flex-end" }}>
-                  <Num label="Check every" value={rc.every} min={5} max={240} suffix="min" width={130} onChange={(v) => setRc({ every: Math.round(v) })} />
-                  <Num label="Roll after moving" value={rc.threshold} min={0.5} max={50} step={0.5} suffix="strikes" width={160} onChange={(v) => setRc({ threshold: v })} />
-                  <div className="stack" style={{ gap: 6 }}><span className="field">What moves</span>
-                    <Seg label="What rolls" value={rc.roll} options={[["shorts", "Sold legs"], ["all", "Every leg"]]} onChange={(v) => setRc({ roll: v })} /></div>
-                </div>
-              )}
-            </section>
-          )}
-
-          <section className="card stack" style={{ gap: 14 }} aria-labelledby="o-size">
-            <h2 id="o-size" className="h2 row" style={{ gap: 0 }}>{hasShort ? 6 : 5}. Size and costs<Info>{HELP.optSize}</Info></h2>
-            <div className="row wrap" style={{ gap: 12, alignItems: "flex-end" }}>
-              <div className="stack" style={{ gap: 6 }}><span className="field">Size</span>
-                <Seg label="Sizing" value={z.mode} options={[["lots", "Fixed lots"], ["margin", "As much as margin allows"]]} onChange={(v) => setZ({ mode: v })} /></div>
-              {z.mode === "lots" && <Num label="Units of the structure" value={z.lots} min={1} max={1000} width={170} onChange={(v) => setZ({ lots: Math.round(v) })} />}
-              <Num label="Paper capital (₹)" value={z.capital} min={1000} step={50000} width={170} onChange={(v) => setZ({ capital: v })} />
-              {z.mode === "margin" && <Num label="Use up to" value={Math.round(z.safety * 100)} min={50} max={100} suffix="%" width={110} onChange={(v) => setZ({ safety: v / 100 })} />}
-            </div>
-            <div className="row wrap" style={{ gap: 12 }}>
-              <Num label="Brokerage per order (₹)" value={c.brokerage} max={1000} width={170} onChange={(v) => setC({ brokerage: v })} />
-              <Num label="Extra slippage" value={c.slippageTicks} max={100} suffix="ticks" width={140} onChange={(v) => setC({ slippageTicks: Math.round(v) })} />
-              <Num label="Freeze limit (units)" value={c.freeze} max={100000} width={160} help={HELP.optFreeze} onChange={(v) => setC({ freeze: Math.round(v) })} />
-            </div>
-            <span className="hint">Freeze limit 0 uses the exchange's{und?.freeze ? ` (${und.freeze.toLocaleString("en-IN")} for ${und.name})` : ""}. Bigger orders are split, and each slice pays brokerage.</span>
-          </section>
+        <div className="opt-grid">
+          <Time label="Enter at" value={t.entry} onChange={(v) => setTiming({ entry: v })} />
+          <Time label="Last entry" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />
+          <Time label="Square off" value={t.squareoff} onChange={(v) => setTiming({ squareoff: v })} />
+          <Num label="Units" value={z.lots} min={1} max={1000} width={120} onChange={(v) => setZ({ lots: Math.round(v) })} />
         </div>
 
-        <div className="stack" style={{ gap: 16, minWidth: 0 }}>
-          <section className="card stack sticky-col" style={{ gap: 14 }} aria-labelledby="o-go">
-            <h2 id="o-go" className="h2">Price it and start</h2>
-            <label className="field">Name<input value={s.name} maxLength={80} onChange={(e) => patch({ name: e.target.value })} /></label>
-            <p className="small muted">
-              {s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + " × " : ""}${l.offset === 0 ? "ATM" : `${Math.abs(l.offset)} ${s.offsetUnit === "points" ? "pts" : l.offset === 1 || l.offset === -1 ? "strike" : "strikes"} ${l.offset > 0 ? "OTM" : "ITM"}`} ${l.opt}`).join(", ")}
-              {" "}on {s.underlying}, entering at {t.entry}, squaring off at {t.squareoff}.
-            </p>
-            <div className="row wrap" style={{ gap: 8 }}>
-              <button className="btn quiet" disabled={pricing || !!offline} onClick={price_}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
-              <button className="btn blue" disabled={starting || !!offline} onClick={start}>{starting ? "Starting…" : "Start paper trading"}</button>
+        <div className="opt-grid two">
+          <div className="stack" style={{ gap: 6 }}>
+            <span className="field" style={{ flexDirection: "row", alignItems: "center", gap: 0 }}>Stop loss<Info>{HELP.optRisk}</Info></span>
+            <div className="row" style={{ gap: 8 }}>
+              <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => setRisk({ stopType: v })} />
+              {r.stopType !== "none" && <input className="input" style={{ width: 100 }} type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
             </div>
-            {preview && (
+          </div>
+          <div className="stack" style={{ gap: 6 }}>
+            <span className="field">Target</span>
+            <div className="row" style={{ gap: 8 }}>
+              <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => setRisk({ tgtType: v })} />
+              {r.tgtType !== "none" && <input className="input" style={{ width: 100 }} type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}
+            </div>
+          </div>
+        </div>
+
+        <details className="more-box">
+          <summary className="small">More settings <span className="muted">(re-centring, trailing, caps, sizing, costs)</span></summary>
+          <div className="stack" style={{ gap: 18, marginTop: 14 }}>
+            <div className="opt-grid">
+              <Num label="Entries a day" value={t.maxEntries} min={1} max={20} width={120} onChange={(v) => setTiming({ maxEntries: Math.round(v) })} />
+              <Num label="Wait after a trade" value={t.cooldown} max={600} suffix="min" width={140} onChange={(v) => setTiming({ cooldown: Math.round(v) })} />
+              <Num label="Daily loss cap (₹)" value={r.dailyLoss} step={1000} width={150} onChange={(v) => setRisk({ dailyLoss: v })} />
+              {hasShort && <Num label="Sold-leg stop +%" value={r.legStopPct} step={5} width={140} help={HELP.optLegStop} onChange={(v) => setRisk({ legStopPct: v })} />}
+            </div>
+            <div className="opt-grid">
+              <Num label="Trail once up (₹)" value={r.trailAfter} step={500} width={150} help={HELP.optTrail} onChange={(v) => setRisk({ trailAfter: v })} />
+              <Num label="…giving back (₹)" value={r.trailBy} step={500} width={150} onChange={(v) => setRisk({ trailBy: v })} />
+            </div>
+            {hasShort && (
               <div className="stack" style={{ gap: 10 }}>
-                <span className="small">{s.underlying} {price(preview.spot, "INR")} · ATM {preview.atm} · expiry {expiryName(preview.expiry)} · lot {preview.lot}
-                  {" "}· {preview.units} unit{preview.units === 1 ? "" : "s"}{s.sizing.mode === "margin" && preview.margin_one ? ` (${inr(preview.margin_one)} margin each)` : ""}</span>
-                {preview.units === 0 ? <p className="neg small">Not enough capital for one unit at today's margin.</p> : <Payoff p={preview} />}
+                <label className="row small" style={{ gap: 8 }}><input type="checkbox" checked={rc.enabled} onChange={(e) => setRc({ enabled: e.target.checked })} />
+                  Re-centre when the market moves<Info>{HELP.optRecenter}</Info></label>
+                {rc.enabled && (
+                  <div className="opt-grid">
+                    <Num label="Check every" value={rc.every} min={5} max={240} suffix="min" width={130} onChange={(v) => setRc({ every: Math.round(v) })} />
+                    <Num label="After moving" value={rc.threshold} min={0.5} max={50} step={0.5} suffix="strikes" width={150} onChange={(v) => setRc({ threshold: v })} />
+                    <div className="stack" style={{ gap: 6 }}><span className="field">Roll</span>
+                      <Seg label="What rolls" value={rc.roll} options={[["shorts", "Sold legs"], ["all", "All legs"]]} onChange={(v) => setRc({ roll: v })} /></div>
+                  </div>
+                )}
               </div>
             )}
-            <div className="row wrap" style={{ gap: 8, borderTop: "1px dashed var(--line)", paddingTop: 12 }}>
-              <button className="btn quiet sm" onClick={exportIt}>Export</button>
-              <button className="btn quiet sm" onClick={() => { if (confirm("Start over with a fresh short straddle?")) { setS(blankOptions()); setPreview(null); } }}>Start over</button>
+            <div className="opt-grid">
+              <div className="stack" style={{ gap: 6 }}><span className="field" style={{ flexDirection: "row", alignItems: "center", gap: 0 }}>Size<Info>{HELP.optSize}</Info></span>
+                <Seg label="Sizing" value={z.mode} options={[["lots", "Fixed units"], ["margin", "Fit to margin"]]} onChange={(v) => setZ({ mode: v })} /></div>
+              <Num label="Paper capital (₹)" value={z.capital} min={1000} step={50000} width={160} onChange={(v) => setZ({ capital: v })} />
             </div>
-          </section>
-          <Chain key={`${s.exchange}${s.underlying}${s.expiry}`} s={s} />
-          <ImportBox onLoaded={(x, n) => { setS({ ...blankOptions(), ...x }); setNotes(n); setPreview(null); }} />
+            <div className="opt-grid">
+              <Num label="Brokerage / order (₹)" value={c.brokerage} max={1000} width={150} onChange={(v) => setC({ brokerage: v })} />
+              <Num label="Extra slippage" value={c.slippageTicks} max={100} suffix="ticks" width={140} onChange={(v) => setC({ slippageTicks: Math.round(v) })} />
+              <Num label="Freeze limit" value={c.freeze} max={100000} width={130} help={HELP.optFreeze} onChange={(v) => setC({ freeze: Math.round(v) })} />
+            </div>
+            {!c.freeze && und?.freeze ? <span className="hint">Freeze limit 0 uses the exchange's: {und.freeze.toLocaleString("en-IN")} for {und.name}.</span> : null}
+          </div>
+        </details>
+      </section>
+
+      <section className="card stack" style={{ gap: 14 }} aria-label="Price and start">
+        <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
+          <label className="field" style={{ flex: "1 1 220px" }}>Name<input value={s.name} maxLength={80} onChange={(e) => patch({ name: e.target.value })} /></label>
+          <button className="btn quiet" disabled={pricing || !!offline} onClick={price_}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
+          <button className="btn blue" disabled={starting || !!offline} onClick={start}>{starting ? "Starting…" : "Start paper trading"}</button>
         </div>
+        {preview && (
+          <div className="stack" style={{ gap: 10 }}>
+            <span className="small muted">{s.underlying} {price(preview.spot, "INR")} · ATM {preview.atm} · expiry {expiryName(preview.expiry)} · lot {preview.lot} · {preview.units} unit{preview.units === 1 ? "" : "s"}{s.sizing.mode === "margin" && preview.margin_one ? ` (${inr(preview.margin_one)} margin each)` : ""}</span>
+            {preview.units === 0 ? <p className="neg small">Not enough capital for one unit at today's margin.</p> : <Payoff p={preview} />}
+          </div>
+        )}
+      </section>
+
+      <div className="opt-extras">
+        <Chain key={`${s.exchange}${s.underlying}${s.expiry}`} s={s} />
+        <ImportBox onLoaded={(x, n) => { setS({ ...blankOptions(), ...x }); setNotes(n); setPreview(null); }} />
+      </div>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn quiet sm" onClick={exportIt}>Export</button>
+        <button className="btn quiet sm" onClick={() => { if (confirm("Start over with a fresh short straddle?")) { setS(blankOptions()); setPreview(null); } }}>Start over</button>
       </div>
 
-      <section className="stack" style={{ gap: 10 }} aria-labelledby="o-sess">
-        <h2 id="o-sess" className="h2">Your options sessions</h2>
-        {rows === null ? <Loading /> : rows.length === 0 ? <p className="muted">Sessions you start show up here, and under Paper trading.</p> : (
+      {rows && rows.length > 0 && (
+        <section className="stack" style={{ gap: 10 }} aria-labelledby="o-sess">
+          <h2 id="o-sess" className="h3">Your options sessions</h2>
           <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
             {rows.map((x) => (
-              <Link key={x.id} to={`/options/s/${x.id}`} className="card" style={{ flex: "none", minWidth: 210, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+              <Link key={x.id} to={`/options/s/${x.id}`} className="card" style={{ flex: "none", minWidth: 200, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
                 <b>{x.name}</b>
-                <span className="small muted">{x.instrument.symbol} · {new Date(x.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+                <span className="small muted">{new Date(x.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
                 <span className={`badge ${x.status}`} style={{ alignSelf: "flex-start" }}>{x.status}</span>
               </Link>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
-

@@ -2,6 +2,11 @@
 
 ## September 2026
 
+### A simpler Options page
+- One column instead of two, and no sticky panel overlapping the option chain.
+- The main choices sit up front: what to trade, expiry, structure, times, units, stop and target. Legs open with **Edit legs**. Caps, trailing, re-centring, sizing and costs moved into **More settings**.
+- Less common structures and underlyings moved into **More…** menus. The payoff numbers use the full width, and the page no longer scrolls sideways on phones.
+
 ### Kite login reliability
 - If Zerodha rejects the automatic login's 2FA code, it now tries once more with the next code. The usual cause is another program using the same code on the account moments earlier. A rejected password still stops for the day, so the account can't get locked.
 - If Zerodha cancels today's token mid-day, StratLab now notices. That usually happens when another login to the same Kite Connect app replaces it. Indian data goes offline with a clear message instead of failing every request, the admin page says what happened, and a Telegram alert goes out. It doesn't log in again by itself, which would cancel the other program's token in turn.

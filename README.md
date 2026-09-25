@@ -99,6 +99,8 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Check it isn't one lucky chart | **Does it work on similar stocks?** on a verdict runs the same rules on about 10 similar instruments |
 | Understand a number | Every check, stat and setting has an **(i)** button that explains it in plain words |
 | Decide what to do next | The **Next** bar on a verdict: change the rules, try another market, paper trade, write a lab note |
+| Test on a whole group of stocks | **Testing on → Or test on a group**: a ready-made group (NIFTY 50, Bank NIFTY, F&O stocks, US mega caps, large coins) or your own list, with a limit on positions open at once |
+| Paper trade options | **Options** in the sidebar: pick the underlying, expiry and structure, press **Price it now** for live fills, payoff and margin, then **Start paper trading**; stops, targets, re-centring and sizing are under **More settings** |
 | Paper trade | **Paper trade** at the top of a notebook or verdict; running sessions are under **Paper trading** |
 | Share or save | **Share verdict** saves an image; **Export** saves the rules as a file |
 | Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
@@ -148,7 +150,10 @@ stratlab/
 │   │   │   ├── indicators.py SMA, EMA, RSI, MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, Donchian
 │   │   │   ├── costs.py      per-market trading costs and tax estimates
 │   │   │   ├── verdict.py    the four honesty checks and the verdict
+│   │   │   ├── portfolio.py  group tests: one pot of capital across many instruments
 │   │   │   └── walkforward.py walk-forward test: re-tune on the past, trade the unseen next block
+│   │   ├── options/          Options tab: contracts, chains, quotes and margin from Kite; the options engine and sessions
+│   │   ├── universes.py      ready-made groups of stocks and coins
 │   │   ├── basket.py         "does it work on similar stocks?": same rules on ~10 similar instruments
 │   │   ├── data/             market data: markets list, Coinbase (crypto), Yahoo (US, UK, EU, Japan, forex)
 │   │   ├── intel/            research: Finnhub, Yahoo, Screener.in, news, Wikipedia, AI reads, /research API
@@ -167,7 +172,7 @@ stratlab/
 ├── frontend/                 React + TypeScript app built with Vite (deploys to Vercel)
 │   ├── public/               config.js (API URL, Supabase public key), favicon, app icons, link-preview image
 │   └── src/
-│       ├── pages/            notebook, verdict, markets, research, paper trading, plans, account, admin
+│       ├── pages/            notebook, verdict, markets, research, paper trading, options, plans, account, admin
 │       ├── components/       rules editor, charts, sidebar, feature tour, logo, share image
 │       └── lib/              API client, formatting, rule parser, CSV import, (i) help texts, brand
 └── supabase/
