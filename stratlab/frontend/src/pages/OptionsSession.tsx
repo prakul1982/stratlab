@@ -72,7 +72,7 @@ export function OptionsSession() {
           <span><b>{snap.signal.name}</b> on {snap.instrument.underlying} {snap.signal.tf} candles</span>
           <span className={`badge ${snap.signal.position === "long" ? "pass" : snap.signal.position === "short" ? "warn" : "skip"}`}>
             {snap.signal.position === "long" ? "Rules long" : snap.signal.position === "short" ? "Rules short" : "Rules flat"}</span>
-          {snap.signal.last_candle && <span className="small muted">last candle {new Date(snap.signal.last_candle).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}{snap.signal.price != null ? ` · ${price(snap.signal.price, "INR")}` : ""}</span>}
+          {snap.signal.last_candle && <span className="small muted">last candle {new Date(snap.signal.last_candle).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })} IST{snap.signal.price != null ? ` · ${price(snap.signal.price, "INR")}` : ""}</span>}
           {!snap.signal.ok && <span className="small" style={{ color: "var(--orange)" }}>Couldn't fetch the latest candles; retrying.</span>}
         </div>
       )}

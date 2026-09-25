@@ -221,7 +221,13 @@ export function OptionsPage() {
         notify(`"${nb.name}" uses daily candles. Option trades close every day, so pick rules on 5-minute, 15-minute or hourly candles.`);
         return;
       }
-      patch({ signal: { rules: nb.strategy, notebook: nb.id, name: nb.name, short: s.signal?.short ?? (nb.strategy.side === "long" ? "none" : "mirror") } });
+      const signal = { rules: nb.strategy, notebook: nb.id, name: nb.name, short: s.signal?.short ?? (nb.strategy.side === "long" ? "none" : "mirror") as "none" | "mirror" };
+      // a directional signal usually buys an option; swap out the default short straddle
+      const bc = STRUCTURES.find((x) => x.id === "buy_call")!;
+      if (s.structure === "short_straddle") {
+        patch({ signal, structure: "buy_call", offsetUnit: bc.unit, legs: bc.legs.map((l) => ({ ...l })), name: `${s.underlying} options on ${nb.name}` });
+        notify("Switched the structure to Buy a call. Change it above if you want something else.");
+      } else patch({ signal, name: `${s.underlying} options on ${nb.name}` });
     } catch (e) { fail(e); } finally { setSigBusy(false); }
   };
   const sigTf = s.signal ? ({ "5m": "5-minute", "15m": "15-minute", "1h": "hourly" } as Record<string, string>)[s.signal.rules.tf] : "";
