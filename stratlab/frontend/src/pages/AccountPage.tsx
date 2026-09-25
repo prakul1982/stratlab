@@ -6,6 +6,7 @@ import { dateOnly } from "../lib/format";
 import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { LEVELS } from "../components/LevelPrompt";
+import { PhoneCard } from "../components/PhoneCard";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
@@ -104,6 +105,7 @@ export function AccountPage() {
                   : <><Link to="/plans" className="btn outline">Change plan</Link><button className="btn danger" onClick={cancel}>Cancel subscription</button></>}
             </div>
           </section>
+          <PhoneCard />
           <section className="card stack" style={{ gap: 12 }}>
             <h2 className="h2">Experience</h2>
             <p className="small muted">Changes only what starts open and which tools are suggested. Everything stays available.</p>

@@ -2,6 +2,11 @@
 
 ## September 2026
 
+### StratLab on your phone
+- **Install it:** StratLab can go on your home screen like an app, with its own icon and no browser bars. Long-press the icon for shortcuts to Test an idea, Paper trading and the Strategy library. On Android or a computer, use **Account → On your phone → Install StratLab** (or the browser's Install app). On an iPhone, tap Share → Add to Home Screen.
+- **Notifications without Telegram:** **Turn on notifications** on any device (an iPhone once it's installed) to get each paper trade and the daily report as a phone notification. Tapping one opens the session. **Send a test** checks it works, and each device can be turned off on its own.
+- If you lose signal, the app still opens and reconnects when you're back online.
+
 ### All your paper trading at once
 - The top of **Paper trading** now shows every running session added up, per currency (rupees and dollars are never mixed):
   - what the open positions are worth now, and how much of your paper capital that is

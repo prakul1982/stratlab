@@ -37,9 +37,9 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import daily_report, ideas, library, public, risk
+from . import daily_report, ideas, library, public, push, risk
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, IdeasReq, LibraryReq, PrefsReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -293,6 +293,34 @@ def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     return {"prefs": {"level": req.level}}
 
 
+@app.get("/push/key")
+def push_key(profile=Depends(current_profile)):
+    return {"enabled": push.enabled(), "key": settings.VAPID_PUBLIC_KEY or None, "devices": len(push.devices(profile["id"]))}
+
+
+@app.post("/push/subscribe")
+def push_subscribe(req: PushReq, profile=Depends(current_profile)):
+    """Remember this device for notifications (trade alerts and the daily report, as the plan allows)."""
+    if not push.enabled():
+        err(503, "push_off", "Phone notifications aren't set up on the server yet.")
+    push.add(profile["id"], req.subscription.model_dump())
+    return {"devices": len(push.devices(profile["id"]))}
+
+
+@app.post("/push/test")
+def push_test(profile=Depends(current_profile)):
+    if not push.enabled():
+        err(503, "push_off", "Phone notifications aren't set up on the server yet.")
+    sent = push.send(profile["id"], "StratLab", "Notifications work. Paper-trade alerts and the daily report will arrive like this.", url="/account", tag="test")
+    return {"sent": sent}
+
+
+@app.post("/push/unsubscribe")
+def push_unsubscribe(req: PushReq, profile=Depends(current_profile)):
+    push.remove(profile["id"], req.subscription.endpoint)
+    return {"devices": len(push.devices(profile["id"]))}
+
+
 @app.put("/me/alerts")
 def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
     need(profile, "daily_report", "Alerts and the daily report")
@@ -314,7 +342,7 @@ def test_alert(profile=Depends(current_profile)):
     except Exception as e:
         err(502, "alert_failed", f"Alert could not be sent: {e}")
     if not sent:
-        err(400, "no_channels", "Add a Telegram chat ID or an email first, then save.")
+        err(400, "no_channels", "Add a Telegram chat ID or an email, or turn on phone notifications, first.")
     return {"sent": sent}
 
 

@@ -2,6 +2,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    }
+  ],
   "rewrites": [
     {
       "source": "/v/:token",

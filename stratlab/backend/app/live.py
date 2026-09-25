@@ -306,7 +306,7 @@ class LiveManager:
                     else:
                         text = (f"StratLab paper trade: SELL {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur}, "
                                 f"{ev['why'].lower()}, P&L {ev['pnl']:,.0f} {cur} ({s.name})")
-                    notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False)
+                    notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False, url=f"/paper/{s.id}")
             except Exception as e:
                 print("order record failed:", e)
         threading.Thread(target=work, daemon=True).start()
@@ -413,7 +413,9 @@ def alerts_on(profile: dict) -> bool:
 
 def report_on(profile: dict) -> bool:
     """The daily report goes wherever alerts are set up (Telegram or email), on plans that include it."""
-    return bool(profile.get("telegram_chat_id") or profile.get("alert_email")) and allows(effective_plan(profile), "daily_report")
+    from . import push
+    has_channel = profile.get("telegram_chat_id") or profile.get("alert_email") or (push.enabled() and push.devices(profile.get("id") or ""))
+    return bool(has_channel) and allows(effective_plan(profile), "daily_report")
 
 
 def market_name(mid: str) -> str:

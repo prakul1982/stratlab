@@ -43,10 +43,14 @@ def send_email(to: str, subject: str, body: str) -> None:
         s.send_message(msg)
 
 
-def notify(profile: dict, subject: str, text: str, background: bool = True) -> list[str]:
+def notify(profile: dict, subject: str, text: str, background: bool = True, url: str = "/paper") -> list[str]:
     """Send to every channel the user set up. Returns the channels attempted."""
+    from . import push
     channels = []
     jobs = []
+    if profile.get("id") and push.enabled() and push.devices(profile["id"]):
+        channels.append("push")
+        jobs.append(lambda: push.send(profile["id"], subject, text, url))
     if profile.get("telegram_chat_id"):
         channels.append("telegram")
         jobs.append(lambda: send_telegram(profile["telegram_chat_id"], text))

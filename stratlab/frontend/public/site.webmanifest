@@ -1,13 +1,20 @@
 {
+  "id": "/",
   "name": "StratLab",
   "short_name": "StratLab",
   "description": "Test your trading idea before your money does.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#F5F1E8",
   "theme_color": "#F5F1E8",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Test an idea", "url": "/new", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Paper trading", "url": "/paper", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Strategy library", "url": "/library", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

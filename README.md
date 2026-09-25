@@ -48,7 +48,7 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 - **Research built in.** Company pages for India and the US: live price and chart, valuation and growth with context, sales and profit history, results against estimates, who owns it, insider trades, news, and an AI read whose trading ideas open as a notebook in one click. Plus AI theme maps, a daily market pulse, side-by-side comparisons and a watchlist.
 - **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
 - **Import any strategy.** One **Import a strategy** page takes a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words. It sets up the right thing: a notebook for rules on one instrument, a group notebook for strategies that scan a list (like an F&O momentum scanner), or an Options structure. Anything that can't be carried over is listed.
-- **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock. A single instrument, a whole group with shared capital, or an option structure. Sessions keep running until you stop them. With alerts on, each trade comes to Telegram or email, plus a short report a few minutes after each market closes.
+- **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock. A single instrument, a whole group with shared capital, or an option structure. Sessions keep running until you stop them. With alerts on, each trade comes as a phone notification, on Telegram or by email, plus a short report a few minutes after each market closes.
 - **Share a verdict.** A card with the equity chart, all four checks and the numbers, sent straight from your phone's share menu, or a public link anyone can open without an account. It previews in WhatsApp, X and LinkedIn, shows the verdict but never your rules, and turns off with one tap.
 
 <picture>
@@ -121,6 +121,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | See all your paper trading at once | **Paper trading** shows **All running sessions** on top: open position value, today, total P&L, the worst day and the deepest fall for everything together, per currency, with each session's share |
 | Borrow a strategy, or share yours | **Strategy library** in the sidebar: rules other traders published with their honest verdict (luck included). **Copy and re-test** puts them in a notebook of your own. Publish yours from a verdict: **Share verdict → Publish to the strategy library** |
 | Find anything, or ask for ideas | **Search or ask** at the top of the sidebar, or **Ctrl+K** (⌘K) anywhere: type a stock, an idea to test, a question ("momentum ideas for bank stocks") for 4 testable ideas, a feature's name ("walk forward"), or paste a strategy to import it |
+| Put it on your phone | **Account → On your phone**: install StratLab to the home screen (its own icon, full screen) and **Turn on notifications** to get trade alerts and the daily report on that device, no Telegram needed. On an iPhone, first Share → Add to Home Screen |
 | Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
 | Read at night | **Night mode** at the bottom of the sidebar |
 
@@ -185,7 +186,8 @@ stratlab/
 │   │   ├── plans.py          plan limits and prices (Pro features open to all until payments go live)
 │   │   ├── ai_writer.py      plain English → strategy rules
 │   │   ├── ai_providers.py   the AI provider chain and its order for quick jobs and research reads
-│   │   └── alerts.py         Telegram and email alerts
+│   │   ├── push.py           phone and browser notifications (Web Push)
+│   │   └── alerts.py         phone, Telegram and email alerts
 │   ├── tests/                pytest suite
 │   └── .env.example          every setting the server reads
 ├── frontend/                 React + TypeScript app built with Vite (deploys to Vercel)
@@ -232,7 +234,7 @@ The **[setup guide](stratlab/README.md)** covers Supabase, Kite Connect (includi
 | Group paper trading | – | ✓ | ✓ with faster entries and a spread limit |
 | Options paper trading | – | At set times | At set times or on a notebook's signal |
 | Daily report after the close | – | ✓ | ✓ |
-| Telegram and email alerts for every trade | – | – | ✓ |
+| Phone, Telegram and email alerts for every trade | – | – | ✓ |
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
 | Markets | All, except Indian F&O | same | + Indian F&O |
 | Export rules and trades | – | – | ✓ |
