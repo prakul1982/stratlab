@@ -1,19 +1,61 @@
 """Phone and browser notifications (Web Push), a channel like Telegram and email.
 
 Each device that turns notifications on sends its push subscription, kept in app_settings under
-"push:<user id>". Needs a VAPID key pair in the environment; generate one with
-`python -m app.push keys`. Without keys, the feature stays off and the button explains why."""
+"push:<user id>". Signing needs a VAPID key pair: the server makes one the first time it's needed and
+keeps it in app_settings (the owner chose this over setting it by hand), so there's nothing to set up.
+VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY in the environment take precedence if set."""
 import json
 
 from . import db
 from .config import settings
 
 PREFIX = "push:"
+KEYS = "vapid:keys"
 MAX_DEVICES = 10
+_cache: dict = {}
+
+
+def generate() -> tuple[str, str]:
+    """A new key pair as base64url strings: the public key as an uncompressed point, the private key raw."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from py_vapid import Vapid01
+
+    v = Vapid01()
+    v.generate_keys()
+    raw_pub = v.public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    raw_priv = v.private_key.private_numbers().private_value.to_bytes(32, "big")
+    b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+    return b64(raw_pub), b64(raw_priv)
+
+
+def keys() -> tuple[str, str] | None:
+    """(public, private): from the environment if set, else the saved pair, else a new pair saved now."""
+    if settings.VAPID_PUBLIC_KEY and settings.VAPID_PRIVATE_KEY:
+        return settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY
+    if "pair" in _cache:
+        return _cache["pair"]
+    try:
+        saved = json.loads(db.get_setting(KEYS) or "null")
+        if not (isinstance(saved, dict) and saved.get("public") and saved.get("private")):
+            pub, priv = generate()
+            db.set_setting(KEYS, json.dumps({"public": pub, "private": priv}))
+            saved = json.loads(db.get_setting(KEYS) or "null") or {"public": pub, "private": priv}   # another worker may have won
+        _cache["pair"] = (saved["public"], saved["private"])
+        return _cache["pair"]
+    except Exception as e:
+        print("push keys unavailable:", str(e)[:200])
+        return None
+
+
+def public_key() -> str | None:
+    k = keys()
+    return k[0] if k else None
 
 
 def enabled() -> bool:
-    return bool(settings.VAPID_PUBLIC_KEY and settings.VAPID_PRIVATE_KEY)
+    return keys() is not None
 
 
 def devices(uid: str) -> list[dict]:
@@ -42,7 +84,8 @@ def remove(uid: str, endpoint: str):
 
 def send(uid: str, title: str, body: str, url: str = "/", tag: str | None = None) -> int:
     """Send to every device the user turned on. Devices that have gone away are forgotten. Returns how many got it."""
-    if not enabled():
+    k = keys()
+    if not k:
         return 0
     from pywebpush import WebPushException, webpush
     subs = devices(uid)
@@ -50,7 +93,7 @@ def send(uid: str, title: str, body: str, url: str = "/", tag: str | None = None
     payload = json.dumps({"title": title[:120], "body": body[:600], "url": url, "tag": tag})
     for s in subs:
         try:
-            webpush(subscription_info=s, data=payload, vapid_private_key=settings.VAPID_PRIVATE_KEY,
+            webpush(subscription_info=s, data=payload, vapid_private_key=k[1],
                     vapid_claims={"sub": settings.VAPID_SUBJECT or "mailto:admin@stratlab.studio"}, ttl=3600)
             sent += 1
         except WebPushException as e:
@@ -67,17 +110,9 @@ def send(uid: str, title: str, body: str, url: str = "/", tag: str | None = None
 
 
 if __name__ == "__main__":   # python -m app.push keys
-    import base64
     import sys
-
-    from cryptography.hazmat.primitives import serialization
-    from py_vapid import Vapid01
 
     if sys.argv[1:] != ["keys"]:
         raise SystemExit("usage: python -m app.push keys")
-    v = Vapid01()
-    v.generate_keys()
-    raw_pub = v.public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
-    raw_priv = v.private_key.private_numbers().private_value.to_bytes(32, "big")
-    b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
-    print(f"VAPID_PUBLIC_KEY={b64(raw_pub)}\nVAPID_PRIVATE_KEY={b64(raw_priv)}\nVAPID_SUBJECT=mailto:you@example.com")
+    pub, priv = generate()
+    print(f"VAPID_PUBLIC_KEY={pub}\nVAPID_PRIVATE_KEY={priv}\nVAPID_SUBJECT=mailto:you@example.com")

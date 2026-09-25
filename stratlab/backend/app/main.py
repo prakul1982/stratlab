@@ -295,7 +295,7 @@ def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
 
 @app.get("/push/key")
 def push_key(profile=Depends(current_profile)):
-    return {"enabled": push.enabled(), "key": settings.VAPID_PUBLIC_KEY or None, "devices": len(push.devices(profile["id"]))}
+    return {"enabled": push.enabled(), "key": push.public_key(), "devices": len(push.devices(profile["id"]))}
 
 
 @app.post("/push/subscribe")
