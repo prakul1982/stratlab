@@ -219,7 +219,7 @@ function markersFor(e: Experiment): Marker[] {
   return out.filter((m) => m.i >= 0);
 }
 
-export function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
+function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const nav = useNavigate();
   const { fail, refreshNotebooks } = useApp();
   const remove = async () => {

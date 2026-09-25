@@ -7,7 +7,7 @@ import math
 import secrets
 import threading
 import time
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from kiteconnect import KiteConnect, KiteTicker

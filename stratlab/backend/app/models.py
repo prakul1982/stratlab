@@ -122,10 +122,6 @@ class DataReq(BaseModel):
         return self
 
 
-class BacktestReq(DataReq):
-    strategy: Strategy
-
-
 class LiveStartReq(BaseModel):
     strategy: Strategy
     instrument: Optional[str] = Field(None, max_length=60)

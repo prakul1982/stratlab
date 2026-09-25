@@ -4,8 +4,6 @@ import { currencySymbol } from "./format";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
-export const REGION_CCY: Record<Region, string> = { IN: "INR", US: "USD" };
-
 export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr" }
 export interface MetricGroup { title: string; items: MetricItem[] }
 export interface NewsItem { headline: string; url: string; source: string; at: string | null }

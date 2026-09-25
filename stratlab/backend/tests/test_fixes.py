@@ -93,7 +93,7 @@ def test_bad_ids_are_404_not_500(monkeypatch):
     app.dependency_overrides[main.current_profile] = lambda: {"id": "u", "_plan": "free"}
     try:
         c = TestClient(app)
-        assert c.delete("/strategies/not-a-uuid").status_code == 404
+        assert c.delete("/notebooks/not-a-uuid").status_code == 404
         assert c.get("/live/sessions/not-a-uuid").status_code == 404
     finally:
         app.dependency_overrides.clear()

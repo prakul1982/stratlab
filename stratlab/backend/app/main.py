@@ -38,8 +38,8 @@ from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import daily_report, public
-from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq, OptionStrategy)
-from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
+from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import PLANS, has_pro_features, plan_info, trial_state
 
@@ -309,39 +309,6 @@ def instrument_info(inst_id: str, profile=Depends(current_profile)):
     return get_instrument(inst_id)[1]
 
 
-@app.get("/instruments/{inst_id}/ltp")
-def instrument_ltp(inst_id: str, profile=Depends(current_profile)):
-    prov, inst = get_instrument(inst_id)
-    return {"id": inst["id"], "ltp": prov.ltp(inst)}
-
-
-# ---------- strategies ----------
-@app.get("/strategies")
-def strategies(profile=Depends(current_profile)):
-    return db.list_strategies(profile["id"])
-
-
-@app.post("/strategies")
-def create_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
-    return db.save_strategy(profile["id"], req.strategy.name, req.strategy.model_dump(), req.instrument_token)
-
-
-@app.put("/strategies/{sid}")
-def update_strategy(sid: str, req: SaveStrategyReq, profile=Depends(current_profile)):
-    sid = check_id(sid)
-    row = db.save_strategy(profile["id"], req.strategy.name, req.strategy.model_dump(), req.instrument_token, sid)
-    if not row:
-        err(404, "not_found", "Strategy not found.")
-    return row
-
-
-@app.delete("/strategies/{sid}")
-def remove_strategy(sid: str, profile=Depends(current_profile)):
-    sid = check_id(sid)
-    db.delete_strategy(profile["id"], sid)
-    return {"deleted": True}
-
-
 @app.post("/export/strategy")
 def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
     if not is_pro(profile):
@@ -447,11 +414,6 @@ def run_test(profile, strategy: Strategy, req) -> dict:
     used = backtests_used(profile)
     out["usage"] = {"backtests_used": used, "backtests_limit": limit}
     return out
-
-
-@app.post("/backtest")
-def run_backtest(req: BacktestReq, profile=Depends(current_profile)):
-    return ok(run_test(profile, req.strategy, req))
 
 
 def run_group_test(profile, strategy: Strategy, group: dict, req, version: int) -> tuple[dict, dict]:

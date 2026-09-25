@@ -6,7 +6,7 @@ import { Search } from "./Icons";
 
 let defaultsCache: Instrument[] | null = null;
 
-export function useDefaults(): Instrument[] {
+function useDefaults(): Instrument[] {
   const [d, setD] = useState<Instrument[]>(defaultsCache ?? []);
   useEffect(() => {
     if (defaultsCache) return;
@@ -15,7 +15,7 @@ export function useDefaults(): Instrument[] {
   return d;
 }
 
-export const instKind = (r: Instrument) =>
+const instKind = (r: Instrument) =>
   r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "ETF" ? "ETF" : r.type === "FX" ? "Currency pair"
     : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
 

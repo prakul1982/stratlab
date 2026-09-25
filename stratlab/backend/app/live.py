@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 from . import db
 from .alerts import notify
 from .engine import costs as C
-from .engine.core import Ctx, Engine, chart_series, clean, cond_text
-from .kite_service import IST, KiteService, TickHub, INTERVALS
+from .engine.core import Ctx, Engine, chart_series, cond_text
+from .kite_service import IST, KiteService, TickHub
 from .models import Strategy
 from .daily_report import Reporter
 from .data.markets import MARKETS

@@ -34,7 +34,7 @@ export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boo
   { t: "day_high", name: "Day high (so far)", friendly: "today's high", pro: true, group: "day" },
   { t: "day_low", name: "Day low (so far)", friendly: "today's low", pro: true, group: "day" },
 ];
-export const PRO_TYPES = new Set(INDICATORS.filter((i) => i.pro).map((i) => i.t));
+const PRO_TYPES = new Set(INDICATORS.filter((i) => i.pro).map((i) => i.t));
 export const DEFAULTS: Partial<Record<RefType, [number, number?]>> = {
   sma: [20], ema: [20], rsi: [14], macd: [12, 26], macd_signal: [12, 26], macd_hist: [12, 26],
   bb_upper: [20, 2], bb_mid: [20, 2], bb_lower: [20, 2], vwap: [20], supertrend: [10, 3],
@@ -95,11 +95,11 @@ function baseName(r: Ref): string {
   }
 }
 
-export const allConds = (s: Strategy) => [...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])];
+const allConds = (s: Strategy) => [...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])];
 export const usesPro = (s: Strategy) => allConds(s).some((c) => PRO_TYPES.has(c.l.t) || PRO_TYPES.has(c.r.t));
 
 export const NO_SESSION = { start: "", end: "", squareoff: "", maxTradesDay: 0, cooldown: 0, dailyLossPct: 0 };
-export const DEFAULT_RISK: Risk = { capital: 500000, riskPct: 1, maxAlloc: 100, sl: 2, tgt: 6, brokerage: 20, slippage: 0.05 };
+const DEFAULT_RISK: Risk = { capital: 500000, riskPct: 1, maxAlloc: 100, sl: 2, tgt: 6, brokerage: 20, slippage: 0.05 };
 
 export function blankStrategy(name = "Untitled notebook"): Strategy {
   return { name, tf: "1d", text: "", entry: [], exit: [], entryJoin: "all", risk: { ...DEFAULT_RISK }, side: "long", shortEntry: [], shortExit: [],

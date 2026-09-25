@@ -73,7 +73,7 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
   );
 }
 
-export function Starters({ where }: { where?: Where | null }) {
+function Starters({ where }: { where?: Where | null }) {
   const create = useCreateNotebook(where);
   const start = (i: number) => {
     const st = STARTERS[i];

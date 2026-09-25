@@ -128,7 +128,6 @@ class GroupLiveSession:
         if len(self.members) < 2:
             raise ValueError("Fewer than two of the group's instruments have enough live price history to start.")
         self.lids: list[str] = []
-        self._rr = 0
 
     def _load(self, iid: str):
         try:

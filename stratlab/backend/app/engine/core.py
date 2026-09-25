@@ -218,7 +218,6 @@ class Engine:
 
     def step(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
         b, r = bars[i], self.r
-        slip, brok = r.slippage / 100, r.brokerage
         date, closes_at = bar_clock(b["t"], self.tf_min)
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False

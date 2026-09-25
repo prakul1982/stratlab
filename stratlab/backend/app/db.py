@@ -47,11 +47,6 @@ def add_usage(user_id: str, kind: str) -> None:
 
 
 # ---------- strategies ----------
-def list_strategies(user_id: str) -> list[dict]:
-    return (sb().table("strategies").select("id,name,body,instrument_token,updated_at")
-            .eq("user_id", user_id).order("updated_at", desc=True).execute().data)
-
-
 def get_strategy(user_id: str, sid: str) -> dict | None:
     r = sb().table("strategies").select("*").eq("user_id", user_id).eq("id", sid).limit(1).execute()
     return r.data[0] if r.data else None
@@ -113,11 +108,6 @@ def delete_stopped_sessions(user_id: str) -> int:
 
 def add_order(row: dict) -> None:
     sb().table("live_orders").insert(row).execute()
-
-
-def session_orders(session_id: str) -> list[dict]:
-    return (sb().table("live_orders").select("*").eq("session_id", session_id)
-            .order("ts", desc=True).limit(200).execute().data)
 
 
 # ---------- app settings (Kite token) ----------
