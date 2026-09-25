@@ -593,3 +593,8 @@ table.legs input[type=number] { width: 72px !important; }
   padding: 9px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
 .more-pop button:hover, .more-pop button:focus-visible { background: var(--chip); outline: none; }
 .more-pop button.danger { color: var(--orange-ink); }
+.lp-beyond { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lp-beyond-card { display: flex; flex-direction: column; gap: 10px; padding: 24px; }
+.lp-beyond-card b { font-size: 18px; }
+.lp-beyond-card .lp-fix { margin-top: auto; }
+@media (max-width: 860px) { .lp-beyond { grid-template-columns: 1fr; } }

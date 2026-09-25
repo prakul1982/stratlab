@@ -47,7 +47,8 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 - **Any market.** Indian stocks, indices and F&O (Zerodha Kite), US, UK, European and Japanese stocks and ETFs and forex (Yahoo Finance), crypto (Coinbase), or upload a CSV of candles from anywhere. No extra keys needed.
 - **Research built in.** Company pages for India and the US: live price and chart, valuation and growth with context, sales and profit history, results against estimates, who owns it, insider trades, news, and an AI read whose trading ideas open as a notebook in one click. Plus AI theme maps, a daily market pulse, side-by-side comparisons and a watchlist.
 - **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
-- **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock.
+- **Import any strategy.** One **Import a strategy** page takes a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words. It sets up the right thing: a notebook for rules on one instrument, a group notebook for strategies that scan a list (like an F&O momentum scanner), or an Options structure. Anything that can't be carried over is listed.
+- **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock. A single instrument, a whole group with shared capital, or an option structure. Sessions keep running until you stop them.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/walkforward-dark.png">
@@ -57,6 +58,16 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/notebook-dark.png">
   <img alt="A notebook: the question being tested, rules written as editable sentences, and lab notes" src="docs/images/notebook-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/options-dark.png">
+  <img alt="The Options tab: a NIFTY iron fly priced on live bid and ask, with entry and square-off times, stop and target, and a button to start paper trading" src="docs/images/options-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/import-dark.png">
+  <img alt="Import a strategy: one place for any format, which sets up a notebook, a group or an options structure" src="docs/images/import-light.png">
 </picture>
 
 <picture>
@@ -70,7 +81,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/tour-dark.png">
-  <img alt="The feature tour: step 3 of 9, 'Research a company first', with where to find it" src="docs/images/tour-light.png">
+  <img alt="The feature tour: step 3 of 10, 'Research a company first', with where to find it" src="docs/images/tour-light.png">
 </picture>
 
 | You want to… | Where it is |

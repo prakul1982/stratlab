@@ -2,6 +2,20 @@
 
 ## September 2026
 
+### Docs, landing page and tour brought up to date
+- **Landing page:**
+  - A new **Beyond one chart** section covers options (live paper trading, with backtesting coming soon), whole-group tests and paper trading, and importing any strategy, and the top menu links to it.
+  - The toolkit and FAQ now cover option structures, groups and imports from your own bots.
+- **README:**
+  - It covers **Import any strategy**, and paper trading groups and option structures.
+  - New screenshots of the Options tab and the Import page, and the rest are re-shot on the current design.
+- **Setup guide:**
+  - How to run StratLab next to your own bots on the same Zerodha account: a separate Kite Connect app, and a different login time.
+  - The Admin page's recent-errors list.
+  - How imports route to groups and options.
+  - Group and options paper trading, and when a paper session stops.
+- **The in-app tour** has a new step for groups, options and importing.
+
 ### Fixed: Admin page error while an options session runs
 - The Admin page's "Paper trading now" list crashed while any options session was running ("Something went wrong on our side (GET /admin/sessions)"). Options sessions now report their market like other sessions, and one broken session can no longer hide the whole list.
 
