@@ -49,6 +49,10 @@ Set these and the server logs in to Kite by itself every day at `KITE_AUTO_LOGIN
 - `KITE_TOTP_SECRET`: the secret key shown when you set up an authenticator app for Kite 2FA (the text under the QR code, not a 6-digit code). If you already set up 2FA without saving it, reset external 2FA in Kite to get a new one.
 - `ADMIN_TELEGRAM_CHAT_ID` (optional): your Telegram chat ID, to get a message if the login fails
 
+**Other programs on the same Zerodha account.** If your own trading bots also log in to this Zerodha account:
+- Give StratLab its **own Kite Connect app** (its own API key). A new login to the same app cancels the previous token. If StratLab and a bot share an API key, whichever logs in last knocks the other out. StratLab notices a cancelled token, goes offline with a clear message and sends a Telegram alert, but it deliberately doesn't log in again by itself, so the two don't fight.
+- Keep `KITE_AUTO_LOGIN_AT` a few minutes away from the other logins. Two logins in the same 30-second window use the same 2FA code, and Zerodha refuses the second. StratLab retries once with the next code, then stops for the day.
+
 To test the credentials straight away, send a POST request to `https://YOUR-BACKEND/admin/kite/auto-login?key=YOUR_ADMIN_KEY`. `/admin/status` shows the last result.
 
 > **Read before enabling.** Zerodha's Kite Connect terms expect the daily login to be done by hand, so automating it risks your API key or account being restricted. Your password and TOTP secret also give full trading access to your Zerodha account: keep them only in the host's environment variables and never commit them. If Zerodha rejects the password or code, the server doesn't retry until the next day, so it can't lock your account with repeated attempts. Leave these variables empty to keep logging in by hand.
@@ -126,7 +130,8 @@ Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and red
 - Kite status and a **Log in to Kite** button (no more typing `?key=` URLs), plus a button to run the automatic login now.
 - A live test of every AI provider, the order each kind of job asks them in, which keys are missing, whether the Finnhub key is set, and whether payments are set up.
 - Users, their plan and this month's usage, with **Change plan** to grant Basic or Pro by hand (for 30 days, 90 days, a year or with no end date).
-- Paper trading sessions running now, each with a Stop button.
+- Paper trading sessions running now (single instruments, groups and options), each with a Stop button.
+- **Recent server errors**: every unexpected error shows users a short code, like "(GET /notebooks, ref 3FA9C1)". This table lists the last 25 with the request, the error and the line of code, and keeps them across restarts.
 
 Everyone else gets a 403 from the `/admin` API and never sees the link. The older `?key=ADMIN_KEY` URLs keep working.
 
@@ -159,13 +164,15 @@ The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, wh
   - The verdict: under 15 trades is *not enough evidence*; a loss after costs is *no edge*; a failed unseen-data or nearby-settings check is *probably luck*; passing both (with no failed drawdown check) is *likely a real edge*; anything else is *mixed*.
 - **Walk-forward test** (`engine/walkforward.py`, run from a verdict page): the tradeable period is cut into 8 blocks. In each of 5 steps, up to 25 nearby settings of the first two indicator lengths are tried on 3 blocks of the past, the best is kept, and it trades the next block with fresh capital. The unseen blocks are compounded into one return and compared with the fixed settings and buy and hold. It fails if that return is a loss, passes if 60%+ of blocks are profitable and the unseen yearly return is at least half the tuned one, and warns otherwise (or when there were fewer than 10 unseen trades).
 - **Does it work on similar stocks?** (`basket.py`, run from a verdict page): the same rules and period on about 10 well-known instruments from the same market (four at a time), skipping any the market no longer lists. 60%+ profitable passes; under 40% fails.
-- **Import** (`backend/app/importer.py`, `POST /import/strategy`): the format is detected from the text (and file name). A StratLab export loads exactly, with no AI. Pine Script, Python, MetaTrader, AmiBroker and plain words go to the AI builder, told which language it's reading and to list what it couldn't express; that uses one AI build. If the AI is unavailable, Pine Script is read by a small built-in parser (SMA, EMA and RSI, crossovers and comparisons, entries, exits and percent stops). A script that trades both ways is imported in its main direction, with the opposite entry used as the exit.
+- **Import** (`backend/app/importer.py`, `POST /import/strategy`, the **Import a strategy** page): the format is detected from the text (and file name). Option structures (a straddle, strangle, condor and so on, spotted by `options/importer.is_options`) are translated into an options strategy and open in the Options tab. A strategy that trades a list of instruments comes back with a `universe`: a preset such as the liquid F&O stocks, or its own symbols, plus the most positions open at once. The frontend saves that as the new notebook's group. A StratLab export loads exactly, with no AI. Pine Script, Python, MetaTrader, AmiBroker and plain words go to the AI builder, told which language it's reading and to list what it couldn't express; that uses one AI build. If the AI is unavailable, Pine Script is read by a small built-in parser (SMA, EMA and RSI, crossovers and comparisons, entries, exits and percent stops). A script that trades both ways is imported in its main direction, with the opposite entry used as the exit.
 - **Notebooks** (`/notebooks` routes): stored in the existing `strategies` table, so no database migration is needed. A notebook can be pinned (`PUT` with `pinned`; pinned ones list first) and copied (`POST /notebooks/{id}/duplicate`, which copies the rules, market and notes but not the experiments). Each experiment keeps a compact record (up to 240 chart points, the trades, costs and verdict), capped at 50 per notebook.
 - **Live paper trading** (`backend/app/live.py`):
   - India: one KiteTicker connection feeds every session, and ticks become candles for your timeframe (market hours 09:15–15:30 IST).
   - Every other market (crypto, US, UK, Europe, Japan, forex): each session checks its source (Coinbase, or Yahoo Finance) every 15 seconds for newly closed candles. Yahoo prices can run a few minutes behind.
   - On each closed candle, the same engine decides whether to trade.
-  - Session state is saved every 30 seconds and resumes after a restart.
+  - Groups (`backend/app/group_live.py`, `POST /live/groups`): one engine and candle builder per member, fed by ticks (India) or polled a few members at a time (other markets). There's one pot of capital, a cap on positions open at once, and a group-wide daily loss cap that closes everything. Groups need intraday candles.
+  - Options sessions (`backend/app/options/session.py`) are polled every 5 seconds on live quotes; see Options above.
+  - Session state is saved every 30 seconds and resumes after a restart. A session keeps running until the user or the admin stops it, or the free trial or plan limit ends it. Indian sessions show as paused until the day's Kite login.
   - Free trials and plan limits are re-checked every minute.
 - **API routes:** see `backend/app/main.py`. The browser only ever talks to this API; it never touches the database or Kite directly.
 
@@ -177,4 +184,5 @@ The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, wh
 - European costs cover your brokerage only (no local transaction taxes such as France's), and Japanese costs likewise.
 - The tax figure is a rough estimate for Indian equity only, not tax advice.
 - `kiteconnect` (even its latest release, 5.2.2) pins `autobahn==19.11.2`, which has known advisories, so security scanners will keep flagging it until Zerodha updates the package. StratLab only uses it for the outgoing connection to Zerodha's own price feed, not to serve anything. Replacing Kite's ticker client with our own is the way to clear it if needed.
+- Options run as live paper trading only: backtesting them needs historical prices for every strike, which Kite doesn't provide for expired contracts. Group paper trading decides on each closed candle, not on every tick, and has no spread filter.
 - This is a paper trading tool: no real orders are placed. If you add live execution later, review SEBI's retail algo trading framework first.

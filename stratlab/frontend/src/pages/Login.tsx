@@ -49,8 +49,14 @@ const TOOLS: [string, string][] = [
   ["Built for intraday", "Entry windows, square-off time, trades per day, cooldowns and a daily loss cap, with intraday (MIS) costs."],
   ["20+ indicators", "Moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian breakouts and volume."],
   ["Compare experiments", "Every run is saved and numbered. Put two side by side to see exactly what changed and whether it helped."],
-  ["Paper trading", "When a verdict holds up, run it live on real prices with fake money, and get alerts when it trades."],
+  ["Paper trading", "When a verdict holds up, run it live on real prices with fake money: one stock, a whole group, or an option structure. It keeps running until you stop it."],
   ["Walk-forward test", "Re-tune the settings on the past, trade them on the next stretch the tuning never saw, slide forward, repeat. The strictest test there is."],
+];
+
+const BEYOND: [string, string, string][] = [
+  ["Options, live", "Straddles, strangles, iron flies, condors, spreads or any structure up to eight legs, paper traded on live NSE, BSE and MCX option prices. Every fill is the real bid or ask. Timed entries, stops on the whole position or each leg, re-centring, and sizing by the broker's real margin.", "Backtesting options: coming soon"],
+  ["Whole groups", "Run one set of rules across NIFTY 50, the liquid F&O stocks, US mega caps, large coins or your own list, with one pot of capital and a limit on positions open at once. See which members carried it, then paper trade the whole group live.", "Built for scanners and momentum books"],
+  ["Bring any strategy", "Drop in a config file, Pine Script, Python, MetaTrader, AmiBroker or plain words. StratLab works out what it is and sets it up in the right place: a notebook, a group, or the Options tab.", "Anything it can't carry over is listed"],
 ];
 
 const MARKETS: [string, string, string][] = [
@@ -64,7 +70,8 @@ const FAQ: [string, string][] = [
   ["Do I need to know how to code?", "No. You describe the idea in plain words. If something is missing, like when to sell, StratLab asks. You can also tap any rule to change it."],
   ["Where do the prices come from?", "Indian prices from Zerodha Kite, crypto from Coinbase, and US, UK, European, Japanese and forex prices from Yahoo Finance. Company research uses Finnhub, Screener.in, news and Wikipedia."],
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
-  ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, and lists anything it couldn't translate."],
+  ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a config file from your own bot, TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, sets up a group if it trades a list of stocks, opens option structures in the Options tab, and lists anything it couldn't translate."],
+  ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE and MCX option prices, with fills at the real bid and ask. Backtesting options is coming soon: it needs real historical prices for every strike, and we won't stand in a pricing model."],
   ["What does it cost?", "It's free to start, and every indicator and market is unlocked while StratLab is in early access."],
 ];
 
@@ -91,7 +98,7 @@ export function Login() {
       <header className="lp-nav">
         <a href="#top" className="brand" aria-label="StratLab home"><Logo size={46} /></a>
         <nav aria-label="Sections">
-          <a href="#how">How it works</a><a href="#checks">Honesty checks</a><a href="#research">Research</a><a href="#markets">Markets</a><a href="#faq">FAQ</a>
+          <a href="#how">How it works</a><a href="#checks">Honesty checks</a><a href="#beyond">Options &amp; groups</a><a href="#research">Research</a><a href="#markets">Markets</a><a href="#faq">FAQ</a>
         </nav>
         <button className="btn outline sm" onClick={signIn}>Sign in</button>
       </header>
@@ -182,7 +189,22 @@ export function Login() {
         </div>
       </section>
 
-      <section id="research" className="lp-sec lp-alt">
+      <section id="beyond" className="lp-sec lp-alt">
+        <div className="lp-wrap stack" style={{ gap: 32 }}>
+          <div className="lp-head">
+            <span className="eyebrow">Beyond one chart</span>
+            <h2 className="serif lp-h2">Options, whole groups, and the strategies you already run.</h2>
+            <p className="lp-p">Real trading isn't one stock and one rule. StratLab handles the rest too.</p>
+          </div>
+          <div className="lp-beyond">
+            {BEYOND.map(([t, b, tag]) => (
+              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="research" className="lp-sec">
         <div className="lp-wrap lp-split">
           <div className="stack" style={{ gap: 14 }}>
             <span className="eyebrow">Research</span>
@@ -198,7 +220,7 @@ export function Login() {
         </div>
       </section>
 
-      <section className="lp-sec">
+      <section className="lp-sec lp-alt">
         <div className="lp-wrap stack" style={{ gap: 32 }}>
           <div className="lp-head"><span className="eyebrow">The toolkit</span><h2 className="serif lp-h2">Everything a serious test needs.</h2></div>
           <div className="lp-tools">
@@ -207,7 +229,7 @@ export function Login() {
         </div>
       </section>
 
-      <section id="markets" className="lp-sec lp-alt">
+      <section id="markets" className="lp-sec">
         <div className="lp-wrap stack" style={{ gap: 32 }}>
           <div className="lp-head">
             <span className="eyebrow">Markets</span>
@@ -222,7 +244,7 @@ export function Login() {
         </div>
       </section>
 
-      <section id="faq" className="lp-sec">
+      <section id="faq" className="lp-sec lp-alt">
         <div className="lp-wrap lp-split">
           <div className="stack" style={{ gap: 14 }}>
             <span className="eyebrow">Questions</span>

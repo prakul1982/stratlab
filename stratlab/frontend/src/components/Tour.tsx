@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Compass, Globe, Lens, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
+import { Compass, Globe, Layers, Lens, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
 import { Modal } from "./ui";
 import { LogoMark } from "./Logo";
 
@@ -29,6 +29,9 @@ const STEPS: Step[] = [
   { icon: <Pulse size={34} />, title: "Paper trade what survives",
     body: "When an idea earns a real verdict, run it live on paper: real prices, fake money, same rules. You get alerts when it would trade.",
     where: "\"Paper trade\" at the top of a notebook or verdict page. Running sessions are under Paper trading in the sidebar." },
+  { icon: <Layers size={34} />, title: "Groups, options and your own strategies",
+    body: "Test one set of rules on a whole group of stocks with shared capital, paper trade option structures on live NSE, BSE and MCX prices, or import a strategy you already run and let StratLab set it up.",
+    where: "\"Testing on\" on a notebook for groups; Options and Import a strategy in the sidebar." },
   { icon: <Share size={34} />, title: "Share, export and keep notes",
     body: "Save a verdict as an image to post anywhere, export the rules as a file, and jot lab notes so you remember why you changed something.",
     where: "\"Share verdict\" on a result, \"More → Export\" and Lab notes in a notebook." },
