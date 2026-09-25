@@ -2,6 +2,16 @@
 
 ## September 2026
 
+### Options on your own signal
+- **Setup:** on the Options tab, set **Enter** to **When a notebook's rules say so** and pick a notebook with rules on 5-minute, 15-minute or hourly candles, for example a 7 EMA crossover.
+- **How it trades:**
+  - The rules run on the underlying's own candles, the same ones a backtest uses.
+  - When they go long, the session enters your structure. Buying the at-the-money call is the default.
+  - When they go short, it can enter the mirror (calls and puts swapped, so it buys the put), or stay out.
+  - When the rules exit or flip, the options are closed.
+- **Limits:** your stop, target and square-off still apply, and a stopped trade isn't re-entered until the rules give a new signal.
+- **The session page** shows what the rules are doing: long, short or flat, and their last candle.
+
 ### Recording option chains for options backtesting
 - Kite keeps no prices for expired options, so StratLab now records its own.
 - **What:** every 5 minutes in market hours it saves the NIFTY, BANKNIFTY and SENSEX chains (current and next expiry, 15 strikes either side of the money): bid, ask, last price and open interest for each call and put, plus the spot price. That's about 1 MB a day.

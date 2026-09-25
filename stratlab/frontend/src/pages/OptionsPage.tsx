@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { money, price } from "../lib/format";
 import { HELP } from "../lib/help";
 import { blankOptions, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
-import type { LiveRow, OptChain, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
+import type { LiveRow, Notebook, OptChain, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
 import { LineChart } from "../components/Charts";
 import { Info, Loading } from "../components/ui";
 
@@ -144,7 +144,7 @@ function Chain({ s }: { s: OptionStrategy }) {
 }
 
 export function OptionsPage() {
-  const { fail, notify, refreshMe } = useApp();
+  const { fail, notify, refreshMe, notebooks } = useApp();
   const nav = useNavigate();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
@@ -190,7 +190,8 @@ export function OptionsPage() {
     catch (e) { fail(e); } finally { setPricing(false); }
   };
   const start = async () => {
-    if (!confirm(`Start paper trading "${s.name}"? It enters at ${s.timing.entry} on market days with fake money, on live ${s.underlying} option prices.`)) return;
+    const when = s.signal ? `whenever "${s.signal.name}" signals a trade (from ${s.timing.entry})` : `at ${s.timing.entry}`;
+    if (!confirm(`Start paper trading "${s.name}"? It enters ${when} on market days with fake money, on live ${s.underlying} option prices.`)) return;
     setStarting(true);
     try {
       const snap = await api<{ id: string }>("/options/sessions", { method: "POST", body: { strategy: s } });
@@ -209,6 +210,27 @@ export function OptionsPage() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 
+  const [sigBusy, setSigBusy] = useState(false);
+  const [ruleMode, setRuleMode] = useState(!!s.signal);
+  const pickRules = async (id: string) => {
+    if (!id) return;
+    setSigBusy(true);
+    try {
+      const nb = await api<Notebook>(`/notebooks/${id}`);
+      if (!["5m", "15m", "1h"].includes(nb.strategy.tf)) {
+        notify(`"${nb.name}" uses daily candles. Option trades close every day, so pick rules on 5-minute, 15-minute or hourly candles.`);
+        return;
+      }
+      const signal = { rules: nb.strategy, notebook: nb.id, name: nb.name, short: s.signal?.short ?? (nb.strategy.side === "long" ? "none" : "mirror") as "none" | "mirror" };
+      // a directional signal usually buys an option; swap out the default short straddle
+      const bc = STRUCTURES.find((x) => x.id === "buy_call")!;
+      if (s.structure === "short_straddle") {
+        patch({ signal, structure: "buy_call", offsetUnit: bc.unit, legs: bc.legs.map((l) => ({ ...l })), name: `${s.underlying} options on ${nb.name}` });
+        notify("Switched the structure to Buy a call. Change it above if you want something else.");
+      } else patch({ signal, name: `${s.underlying} options on ${nb.name}` });
+    } catch (e) { fail(e); } finally { setSigBusy(false); }
+  };
+  const sigTf = s.signal ? ({ "5m": "5-minute", "15m": "15-minute", "1h": "hourly" } as Record<string, string>)[s.signal.rules.tf] : "";
   const r = s.risk, t = s.timing, rc = s.recenter, z = s.sizing, c = s.costs;
   const setRisk = (p: Partial<OptionStrategy["risk"]>) => patch({ risk: { ...r, ...p } });
   const setTiming = (p: Partial<OptionStrategy["timing"]>) => patch({ timing: { ...t, ...p } });
@@ -290,8 +312,35 @@ export function OptionsPage() {
           </div>
         </details>
 
+        <div className="opt-row">
+          <span className="opt-label">Enter</span>
+          <div className="stack" style={{ gap: 10 }}>
+            <Seg label="When to enter" value={ruleMode ? "rules" : "time"}
+              options={[["time", "At a set time"], ["rules", "When a notebook's rules say so"]]}
+              onChange={(v) => { setRuleMode(v === "rules"); if (v === "time") patch({ signal: null }); }} />
+            {ruleMode && <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+              <span className="chip-select">
+                <select aria-label="Notebook with the rules" value={s.signal?.notebook ?? ""} disabled={sigBusy} onChange={(e) => pickRules(e.target.value)}>
+                  <option value="">{s.signal ? s.signal.name : "Use a notebook's rules…"}</option>
+                  {(notebooks ?? []).filter((n) => n.id !== s.signal?.notebook).map((n) => (
+                    <option key={n.id} value={n.id}>{n.name}{n.tf ? ` (${n.tf})` : ""}</option>))}
+                </select>
+              </span>
+              {s.signal && <Seg label="Short signals" value={s.signal.short}
+                options={[["mirror", "Short signals: swap calls and puts"], ["none", "Long signals only"]]}
+                onChange={(v) => patch({ signal: { ...s.signal!, short: v } })} />}
+            </div>}
+            {ruleMode && !s.signal && <p className="small muted">Pick a notebook with rules on 5-minute, 15-minute or hourly candles, for example a 7 EMA crossover on NIFTY 50.</p>}
+            {s.signal && <p className="small muted" style={{ maxWidth: "70ch" }}>
+              The rules of <b>{s.signal.name}</b> run on {s.underlying}'s own {sigTf} candles. When they go long, this enters the legs above
+              {s.signal.short === "mirror" ? "; when they go short, it enters the same legs with calls and puts swapped" : ""}. When they exit, the options are closed.
+              Your stop, target and square-off below still apply, and one signal is traded once.
+            </p>}
+          </div>
+        </div>
+
         <div className="opt-grid">
-          <Time label="Enter at" value={t.entry} onChange={(v) => setTiming({ entry: v })} />
+          <Time label={s.signal ? "Earliest entry" : "Enter at"} value={t.entry} onChange={(v) => setTiming({ entry: v })} />
           <Time label="Last entry" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />
           <Time label="Square off" value={t.squareoff} onChange={(v) => setTiming({ squareoff: v })} />
           <Num label="Units" value={z.lots} min={1} max={1000} width={120} onChange={(v) => setZ({ lots: Math.round(v) })} />
@@ -360,7 +409,7 @@ export function OptionsPage() {
         <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
           <label className="field" style={{ flex: "1 1 220px" }}>Name<input value={s.name} maxLength={80} onChange={(e) => patch({ name: e.target.value })} /></label>
           <button className="btn quiet" disabled={pricing || !!offline} onClick={price_}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
-          <button className="btn blue" disabled={starting || !!offline} onClick={start}>{starting ? "Starting…" : "Start paper trading"}</button>
+          <button className="btn blue" disabled={starting || !!offline || (ruleMode && !s.signal)} onClick={start}>{starting ? "Starting…" : "Start paper trading"}</button>
         </div>
         {preview && (
           <div className="stack" style={{ gap: 10 }}>

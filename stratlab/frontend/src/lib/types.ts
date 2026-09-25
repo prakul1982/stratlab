@@ -143,6 +143,7 @@ export interface OptionStrategy {
   sizing: { mode: "lots" | "margin"; lots: number; capital: number; safety: number };
   costs: { brokerage: number; slippageTicks: number; freeze: number };
   notes: string;
+  signal?: { rules: Strategy; notebook?: string | null; name: string; short: "mirror" | "none" } | null;
 }
 export interface Underlying { exchange: "NFO" | "BFO" | "MCX"; name: string; lot: number; expiries: string[]; venue: string; popular: boolean; freeze: number; index: boolean }
 export interface OptQuote { ltp: number | null; bid: number | null; ask: number | null; oi?: number | null; volume?: number | null; ts?: string | null }
@@ -162,7 +163,9 @@ export interface OptionSnapshot {
   spot: number | null; last_tick_at?: string | null; fresh: boolean; feed_connected?: boolean; expiry?: string | null; lot?: number | null; note: string;
   legs: OptLegLive[];
   position: { opened: string; center: number; spot_in: number; credit: number; mtm: number; costs: number; net: number; best: number; worst: number;
-    rolls: number; units: number; orders: number; expiry: string } | null;
+    rolls: number; units: number; orders: number; expiry: string; dir?: "long" | "short" | null } | null;
+  signal?: { tf: Tf; position: "long" | "short" | null; since: string | null; last_candle: string | null; price: number | null; ok: boolean;
+    name: string; short: "mirror" | "none" } | null;
   events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; slices?: number }[];
   trades: OptTrade[]; equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; cash: number; realised: number; today: number; halted: boolean; entries_today: number;

@@ -10,6 +10,7 @@ UNDERLYINGS = {  # (exchange, name): (spot key, spot, strike gap, lot)
     ("BFO", "SENSEX"): ("BSE:SENSEX", 82000.0, 100, 20),
     ("MCX", "CRUDEOIL"): ("MCX:CRUDEOILFUT", 5600.0, 50, 100),
 }
+TOKENS = {sk: 900001 + i for i, (sk, *_) in enumerate(UNDERLYINGS.values())}
 
 
 def _expiries():
@@ -55,6 +56,9 @@ class _Inner:
                         "depth": {"buy": [{"price": round(px - spread / 2, 2)}], "sell": [{"price": round(px + spread / 2, 2)}]}}
         return out
 
+    def ltp(self, keys):
+        return {k: {"instrument_token": TOKENS[k], "last_price": self.o.spot(k, datetime.now(IST))} for k in keys if k in TOKENS}
+
     def basket_order_margins(self, orders, consider_positions=False, mode="compact"):
         sold = sum(o["quantity"] for o in orders if o["transaction_type"] == "SELL")
         hedged = any(o["transaction_type"] == "BUY" for o in orders)
@@ -78,6 +82,23 @@ class FakeOptionsKite:
 
     def _throttle(self):
         pass
+
+    def history(self, token, tf, days):
+        """Candles of the spot's wave in market hours, for rules that drive option trades."""
+        key = next(k for k, v in TOKENS.items() if v == token)
+        step = {"5m": 5, "15m": 15, "1h": 60}[tf]
+        now = datetime.now(IST)
+        out = []
+        for d in range(min(days, 30), -1, -1):
+            day = (now - timedelta(days=d)).replace(hour=9, minute=15, second=0, microsecond=0)
+            if day.weekday() >= 5:
+                continue
+            t = day
+            while t < day.replace(hour=15, minute=30) and t <= now:
+                prices = [self.spot(key, t + timedelta(minutes=m)) for m in range(0, step + 1, max(1, step // 5))]
+                out.append({"t": t.isoformat(), "o": prices[0], "h": max(prices), "l": min(prices), "c": prices[-1], "v": 0})
+                t += timedelta(minutes=step)
+        return out
 
     def spot(self, key, now):
         for (_, _), (sk, spot, gap, _) in UNDERLYINGS.items():

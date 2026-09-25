@@ -88,11 +88,18 @@ class OptionsEngine:
         self.halted = st.get("halted", False)
         self.cool_until = st.get("cool_until")
         self.note = st.get("note", "")
+        self.used_signal = st.get("used_signal")    # the rules' trade we last acted on, so a stop doesn't re-enter it
 
     def dump(self) -> dict:
         return {"cash": self.cash, "pos": self.pos, "trades": self.trades[-500:], "events": self.events[-400:],
                 "day": self.day, "entries_today": self.entries_today, "day_realised": self.day_realised,
-                "halted": self.halted, "cool_until": self.cool_until, "note": self.note}
+                "halted": self.halted, "cool_until": self.cool_until, "note": self.note, "used_signal": self.used_signal}
+
+    def legs_for(self, direction: str | None):
+        """The structure for a signal's direction: the legs as set for long, calls and puts swapped for short."""
+        if direction != "short":
+            return self.s.legs
+        return [lg.model_copy(update={"opt": "PE" if lg.opt == "CE" else "CE"}) for lg in self.s.legs]
 
     # ---------- marks ----------
     def _mark(self, leg: dict, quotes: dict) -> float:
@@ -189,9 +196,9 @@ class OptionsEngine:
             self.note = f"Not enough capital for even one unit (needs about {one:,.0f} of margin)."
         return units
 
-    def _enter(self, now, spot, contracts: Contracts, quotes, out) -> bool:
+    def _enter(self, now, spot, contracts: Contracts, quotes, out, direction: str | None = None) -> bool:
         atm = contracts.atm(spot)
-        plan = self._plan(contracts, atm)
+        plan = self._plan(contracts, atm, self.legs_for(direction))
         if plan is None:
             self.note = "A strike this structure needs isn't listed for that expiry."
             return False
@@ -204,7 +211,7 @@ class OptionsEngine:
             return False
         self.pos = {"opened": now.isoformat(), "center": atm, "spot_in": spot, "legs": [], "closed_pnl": 0.0,
                     "costs": 0.0, "orders": 0, "peak": 0.0, "low": 0.0, "rolls": 0, "expiry": contracts.expiry,
-                    "units": units, "last_check": now.isoformat(), "credit": 0.0}
+                    "units": units, "last_check": now.isoformat(), "credit": 0.0, "dir": direction}
         # buy the hedges first, as a broker would, so the sold legs get the margin benefit
         for opt, side, k, n in sorted(plan, key=lambda x: x[1] != "buy"):
             self._open_leg(now, contracts, quotes, opt, side, k, n * units * contracts.lot, "Entry", out)
@@ -242,7 +249,7 @@ class OptionsEngine:
         atm = contracts.atm(spot)
         if abs(atm - p["center"]) < r.threshold * contracts.step(spot) - 1e-9:
             return
-        legs = [lg for lg in self.s.legs if r.roll == "all" or lg.side == "sell"]
+        legs = [lg for lg in self.legs_for(p.get("dir")) if r.roll == "all" or lg.side == "sell"]
         plan = self._plan(contracts, atm, legs)
         if plan is None or any(fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None for o, sd, k, _ in plan):
             return   # try again at the next check
@@ -257,8 +264,11 @@ class OptionsEngine:
                                            for l in p["legs"] if l["open"])
 
     # ---------- one pass ----------
-    def step(self, now: datetime, spot: float | None, contracts: Contracts | None, quotes: dict, fresh: bool) -> list[dict]:
-        """Act on one snapshot. `fresh` is False when the quotes are old (market closed, holiday, dead feed)."""
+    def step(self, now: datetime, spot: float | None, contracts: Contracts | None, quotes: dict, fresh: bool,
+             want: dict | None = None) -> list[dict]:
+        """Act on one snapshot. `fresh` is False when the quotes are old (market closed, holiday, dead feed).
+        With a signal set, `want` is the rules' open trade ({"dir": "long"|"short", "key": its entry time}) or None."""
+        sig = self.s.signal
         out: list[dict] = []
         t, rk = self.s.timing, self.s.risk
         today = now.date().isoformat()
@@ -270,6 +280,9 @@ class OptionsEngine:
                 return out   # without live prices no stop can be judged; hold and wait
             if now >= _at(now, t.squareoff) or p["opened"][:10] != today:
                 self._exit(now, quotes, "Square-off", out)
+                return out
+            if sig and (not want or want["dir"] != p.get("dir")):
+                self._exit(now, quotes, "The rules exited" if not want else "The rules turned " + want["dir"], out)
                 return out
             if rk.legStopPct:
                 for leg in p["legs"]:
@@ -305,10 +318,21 @@ class OptionsEngine:
             return out
         if self.cool_until and now < datetime.fromisoformat(self.cool_until):
             return out
+        if sig:
+            if not want:
+                self.note = "Waiting for the rules to signal a trade."
+                return out
+            if want["key"] == self.used_signal:
+                self.note = "Already traded this signal; waiting for the next one."
+                return out
+            if want["dir"] == "short" and sig.short == "none":
+                self.note = "The rules are short; this session only takes long signals."
+                return out
         if not fresh or not spot or not contracts:
             self.note = "Waiting for live prices." if not fresh else "Waiting for the option chain."
             return out
-        self._enter(now, spot, contracts, quotes, out)
+        if self._enter(now, spot, contracts, quotes, out, want["dir"] if sig else None) and sig:
+            self.used_signal = want["key"]
         return out
 
     def legs_view(self, quotes: dict) -> list[dict]:
