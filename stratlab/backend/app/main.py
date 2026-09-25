@@ -1016,11 +1016,16 @@ def admin_sessions(_=Depends(admin.admin_profile)):
     emails = {}
     out = []
     for s in list(manager.sessions.values()):
-        if s.user_id not in emails:
-            emails[s.user_id] = db.get_profile(s.user_id).get("email")
-        account = s.snapshot().get("account") or {}
-        out.append({"id": s.id, "name": s.name, "email": emails[s.user_id], "symbol": s.inst.get("symbol"),
-                    "market": s.market, "started_at": s.started_at, "capital": account.get("capital"),
+        try:
+            if s.user_id not in emails:
+                emails[s.user_id] = (db.get_profile(s.user_id) or {}).get("email")
+            account = s.snapshot().get("account") or {}
+        except Exception as e:   # one broken session mustn't hide the rest
+            print("admin sessions:", s.id, e)
+            account = {}
+        out.append({"id": s.id, "name": s.name, "email": emails.get(s.user_id), "symbol": s.inst.get("symbol"),
+                    "market": getattr(s, "market", s.inst.get("market")), "kind": getattr(s, "kind", "rules"),
+                    "started_at": s.started_at, "capital": account.get("capital"),
                     "equity": account.get("equity"), "trades": account.get("trades")})
     return out
 

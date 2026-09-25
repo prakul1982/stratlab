@@ -2,6 +2,9 @@
 
 ## September 2026
 
+### Fixed: Admin page error while an options session runs
+- The Admin page's "Paper trading now" list crashed while any options session was running ("Something went wrong on our side (GET /admin/sessions)"). Options sessions now report their market like other sessions, and one broken session can no longer hide the whole list.
+
 ### Easier to trace server errors
 - An unexpected server error now shows a short reference code, like "Something went wrong on our side (ref 3FA9C1)".
 - The Admin page lists recent errors: the code, when it happened, which request, the error, and where in the code it failed. You can match a user's report to its cause without digging through the host's logs.
