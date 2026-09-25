@@ -1,4 +1,4 @@
-import { StrictMode, useCallback } from "react";
+import { lazy, StrictMode, Suspense, useCallback, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "@fontsource/montserrat/300.css";
@@ -17,25 +17,35 @@ import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { Login } from "./pages/Login";
 import { Home, NewNotebook } from "./pages/Home";
-import { NotebookPage } from "./pages/NotebookPage";
-import { ExperimentPage } from "./pages/ExperimentPage";
-import { MarketPage } from "./pages/MarketPage";
-import { OptionsPage } from "./pages/OptionsPage";
-import { ImportPage } from "./pages/ImportPage";
-import { PublicVerdict } from "./pages/PublicVerdict";
-import { OptionsSession } from "./pages/OptionsSession";
-import { PaperPage } from "./pages/PaperPage";
-import { PlansPage } from "./pages/PlansPage";
-import { AccountPage } from "./pages/AccountPage";
-import { AdminPage } from "./pages/AdminPage";
-import { CompareExperiments } from "./pages/CompareExperiments";
-import { ComparePage, CompanyPage, PulsePage, ResearchHome, ThemesPage, WatchlistPage } from "./pages/Research";
+
+// every page but the first ones loads when it's opened, so the app starts fast
+const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
+  lazy(() => load().then((m) => ({ default: m[name] })));
+const NotebookPage = page(() => import("./pages/NotebookPage"), "NotebookPage");
+const ExperimentPage = page(() => import("./pages/ExperimentPage"), "ExperimentPage");
+const MarketPage = page(() => import("./pages/MarketPage"), "MarketPage");
+const OptionsPage = page(() => import("./pages/OptionsPage"), "OptionsPage");
+const ImportPage = page(() => import("./pages/ImportPage"), "ImportPage");
+const PublicVerdict = page(() => import("./pages/PublicVerdict"), "PublicVerdict");
+const OptionsSession = page(() => import("./pages/OptionsSession"), "OptionsSession");
+const PaperPage = page(() => import("./pages/PaperPage"), "PaperPage");
+const PlansPage = page(() => import("./pages/PlansPage"), "PlansPage");
+const AccountPage = page(() => import("./pages/AccountPage"), "AccountPage");
+const AdminPage = page(() => import("./pages/AdminPage"), "AdminPage");
+const CompareExperiments = page(() => import("./pages/CompareExperiments"), "CompareExperiments");
+const research = () => import("./pages/Research");
+const ResearchHome = page(research, "ResearchHome");
+const ThemesPage = page(research, "ThemesPage");
+const PulsePage = page(research, "PulsePage");
+const ComparePage = page(research, "ComparePage");
+const WatchlistPage = page(research, "WatchlistPage");
+const CompanyPage = page(research, "CompanyPage");
 
 function Routed() {
   const { session, ready, dataOffline, meError } = useApp();
   const loc = useLocation();
   // shared verdicts are public: no sign-in needed
-  if (loc.pathname.startsWith("/verdict/")) return <Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes>;
+  if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;
   if (!ready) return <Loading label="Opening StratLab" />;
   if (!session) return <Login />;
   return (
@@ -47,6 +57,7 @@ function Routed() {
           <Link to="/account" className="btn sm quiet">Run a connection check</Link>
         </div>
       )}
+      <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/new" element={<NewNotebook />} />
@@ -70,6 +81,7 @@ function Routed() {
         <Route path="/research/:region/:symbol" element={<CompanyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </Shell>
   );
 }

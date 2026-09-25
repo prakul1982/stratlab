@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
 
-from datetime import datetime
 
 from app.plans import IST, effective_plan, trial_end, trial_state
 

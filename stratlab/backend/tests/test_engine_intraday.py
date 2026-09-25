@@ -1,11 +1,9 @@
 """Intraday rules: day values, candle shape, higher timeframes, both directions, sessions, stops, scoring, sizing."""
-import math
-
 import numpy as np
 import pytest
 
 from app.engine import costs as C
-from app.engine.core import Ctx, Engine, backtest, bar_clock
+from app.engine.core import Ctx, Engine, bar_clock
 from app.models import Ref, Strategy
 
 RISK = {"capital": 100000, "riskPct": 1, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0}

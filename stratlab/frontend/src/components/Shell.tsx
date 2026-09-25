@@ -4,7 +4,6 @@ import { useApp } from "../lib/app";
 import { Book, Compass, Layers, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
 import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
-import { VerdictBadge } from "./ui";
 import { inWords, marketState } from "../lib/marketHours";
 
 const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US", UK: "UK", EU: "Europe", JP: "Japan", FX: "Forex" };
@@ -106,4 +105,3 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-export { VerdictBadge };

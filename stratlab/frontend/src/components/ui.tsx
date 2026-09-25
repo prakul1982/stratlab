@@ -3,7 +3,7 @@ import { useApp } from "../lib/app";
 import type { CheckStatus, VerdictKind } from "../lib/types";
 import { Close } from "./Icons";
 
-export const VERDICT_NAME: Record<VerdictKind, string> = {
+const VERDICT_NAME: Record<VerdictKind, string> = {
   edge: "Likely real edge", mixed: "Mixed evidence", luck: "Probably luck", not_enough: "Not enough evidence", no_edge: "No edge",
 };
 export const STATUS_NAME: Record<CheckStatus, string> = { pass: "Passed", warn: "Warning", fail: "Failed", skip: "Skipped" };

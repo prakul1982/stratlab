@@ -18,10 +18,11 @@ class FakeDB:
         return self.profiles[uid]
 
 
-def single(uid, name, market, trades, qty=0, unreal=0.0, equity=10500.0):
+def single(uid, name, market, trades, qty=0, unreal=0.0, equity=10500.0, tick="2026-09-24T15:20:00+05:30"):
     eng = SimpleNamespace(trades=trades)
     snap = {"kind": "single", "account": {"capital": 10000, "equity": equity, "qty": qty, "unrealised": unreal}}
-    return SimpleNamespace(user_id=uid, name=name, market=market, inst={"currency": "INR"}, engine=eng, snapshot=lambda: snap)
+    return SimpleNamespace(user_id=uid, name=name, market=market, inst={"currency": "INR"}, engine=eng, snapshot=lambda: snap,
+                           last_tick_at=tick)
 
 
 def utc(*a):
@@ -82,3 +83,13 @@ def test_group_and_options_sessions():
                         snapshot=lambda: {"kind": "options", "position": None, "account": {"capital": 1000, "equity": 1800, "unrealised": 0}})
     r = R.summarise(o, day)
     assert (r["closed"], r["pnl"], r["open"]) == (1, 800.0, 0)
+
+
+def test_no_report_on_a_holiday():
+    db = FakeDB({"u1": {"alerts_enabled": True}})
+    sent = []
+    idle = single("u1", "EMA", "IN", [], tick="2026-09-23T15:20:00+05:30")     # last price was yesterday
+    assert R.Reporter(db).run([idle], utc(2026, 9, 24, 10, 15), can_alert=lambda p: True, market_name=str,
+                              send=lambda *x: sent.append(x)) == [] and not sent
+    us = single("u1", "SPY dips", "US", [], tick="2026-09-24T20:05:00+00:00")   # 16:05 New York
+    assert R.traded_today([us], "US", "2026-09-24") and not R.traded_today([us], "US", "2026-09-25")

@@ -80,8 +80,6 @@ export function ago(iso: string | null | undefined): string {
 }
 
 export const TF_NAME: Record<string, string> = { "1d": "Daily", "1h": "1-hour", "15m": "15-minute", "5m": "5-minute" };
-export const TF_UNIT: Record<string, string> = { "1d": "day", "1h": "hour", "15m": "15-min", "5m": "5-min" };
-
 export function periodName(days: number): string {
   if (days >= 365 && days % 365 < 5) return `${Math.round(days / 365)} year${days >= 730 ? "s" : ""}`;
   if (days >= 28) return `${Math.round(days / 30.4)} months`;

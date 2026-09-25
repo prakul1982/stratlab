@@ -49,13 +49,14 @@ const TOOLS: [string, string][] = [
   ["Built for intraday", "Entry windows, square-off time, trades per day, cooldowns and a daily loss cap, with intraday (MIS) costs."],
   ["20+ indicators", "Moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian breakouts and volume."],
   ["Compare experiments", "Every run is saved and numbered. Put two side by side to see exactly what changed and whether it helped."],
-  ["Paper trading", "When a verdict holds up, run it live on real prices with fake money: one stock, a whole group, or an option structure. It keeps running until you stop it."],
+  ["Paper trading", "When a verdict holds up, run it live on real prices with fake money: one stock, a whole group, or an option structure. It keeps running until you stop it, with Telegram or email alerts and a short report after each market closes."],
   ["Walk-forward test", "Re-tune the settings on the past, trade them on the next stretch the tuning never saw, slide forward, repeat. The strictest test there is."],
+  ["Share the verdict", "Send a card with the chart and all four checks straight from your phone, or a public link anyone can open. Your rules stay private."],
 ];
 
 const BEYOND: [string, string, string][] = [
-  ["Options, live", "Straddles, strangles, iron flies, condors, spreads or any structure up to eight legs, paper traded on live NSE, BSE and MCX option prices. Every fill is the real bid or ask. Timed entries, stops on the whole position or each leg, re-centring, and sizing by the broker's real margin.", "Backtesting options: coming soon"],
-  ["Whole groups", "Run one set of rules across NIFTY 50, the liquid F&O stocks, US mega caps, large coins or your own list, with one pot of capital and a limit on positions open at once. See which members carried it, then paper trade the whole group live.", "Built for scanners and momentum books"],
+  ["Options, live", "Straddles, strangles, iron flies, condors, spreads or any structure up to eight legs, paper traded on live NSE, BSE and MCX option prices. Every fill is the real bid or ask. Enter at a set time or whenever your own rules signal, say a 7 EMA cross buying the NIFTY call. Stops on the whole position or each leg, re-centring, and sizing by the broker's real margin.", "Chains recorded every 5 minutes for backtesting"],
+  ["Whole groups", "Run one set of rules across NIFTY 50, the liquid F&O stocks, US mega caps, large coins or your own list, with one pot of capital and a limit on positions open at once. See which members carried it, then paper trade the whole group live, entering on the live price and skipping stocks whose spread is too wide.", "Built for scanners and momentum books"],
   ["Bring any strategy", "Drop in a config file, Pine Script, Python, MetaTrader, AmiBroker or plain words. StratLab works out what it is and sets it up in the right place: a notebook, a group, or the Options tab.", "Anything it can't carry over is listed"],
 ];
 
@@ -71,8 +72,9 @@ const FAQ: [string, string][] = [
   ["Where do the prices come from?", "Indian prices from Zerodha Kite, crypto from Coinbase, and US, UK, European, Japanese and forex prices from Yahoo Finance. Company research uses Finnhub, Screener.in, news and Wikipedia."],
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
   ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a config file from your own bot, TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, sets up a group if it trades a list of stocks, opens option structures in the Options tab, and lists anything it couldn't translate."],
-  ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE and MCX option prices, with fills at the real bid and ask. Backtesting options is coming soon: it needs real historical prices for every strike, and we won't stand in a pricing model."],
-  ["What does it cost?", "It's free to start, and every indicator and market is unlocked while StratLab is in early access."],
+  ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE and MCX option prices, with fills at the real bid and ask. You can also let a notebook's rules decide when: long signals buy your structure and short signals its mirror. Backtesting options needs real historical prices for every strike, which nobody keeps for expired options, so StratLab is recording the NIFTY, BANKNIFTY and SENSEX chains every 5 minutes to build that history. We won't stand in a pricing model."],
+  ["What does it cost?", "It's free to start: experiments every month, AI strategy builds, and 5 market days of paper trading. Every indicator and market is unlocked while StratLab is in early access."],
+  ["Can I share a result?", "Yes. Share a verdict as an image from your phone, or make a public link. It shows the verdict, the chart and the checks, never your rules, and you can turn it off at any time."],
 ];
 
 export function Login() {

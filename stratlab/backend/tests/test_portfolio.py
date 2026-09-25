@@ -1,6 +1,4 @@
 """Group (portfolio) backtests: shared slots, a portfolio-wide daily loss cap, the API."""
-import pytest
-
 from app.engine import portfolio
 from app.models import Strategy
 from tests.test_engine_intraday import day

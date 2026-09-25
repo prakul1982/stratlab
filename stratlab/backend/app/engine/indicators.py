@@ -12,7 +12,6 @@ DEFAULTS = {
     "atr": (14, None),
 }
 # values that live on the candle or the trading day rather than being an indicator with a length
-CANDLE = {"open", "high", "low", "body", "upper_wick", "lower_wick", "range"}
 DAY = {"prev_close", "day_open", "day_high", "day_low", "day_chg"}
 # drawn under the price chart rather than on it
 OSCILLATORS = {"rsi", "macd", "macd_signal", "macd_hist", "adx", "stoch_k", "atr_pct", "volume", "vol_sma",

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { ago, money, pct, price, priceAxis, signClass } from "../lib/format";
+import { ago, pct, price, priceAxis, signClass } from "../lib/format";
 import {
-  bandPosition, bigMoney, metricText, ordinal, researchApi, trendValue, useWatchlist,
+  bandPosition, metricText, ordinal, researchApi, trendValue, useWatchlist,
   type Company, type CompanyAI, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { LineChart } from "./Charts";
@@ -298,7 +298,7 @@ export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
 }
 
 const DONUT = ["var(--ink)", "var(--blue)", "var(--orange)", "var(--dash)", "var(--blue-ink)", "var(--orange-ink)", "var(--muted)", "var(--line-2)"];
-export function Donut({ segments }: { segments: { label: string; share: number }[] }) {
+function Donut({ segments }: { segments: { label: string; share: number }[] }) {
   const tot = segments.reduce((a, s) => a + s.share, 0) || 1;
   const R = 42, C = 2 * Math.PI * R;
   let acc = 0;
@@ -326,7 +326,7 @@ export function Donut({ segments }: { segments: { label: string; share: number }
   );
 }
 
-export function ScoreBar({ label, v }: { label: string; v: number | null }) {
+function ScoreBar({ label, v }: { label: string; v: number | null }) {
   if (v == null) return null;
   return (
     <div className="score-row">
@@ -529,8 +529,3 @@ export function SourcesNote({ sources }: { sources: Company["sources"] }) {
   return <div className="banner small" role="status">Some data is missing: {bad.map((s) => `${s.source} (${s.error})`).join(" · ")}</div>;
 }
 
-export function moneyIn(region: Region) {
-  return (v: number | null | undefined) => money(v, region === "IN" ? "INR" : "USD");
-}
-
-export { bigMoney };

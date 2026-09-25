@@ -31,6 +31,19 @@ def due(market: str, now: datetime) -> str | None:
     return local.date().isoformat() if start <= local < start + WINDOW else None
 
 
+def traded_today(sessions: list, market: str, day: str) -> bool:
+    """False on a holiday: no session in that market saw a price today, so there's nothing to report."""
+    tz = ZoneInfo(SEND_AT[market][0])
+    for s in sessions:
+        t = getattr(s, "last_tick_at", None)
+        try:
+            if t and datetime.fromisoformat(str(t)).astimezone(tz).date().isoformat() == day:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def _day(v) -> str:
     return str(v)[:10]
 
@@ -115,6 +128,8 @@ class Reporter:
             except Exception as e:
                 print("could not save the report log:", e)
             try:
+                if not traded_today(items, market, day):
+                    continue
                 profile = self.db.get_profile(uid)
                 if not can_alert(profile) or not wants_report(self.db, uid):
                     continue

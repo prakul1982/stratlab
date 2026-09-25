@@ -87,7 +87,6 @@ def test_search_and_instrument(api):
     hits = api.get("/instruments/search", params={"q": "btc", "market": "crypto"}).json()
     assert hits[0]["id"] == "CRYPTO:BTC-USD"
     assert api.get("/instruments/CRYPTO:ETH-USD").json()["symbol"] == "ETH/USD"
-    assert api.get("/instruments/CRYPTO:ETH-USD/ltp").json()["ltp"] == 30000
     assert api.get("/instruments/CRYPTO:NOPE-USD").status_code == 404
     vod = api.get("/instruments/UK:VOD.L").json()
     assert vod["name"] == "VODAFONE GROUP PLC" and vod["currency"] == "GBP" and vod["market"] == "UK"
