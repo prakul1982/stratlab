@@ -528,11 +528,9 @@ table.legs input[type=number] { width: 72px !important; }
 .opt-form .opt-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: center; }
 .opt-label { font-size: 13px; font-weight: 600; color: var(--muted); }
 @media (max-width: 560px) { .opt-form .opt-row { grid-template-columns: 1fr; gap: 6px; } }
-.chip { border: 1px solid var(--line-2); background: var(--card); color: var(--ink); border-radius: 999px; padding: 0 14px; min-height: 36px; font: 500 14px var(--sans, inherit); cursor: pointer; }
+.chip { border: 1px solid var(--line-2); background: var(--card); color: var(--ink); border-radius: 999px; padding: 0 16px; height: 40px; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
 .chip:hover { border-color: var(--ink-2); }
 .chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.chip-select { border: 1px dashed var(--line-2); background: transparent; color: var(--ink-2); border-radius: 999px; padding: 0 12px; min-height: 36px; font: inherit; font-size: 14px; cursor: pointer; }
-.chip-select.on { border-style: solid; border-color: var(--ink); color: var(--ink); }
 .legs-box { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--paper-2, transparent); }
 .legs-box > summary, .more-box > summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .legs-box > summary::-webkit-details-marker, .more-box > summary::-webkit-details-marker { display: none; }
@@ -555,3 +553,27 @@ table.legs input[type=number] { width: 72px !important; }
 .route-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .route-list li { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 @media (max-width: 720px) { .route-list { grid-template-columns: 1fr; } }
+/* the options form: every control is 40px tall so rows line up */
+.chip-select { position: relative; display: inline-flex; align-items: center; height: 40px; border: 1px dashed var(--line-2); border-radius: 999px; color: var(--ink-2); }
+.chip-select select { -webkit-appearance: none; appearance: none; border: 0; background: transparent; color: inherit; font-family: inherit; font-size: 14px; font-weight: 500;
+  height: 100%; padding: 0 36px 0 16px; border-radius: 999px; cursor: pointer; outline: none; }
+.chip-select::after { content: ""; position: absolute; right: 16px; top: 50%; width: 6px; height: 6px; margin-top: -5px; border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor; transform: rotate(45deg); pointer-events: none; opacity: .75; }
+.chip-select:hover { border-color: var(--ink-2); }
+.chip-select:focus-within { box-shadow: 0 0 0 2px var(--blue-soft); border-color: var(--blue); }
+.chip-select.on { background: var(--ink); color: var(--paper); border: 1px solid var(--ink); }
+.chip-select select option { color: initial; background: initial; }
+.opt-form .seg { padding: 3px; }
+.opt-form .seg button { min-height: 34px; }
+.opt-form input, .opt-form .input { height: 40px; box-sizing: border-box; }
+.opt-lbl { display: flex; align-items: center; min-height: 24px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.opt-form .field > span:first-child { min-height: 24px; display: flex; align-items: center; }
+.side-foot .link { display: flex; gap: 7px; align-items: center; color: var(--muted); }
+.side-foot .link:hover { color: var(--ink); }
+.mkt-now { position: relative; outline: none; }
+.mkt-tip { display: none; position: absolute; bottom: calc(100% + 6px); left: -6px; z-index: 30; width: 230px; flex-direction: column; gap: 3px;
+  padding: 10px 12px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-2); box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  font-size: 12.5px; line-height: 1.4; color: var(--ink-2); white-space: normal; }
+.mkt-grid > .mkt-now:nth-child(2n) .mkt-tip { left: auto; right: -6px; }
+.mkt-now:hover .mkt-tip, .mkt-now:focus .mkt-tip { display: flex; }
+.mkt-tip b { color: var(--ink); font-size: 13px; }

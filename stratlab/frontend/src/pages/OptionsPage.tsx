@@ -273,17 +273,17 @@ export function OptionsPage() {
       <section className="card stack opt-form" style={{ gap: 18 }} aria-label="Set up the structure">
         <div className="opt-row">
           <span className="opt-label">Trade</span>
-          <div className="row wrap" style={{ gap: 6 }}>
+          <div className="row wrap" style={{ gap: 8 }}>
             {popular.slice(0, 5).map((u) => {
               const on = u.exchange === s.exchange && u.name === s.underlying;
               return <button key={u.exchange + u.name} className={`chip${on ? " on" : ""}`} aria-pressed={on} onClick={() => pickUnderlying(u.exchange, u.name)}>{u.name}</button>;
             })}
             {!!unds?.length && (
-              <select className="chip-select" aria-label="Other underlyings" value={popular.slice(0, 5).some((u) => u.exchange === s.exchange && u.name === s.underlying) ? "" : `${s.exchange}:${s.underlying}`}
+              <span className={`chip-select${popular.slice(0, 5).some((u) => u.exchange === s.exchange && u.name === s.underlying) ? "" : " on"}`}><select aria-label="Other underlyings" value={popular.slice(0, 5).some((u) => u.exchange === s.exchange && u.name === s.underlying) ? "" : `${s.exchange}:${s.underlying}`}
                 onChange={(e) => { if (e.target.value) { const [ex, n] = e.target.value.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); } }}>
                 <option value="">More…</option>
                 {unds.map((u) => <option key={u.exchange + u.name} value={`${u.exchange}:${u.name}`}>{u.name} ({u.venue})</option>)}
-              </select>
+              </select></span>
             )}
           </div>
         </div>
@@ -299,15 +299,15 @@ export function OptionsPage() {
 
         <div className="opt-row">
           <span className="opt-label">Structure</span>
-          <div className="row wrap" style={{ gap: 6 }}>
+          <div className="row wrap" style={{ gap: 8 }}>
             {MAIN.map((id) => { const x = STRUCTURES.find((y) => y.id === id)!; return (
               <button key={id} title={x.hint} className={`chip${s.structure === id ? " on" : ""}`} aria-pressed={s.structure === id} onClick={() => pickStructure(id)}>{x.name}</button>); })}
-            <select className={`chip-select${inMain ? "" : " on"}`} aria-label="Other structures" value={inMain ? "" : s.structure}
+            <span className={`chip-select${inMain ? "" : " on"}`}><select aria-label="Other structures" value={inMain ? "" : s.structure}
               onChange={(e) => { const v = e.target.value; if (v === "custom") patch({ structure: "custom" }); else if (v) pickStructure(v); }}>
               <option value="">More…</option>
               {STRUCTURES.filter((x) => !MAIN.includes(x.id)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               <option value="custom">Custom legs</option>
-            </select>
+            </select></span>
           </div>
         </div>
 
@@ -332,17 +332,17 @@ export function OptionsPage() {
 
         <div className="opt-grid two">
           <div className="stack" style={{ gap: 6 }}>
-            <span className="field" style={{ flexDirection: "row", alignItems: "center", gap: 0 }}>Stop loss<Info>{HELP.optRisk}</Info></span>
+            <span className="opt-lbl">Stop loss<Info>{HELP.optRisk}</Info></span>
             <div className="row" style={{ gap: 8 }}>
               <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => setRisk({ stopType: v })} />
-              {r.stopType !== "none" && <input className="input" style={{ width: 100 }} type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
+              {r.stopType !== "none" && <input className="input" style={{ width: 110 }} type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
             </div>
           </div>
           <div className="stack" style={{ gap: 6 }}>
-            <span className="field">Target</span>
+            <span className="opt-lbl">Target</span>
             <div className="row" style={{ gap: 8 }}>
               <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => setRisk({ tgtType: v })} />
-              {r.tgtType !== "none" && <input className="input" style={{ width: 100 }} type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}
+              {r.tgtType !== "none" && <input className="input" style={{ width: 110 }} type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}
             </div>
           </div>
         </div>
@@ -368,14 +368,14 @@ export function OptionsPage() {
                   <div className="opt-grid">
                     <Num label="Check every" value={rc.every} min={5} max={240} suffix="min" width={130} onChange={(v) => setRc({ every: Math.round(v) })} />
                     <Num label="After moving" value={rc.threshold} min={0.5} max={50} step={0.5} suffix="strikes" width={150} onChange={(v) => setRc({ threshold: v })} />
-                    <div className="stack" style={{ gap: 6 }}><span className="field">Roll</span>
+                    <div className="stack" style={{ gap: 6 }}><span className="opt-lbl">Roll</span>
                       <Seg label="What rolls" value={rc.roll} options={[["shorts", "Sold legs"], ["all", "All legs"]]} onChange={(v) => setRc({ roll: v })} /></div>
                   </div>
                 )}
               </div>
             )}
             <div className="opt-grid">
-              <div className="stack" style={{ gap: 6 }}><span className="field" style={{ flexDirection: "row", alignItems: "center", gap: 0 }}>Size<Info>{HELP.optSize}</Info></span>
+              <div className="stack" style={{ gap: 6 }}><span className="opt-lbl">Size<Info>{HELP.optSize}</Info></span>
                 <Seg label="Sizing" value={z.mode} options={[["lots", "Fixed units"], ["margin", "Fit to margin"]]} onChange={(v) => setZ({ mode: v })} /></div>
               <Num label="Paper capital (₹)" value={z.capital} min={1000} step={50000} width={160} onChange={(v) => setZ({ capital: v })} />
             </div>

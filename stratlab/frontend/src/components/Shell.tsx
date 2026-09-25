@@ -1,29 +1,21 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import type { Market } from "../lib/types";
 import { Book, Compass, Layers, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
 import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { VerdictBadge } from "./ui";
+import { inWords, marketState } from "../lib/marketHours";
 
 const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US", UK: "UK", EU: "Europe", JP: "Japan", FX: "Forex" };
 
-function marketNow(m: Market): string {
-  if (m.status === "offline") return "offline";
-  if (!m.hours || !m.hours.open || !m.hours.close) return m.id === "CRYPTO" ? "always open" : "open";
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: m.tz, weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const day = get("weekday"), hm = `${get("hour")}:${get("minute")}`;
-  const weekend = day === "Sat" || day === "Sun";
-  return !weekend && hm >= m.hours.open && hm < m.hours.close ? "open" : "closed";
-}
 
 export function Shell({ children }: { children: ReactNode }) {
   const { notebooks, markets, theme, setTheme, me } = useApp();
   const [open, setOpen] = useState(false);
   const [tour, setTour] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
   useEffect(() => { if (!tourSeen()) setTour(true); }, []);
   const loc = useLocation();
   const nav = useNavigate();
@@ -63,25 +55,38 @@ export function Shell({ children }: { children: ReactNode }) {
         <NavLink to="/account"><User />Account{me && <span className="badge skip" style={{ marginLeft: "auto" }}>{me.plan_info.name}</span>}</NavLink>
         <NavLink to="/" end><Book />All notebooks</NavLink>
         {me?.is_admin && <NavLink to="/admin"><Shield />Admin</NavLink>}
-        <button className="tour-link" onClick={() => { setOpen(false); setTour(true); }}><Compass />What can I do here?</button>
       </nav>
       <div className="stack small muted" style={{ marginTop: "auto", gap: 8 }}>
         {live.length > 0 && <div className="eyebrow">Markets now</div>}
         <div className="mkt-grid">
           {live.map((m) => {
-            const s = marketNow(m);
-            const on = s === "open" || s === "always open";
+            const st = marketState(m);
+            const mins = st.change ? (st.change.getTime() - Date.now()) / 60000 : null;
             return (
-              <div key={m.id} className="mkt-now" title={`${m.name}: ${s}${m.hours?.open ? ` (${m.hours.open}–${m.hours.close} local time, ${m.hours.days})` : ""}`}>
+              <div key={m.id} className="mkt-now" tabIndex={0} aria-label={`${m.name}: ${st.open ? "open" : st.short}`}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", flex: "none", boxSizing: "border-box",
-                  background: on ? "var(--blue)" : "transparent", border: `1.5px solid ${s === "offline" ? "var(--orange)" : on ? "var(--blue)" : "var(--muted)"}` }} />
-                {SHORT[m.id] ?? m.name}<span className={on ? "" : "muted"} style={{ marginLeft: "auto", fontSize: 11.5 }}>{s === "always open" ? "24/7" : s}</span>
+                  background: st.open ? "var(--blue)" : "transparent", border: `1.5px solid ${st.offline ? "var(--orange)" : st.open ? "var(--blue)" : "var(--muted)"}` }} />
+                {SHORT[m.id] ?? m.name}<span className={st.open ? "" : "muted"} style={{ marginLeft: "auto", fontSize: 11.5, whiteSpace: "nowrap" }}>{st.short}</span>
+                <span className="mkt-tip" role="tooltip">
+                  <b>{m.name}</b>
+                  {st.always ? <span>Trades around the clock, every day.</span>
+                    : st.offline ? <span>Market data is offline right now.</span>
+                    : <>
+                        <span>{st.open ? `Open now · closes in ${inWords(mins!)}` : `Closed · opens in ${inWords(mins!)}`}</span>
+                        {st.change && <span className="muted">{st.open ? "Closes" : "Opens"} {st.change.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })} your time</span>}
+                        {st.hoursLocal && <span className="muted">Hours: {st.hoursLocal}</span>}
+                        {st.hoursYours && <span className="muted">{st.hoursYours}</span>}
+                        <span className="muted" style={{ fontSize: 11 }}>Exchange holidays aren't shown.</span>
+                      </>}
+                </span>
               </div>
             );
           })}
         </div>
-        <button className="link" style={{ alignSelf: "flex-start", display: "flex", gap: 8, alignItems: "center", color: "var(--muted)" }}
-          onClick={() => setTheme(dark ? "light" : "dark")}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? "Light mode" : "Night mode"}</button>
+        <div className="row side-foot" style={{ gap: 14 }}>
+          <button className="link" onClick={() => setTheme(dark ? "light" : "dark")}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? "Light mode" : "Night mode"}</button>
+          <button className="link" onClick={() => { setOpen(false); setTour(true); }} title="A quick tour of what StratLab can do"><Compass size={16} />Tour</button>
+        </div>
       </div>
     </aside>
   );

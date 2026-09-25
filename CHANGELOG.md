@@ -2,6 +2,11 @@
 
 ## September 2026
 
+### Tidier Options controls, market hours in the sidebar
+- On the Options page, every control is the same height, so the rows line up. The **More…** menus now look like the other buttons in every browser (Safari showed a plain box before) and fill in when you've picked from them. The Stop loss and Target labels line up.
+- **Markets now** shows when a closed market opens ("opens 6h 31m", "opens Mon"). Hover or tap a market for its hours in exchange time and in your time, and how long until it opens or closes.
+- The big **What can I do here?** button is now a small **Tour** link beside Night mode.
+
 ### Import any strategy, and paper trade whole groups
 - A new **Import a strategy** tab in the sidebar takes any strategy (a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words) and sets it up in the right place:
   - rules on one instrument become a notebook
