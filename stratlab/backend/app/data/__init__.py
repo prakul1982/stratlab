@@ -2,8 +2,12 @@
 
 Instrument ids are "<MARKET>:<key>": "IN:256265" (a Kite token), "CRYPTO:BTC-USD".
 A bare number is treated as a Kite token, for older saved strategies."""
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from ..kite_service import KiteService
 from .coinbase import CoinbaseProvider, DataError
+from . import calendar
 from .markets import BY_ID, MARKETS
 from .yahoo_markets import YahooProvider
 
@@ -101,7 +105,9 @@ class Registry:
                 status = "soon"
             else:
                 status = "live" if prov.ready() else "offline"
-            out.append({**m, "status": status, "max_days": getattr(prov, "max_days", None)})
+            local = datetime.now(ZoneInfo(m["tz"])).date()
+            out.append({**m, "status": status, "max_days": getattr(prov, "max_days", None),
+                        "holidays": calendar.holidays(m["id"], local)})
         return out
 
 

@@ -2,6 +2,17 @@
 
 ## September 2026
 
+### Weekends, holidays and overnight
+- **Exchange holidays are known now**, for India (NSE/BSE), the US, UK, Europe and Japan:
+  - **Markets now** in the sidebar says **weekend** or **holiday**, and "opens in" skips closed days.
+  - The free trial's 5 market days no longer count holidays.
+  - The daily report isn't sent on a holiday, and option chains aren't recorded on one.
+- **No more "offline" at midnight:** a day's Kite login is used until Zerodha's 6 am reset, so Indian data stays up overnight.
+- **A clearer banner** when Indian data is offline:
+  - on a weekend or holiday it says the market is closed and when data reconnects
+  - before the morning login it says what time data comes back
+  - only a failed login still points you to the connection check
+
 ### StratLab on your phone
 - **Install it:** StratLab can go on your home screen like an app, with its own icon and no browser bars. Long-press the icon for shortcuts to Test an idea, Paper trading and the Strategy library. On Android or a computer, use **Account → On your phone → Install StratLab** (or the browser's Install app). On an iPhone, tap Share → Add to Home Screen.
 - **Notifications without Telegram:** **Turn on notifications** on any device (an iPhone once it's installed) to get each paper trade and the daily report as a phone notification. Tapping one opens the session. **Send a test** checks it works, and each device can be turned off on its own.

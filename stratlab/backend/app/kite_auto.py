@@ -115,6 +115,15 @@ def fetch_request_token(login_url: str, transport: httpx.BaseTransport | None = 
                              "/admin/kite/login to authorise the app, then try again.", retry=False)
 
 
+def login_time(now: datetime) -> datetime:
+    """Today's automatic login time (KITE_AUTO_LOGIN_AT, India time)."""
+    try:
+        hh, mm = (int(x) for x in settings.KITE_AUTO_LOGIN_AT.split(":"))
+    except ValueError:
+        hh, mm = 8, 0
+    return now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+
 def login_due(now: datetime, token_day: str | None) -> bool:
     """A login is due once a day, after KITE_AUTO_LOGIN_AT, unless today's token is already saved."""
     if token_day == now.date().isoformat():
@@ -135,6 +144,13 @@ class AutoLogin:
         self._day: str | None = None
         self._attempts = 0
         self._gave_up = False
+
+    def next_login(self, now: datetime) -> datetime | None:
+        """When Indian data will come back by itself: today's login time if it hasn't come yet."""
+        if not configured():
+            return None
+        at = login_time(now)
+        return at if now < at else None
 
     def start(self):
         if configured() and not self._thread:

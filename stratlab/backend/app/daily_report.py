@@ -4,6 +4,8 @@ import json
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .data.calendar import is_trading_day
+
 # when to send, in the market's own time: a few minutes after the close, so the last candle is in
 SEND_AT = {
     "IN": ("Asia/Kolkata", time(15, 40)),
@@ -25,7 +27,7 @@ def due(market: str, now: datetime) -> str | None:
         return None
     tz, at = SEND_AT[market]
     local = now.astimezone(ZoneInfo(tz))
-    if market != "CRYPTO" and local.weekday() >= 5:
+    if not is_trading_day(market, local.date()):
         return None
     start = datetime.combine(local.date(), at, tzinfo=local.tzinfo)
     return local.date().isoformat() if start <= local < start + WINDOW else None

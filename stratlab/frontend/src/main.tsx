@@ -43,8 +43,29 @@ const ComparePage = page(research, "ComparePage");
 const WatchlistPage = page(research, "WatchlistPage");
 const CompanyPage = page(research, "CompanyPage");
 
+/** Indian data is offline: say why in plain words. On a weekend or holiday that's expected, not a fault. */
+function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; back_at: string | null } | null }) {
+  const back = note?.back_at ? new Date(note.back_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+  const others = "Crypto, the other markets and your own data work as usual.";
+  if (note?.closed) {
+    const why = note.closed === "weekend" ? "closed for the weekend" : "closed today for an exchange holiday";
+    return (
+      <div className="banner">
+        <span>Indian markets are {why}. {back ? `Indian price data reconnects at ${back} your time, so backtests on Indian instruments can run again then.` : "Indian price data reconnects with the next daily login."} {others}</span>
+      </div>
+    );
+  }
+  if (back) return <div className="banner"><span>Indian price data reconnects at {back} your time, before the market opens. {others}</span></div>;
+  return (
+    <div className="banner">
+      <span>Indian market data is offline: today's data login hasn't completed. {others}</span>
+      <Link to="/account" className="btn sm quiet">Run a connection check</Link>
+    </div>
+  );
+}
+
 function Routed() {
-  const { session, ready, dataOffline, meError } = useApp();
+  const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
   // shared verdicts are public: no sign-in needed
   if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;
@@ -53,12 +74,7 @@ function Routed() {
   return (
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
-      {dataOffline && !meError && (
-        <div className="banner">
-          <span>Indian market data is offline until today's data login completes. Crypto and your own data still work.</span>
-          <Link to="/account" className="btn sm quiet">Run a connection check</Link>
-        </div>
-      )}
+      {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<Home />} />

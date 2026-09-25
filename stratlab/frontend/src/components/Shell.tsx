@@ -90,11 +90,10 @@ export function Shell({ children }: { children: ReactNode }) {
                   {st.always ? <span>Trades around the clock, every day.</span>
                     : st.offline ? <span>Market data is offline right now.</span>
                     : <>
-                        <span>{st.open ? `Open now · closes in ${inWords(mins!)}` : `Closed · opens in ${inWords(mins!)}`}</span>
+                        <span>{st.open ? `Open now · closes in ${inWords(mins!)}` : `${st.closedFor === "holiday" ? "Closed today for an exchange holiday" : st.closedFor === "weekend" ? "Closed for the weekend" : "Closed"} · opens in ${inWords(mins!)}`}</span>
                         {st.change && <span className="muted">{st.open ? "Closes" : "Opens"} {st.change.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })} your time</span>}
                         {st.hoursLocal && <span className="muted">Hours: {st.hoursLocal}</span>}
                         {st.hoursYours && <span className="muted">{st.hoursYours}</span>}
-                        <span className="muted" style={{ fontSize: 11 }}>Exchange holidays aren't shown.</span>
                       </>}
                 </span>
               </div>

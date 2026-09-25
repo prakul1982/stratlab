@@ -150,7 +150,7 @@ export function PaperPage() {
 
   let sub = me ? `Your plan runs ${me.live_limit} paper strateg${me.live_limit === 1 ? "y" : "ies"} at a time.` : "";
   if (me?.plan === "free" && me.trial) {
-    sub = !me.trial.started ? "Free plan: starting a session begins your free trial: 5 market days (Monday to Friday) of paper trading."
+    sub = !me.trial.started ? "Free plan: starting a session begins your free trial: 5 market days of paper trading (weekends and exchange holidays don't count)."
       : me.trial.active ? `Free trial active until ${new Date(me.trial.ends_at!).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}.`
         : "Your free paper trading trial has ended. Upgrade to keep paper trading.";
   }

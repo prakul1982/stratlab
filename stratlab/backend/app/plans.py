@@ -7,7 +7,7 @@ PLANS = {
         "backtests_per_month": 5,
         "ai_builds_per_month": 10,
         "live_limit": 1,              # only during the trial
-        "live_trial_days": 5,         # market days (Mon–Fri), counted in India time from the first start
+        "live_trial_days": 5,         # Indian trading days (no weekends or holidays), counted from the first start
         "group_size": 10,             # instruments in one group test
         "features": set(),
     },
@@ -98,12 +98,14 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def trial_end(started: datetime, days: int) -> datetime:
-    """Midnight (India time) after the `days`-th weekday, counting the start day if it's a weekday.
-    Started on a Saturday, the trial runs to the end of the following Friday."""
+    """Midnight (India time) after the `days`-th Indian trading day, counting the start day if it is one.
+    Weekends and exchange holidays don't count: started on a Saturday, it runs to the end of the fifth
+    trading day after."""
+    from .data.calendar import is_trading_day
     d = started.astimezone(IST).date()
     left = days
     while True:
-        if d.weekday() < 5:
+        if is_trading_day("IN", d):
             left -= 1
             if left == 0:
                 break
