@@ -105,6 +105,9 @@ export interface PlanInfo {
   live_limit: number; live_trial_days: number | null; pro_features: boolean;
   price_year?: number; group_size?: number; features?: Record<string, boolean>;
 }
+/** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
+export type Level = "new" | "some" | "pro";
+
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
   billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean };
@@ -113,6 +116,7 @@ export interface Me {
   live_running: number; live_limit: number;
   alerts: { enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
   data_online: boolean; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
+  prefs?: { level: Level | null };
 }
 
 export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number }

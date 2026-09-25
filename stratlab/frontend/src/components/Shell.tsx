@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { Book, Compass, Layers, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Star, Sun, User } from "./Icons";
 import { SearchPalette } from "./SearchPalette";
+import { LevelPrompt } from "./LevelPrompt";
 import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
@@ -11,7 +12,7 @@ const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US",
 
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, theme, setTheme, me } = useApp();
+  const { notebooks, markets, theme, setTheme, me, level } = useApp();
   const [open, setOpen] = useState(false);
   const [tour, setTour] = useState(false);
   const [search, setSearch] = useState(false);
@@ -27,7 +28,9 @@ export function Shell({ children }: { children: ReactNode }) {
   }, []);
   const [, tick] = useState(0);
   useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
-  useEffect(() => { if (!tourSeen()) setTour(true); }, []);
+  // ask the experience level once, then show the tour to anyone who hasn't seen it
+  const askLevel = !!me && !level;
+  useEffect(() => { if (me && level && !tourSeen()) setTour(true); }, [me, level]);
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
@@ -120,6 +123,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <main className="main"><div className="page">{children}</div></main>
       {tour && <Tour onClose={() => setTour(false)} />}
       {search && <SearchPalette onClose={() => setSearch(false)} />}
+      {askLevel && !tour && <LevelPrompt onDone={() => undefined} />}
     </div>
   );
 }

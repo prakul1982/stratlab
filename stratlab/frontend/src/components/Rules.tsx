@@ -192,7 +192,7 @@ const TGT_UNITS: [NonNullable<Risk["tgtType"]>, string, string][] = [
 ];
 
 export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: string; onChange: (s: Strategy) => void }) {
-  const { isPro } = useApp();
+  const { isPro, level } = useApp();
   const set = (patch: Partial<Strategy>) => onChange({ ...s, ...patch });
   const setRisk = (patch: Partial<Risk>) => onChange({ ...s, risk: { ...s.risk, ...patch } });
   const sess: Session = { ...NO_SESSION, ...(s.session ?? {}) };
@@ -332,7 +332,7 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
           <button className="btn quiet sm" onClick={() => addRule("shortExit", { l: { t: "rsi", p: 14 }, op: "lt", r: { t: "num", v: 30 } })}>Add a buy-back rule</button>
         </>}
       </div>
-      <details>
+      <details open={level === "pro" || undefined}>
         <summary className="small" style={{ cursor: "pointer", fontWeight: 600, color: "var(--blue)" }}>Costs and position size</summary>
         <div className="grid4" style={{ marginTop: 12 }}>
           <label className="field">Position size<select value={r.sizing ?? "risk"} onChange={(e) => setRisk({ sizing: e.target.value as Risk["sizing"] })}>

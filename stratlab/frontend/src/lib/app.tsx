@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
-import type { Market, Me, NotebookItem } from "./types";
+import type { Level, Market, Me, NotebookItem } from "./types";
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
@@ -19,6 +19,8 @@ interface AppState {
   refreshMe: () => Promise<void>;
   refreshNotebooks: () => Promise<void>;
   isPro: boolean;
+  level: Level | null;
+  setLevel: (l: Level) => Promise<void>;
   theme: "light" | "dark" | "system";
   setTheme: (t: "light" | "dark" | "system") => void;
 }
@@ -92,10 +94,15 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     } catch { /* private mode */ }
   }, []);
 
+  const setLevel = useCallback(async (l: Level) => {
+    setMe((m) => (m ? { ...m, prefs: { ...(m.prefs ?? {}), level: l } } : m));
+    try { await api("/me/prefs", { method: "PUT", body: { level: l } }); } catch (e) { fail(e); }
+  }, [fail]);
+
   const value = useMemo<AppState>(() => ({
     session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
-    isPro: !!me?.plan_info.pro_features, theme, setTheme,
-  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, theme, setTheme]);
+    isPro: !!me?.plan_info.pro_features, level: me?.prefs?.level ?? null, setLevel, theme, setTheme,
+  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, theme, setTheme]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

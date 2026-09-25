@@ -2,6 +2,13 @@
 
 ## September 2026
 
+### Your experience, your defaults
+- After the first sign-in StratLab asks once how much trading you've done: **New to trading**, **I've traded a bit** or **I trade actively**.
+- It only changes defaults:
+  - Newcomers see the tour and a simpler "What you can do here", without the advanced tools.
+  - Active traders get the costs and sizing, and the Options "More settings", open from the start.
+- Every tool stays available whatever you pick, including through search. Change it any time under **Account → Experience**.
+
 ### Search or ask anything
 - **One box for everything:** at the top of the sidebar, the magnifier on phones, or **Ctrl+K** (⌘K) anywhere. It takes:
   - a stock or coin → its research page, or straight to testing an idea on it

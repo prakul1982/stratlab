@@ -144,7 +144,7 @@ function Chain({ s }: { s: OptionStrategy }) {
 }
 
 export function OptionsPage() {
-  const { fail, notify, refreshMe, notebooks } = useApp();
+  const { fail, notify, refreshMe, notebooks, level } = useApp();
   const nav = useNavigate();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
@@ -368,7 +368,7 @@ export function OptionsPage() {
           </div>
         </div>
 
-        <details className="more-box">
+        <details className="more-box" open={level === "pro" || undefined}>
           <summary className="small">More settings <span className="muted">(re-centring, trailing, caps, sizing, costs)</span></summary>
           <div className="stack" style={{ gap: 18, marginTop: 14 }}>
             <div className="opt-grid">

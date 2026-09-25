@@ -5,7 +5,7 @@ import { Search } from "./Icons";
 
 /** Everything StratLab can do, one tap each, so the deeper tools aren't hidden behind a notebook. */
 export function Explore({ title = "What you can do here" }: { title?: string }) {
-  const { notebooks } = useApp();
+  const { notebooks, level } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
   const latest = notebooks?.[0] ? { id: notebooks[0].id } : null;
@@ -16,7 +16,7 @@ export function Explore({ title = "What you can do here" }: { title?: string }) 
         <button className="btn quiet sm" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}><Search size={16} />Search everything</button>
       </div>
       <div className="explore-grid">
-        {FEATURES.filter((f) => f.home).map((f) => (
+        {FEATURES.filter((f) => f.home && !(level === "new" && f.level === "advanced")).map((f) => (
           <button key={f.id} className="card explore-card" onClick={() => nav(resolve(f.to, loc.pathname, latest))}>
             <b>{f.title}</b>
             <span className="small muted">{f.what}</span>

@@ -87,3 +87,18 @@ def test_yearly_plans_map_back(monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO_YEAR", "plan_py")
     assert billing.plan_for({"plan_id": "plan_py"}) == "pro" and billing.plan_for({"plan_id": "plan_bm"}) == "basic"
     assert billing.plan_for({"plan_id": "x", "notes": {"plan": "basic"}}) == "basic"
+
+
+def test_experience_level_is_saved_with_other_prefs(monkeypatch):
+    from app import db
+    store = {"prefs:u1": '{"daily_report": false}'}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    try:
+        c = as_plan("free")
+        assert c.put("/me/prefs", json={"level": "pro"}).json() == {"prefs": {"level": "pro"}}
+        assert '"daily_report": false' in store["prefs:u1"] and '"level": "pro"' in store["prefs:u1"]
+        assert c.put("/me/prefs", json={"level": "expert"}).status_code == 422
+        assert main.prefs_of("nobody") == {}
+    finally:
+        main.app.dependency_overrides.clear()

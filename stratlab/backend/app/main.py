@@ -39,7 +39,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import daily_report, ideas, public
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, IdeasReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, IdeasReq, PrefsReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -270,10 +270,27 @@ def me(profile=Depends(current_profile)):
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
+        "prefs": {"level": prefs_of(profile["id"]).get("level")},
         "data_online": kite.ready(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "is_admin": admin.is_admin(profile),
     })
+
+
+def prefs_of(uid: str) -> dict:
+    try:
+        p = json.loads(db.get_setting(daily_report.PREFS + uid) or "{}")
+        return p if isinstance(p, dict) else {}
+    except Exception:
+        return {}
+
+
+@app.put("/me/prefs")
+def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
+    """Experience level: only changes defaults (what's expanded, which tools are suggested), never what's allowed."""
+    prefs = {**prefs_of(profile["id"]), "level": req.level}
+    db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
+    return {"prefs": {"level": req.level}}
 
 
 @app.put("/me/alerts")
