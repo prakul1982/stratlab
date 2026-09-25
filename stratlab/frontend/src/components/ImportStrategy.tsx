@@ -4,7 +4,7 @@ import { IMPORTED } from "../pages/OptionsPage";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, riskForCurrency } from "../lib/rules";
-import type { Cond, Instrument, Risk, Session, Strategy, Tf } from "../lib/types";
+import type { Cond, Group, GroupMember, Instrument, Risk, Session, Strategy, Tf } from "../lib/types";
 import { findInstrument, type Built } from "./IdeaComposer";
 import { Upload } from "./Icons";
 import { Info } from "./ui";
@@ -15,6 +15,19 @@ interface ImportOut {
   entry?: Cond[]; exit?: Cond[]; entryJoin?: "all" | "any" | "score"; side?: "long" | "short" | "both"; tf?: Tf | null; name?: string | null;
   shortEntry?: Cond[]; shortExit?: Cond[]; minScore?: number; session?: Session; product?: Strategy["product"];
   instrument?: string | null; market?: string | null; risk?: Partial<Risk>; mentioned?: string[]; notes: string[];
+  universe?: { preset: string | null; symbols: string[]; maxOpen: number | null } | null;
+}
+
+/** The group an imported strategy trades: a ready-made list, or the symbols it names. */
+async function groupFor(u: NonNullable<ImportOut["universe"]>, market: string): Promise<Group | null> {
+  let name = "Imported group", members: GroupMember[] = u.symbols.map((symbol) => ({ symbol }));
+  if (u.preset) {
+    const presets = await api<{ id: string; name: string; symbols: string[] }[]>(`/groups?market=${market}`).catch(() => []);
+    const p = presets.find((x) => x.id === u.preset);
+    if (p) { name = p.name; members = p.symbols.map((symbol) => ({ symbol })); }
+  }
+  if (members.length < 2) return null;
+  return { id: u.preset ?? "custom", name, market, members: members.slice(0, 50), maxOpen: Math.max(1, Math.min(u.maxOpen ?? 10, members.length, 50)) };
 }
 
 const ACCEPT = ".json,.pine,.txt,.py,.afl,.mq4,.mq5,.md";
@@ -65,9 +78,11 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
           session: out.session ?? s.session, product: out.product ?? "auto",
           risk: riskForCurrency({ ...s.risk, ...(out.risk || {}) }, instrument?.currency) };
       }
+      const group = out.universe ? await groupFor(out.universe, out.market || market || "IN") : null;
+      if (group) instrument = null;
       const fallback = !out.strategy && !out.used_ai ? "The AI translator was busy, so StratLab's built-in Pine Script reader was used. It covers moving averages, RSI, crossovers and percent stops." : "";
       await onBuilt({
-        strategy, instrument,
+        strategy, instrument, group,
         question: `Does the imported "${strategy.name}" strategy hold up?`,
         gaps: { mentioned: out.mentioned || ["exit", "sl", "tgt", "tf", "instrument"], notes: out.notes || [], instName: out.instrument ?? null, usedAI: out.used_ai, fallback },
       });

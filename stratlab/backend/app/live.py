@@ -238,14 +238,20 @@ class LiveManager:
                                   stop_reason=f"Could not resume after restart: {e}")
 
     def _attach(self, row: dict):
-        if (row.get("instrument") or {}).get("type") == "OPTIONS":
+        kind = (row.get("instrument") or {}).get("type")
+        if kind == "OPTIONS":
             from .options.session import OptionSession
             s = OptionSession(self, row, self.options)
+        elif kind == "GROUP":
+            from .group_live import GroupLiveSession
+            s = GroupLiveSession(self, row)
         else:
             s = LiveSession(self, row)
         with self._lock:
             self.sessions[s.id] = s
-        if not s.polled:
+        if hasattr(s, "attach"):
+            s.attach(self.hub)
+        elif not s.polled:
             self.hub.add(s.id, int(s.inst["token"]), s.on_tick)
         return s
 
@@ -272,7 +278,9 @@ class LiveManager:
             s = self.sessions.pop(sid, None)
         if not s:
             return
-        if not s.polled:
+        if hasattr(s, "detach"):
+            s.detach(self.hub)
+        elif not s.polled:
             self.hub.remove(sid)
         with s.lock:
             st = s.state()

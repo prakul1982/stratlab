@@ -7,6 +7,7 @@ import type { LiveRow, LiveSnapshot } from "../lib/types";
 import { LineChart, type Marker } from "../components/Charts";
 import { Empty, Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
+import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
 
 function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
   const { fail, refreshMe } = useApp();
@@ -24,6 +25,14 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   }, [load]);
 
   if (!snap) return <Loading label="Connecting to the session" />;
+  if ((snap as unknown as GroupSnapshot).kind === "group") {
+    const g = snap as unknown as GroupSnapshot;
+    return <GroupSession snap={g}
+      onStop={async () => { if (!confirm("Stop this session? Open paper positions are left as they are, and it can't be restarted.")) return;
+        try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); } }}
+      onDelete={async () => { if (!confirm(`Delete "${g.name}" and its orders? This can't be undone.`)) return;
+        try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); } }} />;
+  }
   const running = snap.status === "running";
   const cur = snap.instrument.currency || (snap.instrument.market === "IN" || !snap.instrument.market ? "INR" : "");
   const tz = tzOf(snap.instrument);

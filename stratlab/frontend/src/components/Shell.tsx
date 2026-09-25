@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import type { Market } from "../lib/types";
-import { Book, Compass, Layers, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
+import { Book, Compass, Layers, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
 import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { VerdictBadge } from "./ui";
@@ -36,6 +36,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
       <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>
       <NavLink to="/research" className={({ isActive }) => `btn quiet research-link${isActive || loc.pathname.startsWith("/research") ? " on" : ""}`}><Lens size={18} />Research a company</NavLink>
+      <NavLink to="/import" className={({ isActive }) => `btn quiet research-link${isActive ? " on" : ""}`}><Upload size={18} />Import a strategy</NavLink>
       <nav className="stack" style={{ gap: 4 }} aria-label="Notebooks">
         <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Notebooks</div>
         {notebooks === null && <span className="small muted" style={{ padding: "0 12px" }}>Loading…</span>}

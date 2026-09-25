@@ -80,7 +80,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | See the market's mood | **Research → Market pulse**: index levels, headlines and an AI read of what's moving |
 | Keep an eye on companies | **Watch** on a company page; they're listed under **Research → Watchlist** |
 | Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
-| Bring a strategy you already have | **Import a strategy** on your notebooks page or New notebook: a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
+| Bring a strategy you already have | **Import a strategy** in the sidebar (or on New notebook): it sets up a notebook, a group notebook or an Options structure depending on what you bring; a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
 | Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
 | Find a notebook | Search and sort (recent, name, best verdict) on **All notebooks**; the dot beside each name in the sidebar is its last verdict |
 | Try a variation without losing the original | **Make a copy** at the top of a notebook |
@@ -99,7 +99,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Check it isn't one lucky chart | **Does it work on similar stocks?** on a verdict runs the same rules on about 10 similar instruments |
 | Understand a number | Every check, stat and setting has an **(i)** button that explains it in plain words |
 | Decide what to do next | The **Next** bar on a verdict: change the rules, try another market, paper trade, write a lab note |
-| Test on a whole group of stocks | **Testing on → Or test on a group**: a ready-made group (NIFTY 50, Bank NIFTY, F&O stocks, US mega caps, large coins) or your own list, with a limit on positions open at once |
+| Test on a whole group of stocks | **Testing on → Or test on a group**: a ready-made group (NIFTY 50, Bank NIFTY, F&O stocks, US mega caps, large coins) or your own list, with a limit on positions open at once; **Paper trade** runs the whole group live on intraday candles |
 | Paper trade options | **Options** in the sidebar: pick the underlying, expiry and structure, press **Price it now** for live fills, payoff and margin, then **Start paper trading**; stops, targets, re-centring and sizing are under **More settings** |
 | Paper trade | **Paper trade** at the top of a notebook or verdict; running sessions are under **Paper trading** |
 | Share or save | **Share verdict** saves an image; **Export** saves the rules as a file |
@@ -154,6 +154,7 @@ stratlab/
 │   │   │   └── walkforward.py walk-forward test: re-tune on the past, trade the unseen next block
 │   │   ├── options/          Options tab: contracts, chains, quotes and margin from Kite; the options engine and sessions
 │   │   ├── universes.py      ready-made groups of stocks and coins
+│   │   ├── group_live.py     paper trading a whole group with one pot of capital
 │   │   ├── basket.py         "does it work on similar stocks?": same rules on ~10 similar instruments
 │   │   ├── data/             market data: markets list, Coinbase (crypto), Yahoo (US, UK, EU, Japan, forex)
 │   │   ├── intel/            research: Finnhub, Yahoo, Screener.in, news, Wikipedia, AI reads, /research API

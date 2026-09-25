@@ -281,3 +281,8 @@ class OptionStartReq(BaseModel):
 
 class OptionImportReq(BaseModel):
     text: str = Field(..., min_length=10, max_length=60000)
+
+
+class GroupLiveReq(BaseModel):
+    strategy: Strategy
+    group: GroupReq
