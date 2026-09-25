@@ -17,6 +17,7 @@ export type Where = { market: string; instrument: Instrument | null };
 
 export function useCreateNotebook(where?: Where | null) {
   const nav = useNavigate();
+  const loc = useLocation();
   const { refreshNotebooks, fail } = useApp();
   return async (b: Built) => {
     // what you picked above wins over what the idea text mentions
@@ -31,7 +32,8 @@ export function useCreateNotebook(where?: Where | null) {
         await api(`/notebooks/${nb.id}`, { method: "PUT", body: { group: b.group } });
       }
       await refreshNotebooks();
-      if (where?.market === "CSV") nav(`/n/${nb.id}/market`, { state: { market: "CSV" } });
+      if (new URLSearchParams(loc.search).get("then") === "group" && !b.group) nav(`/n/${nb.id}/market#group`);
+      else if (where?.market === "CSV") nav(`/n/${nb.id}/market`, { state: { market: "CSV" } });
       else nav(`/n/${nb.id}`, { state: { gaps: { ...b.gaps, mentioned: instrument ? [...b.gaps.mentioned, "instrument"] : b.gaps.mentioned } } });
     } catch (e) {
       fail(e);
@@ -149,11 +151,19 @@ export function NewNotebook() {
   return (
     <div className="stack" style={{ gap: 28, maxWidth: 960, margin: "0 auto" }}>
       <div className="stack" style={{ gap: 10 }}>
-        <span className="eyebrow">New notebook</span>
+        <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+          <span className="eyebrow">New notebook</span>
+          <button className="btn outline sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }}>
+            <Upload size={16} />Import a strategy
+          </button>
+        </div>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
           What trading idea do you want to test?
         </h1>
         <p className="muted" style={{ fontSize: 17 }}>Write it the way you'd explain it to a friend. We'll turn it into exact rules and ask about anything that's missing.</p>
+        {new URLSearchParams(loc.search).get("then") === "group" && !prefill?.symbol && (
+          <p className="edit-hint">Testing on a group: describe the rules here (or name the group, like "on NIFTY 50 stocks"). Next you'll pick the stocks or coins.</p>
+        )}
         {prefill?.symbol ? (
           <p className="edit-hint">From Research: testing {prefill.text ? "an idea" : "a strategy"} on {prefill.symbol}. Check the rules below, then build.</p>
         ) : (
@@ -170,14 +180,16 @@ export function NewNotebook() {
         <h2 id="idea-h" className="h2">2. Describe your idea</h2>
         <IdeaComposer key={prefill?.text ?? ""} initial={prefill?.text ?? ""} onBuilt={create} market={where.market} symbol={where.instrument?.symbol} />
       </section>
-      <section ref={importRef} className="card stack" style={{ gap: 14 }} aria-labelledby="import-h">
-        <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-          <h2 id="import-h" className="h2 row" style={{ gap: 10 }}><Upload size={20} />Already have a strategy? Import it</h2>
-          {!importing && <button className="btn quiet sm" onClick={() => setImporting(true)}>Import a strategy</button>}
-        </div>
-        {!importing ? <p className="small muted">From a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker, or a written description. It becomes a notebook you can test like any other.</p>
-          : <ImportStrategy onBuilt={create} market={where.market} />}
-      </section>
+      {importing && (
+        <section ref={importRef} className="card stack" style={{ gap: 14 }} aria-labelledby="import-h">
+          <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+            <h2 id="import-h" className="h2 row" style={{ gap: 10 }}><Upload size={20} />Import a strategy</h2>
+            <button className="btn quiet sm" onClick={() => setImporting(false)}>Close</button>
+          </div>
+          <p className="small muted">A StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker, or a written description. It becomes a notebook you can test like any other.</p>
+          <ImportStrategy onBuilt={create} market={where.market} />
+        </section>
+      )}
       <div className="stack">
         <h2 className="h2">Or start from a classic idea</h2>
         <Starters where={where} />

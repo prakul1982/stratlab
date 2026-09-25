@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Book, Compass, Layers, Library, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Star, Sun, User } from "./Icons";
+import { Book, Compass, Layers, Library, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sun, User } from "./Icons";
 import { SearchPalette } from "./SearchPalette";
 import { LevelPrompt } from "./LevelPrompt";
 import { Tour, tourSeen } from "./Tour";
@@ -44,6 +44,9 @@ export function Shell({ children }: { children: ReactNode }) {
       <button className="search-btn" onClick={() => setSearch(true)} aria-label="Search or ask anything (Ctrl+K)">
         <Search size={17} /><span>Search or ask</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
       </button>
+      <nav className="side-nav" aria-label="Research">
+        <NavLink to="/research" className={() => (loc.pathname.startsWith("/research") ? "active" : "")}><Lens />Research</NavLink>
+      </nav>
       <nav className="stack" style={{ gap: 4 }} aria-label="Notebooks">
         <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Notebooks</div>
         {notebooks === null && <span className="small muted" style={{ padding: "0 12px" }}>Loading…</span>}
@@ -64,14 +67,12 @@ export function Shell({ children }: { children: ReactNode }) {
         })}
       </nav>
       <nav className="side-nav stack" style={{ gap: 2 }} aria-label="Main">
-        <NavLink to="/research" className={() => (loc.pathname.startsWith("/research") ? "active" : "")}><Lens />Research</NavLink>
-        <NavLink to="/library"><Library />Strategy library</NavLink>
-        <NavLink to="/import"><Upload />Import a strategy</NavLink>
-        <NavLink to="/options"><Layers />Options</NavLink>
-        <NavLink to="/paper"><Pulse />Paper trading</NavLink>
         <NavLink to="/" end><Book />All notebooks</NavLink>
-        <NavLink to="/plans"><Star />Plans</NavLink>
-        <NavLink to="/account"><User />Account{me && <span className="badge skip" style={{ marginLeft: "auto" }}>{me.plan_info.name}</span>}</NavLink>
+        <NavLink to="/paper"><Pulse />Paper trading</NavLink>
+        <NavLink to="/options"><Layers />Options</NavLink>
+        <NavLink to="/import"><Upload />Import a strategy</NavLink>
+        <NavLink to="/library"><Library />Strategy library</NavLink>
+        <NavLink to="/account" className={() => (loc.pathname === "/account" || loc.pathname === "/plans" ? "active" : "")}><User />Account{me && <span className="badge skip" style={{ marginLeft: "auto" }}>{me.plan_info.name}</span>}</NavLink>
         {me?.is_admin && <NavLink to="/admin"><Shield />Admin</NavLink>}
       </nav>
       <div className="stack small muted" style={{ marginTop: "auto", gap: 8 }}>

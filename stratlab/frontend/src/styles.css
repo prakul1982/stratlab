@@ -216,6 +216,13 @@ td.num, .num { font-family: var(--mono); }
 @keyframes sh { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
+/* ---------- page titles ---------- */
+.page-title { font: 400 clamp(32px, 4vw, 46px)/1.1 var(--serif); letter-spacing: -0.02em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
+.page-title .info { margin-left: 0; align-self: center; position: relative; top: 0.08em; }
+.page-sub { color: var(--muted); font-size: 17px; max-width: 62ch; }
+.page-chip { align-self: flex-start; max-width: 100%; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--muted); font: 500 13.5px/1.4 var(--sans); }
+
 /* ---------- (i) explanations ---------- */
 .info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
 .info-btn {

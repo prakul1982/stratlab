@@ -65,8 +65,8 @@ export function resolve(to: string, path: string, latest: { id: string } | null)
   if (!to.startsWith("@")) return to;
   const m = path.match(/^\/n\/([^/]+)(?:\/e\/(\d+))?/);
   const id = m?.[1] ?? latest?.id;
-  if (!id) return "/new";
-  if (to === "@market") return `/n/${id}/market`;
+  if (!id) return to === "@market" ? "/new?then=group" : "/new";
+  if (to === "@market") return `/n/${id}/market#group`;
   if (to === "@verdict" && m?.[2]) return path;
   return `/n/${id}`;
 }

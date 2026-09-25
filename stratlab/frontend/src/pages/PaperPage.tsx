@@ -148,20 +148,19 @@ export function PaperPage() {
     } catch (e) { fail(e); }
   };
 
-  let sub = me ? `Your plan runs ${me.live_limit} paper strateg${me.live_limit === 1 ? "y" : "ies"} at a time.` : "";
+  let sub = me ? `${me.plan_info.name} plan · ${me.live_running} of ${me.live_limit} running` : "";
   if (me?.plan === "free" && me.trial) {
-    sub = !me.trial.started ? "Free plan: starting a session begins your free trial: 5 market days of paper trading (weekends and exchange holidays don't count)."
-      : me.trial.active ? `Free trial active until ${new Date(me.trial.ends_at!).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}.`
-        : "Your free paper trading trial has ended. Upgrade to keep paper trading.";
+    sub = !me.trial.started ? "Free trial: 5 market days, starting with your first session"
+      : me.trial.active ? `Free trial until ${new Date(me.trial.ends_at!).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`
+        : "Free trial ended · upgrade to keep paper trading";
   }
 
   return (
     <div className="stack" style={{ gap: 24 }}>
       <div className="stack" style={{ gap: 8 }}>
-        <h1 className="serif row" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", gap: 0 }}>Paper trading<Info>{HELP.paper}</Info></h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: "70ch" }}>
-          Your rules on live prices with fake money, in every market: India, crypto, the US, UK, Europe, Japan and forex. Each runs in its own market hours; crypto trades around the clock. {sub}
-        </p>
+        <h1 className="page-title">Paper trading<Info>{HELP.paper}</Info></h1>
+        <p className="page-sub">Your rules on live prices, with fake money. Each market runs in its own hours; crypto never closes.</p>
+        {sub && <span className="page-chip">{sub}</span>}
       </div>
       {rows === null ? <Loading /> : rows.length === 0 ? (
         <Empty title="No paper trades yet">
