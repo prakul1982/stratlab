@@ -7,6 +7,7 @@ const base = (size = 20) => ({
 export const Plus = ({ size }: P) => <svg {...base(size)}><path d="M12 5v14M5 12h14" /></svg>;
 export const Menu = ({ size }: P) => <svg {...base(size)}><path d="M4 7h16M4 12h16M4 17h16" /></svg>;
 export const Pulse = ({ size }: P) => <svg {...base(size)}><path d="M3 12h4l3-7 4 14 3-7h4" /></svg>;
+export const Layers = ({ size }: P) => <svg {...base(size)}><path d="m12 3 9 5-9 5-9-5z" /><path d="m3 13 9 5 9-5" /></svg>;
 export const Star = ({ size }: P) => <svg {...base(size)}><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8 6.6 19.7l1.1-6.1-4.5-4.2 6.1-.8z" /></svg>;
 export const User = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></svg>;
 export const Book = ({ size }: P) => <svg {...base(size)}><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" /><path d="M5 17a3 3 0 0 1 3-3h11" /></svg>;

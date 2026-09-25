@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import type { Market } from "../lib/types";
-import { Book, Compass, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
+import { Book, Compass, Layers, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Star, Sun, User } from "./Icons";
 import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { VerdictBadge } from "./ui";
@@ -56,6 +56,7 @@ export function Shell({ children }: { children: ReactNode }) {
         })}
       </nav>
       <nav className="side-nav stack" style={{ gap: 2 }} aria-label="Main">
+        <NavLink to="/options"><Layers />Options</NavLink>
         <NavLink to="/paper"><Pulse />Paper trading</NavLink>
         <NavLink to="/plans"><Star />Plans</NavLink>
         <NavLink to="/account"><User />Account{me && <span className="badge skip" style={{ marginLeft: "auto" }}>{me.plan_info.name}</span>}</NavLink>

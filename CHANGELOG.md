@@ -2,6 +2,20 @@
 
 ## September 2026
 
+### Options tab (live paper trading)
+- A new **Options** tab for NSE, BSE and MCX options: NIFTY, BANKNIFTY, SENSEX, FINNIFTY, MIDCPNIFTY, BANKEX, crude, natural gas, gold and silver, plus any stock with options.
+- **Structures**: short and long straddle, short strangle, iron fly, iron condor, bull call and bear put spreads, single calls and puts, or custom structures up to eight legs. Legs are placed by strikes or points from the money.
+- **Live pricing before you start**: legs priced on the live bid and ask, premium, most it can make or lose, breakevens, a payoff chart and the broker's real margin, hedges included. A live option chain sits alongside.
+- **Paper trading on real quotes**: sold legs fill at the bid and bought legs at the ask, with optional extra slippage. Nothing is modelled. It covers:
+  - entry time, last entry, square-off, entries a day and cooldown
+  - stop and target in rupees or % of premium, trailing, per-leg stops, and a daily loss cap
+  - **re-centring** that rolls the sold legs (or all of them) when the market moves
+  - fixed lots, or **as much as margin allows** on your capital
+  - freeze-limit order slicing with brokerage per slice, STT or CTT, exchange fees, stamp duty and GST
+- No entries on stale quotes (holidays, dead feed); open positions wait for live prices.
+- **Import**: option-structure configs (like a hedged short straddle) are recognised by the normal importer and open in the Options tab, with a list of anything that couldn't carry over. Options strategies export and import as JSON.
+- **Backtesting options is coming soon**: it needs real historical prices for every strike, and we won't stand in a pricing model.
+
 ### Test on a group of stocks
 - **Groups**: on the market page, pick a ready-made group (NIFTY 50, Bank NIFTY, 25 liquid F&O stocks, 20 US mega caps, 10 large coins) or build your own from search, up to 50. The same rules then run on every member at once.
 - One pot of capital, a limit on **positions open at once**, and a daily loss cap that counts the whole group, so a momentum or scanner strategy is tested the way it trades.

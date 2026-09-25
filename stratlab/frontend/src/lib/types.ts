@@ -129,3 +129,41 @@ export interface LiveRow {
   id: string; name: string; instrument: Instrument; status: "running" | "stopped" | "paused";
   started_at: string; stopped_at: string | null; stop_reason: string | null;
 }
+
+// ---------- options ----------
+export interface OptLeg { side: "sell" | "buy"; opt: "CE" | "PE"; offset: number; lots: number }
+export interface OptionStrategy {
+  name: string; structure: string; exchange: "NFO" | "BFO" | "MCX"; underlying: string; expiry: string;
+  offsetUnit: "strikes" | "points"; legs: OptLeg[];
+  timing: { entry: string; lastEntry: string; squareoff: string; maxEntries: number; cooldown: number };
+  risk: { stopType: "none" | "amount" | "credit_pct"; stop: number; tgtType: "none" | "amount" | "credit_pct"; tgt: number;
+    trailAfter: number; trailBy: number; legStopPct: number; dailyLoss: number };
+  recenter: { enabled: boolean; every: number; threshold: number; roll: "shorts" | "all" };
+  sizing: { mode: "lots" | "margin"; lots: number; capital: number; safety: number };
+  costs: { brokerage: number; slippageTicks: number; freeze: number };
+  notes: string;
+}
+export interface Underlying { exchange: "NFO" | "BFO" | "MCX"; name: string; lot: number; expiries: string[]; venue: string; popular: boolean; freeze: number; index: boolean }
+export interface OptQuote { ltp: number | null; bid: number | null; ask: number | null; oi?: number | null; volume?: number | null; ts?: string | null }
+export interface OptChain { expiry: string | null; expiries?: string[]; lot?: number; spot: number | null; atm?: number; step?: number;
+  rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null }[]; freeze?: number }
+export interface OptPreview {
+  spot: number; atm: number; step: number; expiry: string; lot: number; freeze: number; units: number;
+  margin_one: number | null; margin: number | null; strikes: number[];
+  legs: { side: "sell" | "buy"; opt: "CE" | "PE"; lots: number; strike: number | null; sym: string | null; quote: OptQuote | null; fill: number | null }[];
+}
+export interface OptLegLive { sym: string; opt: "CE" | "PE"; side: "sell" | "buy"; strike: number; qty: number; entry: number; mark: number; open: boolean; pnl: number }
+export interface OptTrade { opened: string; closed: string; why: string; pnl: number; gross: number; costs: number; credit: number; rolls: number;
+  units: number; orders: number; best: number; worst: number; expiry: string; legs: { sym: string; side: string; qty: number; entry: number; exit: number | null }[] }
+export interface OptionSnapshot {
+  id: string; name: string; kind: "options"; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
+  instrument: { symbol: string; exchange: string; underlying: string }; strategy: OptionStrategy; started_at: string; stopped_at?: string | null;
+  spot: number | null; last_tick_at?: string | null; fresh: boolean; feed_connected?: boolean; expiry?: string | null; lot?: number | null; note: string;
+  legs: OptLegLive[];
+  position: { opened: string; center: number; spot_in: number; credit: number; mtm: number; costs: number; net: number; best: number; worst: number;
+    rolls: number; units: number; orders: number; expiry: string } | null;
+  events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; slices?: number }[];
+  trades: OptTrade[]; equity_curve: { t: string; eq: number }[];
+  account: { capital: number; equity: number; cash: number; realised: number; today: number; halted: boolean; entries_today: number;
+    trades: number; wins: number; unrealised: number };
+}

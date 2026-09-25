@@ -203,3 +203,81 @@ class VerifyReq(BaseModel):
     razorpay_payment_id: str
     razorpay_subscription_id: str
     razorpay_signature: str
+
+
+# ---------- options (live paper trading) ----------
+class OptLeg(BaseModel):
+    side: Literal["sell", "buy"]
+    opt: Literal["CE", "PE"]
+    offset: float = Field(0, ge=-5000, le=5000)   # distance from the money: + is out of the money, - in the money
+    lots: int = Field(1, ge=1, le=50)              # lots of this leg per unit of the structure
+
+
+class OptTiming(BaseModel):
+    entry: str = Field("09:30", pattern=HHMM)       # first entry
+    lastEntry: str = Field("14:45", pattern=HHMM)   # no new entries from this time
+    squareoff: str = Field("15:15", pattern=HHMM)   # everything closes at this time
+    maxEntries: int = Field(1, ge=1, le=20)         # entries a day
+    cooldown: int = Field(0, ge=0, le=600)          # minutes to wait after a trade closes
+
+
+class OptRisk(BaseModel):
+    stopType: Literal["none", "amount", "credit_pct"] = "amount"
+    stop: float = Field(0, ge=0, le=1e9)            # a loss in money, or % of the premium collected (paid, for debit trades)
+    tgtType: Literal["none", "amount", "credit_pct"] = "none"
+    tgt: float = Field(0, ge=0, le=1e9)
+    trailAfter: float = Field(0, ge=0, le=1e9)      # once the trade is up this much...
+    trailBy: float = Field(0, ge=0, le=1e9)         # ...close it if it gives back this much from its best
+    legStopPct: float = Field(0, ge=0, le=1000)     # close a sold leg when its premium rises this % above entry
+    dailyLoss: float = Field(0, ge=0, le=1e9)       # stop for the day after losing this much
+
+
+class OptRecenter(BaseModel):
+    enabled: bool = False
+    every: int = Field(30, ge=5, le=240)            # minutes between checks
+    threshold: float = Field(2, ge=0.5, le=50)      # strikes the market has to move from the centre
+    roll: Literal["shorts", "all"] = "shorts"       # move only the sold legs, or the whole structure
+
+
+class OptSizing(BaseModel):
+    mode: Literal["lots", "margin"] = "lots"
+    lots: int = Field(1, ge=1, le=1000)             # multiplier on every leg's lots
+    capital: float = Field(500000, gt=0, le=1e11)   # the paper account; "margin" sizes to fit it
+    safety: float = Field(0.98, ge=0.5, le=1)
+
+
+class OptCosts(BaseModel):
+    brokerage: float = Field(20, ge=0, le=1000)     # per order (each freeze-limit slice is an order)
+    slippageTicks: int = Field(0, ge=0, le=100)     # ticks worse than the bid or ask
+    freeze: int = Field(0, ge=0, le=100000)         # most units in one order; 0 = the exchange default
+
+
+class OptionStrategy(BaseModel):
+    name: str = Field("Options strategy", max_length=80)
+    structure: str = Field("custom", max_length=40)
+    exchange: Literal["NFO", "BFO", "MCX"] = "NFO"
+    underlying: str = Field(..., min_length=1, max_length=40)
+    expiry: str = Field("current", pattern=r"^(current|next|month|\d{4}-\d{2}-\d{2})$")
+    offsetUnit: Literal["strikes", "points"] = "strikes"
+    legs: list[OptLeg] = Field(..., min_length=1, max_length=8)
+    timing: OptTiming = Field(default_factory=OptTiming)
+    risk: OptRisk = Field(default_factory=OptRisk)
+    recenter: OptRecenter = Field(default_factory=OptRecenter)
+    sizing: OptSizing = Field(default_factory=OptSizing)
+    costs: OptCosts = Field(default_factory=OptCosts)
+    notes: str = Field("", max_length=2000)
+
+    @model_validator(mode="after")
+    def _times(self):
+        t = self.timing
+        if not (t.entry < t.squareoff and t.lastEntry <= t.squareoff):
+            raise ValueError("Entries have to come before the square-off time.")
+        return self
+
+
+class OptionStartReq(BaseModel):
+    strategy: OptionStrategy
+
+
+class OptionImportReq(BaseModel):
+    text: str = Field(..., min_length=10, max_length=60000)

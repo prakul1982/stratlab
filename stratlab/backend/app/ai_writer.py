@@ -284,3 +284,8 @@ def write_strategy(text: str, pro: bool) -> dict:
     out["mentioned"] = sorted(mentioned)
     out["notes"] = list(dict.fromkeys(out["notes"]))
     return out
+
+
+def ask_json(system: str, text: str, max_tokens: int = 2500):
+    """Any JSON answer from the provider chain (used by the options importer)."""
+    return extract_json(complete(system, text, gemini=_gemini, anthropic=_anthropic, max_tokens=max_tokens))

@@ -168,7 +168,7 @@ export function PaperPage() {
         )}
         <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
           {rows.map((r) => (
-            <button key={r.id} className="card" onClick={() => nav(`/paper/${r.id}`)} aria-current={r.id === sid}
+            <button key={r.id} className="card" onClick={() => nav(r.instrument?.type === "OPTIONS" ? `/options/s/${r.id}` : `/paper/${r.id}`)} aria-current={r.id === sid}
               style={{ flex: "none", minWidth: 210, textAlign: "left", cursor: "pointer", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4,
                 border: r.id === sid ? "2px solid var(--ink)" : undefined }}>
               <b>{r.name}</b>

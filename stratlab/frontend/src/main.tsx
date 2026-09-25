@@ -20,6 +20,8 @@ import { Home, NewNotebook } from "./pages/Home";
 import { NotebookPage } from "./pages/NotebookPage";
 import { ExperimentPage } from "./pages/ExperimentPage";
 import { MarketPage } from "./pages/MarketPage";
+import { OptionsPage } from "./pages/OptionsPage";
+import { OptionsSession } from "./pages/OptionsSession";
 import { PaperPage } from "./pages/PaperPage";
 import { PlansPage } from "./pages/PlansPage";
 import { AccountPage } from "./pages/AccountPage";
@@ -47,6 +49,8 @@ function Routed() {
         <Route path="/n/:id/market" element={<MarketPage />} />
         <Route path="/n/:id/compare" element={<CompareExperiments />} />
         <Route path="/n/:id/e/:v" element={<ExperimentPage />} />
+        <Route path="/options" element={<OptionsPage />} />
+        <Route path="/options/s/:sid" element={<OptionsSession />} />
         <Route path="/paper" element={<PaperPage />} />
         <Route path="/paper/:sid" element={<PaperPage />} />
         <Route path="/plans" element={<PlansPage />} />
