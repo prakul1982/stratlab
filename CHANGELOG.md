@@ -2,6 +2,17 @@
 
 ## September 2026
 
+### A longer free trial, a daily report, and error alerts
+- **Free trial:** the free plan's paper trading trial now lasts **5 market days** (Monday to Friday, counted from the day you start) instead of 24 hours. Starting on a weekend doesn't use any of it.
+- **Daily report:**
+  - People with alerts on get a short Telegram or email report a few minutes after each market closes.
+  - For each paper trading session in that market it lists the trades closed that day and their profit or loss, what's still open, and the result since the start.
+  - You can turn it off under **Account → Trade alerts**.
+- **Fixed: trade alerts never arrived** for anyone without a paid Pro plan. While payments aren't live, everyone can switch alerts on, but they were only ever sent to paid Pro accounts.
+- **Error alerts (optional):**
+  - Set a Sentry DSN and every server error goes to Sentry with the same ref code users see.
+  - So do errors in the paper trading loop, failed Kite auto-logins and, if you add the DSN to the frontend config, errors in people's browsers.
+
 ### A new share card, and public links to a verdict
 - **The share card** now shows:
   - an equity chart against buy and hold, with the unseen years shaded

@@ -13,7 +13,7 @@ A research notebook for traders: describe a strategy in plain words, test it on 
 | | Free | Basic, ₹1,999/mo | Pro, ₹4,900/mo |
 |---|---|---|---|
 | Experiments (backtest + verdict; walk-forward and the similar-stocks check count as one each) | 5 per month | 50 per month | Unlimited |
-| Live paper trading | 24-hour trial from first use, 1 strategy | 1 strategy at a time | 5 at a time |
+| Live paper trading | 5 market days (Mon–Fri) from first use, 1 strategy | 1 strategy at a time | 5 at a time |
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
 | Markets | Every market except Indian F&O | same | + Indian F&O (futures and options) |
 | AI strategy builds | 10 per month | 100 per month | Unlimited |
@@ -87,6 +87,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
   - Paste only the key itself as the value. Stray quotes or a leading `GROQ_API_KEY=` are forgiven, but a key from the wrong account or a revoked key is not. After changing variables in Railway, redeploy so the server picks them up.
 - **Telegram:** create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`. Users press Start on your bot and paste their chat ID on the Account page.
 - **Email:** fill in the SMTP settings. For Gmail, use an app password. Port 465 uses SSL, 587 uses STARTTLS.
+- **Daily report:** anyone with alerts on also gets a short report a few minutes after each market closes (15:40 in India, 16:10 New York, 23:55 UTC for crypto). It lists each paper trading session in that market: trades closed that day, their P&L, what's still open, and the result since the start. People can turn it off on the Account page. Nothing extra to set up.
 
 ### 5. Crypto, global markets and uploaded data
 Nothing to set up. Crypto prices come from Coinbase's public market data. US, UK, European and Japanese stocks and ETFs, and forex pairs, come from Yahoo Finance's public chart data (London prices are converted from pence to pounds). Neither needs an account or key. Yahoo keeps about 2 years of hourly and 60 days of 15- and 5-minute candles, so intraday tests on those markets are shorter. Uploaded CSVs are read in the browser and sent with each test; they aren't stored on the server.
@@ -133,6 +134,11 @@ Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and red
 - Users, their plan and this month's usage, with **Change plan** to grant Basic or Pro by hand (for 30 days, 90 days, a year or with no end date).
 - Paper trading sessions running now (single instruments, groups and options), each with a Stop button.
 - **Recent server errors**: every unexpected error shows users a short code, like "(GET /notebooks, ref 3FA9C1)". This table lists the last 25 with the request, the error and the line of code, and keeps them across restarts.
+
+**Error alerts by Sentry (optional):** make a free project at sentry.io (platform: Python/FastAPI) and copy its DSN.
+- Backend: set `SENTRY_DSN` in Railway (`SENTRY_ENV` defaults to `production`). Every server error then reaches Sentry tagged with the same ref code users see, along with errors in the paper trading loop and failed Kite auto-logins. Sentry emails you, or pings your phone through its app.
+- Frontend: add `SENTRY_DSN: "…"` to `public/config.js` for errors in people's browsers. You can use a second Sentry project (platform: Browser JavaScript). The Sentry code only downloads when a DSN is set.
+- Nothing personal is sent: no emails, IP addresses or request bodies.
 
 Everyone else gets a 403 from the `/admin` API and never sees the link. The older `?key=ADMIN_KEY` URLs keep working.
 

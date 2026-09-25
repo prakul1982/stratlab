@@ -10,12 +10,12 @@ type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
 export function AccountPage() {
   const { me, isPro, fail, notify, refreshMe } = useApp();
-  const [alerts, setAlerts] = useState({ enabled: false, tg: "", email: "" });
+  const [alerts, setAlerts] = useState({ enabled: false, tg: "", email: "", daily: true });
   const [checks, setChecks] = useState<Row[] | null>(null);
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    if (me) setAlerts({ enabled: me.alerts.enabled, tg: me.alerts.telegram_chat_id || "", email: me.alerts.email || "" });
+    if (me) setAlerts({ enabled: me.alerts.enabled, tg: me.alerts.telegram_chat_id || "", email: me.alerts.email || "", daily: me.alerts.daily_report ?? true });
   }, [me]);
 
   if (!me) return <Loading label="Loading your account" />;
@@ -27,7 +27,7 @@ export function AccountPage() {
   };
   const saveAlerts = async () => {
     try {
-      await api("/me/alerts", { method: "PUT", body: { alerts_enabled: alerts.enabled, telegram_chat_id: alerts.tg.trim() || null, alert_email: alerts.email.trim() || null } });
+      await api("/me/alerts", { method: "PUT", body: { alerts_enabled: alerts.enabled, telegram_chat_id: alerts.tg.trim() || null, alert_email: alerts.email.trim() || null, daily_report: alerts.daily } });
       await refreshMe(); notify("Alert settings saved.");
     } catch (e) { fail(e); }
   };
@@ -114,10 +114,14 @@ export function AccountPage() {
         </div>
         <section className="card stack" style={{ gap: 14, alignSelf: "start" }}>
           <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>Trade alerts<Info>{HELP.alerts}</Info></h2>{!isPro && <span className="badge next">Pro</span>}</div>
-          <p className="small muted">Get a message whenever a paper trading session buys or sells. For Telegram, open the StratLab bot and press Start, then paste your chat ID (message @userinfobot to find it).</p>
+          <p className="small muted">Get a message whenever a paper trading session buys or sells, and a short report after the market closes: trades closed that day, their profit or loss, and what's still open. For Telegram, open the StratLab bot and press Start, then paste your chat ID (message @userinfobot to find it).</p>
           <label className="row" style={{ gap: 10, fontWeight: 600 }}>
             <input type="checkbox" style={{ width: 20, height: 20 }} checked={alerts.enabled} disabled={!isPro} onChange={(e) => setAlerts({ ...alerts, enabled: e.target.checked })} />
             Send alerts for paper trades
+          </label>
+          <label className="row" style={{ gap: 10, fontWeight: 600 }}>
+            <input type="checkbox" style={{ width: 20, height: 20 }} checked={alerts.daily} disabled={!isPro || !alerts.enabled} onChange={(e) => setAlerts({ ...alerts, daily: e.target.checked })} />
+            Daily report after each market closes
           </label>
           <label className="field">Telegram chat ID<input value={alerts.tg} disabled={!isPro} inputMode="numeric" maxLength={40} onChange={(e) => setAlerts({ ...alerts, tg: e.target.value })} /></label>
           <label className="field">Alert email<input type="email" value={alerts.email} disabled={!isPro} maxLength={200} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} /></label>

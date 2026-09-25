@@ -9,4 +9,5 @@ pandas>=3.0.6,<4
 numpy>=1.26,<3
 python-dotenv>=1.0,<2
 httpx>=0.28.1,<1
-beautifulsoup4>=4.12,<5    # parses Screener.in pages for Indian company fundamentals
+beautifulsoup4>=4.12,<5
+sentry-sdk>=2,<3          # optional error alerts, used only when SENTRY_DSN is set    # parses Screener.in pages for Indian company fundamentals

@@ -1,0 +1,126 @@
+"""A short paper trading report after each market closes, sent by Telegram or email to people who
+turned alerts on. One message per person per market per day, covering every session they run there."""
+import json
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+# when to send, in the market's own time: a few minutes after the close, so the last candle is in
+SEND_AT = {
+    "IN": ("Asia/Kolkata", time(15, 40)),
+    "US": ("America/New_York", time(16, 10)),
+    "UK": ("Europe/London", time(16, 40)),
+    "EU": ("Europe/Berlin", time(17, 40)),
+    "JP": ("Asia/Tokyo", time(15, 40)),
+    "FX": ("America/New_York", time(17, 5)),     # the forex day ends at 17:00 New York
+    "CRYPTO": ("UTC", time(23, 55)),             # crypto never closes: the report covers the UTC day
+}
+WINDOW = timedelta(hours=3)                      # after this, a missed report (server down) is skipped
+SETTING = "daily_reports_sent"
+PREFS = "prefs:"                                 # app_settings key prefix for per-person choices
+
+
+def due(market: str, now: datetime) -> str | None:
+    """The market's local date if its report is due now, else None."""
+    if market not in SEND_AT:
+        return None
+    tz, at = SEND_AT[market]
+    local = now.astimezone(ZoneInfo(tz))
+    if market != "CRYPTO" and local.weekday() >= 5:
+        return None
+    start = datetime.combine(local.date(), at, tzinfo=local.tzinfo)
+    return local.date().isoformat() if start <= local < start + WINDOW else None
+
+
+def _day(v) -> str:
+    return str(v)[:10]
+
+
+def summarise(s, day: str) -> dict:
+    """What one session did on `day`: closed trades, their P&L, what's still open, and the account."""
+    kind = getattr(s, "kind", "single")
+    snap = s.snapshot()
+    acct = snap["account"]
+    if kind == "group":
+        trades = [t for m in s.members for t in m.engine.trades if _day(t["exit_t"]) == day]
+        open_n = acct.get("open", 0)
+    elif snap.get("kind") == "options":
+        trades = [t for t in s.engine.trades if _day(t["closed"]) == day]
+        open_n = 1 if snap.get("position") else 0
+    else:
+        trades = [t for t in s.engine.trades if _day(t["exit_t"]) == day]
+        open_n = 1 if acct.get("qty") else 0
+    return {"name": s.name, "currency": s.inst.get("currency") or ("INR" if getattr(s, "market", "IN") == "IN" else ""),
+            "closed": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0), "pnl": sum(t["pnl"] for t in trades),
+            "open": open_n, "unrealised": acct.get("unrealised") or 0.0,
+            "equity": acct["equity"], "capital": acct["capital"]}
+
+
+def _money(x: float, cur: str) -> str:
+    sign = "-" if x < 0 else "+"
+    return f"{sign}{abs(x):,.0f} {cur}".strip()
+
+
+def text(market_name: str, day: str, rows: list[dict]) -> str:
+    d = date.fromisoformat(day).strftime("%a %d %b")
+    lines = [f"StratLab daily report: {market_name}, {d}", ""]
+    for r in rows:
+        total = r["equity"] - r["capital"]
+        pct = total / r["capital"] * 100 if r["capital"] else 0
+        today = (f"{r['closed']} trade{'s' if r['closed'] != 1 else ''} closed ({r['wins']} won), {_money(r['pnl'], r['currency'])}"
+                 if r["closed"] else "No trades closed")
+        still = f"; {r['open']} open, {_money(r['unrealised'], r['currency'])} on paper" if r["open"] else ""
+        lines.append(f"{r['name']}\n  Today: {today}{still}\n  Since start: {_money(total, r['currency'])} ({pct:+.1f}%)")
+    lines += ["", "Paper trading only: no real orders. Turn this report off under Account → Alerts."]
+    return "\n".join(lines)
+
+
+def wants_report(db, uid: str) -> bool:
+    try:
+        return json.loads(db.get_setting(PREFS + uid) or "{}").get("daily_report", True)
+    except Exception:
+        return True
+
+
+class Reporter:
+    def __init__(self, db):
+        self.db = db
+        self.sent: dict[str, str] | None = None          # "user:market" -> last day sent
+
+    def _load(self):
+        if self.sent is None:
+            try:
+                self.sent = json.loads(self.db.get_setting(SETTING) or "{}")
+            except Exception:
+                self.sent = {}
+
+    def run(self, sessions: list, now: datetime | None = None, *, can_alert, send, market_name) -> list[tuple[str, str]]:
+        """Send what's due. Returns (user, market) pairs sent, for tests and logs."""
+        now = now or datetime.now(timezone.utc)
+        groups: dict[tuple[str, str], list] = {}
+        for s in sessions:
+            groups.setdefault((s.user_id, getattr(s, "market", "IN")), []).append(s)
+        out = []
+        for (uid, market), items in groups.items():
+            day = due(market, now)
+            if not day:
+                continue
+            self._load()
+            key = f"{uid}:{market}"
+            if self.sent.get(key) == day:
+                continue
+            self.sent[key] = day                          # mark first: a failure mustn't cause a flood of retries
+            self.sent = {k: v for k, v in self.sent.items() if v >= (date.fromisoformat(day) - timedelta(days=7)).isoformat()}
+            try:
+                self.db.set_setting(SETTING, json.dumps(self.sent))
+            except Exception as e:
+                print("could not save the report log:", e)
+            try:
+                profile = self.db.get_profile(uid)
+                if not can_alert(profile) or not wants_report(self.db, uid):
+                    continue
+                rows = [summarise(s, day) for s in sorted(items, key=lambda x: x.name)]
+                send(profile, f"StratLab daily report: {market_name(market)}", text(market_name(market), day, rows))
+                out.append((uid, market))
+            except Exception as e:
+                print("daily report failed:", uid, market, e)
+        return out

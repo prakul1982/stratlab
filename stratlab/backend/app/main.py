@@ -23,6 +23,7 @@ from .ai_writer import AIBusy, AIError, _anthropic, _gemini, write_strategy
 from .alerts import notify
 from .auth import current_profile
 from .config import settings
+from .errors import report
 from . import research
 from .engine import walkforward
 from .data import DataError, Registry
@@ -35,7 +36,7 @@ from .options import importer as opt_importer
 from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
-from . import public
+from . import daily_report, public
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq, OptionStrategy)
 from .models import (AdminPlanReq, AIReq, ImportReq, AlertsReq, BacktestReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -83,6 +84,12 @@ async def lifespan(app: FastAPI):
 
 
 log = logging.getLogger("stratlab")
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(dsn=settings.SENTRY_DSN, environment=settings.SENTRY_ENV, traces_sample_rate=0, send_default_pii=False)
+    except Exception as e:
+        print("Sentry not started:", e)
 app = FastAPI(title="StratLab API", lifespan=lifespan)
 research_routes.setup(research_hub, _gemini, _anthropic)
 app.include_router(research_routes.router)
@@ -106,6 +113,7 @@ async def unexpected_errors(request: Request, call_next):
                               "path": request.url.path, "error": f"{type(e).__name__}: {str(e)[:300]}", "where": where})
         del RECENT_ERRORS[:-25]
         _save_errors()
+        report(e, ref=ref, path=f"{request.method} {request.url.path}")
         return JSONResponse(status_code=500, content={"detail": {"code": "server_error",
                             "message": f"Something went wrong on our side ({request.method} {request.url.path}, ref {ref}). "
                                        "Try again in a moment; the admin page lists what failed."}})
@@ -244,7 +252,7 @@ def me(profile=Depends(current_profile)):
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
-                   "email": profile.get("alert_email")},
+                   "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
         "data_online": kite.ready(),
         "billing_enabled": billing.enabled(),
         "is_admin": admin.is_admin(profile),
@@ -257,6 +265,9 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
         upgrade("Telegram and email alerts are on the Pro plan.")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
+    if req.daily_report is not None:
+        prefs = json.loads(db.get_setting(daily_report.PREFS + profile["id"]) or "{}")
+        db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "daily_report": req.daily_report}))
     return {"saved": True}
 
 
@@ -742,7 +753,7 @@ def start_session(profile, s, inst):
     if profile["_plan"] == "free":
         t = trial_state(profile)
         if t["started"] and not t["active"]:
-            upgrade("Your 24-hour live trial has ended. Upgrade to Basic or Pro to keep paper trading.", "trial_ended")
+            upgrade("Your free 5-market-day paper trading trial has ended. Upgrade to Basic or Pro to keep paper trading.", "trial_ended")
         start_trial = not t["started"]
         if start_trial:
             db.update_profile(profile["id"], live_trial_started_at=db.now_iso())

@@ -9,6 +9,9 @@ from .engine import costs as C
 from .engine.core import Ctx, Engine, chart_series, clean, cond_text
 from .kite_service import IST, KiteService, TickHub, INTERVALS
 from .models import Strategy
+from .daily_report import Reporter
+from .data.markets import MARKETS
+from .errors import report
 from .plans import PLANS, effective_plan, has_pro_features, trial_state
 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}
@@ -215,6 +218,7 @@ class LimitError(Exception):
 class LiveManager:
     def __init__(self, kite: KiteService, hub: TickHub, markets=None, options=None):
         self.kite, self.hub, self.markets, self.options = kite, hub, markets, options
+        self.reporter = Reporter(db)
         self.sessions: dict[str, LiveSession] = {}
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -295,7 +299,7 @@ class LiveManager:
                                   "price": round(ev["px"], 2), "reason": ev.get("why"), "pnl": ev.get("pnl"),
                                   "candle_time": ev["t"]})
                 profile = db.get_profile(s.user_id)
-                if effective_plan(profile) == "pro" and profile.get("alerts_enabled"):
+                if alerts_on(profile):
                     sym, cur = ev.get("sym") or s.inst["symbol"], s.inst.get("currency", "INR")
                     if ev["side"] == "buy":
                         text = f"StratLab paper trade: BUY {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur} ({s.name})"
@@ -316,6 +320,7 @@ class LiveManager:
                 self._tick()
             except Exception as e:  # never let one bad pass kill the loop
                 print("live loop error:", e)
+                report(e, where="live loop")
 
     def _tick(self):
         now = datetime.now(IST)
@@ -326,6 +331,7 @@ class LiveManager:
                 s.on_timer(now)
             except Exception as e:
                 print("timer error:", e)
+                report(e, where="live timer")
         t = time.time()
         if t - self._last_persist > 30:
             self._last_persist = t
@@ -333,6 +339,12 @@ class LiveManager:
         if t - self._last_plan > 60:
             self._last_plan = t
             self._enforce_plans(sessions)
+            try:
+                self.reporter.run(sessions, can_alert=alerts_on, market_name=market_name,
+                                  send=lambda p, subj, body: notify(p, subj, body, background=False))
+            except Exception as e:
+                print("daily reports failed:", e)
+                report(e, where="daily report")
 
     def persist(self, sessions: list[LiveSession] | None = None, only_dirty: bool = True):
         if sessions is None:
@@ -371,6 +383,15 @@ class LiveManager:
                 for s in items:
                     if s.id in self.sessions and isinstance(s, LiveSession) and needs_pro(s.strategy, s.inst):
                         self.stop(s.id, "This strategy uses Pro features.")
+
+
+def alerts_on(profile: dict) -> bool:
+    """Trade alerts and daily reports: on for anyone who turned alerts on and has Pro features."""
+    return bool(profile.get("alerts_enabled")) and has_pro_features(effective_plan(profile))
+
+
+def market_name(mid: str) -> str:
+    return next((m["name"] for m in MARKETS if m["id"] == mid), mid)
 
 
 def needs_pro(strategy: Strategy, inst: dict | None) -> bool:

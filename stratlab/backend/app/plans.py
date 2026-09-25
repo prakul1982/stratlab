@@ -6,8 +6,8 @@ PLANS = {
         "name": "Free", "price": 0,
         "backtests_per_month": 5,
         "ai_builds_per_month": 10,
-        "live_limit": 1,              # only during the 24-hour trial
-        "live_trial_hours": 24,
+        "live_limit": 1,              # only during the trial
+        "live_trial_days": 5,         # market days (Mon–Fri), counted in India time from the first start
         "pro_features": False,
     },
     "basic": {
@@ -15,7 +15,7 @@ PLANS = {
         "backtests_per_month": 50,
         "ai_builds_per_month": 100,
         "live_limit": 1,
-        "live_trial_hours": None,
+        "live_trial_days": None,
         "pro_features": False,
     },
     "pro": {
@@ -23,7 +23,7 @@ PLANS = {
         "backtests_per_month": None,  # unlimited
         "ai_builds_per_month": None,  # unlimited (a daily safety cap still applies)
         "live_limit": 5,
-        "live_trial_hours": None,
+        "live_trial_days": None,
         "pro_features": True,         # advanced indicators, F&O, alerts, export
     },
 }
@@ -71,11 +71,28 @@ def effective_plan(profile: dict) -> str:
     return plan
 
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def trial_end(started: datetime, days: int) -> datetime:
+    """Midnight (India time) after the `days`-th weekday, counting the start day if it's a weekday.
+    Started on a Saturday, the trial runs to the end of the following Friday."""
+    d = started.astimezone(IST).date()
+    left = days
+    while True:
+        if d.weekday() < 5:
+            left -= 1
+            if left == 0:
+                break
+        d += timedelta(days=1)
+    return datetime(d.year, d.month, d.day, tzinfo=IST) + timedelta(days=1)
+
+
 def trial_state(profile: dict) -> dict:
-    hours = PLANS["free"]["live_trial_hours"]
+    days = PLANS["free"]["live_trial_days"]
     started = profile.get("live_trial_started_at")
     if not started:
-        return {"started": False, "active": False, "ends_at": None, "available": True}
-    ends = _dt(started) + timedelta(hours=hours)
+        return {"started": False, "active": False, "ends_at": None, "available": True, "days": days}
+    ends = trial_end(_dt(started), days)
     active = datetime.now(timezone.utc) < ends
-    return {"started": True, "active": active, "ends_at": ends.isoformat(), "available": active}
+    return {"started": True, "active": active, "ends_at": ends.isoformat(), "available": active, "days": days}

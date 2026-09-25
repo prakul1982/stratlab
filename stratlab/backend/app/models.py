@@ -193,6 +193,7 @@ class AlertsReq(BaseModel):
     alerts_enabled: bool = False
     telegram_chat_id: Optional[str] = Field(None, max_length=40)
     alert_email: Optional[str] = Field(None, max_length=200)
+    daily_report: Optional[bool] = None
 
 
 class SubscribeReq(BaseModel):

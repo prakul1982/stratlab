@@ -176,6 +176,8 @@ class AutoLogin:
             print("could not load the auto-login result:", e)
 
     def _alert(self, text: str):
+        from .errors import note
+        note(text)
         if settings.ADMIN_TELEGRAM_CHAT_ID:
             from .alerts import send_telegram
             try:

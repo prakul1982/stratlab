@@ -4,7 +4,7 @@ import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
 
 const FEATURES: Record<string, string[]> = {
-  free: ["5 experiments a month, each with a full verdict", "10 AI strategy builds a month", "24-hour paper trading trial",
+  free: ["5 experiments a month, each with a full verdict", "10 AI strategy builds a month", "Paper trading free for 5 market days",
     "Every market: India, crypto, the US, UK, Europe, Japan, forex and your own CSV", "SMA, EMA, RSI and price rules"],
   basic: ["50 experiments a month", "100 AI builds a month", "Paper trade 1 strategy at a time", "Every market, real costs and tax estimates",
     "SMA, EMA, RSI and price rules"],

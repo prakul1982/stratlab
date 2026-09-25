@@ -74,6 +74,8 @@ class Settings:
     ADMIN_KEY = _env("ADMIN_KEY")
     ADMIN_EMAILS = _env("ADMIN_EMAILS")                           # comma-separated Google emails that can open /admin
     ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails
+    SENTRY_DSN = _env("SENTRY_DSN")                               # optional: send server errors to Sentry
+    SENTRY_ENV = _env("SENTRY_ENV", "production")
 
 
 settings = Settings()
