@@ -70,6 +70,7 @@ class Settings:
     FRONTEND_ORIGIN = _env("FRONTEND_ORIGIN", "http://localhost:5500")
     # comma-separated, e.g. "https://stratlab.studio,http://localhost:5500"
     FRONTEND_ORIGINS = origins(FRONTEND_ORIGIN)
+    PUBLIC_SITE_URL = (_env("PUBLIC_SITE_URL", "https://stratlab.studio") or "").rstrip("/")   # where public verdict links point
     ADMIN_KEY = _env("ADMIN_KEY")
     ADMIN_EMAILS = _env("ADMIN_EMAILS")                           # comma-separated Google emails that can open /admin
     ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails

@@ -128,3 +128,7 @@ def get_setting(key: str) -> str | None:
 
 def set_setting(key: str, value: str) -> None:
     sb().table("app_settings").upsert({"key": key, "value": value, "updated_at": now_iso()}).execute()
+
+
+def delete_setting(key: str) -> None:
+    sb().table("app_settings").delete().eq("key", key).execute()

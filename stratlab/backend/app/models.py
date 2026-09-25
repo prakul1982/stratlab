@@ -286,3 +286,7 @@ class OptionImportReq(BaseModel):
 class GroupLiveReq(BaseModel):
     strategy: Strategy
     group: GroupReq
+
+
+class ShareReq(BaseModel):
+    image: Optional[str] = Field(None, max_length=3_000_000)   # the share card as a base64 PNG (data URL or bare)

@@ -598,3 +598,9 @@ table.legs input[type=number] { width: 72px !important; }
 .lp-beyond-card b { font-size: 18px; }
 .lp-beyond-card .lp-fix { margin-top: auto; }
 @media (max-width: 860px) { .lp-beyond { grid-template-columns: 1fr; } }
+.pub { min-height: 100vh; background: var(--paper); }
+.pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--line); }
+.pub-main { max-width: 960px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 32px) 64px; }
+.pub-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .pub-checks { grid-template-columns: 1fr; } }
+.pub-cta { border: 2px solid var(--ink); }

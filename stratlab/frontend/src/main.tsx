@@ -1,6 +1,6 @@
 import { StrictMode, useCallback } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "@fontsource/montserrat/300.css";
 import "@fontsource/montserrat/800.css";
 import "@fontsource/fraunces/400.css";
@@ -22,6 +22,7 @@ import { ExperimentPage } from "./pages/ExperimentPage";
 import { MarketPage } from "./pages/MarketPage";
 import { OptionsPage } from "./pages/OptionsPage";
 import { ImportPage } from "./pages/ImportPage";
+import { PublicVerdict } from "./pages/PublicVerdict";
 import { OptionsSession } from "./pages/OptionsSession";
 import { PaperPage } from "./pages/PaperPage";
 import { PlansPage } from "./pages/PlansPage";
@@ -32,6 +33,9 @@ import { ComparePage, CompanyPage, PulsePage, ResearchHome, ThemesPage, Watchlis
 
 function Routed() {
   const { session, ready, dataOffline, meError } = useApp();
+  const loc = useLocation();
+  // shared verdicts are public: no sign-in needed
+  if (loc.pathname.startsWith("/verdict/")) return <Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes>;
   if (!ready) return <Loading label="Opening StratLab" />;
   if (!session) return <Login />;
   return (
