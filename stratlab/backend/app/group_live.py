@@ -18,6 +18,8 @@ from .models import Strategy
 
 POLL_SECONDS = 60          # each polled member is checked this often for a newly closed candle
 POLLS_PER_PASS = 3         # members polled per 5-second pass, so a big group doesn't burst the data source
+FAST_EVAL_SECONDS = 15     # with fast entries on, each flat member's entry rules are checked this often on the forming candle
+QUOTE_MAX_AGE = 60         # an order book older than this can't vouch for the spread
 _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="group-live")
 
 
@@ -29,9 +31,28 @@ class Member:
         lot = inst.get("step") or (inst.get("lot", 1) if inst.get("fno") else 1)
         self.engine = Engine(sess.each, lot, state=state or None, cost_kind=C.kind_of(inst))
         self.engine.gate = sess.free_slot
+        self.engine.veto = self.filtered
         self.builder = CandleBuilder(sess.tf)
         self.last_price = self.bars[-1]["c"]
         self.next_poll = 0.0
+        self.bid = self.ask = None
+        self.quote_at = 0.0
+        self.next_eval = 0.0
+        self.skips = (state or {}).get("skips") or {"spread": 0, "price": 0}
+
+    def filtered(self) -> bool:
+        """True (and counted) when the entry rules hold but the trade should be skipped."""
+        f = self.s.fast
+        if f.get("minPrice") and self.last_price < f["minPrice"]:
+            self.skips["price"] += 1
+            return True
+        if f.get("maxSpreadPct"):
+            fresh = self.bid and self.ask and time.time() - self.quote_at <= QUOTE_MAX_AGE
+            mid = (self.bid + self.ask) / 2 if fresh else 0
+            if not fresh or mid <= 0 or (self.ask - self.bid) / mid * 100 > f["maxSpreadPct"]:
+                self.skips["spread"] += 1
+                return True
+        return False
 
     def on_tick(self, tick: dict):
         px = tick.get("last_price")
@@ -39,11 +60,31 @@ class Member:
             return
         ts = tick.get("exchange_timestamp") or tick.get("last_trade_time") or datetime.now(IST)
         ts = ts.replace(tzinfo=IST) if ts.tzinfo is None else ts.astimezone(IST)
+        depth = tick.get("depth") or {}
+        bid = next((x["price"] for x in depth.get("buy", []) if x.get("price")), None)
+        ask = next((x["price"] for x in depth.get("sell", []) if x.get("price")), None)
         with self.s.lock:
             self.last_price = float(px)
+            if bid and ask:
+                self.bid, self.ask, self.quote_at = float(bid), float(ask), time.time()
             self.s.last_tick_at = datetime.now(IST).isoformat()
             for c in self.builder.on_tick(float(px), ts, tick.get("volume_traded")):
                 self.s._on_candle(self, c)
+            if self.s.fast.get("ticks"):
+                self.enter_early()
+
+    def enter_early(self):
+        """Fast entries: try the entry rules on the forming candle, with its latest price as the close."""
+        cur = self.builder.cur
+        if cur is None or self.engine.qty > 0 or time.time() < self.next_eval:
+            return
+        self.next_eval = time.time() + FAST_EVAL_SECONDS
+        bar = {"t": cur["start"].isoformat(), "o": cur["o"], "h": cur["h"], "l": cur["l"], "c": cur["c"], "v": cur["v"]}
+        bars = self.bars + [bar]
+        for ev in self.engine.enter_now(bars, Ctx(bars, intraday=True), len(bars) - 1):
+            ev["why"] = ev["why"] + " (live price)"
+            self.s.dirty = True
+            self.s.mgr.on_order(self.s, {**ev, "sym": self.sym})
 
     def open_pnl(self) -> float:
         e = self.engine
@@ -62,6 +103,7 @@ class GroupLiveSession:
         self.market = self.inst.get("market", "IN")
         self.polled = self.market != "IN"
         self.max_open = int(self.inst.get("maxOpen") or 10)
+        self.fast = self.inst.get("fast") or {}
         self.started_at = row["started_at"]
         self.lock = threading.RLock()
         self.dirty = False
@@ -149,7 +191,7 @@ class GroupLiveSession:
             return
         for i, m in enumerate(self.members):
             lid = f"{self.id}:{i}"
-            hub.add(lid, int(m.inst["token"]), m.on_tick)
+            hub.add(lid, int(m.inst["token"]), m.on_tick, full=bool(self.fast.get("maxSpreadPct")))
             self.lids.append(lid)
 
     def detach(self, hub):
@@ -184,7 +226,7 @@ class GroupLiveSession:
 
     # ---------- saving and showing ----------
     def state(self) -> dict:
-        return {"members": {m.inst["id"]: m.engine.dump() for m in self.members}, "day": self.day, "halted": self.halted,
+        return {"members": {m.inst["id"]: {**m.engine.dump(), "skips": m.skips} for m in self.members}, "day": self.day, "halted": self.halted,
                 "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve}
 
     def snapshot(self) -> dict:
@@ -196,6 +238,8 @@ class GroupLiveSession:
             for m in self.members:
                 e = m.engine
                 rows.append({"symbol": m.sym, "id": m.inst["id"], "price": m.last_price, "trades": len(e.trades),
+                         "skipped": m.skips["spread"] + m.skips["price"],
+                         "spread": round((m.ask - m.bid) / ((m.ask + m.bid) / 2) * 100, 3) if m.bid and m.ask else None,
                              "pnl": round(sum(t["pnl"] for t in e.trades), 2),
                              "position": None if e.qty <= 0 else {"side": "short" if e.dir == -1 else "long", "qty": e.qty,
                                                                   "entry": e.entry, "unrealised": round(m.open_pnl(), 2),
@@ -212,7 +256,9 @@ class GroupLiveSession:
                 "account": {"capital": cap, "equity": self.equity(), "realised": self.realised(),
                             "unrealised": sum(m.open_pnl() for m in self.members), "open": open_n, "max_open": self.max_open,
                             "halted": self.halted, "today": self.realised() - self.day_start_realised + sum(m.open_pnl() for m in self.members),
-                            "trades": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0)},
+                            "trades": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0),
+                            "skipped": {k: sum(m.skips[k] for m in self.members) for k in ("spread", "price")}},
+                "fast": self.fast,
             }
 
 

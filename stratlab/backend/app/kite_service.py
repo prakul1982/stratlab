@@ -304,6 +304,7 @@ class TickHub:
         self.started = False
         self.connected = False
         self.listeners: dict[str, tuple[int, callable]] = {}
+        self._full: set[str] = set()      # listeners that need the order book (bid and ask) in each tick
         self._lock = threading.Lock()
 
     def start(self):
@@ -326,7 +327,15 @@ class TickHub:
         toks = self._tokens()
         if toks:
             ws.subscribe(toks)
-            ws.set_mode(ws.MODE_QUOTE, toks)
+            full = self._full_tokens()
+            if [t for t in toks if t not in full]:
+                ws.set_mode(ws.MODE_QUOTE, [t for t in toks if t not in full])
+            if full:
+                ws.set_mode(ws.MODE_FULL, sorted(full))
+
+    def _full_tokens(self) -> set[int]:
+        with self._lock:
+            return {tok for lid, (tok, _) in self.listeners.items() if lid in self._full}
 
     def _on_ticks(self, ws, ticks):
         with self._lock:
@@ -340,18 +349,22 @@ class TickHub:
                     except Exception as e:  # never let one session break the feed
                         print("tick handler error:", e)
 
-    def add(self, lid: str, token: int, cb):
+    def add(self, lid: str, token: int, cb, full: bool = False):
         with self._lock:
             self.listeners[lid] = (token, cb)
+            if full:
+                self._full.add(lid)
         if not self.started:
             self.start()
         elif self.connected and self.ws:
             self.ws.subscribe([token])
-            self.ws.set_mode(self.ws.MODE_QUOTE, [token])
+            full_tok = token in self._full_tokens()
+            self.ws.set_mode(self.ws.MODE_FULL if full_tok else self.ws.MODE_QUOTE, [token])
 
     def remove(self, lid: str):
         with self._lock:
             item = self.listeners.pop(lid, None)
+            self._full.discard(lid)
             still = item and any(t == item[0] for t, _ in self.listeners.values())
         if item and not still and self.connected and self.ws:
             self.ws.unsubscribe([item[0]])

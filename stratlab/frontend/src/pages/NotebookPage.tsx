@@ -91,6 +91,8 @@ export function NotebookPage() {
   const [label, setLabel] = useState("");
   const [running, setRunning] = useState(false);
   const [rewrite, setRewrite] = useState(false);
+  const [groupStart, setGroupStart] = useState(false);
+  const [fast, setFast] = useState({ ticks: false, maxSpreadPct: 0, minPrice: 0 });
   const notesRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { setGaps((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null); }, [id, loc.state]);
@@ -192,16 +194,20 @@ export function NotebookPage() {
   const paperTrade = async () => {
     if (group) {
       if (s.tf === "1d") { notify("Paper trading a group needs intraday candles. Switch the rules to 5-minute, 15-minute or 1-hour candles first."); return; }
-      try {
-        const snap = await api<{ id: string }>("/live/groups", { method: "POST", body: { strategy: { ...s, name: nb.name }, group } });
-        refreshMe();
-        nav(`/paper/${snap.id}`);
-      } catch (e) { fail(e); }
+      setGroupStart(true);
       return;
     }
     if (!inst || isUpload) { notify(isUpload ? "Paper trading needs live prices, so it doesn't work on uploaded data." : "Pick what to trade first."); return; }
     try {
       const snap = await api<{ id: string }>("/live/sessions", { method: "POST", body: { strategy: { ...s, name: nb.name }, instrument: inst.id } });
+      refreshMe();
+      nav(`/paper/${snap.id}`);
+    } catch (e) { fail(e); }
+  };
+
+  const startGroup = async () => {
+    try {
+      const snap = await api<{ id: string }>("/live/groups", { method: "POST", body: { strategy: { ...s, name: nb.name }, group, fast } });
       refreshMe();
       nav(`/paper/${snap.id}`);
     } catch (e) { fail(e); }
@@ -340,6 +346,36 @@ export function NotebookPage() {
           </section>
         )}
       </aside>
+
+      {groupStart && group && (
+        <Modal title="Paper trade this group" onClose={() => setGroupStart(false)}>
+          <div className="stack" style={{ gap: 16 }}>
+            <p className="muted">{group.name}: {group.members.length} instruments, up to {group.maxOpen} open at once, on {TF_NAME[s.tf]} candles, with fake money.</p>
+            {group.market === "IN" && (
+              <label className="row" style={{ gap: 10, alignItems: "flex-start" }}>
+                <input type="checkbox" style={{ width: 20, height: 20, marginTop: 2 }} checked={fast.ticks} onChange={(e) => setFast({ ...fast, ticks: e.target.checked })} />
+                <span className="stack" style={{ gap: 2 }}><b>Faster entries</b>
+                  <span className="small muted">Check the entry rules on the live price every 15 seconds, and enter as soon as they hold, instead of waiting for the candle to close. Exits still wait for the close. A backtest can't see inside a candle, so paper results will differ from it.</span></span>
+              </label>
+            )}
+            <div className="row wrap" style={{ gap: 16 }}>
+              {group.market === "IN" && (
+                <label className="field" style={{ width: 200 }}>Skip if the spread is over (% of price)
+                  <input className="input" type="number" min={0} max={5} step={0.05} value={fast.maxSpreadPct || ""} placeholder="Off"
+                    onChange={(e) => setFast({ ...fast, maxSpreadPct: Math.max(0, Math.min(5, +e.target.value || 0)) })} /></label>
+              )}
+              <label className="field" style={{ width: 200 }}>Skip anything cheaper than
+                <input className="input" type="number" min={0} step={1} value={fast.minPrice || ""} placeholder="Off"
+                  onChange={(e) => setFast({ ...fast, minPrice: Math.max(0, +e.target.value || 0) })} /></label>
+            </div>
+            {group.market === "IN" && <p className="small muted">The spread is the gap between the best bid and ask. 0.1% suits large, liquid stocks. With a spread limit set, an entry is skipped when the order book is too thin or unknown; the session counts how many were skipped.</p>}
+            <div className="row" style={{ gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn quiet" onClick={() => setGroupStart(false)}>Cancel</button>
+              <button className="btn blue" onClick={() => { setGroupStart(false); startGroup(); }}>Start paper trading</button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {rewrite && (
         <Modal title="Describe the idea again" onClose={() => setRewrite(false)}>

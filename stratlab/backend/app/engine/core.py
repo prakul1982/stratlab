@@ -107,6 +107,7 @@ class Engine:
         # the trading day, for session limits
         self.day, self.day_trades, self.day_pnl, self.cool, self.halted = None, 0, 0.0, 0, False
         self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
+        self.veto = None          # live only: checked once the entry rules hold (a wide spread, too cheap to trade)
         if state:
             self.load(state)
 
@@ -251,18 +252,32 @@ class Engine:
         if self.cool > 0:
             self.cool -= 1
             return new
+        return self._try_enter(bars, ctx, i, closes_at)
+
+    def _try_enter(self, bars: list[dict], ctx: Ctx, i: int, closes_at: int) -> list[dict]:
         if self.intraday and not self._may_enter(closes_at):
-            return new
+            return []
         if self.gate is not None and not self.gate():
-            return new
+            return []
+        slip, brok = self.r.slippage / 100, self.r.brokerage
         for d in self.sides:
             if not self._hit(self._rules(d, exit=False), ctx, i):
                 continue
+            if self.veto is not None and self.veto():
+                return []
             ev = self._open(bars, ctx, i, d, slip, brok)
-            if ev:
-                new.append(ev)
-            break
-        return new
+            return [ev] if ev else []
+        return []
+
+    def enter_now(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
+        """Live only: check the entry rules on the candle that is still forming (its close is the latest
+        price) and enter at once if they hold. Exits still wait for the candle to close, as in a backtest."""
+        if self.qty > 0 or self.cool > 0:
+            return []
+        date, closes_at = bar_clock(bars[i]["t"], self.tf_min)
+        if date != self.day:
+            self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
+        return self._try_enter(bars, ctx, i, closes_at)
 
     def _hit_exit(self, ctx: Ctx, i: int) -> bool:
         return any(eval_cond(ctx, c, i) for c in self._rules(self.dir, exit=True))
