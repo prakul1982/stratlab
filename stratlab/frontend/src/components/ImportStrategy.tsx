@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, riskForCurrency } from "../lib/rules";
-import type { Cond, Instrument, Risk, Strategy, Tf } from "../lib/types";
+import type { Cond, Instrument, Risk, Session, Strategy, Tf } from "../lib/types";
 import { findInstrument, type Built } from "./IdeaComposer";
 import { Upload } from "./Icons";
 import { Info } from "./ui";
@@ -10,7 +10,8 @@ import { Info } from "./ui";
 interface ImportOut {
   source: string; source_name: string; used_ai: boolean;
   strategy?: Strategy; instrument_id?: string | null;                       // a StratLab export
-  entry?: Cond[]; exit?: Cond[]; entryJoin?: "all" | "any"; side?: "long" | "short"; tf?: Tf | null; name?: string | null;
+  entry?: Cond[]; exit?: Cond[]; entryJoin?: "all" | "any" | "score"; side?: "long" | "short" | "both"; tf?: Tf | null; name?: string | null;
+  shortEntry?: Cond[]; shortExit?: Cond[]; minScore?: number; session?: Session; product?: Strategy["product"];
   instrument?: string | null; market?: string | null; risk?: Partial<Risk>; mentioned?: string[]; notes: string[];
 }
 
@@ -49,7 +50,9 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
         instrument = out.instrument ? await findInstrument(out.instrument, out.market || (market && market !== "CSV" ? market : null)) : null;
         const s = blankStrategy(out.name || `Imported ${out.source_name} strategy`);
         strategy = { ...s, text: `Imported from ${out.source_name}${file ? ` (${file})` : ""}`, entry: out.entry || [], exit: out.exit || [],
-          entryJoin: out.entryJoin || "all", tf: out.tf || "1d", side: out.side === "short" ? "short" : "long",
+          entryJoin: out.entryJoin || "all", tf: out.tf || "1d", side: out.side === "short" || out.side === "both" ? out.side : "long",
+          shortEntry: out.shortEntry ?? [], shortExit: out.shortExit ?? [], minScore: out.minScore ?? 0,
+          session: out.session ?? s.session, product: out.product ?? "auto",
           risk: riskForCurrency({ ...s.risk, ...(out.risk || {}) }, instrument?.currency) };
       }
       const fallback = !out.strategy && !out.used_ai ? "The AI translator was busy, so StratLab's built-in Pine Script reader was used. It covers moving averages, RSI, crossovers and percent stops." : "";

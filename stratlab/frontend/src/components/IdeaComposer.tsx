@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, detectInstrument, detectTf, nameFor, parseStrategyText, questionFrom, riskForCurrency } from "../lib/rules";
-import type { Cond, Instrument, Risk, Strategy, Tf } from "../lib/types";
+import type { Cond, Instrument, Risk, Session, Strategy, Tf } from "../lib/types";
 import { Info } from "./ui";
 
 export interface Built {
@@ -13,9 +13,10 @@ export interface Built {
 }
 
 interface AIOut {
-  entry: Cond[]; exit: Cond[]; entryJoin: "all" | "any"; tf: Tf | null; name: string | null; instrument: string | null;
+  entry: Cond[]; exit: Cond[]; entryJoin: "all" | "any" | "score"; tf: Tf | null; name: string | null; instrument: string | null;
   market?: string | null; risk: Partial<Risk>; mentioned: string[]; notes: string[]; usage?: { ai_used: number; ai_limit: number | null };
-  side?: "long" | "short";
+  side?: "long" | "short" | "both"; shortEntry?: Cond[]; shortExit?: Cond[];
+  minScore?: number; session?: Session; product?: Strategy["product"];
 }
 
 /** Well-known names per market, used in the examples until you pick an instrument. */
@@ -103,7 +104,9 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
     const instrument = out.instrument ? await findInstrument(out.instrument, out.market || (market && market !== "CSV" ? market : null)) : null;
     const s = blankStrategy(out.name || nameFor({ ...blankStrategy(), entry: out.entry }, instrument?.symbol));
     const strategy: Strategy = {
-      ...s, text: idea, entry: out.entry, exit: out.exit || [], entryJoin: out.entryJoin || "all", tf: out.tf || "1d", side: out.side === "short" ? "short" : "long",
+      ...s, text: idea, entry: out.entry, exit: out.exit || [], entryJoin: out.entryJoin || "all", tf: out.tf || "1d",
+      side: out.side === "short" || out.side === "both" ? out.side : "long", shortEntry: out.shortEntry ?? [], shortExit: out.shortExit ?? [],
+      minScore: out.minScore ?? 0, session: out.session ?? s.session, product: out.product ?? "auto",
       risk: riskForCurrency({ ...s.risk, ...out.risk }, instrument?.currency),
     };
     try {

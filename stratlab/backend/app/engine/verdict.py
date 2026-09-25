@@ -70,7 +70,7 @@ def check_unseen(bars, strategy, start, lot, kind, ctx) -> dict:
 
 def _param_keys(strategy) -> list[tuple[str, int]]:
     keys = []
-    for c in [*strategy.entry, *strategy.exit]:
+    for c in strategy.all_conds():
         for ref in (c.l, c.r):
             if ref.t in PERIOD_TYPES:
                 key = (ref.t, params(ref)[0])
@@ -90,7 +90,7 @@ def _nudged(p: int) -> list[int]:
 
 def _with(strategy, subs: dict[tuple[str, int], int]):
     s = copy.deepcopy(strategy)
-    for c in [*s.entry, *s.exit]:
+    for c in s.all_conds():
         for ref in (c.l, c.r):
             key = (ref.t, params(ref)[0]) if ref.t in PERIOD_TYPES else None
             if key in subs:

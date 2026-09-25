@@ -318,7 +318,7 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
         except ValueError as e:
             if fmt == "stratlab":
                 err(400, "bad_import", str(e))
-            fmt = "text"   # some other JSON: let the AI make sense of it
+            # a config from another system: the AI reads it as a strategy spec
     used, limit = ai_allowance(profile)
     try:
         out = write_strategy(importer.ai_prompt(fmt, req.text), pro=is_pro(profile))
