@@ -4,11 +4,14 @@ Zerodha's Kite Connect terms expect the daily login to be done by hand; automati
 the API key being revoked. It is off unless KITE_USER_ID, KITE_PASSWORD and KITE_TOTP_SECRET
 are all set. Credentials are only read from the environment and never logged.
 
-Zerodha locks an account after repeated wrong passwords or codes, so a rejected login is
-not retried until the next day. Network errors are retried a few times."""
+Zerodha locks an account after repeated wrong passwords or codes, so a rejected password is
+not retried until the next day. A rejected code gets exactly one more try with the next
+30-second code: Zerodha refuses a code that was already used, which happens when another
+program logs in to the same account in the same window. Network errors are retried a few times."""
 import base64
 import hashlib
 import hmac
+import json
 import os
 import re
 import struct
@@ -84,12 +87,20 @@ def fetch_request_token(login_url: str, transport: httpx.BaseTransport | None = 
             raise AutoLoginError("Zerodha's login reply had no request ID.")
         if 30 - time.time() % 30 < 3:  # the current code is about to expire: wait for a fresh one
             time.sleep(4)
-        body = _json(c.post(f"{BASE}/api/twofa", data={
-            "user_id": settings.KITE_USER_ID, "request_id": request_id,
-            "twofa_value": totp(settings.KITE_TOTP_SECRET), "twofa_type": "totp"}))
-        if body.get("status") != "success":
-            raise AutoLoginError(f"Zerodha rejected the TOTP code: {body.get('message', 'no reason given')}. "
-                                 "Check KITE_TOTP_SECRET and the server clock.", retry=False)
+        for attempt in (1, 2):
+            body = _json(c.post(f"{BASE}/api/twofa", data={
+                "user_id": settings.KITE_USER_ID, "request_id": request_id,
+                "twofa_value": totp(settings.KITE_TOTP_SECRET), "twofa_type": "totp"}))
+            if body.get("status") == "success":
+                break
+            if attempt == 1:
+                # most often the code was just used by another login on this account: wait for the next one
+                time.sleep(30 - time.time() % 30 + 2)
+                continue
+            raise AutoLoginError(f"Zerodha rejected the TOTP code twice: {body.get('message', 'no reason given')}. "
+                                 "If another program logs in to this Zerodha account at about the same time, move "
+                                 "KITE_AUTO_LOGIN_AT a few minutes away from it. Otherwise check KITE_TOTP_SECRET "
+                                 "and the server clock.", retry=False)
         # With the session cookies set, the Connect login redirects to our callback with a request token
         url = login_url
         for _ in range(10):
@@ -149,6 +160,20 @@ class AutoLogin:
     def _record(self, ok: bool, message: str):
         self.last = {"at": datetime.now(IST).isoformat(), "ok": ok, "message": message}
         print("Kite auto-login:", message)
+        try:  # kept in the database so a restart (the one after a manual login, say) doesn't lose it
+            from . import db
+            db.set_setting("kite_auto_login_last", json.dumps(self.last))
+        except Exception as e:
+            print("could not save the auto-login result:", e)
+
+    def load_last(self):
+        try:
+            from . import db
+            raw = db.get_setting("kite_auto_login_last")
+            if raw and configured():
+                self.last = json.loads(raw)
+        except Exception as e:
+            print("could not load the auto-login result:", e)
 
     def _alert(self, text: str):
         if settings.ADMIN_TELEGRAM_CHAT_ID:

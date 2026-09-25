@@ -9,7 +9,7 @@ type Plan = "free" | "basic" | "pro";
 type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quick_rank?: number | null; research_rank?: number | null };
 interface Overview {
   server: {
-    kite_ready: boolean; kite_token_day: string | null; feed_connected: boolean; live_sessions: number;
+    kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number;
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean };
   };
@@ -149,7 +149,7 @@ export function AdminPage() {
           <div className="grid2">
             <section className="card stack" style={{ gap: 4 }}>
               <h2 className="h2" style={{ marginBottom: 6 }}>Market data</h2>
-              <Status ok={sv!.kite_ready} label="Kite (India)" detail={sv!.kite_ready ? `Logged in${sv!.kite_token_day ? ` for ${dateOnly(sv!.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline."} />
+              <Status ok={sv!.kite_ready} label="Kite (India)" detail={sv!.kite_invalid ? sv!.kite_invalid : sv!.kite_ready ? `Logged in${sv!.kite_token_day ? ` for ${dateOnly(sv!.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline."} />
               <Status ok={sv!.feed_connected || sv!.live_sessions === 0} warn label="Live price feed" detail={sv!.feed_connected ? "Connected" : sv!.live_sessions ? "Not connected" : "Idle (no India sessions running)"} />
               <Status ok={sv!.auto_login_configured && sv!.auto_login.ok === true} warn={!sv!.auto_login_configured || sv!.auto_login.ok === null} label="Automatic daily login"
                 detail={!sv!.auto_login_configured ? "Off. Log in by hand each morning, or set KITE_USER_ID, KITE_PASSWORD and KITE_TOTP_SECRET." : `${sv!.auto_login.message}${sv!.auto_login.at ? ` (${ago(sv!.auto_login.at)})` : ""}`} />

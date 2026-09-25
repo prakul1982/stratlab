@@ -60,10 +60,12 @@ def after_login() -> str:
 
 
 auto_login = AutoLogin(kite, after_login)
+kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    auto_login.load_last()
     try:
         kite.load_saved_token()
     except Exception as e:
@@ -917,7 +919,7 @@ def admin_status(key: str = ""):
 
 
 def server_status() -> dict:
-    return {"kite_ready": kite.ready(), "kite_token_day": kite.token_day, "feed_started": hub.started,
+    return {"kite_ready": kite.ready(), "kite_token_day": kite.token_day, "kite_invalid": kite.invalid_reason, "feed_started": hub.started,
             "feed_connected": hub.connected, "live_sessions": len(manager.sessions),
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
