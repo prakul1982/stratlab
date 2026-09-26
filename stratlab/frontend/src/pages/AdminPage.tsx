@@ -12,7 +12,7 @@ interface Overview {
     kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number;
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     recent_errors?: { ref: string; at: string; method: string; path: string; error: string; where: string }[];
-    billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean };
+    billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number };
@@ -93,6 +93,7 @@ export function AdminPage() {
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [aiTest, setAiTest] = useState<AITest[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [promoDays, setPromoDays] = useState(10);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -121,7 +122,7 @@ export function AdminPage() {
   const kiteLogin = () => run("kite", async () => {
     const { url } = await api<{ url: string }>("/admin/kite/login-url", { method: "POST" });
     window.open(url, "_blank", "noopener");
-    notify("Kite login opened in a new tab. Come back and refresh when it says it's saved.");
+    notify("Broker login opened in a new tab. Come back and refresh when it says it's saved.");
   });
   const autoLogin = () => run("auto", async () => {
     const r = await api<{ ok: boolean; message: string }>("/admin/kite/auto-login-now", { method: "POST" });
@@ -136,10 +137,19 @@ export function AdminPage() {
   const moderate = (r: ReportedRow, action: "hide" | "restore" | "delete") => {
     if (action === "delete" && !confirm(`Delete "${r.name}" from the library for good?`)) return;
     run(`lib-${r.id}`, async () => {
-      await api(`/admin/library/${r.id}`, { method: "POST", body: JSON.stringify({ action }) });
+      await api(`/admin/library/${r.id}`, { method: "POST", body: { action } });
       notify(action === "restore" ? "Back in the library, reports cleared." : action === "hide" ? "Hidden." : "Deleted.");
       await loadOverview();
     });
+  };
+
+  const startPromo = () => {
+    if (!confirm(`Give every user every Pro feature, free, for ${promoDays} days starting now?`)) return;
+    run("promo", async () => { await api("/admin/promo", { method: "POST", body: { days: promoDays } }); notify(`Launch offer on for ${promoDays} days.`); await loadOverview(); });
+  };
+  const endPromo = () => {
+    if (!confirm("End the launch offer now? Everyone goes back to their own plan within a minute.")) return;
+    run("promo", async () => { await api("/admin/promo", { method: "DELETE" }); notify("Launch offer ended."); await loadOverview(); });
   };
 
   const sv = ov?.server;
@@ -166,15 +176,32 @@ export function AdminPage() {
             ))}
           </div>
 
+          <section className="card stack" style={{ gap: 10 }}>
+            <h2 className="h2">Launch offer</h2>
+            {sv!.promo_until ? (
+              <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+                <span><span className="badge pass">On</span> Every user has every Pro feature free until <b>{new Date(sv!.promo_until).toLocaleString()}</b>. Then plans apply again by themselves.</span>
+                <button className="btn quiet sm danger" disabled={busy === "promo"} onClick={endPromo}>End now</button>
+              </div>
+            ) : (
+              <div className="row wrap" style={{ gap: 10 }}>
+                <span className="small muted">Off. Start it to give everyone every Pro feature free for a while, e.g. at launch. Payments keep working, so people can still subscribe.</span>
+                <label className="row" style={{ gap: 8 }}><span className="small">Days</span>
+                  <input className="input" type="number" min={1} max={90} value={promoDays} onChange={(e) => setPromoDays(Math.max(1, Math.min(90, +e.target.value || 1)))} style={{ width: 80 }} /></label>
+                <button className="btn sm" disabled={busy === "promo"} onClick={startPromo}>Start now</button>
+              </div>
+            )}
+          </section>
+
           <div className="grid2">
             <section className="card stack" style={{ gap: 4 }}>
               <h2 className="h2" style={{ marginBottom: 6 }}>Market data</h2>
-              <Status ok={sv!.kite_ready} label="Kite (India)" detail={sv!.kite_invalid ? sv!.kite_invalid : sv!.kite_ready ? `Logged in${sv!.kite_token_day ? ` for ${dateOnly(sv!.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline."} />
+              <Status ok={sv!.kite_ready} label="Broker data (India)" detail={sv!.kite_invalid ? sv!.kite_invalid : sv!.kite_ready ? `Logged in${sv!.kite_token_day ? ` for ${dateOnly(sv!.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline."} />
               <Status ok={sv!.feed_connected || sv!.live_sessions === 0} warn label="Live price feed" detail={sv!.feed_connected ? "Connected" : sv!.live_sessions ? "Not connected" : "Idle (no India sessions running)"} />
               <Status ok={sv!.auto_login_configured && sv!.auto_login.ok === true} warn={!sv!.auto_login_configured || sv!.auto_login.ok === null} label="Automatic daily login"
-                detail={!sv!.auto_login_configured ? "Off. Log in by hand each morning, or set KITE_USER_ID, KITE_PASSWORD and KITE_TOTP_SECRET." : `${sv!.auto_login.message}${sv!.auto_login.at ? ` (${ago(sv!.auto_login.at)})` : ""}`} />
+                detail={!sv!.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : `${sv!.auto_login.message}${sv!.auto_login.at ? ` (${ago(sv!.auto_login.at)})` : ""}`} />
               <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
-                <button className="btn sm" disabled={busy === "kite"} onClick={kiteLogin}>Log in to Kite</button>
+                <button className="btn sm" disabled={busy === "kite"} onClick={kiteLogin}>Log in to the broker</button>
                 {sv!.auto_login_configured && <button className="btn quiet sm" disabled={busy === "auto"} onClick={autoLogin}>{busy === "auto" ? "Logging in…" : "Run the automatic login now"}</button>}
               </div>
             </section>
@@ -188,7 +215,7 @@ export function AdminPage() {
               {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
               {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error} label={a.label} detail={a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
               {aiKeys.length > 0 && <AIOrder rows={sv!.ai} />}
-              <Status ok={!!sv!.research?.finnhub} label="US company data (Finnhub)" detail={sv!.research?.finnhub ? "FINNHUB_API_KEY is set" : "Add FINNHUB_API_KEY in Railway for US company pages (free at finnhub.io). India needs no key."} />
+              <Status ok={!!sv!.research?.finnhub} label="US company data" detail={sv!.research?.finnhub ? "Key is set" : "Add the company-data key in Railway for US company pages (setup guide, step 6). India needs no key."} />
               {sv!.option_recorder && (() => {
                 const r = sv!.option_recorder!;
                 return <Status ok={r.enabled && !r.last_error} warn={!r.enabled || !!r.last_error} label="Option chain recording"

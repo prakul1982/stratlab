@@ -87,6 +87,7 @@ export function AccountPage() {
     } catch (e) { fail(e); } finally { setChecking(false); }
   };
 
+  const paid = me.paid_plan ?? me.plan;   // what they pay for; me.plan is Pro for everyone during the launch offer
   return (
     <div className="stack" style={{ gap: 26 }}>
       <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -101,10 +102,11 @@ export function AccountPage() {
         <section className="card stack" style={{ gap: 0 }}>
           <div className="spread" style={{ marginBottom: 6 }}>
             <h2 className="h2 row" style={{ gap: 0 }}>Plan and usage<Info>{HELP.experimentsQuota}</Info></h2>
-            <span className="badge skip">{me.plan_info.name}</span>
+            <span className="badge skip">{me.plan_info.name}{me.promo ? " (launch offer)" : ""}</span>
           </div>
           {[
-            ...(me.plan !== "free" ? [[b.cancel_at_period_end ? "Ends on" : "Renews on", dateOnly(b.renews_or_ends)]] : []),
+            ...(me.promo ? [["Launch offer", `Every Pro feature free until ${dateOnly(me.promo.until)}`]] : []),
+            ...(paid !== "free" ? [[b.cancel_at_period_end ? "Ends on" : "Renews on", dateOnly(b.renews_or_ends)]] : []),
             ["Experiments this month", u.backtests_limit == null ? `${u.backtests_used} (unlimited)` : `${u.backtests_used} of ${u.backtests_limit}`],
             ["AI builds this month", u.ai_limit == null ? `${u.ai_used} (unlimited)` : `${u.ai_used} of ${u.ai_limit}`],
             ["Paper sessions running", `${me.live_running} of ${me.live_limit}`],
@@ -112,7 +114,7 @@ export function AccountPage() {
             <div key={k} className="spread" style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}><span className="muted">{k}</span><b>{v}</b></div>
           ))}
           <div className="row wrap" style={{ gap: 8, marginTop: 14 }}>
-            {me.plan === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
+            {paid === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
               : b.cancel_at_period_end ? <><span className="small muted">Cancelled. You keep {me.plan_info.name} until {dateOnly(b.renews_or_ends)}.</span><Link to="/plans" className="btn outline">Compare plans</Link></>
                 : <><Link to="/plans" className="btn outline">Change plan</Link><button className="btn quiet danger" onClick={cancel}>Cancel subscription</button></>}
           </div>

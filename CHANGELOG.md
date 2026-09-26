@@ -2,12 +2,18 @@
 
 ## September 2026
 
+### Launch offer, and quieter about data sources
+- **Launch offer:** from the Admin page, give every user every Pro feature free for a set number of days (10 by default). Users see a banner with the end date. Payments keep working during it, and each user returns to their own plan by themselves when it ends.
+- **Data sources aren't named** in the app, on the site, in error messages or in the docs. Research shows plain labels ("Market data", "Fundamentals") and links only to the company's own website and Wikipedia.
+- **Policies:** the contact email is set, and refunds cover duplicate or wrong charges only.
+- **Fixed:** reporting a library strategy and the admin's moderation buttons sent their request in the wrong format, so they failed.
+
 ### Ready for payments
 - **Terms, Privacy, Cancellation and refunds, and Contact pages:** public (no sign-in), linked from the landing page, Plans and Account. The business name, email and address come from `config.js`.
 - **Payments switch on safely:** paid features lock only once Razorpay's keys *and* plan IDs are set, so a half-finished setup never locks people out. Plan prices on the Plans page come from the server.
 - **Checkout** no longer stays stuck on "Opening checkout…" after paying or after a failed payment. Cancelling now names the date your plan ends, correct for yearly plans too.
 - **Report a library strategy** as spam, offensive, misleading or personal. Three reports from different people hide it until the site owner reviews it on the Admin page (restore, hide or delete). Re-publishing doesn't clear reports.
-- **Tighter site security:** a full Content-Security-Policy (scripts only from StratLab and Razorpay), no inline scripts, and the old `?key=` admin URLs are gone. The Admin page's Kite buttons replace them.
+- **Tighter site security:** a full Content-Security-Policy (scripts only from StratLab and Razorpay), no inline scripts, and the old `?key=` admin URLs are gone. The Admin page's login buttons replace them.
 - **Faster pages:** a signed-in user's profile is cached for 10 seconds, so paper-trading pages that refresh every 3 seconds don't hit the database each time.
 - **Upgraded** to React 19, TypeScript 7 and Sentry 11. Sentry sends no cookies, headers, user details or query strings.
 
@@ -23,7 +29,7 @@
 - **Faster first load:** the Options page loads in its own chunk again.
 
 ### Commodities, Indian and global, kept apart
-- **Indian commodities (MCX):** a new market through the same Kite login.
+- **Indian commodities (MCX):** a new market through the same broker login as Indian stocks.
   - Gold, silver, crude oil and natural gas (with their mini contracts), plus copper, zinc, aluminium and lead futures.
   - Priced in rupees and traded in whole lots, with CTT, MCX fees, stamp duty and GST.
   - Years of daily history, stitched across expiries.
@@ -73,7 +79,7 @@
   - **Markets now** in the sidebar says **weekend** or **holiday**, and "opens in" skips closed days.
   - The free trial's 5 market days no longer count holidays.
   - The daily report isn't sent on a holiday, and option chains aren't recorded on one.
-- **No more "offline" at midnight:** a day's Kite login is used until Zerodha's 6 am reset, so Indian data stays up overnight.
+- **No more "offline" at midnight:** a day's broker login is used until the 6 am token reset, so Indian data stays up overnight.
 - **A clearer banner** when Indian data is offline:
   - on a weekend or holiday it says the market is closed and when data reconnects
   - before the morning login it says what time data comes back
@@ -153,7 +159,7 @@
 - **The session page** shows what the rules are doing: long, short or flat, and their last candle.
 
 ### Recording option chains for options backtesting
-- Kite keeps no prices for expired options, so StratLab now records its own.
+- The broker keeps no prices for expired options, so StratLab now records its own.
 - **What:** every 5 minutes in market hours it saves the NIFTY, BANKNIFTY and SENSEX chains (current and next expiry, 15 strikes either side of the money): bid, ask, last price and open interest for each call and put, plus the spot price. That's about 1 MB a day.
 - **Settings:** choose the underlyings and how often with `OPTION_SNAPSHOTS` and `OPTION_SNAPSHOT_MINUTES`.
 - **Status:** the Admin page shows what was saved today.
@@ -168,7 +174,7 @@
 - **Fixed: trade alerts never arrived** for anyone without a paid Pro plan. While payments aren't live, everyone can switch alerts on, but they were only ever sent to paid Pro accounts.
 - **Error alerts (optional):**
   - Set a Sentry DSN and every server error goes to Sentry with the same ref code users see.
-  - So do errors in the paper trading loop, failed Kite auto-logins and, if you add the DSN to the frontend config, errors in people's browsers.
+  - So do errors in the paper trading loop, failed broker auto-logins and, if you add the DSN to the frontend config, errors in people's browsers.
 
 ### A new share card, and public links to a verdict
 - **The share card** now shows:
@@ -193,7 +199,7 @@
   - It covers **Import any strategy**, and paper trading groups and option structures.
   - New screenshots of the Options tab and the Import page, and the rest are re-shot on the current design.
 - **Setup guide:**
-  - How to run StratLab next to your own bots on the same Zerodha account: a separate Kite Connect app, and a different login time.
+  - How to run StratLab next to your own bots on the same broker account: a separate API app, and a different login time.
   - The Admin page's recent-errors list.
   - How imports route to groups and options.
   - Group and options paper trading, and when a paper session stops.
@@ -241,9 +247,9 @@
 - The main choices sit up front: what to trade, expiry, structure, times, units, stop and target. Legs open with **Edit legs**. Caps, trailing, re-centring, sizing and costs moved into **More settings**.
 - Less common structures and underlyings moved into **More…** menus. The payoff numbers use the full width, and the page no longer scrolls sideways on phones.
 
-### Kite login reliability
-- If Zerodha rejects the automatic login's 2FA code, it now tries once more with the next code. The usual cause is another program using the same code on the account moments earlier. A rejected password still stops for the day, so the account can't get locked.
-- If Zerodha cancels today's token mid-day, StratLab now notices. That usually happens when another login to the same Kite Connect app replaces it. Indian data goes offline with a clear message instead of failing every request, the admin page says what happened, and a Telegram alert goes out. It doesn't log in again by itself, which would cancel the other program's token in turn.
+### Broker login reliability
+- If the broker rejects the automatic login's 2FA code, it now tries once more with the next code. The usual cause is another program using the same code on the account moments earlier. A rejected password still stops for the day, so the account can't get locked.
+- If the broker cancels today's token mid-day, StratLab now notices. That usually happens when another login to the same API app replaces it. Indian data goes offline with a clear message instead of failing every request, the admin page says what happened, and a Telegram alert goes out. It doesn't log in again by itself, which would cancel the other program's token in turn.
 - The last automatic-login result is saved, so it's still on the admin page after a restart.
 
 ### Options tab (live paper trading)
@@ -319,7 +325,7 @@
 - The idea builder (AI and the simple converter) understands "short", "trailing stop" and "exit after N days".
 
 ### Research, and every market live
-- **Research a company** (India and US): live price and chart, where it sits in its 52-week range, key numbers with an industry-range dot, sales and profit by year, quarterly results, results against estimates, analyst ratings, insider trades, shareholding, Screener's strengths and concerns, news, and what the company does.
+- **Research a company** (India and US): live price and chart, where it sits in its 52-week range, key numbers with an industry-range dot, sales and profit by year, quarterly results, results against estimates, analyst ratings, insider trades, shareholding, automatic strengths and concerns, news, and what the company does.
 - An **AI read** on every company: scores, valuation, bull and bear cases, segments, what to watch, and three **ideas to test** that open as a notebook with the market, company and rules filled in.
 - **Themes** (AI map of a sector with a ranked shortlist), **Market pulse** (index levels, headlines and the day's mood), **Compare** two companies with an AI verdict, and a **Watchlist** saved to your account.
 - **US, UK, European and Japanese stocks and ETFs, and forex** are now live for backtests and paper trading, with UK stamp duty and forex spread in the costs.
@@ -327,7 +333,7 @@
 - Fixed: backtests on markets with daylight saving time.
 
 ### Admin page
-- An **Admin** page for the site owner (set by `ADMIN_EMAILS`): server and Kite status, Kite login button, live AI test, user list with usage, plan grants by hand, and running paper sessions with a Stop button.
+- An **Admin** page for the site owner (set by `ADMIN_EMAILS`): server and broker data status, a broker login button, live AI test, user list with usage, plan grants by hand, and running paper sessions with a Stop button.
 
 ### AI builder you can diagnose
 - **Account → Connection check** now tests every AI provider live and shows exactly what's wrong with any that fail.
@@ -353,11 +359,11 @@
 - Each idea is a notebook with numbered experiments and lab notes.
 - Every experiment ends in an honest verdict backed by four checks: unseen data, nearby settings, bad-luck drawdown and enough trades.
 - Real costs in each market's own currency, including Indian taxes and fees.
-- Global markets: India (Zerodha Kite), crypto (Coinbase) and any market through a CSV upload.
+- Global markets: India, crypto and any market through a CSV upload.
 - A new React and TypeScript frontend with charts drawn as SVG, in light and night modes.
 
 ### Foundations
-- Automatic daily Kite login (optional) with safe retries, and a self-restart for the price feed.
+- Automatic daily broker login (optional) with safe retries, and a self-restart for the price feed.
 - Paid plans show "Coming soon" until Razorpay is connected.
 - Fixes to billing, alerts, the live loop and data handling, with a pytest suite and CI.
 - Proprietary license.

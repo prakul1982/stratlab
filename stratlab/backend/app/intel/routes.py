@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .. import db
+from ..branding import public_research, public_text
 from ..ai_providers import AIBusy, AIError
 from ..auth import current_profile
 from ..config import settings
@@ -29,7 +30,7 @@ def setup(research: Research, gemini, anthropic):
 
 
 def err(status: int, code: str, message: str):
-    raise HTTPException(status, {"code": code, "message": message})
+    raise HTTPException(status, {"code": code, "message": public_text(message)})
 
 
 def _safe(o):
@@ -43,7 +44,7 @@ def _safe(o):
 
 
 def ok(data) -> JSONResponse:
-    return JSONResponse(content=_safe(data))
+    return JSONResponse(content=_safe(public_research(data)))
 
 
 def region_of(region: str) -> str:

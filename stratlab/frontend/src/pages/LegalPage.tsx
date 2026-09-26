@@ -6,7 +6,7 @@ import { Logo } from "../components/Logo";
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
 export const BUSINESS = {
   name: CFG.BUSINESS_NAME || "StratLab",
-  email: CFG.CONTACT_EMAIL || "support@stratlab.studio",
+  email: CFG.CONTACT_EMAIL || "prakul828@gmail.com",
   address: CFG.BUSINESS_ADDRESS || "",
   updated: "26 September 2026",
 };
@@ -105,7 +105,6 @@ function Refunds() {
       <ul>
         <li>Because you can use a paid plan straight away and cancel any time before it renews, payments for a period that has started aren't refunded.</li>
         <li>We refund in full if you were charged twice, charged after cancelling, or charged but your plan didn't activate and we can't fix it.</li>
-        <li>If you forgot to cancel a renewal and haven't used the paid features since it renewed, email us within 7 days and we'll refund it.</li>
         <li>To ask for a refund, email {mail} from your account's email with the payment date. We reply within 2 working days. Approved refunds go back to the original payment method within 5–7 working days (your bank may take longer to show it).</li>
       </ul>
       <h2 className="h3">Delivery</h2>

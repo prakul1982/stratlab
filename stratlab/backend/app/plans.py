@@ -97,6 +97,48 @@ def effective_plan(profile: dict) -> str:
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
+# ---------- launch offer: everyone gets Pro until a date the admin sets ----------
+PROMO_KEY = "promo:free_until"
+PROMO_TTL = 30.0
+_promo: dict = {"read_at": 0.0, "until": None}
+
+
+def promo_until() -> datetime | None:
+    """When the free-for-everyone offer ends, or None when there isn't one. Read from the database every 30 s."""
+    import time
+    from . import db
+    if time.monotonic() - _promo["read_at"] > PROMO_TTL:
+        try:
+            raw = db.get_setting(PROMO_KEY)
+            _promo["until"] = _dt(raw) if raw else None
+        except Exception:
+            pass   # keep the last known value if the database blips
+        _promo["read_at"] = time.monotonic()
+    return _promo["until"]
+
+
+def promo_active(now: datetime | None = None) -> bool:
+    until = promo_until()
+    return bool(until and (now or datetime.now(timezone.utc)) < until)
+
+
+def set_promo(days: int | None) -> datetime | None:
+    """Start the offer now for `days` days, or end it (None)."""
+    from . import db
+    if days:
+        until = datetime.now(timezone.utc) + timedelta(days=days)
+        db.set_setting(PROMO_KEY, until.isoformat())
+    else:
+        until = None
+        db.delete_setting(PROMO_KEY)
+    _promo.update(read_at=0.0, until=until)
+    return until
+
+
+def access_plan(profile: dict) -> str:
+    """What the user can use right now: Pro for everyone during the launch offer, else what they pay for."""
+    return "pro" if promo_active() else effective_plan(profile)
+
 
 def trial_end(started: datetime, days: int) -> datetime:
     """Midnight (India time) after the `days`-th Indian trading day, counting the start day if it is one.

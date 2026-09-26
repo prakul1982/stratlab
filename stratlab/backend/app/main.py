@@ -24,6 +24,7 @@ from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_str
 from . import alerts
 from .auth import current_profile
 from .config import settings
+from .branding import public_text
 from .errors import report
 from .guard import Guard
 from . import research
@@ -42,9 +43,9 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, ModerateReq, ReportReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, ModerateReq, PromoReq, ReportReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
-from .plans import FEATURE_PLAN, PLANS, allows, group_size, has_pro_features, plan_info, public_plans, trial_state
+from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -154,7 +155,7 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
 
 # ---------- helpers ----------
 def err(status: int, code: str, message: str):
-    raise HTTPException(status, {"code": code, "message": message})
+    raise HTTPException(status, {"code": code, "message": public_text(message)})
 
 
 def upgrade(message: str, code: str = "upgrade_required"):
@@ -227,23 +228,24 @@ def check_features(profile, strategy: Strategy, inst: dict | None):
 
 @app.exception_handler(KiteNotReady)
 def _kite_not_ready(request, exc):
-    return JSONResponse(status_code=503, content={"detail": {"code": "data_offline", "message": str(exc)}})
+    return JSONResponse(status_code=503, content={"detail": {"code": "data_offline", "message": public_text(str(exc))}})
 
 
 @app.exception_handler(research.ResearchError)
 def _research_error(request, exc):
-    return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": exc.message}})
+    return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": public_text(exc.message)}})
 
 
 @app.exception_handler(DataError)
 def _data_error(request, exc):
-    return JSONResponse(status_code=502, content={"detail": {"code": "data_error", "message": str(exc)}})
+    return JSONResponse(status_code=502, content={"detail": {"code": "data_error", "message": public_text(str(exc))}})
 
 
 @app.exception_handler(kite_exc.KiteException)
 def _kite_error(request, exc):
+    print("market data request failed:", exc)
     return JSONResponse(status_code=502, content={"detail": {"code": "data_error",
-                        "message": f"Market data request failed: {exc}"}})
+                        "message": "The market data request failed. Try again in a moment."}})
 
 
 # ---------- account ----------
@@ -265,7 +267,8 @@ def me(profile=Depends(current_profile)):
     info = plan_info(plan)
     return ok({
         "id": profile["id"], "email": profile.get("email"),
-        "plan": plan, "plan_info": info,
+        "plan": plan, "plan_info": info, "paid_plan": profile.get("_paid_plan", plan),
+        "promo": {"until": until.isoformat()} if (until := promo_until()) and promo_active() else None,
         "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                     "renews_or_ends": profile.get("current_period_end"),
                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
@@ -1062,7 +1065,7 @@ def clear_stopped_live(profile=Depends(current_profile)):
 # ---------- options (live paper trading only) ----------
 def options_ready():
     if not options_data.ready():
-        err(503, "data_offline", "Option quotes come from the broker's live feed, which is offline until today's Kite login. "
+        err(503, "data_offline", "Option quotes come from the live feed, which is offline until today's data login completes. "
             "Try again after the market data comes back.")
 
 
@@ -1159,7 +1162,7 @@ def options_import(req: OptionImportReq, profile=Depends(current_profile)):
 # ---------- billing ----------
 @app.post("/billing/subscribe")
 def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
-    if profile["_plan"] == req.plan:
+    if profile.get("_paid_plan", profile["_plan"]) == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
     try:
         return billing.create_subscription(profile, req.plan, req.period)
@@ -1217,7 +1220,8 @@ def server_status() -> dict:
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
-            "research": {"finnhub": bool(settings.FINNHUB_API_KEY)}, "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS))}
+            "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
+            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS))}
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
@@ -1263,6 +1267,21 @@ def admin_stop_session(sid: str, _=Depends(admin.admin_profile)):
         err(404, "not_found", "That session isn't running.")
     manager.stop(sid, "Stopped by the site owner.")
     return {"ok": True}
+
+
+@app.post("/admin/promo")
+def admin_start_promo(req: PromoReq, who=Depends(admin.admin_profile)):
+    """Everyone gets Pro, starting now, for this many days (the launch offer). Starting again resets the end."""
+    until = set_promo(req.days)
+    log.info("admin %s started the free offer until %s", who.get("email"), until)
+    return {"until": until.isoformat() if until else None}
+
+
+@app.delete("/admin/promo")
+def admin_end_promo(who=Depends(admin.admin_profile)):
+    set_promo(None)
+    log.info("admin %s ended the free offer", who.get("email"))
+    return {"until": None}
 
 
 @app.get("/admin/library")

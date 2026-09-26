@@ -33,7 +33,7 @@ export interface Instrument {
 export interface Market {
   id: string; name: string; venues: string; currency: string | null; symbol: string; tz: string;
   hours: { open: string | null; close: string | null; days: string } | null; what: string; costs: string;
-  provider: string | null; brokerage: number; status: "live" | "offline" | "soon"; max_days: Record<Tf, number> | null;
+  brokerage: number; status: "live" | "offline" | "soon"; max_days: Record<Tf, number> | null;
   holidays?: string[];      // weekday closures in the next few weeks, as dates in the exchange's own calendar
 }
 
@@ -122,6 +122,7 @@ export interface Me {
   data_online: boolean;
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
   plans?: Record<string, { price: number; price_year: number }>;
+  paid_plan?: "free" | "basic" | "pro"; promo?: { until: string } | null;
   prefs?: { level: Level | null };
 }
 

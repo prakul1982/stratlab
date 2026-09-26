@@ -201,6 +201,10 @@ class ReportReq(BaseModel):
     reason: Literal["spam", "offensive", "misleading", "personal", "other"] = "other"
 
 
+class PromoReq(BaseModel):
+    days: int = Field(10, ge=1, le=90)
+
+
 class ModerateReq(BaseModel):
     action: Literal["hide", "restore", "delete"]
 

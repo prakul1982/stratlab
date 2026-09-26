@@ -133,7 +133,7 @@ class KiteService:
         if self.invalid_reason:
             raise KiteNotReady("Indian market data is offline: the broker login was cancelled. The admin needs to log in again.")
         if not self.ready():
-            raise KiteNotReady("Market data is offline. The admin needs to complete today's Kite login.")
+            raise KiteNotReady("Market data is offline. The admin needs to complete today's data login.")
 
     def _throttle(self):
         # Kite allows about 3 requests per second on most endpoints

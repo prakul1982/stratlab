@@ -64,6 +64,7 @@ svg { display: block; }
 .btn.outline:hover { background: var(--card); color: var(--ink); filter: none; }
 .btn.quiet { background: var(--card); border-color: var(--line-2); color: var(--ink); font-weight: 500; }
 .btn.quiet:hover { border-color: var(--ink); color: var(--ink); filter: none; }
+.promo-banner { background: var(--blue-soft, var(--paper-2)); }
 .warn-text { color: var(--orange-ink); }
 .btn.danger { background: transparent; border-color: var(--line-2); color: var(--orange-ink); }
 .btn.sm { min-height: 36px; padding: 0 12px; font-size: 14px; }

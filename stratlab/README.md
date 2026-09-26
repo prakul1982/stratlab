@@ -5,7 +5,7 @@
 A research notebook for traders: describe a strategy in plain words, test it on real market data, get an honest verdict (real edge or luck), then paper trade it with fake capital.
 
 - **Frontend:** `frontend/`, a React + TypeScript app built with Vite. Supabase login, Razorpay Checkout, charts drawn as SVG.
-- **Backend:** `backend/`, built with FastAPI. It handles market data (Kite for India, Coinbase for crypto, Yahoo Finance for the US, UK, Europe, Japan and forex, uploaded CSVs), company research, the backtest engine, the verdict checks, trading costs, live paper trading, billing, alerts and the AI writer.
+- **Backend:** `backend/`, built with FastAPI. It handles market data (a broker feed for India and MCX, public market data for crypto, the US, UK, Europe, Japan, forex and global commodities, and uploaded CSVs), company research, the backtest engine, the verdict checks, trading costs, live paper trading, billing, alerts and the AI writer.
 - **Database and login:** Supabase (Postgres plus Google sign-in). The schema is in `supabase/schema.sql`.
 
 ## Plans (edit in `backend/app/plans.py`)
@@ -35,28 +35,27 @@ Monthly counts reset on the 1st of each month (IST). Limits are enforced on the 
    - the project URL and `anon` key go into `frontend/config.js`
    - the `service_role` key goes into `backend/.env`. It must stay on the server only.
 
-### 2. Kite Connect
-1. In the Kite developer console, set the app's redirect URL to `https://YOUR-BACKEND/admin/kite/callback`.
-2. Put the API key and secret in `backend/.env`.
-3. Log in once by hand: set up the Admin page first (step 9), then press **Log in to Kite** there and log in with Zerodha. This also authorises the app for the automatic login.
-4. Kite access tokens expire every morning. After a login the server restarts itself (it exits and the host starts it again), because the Kite ticker can't switch to a new token inside a running process. Live sessions are saved first and resume after the restart.
+### 2. Broker data API (India and MCX)
+Indian stocks, F&O, MCX and live ticks come from a broker's market data API. The variables keep their original `KITE_` names.
+1. In the broker's developer console, set the app's redirect URL to `https://YOUR-BACKEND/admin/kite/callback`.
+2. Put the API key and secret in `backend/.env` (`KITE_API_KEY`, `KITE_API_SECRET`).
+3. Log in once by hand: set up the Admin page first (step 9), then press the broker login button there. This also authorises the app for the automatic login.
+4. Access tokens expire every morning. After a login the server restarts itself (it exits and the host starts it again), because the live feed can't switch to a new token inside a running process. Live sessions are saved first and resume after the restart.
 
 #### Automatic daily login (optional)
-Set these and the server logs in to Kite by itself every day at `KITE_AUTO_LOGIN_AT` (IST, default `08:00`):
-- `KITE_USER_ID`: your Zerodha client ID
-- `KITE_PASSWORD`: your Zerodha password
-- `KITE_TOTP_SECRET`: the secret key shown when you set up an authenticator app for Kite 2FA (the text under the QR code, not a 6-digit code). If you already set up 2FA without saving it, reset external 2FA in Kite to get a new one.
+Set these and the server logs in by itself every day at `KITE_AUTO_LOGIN_AT` (IST, default `08:00`):
+- `KITE_USER_ID`: your broker client ID
+- `KITE_PASSWORD`: your broker password
+- `KITE_TOTP_SECRET`: the secret key shown when you set up an authenticator app for the broker's 2FA (the text under the QR code, not a 6-digit code). If you already set up 2FA without saving it, reset external 2FA to get a new one.
 - `ADMIN_TELEGRAM_CHAT_ID` (optional): your Telegram chat ID, to get a message if the login fails
 
-**Other programs on the same Zerodha account.** If your own trading bots also log in to this Zerodha account:
-- Give StratLab its **own Kite Connect app** (its own API key). A new login to the same app cancels the previous token. If StratLab and a bot share an API key, whichever logs in last knocks the other out. StratLab notices a cancelled token, goes offline with a clear message and sends a Telegram alert, but it deliberately doesn't log in again by itself, so the two don't fight.
-- Keep `KITE_AUTO_LOGIN_AT` a few minutes away from the other logins. Two logins in the same 30-second window use the same 2FA code, and Zerodha refuses the second. StratLab retries once with the next code, then stops for the day.
+**Other programs on the same broker account.** If your own trading bots also log in to this account:
+- Give StratLab its **own API app** (its own API key). A new login to the same app cancels the previous token. If StratLab and a bot share an API key, whichever logs in last knocks the other out. StratLab notices a cancelled token, goes offline with a clear message and sends a Telegram alert, but it deliberately doesn't log in again by itself, so the two don't fight.
+- Keep `KITE_AUTO_LOGIN_AT` a few minutes away from the other logins. Two logins in the same 30-second window use the same 2FA code, and the broker refuses the second. StratLab retries once with the next code, then stops for the day.
 
 To test the credentials straight away, press **Run the automatic login now** on the Admin page, which shows the result.
 
-> **Read before enabling.** Zerodha's Kite Connect terms expect the daily login to be done by hand, so automating it risks your API key or account being restricted. Your password and TOTP secret also give full trading access to your Zerodha account: keep them only in the host's environment variables and never commit them. If Zerodha rejects the password or code, the server doesn't retry until the next day, so it can't lock your account with repeated attempts. Leave these variables empty to keep logging in by hand.
-
-> **Data licensing:** this build serves data from your single Kite subscription. Before charging users, confirm with Zerodha that this is allowed. Redistributing exchange data usually needs a licence. All data access is in `backend/app/kite_service.py`, so you can swap in a licensed vendor without touching the rest.
+> **Read before enabling.** Your password and TOTP secret give full trading access to your broker account: keep them only in the host's environment variables and never commit them. If the broker rejects the password or code, the server doesn't retry until the next day, so it can't lock your account with repeated attempts. Leave these variables empty to keep logging in by hand.
 
 ### 3. Razorpay (optional, for paid plans)
 Leave the Razorpay settings empty and the Plans page shows the paid plans as "Coming soon", with everyone on Free. To take payments:
@@ -79,7 +78,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
    - `/refunds` (cancellation, refunds and delivery)
    - `/contact`
 
-   Before submitting, fill in `BUSINESS_NAME`, `CONTACT_EMAIL` and `BUSINESS_ADDRESS` in `frontend/public/config.js`, and make sure that email inbox exists. Read the four pages once and adjust the refund terms if you want a different policy.
+   The business name and contact email are set in `frontend/public/config.js` (`BUSINESS_NAME`, `CONTACT_EMAIL`; add `BUSINESS_ADDRESS` if you want one listed). Read the four pages once and adjust the refund terms if you want a different policy.
 2. **Switch to Live mode** in the dashboard, then repeat the Test Mode setup there: live plans cannot see test plans.
    - Create the plans again: Basic ₹999 and Pro ₹2,999 monthly, plus yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
    - Generate live API keys.
@@ -91,7 +90,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
    - optionally `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`
 
    Then redeploy.
-4. **What changes at that moment:** paid features lock to each plan. Until the keys **and** both monthly plan IDs are set, everyone keeps every feature. Anyone using Pro features on Free loses them; grant early users Pro for a while from the Admin page (Change plan → 30 or 90 days) if you want to thank them.
+4. **What changes at that moment:** paid features lock to each plan. Until the keys **and** both monthly plan IDs are set, everyone keeps every feature. Anyone using Pro features on Free loses them. To soften the switch, start the **Launch offer** on the Admin page: every user gets every Pro feature free for the days you choose (10 by default), while payments keep working. When it ends, each user goes back to their own plan within a minute; sessions their plan doesn't cover are stopped with a message. You can also grant individual users Pro by hand (Change plan → 30 or 90 days).
 5. **Check it once for real:** buy Basic with your own account, confirm the Account page shows it and the Admin page lists you as paying, then cancel from Account (you keep it until the period ends). Refund yourself from the Razorpay dashboard if you like.
 
 ### 4. AI builder (all plans) and alerts (Pro)
@@ -115,7 +114,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 Weekends and exchange holidays come from the `exchange_calendars` package: BSE for India (NSE closes on the same days), NYSE, LSE, Xetra and Tokyo. Exchanges publish the next year's holidays late in the year, and a redeploy picks up the package update with them. For dates the installed version doesn't know yet, every weekday counts as a trading day.
 
 ### Recording option chains (for options backtesting)
-Kite has no price history for expired options, so StratLab records its own.
+The broker keeps no price history for expired options, so StratLab records its own.
 - **What it saves:** every 5 minutes in Indian market hours it saves the chain of NIFTY, BANKNIFTY and SENSEX: the current and next expiry, and 15 strikes either side of the money, with bid, ask, last price and open interest for each call and put, plus the spot price.
 - **Storage:** that's about 1 MB a day in the `option_snapshots` table, so the free Supabase tier holds more than a year.
 - **Settings:**
@@ -125,15 +124,15 @@ Kite has no price history for expired options, so StratLab records its own.
 - The longer it runs, the more history options backtests will have, so it is worth starting early.
 
 ### 5. Crypto, global markets and uploaded data
-Nothing to set up. Crypto prices come from Coinbase's public market data. US, UK, European and Japanese stocks and ETFs, and forex pairs, come from Yahoo Finance's public chart data (London prices are converted from pence to pounds). Neither needs an account or key. Yahoo keeps about 2 years of hourly and 60 days of 15- and 5-minute candles, so intraday tests on those markets are shorter. Uploaded CSVs are read in the browser and sent with each test; they aren't stored on the server.
+Nothing to set up. Crypto prices, and US, UK, European and Japanese stocks and ETFs, forex pairs and global commodities come from public market data that needs no account or key (London prices are converted from pence to pounds). About 2 years of hourly and 60 days of 15- and 5-minute candles are available for those markets, so intraday tests on them are shorter. Uploaded CSVs are read in the browser and sent with each test; they aren't stored on the server.
 
 ### 6. Research
 The **Research** section (company pages, themes, market pulse, compare, watchlist) needs one key for US companies:
-- `FINNHUB_API_KEY` from finnhub.io (free, 60 calls a minute). Company pages are cached (profiles for a day, fundamentals for 6 hours, prices for a minute), and peer and watchlist prices come from Yahoo, so the free limit goes a long way.
-- Indian companies need no key: fundamentals come from Screener.in's public pages, prices from Kite (or Yahoo when Kite is offline), and news from Google News.
+- `FINNHUB_API_KEY`: a free company-data key (60 calls a minute). Company pages are cached (profiles for a day, fundamentals for 6 hours, prices for a minute), and peer and watchlist prices come from the public market data, so the free limit goes a long way.
+- Indian companies need no key: fundamentals come from public company pages, prices from the broker feed (or public market data when it's offline), and news from a news feed.
 - AI reads use the provider chain above. `RESEARCH_AI_PER_DAY` (default 60) caps fresh AI reads per user per day; cached reads don't count.
 
-Admin → AI builder shows whether the Finnhub key is set, and each company page lists any source that didn't answer.
+Admin → AI builder shows whether the company-data key is set, and each company page says which kind of data didn't answer.
 
 ### 7. Run locally
 ```bash
@@ -158,20 +157,21 @@ cd frontend && npm run build                   # typecheck and production build
 ```
 
 ### 8. Deploy
-- **Backend:** Railway (Hobby plan, about $5 a month) or a small always-on VPS. Run it as **one process**, e.g. `uvicorn app.main:app --host 0.0.0.0 --port 8000` with no multiple workers. Live sessions, the tick feed and the daily Kite login live in memory in that process, so hosts that sleep when idle (free tiers of Render, Cloud Run) break paper trading.
+- **Backend:** Railway (Hobby plan, about $5 a month) or a small always-on VPS. Run it as **one process**, e.g. `uvicorn app.main:app --host 0.0.0.0 --port 8000` with no multiple workers. Live sessions, the tick feed and the daily broker login live in memory in that process, so hosts that sleep when idle (free tiers of Render, Cloud Run) break paper trading.
 - **Frontend:** Vercel or Netlify, with the project's root directory set to `stratlab/frontend`. `vercel.json` and `netlify.toml` set the build (`npm run build`, output `dist`) and send every page to `index.html`, so links like `/n/…` work on refresh. On Vercel, clear any Build Command or Output Directory overrides in the project settings so `vercel.json` applies. Put the production API URL in `public/config.js`.
 - **Public verdict links:** a shared link looks like `https://your-site/v/abc123`. The `/v/…` rewrite in `vercel.json` and `netlify.toml` passes it to the backend, which serves the preview that WhatsApp, X and LinkedIn read (title, summary and the card as the image), then sends people to the page at `/verdict/abc123`. If your backend isn't at `stratlab-production-ca25.up.railway.app`, change that address in both files. Set `PUBLIC_SITE_URL` on the backend to your site's address (default `https://stratlab.studio`). A public link holds a copy of the verdict, never the rules, and turning it off or deleting the experiment removes it.
 
 ### 9. Admin page
 Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and redeploy. Signed in with that account, you get an **Admin** link in the sidebar with:
-- Kite status and a **Log in to Kite** button, plus a button to run the automatic login now.
-- A live test of every AI provider, the order each kind of job asks them in, which keys are missing, whether the Finnhub key is set, and whether payments are set up.
+- Broker data status and a login button, plus a button to run the automatic login now.
+- **Launch offer:** give every user every Pro feature free for N days, starting now. Users see a banner with the end date; the Plans and Account pages still show what they actually pay for. It ends by itself, or press End now.
+- A live test of every AI provider, the order each kind of job asks them in, which keys are missing, whether the company-data key is set, and whether payments are set up.
 - Users, their plan and this month's usage, with **Change plan** to grant Basic or Pro by hand (for 30 days, 90 days, a year or with no end date).
 - Paper trading sessions running now (single instruments, groups and options), each with a Stop button.
 - **Recent server errors**: every unexpected error shows users a short code, like "(GET /notebooks, ref 3FA9C1)". This table lists the last 25 with the request, the error and the line of code, and keeps them across restarts.
 
 **Error alerts by Sentry (optional):** make a free project at sentry.io (platform: Python/FastAPI) and copy its DSN.
-- Backend: set `SENTRY_DSN` in Railway (`SENTRY_ENV` defaults to `production`). Every server error then reaches Sentry tagged with the same ref code users see, along with errors in the paper trading loop and failed Kite auto-logins. Sentry emails you, or pings your phone through its app.
+- Backend: set `SENTRY_DSN` in Railway (`SENTRY_ENV` defaults to `production`). Every server error then reaches Sentry tagged with the same ref code users see, along with errors in the paper trading loop and failed broker auto-logins. Sentry emails you, or pings your phone through its app.
 - Frontend: add `SENTRY_DSN: "…"` to `public/config.js` for errors in people's browsers. You can use a second Sentry project (platform: Browser JavaScript). The Sentry code only downloads when a DSN is set.
 - Nothing personal is sent: no emails, IP addresses or request bodies.
 
@@ -192,7 +192,7 @@ The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, wh
   - "Both ways" strategies keep long rules in `entry`/`exit` and short rules in `shortEntry`/`shortExit`; whichever entry fires first opens the trade.
   - Entry rules combine as all, any, or a weighted score (`w` on each rule, `minScore` to enter).
   - Rule values include the candle (open, high, low, body, wicks, range, ATR in points) and the trading day (previous close, day open/high/low so far, day change %). Any value can be shifted N candles back (`ago`), multiplied (`k`), or computed on a higher timeframe (`tf`: 15m, 1h, daily). Higher-timeframe values only use completed candles: a 15-minute candle sees the last finished hour, never the one in progress. Hourly buckets start at each session's open (09:15 in India).
-  - Options (`backend/app/options/`, live paper trading only): `OptionsData` loads NFO, BFO and MCX option contracts from Kite each day. It prices legs with `kite.quote` depth (sell at the best bid, buy at the best ask) and gets basket margins from `basket_order_margins`. `OptionsEngine` is a pure state machine stepped every 5 seconds by the live manager with the spot, the contracts and the quotes. It handles entry, square-off, whole-position stop/target (money or % of premium), trailing, per-leg stops, the daily cap, re-centring, margin sizing and freeze-limit slices. Quotes older than 2 minutes block entries and pause exits. Sessions are stored in `live_sessions` with `instrument.type = "OPTIONS"`. **Strategy library** (`backend/app/library.py`, `frontend/src/pages/LibraryPage.tsx`):
+  - Options (`backend/app/options/`, live paper trading only): `OptionsData` loads NFO, BFO and MCX option contracts from the broker each day. It prices legs with the broker's quote depth (sell at the best bid, buy at the best ask) and gets basket margins from `basket_order_margins`. `OptionsEngine` is a pure state machine stepped every 5 seconds by the live manager with the spot, the contracts and the quotes. It handles entry, square-off, whole-position stop/target (money or % of premium), trailing, per-leg stops, the daily cap, re-centring, margin sizing and freeze-limit slices. Quotes older than 2 minutes block entries and pause exits. Sessions are stored in `live_sessions` with `instrument.type = "OPTIONS"`. **Strategy library** (`backend/app/library.py`, `frontend/src/pages/LibraryPage.tsx`):
 - An entry is published from one experiment (`POST /notebooks/{id}/experiments/{v}/library`). It freezes the exact rules that were tested with their verdict and numbers, plus an optional description and display name.
 - It's stored in `app_settings` as `lib:<id>`, with the owner's id kept server-side only.
 - `GET /library` filters by market, verdict and words, and sorts by best verdict (real edges first, then return on unseen data), newest or most copied.
@@ -205,12 +205,12 @@ The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, wh
 
 Group sessions (`group_live.py`) take optional `fast` settings, stored on the session's instrument:
 - `ticks` (India only) re-checks a flat member's entry rules on the forming candle every 15 seconds. It uses `Engine.enter_now` and enters at the live price; exits still wait for the candle to close.
-- `maxSpreadPct` (India only) subscribes those members' ticks in Kite's full mode for the order book. Once the rules hold, it skips the entry when the bid-ask spread is wider than that % of price, or unknown.
+- `maxSpreadPct` (India only) subscribes those members' ticks in full mode for the order book. Once the rules hold, it skips the entry when the bid-ask spread is wider than that % of price, or unknown.
 - `minPrice` skips instruments below a price.
 
 Skips go through the engine's `veto` hook, so they're counted only when the rules actually fired.
 
-With `strategy.signal` set, entries follow a notebook's rules instead of the clock. `options/signal.SignalFeed` runs those rules on the underlying's own Kite candles, fetched every 20 seconds, so they see what a backtest sees. It uses a notional account so sizing never rounds to zero. The engine enters on a long signal, enters the same legs with calls and puts swapped on a short one (or stays out), and exits when the rules exit or flip. Each signal is traded once, so a stopped trade isn't re-entered until the rules signal again. Routes: `GET /options/underlyings`, `GET /options/chain`, `POST /options/preview`, `POST /options/sessions`, `POST /options/import`.
+With `strategy.signal` set, entries follow a notebook's rules instead of the clock. `options/signal.SignalFeed` runs those rules on the underlying's own candles, fetched every 20 seconds, so they see what a backtest sees. It uses a notional account so sizing never rounds to zero. The engine enters on a long signal, enters the same legs with calls and puts swapped on a short one (or stays out), and exits when the rules exit or flip. Each signal is traded once, so a stopped trade isn't re-entered until the rules signal again. Routes: `GET /options/underlyings`, `GET /options/chain`, `POST /options/preview`, `POST /options/sessions`, `POST /options/import`.
   - Groups (`group` on a notebook: `{id, name, market, members: [{id?, symbol}], maxOpen}`, presets from `GET /groups?market=`): one engine per member on a shared timeline and one pot of capital. An entry is skipped when `maxOpen` positions are already open; the daily loss cap counts the whole group and closes everything. Unseen data uses a 70/30 split of the shared timeline; the nearby-settings check, walk-forward and the similar-stocks check are skipped. Size by fixed capital per trade, since risk sizing sizes each trade against the full capital.
   - Intraday session (`session`): no entries on candles that close outside the entry window; any open trade closes on the candle that ends at the square-off time (or at the next day's open if the data skips it); a cap on trades per day, a cooldown in candles after each trade, and a daily loss cap (% of capital, including the open trade, which is closed when the cap is hit). Times are the exchange's local time and refer to when a candle closes. With a square-off time, Indian cash trades use intraday (MIS) costs: STT 0.025% on sells, stamp duty 0.003% on buys.
   - Quantities round down to the instrument's step: 1 share, a whole F&O lot, or a fraction of a coin.
@@ -227,23 +227,22 @@ With `strategy.signal` set, entries follow a notebook's rules instead of the clo
 - **Import** (`backend/app/importer.py`, `POST /import/strategy`, the **Import a strategy** page): the format is detected from the text (and file name). Option structures (a straddle, strangle, condor and so on, spotted by `options/importer.is_options`) are translated into an options strategy and open in the Options tab. A strategy that trades a list of instruments comes back with a `universe`: a preset such as the liquid F&O stocks, or its own symbols, plus the most positions open at once. The frontend saves that as the new notebook's group. A StratLab export loads exactly, with no AI. Pine Script, Python, MetaTrader, AmiBroker and plain words go to the AI builder, told which language it's reading and to list what it couldn't express; that uses one AI build. If the AI is unavailable, Pine Script is read by a small built-in parser (SMA, EMA and RSI, crossovers and comparisons, entries, exits and percent stops). A script that trades both ways is imported in its main direction, with the opposite entry used as the exit.
 - **Notebooks** (`/notebooks` routes): stored in the existing `strategies` table, so no database migration is needed. A notebook can be pinned (`PUT` with `pinned`; pinned ones list first) and copied (`POST /notebooks/{id}/duplicate`, which copies the rules, market and notes but not the experiments). Each experiment keeps a compact record (up to 240 chart points, the trades, costs and verdict), capped at 50 per notebook.
 - **Live paper trading** (`backend/app/live.py`):
-  - India: one KiteTicker connection feeds every session, and ticks become candles for your timeframe (market hours 09:15–15:30 IST).
-  - Every other market (crypto, US, UK, Europe, Japan, forex): each session checks its source (Coinbase, or Yahoo Finance) every 15 seconds for newly closed candles. Yahoo prices can run a few minutes behind.
+  - India: one live-feed connection feeds every session, and ticks become candles for your timeframe (market hours 09:15–15:30 IST).
+  - Every other market (crypto, US, UK, Europe, Japan, forex): each session checks its data source every 15 seconds for newly closed candles. Some of those prices can run a few minutes behind.
   - On each closed candle, the same engine decides whether to trade.
   - Groups (`backend/app/group_live.py`, `POST /live/groups`): one engine and candle builder per member, fed by ticks (India) or polled a few members at a time (other markets). There's one pot of capital, a cap on positions open at once, and a group-wide daily loss cap that closes everything. Groups need intraday candles.
   - Options sessions (`backend/app/options/session.py`) are polled every 5 seconds on live quotes; see Options above.
   - Session state is saved every 30 seconds and resumes after a restart. A session keeps running until the user or the admin stops it, or the free trial or plan limit ends it. Indian sessions show as paused until the day's Kite login.
   - Free trials and plan limits are re-checked every minute.
-- **API routes:** see `backend/app/main.py`. The browser only ever talks to this API; it never touches the database or Kite directly.
+- **API routes:** see `backend/app/main.py`. The browser only ever talks to this API; it never touches the database or the data providers directly.
 - **Request guard** (`backend/app/guard.py`): every request is capped at 8 MB and rate-limited: 600 a minute per signed-in user and 240 a minute per address, with `/health` exempt. It also adds security headers. The site's own headers, including a Content-Security-Policy, are in `frontend/vercel.json` (and `netlify.toml`). The policy allows scripts only from the site itself and Razorpay Checkout. It allows API calls to `*.up.railway.app`, `*.stratlab.studio`, Supabase, Razorpay and Sentry: if the backend moves to another domain, add it to `connect-src` in both files. See [SECURITY.md](../SECURITY.md) for the full list.
 
 ## Known limits
 - Short selling is simulated without borrowing fees or margin interest. In India, cash-market shorts must be closed the same day; holding a short overnight is only possible through futures, so treat multi-day shorts on Indian stocks as a what-if.
-- Historical data for **expired** option and futures contracts isn't available from Kite, so F&O backtests only work on currently listed contracts. Continuous data is used for daily futures candles.
+- Historical data for **expired** option and futures contracts isn't available from the broker, so F&O backtests only work on currently listed contracts. Continuous data is used for daily futures candles.
 - Backtests don't model intra-candle order (if stop and target fall in the same candle, the stop is assumed to hit first).
-- Yahoo Finance and Screener.in are public but unofficial sources: they can change without notice, and their terms don't cover commercial redistribution. Before charging users for data from them, move to a licensed vendor; each source lives in one file (`app/data/yahoo_markets.py`, `app/intel/*.py`), so it's a contained swap. The AI's company and theme reads are opinions for research, not investment advice.
 - European costs cover your brokerage only (no local transaction taxes such as France's), and Japanese costs likewise.
 - The tax figure is a rough estimate for Indian equity only, not tax advice.
-- `kiteconnect` (even its latest release, 5.2.2) pins `autobahn==19.11.2`, which has known advisories, so security scanners will keep flagging it until Zerodha updates the package. StratLab only uses it for the outgoing connection to Zerodha's own price feed, not to serve anything. Replacing Kite's ticker client with our own is the way to clear it if needed.
-- Options run as live paper trading only: backtesting them needs historical prices for every strike, which Kite doesn't provide for expired contracts. Group paper trading decides on each closed candle, not on every tick, and has no spread filter.
+- The broker's Python client (even its latest release) pins `autobahn==19.11.2`, which has known advisories, so security scanners will keep flagging it until the broker updates the package. StratLab only uses it for the outgoing connection to the broker's price feed, not to serve anything. Replacing its live-feed client with our own is the way to clear it if needed.
+- Options run as live paper trading only: backtesting them needs historical prices for every strike, which the broker doesn't provide for expired contracts. Group paper trading decides on each closed candle, not on every tick, and has no spread filter.
 - This is a paper trading tool: no real orders are placed. If you add live execution later, review SEBI's retail algo trading framework first.

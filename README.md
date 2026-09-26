@@ -44,15 +44,15 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 - **Options, live.** A separate Options tab paper trades straddles, strangles, iron flies, condors, spreads or any structure up to 8 legs on live NSE, BSE and MCX option quotes, filling at the real bid and ask. Entries come at a set time or whenever a notebook's own rules signal: a 7 EMA cross can buy the ATM NIFTY call, and a short signal the put. It covers MTM stops and targets, trailing, per-leg stops, daily caps, re-centring, margin-based sizing and freeze-limit slicing. Options backtesting is coming: StratLab now records NIFTY, BANKNIFTY and SENSEX option chains every 5 minutes to build the price history it needs.
 - **Test on a whole group.** Run the rules on a ready-made group (NIFTY 50, Bank NIFTY, liquid F&O stocks, US mega caps, large coins) or your own list of up to 50, sharing one pot of capital with a limit on positions open at once. The verdict breaks the result down member by member. Paper trading an Indian group can enter on the live price instead of waiting for the candle to close, and skip stocks whose bid-ask spread is too wide.
 - **Built for intraday.** An entry window, a square-off time, a cap on trades per day, a cooldown after each trade and a daily loss cap. Entry rules can be combined as a weighted conviction score. Size by risk or by fixed capital per trade with leverage; Indian intraday trades use MIS costs.
-- **Any market.** Indian stocks, indices and F&O (Zerodha Kite), US, UK, European and Japanese stocks and ETFs and forex (Yahoo Finance), crypto (Coinbase), or upload a CSV of candles from anywhere. No extra keys needed.
+- **Any market.** Indian stocks, indices and F&O on a live exchange feed; US, UK, European and Japanese stocks and ETFs, forex and crypto; or upload a CSV of candles from anywhere. No extra keys needed.
 - **Commodities, as two separate markets.**
-  - **Indian commodities (MCX, via Kite):** gold, gold mini and petal, silver, silver mini and micro, crude oil and crude mini, natural gas and its mini, copper, zinc, aluminium, lead.
+  - **Indian commodities (MCX):** gold, gold mini and petal, silver, silver mini and micro, crude oil and crude mini, natural gas and its mini, copper, zinc, aluminium, lead.
     - Rupees, whole lots (one GOLDM lot is 100 g, so 10 times the quoted price per 10 g).
     - Costs: CTT 0.01% on sells, MCX fees, stamp duty, GST.
     - Hours 9:00 am to 11:30 pm IST, NSE holiday calendar.
     - Daily history is stitched across expiries for years of data; intraday history covers only the current contract.
     - Paper sessions trade the front-month contract, which rolls 3 days before expiry.
-  - **Global commodities (Yahoo Finance):** COMEX, NYMEX, CBOT and ICE front-month futures: gold, silver, platinum, copper, WTI and Brent crude, natural gas, corn, wheat, soybeans, coffee, sugar, cocoa, cotton.
+  - **Global commodities:** COMEX, NYMEX, CBOT and ICE front-month futures: gold, silver, platinum, copper, WTI and Brent crude, natural gas, corn, wheat, soybeans, coffee, sugar, cocoa, cotton.
     - Dollars (grain prices in cents are converted), sized per ounce, barrel or bushel rather than per exchange contract.
     - A spread and commission estimate per side.
     - Sunday 6 pm to Friday 5 pm New York, US holiday calendar.
@@ -168,18 +168,18 @@ flowchart LR
     UI["Frontend<br/>React + Vite"] -- "REST, Supabase JWT" --> API["FastAPI backend"]
     UI -- "Google sign-in" --> SB[("Supabase<br/>Auth + Postgres")]
     API --> SB
-    API -- "India: candles, live ticks" --> KITE["Zerodha Kite Connect"]
+    API -- "India: candles, live ticks" --> BROKER["Broker market data API"]
     API -- "crypto: candles, prices" --> CB["Coinbase public data"]
-    API -- "US, UK, EU, Japan, forex, global commodities; charts" --> YF["Yahoo Finance"]
-    API -- "research: US companies" --> FH["Finnhub"]
-    API -- "research: Indian fundamentals, news" --> SC["Screener.in, Google News, Wikipedia"]
+    API -- "US, UK, EU, Japan, forex, global commodities; charts" --> YF["Market data API"]
+    API -- "research: US companies" --> FH["Company data API"]
+    API -- "research: Indian fundamentals, news" --> SC["Fundamentals, news, Wikipedia"]
     API -- "subscriptions (coming soon)" --> RZP["Razorpay"]
     RZP -- "webhooks" --> API
     API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini, Mistral,<br/>SambaNova, OpenRouter, Claude"]
     API --> ALERT["Telegram / email alerts"]
 ```
 
-The browser only talks to the backend. The backend owns every secret: the Supabase service key, Kite and Razorpay credentials, and the AI keys. Backtests, verdict checks and live paper trading all use the same engine, so a strategy behaves the same everywhere.
+The browser only talks to the backend. The backend owns every secret: the Supabase service key, broker and Razorpay credentials, and the AI keys. Backtests, verdict checks and live paper trading all use the same engine, so a strategy behaves the same everywhere.
 
 ## Repository layout
 
@@ -195,16 +195,16 @@ stratlab/
 │   │   │   ├── verdict.py    the four honesty checks and the verdict
 │   │   │   ├── portfolio.py  group tests: one pot of capital across many instruments
 │   │   │   └── walkforward.py walk-forward test: re-tune on the past, trade the unseen next block
-│   │   ├── options/          Options tab: contracts, chains, quotes and margin from Kite; the options engine and sessions
+│   │   ├── options/          Options tab: contracts, chains, quotes and margin; the options engine and sessions
 │   │   ├── universes.py      ready-made groups of stocks and coins
 │   │   ├── group_live.py     paper trading a whole group with one pot of capital
 │   │   ├── basket.py         "does it work on similar stocks?": same rules on ~10 similar instruments
-│   │   ├── data/             market data: markets list, Coinbase (crypto), Yahoo (US, UK, EU, Japan, forex, global commodities), MCX (Kite), holidays
-│   │   ├── intel/            research: Finnhub, Yahoo, Screener.in, news, Wikipedia, AI reads, /research API
+│   │   ├── data/             market data: markets list, one provider per market (India, MCX, crypto, US, UK, EU, Japan, forex, global commodities), holidays
+│   │   ├── intel/            research: company data, fundamentals, news, Wikipedia, AI reads, /research API
 │   │   ├── research.py       load candles, run an experiment, keep a compact record
 │   │   ├── live.py           paper trading on live ticks (India) or polled candles (every other market)
-│   │   ├── kite_service.py   Zerodha Kite Connect
-│   │   ├── kite_auto.py      optional automatic daily Kite login
+│   │   ├── kite_service.py   the broker data API: login, candles, live ticks
+│   │   ├── kite_auto.py      optional automatic daily broker login
 │   │   ├── admin.py          owner-only admin page API
 │   │   ├── billing.py        Razorpay subscriptions
 │   │   ├── plans.py          plan limits and prices (Pro features open to all until payments go live)
@@ -231,7 +231,7 @@ stratlab/
 cd stratlab/backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # fill in Supabase, Kite, Razorpay and AI keys
+cp .env.example .env          # fill in Supabase, broker, Razorpay and AI keys
 uvicorn app.main:app --reload --port 8000
 
 # frontend (in another terminal)
@@ -242,7 +242,7 @@ npm run dev                   # open http://localhost:5500
 
 Run the tests with `cd stratlab/backend && pytest`, and check the frontend with `cd stratlab/frontend && npm run build`.
 
-The **[setup guide](stratlab/README.md)** covers Supabase, Kite Connect (including the automatic daily login), Razorpay, the AI writer, deployment, and how the engine and the verdict work.
+The **[setup guide](stratlab/README.md)** covers Supabase, the broker data API (including the automatic daily login), Razorpay, the AI writer, deployment, and how the engine and the verdict work.
 
 ## Plans
 
