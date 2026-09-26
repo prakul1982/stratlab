@@ -177,7 +177,7 @@ export function CompanyPage() {
         {c.earnings.length > 1 && <Panel title="Results versus expectations" info={HELP.researchEarnings}><EarningsBars rows={c.earnings} /></Panel>}
         {c.shareholding && c.shareholding.rows.length > 0 && <Panel title="Who owns it" info={HELP.researchHolding}><Shareholding s={c.shareholding} /></Panel>}
         {((c.pros?.length ?? 0) > 0 || (c.cons?.length ?? 0) > 0) && (
-          <Panel title="Strengths and concerns" info="Automatic checks from Screener.in's data.">
+          <Panel title="Strengths and concerns" info="Automatic checks on the company's reported numbers.">
             <ul className="bullets small">{c.pros?.map((p) => <li key={p} className="pos-dot">{p}</li>)}</ul>
             <ul className="bullets small">{c.cons?.map((p) => <li key={p} className="neg-dot">{p}</li>)}</ul>
           </Panel>
@@ -202,7 +202,7 @@ export function CompanyPage() {
         {c.peers.length > 0 && <Panel title="Similar companies" info="Companies in the same industry. Tap one to open it."><QuoteGrid region={region} symbols={c.peers} /></Panel>}
         <Panel title="Latest news"><NewsList items={c.news} /></Panel>
       </div>
-      <p className="hint">Data from {Array.from(new Set(c.sources.filter((s) => s.ok).map((s) => s.source))).join(", ") || "public sources"}. Scores and AI text are estimates, not advice.</p>
+      <p className="hint">Scores and AI text are estimates, not advice.</p>
     </div>
   );
 }

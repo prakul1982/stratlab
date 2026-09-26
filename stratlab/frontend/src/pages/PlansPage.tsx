@@ -27,13 +27,14 @@ export function PlansPage() {
   const yearlyOk = !!me?.yearly_enabled;
   const [yearly, setYearly] = useState(false);
   const period = yearly && yearlyOk ? "year" : "month";
+  const paid = me?.paid_plan ?? me?.plan;   // me.plan is Pro for everyone during the launch offer
   const priceOf = (p: string, per: string) => {
     const sp = me?.plans?.[p];
     return sp ? (per === "year" ? sp.price_year : sp.price) : PRICE[p][per === "year" ? 1 : 0];
   };
 
   const subscribe = async (plan: "basic" | "pro") => {
-    if (me && me.plan !== "free" && !confirm(`Switch to ${plan === "pro" ? "Pro" : "Basic"}? Your current subscription stops billing once the new one is active.`)) return;
+    if (me && paid !== "free" && !confirm(`Switch to ${plan === "pro" ? "Pro" : "Basic"}? Your current subscription stops billing once the new one is active.`)) return;
     setBusy(plan);
     try {
       const d = await api<{ subscription_id: string; key_id: string; email: string }>("/billing/subscribe", { method: "POST", body: { plan, period } });
@@ -71,7 +72,7 @@ export function PlansPage() {
       </div>
       <div className="grid4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
         {(["free", "basic", "pro"] as const).map((p) => {
-          const cur = me?.plan === p;
+          const cur = paid === p;
           const price = priceOf(p, period);
           return (
             <div key={p} className="card stack" style={{ gap: 14, border: p === "pro" ? "2px solid var(--ink)" : undefined }}>
@@ -87,12 +88,12 @@ export function PlansPage() {
                 : p === "free" ? <span className="small muted">Included whenever a paid plan ends</span>
                   : !billing ? <button className="btn outline" disabled>Coming soon</button>
                     : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy} onClick={() => subscribe(p)}>
-                      {busy === p ? "Opening checkout…" : me?.plan === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${p === "pro" ? "Pro" : "Basic"}`}</button>}
+                      {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${p === "pro" ? "Pro" : "Basic"}`}</button>}
             </div>
           );
         })}
       </div>
-      {me && me.plan !== "free" && me.billing.renews_or_ends && (
+      {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="small muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
       <p className="small muted" style={{ maxWidth: "80ch" }}>Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by Razorpay.</p>

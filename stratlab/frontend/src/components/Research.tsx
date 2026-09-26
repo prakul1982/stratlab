@@ -162,7 +162,7 @@ export function PriceChart({ region, symbol, currency }: { region: Region; symbo
                 lines={[{ values: data.map((d) => d.c), color: "var(--ink)", width: 2, label: "Close" }]}
                 labels={data.map((d) => fmtDate(d.t))} axisLabels={ticks}
                 format={(v) => price(v, currency)} axisFormat={(v) => priceAxis(v, currency)} />}
-      {src && <span className="hint">Prices from {src}. Daily closes.</span>}
+      {src && <span className="hint">{src === "Live prices" ? "Live exchange prices" : "Delayed prices"}. Daily closes.</span>}
     </div>
   );
 }

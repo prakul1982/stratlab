@@ -72,7 +72,7 @@ export function LibraryPage() {
     if (!reporting) return;
     setBusy(reporting.id);
     try {
-      const r = await api<{ hidden: boolean }>(`/library/${reporting.id}/report`, { method: "POST", body: JSON.stringify({ reason: reporting.reason }) });
+      const r = await api<{ hidden: boolean }>(`/library/${reporting.id}/report`, { method: "POST", body: { reason: reporting.reason } });
       const id = reporting.id;
       setRows((rs) => r.hidden ? rs?.filter((x) => x.id !== id) ?? rs : rs?.map((x) => x.id === id ? { ...x, reported: true } : x) ?? rs);
       setReporting(null);

@@ -108,7 +108,8 @@ class Registry:
             else:
                 status = "live" if prov.ready() else "offline"
             local = datetime.now(ZoneInfo(m["tz"])).date()
-            out.append({**m, "status": status, "max_days": getattr(prov, "max_days", None),
+            public = {k: v for k, v in m.items() if k != "provider"}     # which data provider is internal
+            out.append({**public, "status": status, "max_days": getattr(prov, "max_days", None),
                         "holidays": calendar.holidays(m["id"], local)})
         return out
 

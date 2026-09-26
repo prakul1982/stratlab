@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useCallback, type ComponentType } from "react";
+import { lazy, StrictMode, Suspense, useCallback, useState, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "@fontsource/montserrat/300.css";
@@ -65,6 +65,20 @@ function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; ba
   );
 }
 
+/** The launch offer: every Pro feature free for everyone until a date. Dismissed per offer. */
+function PromoBanner({ until }: { until: string }) {
+  const key = `stratlab.promo.seen.${until.slice(0, 10)}`;
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(key) === "1"; } catch { return false; } });
+  if (hidden) return null;
+  const day = new Date(until).toLocaleDateString(undefined, { day: "numeric", month: "long" });
+  return (
+    <div className="banner promo-banner">
+      <span><b>Launch offer:</b> every Pro feature is free for everyone until {day}. After that, your plan's limits apply again.</span>
+      <button className="btn sm quiet" onClick={() => { try { localStorage.setItem(key, "1"); } catch { /* storage off */ } setHidden(true); }}>Got it</button>
+    </div>
+  );
+}
+
 function Routed() {
   const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
@@ -77,6 +91,7 @@ function Routed() {
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
+      {me?.promo && <PromoBanner until={me.promo.until} />}
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<Home />} />
