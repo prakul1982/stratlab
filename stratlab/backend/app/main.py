@@ -24,6 +24,7 @@ from . import alerts
 from .auth import current_profile
 from .config import settings
 from .errors import report
+from .guard import Guard
 from . import research
 from .engine import walkforward
 from .data import DataError, Registry
@@ -145,6 +146,7 @@ def _load_errors():
         print("could not load errors:", x)
 
 
+app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -246,9 +248,9 @@ def _kite_error(request, exc):
 # ---------- account ----------
 @app.get("/health")
 def health():
-    ai = ai_health()
+    """Public: only whether things are up. Provider details are on the admin page."""
     return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
-            "ai_configured": any(p["in_use"] for p in ai), "ai": ai}
+            "ai_configured": any(p["in_use"] for p in ai_health())}
 
 
 @app.get("/plans")
@@ -317,6 +319,8 @@ def push_subscribe(req: PushReq, profile=Depends(current_profile)):
     """Remember this device for notifications (trade alerts and the daily report, as the plan allows)."""
     if not push.enabled():
         err(503, "push_off", "Phone notifications aren't set up on the server yet.")
+    if not push.valid_endpoint(req.subscription.endpoint):
+        err(400, "bad_push_endpoint", "This browser's notification service isn't supported. Try Chrome, Safari, Firefox or Edge.")
     push.add(profile["id"], req.subscription.model_dump())
     return {"devices": len(push.devices(profile["id"]))}
 
@@ -325,6 +329,7 @@ def push_subscribe(req: PushReq, profile=Depends(current_profile)):
 def push_test(profile=Depends(current_profile)):
     if not push.enabled():
         err(503, "push_off", "Phone notifications aren't set up on the server yet.")
+    throttle(profile, "push_test", 5, 3600, "You've sent 5 test notifications this hour. Try again later.")
     sent = push.send(profile["id"], "StratLab", "Notifications work. Paper-trade alerts and the daily report will arrive like this.", url="/account", tag="test")
     return {"sent": sent}
 
@@ -351,6 +356,7 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
 @app.post("/me/alerts/test")
 def test_alert(profile=Depends(current_profile)):
     need(profile, "daily_report", "Alerts and the daily report")
+    throttle(profile, "alert_test", 5, 3600, "You've sent 5 test alerts this hour. Try again later.")
     sent, failed = alerts.test(profile)
     if not sent and not failed:
         err(400, "no_channels", "Turn on phone notifications on this device, or add a Telegram chat ID"
@@ -481,17 +487,21 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
     return out
 
 
-_ai_tests: dict[str, float] = {}
+_recent: dict[tuple[str, str], list[float]] = {}
+_recent_lock = threading.Lock()
 
 
-@app.post("/ai/test")
-def ai_test(profile=Depends(current_profile)):
-    """Try every configured AI provider once and report exactly what happened (for the connection check)."""
-    last = _ai_tests.get(profile["id"], 0.0)
-    if datetime.now().timestamp() - last < 20:
-        err(429, "ai_test_wait", "Wait a few seconds before testing again.")
-    _ai_tests[profile["id"]] = datetime.now().timestamp()
-    return {"providers": ai_test_all(gemini=_gemini, anthropic=_anthropic)}
+def throttle(profile, what: str, times: int, per_seconds: float, message: str):
+    """Allow an action a few times per window per user: test sends and other things that reach outside services."""
+    now = datetime.now().timestamp()
+    key = (profile["id"], what)
+    with _recent_lock:
+        hits = [t for t in _recent.get(key, []) if now - t < per_seconds]
+        if len(hits) >= times:
+            err(429, "slow_down", message)
+        _recent[key] = hits + [now]
+        if len(_recent) > 20000:
+            _recent.clear()
 
 
 # ---------- backtests and notebooks ----------

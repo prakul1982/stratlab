@@ -43,7 +43,7 @@ class FakeSB:
 def client(monkeypatch):
     monkeypatch.setattr(db, "sb", lambda: FakeSB())
     monkeypatch.setattr(settings, "ADMIN_EMAILS", "Owner@x.com, other@x.com")
-    who = {"profile": dict(PROFILES[0], _plan="free")}
+    who = {"profile": dict(PROFILES[0], _plan="free", _email_verified=True)}
     main.app.dependency_overrides[main.current_profile] = lambda: who["profile"]
     yield TestClient(main.app), who
     main.app.dependency_overrides.clear()
@@ -51,11 +51,12 @@ def client(monkeypatch):
 
 def test_admin_emails_are_case_insensitive():
     settings.ADMIN_EMAILS = " Owner@X.com ,"
-    assert admin.is_admin({"email": "owner@x.com"})
-    assert not admin.is_admin({"email": "someone@x.com"})
-    assert not admin.is_admin({"email": None})
+    assert admin.is_admin({"email": "owner@x.com", "_email_verified": True})
+    assert not admin.is_admin({"email": "owner@x.com"})            # an unverified address is never trusted
+    assert not admin.is_admin({"email": "someone@x.com", "_email_verified": True})
+    assert not admin.is_admin({"email": None, "_email_verified": True})
     settings.ADMIN_EMAILS = ""
-    assert not admin.is_admin({"email": ""})
+    assert not admin.is_admin({"email": "", "_email_verified": True})
 
 
 def test_non_admin_gets_403(client):

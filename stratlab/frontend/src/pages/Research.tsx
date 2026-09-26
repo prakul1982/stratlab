@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { ago, pct, price, signClass } from "../lib/format";
+import { ago, pct, price, safeHref, signClass } from "../lib/format";
 import { HELP } from "../lib/help";
 import {
   REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, researchApi, saveRegion, savedRegion, useWatchlist,
@@ -139,8 +139,8 @@ export function CompanyPage() {
           {c.testable && <button className="btn blue sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
-          {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
-          {c.website && <a className="btn quiet sm" href={c.website} target="_blank" rel="noopener noreferrer">Website ↗</a>}
+          {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
+          {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
         </div>
       </section>
       <SourcesNote sources={c.sources} />
@@ -153,7 +153,7 @@ export function CompanyPage() {
             <p className="small" style={{ lineHeight: 1.65 }}>{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="small muted" style={{ lineHeight: 1.6 }}>{c.about.profile}</p>}
             <div className="row wrap small" style={{ gap: 14 }}>{c.facts.map((f) => <span key={f.label}><span className="muted">{f.label}</span> <b>{f.value}</b></span>)}</div>
-            {wiki && <a className="link small" href={wiki.url} target="_blank" rel="noopener noreferrer">More on Wikipedia ↗</a>}
+            {wiki && <a className="link small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">More on Wikipedia ↗</a>}
           </Panel>
         )}
         {c.range52.low != null && <Panel title="Where the price sits" info={HELP.research52}><Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} /></Panel>}
@@ -230,7 +230,7 @@ export function ThemesPage() {
       <Header eyebrow={`Themes · ${REGION_NAME[region]}`} title="Map a theme, find the shovels"
         sub="Type a sector or trend. The AI maps who's involved, where the money flows, and ranks the companies worth a closer look." />
       <form className="row" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); go(text); }}>
-        <input className="input" style={{ flex: 1, minHeight: 52 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} aria-label="Theme" />
+        <input className="input" style={{ flex: 1 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} aria-label="Theme" />
         <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
       </form>
       <div className="row wrap" style={{ gap: 8 }}>{THEME_IDEAS[region].map((t) => <button key={t} className="btn quiet sm" onClick={() => go(t)}>{t}</button>)}</div>

@@ -52,20 +52,22 @@ export function AccountPage() {
     try {
       const { data } = await supabase.auth.getSession();
       add({ t: "Signed in", s: data.session ? "pass" : "fail", d: data.session?.user.email || "Not signed in. Sign out and in again." });
-      let health: { data_online: boolean; ai_configured: boolean;
-        ai?: { label: string; configured: boolean; in_use: boolean; model: string | null; last_ok: number | null; last_error: string | null }[] } | null = null;
+      let health: { data_online: boolean; ai_configured: boolean } | null = null;
       try { health = await (await fetch(CFG.API_BASE + "/health")).json(); add({ t: "StratLab server", s: "pass", d: CFG.API_BASE.replace("https://", "") }); }
       catch { add({ t: "StratLab server", s: "fail", d: "Can't reach the server. Check the Railway service is running and FRONTEND_ORIGIN lists this site." }); return; }
       const markets = await api<{ name: string; status: string }[]>("/markets");
       for (const m of markets.filter((x) => x.status !== "soon")) {
         add({ t: /data$/i.test(m.name) ? m.name : `${m.name} data`, s: m.status === "live" ? "pass" : "warn", d: m.status === "live" ? "Online" : "Offline right now" });
       }
-      const ai = (health?.ai ?? []).filter((p) => p.configured);
-      if (!ai.length) add({ t: "AI strategy builder", s: "fail", d: "No AI key on the server, so the simple converter is used. Add a free GROQ_API_KEY (console.groq.com) in Railway → Variables, then redeploy." });
+      if (!health?.ai_configured) add({ t: "AI strategy builder", s: me.is_admin ? "fail" : "warn",
+        d: me.is_admin ? "No AI key on the server, so the simple converter is used. Add a free GROQ_API_KEY (console.groq.com) in Railway → Variables, then redeploy."
+          : "Using the simple converter right now. Describing ideas still works." });
+      else if (!me.is_admin) add({ t: "AI strategy builder", s: "pass", d: "Online" });
       else {
-        add({ t: "AI strategy builder", s: "warn", d: `Testing ${ai.map((p) => p.label).join(", ")}…` });
+        // only the owner tests every provider: each test spends the shared free AI allowance
+        add({ t: "AI strategy builder", s: "warn", d: "Testing each provider…" });
         try {
-          const r = await api<{ providers: { label: string; ok: boolean; error: string | null; model: string | null; ms: number }[] }>("/ai/test", { method: "POST" });
+          const r = await api<{ providers: { label: string; ok: boolean; error: string | null; model: string | null; ms: number }[] }>("/admin/ai/test", { method: "POST" });
           rows.pop();
           const working = r.providers.filter((p) => p.ok).length;
           add({ t: "AI strategy builder", s: working ? "pass" : "fail",

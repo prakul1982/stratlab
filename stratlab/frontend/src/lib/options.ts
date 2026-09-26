@@ -70,3 +70,5 @@ export function payoff(p: OptPreview) {
     breakevens, credit };
 }
 
+/** sessionStorage key: an imported options strategy handed from the import dialog to the Options page. */
+export const IMPORTED = "stratlab.options.import";

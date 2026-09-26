@@ -4,14 +4,13 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, price } from "../lib/format";
 import { HELP } from "../lib/help";
-import { blankOptions, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
+import { blankOptions, IMPORTED, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
 import { LineChart } from "../components/Charts";
 import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
 
 const DRAFT = "stratlab.options.draft.v1";
-export const IMPORTED = "stratlab.options.import";
 
 const loadDraft = (): OptionStrategy => {
   try {

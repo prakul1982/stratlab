@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { ago, pct, price, priceAxis, signClass } from "../lib/format";
+import { ago, pct, price, priceAxis, safeHref, signClass } from "../lib/format";
 import {
   bandPosition, metricText, ordinal, researchApi, trendValue, useWatchlist,
   type Company, type CompanyAI, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
@@ -366,7 +366,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
   return (
     <div className="stack" style={{ gap: 0 }}>
       {items.slice(0, limit).map((n, i) => (
-        <a key={i} className="news-row" href={n.url} target="_blank" rel="noopener noreferrer">
+        <a key={i} className="news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
           <span>{n.headline}</span>
           <span className="tiny muted">{n.source}{n.at ? ` · ${ago(n.at)}` : ""} ↗</span>
         </a>
