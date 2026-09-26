@@ -64,6 +64,7 @@ svg { display: block; }
 .btn.outline:hover { background: var(--card); color: var(--ink); filter: none; }
 .btn.quiet { background: var(--card); border-color: var(--line-2); color: var(--ink); font-weight: 500; }
 .btn.quiet:hover { border-color: var(--ink); color: var(--ink); filter: none; }
+.warn-text { color: var(--orange-ink); }
 .btn.danger { background: transparent; border-color: var(--line-2); color: var(--orange-ink); }
 .btn.sm { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .btn.block { width: 100%; }
@@ -521,6 +522,11 @@ a.chip-link:hover { border-color: var(--ink); color: var(--ink); }
 .lp-faq details[open] summary::after { content: "–"; }
 .lp-faq details p { margin-top: 10px; line-height: 1.6; max-width: 60ch; }
 .lp-final { padding: clamp(64px, 9vw, 120px) 0; border-top: 1px solid var(--line); }
+.legal { max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
+.legal-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+.legal-body { gap: 12px; line-height: 1.65; }
+.legal-body .h3 { margin-top: 14px; }
+.legal-body ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .lp-foot { padding: 28px 0 40px; border-top: 1px solid var(--line); }
 @media (max-width: 1000px) {
   .lp-hero-grid, .lp-split { grid-template-columns: minmax(0, 1fr); }

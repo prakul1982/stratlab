@@ -46,9 +46,10 @@ GRACE = timedelta(days=1)
 
 
 def payments_live() -> bool:
-    """Razorpay keys are set, so people can actually buy Pro."""
-    from .config import settings
-    return bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+    """People can actually buy a plan: the Razorpay keys and both monthly plan IDs are set. Until then every
+    feature stays open, so setting only the keys never locks people out of features they can't yet buy."""
+    from . import billing
+    return billing.enabled()
 
 
 def allows(plan: str, feature: str) -> bool:

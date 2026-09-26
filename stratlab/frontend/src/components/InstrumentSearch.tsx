@@ -36,7 +36,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
   const { fail } = useApp();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Instrument[] | null>(null);
-  const timer = useRef<number>();
+  const timer = useRef<number>(undefined);
   const defaults = useDefaults().filter((d) => d.market === market.id);
 
   useEffect(() => { setQ(""); setResults(null); }, [market.id]);

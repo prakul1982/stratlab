@@ -14,6 +14,10 @@ from . import db
 PREFIX = "lib:"
 ID = re.compile(r"^[A-Za-z0-9_-]{6,24}$")
 RANK = {"edge": 0, "mixed": 1, "not_enough": 2, "luck": 3, "no_edge": 4}
+REASONS = {"spam": "Spam or advertising", "offensive": "Offensive or abusive", "misleading": "Misleading or a scam",
+           "personal": "Shares someone's personal details", "other": "Something else"}
+HIDE_AFTER = 3          # reports from different people before an entry is hidden until the owner of the site looks
+MODERATION = ("reports", "hidden", "hidden_by")
 
 
 def _unseen(exp: dict) -> float | None:
@@ -46,10 +50,41 @@ def entry(nb: dict, exp: dict, owner: str, author: str, description: str, entry_
 
 
 def public(e: dict, viewer: str | None = None) -> dict:
-    """What anyone sees: everything but the owner's id (a flag says whether it's yours)."""
-    out = {k: v for k, v in e.items() if k not in ("owner", "source")}
+    """What anyone sees: everything but the owner's id and who reported it (flags say whether it's yours)."""
+    out = {k: v for k, v in e.items() if k not in ("owner", "source") + MODERATION}
     out["mine"] = bool(viewer and e.get("owner") == viewer)
+    out["reported"] = bool(viewer and viewer in (e.get("reports") or {}))
+    if out["mine"] and e.get("hidden"):
+        out["hidden"] = True   # the author is told it's hidden, not who reported it
     return out
+
+
+def visible(e: dict, viewer: str | None = None) -> bool:
+    return not e.get("hidden") or bool(viewer and e.get("owner") == viewer)
+
+
+def report(e: dict, viewer: str, reason: str) -> dict:
+    """One report per person; enough of them hides the entry until it's reviewed."""
+    reports = dict(e.get("reports") or {})
+    reports[viewer] = {"reason": reason if reason in REASONS else "other", "at": datetime.now(timezone.utc).isoformat()}
+    e = {**e, "reports": reports}
+    if len(reports) >= HIDE_AFTER and not e.get("hidden"):
+        e["hidden"], e["hidden_by"] = True, "reports"
+    return e
+
+
+def moderate(e: dict, action: str) -> dict:
+    """The site owner's decision: hide it, or restore it (which clears the reports)."""
+    if action == "hide":
+        return {**e, "hidden": True, "hidden_by": "admin"}
+    return {**{k: v for k, v in e.items() if k not in MODERATION}, "reports": {}}
+
+
+def carry_moderation(old: dict | None, new: dict) -> dict:
+    """Publishing again keeps the reports and any hiding: re-publishing can't be used to clear them."""
+    if old:
+        new.update({k: old[k] for k in MODERATION if k in old})
+    return new
 
 
 def save(e: dict):

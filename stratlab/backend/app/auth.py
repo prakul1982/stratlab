@@ -33,7 +33,7 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
             if len(_cache) > 5000:
                 _cache.clear()
             _cache[token] = (now + 60, uid, email, verified)
-    profile = db.get_profile(uid, email)
+    profile = db.cached_profile(uid, email)
     profile["_plan"] = effective_plan(profile)
     profile["_email_verified"] = verified
     return profile

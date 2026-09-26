@@ -78,18 +78,27 @@ function PlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: () => v
   );
 }
 
+interface ReportedRow {
+  id: string; name: string; author: string; email: string | null; description: string; reports: number;
+  reasons: Record<string, number>; hidden: boolean; hidden_by: string | null; published_at: string;
+}
+
 export function AdminPage() {
   const { me, notify, fail } = useApp();
   const [ov, setOv] = useState<Overview | null>(null);
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [reported, setReported] = useState<{ entries: ReportedRow[]; reasons: Record<string, string> } | null>(null);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [aiTest, setAiTest] = useState<AITest[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const loadOverview = useCallback(async () => {
-    try { setOv(await api<Overview>("/admin/overview")); setSessions(await api<SessionRow[]>("/admin/sessions")); } catch (e) { fail(e); }
+    try {
+      setOv(await api<Overview>("/admin/overview")); setSessions(await api<SessionRow[]>("/admin/sessions"));
+      setReported(await api<{ entries: ReportedRow[]; reasons: Record<string, string> }>("/admin/library"));
+    } catch (e) { fail(e); }
   }, [fail]);
   const loadUsers = useCallback(async (query: string) => {
     try { setUsers(await api<UserRow[]>(`/admin/users?q=${encodeURIComponent(query)}`)); } catch (e) { fail(e); }
@@ -122,6 +131,15 @@ export function AdminPage() {
   const stop = (s: SessionRow) => {
     if (!confirm(`Stop "${s.name}" for ${s.email}?`)) return;
     run(`stop-${s.id}`, async () => { await api(`/admin/sessions/${s.id}/stop`, { method: "POST" }); notify("Session stopped."); await loadOverview(); });
+  };
+
+  const moderate = (r: ReportedRow, action: "hide" | "restore" | "delete") => {
+    if (action === "delete" && !confirm(`Delete "${r.name}" from the library for good?`)) return;
+    run(`lib-${r.id}`, async () => {
+      await api(`/admin/library/${r.id}`, { method: "POST", body: JSON.stringify({ action }) });
+      notify(action === "restore" ? "Back in the library, reports cleared." : action === "hide" ? "Hidden." : "Deleted.");
+      await loadOverview();
+    });
   };
 
   const sv = ov?.server;
@@ -208,6 +226,27 @@ export function AdminPage() {
                   </tr>
                 ))}</tbody>
               </table></div>
+            )}
+          </section>
+
+          <section className="card stack" style={{ gap: 12 }}>
+            <h2 className="h2">Reported in the library <span className="muted" style={{ fontSize: 18 }}>({reported?.entries.length ?? 0})</span></h2>
+            {!reported?.entries.length ? <p className="small muted">Nothing reported. An entry is hidden by itself after 3 reports from different people, until you look at it here.</p> : (
+              <div className="stack" style={{ gap: 10 }}>{reported.entries.map((r, i) => (
+                <div key={r.id} className="stack" style={{ gap: 6, paddingBottom: 10, borderBottom: i < reported.entries.length - 1 ? "1px solid var(--line)" : "none" }}>
+                  <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
+                    <b>{r.name} <span className="small muted">by {r.author}{r.email ? ` (${r.email})` : ""}</span></b>
+                    <span className="small">{r.hidden ? <span className="badge fail">Hidden{r.hidden_by === "admin" ? " by you" : " by reports"}</span> : <span className="badge">Showing</span>}</span>
+                  </div>
+                  {r.description && <p className="small muted">{r.description}</p>}
+                  <span className="small">{r.reports} report{r.reports === 1 ? "" : "s"}{r.reports ? ": " + Object.entries(r.reasons).map(([k, n]) => `${reported.reasons[k] ?? k} (${n})`).join(", ") : ""}</span>
+                  <div className="row wrap" style={{ gap: 8 }}>
+                    <button className="btn quiet sm" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "restore")}>{r.hidden ? "Restore" : "Keep, clear reports"}</button>
+                    {!r.hidden && <button className="btn quiet sm" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "hide")}>Hide</button>}
+                    <button className="btn quiet sm danger" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "delete")}>Delete</button>
+                  </div>
+                </div>
+              ))}</div>
             )}
           </section>
         </>

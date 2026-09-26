@@ -2,16 +2,19 @@ import { createClient } from "@supabase/supabase-js";
 
 declare global {
   interface Window {
-    STRATLAB_CONFIG?: { API_BASE: string; SUPABASE_URL: string; SUPABASE_ANON_KEY: string; SENTRY_DSN?: string };
+    STRATLAB_CONFIG?: { API_BASE: string; SUPABASE_URL: string; SUPABASE_ANON_KEY: string; SENTRY_DSN?: string;
+      BUSINESS_NAME?: string; CONTACT_EMAIL?: string; BUSINESS_ADDRESS?: string };
     Razorpay?: any;
   }
 }
 
-export const CFG = window.STRATLAB_CONFIG ?? { API_BASE: "", SUPABASE_URL: "", SUPABASE_ANON_KEY: "" };
+export const CFG: NonNullable<Window["STRATLAB_CONFIG"]> = window.STRATLAB_CONFIG ?? { API_BASE: "", SUPABASE_URL: "", SUPABASE_ANON_KEY: "" };
 
 // Error alerts: only when a Sentry DSN is in config.js, and the SDK is only downloaded then.
 if (CFG.SENTRY_DSN) {
-  import("@sentry/browser").then((S) => S.init({ dsn: CFG.SENTRY_DSN, environment: location.hostname, sendDefaultPii: false,
+  import("@sentry/browser").then((S) => S.init({ dsn: CFG.SENTRY_DSN, environment: location.hostname,
+    // nothing personal: no user fields, cookies, headers, bodies or query strings
+    dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false },
     ignoreErrors: ["ResizeObserver loop", "AbortError", "Failed to fetch", "Load failed", "NetworkError"] })).catch(() => {});
 }
 export const supabase = createClient(CFG.SUPABASE_URL || "http://localhost", CFG.SUPABASE_ANON_KEY || "missing");

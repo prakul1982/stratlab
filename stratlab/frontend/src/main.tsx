@@ -17,6 +17,7 @@ import { registerPwa } from "./lib/pwa";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { Login } from "./pages/Login";
+import { LEGAL_PAGES, LegalPage } from "./pages/LegalPage";
 import { Home, NewNotebook } from "./pages/Home";
 
 // every page but the first ones loads when it's opened, so the app starts fast
@@ -68,6 +69,7 @@ function Routed() {
   const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
   // shared verdicts are public: no sign-in needed
+  if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) return <LegalPage />;   // policies are public: no sign-in needed
   if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;
   if (!ready) return <Loading label="Opening StratLab" />;
   if (!session) return <Login />;

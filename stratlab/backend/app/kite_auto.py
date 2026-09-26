@@ -112,7 +112,7 @@ def fetch_request_token(login_url: str, transport: httpx.BaseTransport | None = 
             if token:
                 return token[0]
         raise AutoLoginError("Logged in, but Zerodha didn't hand back a request token. Log in once through "
-                             "/admin/kite/login to authorise the app, then try again.", retry=False)
+                             "the Admin page (Log in to Kite) to authorise the app, then try again.", retry=False)
 
 
 def login_time(now: datetime) -> datetime:
@@ -214,7 +214,7 @@ class AutoLogin:
                 except Exception as e:
                     if self._gave_up or self._attempts >= MAX_ATTEMPTS:
                         self._alert(f"StratLab: Kite auto-login failed and won't retry today. {e} "
-                                    f"Log in by hand at /admin/kite/login.")
+                                    f"Log in by hand from the Admin page (Log in to Kite).")
                     time.sleep(RETRY_MINUTES * 60)
                     continue
             time.sleep(30)

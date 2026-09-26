@@ -60,3 +60,36 @@ def test_best_sort_puts_real_edges_first():
             {"name": "c", "verdict": {"verdict": "edge"}, "stats": {"unseen": 7, "ret": 3}}]
     assert [r["name"] for r in library.search(rows)] == ["c", "b", "a"]
     assert [r["name"] for r in library.search(rows, verdict="luck")] == ["a"]
+
+
+def test_reports_hide_an_entry_until_the_owner_of_the_site_reviews_it(api, store, monkeypatch):
+    from app import admin as admin_mod
+    from app.config import settings
+    nb = api.post("/notebooks", json={"name": "Spammy", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    e = api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"description": "buy my course"}).json()
+    assert api.post(f"/library/{e['id']}/report", json={"reason": "spam"}).status_code == 400        # not your own
+
+    for i, uid in enumerate(["r1", "r2", "r2", "r3"]):
+        as_user(uid)
+        r = api.post(f"/library/{e['id']}/report", json={"reason": "spam"}).json()
+    assert r == {"reported": True, "hidden": True}                  # three different people (r2 counted once)
+    assert api.get("/library").json()["total"] == 0 and api.get(f"/library/{e['id']}").status_code == 404
+    assert api.post(f"/library/{e['id']}/copy").status_code == 404
+
+    as_user("user-1")                                                # the author still sees it, marked hidden
+    mine = api.get(f"/library/{e['id']}").json()
+    assert mine["hidden"] and "reports" not in mine and "r1" not in str(mine)
+    api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"description": "clean now"})   # re-publishing doesn't clear it
+    as_user("r9")
+    assert api.get("/library").json()["total"] == 0
+
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "boss@x")
+    main.app.dependency_overrides[main.current_profile] = lambda: {"id": "boss", "_plan": "pro", "email": "boss@x", "_email_verified": True}
+    monkeypatch.setattr(db, "get_profile", lambda uid, email=None: {"id": uid, "email": "author@x"})
+    queue = api.get("/admin/library").json()["entries"]
+    assert queue[0]["reports"] == 3 and queue[0]["reasons"] == {"spam": 3} and queue[0]["hidden"] and queue[0]["email"] == "author@x"
+    assert api.post(f"/admin/library/{e['id']}", json={"action": "restore"}).json() == {"ok": True}
+    as_user("r9")
+    assert api.get("/library").json()["total"] == 1
+    assert admin_mod.is_admin({"email": "boss@x", "_email_verified": True})

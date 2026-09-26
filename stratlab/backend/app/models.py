@@ -197,6 +197,14 @@ class LibraryReq(BaseModel):
     author: str = Field("", max_length=40)       # a display name; empty means "A StratLab user"
 
 
+class ReportReq(BaseModel):
+    reason: Literal["spam", "offensive", "misleading", "personal", "other"] = "other"
+
+
+class ModerateReq(BaseModel):
+    action: Literal["hide", "restore", "delete"]
+
+
 class PushKeys(BaseModel):
     p256dh: str = Field(..., max_length=200)
     auth: str = Field(..., max_length=100)

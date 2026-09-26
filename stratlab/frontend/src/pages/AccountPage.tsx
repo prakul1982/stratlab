@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, CFG, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
+import { LegalLinks } from "./LegalPage";
 import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { LEVELS } from "../components/LevelPrompt";
@@ -28,8 +29,9 @@ export function AccountPage() {
   const ch = me.alerts.channels ?? { push: true, telegram: true, email: true };
 
   const cancel = async () => {
-    if (!confirm("Cancel your subscription? You keep your plan until the end of this billing month.")) return;
-    try { await api("/billing/cancel", { method: "POST" }); await refreshMe(); notify("Subscription cancelled at the end of this month."); } catch (e) { fail(e); }
+    const until = me?.billing.renews_or_ends ? ` (${dateOnly(me.billing.renews_or_ends)})` : "";
+    if (!confirm(`Cancel your subscription? You keep your plan until the end of the period you've paid for${until}, and you won't be charged again.`)) return;
+    try { await api("/billing/cancel", { method: "POST" }); await refreshMe(); notify(`Cancelled. Your plan stays until the end of the paid period${until}.`); } catch (e) { fail(e); }
   };
   const saveAlerts = async () => {
     try {
@@ -163,6 +165,7 @@ export function AccountPage() {
             </div>
           ))}
         </section>
+        <LegalLinks />
       </div>
     </div>
   );

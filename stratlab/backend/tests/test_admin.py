@@ -106,3 +106,12 @@ def test_plan_request_is_validated(client, monkeypatch):
     assert c.post("/admin/users/u2/plan", json={"plan": "gold"}).status_code == 422
     assert c.post("/admin/users/u2/plan", json={"plan": "pro", "days": 0}).status_code == 422
     assert c.post("/admin/users/u2/plan", json={"plan": "pro", "days": 30}).json() == {"ok": True}
+
+
+def test_old_key_urls_are_gone_and_callback_needs_the_state(client):
+    c, _ = client
+    for method, path in [("get", "/admin/kite/login?key=x"), ("get", "/admin/status?key=x"), ("post", "/admin/kite/auto-login?key=x")]:
+        assert getattr(c, method)(path).status_code in (404, 405), path
+    main.kite.login_state = "good"
+    r = c.get("/admin/kite/callback?status=success&request_token=t&state=<script>")
+    assert r.status_code == 403 and "<script>" not in r.text
