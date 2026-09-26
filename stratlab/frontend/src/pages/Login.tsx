@@ -66,17 +66,21 @@ const BEYOND: [string, string, string][] = [
 const MARKETS: [string, string, string][] = [
   ["₹", "India", "NSE stocks, indices and F&O"], ["₿", "Crypto", "BTC, ETH and hundreds of pairs"], ["$", "United States", "NYSE and NASDAQ stocks and ETFs"],
   ["£", "United Kingdom", "London Stock Exchange"], ["€", "Europe", "Xetra and Euronext"], ["¥", "Japan", "Tokyo Stock Exchange"],
-  ["€$", "Forex", "Major and minor currency pairs"], ["+", "Your own data", "Upload any CSV of candles"],
+  ["€$", "Forex", "Major and minor currency pairs"],
+  ["₹Au", "Indian commodities", "MCX futures in rupees: gold, silver, crude, natural gas, base metals, in whole lots"],
+  ["$Au", "Global commodities", "COMEX, NYMEX, ICE futures in dollars: gold, oil, grains, coffee, per unit"],
+  ["+", "Your own data", "Upload any CSV of candles"],
 ];
 
 const FAQ: [string, string][] = [
   ["Does StratLab place real trades?", "No. Everything is research and paper trading with fake money. No real orders are ever placed, and nothing here is investment advice."],
   ["Do I need to know how to code?", "No. You describe the idea in plain words. If something is missing, like when to sell, StratLab asks. You can also tap any rule to change it."],
-  ["Where do the prices come from?", "Indian prices from Zerodha Kite, crypto from Coinbase, and US, UK, European, Japanese and forex prices from Yahoo Finance. Company research uses Finnhub, Screener.in, news and Wikipedia."],
+  ["Where do the prices come from?", "Indian stocks and MCX commodities from Zerodha Kite, crypto from Coinbase, and US, UK, European, Japanese, forex and global commodity prices from Yahoo Finance. Company research uses Finnhub, Screener.in, news and Wikipedia."],
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
   ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a config file from your own bot, TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, sets up a group if it trades a list of stocks, opens option structures in the Options tab, and lists anything it couldn't translate."],
   ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE and MCX option prices, with fills at the real bid and ask. You can also let a notebook's rules decide when: long signals buy your structure and short signals its mirror. Backtesting options needs real historical prices for every strike, which nobody keeps for expired options, so StratLab is recording the NIFTY, BANKNIFTY and SENSEX chains every 5 minutes to build that history. We won't stand in a pricing model."],
   ["What does it cost?", "It's free to start: experiments every month, AI strategy builds, and 5 market days of paper trading. Basic (₹999 a month) adds group and options paper trading and a daily report; Pro (₹2,999) adds options on your own signals, faster group entries, alerts for every trade, every indicator and F&O. Everything is unlocked while StratLab is in early access."],
+  ["Can I test commodities?", "Yes, as two separate markets. Indian commodities are MCX futures in rupees (gold, silver, crude oil, natural gas, copper, zinc, aluminium, lead, and their mini contracts), sized in whole lots with MCX costs, on years of daily history stitched across expiries. Global commodities are COMEX, NYMEX and ICE futures in dollars (gold, silver, oil, gas, copper, grains, coffee, sugar, cocoa, cotton), sized per ounce or barrel."],
   ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon, and sends paper trades and the daily report as notifications."],
   ["Does it know market holidays?", "Yes. Exchange holidays in India, the US, UK, Europe and Japan are built in: the markets panel shows weekends and holidays, the daily report skips them, and they don't count toward the free trial."],
   ["Can I share a result?", "Yes. Share a verdict as an image from your phone, or make a public link. It shows the verdict, the chart and the checks, never your rules, and you can turn it off at any time."],

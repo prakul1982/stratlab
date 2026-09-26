@@ -16,7 +16,8 @@ function useDefaults(): Instrument[] {
 }
 
 const instKind = (r: Instrument) =>
-  r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "ETF" ? "ETF" : r.type === "FX" ? "Currency pair"
+  r.market === "MCX" ? `MCX futures · ${r.contract ?? ""}`.trim() : r.market === "CMDTY" ? "Futures, front month"
+    : r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "ETF" ? "ETF" : r.type === "FX" ? "Currency pair"
     : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
 
 const PLACEHOLDER: Record<string, string> = {
@@ -24,6 +25,8 @@ const PLACEHOLDER: Record<string, string> = {
   US: "Search any US stock or ETF: AAPL, NVDA, SPY…", UK: "Search any London listing: Shell, VOD.L, ISF.L…",
   EU: "Search European stocks: SAP, ASML, LVMH…", JP: "Search Tokyo listings: Toyota, Sony, 7203…",
   FX: "Search a currency pair: EURUSD, USDJPY, GBPUSD…",
+  MCX: "Search MCX commodities: gold mini, crude oil, natural gas, copper…",
+  CMDTY: "Search global commodities: gold, WTI crude, Brent, corn, coffee…",
 };
 
 /** Search box plus popular picks for one market. */

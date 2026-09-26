@@ -46,14 +46,15 @@ export function marketState(m: Market, now = new Date()): MarketState {
   const at = (mins: number) => new Date(now.getTime() + mins * 60000);
   const yours = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   if (m.id === "FX" || !m.hours?.open || !m.hours?.close) {
-    // forex trades from Sunday 17:00 to Friday 17:00 New York time
+    // forex trades from Sunday 17:00 to Friday 17:00 New York time; global commodity futures (CME) from Sunday 18:00
     const w = wall(now, "America/New_York");
-    const weekMin = w.wd * DAY + w.min, openAt = 0 * DAY + 17 * 60, closeAt = 5 * DAY + 17 * 60;
+    const sunOpen = m.id === "CMDTY" ? 18 : 17;
+    const weekMin = w.wd * DAY + w.min, openAt = 0 * DAY + sunOpen * 60, closeAt = 5 * DAY + 17 * 60;
     const open = weekMin >= openAt && weekMin < closeAt;
     const until = open ? closeAt - weekMin : (openAt + 7 * DAY - weekMin) % (7 * DAY);
     const weekend = !open && (w.wd === 6 || w.wd === 0 || (w.wd === 5 && w.min >= 17 * 60));
     return { ...base, open, closedFor: weekend ? "weekend" : null, short: open ? "open" : weekend ? "weekend" : `opens ${inWords(until)}`,
-      change: at(until), hoursLocal: "Sun 17:00 – Fri 17:00 New York", hoursYours: null };
+      change: at(until), hoursLocal: `Sun ${sunOpen}:00 – Fri 17:00 New York${m.id === "CMDTY" ? ", with a daily break 17:00–18:00" : ""}`, hoursYours: null };
   }
   const w = wall(now, m.tz), o = hm(m.hours.open), c = hm(m.hours.close);
   const weekday = (d: number) => d >= 1 && d <= 5;

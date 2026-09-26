@@ -444,7 +444,7 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
         "diagnostics": diagnostics,
         "bars": [{"t": b["t"], "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"]} for b in view],
         "equity": clean(equity), "buy_hold": clean(bh), "drawdown": clean(st.pop("dd")),
-        "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100},
+        "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100, "skipped_size": eng.skipped_size},
         "trades": eng.trades, "open_trade": open_trade, "events": eng.events,
         "overlays": overlays, "oscillators": osc, "periods": periods[-60:],
         "costs": cost_summary(eng, cost_kind, equity[-1] - cap),

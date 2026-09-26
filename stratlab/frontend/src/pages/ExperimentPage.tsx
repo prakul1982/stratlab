@@ -94,7 +94,7 @@ function WalkForwardInner({ nb, e }: { nb: Notebook; e: Experiment }) {
   );
 }
 
-const PEERS: Record<string, string> = { CRYPTO: "coins", FX: "currency pairs" };
+const PEERS: Record<string, string> = { CRYPTO: "coins", FX: "currency pairs", MCX: "MCX commodities", CMDTY: "global commodities" };
 
 /** Same rules, same period, ~10 similar instruments: does the edge travel, or is it one lucky chart? */
 function BasketCheck({ nb, e }: { nb: Notebook; e: Experiment }) {
@@ -266,6 +266,13 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         )}
         <button className="btn danger sm" style={{ marginLeft: "auto" }} onClick={remove}><Trash size={17} />Delete this experiment</button>
       </div>
+      {(st.skipped_size ?? 0) > 0 && (
+        <div className="banner">
+          <span>{st.skipped_size} entry signal{st.skipped_size === 1 ? " was" : "s were"} skipped because one {e.instrument.market === "MCX" || e.instrument.fno ? "lot" : "unit"} cost more than the capital allowed for a trade
+            {e.instrument.market === "MCX" && e.instrument.lot_units ? ` (a ${e.instrument.symbol} lot is ${e.instrument.lot_units} × the price)` : ""}.
+            Raise the capital{e.instrument.market === "MCX" ? ", use leverage (futures margin) or pick a mini contract" : ""} under Size in the rules.</span>
+        </div>
+      )}
 
       <section className="row" style={{ gap: 40, alignItems: "flex-end", paddingBottom: 26, borderBottom: "1px solid var(--line-2)", flexWrap: "wrap" }}>
         <div className="stack" style={{ gap: 12, flex: "1 1 520px", minWidth: 0 }}>

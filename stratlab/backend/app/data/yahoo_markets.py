@@ -1,7 +1,10 @@
-"""Stocks, ETFs and forex from Yahoo Finance: the US, UK, European, Japanese and forex markets.
+"""Stocks, ETFs, forex and global commodity futures from Yahoo Finance: the US, UK, European, Japanese,
+forex and global commodities markets.
 
-Instrument ids use Yahoo's own symbols: "US:AAPL", "UK:VOD.L", "EU:SAP.DE", "JP:7203.T",
-"FX:EURUSD=X". London prices come in pence and are converted to pounds."""
+Instrument ids use Yahoo's own symbols: "US:AAPL", "UK:VOD.L", "EU:SAP.DE", "JP:7203.T", "FX:EURUSD=X",
+"CMDTY:GC=F". London prices come in pence and US grain futures in cents; both are converted.
+Global commodities are the front-month futures series (Yahoo rolls it to the next contract as each expires),
+sized per unit of the quote (an ounce, a barrel, a bushel) rather than per exchange contract."""
 import math
 import threading
 
@@ -17,6 +20,7 @@ MARKET_INFO = {
     "EU": {"currency": "EUR", "tz": "Europe/Berlin", "per_day": {"1h": 9, "15m": 34, "5m": 102}},
     "JP": {"currency": "JPY", "tz": "Asia/Tokyo", "per_day": {"1h": 5, "15m": 20, "5m": 60}},
     "FX": {"currency": "USD", "tz": "Europe/London", "per_day": {"1h": 24, "15m": 96, "5m": 288}},
+    "CMDTY": {"currency": "USD", "tz": "America/New_York", "per_day": {"1h": 23, "15m": 92, "5m": 276}},
 }
 DEFAULTS = {
     "US": [("SPY", "SPDR S&P 500 ETF", "ETF"), ("AAPL", "Apple", "EQ"), ("NVDA", "NVIDIA", "EQ"),
@@ -29,13 +33,27 @@ DEFAULTS = {
            ("1306.T", "TOPIX ETF", "ETF")],
     "FX": [("EURUSD=X", "Euro / US Dollar", "FX"), ("USDJPY=X", "US Dollar / Japanese Yen", "FX"),
            ("GBPUSD=X", "British Pound / US Dollar", "FX"), ("USDINR=X", "US Dollar / Indian Rupee", "FX")],
+    "CMDTY": [("GC=F", "Gold futures (COMEX, $ per ounce)", "FUT"), ("CL=F", "WTI crude oil futures (NYMEX, $ per barrel)", "FUT"),
+              ("SI=F", "Silver futures (COMEX, $ per ounce)", "FUT"), ("NG=F", "Natural gas futures (NYMEX, $ per mmBtu)", "FUT"),
+              ("BZ=F", "Brent crude oil futures (ICE, $ per barrel)", "FUT"), ("HG=F", "Copper futures (COMEX, $ per pound)", "FUT"),
+              ("PL=F", "Platinum futures (NYMEX, $ per ounce)", "FUT"), ("ZC=F", "Corn futures (CBOT, $ per bushel)", "FUT"),
+              ("ZW=F", "Wheat futures (CBOT, $ per bushel)", "FUT"), ("ZS=F", "Soybean futures (CBOT, $ per bushel)", "FUT"),
+              ("KC=F", "Coffee futures (ICE, $ per pound)", "FUT"), ("SB=F", "Sugar futures (ICE, $ per pound)", "FUT"),
+              ("CC=F", "Cocoa futures (ICE, $ per tonne)", "FUT"), ("CT=F", "Cotton futures (ICE, $ per pound)", "FUT")],
 }
+CMDTY_ALIASES = {"GOLD": "GC=F", "SILVER": "SI=F", "CRUDE": "CL=F", "CRUDE OIL": "CL=F", "OIL": "CL=F", "WTI": "CL=F",
+                 "BRENT": "BZ=F", "NATURAL GAS": "NG=F", "GAS": "NG=F", "COPPER": "HG=F", "PLATINUM": "PL=F", "CORN": "ZC=F",
+                 "WHEAT": "ZW=F", "SOYBEANS": "ZS=F", "SOYBEAN": "ZS=F", "COFFEE": "KC=F", "SUGAR": "SB=F", "COCOA": "CC=F",
+                 "COTTON": "CT=F"}
+CENTS = ("USX", "USd")          # grains and softs are quoted in US cents
 
 
 def fits(market: str, q: dict) -> bool:
     sym, qt = str(q.get("symbol", "")), q.get("quoteType")
     if market == "FX":
         return qt == "CURRENCY" and sym.endswith("=X")
+    if market == "CMDTY":
+        return qt == "FUTURE" and sym.endswith("=F")
     if qt not in ("EQUITY", "ETF"):
         return False
     if market == "US":
@@ -72,7 +90,7 @@ class YahooProvider:
         else:
             display = sym
         return {"id": f"{self.market}:{sym}", "token": sym, "symbol": display, "name": name or display,
-                "exchange": {"US": "US", "UK": "LSE", "EU": "Europe", "JP": "TSE", "FX": "Forex"}[self.market],
+                "exchange": {"US": "US", "UK": "LSE", "EU": "Europe", "JP": "TSE", "FX": "Forex", "CMDTY": "Futures"}[self.market],
                 "type": itype, "market": self.market, "currency": currency or self.info["currency"],
                 "step": 1, "lot": 1, "fno": False, "expiry": None, "strike": None, "tz": self.info["tz"]}
 
@@ -83,6 +101,8 @@ class YahooProvider:
 
     def instrument(self, key: str) -> dict | None:
         key = key.strip().upper()
+        if self.market == "CMDTY":
+            key = CMDTY_ALIASES.get(key, key)
         hit = self._known.get(key)
         if hit:
             return hit
@@ -92,8 +112,8 @@ class YahooProvider:
             return None
         if m.get("price") is None:
             return None
-        itype = "FX" if self.market == "FX" else ("ETF" if m.get("type") == "ETF" else "EQ")
-        currency = "GBP" if m.get("currency") in ("GBp", "GBX") else m.get("currency")
+        itype = "FX" if self.market == "FX" else "FUT" if self.market == "CMDTY" else ("ETF" if m.get("type") == "ETF" else "EQ")
+        currency = "GBP" if m.get("currency") in ("GBp", "GBX") else "USD" if m.get("currency") in CENTS else m.get("currency")
         return self._remember(self._make(key, m.get("name"), itype, currency))
 
     def defaults(self) -> list[dict]:
@@ -103,6 +123,12 @@ class YahooProvider:
         q = q.strip()
         if len(q) < 1:
             return []
+        if self.market == "CMDTY":      # the usual names first: "gold" means COMEX gold, not a gold miner
+            words = q.upper()
+            hits = [i for s, name, _ in DEFAULTS["CMDTY"] if (i := self._known[s]) and
+                    (words in name.upper() or words == s or CMDTY_ALIASES.get(words) == s)]
+            if hits:
+                return hits[:limit]
         try:
             rows = self.yahoo.search(q, limit=25)
         except SourceError as e:
@@ -111,7 +137,7 @@ class YahooProvider:
         for x in rows:
             if not fits(self.market, x):
                 continue
-            itype = "FX" if self.market == "FX" else ("ETF" if x.get("quoteType") == "ETF" else "EQ")
+            itype = "FX" if self.market == "FX" else "FUT" if self.market == "CMDTY" else ("ETF" if x.get("quoteType") == "ETF" else "EQ")
             known = self._known.get(str(x["symbol"]).upper())
             out.append(known or self._remember(self._make(x["symbol"], x.get("longname") or x.get("shortname"), itype)))
             if len(out) >= limit:
@@ -120,7 +146,7 @@ class YahooProvider:
 
     # ---------- prices ----------
     def _scale(self, inst: dict, meta: dict) -> float:
-        return 0.01 if meta.get("currency") in ("GBp", "GBX") else 1.0
+        return 0.01 if meta.get("currency") in ("GBp", "GBX", *CENTS) else 1.0
 
     def ltp(self, inst: dict) -> float | None:
         try:

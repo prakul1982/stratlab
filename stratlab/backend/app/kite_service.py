@@ -174,6 +174,25 @@ class KiteService:
         self._by_token = {r["token"]: r for r in rows}
         self._inst_day = today_ist()
 
+    def instruments_of(self, exchange: str) -> list[dict]:
+        """Kite's raw instrument list for one exchange (MCX commodities), fetched once a day."""
+        key = ("instruments", exchange, today_ist())
+        hit = self._cache.get(key)
+        if hit:
+            return hit[1]
+        self._require()
+        self._throttle()
+        rows = self.kite.instruments(exchange)
+        self._cache[key] = (time.time(), rows)
+        return rows
+
+    def ltp_key(self, key: str) -> float | None:
+        """Last price for an "EXCHANGE:SYMBOL" key."""
+        self._require()
+        self._throttle()
+        v = self.kite.ltp([key]).get(key)
+        return v["last_price"] if v else None
+
     def instrument(self, token: int) -> dict | None:
         self._load_instruments()
         return self._by_token.get(int(token))
@@ -265,17 +284,21 @@ class KiteService:
         return out
 
     # ---------- historical candles ----------
-    def history(self, token: int, tf: str, days: int) -> list[dict]:
+    def history(self, token: int, tf: str, days: int, continuous: bool | None = None, ttl: float | None = None) -> list[dict]:
+        """Candles for a token. Futures on daily candles use Kite's continuous series unless told otherwise;
+        `ttl` overrides how long a cached answer is reused (live polling wants fresh candles)."""
         self._require()
         interval, chunk, _ = INTERVALS[tf]
         now = datetime.now(IST)
-        ttl = 6 * 3600 if tf == "1d" else 300
-        key = (token, tf, days)
+        if ttl is None:
+            ttl = 6 * 3600 if tf == "1d" else 300
+        if continuous is None:
+            inst = self._by_token.get(int(token)) or {}
+            continuous = inst.get("type") == "FUT" and tf == "1d"
+        key = (token, tf, days, continuous)
         hit = self._cache.get(key)
         if hit and time.time() - hit[0] < ttl:
             return hit[1]
-        inst = self._by_token.get(int(token)) or {}
-        continuous = inst.get("type") == "FUT" and tf == "1d"
         start = now - timedelta(days=days)
         out, frm = [], start
         while frm < now:

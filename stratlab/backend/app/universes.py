@@ -32,6 +32,17 @@ PRESETS = {
         {"id": "top_coins", "name": "10 large coins", "symbols": [
             "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "ADA-USD", "DOGE-USD", "LINK-USD", "LTC-USD", "AVAX-USD", "DOT-USD"]},
     ],
+    "MCX": [
+        {"id": "mcx_minis", "name": "MCX mini contracts (metals and energy)", "symbols": [
+            "GOLDM", "SILVERM", "CRUDEOILM", "NATGASMINI", "ZINCMINI", "ALUMINI", "LEADMINI"]},
+        {"id": "mcx_main", "name": "MCX main contracts", "symbols": [
+            "GOLD", "SILVER", "CRUDEOIL", "NATURALGAS", "COPPER", "ZINC", "ALUMINIUM", "LEAD"]},
+    ],
+    "CMDTY": [
+        {"id": "global_commodities", "name": "14 global commodity futures", "symbols": [
+            "GC=F", "SI=F", "PL=F", "HG=F", "CL=F", "BZ=F", "NG=F", "ZC=F", "ZW=F", "ZS=F", "KC=F", "SB=F", "CC=F", "CT=F"]},
+        {"id": "global_metals_energy", "name": "Global metals and energy", "symbols": ["GC=F", "SI=F", "PL=F", "HG=F", "CL=F", "BZ=F", "NG=F"]},
+    ],
 }
 
 
