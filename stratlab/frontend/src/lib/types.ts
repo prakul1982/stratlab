@@ -121,6 +121,7 @@ export interface Me {
   alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
   data_online: boolean;
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
+  plans?: Record<string, { price: number; price_year: number }>;
   prefs?: { level: Level | null };
 }
 

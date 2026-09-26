@@ -1,4 +1,6 @@
 """Supabase access with the service-role key (bypasses RLS, server only)."""
+import threading
+import time
 from datetime import datetime, timezone
 from supabase import create_client, Client
 from .config import settings
@@ -25,9 +27,39 @@ def get_profile(user_id: str, email: str | None = None) -> dict:
     return sb().table("profiles").upsert({"id": user_id, "email": email, "plan": "free"}).execute().data[0]
 
 
+# Signed-in requests read the profile on every call (a paper page polls every 3 s), so keep it for a few
+# seconds. Every change goes through update_profile, which drops the copy, and the server runs one process.
+PROFILE_TTL = 10.0
+_profiles: dict[str, tuple[float, dict]] = {}
+_profiles_lock = threading.Lock()
+
+
+def cached_profile(user_id: str, email: str | None = None) -> dict:
+    now = time.monotonic()
+    with _profiles_lock:
+        hit = _profiles.get(user_id)
+    if hit and hit[0] > now:
+        return dict(hit[1])
+    row = get_profile(user_id, email)
+    with _profiles_lock:
+        if len(_profiles) > 5000:
+            _profiles.clear()
+        _profiles[user_id] = (now + PROFILE_TTL, dict(row))
+    return dict(row)
+
+
+def forget_profile(user_id: str) -> None:
+    with _profiles_lock:
+        _profiles.pop(user_id, None)
+
+
 def update_profile(user_id: str, **fields) -> dict:
     fields["updated_at"] = now_iso()
-    return sb().table("profiles").update(fields).eq("id", user_id).execute().data[0]
+    forget_profile(user_id)
+    try:
+        return sb().table("profiles").update(fields).eq("id", user_id).execute().data[0]
+    finally:
+        forget_profile(user_id)   # also drop a copy a request re-read while the update ran
 
 
 def profile_by_subscription(sub_id: str) -> dict | None:

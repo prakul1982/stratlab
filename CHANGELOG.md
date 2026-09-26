@@ -2,6 +2,15 @@
 
 ## September 2026
 
+### Ready for payments
+- **Terms, Privacy, Cancellation and refunds, and Contact pages:** public (no sign-in), linked from the landing page, Plans and Account. The business name, email and address come from `config.js`.
+- **Payments switch on safely:** paid features lock only once Razorpay's keys *and* plan IDs are set, so a half-finished setup never locks people out. Plan prices on the Plans page come from the server.
+- **Checkout** no longer stays stuck on "Opening checkout…" after paying or after a failed payment. Cancelling now names the date your plan ends, correct for yearly plans too.
+- **Report a library strategy** as spam, offensive, misleading or personal. Three reports from different people hide it until the site owner reviews it on the Admin page (restore, hide or delete). Re-publishing doesn't clear reports.
+- **Tighter site security:** a full Content-Security-Policy (scripts only from StratLab and Razorpay), no inline scripts, and the old `?key=` admin URLs are gone. The Admin page's Kite buttons replace them.
+- **Faster pages:** a signed-in user's profile is cached for 10 seconds, so paper-trading pages that refresh every 3 seconds don't hit the database each time.
+- **Upgraded** to React 19, TypeScript 7 and Sentry 11. Sentry sends no cookies, headers, user details or query strings.
+
 ### Production hardening
 - **Request limits:** API requests are capped at 8 MB and rate-limited per user and per address, generously enough that normal use never notices. Test alerts and test notifications are limited to 5 an hour.
 - **Phone notifications** only accept the browsers' own push services (Google, Apple, Mozilla, Microsoft).

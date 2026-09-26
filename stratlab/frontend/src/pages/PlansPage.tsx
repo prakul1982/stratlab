@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { LegalLinks } from "./LegalPage";
 import { api, loadRazorpay } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
@@ -16,7 +17,8 @@ const FEATURES: Record<string, string[]> = {
     "All 20+ indicators: MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, Donchian and more", "Indian F&O", "Export rules and trades"],
 };
 const WHO: Record<string, string> = { free: "Test a few ideas", basic: "For traders running a strategy or two", pro: "For active traders running several strategies" };
-const PRICE = { free: [0, 0], basic: [999, 9990], pro: [2999, 29990] } as const;
+// shown until /me arrives; the server's plans.py is the source of truth, and the same amounts must be set on the Razorpay plans
+const PRICE: Record<string, [number, number]> = { free: [0, 0], basic: [999, 9990], pro: [2999, 29990] };
 
 export function PlansPage() {
   const { me, fail, notify, refreshMe } = useApp();
@@ -25,6 +27,10 @@ export function PlansPage() {
   const yearlyOk = !!me?.yearly_enabled;
   const [yearly, setYearly] = useState(false);
   const period = yearly && yearlyOk ? "year" : "month";
+  const priceOf = (p: string, per: string) => {
+    const sp = me?.plans?.[p];
+    return sp ? (per === "year" ? sp.price_year : sp.price) : PRICE[p][per === "year" ? 1 : 0];
+  };
 
   const subscribe = async (plan: "basic" | "pro") => {
     if (me && me.plan !== "free" && !confirm(`Switch to ${plan === "pro" ? "Pro" : "Basic"}? Your current subscription stops billing once the new one is active.`)) return;
@@ -34,15 +40,16 @@ export function PlansPage() {
       await loadRazorpay();
       const rz = new window.Razorpay({
         key: d.key_id, subscription_id: d.subscription_id, name: "StratLab",
-        description: `${plan === "pro" ? "Pro" : "Basic"} plan, ₹${PRICE[plan][period === "year" ? 1 : 0].toLocaleString("en-IN")} / ${period}`,
+        description: `${plan === "pro" ? "Pro" : "Basic"} plan, ₹${priceOf(plan, period).toLocaleString("en-IN")} / ${period}`,
         prefill: { email: d.email || "" }, theme: { color: "#1D1B17" },
         handler: async (resp: unknown) => {
           try { await api("/billing/verify", { method: "POST", body: resp }); await refreshMe(); notify(`You're on ${plan === "pro" ? "Pro" : "Basic"} now.`); }
           catch (e) { fail(e); }
+          finally { setBusy(null); }
         },
         modal: { ondismiss: () => setBusy(null) },
       });
-      rz.on("payment.failed", (r: { error: { description: string } }) => notify(`Payment failed: ${r.error.description}`));
+      rz.on("payment.failed", (r: { error: { description: string } }) => { notify(`Payment failed: ${r.error.description}`); setBusy(null); });
       rz.open();
     } catch (e) { fail(e); setBusy(null); }
   };
@@ -65,7 +72,7 @@ export function PlansPage() {
       <div className="grid4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
         {(["free", "basic", "pro"] as const).map((p) => {
           const cur = me?.plan === p;
-          const price = PRICE[p][period === "year" ? 1 : 0];
+          const price = priceOf(p, period);
           return (
             <div key={p} className="card stack" style={{ gap: 14, border: p === "pro" ? "2px solid var(--ink)" : undefined }}>
               <div className="stack" style={{ gap: 2 }}>
@@ -88,7 +95,9 @@ export function PlansPage() {
       {me && me.plan !== "free" && me.billing.renews_or_ends && (
         <p className="small muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
+      <p className="small muted" style={{ maxWidth: "80ch" }}>Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by Razorpay.</p>
       <p className="small muted" style={{ maxWidth: "80ch" }}>StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>
+      <LegalLinks />
     </div>
   );
 }

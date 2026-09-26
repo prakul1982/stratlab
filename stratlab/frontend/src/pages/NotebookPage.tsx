@@ -22,7 +22,7 @@ export function useNotebook(id: string | undefined) {
   const { fail, refreshNotebooks } = useApp();
   const [nb, setNb] = useState<Notebook | null>(null);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
-  const timer = useRef<number>();
+  const timer = useRef<number>(undefined);
   const pending = useRef<Record<string, unknown>>({});
 
   const load = useCallback(async () => {
@@ -96,8 +96,8 @@ export function NotebookPage() {
   const notesRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { setGaps((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null); }, [id, loc.state]);
-  const applyRef = useRef<(action: string) => void>();
-  const runRef = useRef<() => void>();
+  const applyRef = useRef<(action: string) => void>(undefined);
+  const runRef = useRef<() => void>(undefined);
   const pendingAction = useRef<string | null>(null);
   useEffect(() => { pendingAction.current = (loc.state as { action?: string } | null)?.action ?? null; }, [loc.state]);
   useEffect(() => {

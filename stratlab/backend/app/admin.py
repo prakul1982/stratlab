@@ -1,6 +1,6 @@
 """Owner-only admin: who's signed up, what they use, and granting plans by hand.
 
-Access is by Google account: emails listed in ADMIN_EMAILS. The older ?key= admin URLs still work."""
+Access is by Google account: verified emails listed in ADMIN_EMAILS. (The old ?key= admin URLs are gone.)"""
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 

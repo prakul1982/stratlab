@@ -43,7 +43,7 @@ export function CompanySearch({ region, autoFocus, onPick, placeholder }: {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<{ symbol: string; name: string; exchange: string }[] | null>(null);
   const [active, setActive] = useState(0);
-  const timer = useRef<number>();
+  const timer = useRef<number>(undefined);
   useEffect(() => { setQ(""); setRows(null); }, [region]);
   useEffect(() => {
     window.clearTimeout(timer.current);

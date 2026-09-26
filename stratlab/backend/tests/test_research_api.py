@@ -85,6 +85,8 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     from app.config import settings
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_test")        # payments live, so Pro is gated
     monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "s")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
     r = api.get("/research/company/US/NVDA/ai").json()
     assert r["valuation"] == "RICH" and r["composite"] == 78 and r["segments"][1] == {"label": "Gaming", "share": 9}
     assert [i["title"] for i in r["ideas"]] == ["Trend rider"]          # blank and malformed ideas dropped

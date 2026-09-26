@@ -37,7 +37,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const [markets, setMarkets] = useState<Market[]>([]);
   const [dataOffline, setDataOffline] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
-  const timer = useRef<number>();
+  const timer = useRef<number>(undefined);
   const [theme, setThemeState] = useState<"light" | "dark" | "system">(() => {
     try { return (localStorage.getItem("stratlab-theme") as "light" | "dark") || "system"; } catch { return "system"; }
   });

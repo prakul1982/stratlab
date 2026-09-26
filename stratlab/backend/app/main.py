@@ -1,6 +1,7 @@
 """StratLab API."""
 import json
 import logging
+from html import escape as html_escape
 import math
 import re
 import secrets
@@ -41,7 +42,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, ModerateReq, ReportReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -779,6 +780,7 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
                       entry_id=old["id"] if old and old.get("owner") == profile["id"] else None)
     if old and old.get("owner") == profile["id"]:
         e["copies"], e["published_at"] = old.get("copies", 0), old.get("published_at", e["published_at"])
+        e = library.carry_moderation(old, e)
     library.save(e)
     exp["library"] = e["id"]
     nb["experiments"] = [exp if x["v"] == version else x for x in exps]
@@ -788,23 +790,41 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
 
 @app.get("/library")
 def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", profile=Depends(current_profile)):
-    rows = library.search(library.all_entries(), market.upper()[:10], verdict[:12], q[:80], sort)
-    return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows)}
+    shown = [e for e in library.all_entries() if library.visible(e, profile["id"])]
+    rows = library.search(shown, market.upper()[:10], verdict[:12], q[:80], sort)
+    return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows),
+            "reasons": library.REASONS}
+
+
+def visible_entry(eid: str, profile) -> dict:
+    e = library.load(eid)
+    if not e or not (library.visible(e, profile["id"]) or admin.is_admin(profile)):
+        err(404, "not_found", "That strategy isn't in the library any more.")
+    return e
 
 
 @app.get("/library/{eid}")
 def library_entry(eid: str, profile=Depends(current_profile)):
-    e = library.load(eid)
-    if not e:
-        err(404, "not_found", "That strategy isn't in the library any more.")
-    return library.public(e, profile["id"])
+    return library.public(visible_entry(eid, profile), profile["id"])
+
+
+@app.post("/library/{eid}/report")
+def report_library_entry(eid: str, req: ReportReq, profile=Depends(current_profile)):
+    """Flag an entry for the site owner. Several reports hide it until it's reviewed."""
+    e = visible_entry(eid, profile)
+    if e.get("owner") == profile["id"]:
+        err(400, "own_entry", "This is your own strategy. Take it down instead if it shouldn't be here.")
+    throttle(profile, "library_report", 20, 86400, "You've sent a lot of reports today. Thanks; try again tomorrow.")
+    e = library.report(e, profile["id"], req.reason)
+    library.save(e)
+    return {"reported": True, "hidden": bool(e.get("hidden"))}
 
 
 @app.post("/library/{eid}/copy")
 def copy_from_library(eid: str, profile=Depends(current_profile)):
     """Put the rules in a new notebook of your own, ready to re-test."""
-    e = library.load(eid)
-    if not e or not e.get("strategy"):
+    e = visible_entry(eid, profile)
+    if not e.get("strategy"):
         err(404, "not_found", "That strategy isn't in the library any more.")
     inst = (e.get("instrument") or {}).get("id")
     nb = {"name": e["name"][:80], "question": e.get("question") or e.get("description") or "",
@@ -1178,17 +1198,8 @@ async def webhook(request: Request):
 
 
 # ---------- admin: daily Kite login ----------
-def _admin(key: str):
-    if not settings.ADMIN_KEY or not secrets.compare_digest(key.encode(), settings.ADMIN_KEY.encode()):
-        raise HTTPException(403, "Forbidden")
-
-
-@app.get("/admin/kite/login")
-def kite_login(key: str = ""):
-    _admin(key)
-    return RedirectResponse(kite.login_url())
-
-
+# Kite sends the admin back here after logging in. It's protected by the one-time state from login_url(),
+# which only an admin can start (the Admin page's "Log in to Kite" button).
 @app.get("/admin/kite/callback", response_class=HTMLResponse)
 def kite_callback(request_token: str = "", status: str = "", state: str = ""):
     if status != "success" or not request_token:
@@ -1196,27 +1207,8 @@ def kite_callback(request_token: str = "", status: str = "", state: str = ""):
     try:
         kite.complete_login(request_token, state)
     except PermissionError as e:
-        return HTMLResponse(f"<p>{e}</p>", status_code=403)
-    return HTMLResponse(f"<p>{after_login()}</p>")
-
-
-@app.post("/admin/kite/auto-login")
-def kite_auto_login(key: str = ""):
-    """Run the automatic login now, e.g. to test the credentials after setting them."""
-    _admin(key)
-    try:
-        auto_login.run_once()
-    except AutoLoginError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:
-        raise HTTPException(502, f"Kite login failed: {e}")
-    return auto_login.last
-
-
-@app.get("/admin/status")
-def admin_status(key: str = ""):
-    _admin(key)
-    return server_status()
+        return HTMLResponse(f"<p>{html_escape(str(e))}</p>", status_code=403)
+    return HTMLResponse(f"<p>{html_escape(after_login())}</p><p><a href=\"{html_escape(settings.PUBLIC_SITE_URL)}/admin\">Back to the admin page</a></p>")
 
 
 def server_status() -> dict:
@@ -1270,6 +1262,43 @@ def admin_stop_session(sid: str, _=Depends(admin.admin_profile)):
     if sid not in manager.sessions:
         err(404, "not_found", "That session isn't running.")
     manager.stop(sid, "Stopped by the site owner.")
+    return {"ok": True}
+
+
+@app.get("/admin/library")
+def admin_library(_=Depends(admin.admin_profile)):
+    """Library entries that were reported or hidden, most reported first."""
+    emails: dict[str, str | None] = {}
+    out = []
+    for e in library.all_entries():
+        reports = e.get("reports") or {}
+        if not reports and not e.get("hidden"):
+            continue
+        owner = e.get("owner")
+        if owner and owner not in emails:
+            try:
+                emails[owner] = (db.get_profile(owner) or {}).get("email")
+            except Exception:
+                emails[owner] = None
+        reasons: dict[str, int] = {}
+        for r in reports.values():
+            reasons[r.get("reason", "other")] = reasons.get(r.get("reason", "other"), 0) + 1
+        out.append({"id": e["id"], "name": e.get("name"), "author": e.get("author"), "email": emails.get(owner),
+                    "description": e.get("description"), "reports": len(reports), "reasons": reasons,
+                    "hidden": bool(e.get("hidden")), "hidden_by": e.get("hidden_by"), "published_at": e.get("published_at")})
+    out.sort(key=lambda x: (-x["reports"], x["published_at"] or ""))
+    return {"entries": out, "reasons": library.REASONS}
+
+
+@app.post("/admin/library/{eid}")
+def admin_moderate_library(eid: str, req: ModerateReq, _=Depends(admin.admin_profile)):
+    e = library.load(eid)
+    if not e:
+        err(404, "not_found", "That strategy isn't in the library any more.")
+    if req.action == "delete":
+        library.remove(eid)
+    else:
+        library.save(library.moderate(e, req.action))
     return {"ok": True}
 
 

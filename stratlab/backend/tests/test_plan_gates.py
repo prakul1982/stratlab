@@ -13,6 +13,8 @@ from app.plans import PLANS, allows, group_size, plan_info
 def paid(monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_live_x")
     monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "secret")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
 
 
 def as_plan(plan):

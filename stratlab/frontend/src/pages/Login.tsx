@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { supabase } from "../lib/api";
 import { Google } from "../components/Icons";
+import { LegalLinks } from "./LegalPage";
 import { Logo } from "../components/Logo";
 
 /* The public landing page: what StratLab is, why it's different, and one way in (Google sign-in). */
@@ -280,6 +281,7 @@ export function Login() {
         <div className="lp-wrap spread" style={{ flexWrap: "wrap", gap: 16 }}>
           <Logo size={30} />
           <p className="small muted" style={{ maxWidth: "70ch" }}>Paper trading and research only. No real orders are placed. Past results don't predict future returns, and nothing on StratLab is investment advice. © {new Date().getFullYear()} StratLab.</p>
+          <LegalLinks />
         </div>
       </footer>
     </div>

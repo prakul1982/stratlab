@@ -14,7 +14,7 @@ export interface LibEntry {
   tf: string; side: string; range: { from: string; to: string } | null; strategy: Strategy;
   verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number };
   stats: { ret: number | null; buy_hold: number | null; mdd: number | null; trades: number | null; unseen: number | null };
-  published_at: string; copies: number; mine: boolean;
+  published_at: string; copies: number; mine: boolean; reported?: boolean; hidden?: boolean;
 }
 
 const VERDICTS: [string, string][] = [["", "Any verdict"], ["edge", "Likely a real edge"], ["mixed", "Mixed evidence"], ["not_enough", "Not enough evidence"], ["luck", "Probably luck"], ["no_edge", "No edge here"]];
@@ -43,11 +43,14 @@ export function LibraryPage() {
   const [verdict, setVerdict] = useState("");
   const [sort, setSort] = useState("best");
   const [busy, setBusy] = useState<string | null>(null);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [reporting, setReporting] = useState<{ id: string; reason: string } | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
       const p = new URLSearchParams({ q, market, verdict, sort });
-      api<{ entries: LibEntry[]; total: number }>(`/library?${p}`).then((r) => { setRows(r.entries); setTotal(r.total); }).catch((e) => { setRows([]); fail(e); });
+      api<{ entries: LibEntry[]; total: number; reasons?: Record<string, string> }>(`/library?${p}`)
+        .then((r) => { setRows(r.entries); setTotal(r.total); if (r.reasons) setReasons(r.reasons); }).catch((e) => { setRows([]); fail(e); });
     }, 200);
     return () => window.clearTimeout(t);
   }, [q, market, verdict, sort, fail]);
@@ -64,6 +67,17 @@ export function LibraryPage() {
   const takeDown = async (e: LibEntry) => {
     if (!confirm(`Take "${e.name}" out of the library? Copies people already made stay theirs.`)) return;
     try { await api(`/library/${e.id}`, { method: "DELETE" }); setRows((r) => r?.filter((x) => x.id !== e.id) ?? r); notify("Taken down."); } catch (x) { fail(x); }
+  };
+  const sendReport = async () => {
+    if (!reporting) return;
+    setBusy(reporting.id);
+    try {
+      const r = await api<{ hidden: boolean }>(`/library/${reporting.id}/report`, { method: "POST", body: JSON.stringify({ reason: reporting.reason }) });
+      const id = reporting.id;
+      setRows((rs) => r.hidden ? rs?.filter((x) => x.id !== id) ?? rs : rs?.map((x) => x.id === id ? { ...x, reported: true } : x) ?? rs);
+      setReporting(null);
+      notify(r.hidden ? "Thanks. It's hidden while the site owner takes a look." : "Thanks. The site owner will take a look.");
+    } catch (x) { fail(x); } finally { setBusy(null); }
   };
   const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
 
@@ -107,10 +121,23 @@ export function LibraryPage() {
                   {([["After costs", e.stats.ret], ["Buy and hold", e.stats.buy_hold], ["Unseen years", e.stats.unseen], ["Worst fall", e.stats.mdd]] as [string, number | null][]).map(([k, n]) => (
                     <div key={k}><span className="eyebrow">{k}</span><b className={`mono ${signClass(n)}`}>{n == null ? "–" : pct(n)}</b></div>))}
                 </div>
-                <div className="row wrap" style={{ gap: 8, marginTop: "auto" }}>
-                  <button className="btn sm" disabled={busy === e.id} onClick={() => copy(e)}>{busy === e.id ? "Copying…" : "Copy and re-test"}</button>
-                  {e.mine && <button className="btn quiet sm danger" onClick={() => takeDown(e)}>Take down</button>}
-                </div>
+                {e.mine && e.hidden && <p className="small warn-text">Hidden from others after reports. The site owner will review it; editing and publishing again won't bring it back sooner.</p>}
+                {reporting?.id === e.id ? (
+                  <div className="row wrap" style={{ gap: 8, marginTop: "auto" }}>
+                    <span className="chip-select"><select aria-label="Why are you reporting this?" value={reporting.reason} onChange={(x) => setReporting({ id: e.id, reason: x.target.value })}>
+                      {Object.entries(reasons).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></span>
+                    <button className="btn sm" disabled={busy === e.id} onClick={sendReport}>{busy === e.id ? "Sending…" : "Send report"}</button>
+                    <button className="btn quiet sm" onClick={() => setReporting(null)}>Cancel</button>
+                  </div>
+                ) : (
+                  <div className="row wrap" style={{ gap: 8, marginTop: "auto" }}>
+                    <button className="btn sm" disabled={busy === e.id} onClick={() => copy(e)}>{busy === e.id ? "Copying…" : "Copy and re-test"}</button>
+                    {e.mine && <button className="btn quiet sm danger" onClick={() => takeDown(e)}>Take down</button>}
+                    {!e.mine && (e.reported
+                      ? <span className="small muted" style={{ marginLeft: "auto" }}>Reported</span>
+                      : <button className="btn quiet sm" style={{ marginLeft: "auto" }} onClick={() => setReporting({ id: e.id, reason: "spam" })}>Report</button>)}
+                  </div>
+                )}
               </article>
             ))}
           </div>

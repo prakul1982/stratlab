@@ -20,7 +20,7 @@ A research notebook for traders: describe a strategy in plain words, test it on 
 
 Monthly counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them.
 
-**Early access:** while Razorpay isn't configured (`RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` empty), every plan gets every feature and groups of up to 50, because nobody can buy a plan yet. The monthly limits and paper-trading counts still apply. As soon as the Razorpay keys are set, each feature locks to its plan, with no code change. The server checks every gate (`allows()` in plans.py), and a session a plan no longer covers after a downgrade is stopped within a minute.
+**Early access:** until Razorpay is fully configured (the keys and both monthly plan IDs), every plan gets every feature and groups of up to 50, because nobody can buy a plan yet. The monthly limits and paper-trading counts still apply. As soon as they're all set, each feature locks to its plan, with no code change. The server checks every gate (`allows()` in plans.py), and a session a plan no longer covers after a downgrade is stopped within a minute.
 
 ---
 
@@ -38,7 +38,7 @@ Monthly counts reset on the 1st of each month (IST). Limits are enforced on the 
 ### 2. Kite Connect
 1. In the Kite developer console, set the app's redirect URL to `https://YOUR-BACKEND/admin/kite/callback`.
 2. Put the API key and secret in `backend/.env`.
-3. Log in once by hand: open `https://YOUR-BACKEND/admin/kite/login?key=YOUR_ADMIN_KEY` and log in with Zerodha. This also authorises the app for the automatic login.
+3. Log in once by hand: set up the Admin page first (step 9), then press **Log in to Kite** there and log in with Zerodha. This also authorises the app for the automatic login.
 4. Kite access tokens expire every morning. After a login the server restarts itself (it exits and the host starts it again), because the Kite ticker can't switch to a new token inside a running process. Live sessions are saved first and resume after the restart.
 
 #### Automatic daily login (optional)
@@ -52,7 +52,7 @@ Set these and the server logs in to Kite by itself every day at `KITE_AUTO_LOGIN
 - Give StratLab its **own Kite Connect app** (its own API key). A new login to the same app cancels the previous token. If StratLab and a bot share an API key, whichever logs in last knocks the other out. StratLab notices a cancelled token, goes offline with a clear message and sends a Telegram alert, but it deliberately doesn't log in again by itself, so the two don't fight.
 - Keep `KITE_AUTO_LOGIN_AT` a few minutes away from the other logins. Two logins in the same 30-second window use the same 2FA code, and Zerodha refuses the second. StratLab retries once with the next code, then stops for the day.
 
-To test the credentials straight away, send a POST request to `https://YOUR-BACKEND/admin/kite/auto-login?key=YOUR_ADMIN_KEY`. `/admin/status` shows the last result.
+To test the credentials straight away, press **Run the automatic login now** on the Admin page, which shows the result.
 
 > **Read before enabling.** Zerodha's Kite Connect terms expect the daily login to be done by hand, so automating it risks your API key or account being restricted. Your password and TOTP secret also give full trading access to your Zerodha account: keep them only in the host's environment variables and never commit them. If Zerodha rejects the password or code, the server doesn't retry until the next day, so it can't lock your account with repeated attempts. Leave these variables empty to keep logging in by hand.
 
@@ -70,7 +70,29 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
    - `subscription.completed`
    - `subscription.halted`
    - `subscription.paused`
-4. Test everything in Test Mode first.
+4. Test everything in Test Mode first (test keys `rzp_test_…`, test plans, card `4111 1111 1111 1111`).
+
+#### Going live with payments
+1. **Activate the account:** in the Razorpay dashboard, finish KYC (PAN, bank account, business details) and give your website as `https://stratlab.studio`. Razorpay checks the site has these public pages, which it already does (they open without signing in):
+   - `/terms`
+   - `/privacy`
+   - `/refunds` (cancellation, refunds and delivery)
+   - `/contact`
+
+   Before submitting, fill in `BUSINESS_NAME`, `CONTACT_EMAIL` and `BUSINESS_ADDRESS` in `frontend/public/config.js`, and make sure that email inbox exists. Read the four pages once and adjust the refund terms if you want a different policy.
+2. **Switch to Live mode** in the dashboard, then repeat the Test Mode setup there: live plans cannot see test plans.
+   - Create the plans again: Basic ₹999 and Pro ₹2,999 monthly, plus yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
+   - Generate live API keys.
+   - Add the webhook again with a new secret.
+3. **Set the live values in Railway → Variables:**
+   - `RAZORPAY_KEY_ID` (`rzp_live_…`) and `RAZORPAY_KEY_SECRET`
+   - `RAZORPAY_WEBHOOK_SECRET`
+   - `RAZORPAY_PLAN_BASIC` and `RAZORPAY_PLAN_PRO`
+   - optionally `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`
+
+   Then redeploy.
+4. **What changes at that moment:** paid features lock to each plan. Until the keys **and** both monthly plan IDs are set, everyone keeps every feature. Anyone using Pro features on Free loses them; grant early users Pro for a while from the Admin page (Change plan → 30 or 90 days) if you want to thank them.
+5. **Check it once for real:** buy Basic with your own account, confirm the Account page shows it and the Admin page lists you as paying, then cancel from Account (you keep it until the period ends). Refund yourself from the Razorpay dashboard if you like.
 
 ### 4. AI builder (all plans) and alerts (Pro)
 - **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order until one answers, so a rate limit or outage at one moves on to the next (the order for each kind of job is below). All but Anthropic have free tiers. Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
@@ -142,7 +164,7 @@ cd frontend && npm run build                   # typecheck and production build
 
 ### 9. Admin page
 Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and redeploy. Signed in with that account, you get an **Admin** link in the sidebar with:
-- Kite status and a **Log in to Kite** button (no more typing `?key=` URLs), plus a button to run the automatic login now.
+- Kite status and a **Log in to Kite** button, plus a button to run the automatic login now.
 - A live test of every AI provider, the order each kind of job asks them in, which keys are missing, whether the Finnhub key is set, and whether payments are set up.
 - Users, their plan and this month's usage, with **Change plan** to grant Basic or Pro by hand (for 30 days, 90 days, a year or with no end date).
 - Paper trading sessions running now (single instruments, groups and options), each with a Stop button.
@@ -153,7 +175,7 @@ Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and red
 - Frontend: add `SENTRY_DSN: "…"` to `public/config.js` for errors in people's browsers. You can use a second Sentry project (platform: Browser JavaScript). The Sentry code only downloads when a DSN is set.
 - Nothing personal is sent: no emails, IP addresses or request bodies.
 
-Everyone else gets a 403 from the `/admin` API and never sees the link. The older `?key=ADMIN_KEY` URLs keep working.
+Everyone else gets a 403 from the `/admin` API and never sees the link. The email must be verified, which Google sign-in always is. The old `?key=ADMIN_KEY` URLs have been removed, so `ADMIN_KEY` can be deleted from the host's variables.
 
 ### 10. Logo and icons
 The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, which feeds the in-app logo (`components/Logo.tsx`) and the share image. The static files in `frontend/public/` (`favicon.svg`, `logo.svg`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `og-image.png`) are rendered from the same shapes; regenerate them if the logo changes.
@@ -213,7 +235,7 @@ With `strategy.signal` set, entries follow a notebook's rules instead of the clo
   - Session state is saved every 30 seconds and resumes after a restart. A session keeps running until the user or the admin stops it, or the free trial or plan limit ends it. Indian sessions show as paused until the day's Kite login.
   - Free trials and plan limits are re-checked every minute.
 - **API routes:** see `backend/app/main.py`. The browser only ever talks to this API; it never touches the database or Kite directly.
-- **Request guard** (`backend/app/guard.py`): every request is capped at 8 MB and rate-limited: 600 a minute per signed-in user and 240 a minute per address, with `/health` exempt. It also adds security headers. The site's own headers are in `frontend/vercel.json` (and `netlify.toml`). See [SECURITY.md](../SECURITY.md) for the full list.
+- **Request guard** (`backend/app/guard.py`): every request is capped at 8 MB and rate-limited: 600 a minute per signed-in user and 240 a minute per address, with `/health` exempt. It also adds security headers. The site's own headers, including a Content-Security-Policy, are in `frontend/vercel.json` (and `netlify.toml`). The policy allows scripts only from the site itself and Razorpay Checkout. It allows API calls to `*.up.railway.app`, `*.stratlab.studio`, Supabase, Razorpay and Sentry: if the backend moves to another domain, add it to `connect-src` in both files. See [SECURITY.md](../SECURITY.md) for the full list.
 
 ## Known limits
 - Short selling is simulated without borrowing fees or margin interest. In India, cash-market shorts must be closed the same day; holding a short overnight is only possible through futures, so treat multi-day shorts on Indian stocks as a what-if.

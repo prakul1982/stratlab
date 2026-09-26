@@ -44,4 +44,9 @@ def test_pro_features_are_open_until_payments_go_live(monkeypatch):
     assert has_pro_features("free") and plan_info("free")["pro_features"] and plan_info("free")["backtests_per_month"] == 5
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_live_x")
     monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "secret")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "")
+    assert has_pro_features("free")          # keys alone: nothing can be bought yet, so nothing is locked
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
     assert not has_pro_features("free") and not has_pro_features("basic") and has_pro_features("pro")
