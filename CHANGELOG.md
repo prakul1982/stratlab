@@ -2,6 +2,17 @@
 
 ## September 2026
 
+### Production hardening
+- **Request limits:** API requests are capped at 8 MB and rate-limited per user and per address, generously enough that normal use never notices. Test alerts and test notifications are limited to 5 an hour.
+- **Phone notifications** only accept the browsers' own push services (Google, Apple, Mozilla, Microsoft).
+- **Alert contacts are checked:** an email or Telegram chat ID that doesn't look right is refused with a clear message.
+- **Admin access** needs a verified email as well as being on the admin list.
+- **Less on show publicly:** the health check no longer lists AI providers or their errors. Only the admin's connection check tests each AI provider, so the free AI allowance isn't spent by other users' checks.
+- **Links from news feeds** open only if they're ordinary web links.
+- **Security headers** on the site and the API: no framing by other sites, no content sniffing, a strict referrer policy and HSTS.
+- **Tidier on phones:** bigger tap areas for chip ✕ and "Add a rule" buttons; the Themes box and button line up; the admin user table no longer runs into the note below it.
+- **Faster first load:** the Options page loads in its own chunk again.
+
 ### Commodities, Indian and global, kept apart
 - **Indian commodities (MCX):** a new market through the same Kite login.
   - Gold, silver, crude oil and natural gas (with their mini contracts), plus copper, zinc, aluminium and lead futures.

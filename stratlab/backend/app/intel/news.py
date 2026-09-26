@@ -19,8 +19,11 @@ class GoogleNews(Source):
     def search(self, query: str, region: str = "IN", limit: int = 10) -> list[dict]:
         gl, ceid = ("IN", "IN:en") if region == "IN" else ("US", "US:en")
         xml = self.fetch("/rss/search", {"q": query, "hl": f"en-{gl}", "gl": gl, "ceid": ceid}, ttl=1800, kind="text")
+        if "<!DOCTYPE" in xml[:2000].upper() or "<!ENTITY" in xml.upper():
+            # a news feed never needs a DTD; refusing one rules out entity-expansion tricks
+            raise SourceError(self.name, "Google News sent an unexpected feed.")
         try:
-            root = ElementTree.fromstring(xml)
+            root = ElementTree.fromstring(xml)   # nosec B314: a feed with a DTD is refused above
         except ElementTree.ParseError:
             raise SourceError(self.name, "Google News sent an unreadable feed.") from None
         out = []

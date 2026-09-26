@@ -23,7 +23,7 @@ RULES = """Rules:
 
 
 def _key(*parts) -> str:
-    return hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()
+    return hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode(), usedforsecurity=False).hexdigest()   # a cache key
 
 
 def cached(kind: str, key_parts: tuple, ttl: float, refresh: bool, build) -> tuple[dict, bool]:

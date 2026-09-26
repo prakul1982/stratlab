@@ -85,3 +85,14 @@ export function periodName(days: number): string {
   if (days >= 28) { const m = Math.round(days / 30.4); return `${m} month${m === 1 ? "" : "s"}`; }
   return `${days} days`;
 }
+
+/** An outside link that's safe to put in href: only http(s), never javascript: or data: from a feed. */
+export function safeHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : undefined;
+  } catch {
+    return undefined;
+  }
+}

@@ -213,6 +213,7 @@ With `strategy.signal` set, entries follow a notebook's rules instead of the clo
   - Session state is saved every 30 seconds and resumes after a restart. A session keeps running until the user or the admin stops it, or the free trial or plan limit ends it. Indian sessions show as paused until the day's Kite login.
   - Free trials and plan limits are re-checked every minute.
 - **API routes:** see `backend/app/main.py`. The browser only ever talks to this API; it never touches the database or Kite directly.
+- **Request guard** (`backend/app/guard.py`): every request is capped at 8 MB and rate-limited: 600 a minute per signed-in user and 240 a minute per address, with `/health` exempt. It also adds security headers. The site's own headers are in `frontend/vercel.json` (and `netlify.toml`). See [SECURITY.md](../SECURITY.md) for the full list.
 
 ## Known limits
 - Short selling is simulated without borrowing fees or margin interest. In India, cash-market shorts must be closed the same day; holding a short overnight is only possible through futures, so treat multi-day shorts on Indian stocks as a what-if.

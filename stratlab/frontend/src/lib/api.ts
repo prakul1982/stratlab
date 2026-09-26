@@ -60,7 +60,7 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
   if (!r.ok) {
     const d = payload?.detail;
     const msg = (d && (d.message || (typeof d === "string" ? d : ""))) ||
-      (Array.isArray(d) ? "Some settings are out of range. Check the numbers and try again." : "") ||
+      (Array.isArray(d) ? invalidMessage(d) : "") ||
       `Something went wrong (${r.status}). Try again.`;
     const e = new ApiError(msg);
     e.status = r.status;
@@ -70,6 +70,21 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
     throw e;
   }
   return payload as T;
+}
+
+const FIELD_HELP: Record<string, string> = {
+  alert_email: "That email address doesn't look right.",
+  telegram_chat_id: "The Telegram chat ID is a number, like 123456789 (from @userinfobot).",
+  endpoint: "This browser's notification service isn't supported.",
+};
+
+/** A readable message for FastAPI's list of invalid fields. */
+function invalidMessage(items: { loc?: (string | number)[] }[]): string {
+  for (const it of items) {
+    const field = [...(it.loc ?? [])].reverse().find((x) => typeof x === "string" && FIELD_HELP[x as string]);
+    if (field) return FIELD_HELP[field as string];
+  }
+  return "Some settings are out of range. Check the numbers and try again.";
 }
 
 export async function loadRazorpay(): Promise<void> {

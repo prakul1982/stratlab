@@ -43,7 +43,7 @@ class Risk(BaseModel):
     maxAlloc: float = Field(100, gt=0, le=100)
     sl: float = Field(2, ge=0, le=100000)
     tgt: float = Field(0, ge=0, le=100000)
-    brokerage: float = Field(20, ge=0)
+    brokerage: float = Field(20, ge=0, le=1e6)
     slippage: float = Field(0.05, ge=0, le=5)
     trail: float = Field(0, ge=0, lt=100)       # trailing stop, % below the best price since entry (0 = off)
     maxBars: int = Field(0, ge=0, le=5000)      # close the trade after this many candles (0 = off)
@@ -187,8 +187,8 @@ class AIReq(BaseModel):
 
 class AlertsReq(BaseModel):
     alerts_enabled: bool = False
-    telegram_chat_id: Optional[str] = Field(None, max_length=40)
-    alert_email: Optional[str] = Field(None, max_length=200)
+    telegram_chat_id: Optional[str] = Field(None, max_length=40, pattern=r"^$|^-?[0-9]{1,20}$|^@[A-Za-z0-9_]{4,32}$")
+    alert_email: Optional[str] = Field(None, max_length=200, pattern=r"^$|^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[A-Za-z]{2,}$")
     daily_report: Optional[bool] = None
 
 

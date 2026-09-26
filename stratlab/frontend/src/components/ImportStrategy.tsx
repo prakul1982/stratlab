@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { IMPORTED } from "../pages/OptionsPage";
+import { IMPORTED } from "../lib/options";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, riskForCurrency } from "../lib/rules";

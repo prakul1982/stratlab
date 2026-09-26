@@ -18,12 +18,12 @@ def kv(monkeypatch):
     return store
 
 
-SUB = lambda n: {"endpoint": f"https://push.example/{n}", "keys": {"p256dh": "k", "auth": "a"}}
+SUB = lambda n: {"endpoint": f"https://fcm.googleapis.com/fcm/send/{n}", "keys": {"p256dh": "k", "auth": "a"}}
 
 
 def test_devices_are_remembered_once_and_dead_ones_forgotten(kv, monkeypatch):
     push.add("u1", SUB(1)); push.add("u1", SUB(1)); push.add("u1", SUB(2))
-    assert [s["endpoint"] for s in push.devices("u1")] == ["https://push.example/1", "https://push.example/2"]
+    assert [s["endpoint"] for s in push.devices("u1")] == ["https://fcm.googleapis.com/fcm/send/1", "https://fcm.googleapis.com/fcm/send/2"]
     sent = []
 
     class Gone(Exception):
@@ -39,8 +39,8 @@ def test_devices_are_remembered_once_and_dead_ones_forgotten(kv, monkeypatch):
     monkeypatch.setitem(sys.modules, "pywebpush", fake)
     assert push.send("u1", "EMA: BUY BTC", "Bought 0.1 BTC", "/paper/x") == 1
     assert '"url": "/paper/x"' in sent[0][1]
-    assert [s["endpoint"] for s in push.devices("u1")] == ["https://push.example/1"]      # the gone device is dropped
-    push.remove("u1", "https://push.example/1")
+    assert [s["endpoint"] for s in push.devices("u1")] == ["https://fcm.googleapis.com/fcm/send/1"]      # the gone device is dropped
+    push.remove("u1", "https://fcm.googleapis.com/fcm/send/1")
     assert push.devices("u1") == [] and "push:u1" not in kv
 
 
@@ -92,3 +92,12 @@ def test_unset_channels_are_skipped_and_tests_report_each_channel(kv, monkeypatc
     monkeypatch.setattr(push, "send", lambda *a, **k: 1)
     ok, failed = alerts.test(prof)
     assert ok == ["push"] and failed == {"telegram": "Telegram refused the message (400)."}          # one failure doesn't block the rest
+
+
+def test_only_browser_push_services_are_accepted():
+    ok = ["https://fcm.googleapis.com/fcm/send/x", "https://web.push.apple.com/abc", "https://updates.push.services.mozilla.com/wpush/v2/x",
+          "https://wns2-par02p.notify.windows.com/w/?token=x"]
+    bad = ["http://fcm.googleapis.com/x", "https://169.254.169.254/latest", "https://localhost/x", "https://evilfcm.googleapis.com.attacker.io/x",
+           "https://user:pw@fcm.googleapis.com/x", "https://fcm.googleapis.com:8443/x", "https://notify.windows.com.evil/x", "not a url"]
+    assert all(push.valid_endpoint(u) for u in ok)
+    assert not any(push.valid_endpoint(u) for u in bad)

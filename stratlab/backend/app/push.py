@@ -5,6 +5,7 @@ Each device that turns notifications on sends its push subscription, kept in app
 keeps it in app_settings (the owner chose this over setting it by hand), so there's nothing to set up.
 VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY in the environment take precedence if set."""
 import json
+from urllib.parse import urlsplit
 
 from . import db
 from .config import settings
@@ -13,6 +14,21 @@ PREFIX = "push:"
 KEYS = "vapid:keys"
 MAX_DEVICES = 10
 _cache: dict = {}
+# The browsers' own push services. A subscription pointing anywhere else is refused, so the server can't be
+# made to send requests to an address of the user's choosing.
+PUSH_HOSTS = ("fcm.googleapis.com", "android.googleapis.com", "updates.push.services.mozilla.com",
+              "push.services.mozilla.com", "web.push.apple.com", ".push.apple.com", ".notify.windows.com")
+
+
+def valid_endpoint(url: str) -> bool:
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    host = (parts.hostname or "").lower()
+    if parts.scheme != "https" or not host or parts.username or parts.password or parts.port not in (None, 443):
+        return False
+    return any(host == h.lstrip(".") or (h.startswith(".") and host.endswith(h)) for h in PUSH_HOSTS)
 
 
 def generate() -> tuple[str, str]:
@@ -92,6 +108,9 @@ def send(uid: str, title: str, body: str, url: str = "/", tag: str | None = None
     sent, gone = 0, []
     payload = json.dumps({"title": title[:120], "body": body[:600], "url": url, "tag": tag})
     for s in subs:
+        if not valid_endpoint(s.get("endpoint") or ""):
+            gone.append(s.get("endpoint"))
+            continue
         try:
             webpush(subscription_info=s, data=payload, vapid_private_key=k[1],
                     vapid_claims={"sub": settings.VAPID_SUBJECT or "mailto:admin@stratlab.studio"}, ttl=3600)

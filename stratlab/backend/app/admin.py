@@ -17,7 +17,7 @@ def admin_emails() -> set[str]:
 
 
 def is_admin(profile: dict) -> bool:
-    return (profile.get("email") or "").strip().lower() in admin_emails()
+    return bool(profile.get("_email_verified")) and (profile.get("email") or "").strip().lower() in admin_emails()
 
 
 def admin_profile(profile=Depends(current_profile)) -> dict:

@@ -45,12 +45,12 @@ def test_server_refuses_what_the_plan_lacks(paid):
         c = as_plan("free")
         r = c.post("/export/strategy", json={"strategy": {"name": "x", "tf": "1d", "entry": [], "exit": []}})
         assert r.status_code == 402 and "Pro plan" in r.json()["detail"]["message"]
-        r = c.put("/me/alerts", json={"alerts_enabled": False, "alert_email": "a@b.c"})
+        r = c.put("/me/alerts", json={"alerts_enabled": False, "alert_email": "a@b.co"})
         assert r.status_code == 402 and "Basic plan" in r.json()["detail"]["message"]
         opt = {"strategy": {"underlying": "NIFTY", "legs": [{"side": "buy", "opt": "CE"}]}}
         assert c.post("/options/sessions", json=opt).status_code == 402
         c = as_plan("basic")
-        r = c.put("/me/alerts", json={"alerts_enabled": True, "alert_email": "a@b.c"})
+        r = c.put("/me/alerts", json={"alerts_enabled": True, "alert_email": "a@b.co"})
         assert r.status_code == 402 and "Trade alerts are on the Pro plan" in r.json()["detail"]["message"]
         sig = {"strategy": {**opt["strategy"], "signal": {"rules": {"name": "e", "tf": "5m", "entry": [], "exit": []}}}}
         r = c.post("/options/sessions", json=sig)
