@@ -7,7 +7,7 @@
 
 **Test your trading idea before your money does.**
 
-Research a company, describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex or crypto, then paper trade it on live prices with fake money.
+Research a company, describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex, crypto or commodities (MCX and global), then paper trade it on live prices with fake money.
 
 ### [🌐 stratlab.studio](https://stratlab.studio)
 
@@ -38,13 +38,24 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 - **Two deeper checks, one tap each.**
   - **Walk-forward test:** re-tunes your settings on a stretch of the past, trades them on the next stretch the tuning never saw, slides forward and repeats. It shows what re-tuning as you go would really have earned, without hindsight.
   - **Does it work on similar stocks?** Runs the same rules on about 10 similar instruments from the same market. Real patterns travel; lucky charts don't.
-- **Real costs, in the market's own currency.** India: STT, exchange and SEBI fees, stamp duty, GST, plus a capital-gains estimate. US: SEC and FINRA fees. UK: stamp duty on share buys. Forex: the spread. Crypto: exchange fees. Slippage on every fill. You see what you'd actually keep.
+- **Real costs, in the market's own currency.** India: STT, exchange and SEBI fees, stamp duty, GST, plus a capital-gains estimate. US: SEC and FINRA fees. UK: stamp duty on share buys. Forex: the spread. Crypto: exchange fees. MCX commodities: CTT on sells, MCX fees, stamp duty and GST. Global commodities: a spread and commission estimate. Slippage on every fill. You see what you'd actually keep.
 - **Lab notebooks.** Each idea is a notebook: a question, the rules written as sentences, numbered experiments you can compare side by side, and your own lab notes.
 - **A full toolkit.** Buy, sell short, or trade both ways with separate long and short rules. Stops in %, points, ATR or the recent swing low/high; targets in %, points or R-multiples; trailing stops and time limits. 20+ indicators (moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian, volume) plus the candle itself (open, high, low, body, wicks, range) and the trading day (previous close, day open/high/low, day change %). Any value can be taken N candles ago, multiplied, or computed on a higher timeframe.
 - **Options, live.** A separate Options tab paper trades straddles, strangles, iron flies, condors, spreads or any structure up to 8 legs on live NSE, BSE and MCX option quotes, filling at the real bid and ask. Entries come at a set time or whenever a notebook's own rules signal: a 7 EMA cross can buy the ATM NIFTY call, and a short signal the put. It covers MTM stops and targets, trailing, per-leg stops, daily caps, re-centring, margin-based sizing and freeze-limit slicing. Options backtesting is coming: StratLab now records NIFTY, BANKNIFTY and SENSEX option chains every 5 minutes to build the price history it needs.
 - **Test on a whole group.** Run the rules on a ready-made group (NIFTY 50, Bank NIFTY, liquid F&O stocks, US mega caps, large coins) or your own list of up to 50, sharing one pot of capital with a limit on positions open at once. The verdict breaks the result down member by member. Paper trading an Indian group can enter on the live price instead of waiting for the candle to close, and skip stocks whose bid-ask spread is too wide.
 - **Built for intraday.** An entry window, a square-off time, a cap on trades per day, a cooldown after each trade and a daily loss cap. Entry rules can be combined as a weighted conviction score. Size by risk or by fixed capital per trade with leverage; Indian intraday trades use MIS costs.
 - **Any market.** Indian stocks, indices and F&O (Zerodha Kite), US, UK, European and Japanese stocks and ETFs and forex (Yahoo Finance), crypto (Coinbase), or upload a CSV of candles from anywhere. No extra keys needed.
+- **Commodities, as two separate markets.**
+  - **Indian commodities (MCX, via Kite):** gold, gold mini and petal, silver, silver mini and micro, crude oil and crude mini, natural gas and its mini, copper, zinc, aluminium, lead.
+    - Rupees, whole lots (one GOLDM lot is 100 g, so 10 times the quoted price per 10 g).
+    - Costs: CTT 0.01% on sells, MCX fees, stamp duty, GST.
+    - Hours 9:00 am to 11:30 pm IST, NSE holiday calendar.
+    - Daily history is stitched across expiries for years of data; intraday history covers only the current contract.
+    - Paper sessions trade the front-month contract, which rolls 3 days before expiry.
+  - **Global commodities (Yahoo Finance):** COMEX, NYMEX, CBOT and ICE front-month futures: gold, silver, platinum, copper, WTI and Brent crude, natural gas, corn, wheat, soybeans, coffee, sugar, cocoa, cotton.
+    - Dollars (grain prices in cents are converted), sized per ounce, barrel or bushel rather than per exchange contract.
+    - A spread and commission estimate per side.
+    - Sunday 6 pm to Friday 5 pm New York, US holiday calendar.
 - **Research built in.** Company pages for India and the US: live price and chart, valuation and growth with context, sales and profit history, results against estimates, who owns it, insider trades, news, and an AI read whose trading ideas open as a notebook in one click. Plus AI theme maps, a daily market pulse, side-by-side comparisons and a watchlist.
 - **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
 - **Import any strategy.** One **Import a strategy** page takes a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words. It sets up the right thing: a notebook for rules on one instrument, a group notebook for strategies that scan a list (like an F&O momentum scanner), or an Options structure. Anything that can't be carried over is listed.
@@ -159,7 +170,7 @@ flowchart LR
     API --> SB
     API -- "India: candles, live ticks" --> KITE["Zerodha Kite Connect"]
     API -- "crypto: candles, prices" --> CB["Coinbase public data"]
-    API -- "US, UK, EU, Japan, forex; charts" --> YF["Yahoo Finance"]
+    API -- "US, UK, EU, Japan, forex, global commodities; charts" --> YF["Yahoo Finance"]
     API -- "research: US companies" --> FH["Finnhub"]
     API -- "research: Indian fundamentals, news" --> SC["Screener.in, Google News, Wikipedia"]
     API -- "subscriptions (coming soon)" --> RZP["Razorpay"]
@@ -188,7 +199,7 @@ stratlab/
 │   │   ├── universes.py      ready-made groups of stocks and coins
 │   │   ├── group_live.py     paper trading a whole group with one pot of capital
 │   │   ├── basket.py         "does it work on similar stocks?": same rules on ~10 similar instruments
-│   │   ├── data/             market data: markets list, Coinbase (crypto), Yahoo (US, UK, EU, Japan, forex)
+│   │   ├── data/             market data: markets list, Coinbase (crypto), Yahoo (US, UK, EU, Japan, forex, global commodities), MCX (Kite), holidays
 │   │   ├── intel/            research: Finnhub, Yahoo, Screener.in, news, Wikipedia, AI reads, /research API
 │   │   ├── research.py       load candles, run an experiment, keep a compact record
 │   │   ├── live.py           paper trading on live ticks (India) or polled candles (every other market)

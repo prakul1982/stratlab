@@ -27,6 +27,7 @@ export interface Instrument {
   id: string; token?: number | string | null; symbol: string; name?: string; exchange?: string; type?: string;
   market?: string; currency?: string; step?: number; lot?: number; fno?: boolean; expiry?: string | null;
   strike?: number | null; tz?: string;
+  contract?: string; unit?: string; lot_units?: number;   // MCX: the contract traded, the price unit, price units per lot
 }
 
 export interface Market {
@@ -50,6 +51,7 @@ export interface Verdict {
 export interface Stats {
   ret: number; pnl: number; cagr: number; mdd: number; sharpe: number; n: number; win: number;
   pf: number | null; avg: number; buy_hold_ret: number;
+  skipped_size?: number;     // entry signals skipped because one share or lot cost more than the budget
 }
 export interface Costs {
   gross_pnl: number; total: number; items: { label: string; amount: number }[]; net_pnl: number;

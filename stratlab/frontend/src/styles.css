@@ -260,7 +260,13 @@ td.num, .num { font-family: var(--mono); }
 .mkt-tile.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .mkt-tile.soon { opacity: .7; }
 .mkt-tile .badge { margin-left: auto; }
-.mkt-sym { font-size: 26px; line-height: 1; width: 34px; text-align: center; flex: none; }
+.mkt-sym { font-size: 24px; line-height: 1; min-width: 34px; text-align: center; flex: none; white-space: nowrap; }
+@media (max-width: 640px) {
+  .mkt-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .mkt-tile { padding: 12px; gap: 8px; align-items: flex-start; }
+  .mkt-sym { font-size: 19px; min-width: 24px; }
+  .mkt-tile b { font-size: 14px; }
+}
 
 /* ---------- page titles ---------- */
 .page-title { font: 400 clamp(32px, 4vw, 46px)/1.1 var(--serif); letter-spacing: -0.02em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }

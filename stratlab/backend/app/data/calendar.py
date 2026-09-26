@@ -6,7 +6,9 @@ installed calendar knows (or if it can't load), a day counts as a trading day wh
 from datetime import date, timedelta
 from functools import lru_cache
 
-CODES = {"IN": "XBOM", "US": "XNYS", "UK": "XLON", "EU": "XETR", "JP": "XTKS"}
+# MCX follows the NSE/BSE holiday list (on some of those days it reopens for the evening session only,
+# which is treated as closed); global commodity futures follow US exchange holidays.
+CODES = {"IN": "XBOM", "MCX": "XBOM", "US": "XNYS", "CMDTY": "XNYS", "UK": "XLON", "EU": "XETR", "JP": "XTKS"}
 
 
 @lru_cache(maxsize=None)
@@ -27,6 +29,8 @@ def warm():
 def is_trading_day(market: str, day: date) -> bool:
     if market == "CRYPTO":
         return True
+    if market == "CMDTY" and day.weekday() == 6:
+        return False                          # Sunday evening's open counts toward Monday
     if day.weekday() >= 5:
         return False
     cal = _calendar(CODES[market]) if market in CODES else None

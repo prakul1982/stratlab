@@ -13,6 +13,8 @@ BASKETS = {
     "UK": ["SHEL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "GSK.L", "RIO.L", "BARC.L", "LLOY.L", "VOD.L", "ISF.L"],
     "EU": ["SAP.DE", "ASML.AS", "MC.PA", "SIE.DE", "TTE.PA", "ALV.DE", "SAN.PA", "OR.PA", "AIR.PA", "BNP.PA", "EXS1.DE"],
     "JP": ["7203.T", "6758.T", "9984.T", "8306.T", "6861.T", "9432.T", "7974.T", "8035.T", "6501.T", "4063.T", "1306.T"],
+    "MCX": ["GOLDM", "SILVERM", "CRUDEOIL", "NATURALGAS", "COPPER", "ZINC", "ALUMINIUM", "LEAD", "GOLD", "SILVER", "CRUDEOILM"],
+    "CMDTY": ["GC=F", "SI=F", "PL=F", "HG=F", "CL=F", "BZ=F", "NG=F", "ZC=F", "ZW=F", "ZS=F", "KC=F"],
     "FX": ["EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X", "USDCAD=X", "USDCHF=X", "NZDUSD=X", "EURGBP=X", "EURJPY=X", "USDINR=X"],
 }
 SIZE = 10

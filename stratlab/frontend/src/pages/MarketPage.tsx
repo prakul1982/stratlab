@@ -50,7 +50,7 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
   }, [presets]);
   const preset = presets.find((p) => p.id === pick);
   const members: GroupMember[] = pick === "custom" ? custom : preset ? preset.symbols.map((symbol) => ({ symbol })) : [];
-  const noun = market.id === "CRYPTO" ? "coins" : market.id === "FX" ? "pairs" : "stocks";
+  const noun = market.id === "CRYPTO" ? "coins" : market.id === "FX" ? "pairs" : market.id === "MCX" || market.id === "CMDTY" ? "commodities" : "stocks";
 
   const save = async () => {
     if (members.length < 2) { notify(`Add at least two ${noun} to the group.`); return; }
@@ -67,7 +67,7 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
   return (
     <section className="card stack" style={{ gap: 14 }} aria-labelledby="group-h">
       <h2 id="group-h" className="h2 row" style={{ gap: 0 }}>Or test on a group of {noun}<Info>{HELP.groupPick}</Info></h2>
-      <p className="small muted">The same rules run on every {noun.slice(0, -1)} in the group at once, sharing one pot of capital, like a real intraday or momentum book.</p>
+      <p className="small muted">The same rules run on every {noun === "commodities" ? "commodity" : noun.slice(0, -1)} in the group at once, sharing one pot of capital, like a real intraday or momentum book.</p>
       <div className="row wrap" style={{ gap: 8 }}>
         {presets.map((p) => (
           <button key={p.id} className={`btn sm ${pick === p.id ? "" : "quiet"}`} aria-pressed={pick === p.id} onClick={() => setPick(p.id)}>{p.name} ({p.count})</button>

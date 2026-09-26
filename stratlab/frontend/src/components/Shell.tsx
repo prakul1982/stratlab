@@ -8,7 +8,7 @@ import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
 
-const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US", UK: "UK", EU: "Europe", JP: "Japan", FX: "Forex" };
+const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US", UK: "UK", EU: "Europe", JP: "Japan", FX: "Forex", MCX: "MCX", CMDTY: "Cmdty" };
 
 
 export function Shell({ children }: { children: ReactNode }) {

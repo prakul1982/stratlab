@@ -2,6 +2,18 @@
 
 ## September 2026
 
+### Commodities, Indian and global, kept apart
+- **Indian commodities (MCX):** a new market through the same Kite login.
+  - Gold, silver, crude oil and natural gas (with their mini contracts), plus copper, zinc, aluminium and lead futures.
+  - Priced in rupees and traded in whole lots, with CTT, MCX fees, stamp duty and GST.
+  - Years of daily history, stitched across expiries.
+  - Hours 9:00 am to 11:30 pm IST.
+- **Global commodities:** a separate market with COMEX, NYMEX, CBOT and ICE futures in dollars, sized per ounce or barrel, with a spread and commission estimate.
+  - Gold, silver, platinum, copper, WTI and Brent crude, natural gas, corn, wheat, soybeans, coffee, sugar, cocoa and cotton.
+  - Trades Sunday evening to Friday, New York time.
+- **Ready-made groups:** MCX mini contracts, MCX main contracts, 14 global commodities, and global metals and energy.
+- **Skipped entries are explained:** if a signal is skipped because one lot costs more than your capital allows, the verdict says so and how to fix it.
+
 ### Alerts that don't trip over missing setup
 - The Account page only offers the channels the server can use. Email appears once SMTP is set up, and Telegram once a bot token is.
 - **Send a test** reports each channel on its own, so one failing channel no longer hides the others that worked.
