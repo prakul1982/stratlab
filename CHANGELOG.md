@@ -2,6 +2,16 @@
 
 ## September 2026
 
+### Alerts that don't trip over missing setup
+- The Account page only offers the channels the server can use. Email appears once SMTP is set up, and Telegram once a bot token is.
+- **Send a test** reports each channel on its own, so one failing channel no longer hides the others that worked.
+- The daily report only counts channels that can actually deliver.
+
+### Calmer everywhere
+- **Account:** one column: Plan, Alerts (what to send, then where), On your phone, Experience, Connection check.
+- **Picking a market:** compact tiles, with the chosen market's details on one line underneath.
+- **Landing page:** now covers Ask or do anything, the strategy library, the phone app, rewriting rules in words, and exchange holidays.
+
 ### Simpler to read, just as powerful
 - **The rules are edited in blocks: Entry, Exit, Size.**
   - Every rule has a visible × to remove it, and each list has its own **+ Add** button.

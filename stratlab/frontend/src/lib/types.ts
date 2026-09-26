@@ -116,7 +116,7 @@ export interface Me {
   usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null };
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
-  alerts: { enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
+  alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
   data_online: boolean;
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
   prefs?: { level: Level | null };

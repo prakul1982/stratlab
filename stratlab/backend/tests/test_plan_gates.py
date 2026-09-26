@@ -75,11 +75,15 @@ def test_downgrade_stops_sessions_the_plan_no_longer_covers(paid):
     assert live.session_needs(SimpleNamespace(kind="single"), "free") is None
 
 
-def test_alerts_and_report_follow_the_plan(paid):
+def test_alerts_and_report_follow_the_plan(paid, monkeypatch):
+    for k, v in (("SMTP_HOST", "smtp.x"), ("SMTP_USER", "u"), ("SMTP_PASSWORD", "p")):
+        monkeypatch.setattr(settings, k, v)                      # email counts as a channel only when the server can send it
     p = lambda plan, **kw: {"plan": plan, "plan_status": "active", **kw}
     assert live.report_on(p("basic", alert_email="a@b.c")) and not live.alerts_on(p("basic", alerts_enabled=True, alert_email="a@b.c"))
     assert live.alerts_on(p("pro", alerts_enabled=True)) and not live.report_on(p("pro"))       # no channel set
     assert not live.report_on({"plan": "free", "alert_email": "a@b.c"})
+    monkeypatch.setattr(settings, "SMTP_HOST", "")
+    assert not live.report_on(p("basic", alert_email="a@b.c"))                                  # no SMTP: no channel
 
 
 def test_yearly_plans_map_back(monkeypatch):

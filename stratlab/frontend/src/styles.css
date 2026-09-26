@@ -253,6 +253,15 @@ td.num, .num { font-family: var(--mono); }
 .more-what { flex: 1; min-width: 180px; }
 .more-body { display: grid; gap: 16px; padding-top: 14px; }
 
+.mkt-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.mkt-tile { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; border: 1.5px solid var(--line);
+  background: var(--card); color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.mkt-tile:hover { border-color: var(--dash); }
+.mkt-tile.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.mkt-tile.soon { opacity: .7; }
+.mkt-tile .badge { margin-left: auto; }
+.mkt-sym { font-size: 26px; line-height: 1; width: 34px; text-align: center; flex: none; }
+
 /* ---------- page titles ---------- */
 .page-title { font: 400 clamp(32px, 4vw, 46px)/1.1 var(--serif); letter-spacing: -0.02em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
 .page-title .info { margin-left: 0; align-self: center; position: relative; top: 0.08em; }

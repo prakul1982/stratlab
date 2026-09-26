@@ -159,22 +159,18 @@ export function MarketPage() {
         <p className="muted row" style={{ fontSize: 17, gap: 0 }}>The same rules run on any market. Prices, trading hours, currency and costs switch to match it.<Info>{HELP.markets}</Info></p>
       </div>
 
-      <div className="grid4" role="radiogroup" aria-label="Market">
+      <div className="mkt-tiles" role="radiogroup" aria-label="Market">
         {markets.map((m) => (
-          <button key={m.id} role="radio" aria-checked={sel === m.id} className="card" onClick={() => setSel(m.id)}
-            style={{ textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", gap: 12, minHeight: 210,
-              border: sel === m.id ? "2px solid var(--ink)" : undefined, opacity: m.status === "soon" ? 0.72 : 1 }}>
-            <div className="spread" style={{ alignItems: "flex-start" }}>
-              <span className="serif" style={{ fontSize: 38, lineHeight: 1 }}>{m.symbol}</span>
-              <span className={`badge ${m.status}`}>{STATUS[m.status]}</span>
-            </div>
-            <div className="stack" style={{ gap: 1 }}><b style={{ fontSize: 17 }}>{m.name}</b><span className="small muted">{m.venues}</span></div>
-            <div className="mono stack" style={{ gap: 4, fontSize: 12.5, color: "var(--ink-2)", paddingTop: 10, borderTop: "1px solid var(--line)" }}>
-              <span>{m.what}</span><span>{localHours(m)}</span><span>{m.costs}</span>
-            </div>
+          <button key={m.id} role="radio" aria-checked={sel === m.id} className={`mkt-tile${sel === m.id ? " on" : ""}${m.status === "soon" ? " soon" : ""}`} onClick={() => setSel(m.id)}>
+            <span className="serif mkt-sym" aria-hidden>{m.symbol}</span>
+            <span className="stack" style={{ gap: 1, minWidth: 0 }}><b>{m.name}</b><span className="small muted">{m.venues}</span></span>
+            {m.status !== "live" && <span className={`badge ${m.status}`}>{STATUS[m.status]}</span>}
           </button>
         ))}
       </div>
+      {market && market.status !== "soon" && (
+        <p className="small muted" style={{ marginTop: -12 }}>{market.name}: {market.what} · {localHours(market)} · costs: {market.costs}</p>
+      )}
 
       {market && market.status === "soon" && (
         <div className="card dashed stack">
