@@ -238,9 +238,9 @@ class SubscribeReq(BaseModel):
 
 
 class VerifyReq(BaseModel):
-    razorpay_payment_id: str
-    razorpay_subscription_id: str
-    razorpay_signature: str
+    razorpay_payment_id: str = Field(..., min_length=1, max_length=64)
+    razorpay_subscription_id: str = Field(..., min_length=1, max_length=64)
+    razorpay_signature: str = Field(..., min_length=1, max_length=256)
 
 
 # ---------- options (live paper trading) ----------
