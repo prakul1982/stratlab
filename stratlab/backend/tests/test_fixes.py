@@ -22,10 +22,14 @@ def test_webhook_signed_with_empty_secret_is_rejected(monkeypatch):
         billing.handle_webhook(body, forged)
 
 
-def test_webhook_route_returns_400_for_forged_request(monkeypatch):
+def test_webhook_route_refuses_forged_or_unconfigured(monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_WEBHOOK_SECRET", "")
     r = TestClient(app).post("/billing/webhook", content=b"{}", headers={"X-Razorpay-Signature": "x"})
-    assert r.status_code == 400
+    assert r.status_code == 503 and "RAZORPAY_WEBHOOK_SECRET" in r.json()["detail"]     # says what's missing
+    monkeypatch.setattr(settings, "RAZORPAY_WEBHOOK_SECRET", "real")
+    r = TestClient(app).post("/billing/webhook", content=b"{}", headers={"X-Razorpay-Signature": "x"})
+    assert r.status_code == 400 and "doesn't match" in r.json()["detail"]
+    assert TestClient(app).get("/billing/webhook").json()["ok"] is True                 # a browser visit gets an explanation
 
 
 def test_cancel_needs_active_subscription():

@@ -15,6 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from kiteconnect import exceptions as kite_exc
+from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
 from . import admin, basket, billing, db, importer, universes
@@ -1168,6 +1169,14 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
         return billing.create_subscription(profile, req.plan, req.period)
     except ValueError as e:
         err(503, "billing_offline", str(e))
+    except rz_errors.BadRequestError as e:
+        # wrong keys ("Authentication failed") or a plan ID the account doesn't have. Not the user's sign-in,
+        # so never 401 here: that would sign them out of StratLab.
+        print("razorpay subscribe refused:", e)
+        err(502, "billing_setup", "Payments aren't set up correctly on the server yet. Try again later.")
+    except (rz_errors.ServerError, rz_errors.GatewayError) as e:
+        print("razorpay subscribe failed:", e)
+        err(502, "billing_unavailable", "The payment service didn't answer. Try again in a minute.")
 
 
 @app.post("/billing/verify")
@@ -1176,6 +1185,10 @@ def verify(req: VerifyReq, profile=Depends(current_profile)):
         billing.verify_checkout(profile, req.razorpay_payment_id, req.razorpay_subscription_id, req.razorpay_signature)
     except SignatureVerificationError:
         err(400, "payment_not_verified", "Payment could not be verified. If money was taken, it will be refunded by Razorpay or activated shortly.")
+    except (rz_errors.BadRequestError, rz_errors.ServerError, rz_errors.GatewayError) as e:
+        # the signature was fine but the subscription couldn't be read back; the webhook activates it anyway
+        print("razorpay verify fetch failed:", e)
+        err(502, "payment_pending", "Payment received. Your plan will switch on within a few minutes; refresh this page shortly.")
     return {"activated": True}
 
 
@@ -1188,13 +1201,25 @@ def cancel(profile=Depends(current_profile)):
     return {"cancel_at_period_end": True}
 
 
+@app.get("/billing/webhook")
+def webhook_info():
+    """Opening the webhook URL in a browser: say it's up, instead of a bare 405."""
+    return {"ok": True, "note": "This is the payment webhook. It only accepts POST requests signed by Razorpay, "
+                                "so opening it in a browser does nothing. Use Razorpay's webhook test to check it."}
+
+
 @app.post("/billing/webhook")
 async def webhook(request: Request):
     body = await request.body()
+    if not settings.RAZORPAY_WEBHOOK_SECRET:
+        print("razorpay webhook refused: RAZORPAY_WEBHOOK_SECRET isn't set on the server")
+        raise HTTPException(503, "Webhook secret isn't set on the server: add RAZORPAY_WEBHOOK_SECRET and redeploy.")
     try:
         billing.handle_webhook(body, request.headers.get("X-Razorpay-Signature", ""))
     except SignatureVerificationError:
-        raise HTTPException(400, "bad signature")
+        print("razorpay webhook refused: signature doesn't match RAZORPAY_WEBHOOK_SECRET")
+        raise HTTPException(400, "Signature doesn't match: RAZORPAY_WEBHOOK_SECRET on the server must be exactly the "
+                                 "secret typed in Razorpay's webhook settings (same mode: Test or Live).")
     except ValueError:  # malformed JSON
         raise HTTPException(400, "bad payload")
     return {"ok": True}
