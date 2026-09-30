@@ -1,4 +1,5 @@
 """StratLab API."""
+from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
 from html import escape as html_escape
@@ -18,7 +19,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, basket, billing, db, deepdive, fixtures, importer, report_card, universes
+from . import admin, basket, billing, checklist, db, deck, deepdive, fixtures, importer, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -37,6 +38,7 @@ from .intel.company import Research
 from .intel import filings
 from .intel.net import SourceError
 from .docs import Docs
+from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
@@ -911,20 +913,33 @@ def deep_base(sym: str) -> dict:
     p = research_routes.source_call(lambda: research_hub.screener.company(sym))
     try:
         items = filings_feed.announcements(sym, deepdive.DOC_DAYS)
-        doc_note = None
+        doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:
-        items, doc_note = [], public_text(str(e))
-    return {"p": p, "docs": deepdive.documents(items)[:20], "doc_note": doc_note}
+        items, doc_note, fsum = [], public_text(str(e)), None
+    return {"p": p, "docs": deepdive.documents(items)[:20], "doc_note": doc_note, "filings": fsum, "trend": price_trend(sym)}
+
+
+def price_trend(sym: str, market: str = "IN") -> dict | None:
+    """Stage and Supertrend on daily candles, or None when prices aren't available."""
+    try:
+        ids, _ = universes.resolve(markets, market, [{"symbol": sym}])
+        return scan.analyse(scan._bars(markets, ids[0])) if ids else None
+    except Exception:
+        return None
 
 
 def deep_view(sym: str, base: dict) -> dict:
     reads, card = deepdive.stored(sym), report_card.stored(sym)
     p = base["p"]
     nums = deepdive.numbers(p)
+    card_view = report_card.view(card, nums)
+    snap = screener_summary(p)
     return {"symbol": sym, "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
+            "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "roce", "roe", "debt_equity", "div_yield")},
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
             "calls": sum(d["kind"] == "transcript" for d in base["docs"]),
-            "card": report_card.view(card, nums), "card_stale": not report_card.fresh(card)}
+            "card": card_view, "card_stale": not report_card.fresh(card), "trend": base["trend"], "filings": base["filings"],
+            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view)}
 
 
 def deep_ai_allowed(profile) -> None:
@@ -964,6 +979,54 @@ def deep_dive_read(symbol: str, refresh: bool = False, profile=Depends(current_p
     deepdive.store(sym, reads)
     db.add_usage(profile["id"], "research_ai")
     return ok(deep_view(sym, base))
+
+
+_investor_pool = ThreadPoolExecutor(max_workers=4)
+
+
+@app.get("/research/investor")
+def investor_home(profile=Depends(current_profile)):
+    """Every India watchlist company: trend, sector rotation, red flags, checklist and report card on one page."""
+    need(profile, "deepdive", "The investor home")
+    syms = filings.watchlist_symbols(profile["id"])[:investor.MAX]
+    if not syms:
+        return ok({"rows": [], "as_of": None})
+    try:
+        rot = rotation.run(markets, "IN", "sectors", None, "weekly", 4)
+        quad = {r["symbol"]: {"symbol": r["symbol"], "name": r["name"], "quadrant": r["quadrant"]} for r in rot["rows"]}
+    except Exception:
+        quad = {}
+
+    def one(sym):
+        problem = None
+        try:
+            p = research_hub.screener.company(sym)
+        except Exception as e:
+            p, problem = None, public_text(str(e))[:120]
+        try:
+            fsum = filings.summarise(filings_feed.announcements(sym))
+        except Exception:
+            fsum = None
+        trend = price_trend(sym)
+        nums = deepdive.numbers(p) if p else None
+        card = report_card.view(report_card.stored(sym), nums) if nums else None
+        checks = checklist.evaluate(p, nums, fsum, trend, card) if p else None
+        sec = investor.sector_of("IN", sym)
+        sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label("IN", sec, None), "quadrant": None} if sec else None)
+        return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(sym) is not None, problem)
+
+    rows = list(_investor_pool.map(one, syms))
+    return ok({"rows": rows, "as_of": datetime.now(IST).isoformat(timespec="minutes")})
+
+
+@app.get("/research/deep/{symbol}/deck")
+def deep_dive_deck(symbol: str, profile=Depends(current_profile)):
+    """The deep dive as a PowerPoint deck: numbers, business, plans, report card and checklist, with sources."""
+    need(profile, "deepdive", "The company deck")
+    sym = research_routes.symbol_of(symbol)
+    data = deck.build(deep_view(sym, deep_base(sym)))
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    headers={"Content-Disposition": f'attachment; filename="{sym}-deep-dive.pptx"'})
 
 
 @app.post("/research/deep/{symbol}/card")

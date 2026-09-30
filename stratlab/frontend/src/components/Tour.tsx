@@ -21,7 +21,7 @@ const STEPS: Step[] = [
     body: "Look up any Indian or US company: price, valuation, growth, who owns it, news, and an AI read that ends with trading ideas you can test in one click. Themes, the market pulse and side-by-side comparisons are there too.",
     where: "\"Research\" in the sidebar menu. Press Watch on a company to keep it on your watchlist." },
   { icon: <Pulse size={34} />, title: "Tools for investors",
-    body: "Scan a group for Stage 2 stocks with the Supertrend up (ST S2), see which sectors lead or lag the market and click through to their stocks, and read your watchlist companies' filings with red flags like a QIP, pledges or resignations. Each can message you when something new turns up.",
+    body: "Scan a group for Stage 2 stocks with the Supertrend up (ST S2), see which sectors lead or lag the market and click through to their stocks, read your watchlist companies' filings with red flags like a QIP, pledges or resignations, and open any Indian company's deep dive: business, capex plans, a management report card and an investor checklist. The investor home puts your whole watchlist on one page.",
     where: "Research → Scan, Rotation and Red flags. These are Pro tools." },
   { icon: <Globe size={34} />, title: "Test on any market",
     body: "The same rules run on Indian stocks, indices and F&O, US, UK, European and Japanese stocks, forex, crypto, or any market you have a CSV for. Prices, hours, currency and costs switch to match.",

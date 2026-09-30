@@ -14,11 +14,14 @@ type Source = { title: string; at: string; url: string; kind: string } | null;
 type Target = { metric: string; low: number | null; high: number | null; period: string | null; what: string; quote: string; said_at: string;
   source: { title: string; at: string; url: string }; actual: number | null; unit: string; result: "met" | "missed" | "pending" | "unchecked";
   revised?: { low: number | null; high: number | null; at: string; quote: string } | null };
+export type CheckState = "pass" | "watch" | "fail" | "na";
+type Checklist = { checks: { group: string; label: string; state: CheckState; value: string; rule: string }[];
+  counts: Record<CheckState, number>; scored: number };
 type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; score: number | null;
   read: { kind: string; at: string; title: string }[]; problems: string[]; at: string };
 export interface DeepView {
   symbol: string; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
-  calls: number; card: Card | null; card_stale: boolean;
+  calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
   numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null;
     growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null } };
   reads: null | {
@@ -82,6 +85,27 @@ function ReportCard({ c }: { c: Card }) {
   );
 }
 
+export const CHECK: Record<CheckState, [string, string]> = { pass: ["Pass", "pass"], watch: ["Watch", "warn"], fail: ["Fail", "fail"], na: ["No data", "skip"] };
+
+function ChecklistPanel({ c }: { c: Checklist }) {
+  const groups = [...new Set(c.checks.map((x) => x.group))];
+  return (
+    <Panel title="Investor checklist" span="full" info="Fixed rules on the reported numbers, the price trend, the filings and the management report card. Each rule is written under its check. A screen to help you look closer, not a recommendation.">
+      <p className="small" style={{ margin: 0 }}><b>{c.counts.pass} pass</b> · {c.counts.watch} watch · {c.counts.fail} fail{c.counts.na ? ` · ${c.counts.na} without data` : ""}</p>
+      <div className="checklist">{groups.map((g) => (
+        <div key={g} className="check-group">
+          <span className="eyebrow">{g}</span>
+          {c.checks.filter((x) => x.group === g).map((x) => (
+            <div key={x.label} className="check-row">
+              <div className="stack" style={{ gap: 2, minWidth: 0 }}><span className="small">{x.label}</span><span className="tiny muted">{x.rule}</span></div>
+              <span className="small num" style={{ textAlign: "right" }}>{x.value}</span>
+              <span className={`badge ${CHECK[x.state][1]}`}>{CHECK[x.state][0]}</span>
+            </div>))}
+        </div>))}</div>
+    </Panel>
+  );
+}
+
 function SourceLink({ s }: { s: Source }) {
   return s ? <a className="link tiny" href={s.url} target="_blank" rel="noopener noreferrer" title={s.title}>{KIND[s.kind] ?? "Filing"}, {day(s.at)} ↗</a> : null;
 }
@@ -95,6 +119,17 @@ export function DeepDivePage() {
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [carding, setCarding] = useState(false);
+  const [decking, setDecking] = useState(false);
+
+  const downloadDeck = async () => {
+    setDecking(true);
+    try {
+      const r = await api<Response>(`/research/deep/${encodeURIComponent(sym)}/deck`, { raw: true });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await r.blob()); a.download = `${sym}-deep-dive.pptx`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (e) { fail(e); } finally { setDecking(false); }
+  };
 
   useEffect(() => {
     if (!pro) return;
@@ -133,6 +168,10 @@ export function DeepDivePage() {
         <span className="eyebrow">Deep dive · India · {sym}</span>
         <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{v?.name ?? sym}: business, capex and growth</h1>
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice.</p>
+        {v && <div className="row wrap" style={{ gap: 10 }}>
+          <button className="btn quiet sm" disabled={decking} onClick={downloadDeck} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking ? "Making the deck…" : "Download as slides (PowerPoint)"}</button>
+          <Link className="btn quiet sm" to="/research/investor">Investor home →</Link>
+        </div>}
       </div>
       {!pro && <div className="banner"><span>The deep dive is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       {pro && error && <div className="card"><p className="muted">{error}</p></div>}
@@ -157,6 +196,8 @@ export function DeepDivePage() {
               </table></div>
             )}
           </Panel>
+
+          {v.checklist && <ChecklistPanel c={v.checklist} />}
 
           <Panel title="Capex and cash" span="full" info="Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ₹ crore.">
             {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>About <b>₹{cr(n.capex_3y_total)} crore</b> spent on capex over the last three years. Figures in ₹ crore.</p>}
