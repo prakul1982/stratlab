@@ -43,6 +43,7 @@ const PulsePage = page(research, "PulsePage");
 const ComparePage = page(research, "ComparePage");
 const WatchlistPage = page(research, "WatchlistPage");
 const ScanPage = page(research, "ScanPage");
+const DeepDivePage = page(() => import("./pages/DeepDive"), "DeepDivePage");
 const RotationPage = page(research, "RotationPage");
 const FilingsPage = page(research, "FilingsPage");
 const CompanyPage = page(research, "CompanyPage");
@@ -120,6 +121,7 @@ function Routed() {
         <Route path="/research/scan" element={<ScanPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
+        <Route path="/research/IN/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/:region/:symbol" element={<CompanyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

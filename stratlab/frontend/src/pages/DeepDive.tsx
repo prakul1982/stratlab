@@ -1,0 +1,183 @@
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { api } from "../lib/api";
+import { useApp } from "../lib/app";
+import { pct, signClass } from "../lib/format";
+import { Panel, ResearchNav, TrendBars } from "../components/Research";
+import { Loading } from "../components/ui";
+
+type Year = { year: string; sales: number | null; profit: number | null; opm: number | null; capex: number | null;
+  capex_pct_sales: number | null; cfo: number | null; cfi: number | null; fcf: number | null; debt: number | null };
+type Quarter = { quarter: string; sales: number | null; profit: number | null; opm: number | null; sales_yoy: number | null };
+type Doc = { kind: string; at: string; title: string; url: string };
+type Source = { title: string; at: string; url: string; kind: string } | null;
+export interface DeepView {
+  symbol: string; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
+  numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null;
+    growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null } };
+  reads: null | {
+    at: string; problems: string[]; read: { kind: string; at: string; title: string }[];
+    business: null | { summary: string; customers: string; drivers: string[]; strengths: string[]; risks: string[];
+      segments: { name: string; share_pct: number | null; what: string }[]; sources: Source[] };
+    plans: null | { capex: { what: string; amount: string | null; timeline: string | null; status: string; quote: string; source: Source }[];
+      outlook: { statement: string; quote: string; source: Source }[]; sources: Source[] };
+  };
+}
+
+const cr = (v: number | null | undefined) => (v == null ? "–" : Math.round(v).toLocaleString("en-IN"));
+const pc = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);
+const day = (s: string) => new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report" };
+
+function Stat({ label, v }: { label: string; v: number | null }) {
+  return <div className="stat"><span className="tiny muted">{label}</span><b className={`num ${signClass(v)}`}>{v == null ? "–" : pct(v)}</b></div>;
+}
+
+function SourceLink({ s }: { s: Source }) {
+  return s ? <a className="link tiny" href={s.url} target="_blank" rel="noopener noreferrer" title={s.title}>{KIND[s.kind] ?? "Filing"}, {day(s.at)} ↗</a> : null;
+}
+
+export function DeepDivePage() {
+  const { symbol = "" } = useParams();
+  const sym = symbol.toUpperCase();
+  const { me, fail, notify } = useApp();
+  const pro = !!me?.plan_info?.features?.deepdive;
+  const [v, setV] = useState<DeepView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+
+  useEffect(() => {
+    if (!pro) return;
+    let live = true;
+    setV(null); setError(null);
+    api<DeepView>(`/research/deep/${encodeURIComponent(sym)}`).then((x) => live && setV(x)).catch((e) => live && setError((e as Error).message));
+    return () => { live = false; };
+  }, [sym, pro]);
+
+  const readDocs = async (refresh = false) => {
+    setReading(true);
+    try {
+      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/read${refresh ? "?refresh=true" : ""}`, { method: "POST" });
+      setV(x);
+      if (x.reads?.problems?.length) notify(`Read with ${x.reads.problems.length} document${x.reads.problems.length === 1 ? "" : "s"} skipped.`);
+    } catch (e) { fail(e); } finally { setReading(false); }
+  };
+
+  const n = v?.numbers;
+  const years = (n?.years ?? []).filter((y) => y.sales != null);
+  const b = v?.reads?.business, p = v?.reads?.plans;
+  return (
+    <div className="stack" style={{ gap: 22 }}>
+      <ResearchNav region="IN" />
+      <div className="stack" style={{ gap: 8 }}>
+        <Link className="link small" to={`/research/IN/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
+        <span className="eyebrow">Deep dive · India · {sym}</span>
+        <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{v?.name ?? sym}: business, capex and growth</h1>
+        <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice.</p>
+      </div>
+      {!pro && <div className="banner"><span>The deep dive is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
+      {pro && error && <div className="card"><p className="muted">{error}</p></div>}
+      {pro && !v && !error && <Loading label="Reading the reported numbers" />}
+      {v && n && (
+        <>
+          <Panel title="Growth and margins" span="full" info="Compound annual growth from the reported annual sales and net profit. OPM is operating profit as a share of sales.">
+            <div className="stat-row">
+              <Stat label="Sales growth a year, last 3 years" v={n.growth.sales_cagr_3y} /><Stat label="Sales growth a year, last 5 years" v={n.growth.sales_cagr_5y} />
+              <Stat label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} /><Stat label="Profit growth a year, last 5 years" v={n.growth.profit_cagr_5y} />
+            </div>
+            <div className="rs-grid">
+              <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.sales as number }))} label="Sales" unit={n.unit} />
+              <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.profit as number }))} label="Net profit" unit={n.unit} tone="blue" />
+            </div>
+            {n.quarters.length > 0 && (
+              <div className="table-wrap"><table>
+                <thead><tr><th>Quarter</th><th className="num">Sales</th><th className="num">vs a year ago</th><th className="num">Operating margin</th><th className="num">Net profit</th></tr></thead>
+                <tbody>{n.quarters.slice(-8).map((q) => (
+                  <tr key={q.quarter}><td>{q.quarter}</td><td className="num">{cr(q.sales)}</td><td className={`num ${signClass(q.sales_yoy)}`}>{q.sales_yoy == null ? "–" : pct(q.sales_yoy)}</td>
+                    <td className="num">{pc(q.opm)}</td><td className="num">{cr(q.profit)}</td></tr>))}</tbody>
+              </table></div>
+            )}
+          </Panel>
+
+          <Panel title="Capex and cash" span="full" info="Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ₹ crore.">
+            {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>About <b>₹{cr(n.capex_3y_total)} crore</b> spent on capex over the last three years. Figures in ₹ crore.</p>}
+            <div className="table-wrap"><table>
+              <thead><tr><th>Year</th><th className="num">Sales</th><th className="num">Capex</th><th className="num">Capex / sales</th><th className="num">Cash from operations</th><th className="num">Free cash flow</th><th className="num">Debt</th></tr></thead>
+              <tbody>{[...years].reverse().slice(0, 8).map((y) => (
+                <tr key={y.year}><td>{y.year}</td><td className="num">{cr(y.sales)}</td><td className="num">{cr(y.capex)}</td><td className="num">{pc(y.capex_pct_sales)}</td>
+                  <td className="num">{cr(y.cfo)}</td><td className={`num ${signClass(y.fcf)}`}>{cr(y.fcf)}</td><td className="num">{cr(y.debt)}</td></tr>))}</tbody>
+            </table></div>
+          </Panel>
+
+          <section className="card stack" style={{ gap: 12 }}>
+            <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
+              <div className="stack" style={{ gap: 2 }}>
+                <h2 className="h3">From the company's own documents</h2>
+                <span className="small muted">{v.reads ? `Read ${day(v.reads.at)}: ${v.reads.read.map((d) => `${KIND[d.kind] ?? "Filing"}, ${day(d.at)}`).join(" · ") || "the company profile"}` : `${v.documents.length} presentations and call transcripts found in the last two years.`}</span>
+              </div>
+              <button className="btn sm" disabled={reading || (!v.documents.length && !v.about)} onClick={() => readDocs(!!v.reads)}>
+                {reading ? "Reading… about a minute" : v.reads ? (v.reads_stale ? "Read the newest documents" : "Read again") : "Read the latest presentation and calls"}</button>
+            </div>
+            {v.doc_note && <p className="tiny muted" style={{ margin: 0 }}>Filings: {v.doc_note}</p>}
+            {reading && <Loading label="Reading the latest investor presentation and earnings calls" />}
+            {!v.reads && !reading && <p className="small muted" style={{ margin: 0 }}>The business model, capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
+            {v.reads?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.reads.problems.join(" · ")}</p> : null}
+          </section>
+
+          {b && (
+            <Panel title="Business model" span="full">
+              <p style={{ margin: 0 }}>{b.summary}</p>
+              {b.segments.length > 0 && (
+                <div className="stack" style={{ gap: 8 }}>
+                  {b.segments.map((s) => (
+                    <div key={s.name} className="seg-row">
+                      <div className="spread small"><b>{s.name}</b><span className="muted">{s.share_pct != null ? `${s.share_pct.toFixed(0)}% of revenue` : ""}</span></div>
+                      {s.share_pct != null && <div className="seg-bar"><i style={{ width: `${Math.min(100, s.share_pct)}%` }} /></div>}
+                      {s.what && <span className="tiny muted">{s.what}</span>}
+                    </div>))}
+                </div>
+              )}
+              <div className="rs-grid">
+                {b.customers && <div className="stack" style={{ gap: 4 }}><b className="small">Customers</b><span className="small">{b.customers}</span></div>}
+                {b.drivers.length > 0 && <div className="stack" style={{ gap: 4 }}><b className="small">What drives revenue</b><ul className="bullets small">{b.drivers.map((x) => <li key={x}>{x}</li>)}</ul></div>}
+                {b.strengths.length > 0 && <div className="stack" style={{ gap: 4 }}><b className="small">Strengths it points to</b><ul className="bullets small">{b.strengths.map((x) => <li key={x} className="pos-dot">{x}</li>)}</ul></div>}
+                {b.risks.length > 0 && <div className="stack" style={{ gap: 4 }}><b className="small">Risks it names</b><ul className="bullets small">{b.risks.map((x) => <li key={x} className="neg-dot">{x}</li>)}</ul></div>}
+              </div>
+              <div className="row wrap" style={{ gap: 10 }}>{b.sources.map((s, i) => <SourceLink key={i} s={s} />)}</div>
+            </Panel>
+          )}
+
+          {p && (p.capex.length > 0 || p.outlook.length > 0) && (
+            <Panel title="Capex and growth plans, in management's words" span="full">
+              {p.capex.length > 0 && (
+                <div className="table-wrap"><table>
+                  <thead><tr><th>Plan</th><th>Amount</th><th>When</th><th>Status</th><th>Source</th></tr></thead>
+                  <tbody>{p.capex.map((c, i) => (
+                    <tr key={i}><td>{c.what}{c.quote && <div className="tiny muted">"{c.quote}"</div>}</td><td>{c.amount ?? "–"}</td><td>{c.timeline ?? "–"}</td>
+                      <td><span className={`badge ${c.status === "done" ? "pass" : c.status === "under way" ? "next" : "skip"}`}>{c.status}</span></td><td><SourceLink s={c.source} /></td></tr>))}</tbody>
+                </table></div>
+              )}
+              {p.outlook.length > 0 && (
+                <div className="stack" style={{ gap: 8 }}>
+                  <b className="small">Outlook</b>
+                  {p.outlook.map((o, i) => (
+                    <div key={i} className="quote-row"><span className="small">{o.statement}</span>{o.quote && <span className="tiny muted">"{o.quote}"</span>}<SourceLink s={o.source} /></div>))}
+                </div>
+              )}
+            </Panel>
+          )}
+
+          {v.documents.length > 0 && (
+            <Panel title="Documents" span="full">
+              <div className="filings">{v.documents.map((d) => (
+                <div key={d.url} className="filing"><span className="tiny muted mono">{day(d.at)}</span>
+                  <div className="stack" style={{ gap: 2, minWidth: 0 }}><span className="small">{d.title}</span><span className="tiny muted">{KIND[d.kind] ?? d.kind}</span></div>
+                  <a className="link tiny" href={d.url} target="_blank" rel="noopener noreferrer">Open ↗</a></div>))}</div>
+            </Panel>
+          )}
+          <p className="small muted" style={{ maxWidth: "80ch" }}>Numbers are the company's reported figures; capex and free cash flow are estimated from them. The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it. Nothing here is investment advice.</p>
+        </>
+      )}
+    </div>
+  );
+}

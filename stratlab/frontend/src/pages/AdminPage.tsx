@@ -100,7 +100,10 @@ export function AdminPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [promoDays, setPromoDays] = useState(10);
   const [billingCheck, setBillingCheck] = useState<BillingCheck | null>(null);
-  const [filingCheck, setFilingCheck] = useState<{ ok: boolean; symbol: string; count?: number; error?: string; latest?: { at: string; label: string; subject: string }[] } | null>(null);
+  const [filingCheck, setFilingCheck] = useState<{ ok: boolean; symbol: string; count?: number; error?: string; latest?: { at: string; label: string; subject: string }[];
+    documents_found?: number; document?: { ok: boolean; title: string; kind: string; chars?: number; error?: string } | null } | null>(null);
+
+  const [fixtureNote, setFixtureNote] = useState<string | null>(null);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -150,6 +153,15 @@ export function AdminPage() {
     });
   };
 
+  const saveFixture = () => run("fixture", async () => {
+    setFixtureNote("Collecting about two years of prices. This takes a minute or two…");
+    const r = await api<Response>("/admin/fixture/prices", { method: "POST", raw: true });
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "real_prices.json.gz"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    setFixtureNote(`Saved real_prices.json.gz: ${r.headers.get("X-Instruments") ?? "?"} instruments, ${Math.round(blob.size / 1024)} KB${Number(r.headers.get("X-Problems")) ? `, ${r.headers.get("X-Problems")} skipped` : ""}. Upload it to GitHub at stratlab/backend/tests/fixtures/real_prices.json.gz.`);
+  });
   const checkFilings = () => run("filings", async () => { setFilingCheck(await api("/admin/filings/check", { method: "POST" })); });
   const checkBilling = () => run("billing", async () => { setBillingCheck(await api<BillingCheck>("/admin/billing/check", { method: "POST" })); });
   const startPromo = () => {
@@ -244,10 +256,19 @@ export function AdminPage() {
                 )}
               </div>
               <div className="stack" style={{ gap: 8, marginTop: 6 }}>
+                <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "fixture"} onClick={saveFixture}
+                  title="Real daily prices for the test suite, so checks run on real market behaviour. Prices only: no user data.">{busy === "fixture" ? "Collecting prices…" : "Save real prices for testing"}</button>
+                {fixtureNote && <p className="tiny muted" style={{ margin: 0 }}>{fixtureNote}</p>}
+              </div>
+              <div className="stack" style={{ gap: 8, marginTop: 6 }}>
                 <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "filings"} onClick={checkFilings}>{busy === "filings" ? "Asking the exchange…" : "Check filings feed"}</button>
                 {filingCheck && <Status ok={filingCheck.ok} label={`Exchange filings (${filingCheck.symbol})`}
                   detail={filingCheck.ok ? `${filingCheck.count} filings in the last year. Latest: ${(filingCheck.latest ?? []).map((l) => `${l.at.slice(0, 10)} ${l.label}`).join("; ") || "none"}`
                     : `${filingCheck.error} The exchange sometimes blocks cloud servers; if this keeps failing, the BSE feed can be added as a fallback.`} />}
+                {filingCheck?.ok && <Status ok={!!filingCheck.document?.ok} warn={!filingCheck.document} label="Company documents (deep dive)"
+                  detail={!filingCheck.document ? `No presentation or call transcript among ${filingCheck.symbol}'s filings to try.`
+                    : filingCheck.document.ok ? `Read "${filingCheck.document.title}" (${filingCheck.document.kind}): ${filingCheck.document.chars?.toLocaleString()} characters of text. ${filingCheck.documents_found} documents found.`
+                    : `Couldn't read "${filingCheck.document.title}": ${filingCheck.document.error}`} />}
               </div>
             </section>
           </div>
