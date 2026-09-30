@@ -142,6 +142,7 @@ export function CompanyPage() {
           {c.testable && <button className="btn blue sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
+          {region === "IN" && <Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
           {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
           {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
         </div>

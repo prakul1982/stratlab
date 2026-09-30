@@ -18,7 +18,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, basket, billing, db, importer, universes
+from . import admin, basket, billing, db, deepdive, fixtures, importer, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -36,6 +36,7 @@ from .intel import routes as research_routes
 from .intel.company import Research
 from .intel import filings
 from .intel.net import SourceError
+from .docs import Docs
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
@@ -901,6 +902,63 @@ def filings_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
     return {"alerts": req.on}
 
 
+# ---------- company deep dive: business, capex and growth (Pro, India) ----------
+deep_docs = Docs()
+
+
+def deep_base(sym: str) -> dict:
+    """Numbers and the list of readable documents for one company (no AI)."""
+    p = research_routes.source_call(lambda: research_hub.screener.company(sym))
+    try:
+        items = filings_feed.announcements(sym, deepdive.DOC_DAYS)
+        doc_note = None
+    except SourceError as e:
+        items, doc_note = [], public_text(str(e))
+    return {"p": p, "docs": deepdive.documents(items)[:20], "doc_note": doc_note}
+
+
+def deep_view(sym: str, base: dict) -> dict:
+    reads = deepdive.stored(sym)
+    p = base["p"]
+    return {"symbol": sym, "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": deepdive.numbers(p),
+            "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads)}
+
+
+@app.get("/research/deep/{symbol}")
+def deep_dive(symbol: str, profile=Depends(current_profile)):
+    """Growth, margins, capex and cash flow from the reported numbers, plus any stored read of the company's documents."""
+    need(profile, "deepdive", "The company deep dive")
+    sym = research_routes.symbol_of(symbol)
+    return ok(deep_view(sym, deep_base(sym)))
+
+
+@app.post("/research/deep/{symbol}/read")
+def deep_dive_read(symbol: str, refresh: bool = False, profile=Depends(current_profile)):
+    """Read the latest investor presentation and call transcripts with AI: business model, capex and growth plans."""
+    need(profile, "deepdive", "The company deep dive")
+    sym = research_routes.symbol_of(symbol)
+    base = deep_base(sym)
+    have = deepdive.stored(sym)
+    if deepdive.fresh(have) and not refresh:
+        return ok(deep_view(sym, base))
+    if not base["docs"] and not base["p"].get("about"):
+        err(404, "no_documents", "No investor presentation or call transcript was found for this company in the last two years.")
+    since = (datetime.now(IST) - timedelta(days=1)).isoformat()
+    if db.count_usage(profile["id"], "research_ai", since) >= settings.RESEARCH_AI_PER_DAY:
+        err(429, "research_ai_limit", f"You've used {settings.RESEARCH_AI_PER_DAY} fresh AI reads today. Stored reads still work; try again tomorrow.")
+    p = base["p"]
+    try:
+        reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic))
+    except AIBusy as e:
+        err(503, "ai_busy", str(e))
+    except AIError as e:
+        err(422, "ai_failed", str(e))
+    reads["problems"] = [public_text(x) for x in reads["problems"]]
+    deepdive.store(sym, reads)
+    db.add_usage(profile["id"], "research_ai")
+    return ok(deep_view(sym, base))
+
+
 # ---------- the public strategy library ----------
 @app.post("/notebooks/{nid}/experiments/{version}/library")
 def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(current_profile)):
@@ -1434,6 +1492,19 @@ def admin_billing_check(_=Depends(admin.admin_profile)):
     return billing.check_setup()
 
 
+@app.post("/admin/fixture/prices")
+def admin_fixture_prices(_=Depends(admin.admin_profile)):
+    """About two years of real daily prices (indices, sectors, the ready-made groups) as one gzipped JSON file, for
+    the test suite. Prices only: no user data and no credentials. Takes a minute or two (the data sources' rate limits)."""
+    snap = fixtures.build(markets)
+    count = sum(len(v) for v in snap["markets"].values())
+    if not count:
+        err(503, "data_offline", "No market data came back: " + "; ".join(snap["problems"][:3]))
+    return Response(content=fixtures.pack(snap), media_type="application/gzip",
+                    headers={"Content-Disposition": 'attachment; filename="real_prices.json.gz"', "X-Instruments": str(count),
+                             "X-Problems": str(len(snap["problems"])), "Access-Control-Expose-Headers": "X-Instruments, X-Problems"})
+
+
 @app.post("/admin/filings/check")
 def admin_filings_check(symbol: str = "RELIANCE", _=Depends(admin.admin_profile)):
     """Whether the exchange's filings feed answers from this server, with the latest few filings for one stock."""
@@ -1443,8 +1514,16 @@ def admin_filings_check(symbol: str = "RELIANCE", _=Depends(admin.admin_profile)
         items = filings_feed.announcements(sym)
     except SourceError as e:
         return {"ok": False, "symbol": sym, "error": str(e)}
+    doc = None
+    found = deepdive.documents(filings_feed.announcements(sym, deepdive.DOC_DAYS))
+    if found:
+        try:
+            text = deep_docs.text(found[0]["url"])
+            doc = {"ok": True, "title": found[0]["title"], "kind": found[0]["kind"], "chars": len(text), "start": text[:160]}
+        except SourceError as e:
+            doc = {"ok": False, "title": found[0]["title"], "kind": found[0]["kind"], "error": str(e)}
     return {"ok": True, "symbol": sym, "count": len(items), "latest": [{k: i[k] for k in ("at", "label", "subject")} for i in items[:3]],
-            "alerts": filing_alerts_job.status}
+            "alerts": filing_alerts_job.status, "document": doc, "documents_found": len(found)}
 
 
 @app.post("/admin/promo")

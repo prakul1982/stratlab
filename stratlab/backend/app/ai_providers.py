@@ -22,6 +22,7 @@ from .config import settings
 # (Cerebras, Mistral) and keeps Groq's allowance for the quick jobs. Anthropic is paid, so always last.
 DEFAULT_ORDER = ["groq", "cerebras", "gemini", "mistral", "sambanova", "openrouter", "anthropic"]
 RESEARCH_ORDER = ["cerebras", "mistral", "gemini", "sambanova", "groq", "openrouter", "anthropic"]
+LONG_ORDER = ["gemini", "mistral", "cerebras", "groq", "sambanova", "openrouter", "anthropic"]   # long documents: biggest context first
 
 OPENAI_STYLE = {
     "groq": {"base": "https://api.groq.com/openai/v1", "label": "Groq"},
@@ -80,11 +81,11 @@ def order(kind: str = "quick") -> list[str]:
     """Providers to try, in order, for a "quick" job (the idea builder) or a "research" one (long reads).
     AI_PROVIDERS / AI_PROVIDERS_RESEARCH override the defaults; research falls back to AI_PROVIDERS."""
     raw = (settings.AI_PROVIDERS or "auto").strip().lower()
-    if kind == "research":
+    if kind in ("research", "long"):
         own = (settings.AI_PROVIDERS_RESEARCH or "auto").strip().lower()
         raw = own if own != "auto" else raw
     if raw == "auto":
-        names = list(RESEARCH_ORDER if kind == "research" else DEFAULT_ORDER)
+        names = list(LONG_ORDER if kind == "long" else RESEARCH_ORDER if kind == "research" else DEFAULT_ORDER)
         if settings.AI_PROVIDER == "anthropic":  # older setting: Claude first
             names.remove("anthropic")
             names.insert(0, "anthropic")

@@ -50,6 +50,8 @@ export const FEATURES: Feature[] = [
     words: "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors", home: true },
   { id: "filings", title: "Filings and red flags", what: "Fund raises (QIP), pledges, resignations and defaults your watchlist companies filed, with an evening alert.", to: "/research/filings",
     words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true },
+  { id: "deepdive", title: "Company deep dive", what: "Growth, margins, capex and cash for an Indian company, plus its business model and plans read from its own presentations and calls.", to: "/research",
+    words: "deep dive business model segments capex capacity expansion growth margins cash flow free cash flow presentation concall transcript management guidance" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },
   { id: "account", title: "Account and connection check", what: "Your plan, usage and a check of every data and AI service.", to: "/account",
     words: "account settings usage connection check theme" },

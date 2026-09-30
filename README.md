@@ -7,7 +7,7 @@
 
 **Test your trading idea before your money does.**
 
-Research a company, describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex, crypto or commodities (MCX and global), then paper trade it on live prices with fake money. For investors: a Stage 2 + Supertrend scan, sector rotation and exchange filings with red flags.
+Research a company, describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex, crypto or commodities (MCX and global), then paper trade it on live prices with fake money. For investors: a Stage 2 + Supertrend scan, sector rotation, exchange filings with red flags, and a deep dive into a company's business, capex and plans from its own documents.
 
 ### [🌐 stratlab.studio](https://stratlab.studio)
 
@@ -61,6 +61,7 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
   - **Stage 2 + Supertrend scan (ST S2):** which stocks in your watchlist or a ready-made group are in Weinstein's Stage 2 with the Supertrend up, fresh signals first. Backtest the ready-made ST S2 rules on the whole group in one click, and get a message after each close when a watchlist stock lines up.
   - **Sector rotation:** every sector against the market, as Leading, Weakening, Lagging or Improving, with the trail it took and a plain-language summary. Click a sector to see its biggest stocks against that sector. NSE sectors, NSE size and style indices, S&P 500 sectors and US industries.
   - **Filings and red flags (India):** what a company told the exchange: fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades, each linked to the filing. A 3-month summary per watchlist stock and an evening alert.
+  - **Company deep dive (India):** ten years of sales, profit, margins, capex and free cash flow, then the business model and the capex and growth plans read from the company's own investor presentations and earnings-call transcripts, each plan linked to the document it came from.
 - **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
 - **Import any strategy.** One **Import a strategy** page takes a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words. It sets up the right thing: a notebook for rules on one instrument, a group notebook for strategies that scan a list (like an F&O momentum scanner), or an Options structure. Anything that can't be carried over is listed.
 - **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock. A single instrument, a whole group with shared capital, or an option structure. Sessions keep running until you stop them. With alerts on, each trade comes as a phone notification, on Telegram or by email, plus a short report a few minutes after each market closes.
@@ -134,6 +135,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Find Stage 2 stocks with the Supertrend up | **Research → Scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
 | See which sectors are leading | **Research → Rotation**: sectors, size and style indices or US industries, weekly or daily, with a trail and **Animate**; **Stocks →** on a sector shows its biggest stocks against it (Pro) |
 | Check a company's filings for red flags | **Research → Red flags** for your India watchlist, or **Filings and red flags** on any Indian company page; tick the box for an evening alert (Pro) |
+| Understand a company's business and its capex plans | On any Indian company page, **Deep dive: business, capex, management**; **Read the documents** has the AI read its latest presentation and call transcripts (Pro) |
 | Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
 | Bring a strategy you already have | **Import a strategy** in the sidebar (or on New notebook): it sets up a notebook, a group notebook or an Options structure depending on what you bring; a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
 | Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
@@ -195,7 +197,7 @@ flowchart LR
     API -- "US, UK, EU, Japan, forex, global commodities; charts" --> YF["Market data API"]
     API -- "research: US companies" --> FH["Company data API"]
     API -- "research: Indian fundamentals, news" --> SC["Fundamentals, news, Wikipedia"]
-    API -- "India: company filings" --> EX["Exchange announcements"]
+    API -- "India: company filings, presentations, call transcripts" --> EX["Exchange announcements and documents"]
     API -- "subscriptions" --> RZP["Razorpay"]
     RZP -- "webhooks" --> API
     API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini, Mistral,<br/>SambaNova, OpenRouter, Claude"]
@@ -225,6 +227,9 @@ stratlab/
 │   │   ├── data/             market data: markets list, one provider per market (India, MCX, crypto, US, UK, EU, Japan, forex, global commodities), holidays
 │   │   ├── intel/            research: company data, fundamentals, news, Wikipedia, AI reads, exchange filings and red flags, /research API
 │   │   ├── scan.py           Stage 2 + Supertrend (ST S2) scans, the ready-made ST S2 strategy and its daily alert
+│   │   ├── deepdive.py       company deep dive: 10-year numbers and capex, AI reads of presentations and call transcripts
+│   │   ├── docs.py           downloads exchange-filed PDFs (exchange hosts only, size-capped) and cuts them to the passages that matter
+│   │   ├── fixtures.py       the admin's real-price snapshot for tests
 │   │   ├── rotation.py       sector rotation: relative strength and momentum against a benchmark, with trails
 │   │   ├── sector_members.py the biggest stocks in each sector index and sector fund, for drilling into a sector
 │   │   ├── research.py       load candles, run an experiment, keep a compact record
@@ -290,7 +295,7 @@ Paid plans switch on once Razorpay's keys and plan IDs are set; until then every
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
 | Markets | All, except Indian F&O | same | + Indian F&O |
 | Export rules and trades | – | – | ✓ |
-| ST S2 scan, sector rotation, filings and red flags | – | – | ✓ |
+| ST S2 scan, sector rotation, filings and red flags, company deep dive | – | – | ✓ |
 | Research AI reads | 60 / day | 60 / day | 60 / day |
 | Share cards and public links | ✓ | ✓ | ✓ |
 

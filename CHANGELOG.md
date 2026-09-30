@@ -2,6 +2,14 @@
 
 ## September 2026
 
+### Company deep dive
+- **Deep dive on every Indian company page (Pro):** ten years of sales, profit and operating margin, sales and profit growth over 3 and 5 years, the last 12 quarters with growth on a year earlier, and a capex and cash table (capex, capex as a share of sales, cash from operations, free cash flow, debt). Capex is the change in fixed assets and work in progress plus depreciation.
+- **From the company's own documents:** the AI reads its latest investor presentation and two latest earnings-call transcripts from the exchange, then lays out the business model (segments and their share) and every capex and growth plan (what, how much, by when, status) with the management's own words and a link to the document. Facts only, never advice; kept for a week, and counts toward the daily research AI limit.
+- **Admin → Check filings feed** now also tries to read one company document from the server.
+
+### Real prices for tests
+- **Admin → Save real prices for testing** downloads about two years of real daily prices (benchmarks, every sector index, the ready-made groups and a few sectors' stocks). Saved as `stratlab/backend/tests/fixtures/real_prices.json.gz`, it makes the test suite also check the calculations on real market data. Prices only: no user data.
+
 ### Sector rotation
 - **Research → Rotation (Pro):** every sector against the market as **Leading**, **Weakening**, **Lagging** or **Improving**, with the trail it took (1 to 12 weekly or daily points) and an **Animate** replay. A plain-language summary lists which sectors sit in each quadrant and which moved into Leading.
 - **More to compare:** NSE sector indices and NSE size and style indices (Next 50, Midcap 100, Smallcap 100, Momentum 30, Quality 30, Alpha 50…) against the Nifty 500; S&P 500 sectors and US industries (semiconductors, software, biotech, regional banks, defense, gold miners, homebuilders…) against SPY; or any scan group and your watchlist.
