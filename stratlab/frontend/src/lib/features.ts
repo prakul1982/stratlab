@@ -48,6 +48,8 @@ export const FEATURES: Feature[] = [
     words: "scan screener stage 2 stage two supertrend st s2 weinstein signals alert" },
   { id: "rotation", title: "Sector rotation", what: "Which sectors (or stocks) are leading, weakening, lagging or improving against the market, with their recent trail.", to: "/research/rotation",
     words: "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors" },
+  { id: "filings", title: "Filings and red flags", what: "What your watchlist companies filed with the exchange: fund raises (QIP), pledges, resignations, defaults, with an evening alert.", to: "/research/filings",
+    words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },
   { id: "account", title: "Account and connection check", what: "Your plan, usage and a check of every data and AI service.", to: "/account",
     words: "account settings usage connection check theme" },

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 export type Quadrant = "leading" | "weakening" | "lagging" | "improving";
 export interface RotationRow {
   id: string; symbol: string; name: string; points: { t: string; x: number; y: number }[];
-  x: number; y: number; quadrant: Quadrant; heading: number | null; moved: Quadrant | null; core?: boolean;
+  x: number; y: number; quadrant: Quadrant; heading: number | null; moved: Quadrant | null; core?: boolean; stocks?: number;
 }
 
 export const QUADRANTS: { id: Quadrant; name: string; says: string }[] = [

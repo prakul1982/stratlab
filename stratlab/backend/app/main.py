@@ -34,6 +34,8 @@ from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research
+from .intel import filings
+from .intel.net import SourceError
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
@@ -79,6 +81,16 @@ def _scan_alert_ok(profile: dict) -> bool:
 
 scan_alerts_job = scan.Alerts(markets, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                               can_alert=_scan_alert_ok)
+
+
+def _filing_alert_ok(profile: dict) -> bool:
+    from .plans import access_plan
+    return allows(access_plan(profile), "filings") and bool(alerts.jobs_for(profile, "", ""))
+
+
+filings_feed = filings.NSEFilings()
+filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
+                                   can_alert=_filing_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 
 
@@ -98,6 +110,7 @@ async def lifespan(app: FastAPI):
     auto_login.start()
     recorder.start()
     scan_alerts_job.start()
+    filing_alerts_job.start()
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     yield
 
@@ -798,7 +811,8 @@ def scan_sets(region: str = "IN", profile=Depends(current_profile)):
     region = "US" if region.upper() == "US" else "IN"
     return {"sets": [{"id": "watchlist", "name": "Your watchlist", "count": len(scan.watchlist_members(profile["id"], region))}]
             + [{"id": p["id"], "name": p["name"], "count": p["count"]} for p in universes.presets(region)],
-            "alerts": scan.alert_on(profile["id"]), "template": scan.ST_S2, "fresh_days": scan.FRESH}
+            "alerts": scan.alert_on(profile["id"]), "template": scan.ST_S2, "fresh_days": scan.FRESH,
+            "rotation_sets": [{"id": k, "name": v["name"]} for k, v in rotation.index_sets(region).items()]}
 
 
 @app.post("/research/scan")
@@ -826,16 +840,20 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
     prov = markets.provider(region)
     if prov is None or not prov.ready():
         raise KiteNotReady("Market data for this market is offline right now.")
-    if set == "sectors":
-        members, name = None, rotation.SECTORS[region]["name"]
+    set = set[:60]
+    index_sets = rotation.index_sets(region)
+    if set in index_sets:
+        members, name = None, index_sets[set]["name"]
+    elif set.startswith("sector:"):
+        members, name = None, f"{rotation._label(region, set.split(':', 1)[1], None)} stocks"
     else:
-        name, members = scan_members(profile, region, set[:40])
+        name, members = scan_members(profile, region, set)
         if len(members) < 2:
             err(400, "empty", "Pick a group with at least two stocks, or star more companies for your watchlist.")
     try:
         out = rotation.run(markets, region, set, members, interval, tail)
     except LookupError as e:
-        err(503, "no_benchmark", str(e))
+        err(404 if set.startswith("sector:") else 503, "no_benchmark", str(e))
     out["skipped"] = [public_text(x) for x in out["skipped"]]
     return ok({"name": name, "market": region, **out})
 
@@ -845,6 +863,40 @@ def scan_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
     if req.on:
         need(profile, "scans", "ST S2 watchlist alerts")
     scan.set_alert(profile["id"], req.on)
+    return {"alerts": req.on}
+
+
+# ---------- exchange filings and red flags (Pro, India) ----------
+def filing_call(fn):
+    try:
+        return fn()
+    except SourceError as e:
+        err(503 if e.busy else 502, "filings_unavailable", str(e))
+
+
+@app.get("/research/filings")
+def filings_watchlist(profile=Depends(current_profile)):
+    """Red flags in the last 3 months for each India watchlist stock."""
+    need(profile, "filings", "Filings and red flags")
+    syms = filings.watchlist_symbols(profile["id"])
+    out = filings.overview(filings_feed, syms) if syms else {"rows": [], "problems": [], "days": filings.WINDOW_DAYS}
+    out["problems"] = [public_text(x) for x in out["problems"]]
+    return ok({**out, "alerts": bool(filings.alert_state(profile["id"]).get("on")), "send_at": filings.SEND_AT})
+
+
+@app.get("/research/filings/{symbol}")
+def filings_company(symbol: str, profile=Depends(current_profile)):
+    """One NSE company's filings for the last year, with red flags and the 3-month summary."""
+    need(profile, "filings", "Filings and red flags")
+    sym = research_routes.symbol_of(symbol)
+    return ok(filing_call(lambda: filings.report(filings_feed, sym)))
+
+
+@app.put("/research/filings/alerts")
+def filings_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
+    if req.on:
+        need(profile, "filings", "Filing alerts")
+    filings.set_alert(profile["id"], req.on)
     return {"alerts": req.on}
 
 
@@ -1379,6 +1431,19 @@ def admin_stop_session(sid: str, _=Depends(admin.admin_profile)):
 def admin_billing_check(_=Depends(admin.admin_profile)):
     """Whether Razorpay accepts the keys and knows each plan, straight from Razorpay."""
     return billing.check_setup()
+
+
+@app.post("/admin/filings/check")
+def admin_filings_check(symbol: str = "RELIANCE", _=Depends(admin.admin_profile)):
+    """Whether the exchange's filings feed answers from this server, with the latest few filings for one stock."""
+    sym = research_routes.symbol_of(symbol)
+    filings_feed.cache.clear()
+    try:
+        items = filings_feed.announcements(sym)
+    except SourceError as e:
+        return {"ok": False, "symbol": sym, "error": str(e)}
+    return {"ok": True, "symbol": sym, "count": len(items), "latest": [{k: i[k] for k in ("at", "label", "subject")} for i in items[:3]],
+            "alerts": filing_alerts_job.status}
 
 
 @app.post("/admin/promo")

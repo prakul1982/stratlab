@@ -100,6 +100,7 @@ export function AdminPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [promoDays, setPromoDays] = useState(10);
   const [billingCheck, setBillingCheck] = useState<BillingCheck | null>(null);
+  const [filingCheck, setFilingCheck] = useState<{ ok: boolean; symbol: string; count?: number; error?: string; latest?: { at: string; label: string; subject: string }[] } | null>(null);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -149,6 +150,7 @@ export function AdminPage() {
     });
   };
 
+  const checkFilings = () => run("filings", async () => { setFilingCheck(await api("/admin/filings/check", { method: "POST" })); });
   const checkBilling = () => run("billing", async () => { setBillingCheck(await api<BillingCheck>("/admin/billing/check", { method: "POST" })); });
   const startPromo = () => {
     if (!confirm(`Give every user every Pro feature, free, for ${promoDays} days starting now?`)) return;
@@ -240,6 +242,12 @@ export function AdminPage() {
                     <Status ok={billingCheck.webhook_secret_set} label="Webhook secret" detail={billingCheck.webhook_secret_set ? "Set" : "RAZORPAY_WEBHOOK_SECRET is missing"} />
                   </div>
                 )}
+              </div>
+              <div className="stack" style={{ gap: 8, marginTop: 6 }}>
+                <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "filings"} onClick={checkFilings}>{busy === "filings" ? "Asking the exchange…" : "Check filings feed"}</button>
+                {filingCheck && <Status ok={filingCheck.ok} label={`Exchange filings (${filingCheck.symbol})`}
+                  detail={filingCheck.ok ? `${filingCheck.count} filings in the last year. Latest: ${(filingCheck.latest ?? []).map((l) => `${l.at.slice(0, 10)} ${l.label}`).join("; ") || "none"}`
+                    : `${filingCheck.error} The exchange sometimes blocks cloud servers; if this keeps failing, the BSE feed can be added as a fallback.`} />}
               </div>
             </section>
           </div>
