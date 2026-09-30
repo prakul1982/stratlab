@@ -62,6 +62,8 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
   - **Sector rotation:** every sector against the market, as Leading, Weakening, Lagging or Improving, with the trail it took and a plain-language summary. Click a sector to see its biggest stocks against that sector. NSE sectors, NSE size and style indices, S&P 500 sectors and US industries.
   - **Filings and red flags (India):** what a company told the exchange: fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades, each linked to the filing. A 3-month summary per watchlist stock and an evening alert.
   - **Company deep dive (India):** ten years of sales, profit, margins, capex and free cash flow, then the business model and the capex and growth plans read from the company's own investor presentations and earnings-call transcripts, each plan linked to the document it came from.
+  - **Management report card (India):** the targets management gave on its earnings calls over two years (revenue and profit growth, margins, capex), each checked against what the reported numbers later showed: met, missed or not due yet, with the quote and the call it came from.
+  - **Investor checklist, investor home and deck (India):** fixed, written-down checks (trend, growth, return on capital, margins, debt, cash conversion, promoter holding, filings, management's record) on every deep dive; every watchlist company on one **Investor home**; and the deep dive as a PowerPoint deck.
 - **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
 - **Import any strategy.** One **Import a strategy** page takes a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words. It sets up the right thing: a notebook for rules on one instrument, a group notebook for strategies that scan a list (like an F&O momentum scanner), or an Options structure. Anything that can't be carried over is listed.
 - **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock. A single instrument, a whole group with shared capital, or an option structure. Sessions keep running until you stop them. With alerts on, each trade comes as a phone notification, on Telegram or by email, plus a short report a few minutes after each market closes.
@@ -135,7 +137,8 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Find Stage 2 stocks with the Supertrend up | **Research → Scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
 | See which sectors are leading | **Research → Rotation**: sectors, size and style indices or US industries, weekly or daily, with a trail and **Animate**; **Stocks →** on a sector shows its biggest stocks against it (Pro) |
 | Check a company's filings for red flags | **Research → Red flags** for your India watchlist, or **Filings and red flags** on any Indian company page; tick the box for an evening alert (Pro) |
-| Understand a company's business and its capex plans | On any Indian company page, **Deep dive: business, capex, management**; **Read the documents** has the AI read its latest presentation and call transcripts (Pro) |
+| Understand a company's business and its capex plans | On any Indian company page, **Deep dive: business, capex, management**; **Read the documents** has the AI read its latest presentation and call transcripts; **Check past calls** builds the management report card; **Download as slides** gives a PowerPoint deck (Pro) |
+| See the whole watchlist the investor way | **Research → Investor home**: trend, sector rotation, red flags, checklist and report card for each India watchlist company (Pro) |
 | Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
 | Bring a strategy you already have | **Import a strategy** in the sidebar (or on New notebook): it sets up a notebook, a group notebook or an Options structure depending on what you bring; a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
 | Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
@@ -229,6 +232,10 @@ stratlab/
 │   │   ├── scan.py           Stage 2 + Supertrend (ST S2) scans, the ready-made ST S2 strategy and its daily alert
 │   │   ├── deepdive.py       company deep dive: 10-year numbers and capex, AI reads of presentations and call transcripts
 │   │   ├── docs.py           downloads exchange-filed PDFs (exchange hosts only, size-capped) and cuts them to the passages that matter
+│   │   ├── report_card.py    management report card: targets from past earnings calls checked against reported results
+│   │   ├── checklist.py      the investor checklist: fixed pass / watch / fail rules
+│   │   ├── investor.py       the investor home: one row per watchlist company
+│   │   ├── deck.py           the deep dive as a PowerPoint deck
 │   │   ├── fixtures.py       the admin's real-price snapshot for tests
 │   │   ├── rotation.py       sector rotation: relative strength and momentum against a benchmark, with trails
 │   │   ├── sector_members.py the biggest stocks in each sector index and sector fund, for drilling into a sector
@@ -295,7 +302,7 @@ Paid plans switch on once Razorpay's keys and plan IDs are set; until then every
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
 | Markets | All, except Indian F&O | same | + Indian F&O |
 | Export rules and trades | – | – | ✓ |
-| ST S2 scan, sector rotation, filings and red flags, company deep dive | – | – | ✓ |
+| ST S2 scan, sector rotation, filings and red flags, company deep dive, management report card, investor checklist, investor home, company deck | – | – | ✓ |
 | Research AI reads | 60 / day | 60 / day | 60 / day |
 | Share cards and public links | ✓ | ✓ | ✓ |
 

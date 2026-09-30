@@ -68,6 +68,9 @@ const INVESTORS: [string, string, string][] = [
   ["Stage 2 + Supertrend scan", "Which stocks in your watchlist or a ready-made group are in Stage 2 with the Supertrend pointing up, fresh signals first. Backtest the ST S2 rules on the whole group in one click, and get a message after the close when a new one lines up.", "ST S2, with a daily alert"],
   ["Sector rotation", "Every sector against the market: Leading, Weakening, Lagging or Improving, with the path it took to get there. Click a sector to see its biggest stocks the same way. NSE sectors, S&P 500 sectors and US industries.", "Know where the money is moving"],
   ["Filings and red flags", "What your watchlist companies told the exchange: fund raises like a QIP or preferential issue, promoter pledges, auditor or director resignations, defaults, regulator action, rating downgrades. A 3-month summary, and an evening alert.", "Read the filing before the chart"],
+  ["Company deep dive", "Ten years of sales, margins, capex and free cash flow, then the business model and every capex plan read from the company's own presentations and earnings calls, each linked to its source.", "In the company's own words"],
+  ["Management report card", "What management said it would deliver on past earnings calls (growth, margins, capex) checked against what the results later showed: met, missed or not due yet.", "Do they deliver?"],
+  ["Checklist, home and deck", "Fixed, written-down checks on growth, quality, debt, cash, promoters, filings and trend; every watchlist company on one investor home; and the whole deep dive as slides.", "All in one place"],
 ];
 
 const MARKETS: [string, string, string][] = [

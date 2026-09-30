@@ -11,8 +11,17 @@ type Year = { year: string; sales: number | null; profit: number | null; opm: nu
 type Quarter = { quarter: string; sales: number | null; profit: number | null; opm: number | null; sales_yoy: number | null };
 type Doc = { kind: string; at: string; title: string; url: string };
 type Source = { title: string; at: string; url: string; kind: string } | null;
+type Target = { metric: string; low: number | null; high: number | null; period: string | null; what: string; quote: string; said_at: string;
+  source: { title: string; at: string; url: string }; actual: number | null; unit: string; result: "met" | "missed" | "pending" | "unchecked";
+  revised?: { low: number | null; high: number | null; at: string; quote: string } | null };
+export type CheckState = "pass" | "watch" | "fail" | "na";
+type Checklist = { checks: { group: string; label: string; state: CheckState; value: string; rule: string }[];
+  counts: Record<CheckState, number>; scored: number };
+type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; score: number | null;
+  read: { kind: string; at: string; title: string }[]; problems: string[]; at: string };
 export interface DeepView {
   symbol: string; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
+  calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
   numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null;
     growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null } };
   reads: null | {
@@ -33,6 +42,70 @@ function Stat({ label, v }: { label: string; v: number | null }) {
   return <div className="stat"><span className="tiny muted">{label}</span><b className={`num ${signClass(v)}`}>{v == null ? "–" : pct(v)}</b></div>;
 }
 
+const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", other: "" };
+const RESULT: Record<string, [string, string]> = { met: ["Met", "pass"], missed: ["Missed", "fail"], pending: ["Not due yet", "next"], unchecked: ["Can't check", "skip"] };
+const target = (lo: number | null, hi: number | null, unit: string) =>
+  lo == null ? "–" : unit === "crore" ? `₹${cr(lo)}${hi != null ? `–${cr(hi)}` : ""} cr` : `${lo}${hi != null ? `–${hi}` : ""}%`;
+
+function ReportCard({ c }: { c: Card }) {
+  const checked = c.met + c.missed;
+  return (
+    <>
+      <div className="stat-row">
+        <div className="stat"><span className="tiny muted">Targets met</span><b className="num">{checked ? `${c.met} of ${checked}` : "–"}</b></div>
+        <div className="stat"><span className="tiny muted">Missed</span><b className="num">{c.missed}</b></div>
+        <div className="stat"><span className="tiny muted">Not due yet</span><b className="num">{c.pending}</b></div>
+        <div className="stat"><span className="tiny muted">Can't check from the numbers</span><b className="num">{c.unchecked}</b></div>
+      </div>
+      <p className="small" style={{ margin: 0 }}>{checked
+        ? <>Of the {checked} targets from past calls that the reported numbers can settle, <b>{c.met} {c.met === 1 ? "was" : "were"} met</b> and {c.missed} missed ({c.score}% met).</>
+        : "None of the targets found can be settled by the reported numbers yet."}</p>
+      {c.rows.length > 0 ? (
+        <div className="promises">{c.rows.map((r, i) => {
+          const [label, tone] = RESULT[r.result];
+          return (
+            <div key={i} className="promise">
+              <div className="spread" style={{ gap: 10, alignItems: "flex-start" }}>
+                <span className="small">{METRIC[r.metric] ? <b>{METRIC[r.metric]}: </b> : null}{r.what}</span>
+                <span className={`badge ${tone}`}>{label}</span>
+              </div>
+              <div className="promise-facts tiny">
+                {r.period && <span><span className="muted">For</span> {r.period}</span>}
+                {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit)}</b></span>}
+                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? `₹${cr(r.actual)} cr` : `${r.actual.toFixed(1)}%`}</b></span>}
+                <a className="link" href={r.source.url} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
+              </div>
+              {r.quote && <span className="tiny muted">"{r.quote}"</span>}
+              {r.revised && <span className="tiny muted">Later changed to {target(r.revised.low, r.revised.high, r.unit)} ({day(r.revised.at)}).</span>}
+            </div>);
+        })}</div>
+      ) : <p className="small muted" style={{ margin: 0 }}>No specific targets were found in these calls.</p>}
+      <p className="tiny muted" style={{ margin: 0 }}>Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), and estimated capex (within 10%). A target repeated on later calls counts once, from the first time it was said.</p>
+    </>
+  );
+}
+
+export const CHECK: Record<CheckState, [string, string]> = { pass: ["Pass", "pass"], watch: ["Watch", "warn"], fail: ["Fail", "fail"], na: ["No data", "skip"] };
+
+function ChecklistPanel({ c }: { c: Checklist }) {
+  const groups = [...new Set(c.checks.map((x) => x.group))];
+  return (
+    <Panel title="Investor checklist" span="full" info="Fixed rules on the reported numbers, the price trend, the filings and the management report card. Each rule is written under its check. A screen to help you look closer, not a recommendation.">
+      <p className="small" style={{ margin: 0 }}><b>{c.counts.pass} pass</b> · {c.counts.watch} watch · {c.counts.fail} fail{c.counts.na ? ` · ${c.counts.na} without data` : ""}</p>
+      <div className="checklist">{groups.map((g) => (
+        <div key={g} className="check-group">
+          <span className="eyebrow">{g}</span>
+          {c.checks.filter((x) => x.group === g).map((x) => (
+            <div key={x.label} className="check-row">
+              <div className="stack" style={{ gap: 2, minWidth: 0 }}><span className="small">{x.label}</span><span className="tiny muted">{x.rule}</span></div>
+              <span className="small num" style={{ textAlign: "right" }}>{x.value}</span>
+              <span className={`badge ${CHECK[x.state][1]}`}>{CHECK[x.state][0]}</span>
+            </div>))}
+        </div>))}</div>
+    </Panel>
+  );
+}
+
 function SourceLink({ s }: { s: Source }) {
   return s ? <a className="link tiny" href={s.url} target="_blank" rel="noopener noreferrer" title={s.title}>{KIND[s.kind] ?? "Filing"}, {day(s.at)} ↗</a> : null;
 }
@@ -45,6 +118,18 @@ export function DeepDivePage() {
   const [v, setV] = useState<DeepView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
+  const [carding, setCarding] = useState(false);
+  const [decking, setDecking] = useState(false);
+
+  const downloadDeck = async () => {
+    setDecking(true);
+    try {
+      const r = await api<Response>(`/research/deep/${encodeURIComponent(sym)}/deck`, { raw: true });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await r.blob()); a.download = `${sym}-deep-dive.pptx`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (e) { fail(e); } finally { setDecking(false); }
+  };
 
   useEffect(() => {
     if (!pro) return;
@@ -63,6 +148,15 @@ export function DeepDivePage() {
     } catch (e) { fail(e); } finally { setReading(false); }
   };
 
+  const checkCalls = async (refresh = false) => {
+    setCarding(true);
+    try {
+      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/card${refresh ? "?refresh=true" : ""}`, { method: "POST" });
+      setV(x);
+      if (x.card?.problems?.length) notify(`Checked with ${x.card.problems.length} call${x.card.problems.length === 1 ? "" : "s"} skipped.`);
+    } catch (e) { fail(e); } finally { setCarding(false); }
+  };
+
   const n = v?.numbers;
   const years = (n?.years ?? []).filter((y) => y.sales != null);
   const b = v?.reads?.business, p = v?.reads?.plans;
@@ -74,6 +168,10 @@ export function DeepDivePage() {
         <span className="eyebrow">Deep dive · India · {sym}</span>
         <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{v?.name ?? sym}: business, capex and growth</h1>
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice.</p>
+        {v && <div className="row wrap" style={{ gap: 10 }}>
+          <button className="btn quiet sm" disabled={decking} onClick={downloadDeck} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking ? "Making the deck…" : "Download as slides (PowerPoint)"}</button>
+          <Link className="btn quiet sm" to="/research/investor">Investor home →</Link>
+        </div>}
       </div>
       {!pro && <div className="banner"><span>The deep dive is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       {pro && error && <div className="card"><p className="muted">{error}</p></div>}
@@ -98,6 +196,8 @@ export function DeepDivePage() {
               </table></div>
             )}
           </Panel>
+
+          {v.checklist && <ChecklistPanel c={v.checklist} />}
 
           <Panel title="Capex and cash" span="full" info="Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ₹ crore.">
             {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>About <b>₹{cr(n.capex_3y_total)} crore</b> spent on capex over the last three years. Figures in ₹ crore.</p>}
@@ -166,6 +266,22 @@ export function DeepDivePage() {
               )}
             </Panel>
           )}
+
+          <section className="card stack" style={{ gap: 12 }}>
+            <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
+              <div className="stack" style={{ gap: 2 }}>
+                <h2 className="h3">Management report card</h2>
+                <span className="small muted">{v.card ? `What they said on ${v.card.read.length} earnings call${v.card.read.length === 1 ? "" : "s"}, and what the numbers showed. Checked ${day(v.card.at)}.`
+                  : `What management promised on past earnings calls, against what happened. ${v.calls} call transcript${v.calls === 1 ? "" : "s"} found.`}</span>
+              </div>
+              <button className="btn sm" disabled={carding || !v.calls} onClick={() => checkCalls(!!v.card)}>
+                {carding ? "Reading the calls… about a minute" : v.card ? (v.card_stale ? "Check the newest calls" : "Check again") : "Check past calls"}</button>
+            </div>
+            {carding && <Loading label="Reading past earnings calls" />}
+            {!v.card && !carding && <p className="small muted" style={{ margin: 0 }}>{v.calls ? "Reads up to six calls over the last two years for the targets management gave (growth, margins, capex), then checks each against the reported results. Counts as one of your daily AI reads; kept for a week and shared." : "No earnings-call transcripts were found in the company's filings for the last two years."}</p>}
+            {v.card && <ReportCard c={v.card} />}
+            {v.card?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.card.problems.join(" · ")}</p> : null}
+          </section>
 
           {v.documents.length > 0 && (
             <Panel title="Documents" span="full">
