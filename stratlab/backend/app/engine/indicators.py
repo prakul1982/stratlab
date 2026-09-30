@@ -9,13 +9,13 @@ DEFAULTS = {
     "vwap": (20, None), "supertrend": (10, 3),
     "adx": (14, None), "stoch_k": (14, 3), "atr_pct": (14, None),
     "dc_upper": (20, None), "dc_lower": (20, None), "volume": (None, None), "vol_sma": (20, None),
-    "atr": (14, None),
+    "atr": (14, None), "stage": (150, 20),
 }
 # values that live on the candle or the trading day rather than being an indicator with a length
 DAY = {"prev_close", "day_open", "day_high", "day_low", "day_chg"}
 # drawn under the price chart rather than on it
 OSCILLATORS = {"rsi", "macd", "macd_signal", "macd_hist", "adx", "stoch_k", "atr_pct", "volume", "vol_sma",
-               "body", "upper_wick", "lower_wick", "range", "atr", "day_chg"}
+               "body", "upper_wick", "lower_wick", "range", "atr", "day_chg", "stage"}
 
 
 def params(ref) -> tuple[int, float]:
@@ -60,6 +60,40 @@ def supertrend(df: pd.DataFrame, n: int, mult: float) -> pd.Series:
         else:
             st[i] = fl[i] if c[i] >= fl[i] else fu[i]
     return pd.Series(st, index=df.index)
+
+
+FLAT = 0.01   # the average moving less than 1% over the look-back counts as flat
+
+
+def stage(c: pd.Series, n: int = 150, look: int = 20) -> pd.Series:
+    """Weinstein's market stage, 1 to 4, from the n-candle average (150 days is about 30 weeks) and its slope.
+
+    2 (advancing): the average is rising and the price is above it.   4 (declining): falling, price below.
+    3 (topping): the average stops rising, or the price breaks below a rising one.
+    1 (basing): the average stops falling, or the price climbs above a falling one.
+    A flat average keeps the story it came from: flat after an advance is a top (3), after a decline a base (1)."""
+    avg = c.rolling(n).mean()
+    prev_avg = avg.shift(look)
+    slope = ((avg - prev_avg) / prev_avg).to_numpy(dtype=float)
+    price, a = c.to_numpy(dtype=float), avg.to_numpy(dtype=float)
+    out = np.full(len(c), np.nan)
+    last = np.nan
+    for i in range(len(c)):
+        s = slope[i]
+        if np.isnan(s) or np.isnan(a[i]):
+            continue
+        if s > FLAT:
+            st = 2 if price[i] > a[i] else 3
+        elif s < -FLAT:
+            st = 4 if price[i] < a[i] else 1
+        elif last in (2, 3):
+            st = 3
+        elif last in (4, 1):
+            st = 1
+        else:
+            st = 1 if price[i] >= a[i] else 3
+        out[i] = last = st
+    return pd.Series(out, index=c.index)
 
 
 def true_range(df: pd.DataFrame) -> pd.Series:
@@ -181,6 +215,8 @@ def compute(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
         return vwap(df, p, intraday)
     if t == "supertrend":
         return supertrend(df, p, m or 3)
+    if t == "stage":
+        return stage(c, p, int(m or 20))
     if t == "adx":
         return adx(df, p)
     if t == "stoch_k":
@@ -250,5 +286,7 @@ def _base_name(ref) -> str:
         return f"BB {t[3:]} {p},{m:g}"
     if t == "supertrend":
         return f"Supertrend {p},{m:g}"
+    if t == "stage":
+        return "Stage" if (p, int(m or 20)) == (150, 20) else f"Stage ({p}-candle average)"
     return {"adx": f"ADX {p}", "stoch_k": f"Stochastic {p}", "atr_pct": f"ATR% {p}", "dc_upper": f"Donchian high {p}",
             "dc_lower": f"Donchian low {p}", "volume": "Volume", "vol_sma": f"Volume SMA {p}", "atr": f"ATR {p}"}[t]

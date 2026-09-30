@@ -5,7 +5,7 @@ RefType = Literal[
     "price", "num", "sma", "ema", "rsi",
     "macd", "macd_signal", "macd_hist",
     "bb_upper", "bb_mid", "bb_lower",
-    "vwap", "supertrend",
+    "vwap", "supertrend", "stage",
     "adx", "stoch_k", "atr_pct", "dc_upper", "dc_lower", "volume", "vol_sma",
     # the candle itself, and the trading day it belongs to
     "open", "high", "low", "body", "upper_wick", "lower_wick", "range", "atr",
@@ -32,7 +32,7 @@ class Ref(BaseModel):
 
 class Cond(BaseModel):
     l: Ref
-    op: Literal["xa", "xb", "gt", "lt"]
+    op: Literal["xa", "xb", "gt", "lt", "eq"]   # eq: "is", for whole-number values such as Stage
     r: Ref
     w: Optional[float] = Field(None, gt=0, le=10)    # weight when entry rules are scored
 

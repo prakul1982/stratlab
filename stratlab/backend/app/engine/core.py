@@ -6,7 +6,7 @@ import pandas as pd
 from . import costs as C
 from .indicators import compute_full, ref_name, OSCILLATORS
 
-OP_NAME = {"xa": "crosses above", "xb": "crosses below", "gt": "is above", "lt": "is below"}
+OP_NAME = {"xa": "crosses above", "xb": "crosses below", "gt": "is above", "lt": "is below", "eq": "is"}
 
 
 class Ctx:
@@ -47,6 +47,8 @@ def eval_cond(ctx: Ctx, c, i: int) -> bool:
         return L > R
     if c.op == "lt":
         return L < R
+    if c.op == "eq":
+        return abs(L - R) < 1e-9
     Lp, Rp = ctx.val(c.l, i - 1), ctx.val(c.r, i - 1)
     if Lp is None or Rp is None:
         return False

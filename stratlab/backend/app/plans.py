@@ -39,7 +39,7 @@ BASIC_REFS = {"price", "sma", "ema", "rsi", "num"}
 PRO_REFS = BASIC_REFS | {
     "macd", "macd_signal", "macd_hist",
     "bb_upper", "bb_mid", "bb_lower",
-    "vwap", "supertrend",
+    "vwap", "supertrend", "stage",
 }
 
 GRACE = timedelta(days=1)
