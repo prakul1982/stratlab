@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { AuthClient } from "@supabase/auth-js";
 
 declare global {
   interface Window {
@@ -17,7 +17,18 @@ if (CFG.SENTRY_DSN) {
     dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false },
     ignoreErrors: ["ResizeObserver loop", "AbortError", "Failed to fetch", "Load failed", "NetworkError"] })).catch(() => {});
 }
-export const supabase = createClient(CFG.SUPABASE_URL || "http://localhost", CFG.SUPABASE_ANON_KEY || "missing");
+// Only sign-in is used, so the standalone auth client is loaded rather than the whole Supabase client (database,
+// storage, realtime): the same settings the full client would use, down to the storage key, so saved logins carry over.
+const sbBase = new URL((CFG.SUPABASE_URL || "http://localhost").replace(/\/?$/, "/"));
+const sbKey = CFG.SUPABASE_ANON_KEY || "missing";
+export const supabase = {
+  auth: new AuthClient({
+    url: new URL("auth/v1", sbBase).href,
+    headers: { Authorization: `Bearer ${sbKey}`, apikey: sbKey },
+    storageKey: `sb-${sbBase.hostname.split(".")[0]}-auth-token`,
+    autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: "implicit",
+  }),
+};
 
 export class ApiError extends Error {
   status = 0;
