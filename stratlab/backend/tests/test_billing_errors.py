@@ -75,3 +75,33 @@ def test_admin_sees_razorpays_reason(monkeypatch):
         assert "does not exist" in c.post("/billing/subscribe", json={"plan": "pro"}).json()["detail"]["message"]
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_setup_check_reports_keys_and_plans(monkeypatch):
+    from app.config import settings
+
+    class FakePlan:
+        def __init__(self, bad_auth): self.bad = bad_auth
+        def all(self, q):
+            if self.bad:
+                raise rz.BadRequestError("Authentication failed")
+        def fetch(self, pid):
+            if pid != "plan_good":
+                raise rz.BadRequestError("The id provided does not exist")
+            return {"interval": 1, "period": "monthly", "item": {"name": "StratLab Basic", "amount": 99900}}
+
+    for k, v in {"RAZORPAY_KEY_ID": "rzp_test_ABCDEFGH1234", "RAZORPAY_KEY_SECRET": "s" * 24, "RAZORPAY_WEBHOOK_SECRET": "",
+                 "RAZORPAY_PLAN_BASIC": "plan_good", "RAZORPAY_PLAN_PRO": "plan_typo", "RAZORPAY_PLAN_BASIC_YEAR": "",
+                 "RAZORPAY_PLAN_PRO_YEAR": ""}.items():
+        monkeypatch.setattr(settings, k, v)
+    bad = {"auth": True}
+    monkeypatch.setattr(billing.razorpay, "Client", lambda auth: type("C", (), {"plan": FakePlan(bad["auth"])})())
+    r = billing.check_setup()
+    assert r["mode"] == "test" and not r["keys_ok"] and "Authentication failed" in r["keys_error"]
+    assert "s" * 24 not in str(r) and r["secret_length"] == 24 and r["key_id"].endswith("1234")   # nothing secret returned
+    bad["auth"] = False
+    r = billing.check_setup()
+    plans = {p["label"]: p for p in r["plans"]}
+    assert r["keys_ok"] and plans["Basic monthly"]["ok"] and "₹999" in plans["Basic monthly"]["detail"]
+    assert not plans["Pro monthly"]["ok"] and "can't find" in plans["Pro monthly"]["detail"]
+    assert plans["Basic yearly"]["detail"] == "Not set" and r["webhook_secret_set"] is False
