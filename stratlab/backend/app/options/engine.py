@@ -202,8 +202,13 @@ class OptionsEngine:
         if plan is None:
             self.note = "A strike this structure needs isn't listed for that expiry."
             return False
-        if any(fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None for o, sd, k, _ in plan):
-            self.note = "Waiting for quotes on every leg."
+        missing = [(o, sd, k) for o, sd, k, _ in plan if fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None]
+        if missing:
+            legs = ", ".join(f"{k:g} {o} ({'buy' if sd == 'buy' else 'sell'})" for o, sd, k in missing)
+            note = f"No price yet for {legs}, so no entry. It enters once every leg has a bid, ask or last price."
+            if note != self.note:            # once per change, so the server log shows which contract had no price
+                print("options: no quote for", [contracts.key(o, k) for o, _, k in missing], "spot", spot)
+            self.note = note
             return False
         self.note = ""
         units = self._units(contracts, plan)
@@ -311,10 +316,15 @@ class OptionsEngine:
             if self.s.recenter.enabled and contracts and spot and now < _at(now, t.lastEntry):
                 self._recenter(now, spot, contracts, quotes, out)
             return out
-        # flat: may we enter?
-        if self.halted or self.entries_today >= t.maxEntries:
+        # flat: may we enter? Outside the window, say why instead of leaving an old note up
+        if self.halted:
+            self.note = "The daily loss cap was hit, so no more entries today."
+            return out
+        if self.entries_today >= t.maxEntries:
+            self.note = f"Took today's {t.maxEntries} entries; next entries on the next market day."
             return out
         if not (_at(now, t.entry) <= now < _at(now, t.lastEntry)) or now >= _at(now, t.squareoff):
+            self.note = "" if now < _at(now, t.entry) else f"Entries stop at {t.lastEntry}; next entry at {t.entry} on the next market day."
             return out
         if self.cool_until and now < datetime.fromisoformat(self.cool_until):
             return out
