@@ -193,3 +193,14 @@ def test_parse_ai_answer_keeps_what_validates():
                             "notes": ["SL-limit orders are simulated as fills at the bid/ask"]})
     assert len(s.legs) == 2 and s.risk.stop == 50000 and s.timing.entry == "09:30"
     assert any("leg" in n for n in notes) and any("timing" in n for n in notes)
+
+
+def test_missing_leg_is_named_and_old_notes_clear_after_hours():
+    e, c = OptionsEngine(straddle()), contracts()
+    q = quotes(25000)
+    q["NFO:NIFTY25000PE"] = {"bid": 0, "ask": 0, "ltp": 0}          # one leg with no price at all
+    assert e.step(at("09:31"), 25000, c, q, True) == []
+    assert "25000 PE (sell)" in e.note and "25000 CE" not in e.note
+    # after the entry window the note says why nothing happens, instead of the morning's quote problem
+    assert e.step(at("15:40"), 25000, c, q, False) == [] and "Entries stop at 14:45" in e.note
+    assert e.step(at("09:00", day=25), 25000, c, q, False) == [] and e.note == ""

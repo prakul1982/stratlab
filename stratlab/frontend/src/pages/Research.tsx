@@ -13,7 +13,7 @@ import {
   QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars, ValuationGauge,
 } from "../components/Research";
 import { Info, Loading } from "../components/ui";
-import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type RotationRow } from "../components/Rotation";
+import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 
 function useRegion(): [Region, (r: Region) => void] {
   const [params, setParams] = useSearchParams();
@@ -599,8 +599,10 @@ export function RotationPage() {
   const [sets, setSets] = useState<ScanSets | null>(null);
   const [setId, setSetId] = useState("sectors");
   const [interval, setIv] = useState<"weekly" | "daily">("weekly");
-  const [tail, setTail] = useState(5);
-  const [askTail, setAskTail] = useState(5);          // the slider settles before it asks the server
+  const [tail, setTail] = useState(4);
+  const [askTail, setAskTail] = useState(4);
+  const [picked, setPicked] = useState<Set<string> | null>(null);   // null = the default set (main sectors)
+  const [focus, setFocus] = useState<string | null>(null);          // the slider settles before it asks the server
   const [out, setOut] = useState<RotationOut | null>(null);
   const [busy, setBusy] = useState(false);
   const pro = !!me?.plan_info?.features?.scans;
@@ -625,7 +627,19 @@ export function RotationPage() {
     return () => { live = false; };
   }, [region, setId, interval, askTail, pro, fail]);
 
+  useEffect(() => { setPicked(null); setFocus(null); }, [region, setId]);
+
   const groups = (sets?.sets ?? []).filter((s) => s.count >= 2);
+  const all = out?.rows ?? [];
+  const isOn = (r: RotationRow) => (picked ? picked.has(r.id) : r.core !== false);
+  const rows = all.filter(isOn);
+  const toggle = (r: RotationRow) => {
+    const next = new Set(all.filter(isOn).map((x) => x.id));
+    if (next.has(r.id)) { next.delete(r.id); if (focus === r.id) setFocus(null); } else next.add(r.id);
+    setPicked(next);
+  };
+  const names = (q: Quadrant, extra?: (r: RotationRow) => boolean) => all.filter((r) => r.quadrant === q && (!extra || extra(r))).map((r) => r.name);
+  const entered = all.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
   const unit = interval === "weekly" ? "week" : "day";
   return (
     <div className="stack" style={{ gap: 24 }}>
@@ -654,19 +668,39 @@ export function RotationPage() {
           <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
             <div className="stack" style={{ gap: 2 }}>
               <b>{out.name} vs {out.benchmark}</b>
-              <span className="small muted">{out.rows.length} shown · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${out.as_of}` : ""}{step !== null ? ` · replaying ${unit} ${step} of ${out.tail}` : ""}</span>
+              <span className="small muted">{rows.length} of {all.length} shown · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${out.as_of}` : ""}{step !== null ? ` · replaying ${unit} ${step} of ${out.tail}` : ""}</span>
             </div>
             <div className="rot-legend" aria-label="Legend">
               {QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}
             </div>
           </div>
-          {out.rows.length === 0 ? <p className="small muted">Not enough price history to draw this yet.</p> : <RotationChart rows={out.rows} benchmark={out.benchmark} step={step} />}
-          {out.rows.length > 0 && (
+          {all.length > 0 && (
+            <div className="rot-read">
+              {([["leading", "Leading: stronger than the market and still gaining"], ["improving", "Improving: weaker, but picking up"],
+                 ["weakening", "Weakening: stronger, but losing pace"], ["lagging", "Lagging: weaker and still slipping"]] as [Quadrant, string][]).map(([q, says]) => (
+                <div key={q}><QuadrantTag q={q} /><span className="muted small">{says.split(": ")[1]}</span>
+                  <span className="small">{names(q).join(", ") || "none"}</span></div>
+              ))}
+              {entered.length > 0 && <p className="small" style={{ margin: 0 }}>Moved into Leading over the last {out.tail} {unit}s: <b>{entered.join(", ")}</b></p>}
+            </div>
+          )}
+          {rows.length === 0 ? <p className="small muted">{all.length ? "Tick a few below to draw them." : "Not enough price history to draw this yet."}</p>
+            : <RotationChart rows={rows} benchmark={out.benchmark} step={step} focus={focus} onFocus={setFocus} />}
+          {all.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one.</p>}
+          {all.length > 0 && (
+            <div className="row wrap small" style={{ gap: 8 }}>
+              <button className="btn quiet sm" onClick={() => setPicked(new Set(all.map((r) => r.id)))}>Show all {all.length}</button>
+              {all.some((r) => r.core === false) && <button className="btn quiet sm" onClick={() => setPicked(null)}>Main sectors only</button>}
+              <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear</button>
+            </div>
+          )}
+          {all.length > 0 && (
             <div className="table-wrap"><table>
-              <thead><tr><th>{setId === "sectors" ? "Sector" : "Stock"}</th><th>Now</th><th className="num">Strength</th><th className="num">Momentum</th><th>Heading</th><th>{out.tail} {unit}s ago</th></tr></thead>
-              <tbody>{out.rows.map((r) => (
-                <tr key={r.id}>
-                  <td>{setId === "sectors" ? r.name : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>}</td>
+              <thead><tr><th style={{ width: 36 }}><span className="sr-only">Show on chart</span></th><th>{setId === "sectors" ? "Sector" : "Stock"}</th><th>Now</th><th className="num">Strength</th><th className="num">Momentum</th><th>Heading</th><th>{out.tail} {unit}s ago</th></tr></thead>
+              <tbody>{all.map((r) => (
+                <tr key={r.id} className={focus === r.id ? "rot-row on" : "rot-row"} onClick={() => isOn(r) && setFocus(focus === r.id ? null : r.id)}>
+                  <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></td>
+                  <td>{setId === "sectors" ? r.name : <Link className="link" onClick={(e) => e.stopPropagation()} to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>}</td>
                   <td><QuadrantTag q={r.quadrant} /></td>
                   <td className="num mono">{r.x.toFixed(2)}</td>
                   <td className="num mono">{r.y.toFixed(2)}</td>

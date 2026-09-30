@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 export type Quadrant = "leading" | "weakening" | "lagging" | "improving";
 export interface RotationRow {
   id: string; symbol: string; name: string; points: { t: string; x: number; y: number }[];
-  x: number; y: number; quadrant: Quadrant; heading: number | null; moved: Quadrant | null;
+  x: number; y: number; quadrant: Quadrant; heading: number | null; moved: Quadrant | null; core?: boolean;
 }
 
 export const QUADRANTS: { id: Quadrant; name: string; says: string }[] = [
@@ -35,9 +35,12 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
 }
 
 /** Relative strength (x) against its momentum (y), 100 = the benchmark, with each member's recent trail. */
-export function RotationChart({ rows, benchmark, step }: { rows: RotationRow[]; benchmark: string; step?: number | null }) {
+export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
+  rows: RotationRow[]; benchmark: string; step?: number | null; focus?: string | null; onFocus?: (id: string | null) => void;
+}) {
   const [box, width] = useWidth();
-  const [hover, setHover] = useState<string | null>(null);
+  const [hoverId, setHover] = useState<string | null>(null);
+  const hover = hoverId ?? focus ?? null;          // the one trail drawn in full; the rest step back
   const phone = width < 560;
   const W = Math.max(300, width), H = Math.round(Math.min(640, Math.max(360, W * (phone ? 1.1 : 0.6))));
   const pad = { l: 44, r: 12, t: 24, b: phone ? 34 : 38 };
@@ -49,7 +52,9 @@ export function RotationChart({ rows, benchmark, step }: { rows: RotationRow[]; 
   const cx = X(100), cy = Y(100);
   const ticks = (s: number) => { const st = (s > 6 ? 2 : s > 3 ? 1 : 0.5) * (phone ? 2 : 1); const out: number[] = []; for (let v = Math.ceil((100 - s) / st) * st; v <= 100 + s; v += st) out.push(+v.toFixed(2)); return out; };
   const shown = (r: RotationRow) => (step ? r.points.slice(0, Math.max(1, step)) : r.points);
-  const hov = rows.find((r) => r.id === hover) ?? null;
+  const hov = rows.find((r) => r.id === hoverId) ?? null;
+  const labels = placeLabels(rows.map((r) => { const e = shown(r)[shown(r).length - 1]; return { id: r.id, name: r.name, x: X(e.x), y: Y(e.y) }; }),
+    { l: pad.l, r: W - pad.r, t: pad.t, b: H - pad.b }, hover, phone);
   const last = hov ? shown(hov)[shown(hov).length - 1] : null;
 
   return (
@@ -75,24 +80,34 @@ export function RotationChart({ rows, benchmark, step }: { rows: RotationRow[]; 
             <text x={a === "start" ? x + 12 : x} y={y} textAnchor={a} className="rot-quad">{Q_NAME[q]}</text>
           </g>
         ))}
-        {/* trails: a thin line through each week, a dot per point, a ringed dot at the latest */}
+        {/* trails: faint history, the latest move and the current position in full; the focused one stands out */}
         {rows.map((r) => {
           const pts = shown(r);
           const end = pts[pts.length - 1];
+          const prev = pts.length > 1 ? pts[pts.length - 2] : null;
           const q = step ? quadrantOf(end.x, end.y) : r.quadrant;
-          const dim = hover && hover !== r.id ? 0.18 : 1;
+          const on = hover === r.id, dim = hover !== null && !on;
           return (
-            <g key={r.id} opacity={dim} style={{ transition: "opacity .15s" }}>
-              <polyline points={pts.map((p) => `${X(p.x)},${Y(p.y)}`).join(" ")} fill="none" stroke={qColor(q)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-              {pts.slice(0, -1).map((p) => <circle key={p.t} cx={X(p.x)} cy={Y(p.y)} r={2.5} fill={qColor(q)} />)}
-              <circle cx={X(end.x)} cy={Y(end.y)} r={5} fill={qColor(q)} stroke="var(--card)" strokeWidth={2} />
-              {(!phone || hover === r.id) && (X(end.x) + 8 + r.name.length * 7 > W - pad.r
-                ? <text x={X(end.x) - 8} y={Y(end.y) - 7} textAnchor="end" className="rot-label">{r.name}</text>
-                : <text x={X(end.x) + 8} y={Y(end.y) - 7} className="rot-label">{r.name}</text>)}
-              <circle cx={X(end.x)} cy={Y(end.y)} r={14} fill="transparent" tabIndex={0} aria-label={`${r.name}: ${Q_NAME[q]}`}
-                onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(r.id)} onBlur={() => setHover(null)}
-                onClick={() => setHover(hover === r.id ? null : r.id)} style={{ cursor: "pointer", outline: "none" }} />
+            <g key={r.id} opacity={dim ? 0.12 : 1} style={{ transition: "opacity .15s" }}>
+              <polyline points={pts.map((p) => `${X(p.x)},${Y(p.y)}`).join(" ")} fill="none" stroke={qColor(q)}
+                strokeWidth={on ? 2 : 1.25} strokeOpacity={on ? 1 : 0.35} strokeLinejoin="round" strokeLinecap="round" />
+              {on && pts.slice(0, -1).map((p) => <circle key={p.t} cx={X(p.x)} cy={Y(p.y)} r={2.5} fill={qColor(q)} />)}
+              {prev && !on && <line x1={X(prev.x)} y1={Y(prev.y)} x2={X(end.x)} y2={Y(end.y)} stroke={qColor(q)} strokeWidth={2} strokeLinecap="round" />}
+              <circle cx={X(end.x)} cy={Y(end.y)} r={on ? 6 : 5} fill={qColor(q)} stroke="var(--card)" strokeWidth={2} />
             </g>
+          );
+        })}
+        {/* names: placed greedily so none overlap; a hidden one still shows when its trail is hovered or focused */}
+        {labels.map((l) => (
+          <text key={l.id} x={l.x} y={l.y} textAnchor={l.anchor} className="rot-label" opacity={hover !== null && hover !== l.id ? 0.25 : 1}
+            style={{ fontWeight: hover === l.id ? 600 : undefined }}>{l.name}</text>
+        ))}
+        {rows.map((r) => {
+          const end = shown(r)[shown(r).length - 1];
+          return (
+            <circle key={`hit-${r.id}`} cx={X(end.x)} cy={Y(end.y)} r={12} fill="transparent" tabIndex={0} aria-label={`${r.name}: ${Q_NAME[quadrantOf(end.x, end.y)]}`}
+              onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(r.id)} onBlur={() => setHover(null)}
+              onClick={() => onFocus?.(focus === r.id ? null : r.id)} style={{ cursor: "pointer", outline: "none" }} />
           );
         })}
       </svg>
@@ -122,4 +137,29 @@ export function useAnimate(len: number): [number | null, () => void] {
     return () => window.clearTimeout(t);
   }, [step, len]);
   return [step, () => setStep(1)];
+}
+
+type Placed = { id: string; name: string; x: number; y: number; anchor: "start" | "end" };
+
+/** Put each name beside its dot (right, else left, else above/below) where it overlaps no other name or dot;
+ *  names that fit nowhere are left out. The hovered/focused one is placed first so it always shows. */
+function placeLabels(heads: { id: string; name: string; x: number; y: number }[], plot: { l: number; r: number; t: number; b: number },
+                     first: string | null, phone: boolean): Placed[] {
+  const out: Placed[] = [], boxes: [number, number, number, number][] = heads.map((h) => [h.x - 6, h.y - 6, h.x + 6, h.y + 6]);
+  const hit = (a: [number, number, number, number]) => boxes.some((b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]);
+  const order = [...heads].sort((a, b) => (a.id === first ? -1 : b.id === first ? 1 : 0));
+  for (const h of order) {
+    if (phone && h.id !== first) continue;
+    const w = h.name.length * 6.6 + 4, own = heads.indexOf(h);
+    const tries: [number, number, "start" | "end"][] = [[h.x + 9, h.y + 4, "start"], [h.x - 9, h.y + 4, "end"], [h.x - w / 2, h.y - 10, "start"], [h.x - w / 2, h.y + 17, "start"]];
+    for (const [x, y, anchor] of tries) {
+      const x0 = anchor === "end" ? x - w : x, box: [number, number, number, number] = [x0, y - 11, x0 + w, y + 3];
+      if (box[0] < plot.l || box[2] > plot.r || box[1] < plot.t || box[3] > plot.b) continue;
+      const mine = boxes[own]; boxes[own] = [0, 0, 0, 0];       // its own dot doesn't block it
+      const clash = hit(box); boxes[own] = mine;
+      if (clash && h.id !== first) continue;
+      boxes.push(box); out.push({ id: h.id, name: h.name, x, y, anchor }); break;
+    }
+  }
+  return out;
 }
