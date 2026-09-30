@@ -19,6 +19,10 @@ FREEZE = {"NIFTY": 1800, "BANKNIFTY": 900, "FINNIFTY": 1800, "MIDCPNIFTY": 2800,
           "SENSEX": 1000, "BANKEX": 900}
 EXCHANGE_NAME = {"NFO": "NSE", "BFO": "BSE", "MCX": "MCX"}
 FRESH_SECONDS = 120
+QUOTE_GAP = 1.05     # Kite allows one quote request a second per account, shared by every session
+REFRESH = 1.0        # a quote older than this is refreshed when someone else's request goes out anyway
+WANT_FOR = 30        # a contract asked for in the last 30 s rides along with everyone else's requests
+BATCH = 450          # contracts per quote request (Kite allows 500)
 
 
 class OptionsData:
@@ -28,6 +32,10 @@ class OptionsData:
         self._day = None
         self._lock = threading.Lock()
         self._qcache: dict[str, tuple[float, dict]] = {}
+        self._qlock = threading.Lock()
+        self._wanted: dict[str, float] = {}      # contract key -> when a session last asked for it
+        self._last_quote = 0.0
+        self.quote_calls = 0
 
     def ready(self) -> bool:
         return self.kite.ready()
@@ -114,30 +122,53 @@ class OptionsData:
         return f"NSE:{name}"
 
     # ---------- quotes ----------
-    def quotes(self, keys: list[str], max_age: float = 1.5) -> dict[str, dict]:
-        """Bid, ask, last price and quote time for each key; shared for a moment across sessions."""
-        now = time.time()
-        out, need = {}, []
-        for k in dict.fromkeys(k for k in keys if k):
-            hit = self._qcache.get(k)
-            if hit and now - hit[0] < max_age:
-                out[k] = hit[1]
-            else:
-                need.append(k)
-        for i in range(0, len(need), 450):
-            self.kite._require()
-            self.kite._throttle()
-            data = self.kite.kite.quote(need[i:i + 450])
-            for k, v in data.items():
-                d = v.get("depth") or {}
-                bid = next((x["price"] for x in d.get("buy", []) if x.get("price")), None)
-                ask = next((x["price"] for x in d.get("sell", []) if x.get("price")), None)
-                ts = v.get("timestamp") or v.get("last_trade_time")
-                q = {"ltp": v.get("last_price"), "bid": bid, "ask": ask, "oi": v.get("oi"),
-                     "volume": v.get("volume"), "ts": ts.isoformat() if hasattr(ts, "isoformat") else ts}
-                self._qcache[k] = (now, q)
-                out[k] = q
-        return out
+    def quotes(self, keys: list[str], max_age: float = 3.0) -> dict[str, dict]:
+        """Bid, ask, last price and quote time for each key.
+
+        Every session shares one stream of quote requests, at most one a second (Kite's limit): a request carries
+        what the caller needs plus every other session's recently wanted contracts that are going stale, so the
+        next session to ask usually finds its prices already fresh. That keeps a hundred sessions under the limit
+        where one request per session per poll would stop at two or three."""
+        keys = [k for k in dict.fromkeys(keys) if k]
+        with self._qlock:
+            now = time.time()
+            for k in keys:
+                self._wanted[k] = now
+            out, need = {}, []
+            for k in keys:
+                hit = self._qcache.get(k)
+                if hit and now - hit[0] < max_age:
+                    out[k] = hit[1]
+                else:
+                    need.append(k)
+            if not need:
+                return out
+            self._wanted = {k: t for k, t in self._wanted.items() if t >= now - WANT_FOR}
+            if len(self._qcache) > 5000:            # contracts nobody watches any more
+                self._qcache = {k: v for k, v in self._qcache.items() if now - v[0] < 300}
+            extra = [k for k in self._wanted if k not in out and k not in need
+                     and (k not in self._qcache or now - self._qcache[k][0] >= REFRESH)]
+            batch = need + extra[:max(0, BATCH - len(need) % BATCH)] if len(need) % BATCH else need
+            for i in range(0, len(batch), BATCH):
+                wait = self._last_quote + QUOTE_GAP - time.time()
+                if wait > 0:
+                    time.sleep(wait)
+                self.kite._require()
+                self.kite._throttle()
+                data = self.kite.kite.quote(batch[i:i + BATCH])
+                self._last_quote, self.quote_calls = time.time(), self.quote_calls + 1
+                for k, v in data.items():
+                    d = v.get("depth") or {}
+                    bid = next((x["price"] for x in d.get("buy", []) if x.get("price")), None)
+                    ask = next((x["price"] for x in d.get("sell", []) if x.get("price")), None)
+                    ts = v.get("timestamp") or v.get("last_trade_time")
+                    q = {"ltp": v.get("last_price"), "bid": bid, "ask": ask, "oi": v.get("oi"),
+                         "volume": v.get("volume"), "ts": ts.isoformat() if hasattr(ts, "isoformat") else ts}
+                    self._qcache[k] = (self._last_quote, q)
+            for k in need:
+                if k in self._qcache:
+                    out[k] = self._qcache[k][1]
+            return out
 
     @staticmethod
     def fresh(q: dict | None, now) -> bool:

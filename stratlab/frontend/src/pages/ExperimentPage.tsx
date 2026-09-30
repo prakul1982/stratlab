@@ -356,7 +356,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <section className="card">
         <div className="spread" style={{ marginBottom: 12 }}>
           <h2 className="h2 row" style={{ gap: 0 }}>Every trade<Info>{HELP.trades}</Info></h2>
-          <span className="small muted">{e.trades.length} shown, after costs</span>
+          <span className="small muted">{e.trades.length} shown, after costs{e.trades_trimmed ? ` (the ${e.trades_trimmed} earlier ones were cleared to save space; run it again to see every trade)` : ""}</span>
         </div>
         <div className="table-wrap">
           <table>

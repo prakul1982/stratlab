@@ -39,16 +39,32 @@ def compact(chain: dict) -> list[list]:
 
 
 class Recorder:
-    def __init__(self, data, save, targets: list[tuple[str, str]], every_minutes: int = 5):
+    def __init__(self, data, save, targets: list[tuple[str, str]], every_minutes: int = 5, prune=None, keep_days: int = 0):
         self.data, self.save = data, save          # save(row) writes one snapshot to the database
+        self.prune, self.keep_days = prune, keep_days   # prune(iso) deletes snapshots older than iso
+        self._pruned_day = None
         self.targets, self.every = targets, max(1, every_minutes) * 60
         self.status = {"enabled": bool(targets), "targets": [f"{e}:{n}" for e, n in targets], "every_minutes": self.every // 60,
-                       "today": 0, "day": None, "last_at": None, "last_error": None}
+                       "today": 0, "day": None, "last_at": None, "last_error": None,
+                       "keep_days": keep_days}
         self._next = 0.0
+
+    def prune_old(self, now: datetime):
+        """Once a day, delete recordings older than keep_days so the database doesn't fill up."""
+        day = now.astimezone(IST).date().isoformat()
+        if not self.prune or self.keep_days <= 0 or self._pruned_day == day:
+            return
+        self._pruned_day = day
+        try:
+            self.prune((now - timedelta(days=self.keep_days)).isoformat())
+        except Exception as e:
+            self.status["last_error"] = f"clean-up: {str(e)[:200]}"
 
     def run_once(self, now: datetime | None = None) -> int:
         """Record every target now if it's due. Returns how many snapshots were saved."""
         now = now or datetime.now(timezone.utc)
+        if self.targets:
+            self.prune_old(now)
         if not self.targets or not in_hours(now) or not self.data.ready():
             return 0
         day = now.astimezone(IST).date().isoformat()

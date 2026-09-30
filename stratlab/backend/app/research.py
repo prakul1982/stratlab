@@ -8,6 +8,8 @@ from .engine.verdict import evaluate
 
 MAX_POINTS = 240       # chart points kept per experiment
 MAX_TRADES = 200
+KEEP_FULL = 10         # the newest experiments in a notebook keep every trade; older ones keep their last few
+OLD_TRADES = 30
 MIN_BARS = 30
 
 
@@ -166,3 +168,16 @@ def record_group(result: dict, strategy, label: str, version: int, now: str, gro
         "group": {"name": group.get("name"), "members": result["members"], "max_open": result["max_open"],
                   "most_open": result["most_open"], "skipped": problems},
     }
+
+
+def slim(experiments: list[dict]) -> list[dict]:
+    """Keep storage in check: experiments older than the newest KEEP_FULL keep their verdict, stats and chart but
+    only their last OLD_TRADES trades (the count trimmed is noted, so the page can say so)."""
+    out = []
+    cut = len(experiments) - KEEP_FULL
+    for i, e in enumerate(experiments):
+        trades = e.get("trades") or []
+        if i < cut and len(trades) > OLD_TRADES:
+            e = {**e, "trades": trades[-OLD_TRADES:], "trades_trimmed": e.get("trades_trimmed", 0) + len(trades) - OLD_TRADES}
+        out.append(e)
+    return out

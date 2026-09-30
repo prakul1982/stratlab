@@ -161,6 +161,10 @@ def add_option_snapshot(row: dict) -> None:
     sb().table("option_snapshots").insert(row).execute()
 
 
+def delete_option_snapshots_before(iso: str) -> None:
+    sb().table("option_snapshots").delete().lt("taken_at", iso).execute()
+
+
 def option_snapshots(name: str, expiry: str, since_iso: str, until_iso: str) -> list[dict]:
     r = (sb().table("option_snapshots").select("taken_at,spot,lot,chain").eq("name", name).eq("expiry", expiry)
          .gte("taken_at", since_iso).lt("taken_at", until_iso).order("taken_at").limit(2000).execute())
