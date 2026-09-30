@@ -44,6 +44,7 @@ const ComparePage = page(research, "ComparePage");
 const WatchlistPage = page(research, "WatchlistPage");
 const ScanPage = page(research, "ScanPage");
 const RotationPage = page(research, "RotationPage");
+const FilingsPage = page(research, "FilingsPage");
 const CompanyPage = page(research, "CompanyPage");
 
 /** Indian data is offline: say why in plain words. On a weekend or holiday that's expected, not a fault. */
@@ -118,6 +119,7 @@ function Routed() {
         <Route path="/research/watchlist" element={<WatchlistPage />} />
         <Route path="/research/scan" element={<ScanPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />
+        <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/:region/:symbol" element={<CompanyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

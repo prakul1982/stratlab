@@ -9,7 +9,7 @@ StratLab's own calculation, in the spirit of relative rotation charts; not the t
 import numpy as np
 import pandas as pd
 
-from . import universes
+from . import sector_members, universes
 from .intel.net import TTLCache
 from .scan import _pool
 
@@ -27,6 +27,15 @@ SECTORS = {
         "NIFTY CAPITAL MKT", "NIFTY HOUSING"]},
     "US": {"benchmark": "SPY", "name": "S&P 500 sectors", "members": [
         "XLK", "XLF", "XLV", "XLE", "XLI", "XLY", "XLP", "XLU", "XLB", "XLRE", "XLC"]},
+}
+# more index sets to compare against the same benchmark (the chart's set picker lists them after "sectors")
+INDEX_SETS = {
+    "IN": {"size": {"name": "NSE size and style indices", "members": [
+        "NIFTY 50", "NIFTY NEXT 50", "NIFTY MIDCAP 100", "NIFTY MIDCAP 150", "NIFTY SMLCAP 100", "NIFTY SMLCAP 250",
+        "NIFTY MICROCAP250", "NIFTY200 MOMENTM30", "NIFTY100 QUALTY30", "NIFTY100 LOWVOL30", "NIFTY ALPHA 50",
+        "NIFTY DIV OPPS 50", "NIFTY GROWSECT 15", "NIFTY MID LIQ 15"]}},
+    "US": {"industries": {"name": "US industries", "members": [
+        "SMH", "IGV", "XBI", "KRE", "KBE", "ITA", "XOP", "GDX", "ITB", "XHB", "XRT", "JETS", "TAN", "IYT", "CIBR", "PAVE"]}},
 }
 US_NAMES = {"XLK": "Technology", "XLF": "Financials", "XLV": "Health care", "XLE": "Energy", "XLI": "Industrials",
             "XLY": "Consumer discretionary", "XLP": "Consumer staples", "XLU": "Utilities", "XLB": "Materials",
@@ -86,29 +95,41 @@ IN_NAMES = {
     "NIFTY OIL AND GAS": "Oil & Gas", "NIFTY MIDCAP 150": "Midcap 150", "NIFTY SMLCAP 250": "Smallcap 250",
     "NIFTY IND DIGITAL": "Digital", "NIFTY IND DEFENCE": "Defence", "NIFTY INDIA MFG": "Manufacturing",
     "NIFTY CHEMICALS": "Chemicals", "NIFTY EV": "EV", "NIFTY IND TOURISM": "Tourism", "NIFTY CAPITAL MKT": "Capital Markets",
-    "NIFTY HOUSING": "Housing",
+    "NIFTY HOUSING": "Housing", "NIFTY 50": "50", "NIFTY NEXT 50": "Next 50", "NIFTY MIDCAP 100": "Midcap 100",
+    "NIFTY SMLCAP 100": "Smallcap 100", "NIFTY MICROCAP250": "Microcap 250", "NIFTY200 MOMENTM30": "200 Momentum 30",
+    "NIFTY100 QUALTY30": "100 Quality 30", "NIFTY100 LOWVOL30": "100 Low Volatility 30", "NIFTY ALPHA 50": "Alpha 50",
+    "NIFTY DIV OPPS 50": "Dividend Opportunities 50", "NIFTY GROWSECT 15": "Growth Sectors 15", "NIFTY MID LIQ 15": "Midcap Liquid 15",
 }
 
 
 def _label(market: str, symbol: str, inst: dict | None) -> str:
     if market == "US" and symbol in US_NAMES:
         return US_NAMES[symbol]
+    if market == "US" and symbol in sector_members.US_NAMES:
+        return sector_members.US_NAMES[symbol]
     if symbol in IN_NAMES:
         return "Nifty " + IN_NAMES[symbol]
     return (inst or {}).get("name") or symbol
 
 
-def resolve_sectors(registry, market: str) -> tuple[list[tuple[str, str]], list[str]]:
-    """(instrument id, symbol) for each sector index the data source has, and the ones it doesn't."""
-    ids, missing = [], []
+def index_sets(market: str) -> dict:
+    """Every list of indices (or sector funds) the chart can compare, by set id."""
+    return {"sectors": SECTORS[market], **INDEX_SETS.get(market, {})}
+
+
+def resolve_index(registry, market: str, sym: str) -> str | None:
     if market == "IN":
-        kite = registry.provider("IN").kite
-        for sym in SECTORS["IN"]["members"]:
-            hit = kite.by_symbol(sym)
-            (ids.append((hit["id"], sym)) if hit and hit.get("type") == "INDEX" else missing.append(sym))
-    else:
-        for sym in SECTORS[market]["members"]:
-            ids.append((f"{market}:{sym}", sym))
+        hit = registry.provider("IN").kite.by_symbol(sym)
+        return hit["id"] if hit and hit.get("type") == "INDEX" else None
+    return f"{market}:{sym}"
+
+
+def resolve_sectors(registry, market: str, set_id: str = "sectors") -> tuple[list[tuple[str, str]], list[str]]:
+    """(instrument id, symbol) for each index in a set the data source has, and the ones it doesn't."""
+    ids, missing = [], []
+    for sym in index_sets(market)[set_id]["members"]:
+        iid = resolve_index(registry, market, sym)
+        (ids.append((iid, sym)) if iid else missing.append(sym))
     return ids, missing
 
 
@@ -123,17 +144,19 @@ def benchmark_id(registry, market: str) -> tuple[str, str]:
     raise LookupError("No benchmark available for this market.")
 
 
-def compute(registry, market: str, members: list[tuple[str, str]], interval: str, tail: int, load) -> dict:
-    """Rotation paths for members [(id, symbol)] against the market's benchmark. `load(id, days)` gives daily bars."""
+def compute(registry, market: str, members: list[tuple[str, str]], interval: str, tail: int, load,
+            bench: tuple[str, str] | None = None) -> dict:
+    """Rotation paths for members [(id, symbol)] against the market's benchmark (or `bench`, (id, symbol)).
+    `load(id, days)` gives daily bars."""
     days = 700 if interval == "weekly" else 220
-    bid, bsym = benchmark_id(registry, market)
-    bench = closes(load(bid, days), interval)
+    bid, bsym = bench or benchmark_id(registry, market)
+    bench_s = closes(load(bid, days), interval)
     prov = registry.provider(market)
 
     def one(item):
         iid, sym = item
         try:
-            pts = path(closes(load(iid, days), interval), bench, tail)
+            pts = path(closes(load(iid, days), interval), bench_s, tail)
             return item, pts, None
         except Exception as e:     # one member's data problem mustn't sink the chart
             return item, [], str(e)[:80] or e.__class__.__name__
@@ -151,10 +174,11 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
         first = pts[0]
         rows.append({"id": iid, "symbol": sym, "name": _label(market, sym, inst), "points": pts, "x": x, "y": y,
                      "quadrant": quadrant(x, y), "heading": heading(pts), "core": market != "IN" or sym in CORE_IN,
+                     "stocks": len(sector_members.members(market, sym)),
                      "moved": None if len(pts) < 2 else quadrant(first["x"], first["y"])})
     order = {"leading": 0, "improving": 1, "weakening": 2, "lagging": 3}
     rows.sort(key=lambda r: (order[r["quadrant"]], -r["x"]))
-    return {"benchmark": bsym, "interval": interval, "tail": tail, "rows": rows, "skipped": skipped,
+    return {"benchmark": _label(market, bsym, None) if bench else bsym, "interval": interval, "tail": tail, "rows": rows, "skipped": skipped,
             "as_of": max((r["points"][-1]["t"] for r in rows), default=None)}
 
 
@@ -174,18 +198,29 @@ def load_daily(registry):
 
 
 def run(registry, market: str, set_id: str, members: list[dict] | None, interval: str, tail: int) -> dict:
-    """Sectors (set "sectors"), or any group of stocks (members), against the market's benchmark."""
+    """A set of indices (set ids from `index_sets`), one sector's stocks against that sector ("sector:<index>"),
+    or any group of stocks (members), against the market's benchmark."""
     tail = max(1, min(MAX_TAIL, int(tail)))
-    if set_id == "sectors":
-        items, missing = resolve_sectors(registry, market)
+    sets, bench, parent = index_sets(market), None, None
+    if set_id in sets:
+        items, missing = resolve_sectors(registry, market, set_id)
+        missing = []                    # an index this data source doesn't carry isn't worth reporting
     else:
+        if set_id.startswith("sector:"):
+            sym = set_id.split(":", 1)[1]
+            members = [{"symbol": x} for x in sector_members.members(market, sym)]
+            iid = resolve_index(registry, market, sym)
+            if not members or not iid:
+                raise LookupError("That sector's stocks aren't available.")
+            bench, parent = (iid, sym), {"symbol": sym, "name": _label(market, sym, None)}
         ids, missing = universes.resolve(registry, market, (members or [])[:universes.MAX_MEMBERS])
         items = [(i, i.split(":", 1)[1]) for i in ids]
-    out = compute(registry, market, items, interval, tail, load_daily(registry))
-    if set_id != "sectors":            # stocks: show the trading symbol, not the index-style label
+    out = compute(registry, market, items, interval, tail, load_daily(registry), bench)
+    if set_id not in sets:              # stocks: show the trading symbol, not the index-style label
         for r in out["rows"]:
             inst = registry.provider(market).instrument(r["id"].split(":", 1)[1]) if registry.provider(market) else None
             r["name"] = (inst or {}).get("symbol") or r["symbol"]
-            r["core"] = True
+            r["core"], r["stocks"] = True, 0
     out["skipped"] = list(missing) + out["skipped"]
+    out["parent"] = parent
     return out

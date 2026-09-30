@@ -13,6 +13,7 @@ import {
   QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars, ValuationGauge,
 } from "../components/Research";
 import { Info, Loading } from "../components/ui";
+import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 
 function useRegion(): [Region, (r: Region) => void] {
@@ -195,6 +196,9 @@ export function CompanyPage() {
           </Panel>
         )}
       </div>
+
+      {region === "IN" && <Panel title="Filings and red flags" id="filings" span="full"
+        info="What the company told the exchange: fund raises (QIP, preferential, rights), pledges, resignations, defaults, regulator action, rating changes, results and calls."><FilingsPanel symbol={sym} /></Panel>}
 
       {c.quarters && c.quarters.cols.length > 0 && <Panel title="Last quarters" span="full"><QuarterTable q={c.quarters} /></Panel>}
 
@@ -481,7 +485,7 @@ interface ScanRow {
   stage: number | null; stage_days: number | null; st_up: boolean; st_days: number; signal: "fresh" | "st_s2" | "stage2" | null;
 }
 interface ScanOut { name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number> }
-interface ScanSets { sets: { id: string; name: string; count: number }[]; alerts: boolean; template: unknown; fresh_days: number }
+interface ScanSets { sets: { id: string; name: string; count: number }[]; alerts: boolean; template: unknown; fresh_days: number; rotation_sets?: { id: string; name: string }[] }
 
 const STAGE_NAME: Record<number, string> = { 1: "Stage 1 · basing", 2: "Stage 2 · advancing", 3: "Stage 3 · topping", 4: "Stage 4 · declining" };
 const SIGNAL: Record<string, [string, string]> = {
@@ -588,7 +592,7 @@ export function ScanPage() {
 
 interface RotationOut {
   name: string; market: Region; benchmark: string; interval: "weekly" | "daily"; tail: number;
-  rows: RotationRow[]; skipped: string[]; as_of: string | null;
+  rows: RotationRow[]; skipped: string[]; as_of: string | null; parent: { symbol: string; name: string } | null;
 }
 
 const ARROW = (deg: number | null) => deg == null ? "–" : ["→", "↗", "↑", "↖", "←", "↙", "↓", "↘"][Math.round(((deg + 360) % 360) / 45) % 8];
@@ -598,6 +602,7 @@ export function RotationPage() {
   const { fail, me } = useApp();
   const [sets, setSets] = useState<ScanSets | null>(null);
   const [setId, setSetId] = useState("sectors");
+  const [backTo, setBackTo] = useState<string | null>(null);        // the set a sector's stocks were opened from
   const [interval, setIv] = useState<"weekly" | "daily">("weekly");
   const [tail, setTail] = useState(4);
   const [askTail, setAskTail] = useState(4);
@@ -630,6 +635,10 @@ export function RotationPage() {
   useEffect(() => { setPicked(null); setFocus(null); }, [region, setId]);
 
   const groups = (sets?.sets ?? []).filter((s) => s.count >= 2);
+  const indexSets = sets?.rotation_sets ?? [{ id: "sectors", name: region === "IN" ? "NSE sector indices" : "S&P 500 sectors" }];
+  const isIndex = indexSets.some((x) => x.id === setId);
+  const drilled = setId.startsWith("sector:");
+  const openStocks = (r: RotationRow) => { setBackTo(setId); setSetId(`sector:${r.symbol}`); };
   const all = out?.rows ?? [];
   const isOn = (r: RotationRow) => (picked ? picked.has(r.id) : r.core !== false);
   const rows = all.filter(isOn);
@@ -643,14 +652,15 @@ export function RotationPage() {
   const unit = interval === "weekly" ? "week" : "day";
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); }} />
+      <ResearchNav region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} />
       <Header eyebrow={`Rotation · ${REGION_NAME[region]}`} title="Sector rotation"
         sub="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
       {!pro && <div className="banner"><span>Sector rotation is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       <div className="row wrap" style={{ gap: 10, alignItems: "center" }}>
-        <span className="chip-select"><select aria-label="What to compare" value={setId} onChange={(e) => setSetId(e.target.value)}>
-          <option value="sectors">{region === "IN" ? "NSE sector indices" : "S&P 500 sectors"}</option>
-          {groups.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.count})</option>)}
+        <span className="chip-select"><select aria-label="What to compare" value={setId} onChange={(e) => { setSetId(e.target.value); setBackTo(null); }}>
+          <optgroup label="Indices">{indexSets.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>
+          {groups.length > 0 && <optgroup label="Stocks">{groups.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.count})</option>)}</optgroup>}
+          {drilled && <option value={setId}>{out?.name ?? "A sector's stocks"}</option>}
         </select></span>
         <div className="seg" role="group" aria-label="Candle size">
           {(["weekly", "daily"] as const).map((v) => <button key={v} aria-pressed={interval === v} onClick={() => setIv(v)}>{v === "weekly" ? "Weekly" : "Daily"}</button>)}
@@ -662,6 +672,10 @@ export function RotationPage() {
         </label>
         <button className="btn quiet sm" disabled={!out || busy || step !== null || (out?.tail ?? 1) < 2} onClick={animate}>{step !== null ? "Playing…" : "Animate"}</button>
       </div>
+      {drilled && (
+        <button className="link small" style={{ alignSelf: "flex-start", background: "none", border: 0, padding: 0, cursor: "pointer" }}
+          onClick={() => { setSetId(backTo ?? "sectors"); setBackTo(null); }}>← Back to {indexSets.find((x) => x.id === (backTo ?? "sectors"))?.name ?? "sectors"}</button>
+      )}
       {busy && !out && <Loading label="Comparing each one with the market" />}
       {out && (
         <section className="card stack" style={{ gap: 14, opacity: busy ? 0.6 : 1 }}>
@@ -676,7 +690,7 @@ export function RotationPage() {
           </div>
           {all.length > 0 && (
             <div className="rot-read">
-              {([["leading", "Leading: stronger than the market and still gaining"], ["improving", "Improving: weaker, but picking up"],
+              {([["leading", `Leading: stronger than ${drilled && out.parent ? out.parent.name : "the market"} and still gaining`], ["improving", "Improving: weaker, but picking up"],
                  ["weakening", "Weakening: stronger, but losing pace"], ["lagging", "Lagging: weaker and still slipping"]] as [Quadrant, string][]).map(([q, says]) => (
                 <div key={q}><QuadrantTag q={q} /><span className="muted small">{says.split(": ")[1]}</span>
                   <span className="small">{names(q).join(", ") || "none"}</span></div>
@@ -696,11 +710,14 @@ export function RotationPage() {
           )}
           {all.length > 0 && (
             <div className="table-wrap"><table>
-              <thead><tr><th style={{ width: 36 }}><span className="sr-only">Show on chart</span></th><th>{setId === "sectors" ? "Sector" : "Stock"}</th><th>Now</th><th className="num">Strength</th><th className="num">Momentum</th><th>Heading</th><th>{out.tail} {unit}s ago</th></tr></thead>
+              <thead><tr><th style={{ width: 36 }}><span className="sr-only">Show on chart</span></th><th>{isIndex ? "Index" : "Stock"}</th><th>Now</th><th className="num">Strength</th><th className="num">Momentum</th><th>Heading</th><th>{out.tail} {unit}s ago</th></tr></thead>
               <tbody>{all.map((r) => (
                 <tr key={r.id} className={focus === r.id ? "rot-row on" : "rot-row"} onClick={() => isOn(r) && setFocus(focus === r.id ? null : r.id)}>
                   <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></td>
-                  <td>{setId === "sectors" ? r.name : <Link className="link" onClick={(e) => e.stopPropagation()} to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>}</td>
+                  <td>{isIndex
+                    ? <span className="row" style={{ gap: 10, justifyContent: "space-between" }}>{r.name}
+                        {(r.stocks ?? 0) > 0 && <button className="btn quiet sm" onClick={(e) => { e.stopPropagation(); openStocks(r); }} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>}</span>
+                    : <Link className="link" onClick={(e) => e.stopPropagation()} to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>}</td>
                   <td><QuadrantTag q={r.quadrant} /></td>
                   <td className="num mono">{r.x.toFixed(2)}</td>
                   <td className="num mono">{r.y.toFixed(2)}</td>
@@ -713,8 +730,70 @@ export function RotationPage() {
         </section>
       )}
       <p className="small muted" style={{ maxWidth: "80ch" }}>
-        Strength: each one's price divided by {region === "IN" ? "the Nifty 500" : "the S&P 500"}, compared with its own last 14 {unit}s (100 = its usual level). Momentum: the same for the change in that strength. StratLab's own calculation. Where something sits today doesn't predict where it goes next, and nothing here is investment advice.
+        {drilled && out?.parent ? `Here each stock is measured against the ${out.parent.name} index itself, so Leading means it's beating its own sector. These are the sector's largest stocks, not its full official list. ` : ""}
+        Strength: each one's price divided by {drilled && out?.parent ? `the ${out.parent.name} index` : region === "IN" ? "the Nifty 500" : "the S&P 500"}, compared with its own last 14 {unit}s (100 = its usual level). Momentum: the same for the change in that strength. StratLab's own calculation. Where something sits today doesn't predict where it goes next, and nothing here is investment advice.
       </p>
+    </div>
+  );
+}
+
+interface FilingsOverview {
+  rows: { symbol: string; summary: FilingSummary; flags: FilingItem[] }[]; problems: string[]; days: number; alerts: boolean; send_at: string;
+}
+
+export function FilingsPage() {
+  const { fail, notify, me } = useApp();
+  const pro = !!me?.plan_info?.features?.filings;
+  const [data, setData] = useState<FilingsOverview | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!pro) return;
+    setBusy(true);
+    api<FilingsOverview>("/research/filings").then(setData).catch(fail).finally(() => setBusy(false));
+  }, [pro, fail]);
+
+  const toggleAlerts = async () => {
+    if (!data) return;
+    try {
+      const r = await api<{ alerts: boolean }>("/research/filings/alerts", { method: "PUT", body: { on: !data.alerts } });
+      setData({ ...data, alerts: r.alerts });
+      notify(r.alerts ? `You'll get a message each evening (${data.send_at} IST) when a watchlist stock files a red flag.` : "Filing alerts off.");
+    } catch (e) { fail(e); }
+  };
+
+  return (
+    <div className="stack" style={{ gap: 24 }}>
+      <ResearchNav region="IN" />
+      <Header eyebrow="Red flags · India" title="Filings and red flags"
+        sub="What your watchlist companies told the exchange in the last 3 months: fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades." />
+      {!pro && <div className="banner"><span>Filings and red flags are on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
+      {data && (
+        <label className="row small" style={{ gap: 8 }}>
+          <input type="checkbox" checked={data.alerts} onChange={toggleAlerts} />
+          Message me each evening when a watchlist stock files a red flag or something to look closer at
+          <Info>{`Checked once a day at ${data.send_at} IST, for the India stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up on the Account page.`}</Info>
+        </label>
+      )}
+      {busy && <Loading label="Reading each company's filings" />}
+      {data && !busy && (data.rows.length === 0 && data.problems.length === 0
+        ? <p className="small muted">Your watchlist has no India stocks yet. Press Watch on a company page to add some.</p>
+        : (
+          <div className="stack" style={{ gap: 14 }}>
+            {data.rows.map((r) => (
+              <section key={r.symbol} className="card stack" style={{ gap: 10 }}>
+                <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
+                  <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
+                  <SummaryLine s={r.summary} />
+                </div>
+                {r.flags.length > 0 ? <div className="filings">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
+                  : <span className="tiny muted">Nothing flagged in the last {data.days} days.</span>}
+              </section>
+            ))}
+            {data.problems.length > 0 && <p className="tiny muted">Couldn't read: {data.problems.join(" · ")}</p>}
+          </div>
+        ))}
+      <p className="small muted" style={{ maxWidth: "80ch" }}>From the companies' own filings with the exchange. Labels come from fixed keyword rules; a label is a reason to read the filing, not a verdict on the company, and nothing here is investment advice.</p>
     </div>
   );
 }

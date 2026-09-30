@@ -65,3 +65,37 @@ def test_endpoint_rotates_us_sectors(monkeypatch):
         assert TestClient(main.app).get("/research/rotation?region=US&set=sectors&tail=99").json()["tail"] == 12
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_more_sets_and_drilling_into_a_sectors_stocks(monkeypatch):
+    rng = np.random.default_rng(5)
+    from app import sector_members
+    syms = set(rotation.SECTORS["US"]["members"]) | set(rotation.INDEX_SETS["US"]["industries"]["members"]) | {"SPY"} \
+        | set(sector_members.US["XLK"])
+    series = {sym: bars_from(list(100 * np.cumprod(1 + rng.normal(0.0005, 0.01, 700)))) for sym in syms}
+
+    class Prov:
+        def ready(self): return True
+        def instrument(self, key): return {"symbol": key, "name": key}
+    prov = Prov()
+
+    class Reg:
+        def provider(self, m): return prov
+        def resolve(self, iid): return prov, {"symbol": iid.split(":")[1]}
+    monkeypatch.setattr(main, "markets", Reg())
+    monkeypatch.setattr(rotation, "load_daily", lambda registry: (lambda iid, days: series[iid.split(":")[1]]))
+    monkeypatch.setattr(rotation.universes, "resolve", lambda reg, m, members: ([f"US:{x['symbol']}" for x in members], []))
+    main.app.dependency_overrides[main.current_profile] = lambda: {"id": "u", "plan": "pro", "_plan": "pro"}
+    c = TestClient(main.app)
+    try:
+        ind = c.get("/research/rotation?region=US&set=industries").json()
+        assert ind["name"] == "US industries" and {"Semiconductors", "Biotech"} <= {r["name"] for r in ind["rows"]}
+        sec = c.get("/research/rotation?region=US&set=sectors").json()
+        tech = next(r for r in sec["rows"] if r["symbol"] == "XLK")
+        assert tech["stocks"] == len(sector_members.US["XLK"])
+        drill = c.get("/research/rotation?region=US&set=sector:XLK").json()
+        assert drill["name"] == "Technology stocks" and drill["benchmark"] == "Technology"
+        assert drill["parent"] == {"symbol": "XLK", "name": "Technology"} and {"AAPL", "MSFT"} <= {r["name"] for r in drill["rows"]}
+        assert c.get("/research/rotation?region=US&set=sector:NOPE").status_code == 404
+    finally:
+        main.app.dependency_overrides.clear()
