@@ -7,14 +7,14 @@
 
 **Test your trading idea before your money does.**
 
-Research a company, describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex, crypto or commodities (MCX and global), then paper trade it on live prices with fake money.
+Research a company, describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex, crypto or commodities (MCX and global), then paper trade it on live prices with fake money. For investors: a Stage 2 + Supertrend scan, sector rotation and exchange filings with red flags.
 
 ### [🌐 stratlab.studio](https://stratlab.studio)
 
 ![Python 3.11](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
-![React](https://img.shields.io/badge/React_18-20232A?logo=react&logoColor=61DAFB)
+![React](https://img.shields.io/badge/React_19-20232A?logo=react&logoColor=61DAFB)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![License: proprietary](https://img.shields.io/badge/license-proprietary-555)
@@ -57,6 +57,10 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
     - A spread and commission estimate per side.
     - Sunday 6 pm to Friday 5 pm New York, US holiday calendar.
 - **Research built in.** Company pages for India and the US: live price and chart, valuation and growth with context, sales and profit history, results against estimates, who owns it, insider trades, news, and an AI read whose trading ideas open as a notebook in one click. Plus AI theme maps, a daily market pulse, side-by-side comparisons and a watchlist.
+- **For investors, not just traders.**
+  - **Stage 2 + Supertrend scan (ST S2):** which stocks in your watchlist or a ready-made group are in Weinstein's Stage 2 with the Supertrend up, fresh signals first. Backtest the ready-made ST S2 rules on the whole group in one click, and get a message after each close when a watchlist stock lines up.
+  - **Sector rotation:** every sector against the market, as Leading, Weakening, Lagging or Improving, with the trail it took and a plain-language summary. Click a sector to see its biggest stocks against that sector. NSE sectors, NSE size and style indices, S&P 500 sectors and US industries.
+  - **Filings and red flags (India):** what a company told the exchange: fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades, each linked to the filing. A 3-month summary per watchlist stock and an evening alert.
 - **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
 - **Import any strategy.** One **Import a strategy** page takes a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words. It sets up the right thing: a notebook for rules on one instrument, a group notebook for strategies that scan a list (like an F&O momentum scanner), or an Options structure. Anything that can't be carried over is listed.
 - **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock. A single instrument, a whole group with shared capital, or an option structure. Sessions keep running until you stop them. With alerts on, each trade comes as a phone notification, on Telegram or by email, plus a short report a few minutes after each market closes.
@@ -83,6 +87,21 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 </picture>
 
 <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/rotation-dark.png">
+  <img alt="Sector rotation: the 11 S&P 500 sectors against SPY in four quadrants, with a summary of which are Leading, Improving, Weakening and Lagging" src="docs/images/rotation-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scan-dark.png">
+  <img alt="The Stage 2 + Supertrend scan: 20 US large caps with their stage, Supertrend direction and ST S2 signal" src="docs/images/scan-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/filings-dark.png">
+  <img alt="Filings and red flags: a watchlist company's QIP flagged as a fund raise, a director resignation, and a 3-month summary" src="docs/images/filings-light.png">
+</picture>
+
+<picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/research-dark.png">
   <img alt="A research page for Reliance Industries: price chart, 52-week range and a button to test a strategy on it" src="docs/images/research-light.png">
 </picture>
@@ -99,7 +118,7 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 
 ## Everything you can do, and where to find it
 
-New here? A short tour pops up the first time you sign in. You can reopen it any time from **Tour** at the bottom of the sidebar. Hover (or tap) a market under **Markets now** to see when it opens or closes: it says **weekend** or **holiday** when an exchange is shut.
+New here? A short tour pops up the first time you sign in. You can reopen it any time from **Tour** at the bottom of the sidebar. **Markets now** at the bottom of the sidebar shows how many markets are open; tap it to list each one, and hover (or tap) a market to see when it opens or closes: it says **weekend** or **holiday** when an exchange is shut.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/tour-dark.png">
@@ -112,6 +131,9 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Explore a sector | **Research → Themes**: a map of who's involved, where the margin sits, and a ranked shortlist |
 | See the market's mood | **Research → Market pulse**: index levels, headlines and an AI read of what's moving |
 | Keep an eye on companies | **Watch** on a company page; they're listed under **Research → Watchlist** |
+| Find Stage 2 stocks with the Supertrend up | **Research → Scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
+| See which sectors are leading | **Research → Rotation**: sectors, size and style indices or US industries, weekly or daily, with a trail and **Animate**; **Stocks →** on a sector shows its biggest stocks against it (Pro) |
+| Check a company's filings for red flags | **Research → Red flags** for your India watchlist, or **Filings and red flags** on any Indian company page; tick the box for an evening alert (Pro) |
 | Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
 | Bring a strategy you already have | **Import a strategy** in the sidebar (or on New notebook): it sets up a notebook, a group notebook or an Options structure depending on what you bring; a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
 | Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
@@ -173,7 +195,8 @@ flowchart LR
     API -- "US, UK, EU, Japan, forex, global commodities; charts" --> YF["Market data API"]
     API -- "research: US companies" --> FH["Company data API"]
     API -- "research: Indian fundamentals, news" --> SC["Fundamentals, news, Wikipedia"]
-    API -- "subscriptions (coming soon)" --> RZP["Razorpay"]
+    API -- "India: company filings" --> EX["Exchange announcements"]
+    API -- "subscriptions" --> RZP["Razorpay"]
     RZP -- "webhooks" --> API
     API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini, Mistral,<br/>SambaNova, OpenRouter, Claude"]
     API --> ALERT["Telegram / email alerts"]
@@ -200,14 +223,19 @@ stratlab/
 │   │   ├── group_live.py     paper trading a whole group with one pot of capital
 │   │   ├── basket.py         "does it work on similar stocks?": same rules on ~10 similar instruments
 │   │   ├── data/             market data: markets list, one provider per market (India, MCX, crypto, US, UK, EU, Japan, forex, global commodities), holidays
-│   │   ├── intel/            research: company data, fundamentals, news, Wikipedia, AI reads, /research API
+│   │   ├── intel/            research: company data, fundamentals, news, Wikipedia, AI reads, exchange filings and red flags, /research API
+│   │   ├── scan.py           Stage 2 + Supertrend (ST S2) scans, the ready-made ST S2 strategy and its daily alert
+│   │   ├── rotation.py       sector rotation: relative strength and momentum against a benchmark, with trails
+│   │   ├── sector_members.py the biggest stocks in each sector index and sector fund, for drilling into a sector
 │   │   ├── research.py       load candles, run an experiment, keep a compact record
 │   │   ├── live.py           paper trading on live ticks (India) or polled candles (every other market)
 │   │   ├── kite_service.py   the broker data API: login, candles, live ticks
 │   │   ├── kite_auto.py      optional automatic daily broker login
 │   │   ├── admin.py          owner-only admin page API
 │   │   ├── billing.py        Razorpay subscriptions
-│   │   ├── plans.py          plan limits and prices (Pro features open to all until payments go live)
+│   │   ├── plans.py          plan limits and prices, and the admin-started launch offer
+│   │   ├── library.py        the public strategy library, with reports and moderation
+│   │   ├── guard.py          request size cap, rate limits and security headers
 │   │   ├── ai_writer.py      plain English → strategy rules
 │   │   ├── ai_providers.py   the AI provider chain and its order for quick jobs and research reads
 │   │   ├── push.py           phone and browser notifications (Web Push)
@@ -246,7 +274,7 @@ The **[setup guide](stratlab/README.md)** covers Supabase, the broker data API (
 
 ## Plans
 
-**Early access: StratLab is free, and every feature is unlocked for everyone** (all indicators, Indian F&O, group and options paper trading, alerts and export, and groups of up to 50). Monthly limits still apply. The paid plans below switch on automatically once Razorpay is connected.
+Paid plans switch on once Razorpay's keys and plan IDs are set; until then every feature is open to everyone, with the Free plan's monthly limits. The site owner can also start a **launch offer** from the Admin page: every user gets Pro free for a set number of days.
 
 | | Free | Basic · ₹999/mo | Pro · ₹2,999/mo |
 |---|---|---|---|
@@ -262,6 +290,7 @@ The **[setup guide](stratlab/README.md)** covers Supabase, the broker data API (
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
 | Markets | All, except Indian F&O | same | + Indian F&O |
 | Export rules and trades | – | – | ✓ |
+| ST S2 scan, sector rotation, filings and red flags | – | – | ✓ |
 | Research AI reads | 60 / day | 60 / day | 60 / day |
 | Share cards and public links | ✓ | ✓ | ✓ |
 

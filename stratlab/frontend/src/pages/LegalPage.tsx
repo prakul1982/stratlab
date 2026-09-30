@@ -4,7 +4,7 @@ import { CFG } from "../lib/api";
 import { Logo } from "../components/Logo";
 
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
-export const BUSINESS = {
+const BUSINESS = {
   name: CFG.BUSINESS_NAME || "StratLab",
   email: CFG.CONTACT_EMAIL || "prakul828@gmail.com",
   address: CFG.BUSINESS_ADDRESS || "",

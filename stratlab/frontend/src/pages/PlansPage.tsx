@@ -14,9 +14,10 @@ const FEATURES: Record<string, string[]> = {
     "SMA, EMA, RSI and price rules", "Share cards and public links"],
   pro: ["Unlimited experiments", "Unlimited AI builds", "Group tests of up to 50 instruments", "Paper trade 10 strategies at a time",
     "Options entered on your own rules' signals", "Faster group entries and a spread limit", "Telegram and email alerts for every trade",
-    "All 20+ indicators: MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, Donchian and more", "Indian F&O", "Export rules and trades"],
+    "All 20+ indicators: MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, Donchian and more", "Indian F&O", "Export rules and trades",
+    "Stage 2 + Supertrend scan with a daily alert", "Sector rotation, down to each sector's stocks", "Filings and red flags, with an evening alert"],
 };
-const WHO: Record<string, string> = { free: "Test a few ideas", basic: "For traders running a strategy or two", pro: "For active traders running several strategies" };
+const WHO: Record<string, string> = { free: "Test a few ideas", basic: "For traders running a strategy or two", pro: "For active traders and investors" };
 // shown until /me arrives; the server's plans.py is the source of truth, and the same amounts must be set on the Razorpay plans
 const PRICE: Record<string, [number, number]> = { free: [0, 0], basic: [999, 9990], pro: [2999, 29990] };
 
