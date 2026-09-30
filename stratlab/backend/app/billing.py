@@ -46,6 +46,42 @@ def _ts(v) -> str:
     return (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
 
 
+def _mask(v: str) -> str:
+    return f"{v[:9]}…{v[-4:]}" if len(v) > 14 else ("set" if v else "missing")
+
+
+def check_setup() -> dict:
+    """Ask Razorpay whether the keys work and each plan exists, for the admin's "Check payments setup" button.
+    Nothing secret is returned: the key ID is shortened and the secret only reported by length."""
+    key, secret = settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET
+    mode = "live" if key.startswith("rzp_live_") else "test" if key.startswith("rzp_test_") else "unknown"
+    out = {"key_id": _mask(key), "mode": mode, "secret_length": len(secret),
+           "webhook_secret_set": bool(settings.RAZORPAY_WEBHOOK_SECRET), "keys_ok": False, "keys_error": None, "plans": []}
+    if not key or not secret:
+        out["keys_error"] = "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must both be set."
+        return out
+    probe = razorpay.Client(auth=(key, secret))   # a fresh client, so a changed key is tried now
+    try:
+        probe.plan.all({"count": 1})
+        out["keys_ok"] = True
+    except Exception as e:
+        out["keys_error"] = (str(e) or e.__class__.__name__)[:200]
+        return out
+    for label, pid in (("Basic monthly", settings.RAZORPAY_PLAN_BASIC), ("Pro monthly", settings.RAZORPAY_PLAN_PRO),
+                       ("Basic yearly", settings.RAZORPAY_PLAN_BASIC_YEAR), ("Pro yearly", settings.RAZORPAY_PLAN_PRO_YEAR)):
+        row = {"label": label, "id": pid or None, "ok": False, "detail": "Not set" if not pid else None}
+        if pid:
+            try:
+                p = probe.plan.fetch(pid)
+                item = p.get("item") or {}
+                row.update(ok=True, detail=f"{item.get('name', '')}: ₹{(item.get('amount') or 0) / 100:,.0f} every "
+                                           f"{p.get('interval', 1)} {p.get('period', '')}".strip())
+            except Exception as e:
+                row["detail"] = f"Razorpay can't find this plan with these keys ({(str(e) or 'error')[:120]})"
+        out["plans"].append(row)
+    return out
+
+
 def create_subscription(profile: dict, plan: str, period: str = "month") -> dict:
     if not enabled():
         raise ValueError("Payments aren't set up on the server yet.")

@@ -78,6 +78,11 @@ function PlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: () => v
   );
 }
 
+interface BillingCheck {
+  key_id: string; mode: string; secret_length: number; webhook_secret_set: boolean; keys_ok: boolean; keys_error: string | null;
+  plans: { label: string; id: string | null; ok: boolean; detail: string | null }[];
+}
+
 interface ReportedRow {
   id: string; name: string; author: string; email: string | null; description: string; reports: number;
   reasons: Record<string, number>; hidden: boolean; hidden_by: string | null; published_at: string;
@@ -94,6 +99,7 @@ export function AdminPage() {
   const [aiTest, setAiTest] = useState<AITest[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [promoDays, setPromoDays] = useState(10);
+  const [billingCheck, setBillingCheck] = useState<BillingCheck | null>(null);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -143,6 +149,7 @@ export function AdminPage() {
     });
   };
 
+  const checkBilling = () => run("billing", async () => { setBillingCheck(await api<BillingCheck>("/admin/billing/check", { method: "POST" })); });
   const startPromo = () => {
     if (!confirm(`Give every user every Pro feature, free, for ${promoDays} days starting now?`)) return;
     run("promo", async () => { await api("/admin/promo", { method: "POST", body: { days: promoDays } }); notify(`Launch offer on for ${promoDays} days.`); await loadOverview(); });
@@ -223,6 +230,17 @@ export function AdminPage() {
                     : `${r.targets.join(", ")} every ${r.every_minutes} min in market hours. ${r.today} saved today${r.last_at ? `, last ${ago(r.last_at)}` : ""}.${r.last_error ? ` Last problem: ${r.last_error}` : ""}`} />;
               })()}
               <Status ok={sv!.billing_enabled} warn label="Payments" detail={sv!.billing_enabled ? "Razorpay is connected" : "Razorpay not set up, so paid plans show \"Coming soon\". Grant plans by hand below."} />
+              <div className="stack" style={{ gap: 8, marginTop: 6 }}>
+                <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "billing"} onClick={checkBilling}>{busy === "billing" ? "Asking Razorpay…" : "Check payments setup"}</button>
+                {billingCheck && (
+                  <div className="stack small" style={{ gap: 4 }}>
+                    <Status ok={billingCheck.keys_ok} label={`Keys (${billingCheck.mode} mode)`}
+                      detail={billingCheck.keys_ok ? `Razorpay accepts key ${billingCheck.key_id}` : `Key ${billingCheck.key_id}, secret ${billingCheck.secret_length} characters: ${billingCheck.keys_error}. Regenerate the key in Razorpay and paste BOTH the new Key ID and secret into Railway.`} />
+                    {billingCheck.plans.map((p) => <Status key={p.label} ok={p.ok} warn={!p.id} label={p.label} detail={p.detail ?? ""} />)}
+                    <Status ok={billingCheck.webhook_secret_set} label="Webhook secret" detail={billingCheck.webhook_secret_set ? "Set" : "RAZORPAY_WEBHOOK_SECRET is missing"} />
+                  </div>
+                )}
+              </div>
             </section>
           </div>
 

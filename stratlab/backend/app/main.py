@@ -1295,6 +1295,12 @@ def admin_stop_session(sid: str, _=Depends(admin.admin_profile)):
     return {"ok": True}
 
 
+@app.post("/admin/billing/check")
+def admin_billing_check(_=Depends(admin.admin_profile)):
+    """Whether Razorpay accepts the keys and knows each plan, straight from Razorpay."""
+    return billing.check_setup()
+
+
 @app.post("/admin/promo")
 def admin_start_promo(req: PromoReq, who=Depends(admin.admin_profile)):
     """Everyone gets Pro, starting now, for this many days (the launch offer). Starting again resets the end."""
