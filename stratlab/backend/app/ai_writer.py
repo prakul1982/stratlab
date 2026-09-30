@@ -12,7 +12,7 @@ from .models import Cond, Risk, Session
 
 BASIC_TYPES = '"price", "num", "sma", "ema", "rsi"'
 PRO_TYPES = ('"price", "num", "sma", "ema", "rsi", "macd", "macd_signal", "macd_hist", '
-             '"bb_upper", "bb_mid", "bb_lower", "vwap", "supertrend", "adx", "stoch_k", "atr_pct", '
+             '"bb_upper", "bb_mid", "bb_lower", "vwap", "supertrend", "stage", "adx", "stoch_k", "atr_pct", '
              '"dc_upper", "dc_lower", "volume", "vol_sma", "atr", "open", "high", "low", "body", "upper_wick", '
              '"lower_wick", "range", "prev_close", "day_open", "day_high", "day_low", "day_chg"')
 
@@ -56,9 +56,10 @@ Schema:
                "instrument", "tf", "exit", "sl", "tgt", "trail", "maxBars", "riskPct", "capital",
   "notes": short plain-English notes on anything you could not express or had to assume
 }
-Cond = {"l": Ref, "op": "xa" | "xb" | "gt" | "lt", "r": Ref, "w": weight (only with entryJoin "score")}
+Cond = {"l": Ref, "op": "xa" | "xb" | "gt" | "lt" | "eq", "r": Ref, "w": weight (only with entryJoin "score")}
   xa = crosses above (true only on the crossing candle), xb = crosses below,
-  gt = is above (true on every candle it stays above), lt = is below.
+  gt = is above (true on every candle it stays above), lt = is below, eq = is (only for whole-number values
+  like stage: "stage eq num 2").
   Use "gt"/"lt" when the user says "above"/"below", and "xa"/"xb" only when they say cross/break/move above.
 Ref = {"t": type, "p": period, "m": second parameter, "v": number,
        "ago": the value this many candles ago, "k": multiply the value by this, "tf": "15m" | "1h" | "1d" to
@@ -67,6 +68,10 @@ Allowed types for this user: %TYPES%
   "price" = close price, "num" = a constant in "v", sma/ema/rsi use "p" as the length,
   macd types: p = fast (12), m = slow (26); bb types: p = length, m = std-devs; vwap: p = length;
   supertrend: p = ATR length, m = multiplier.
+  stage: Weinstein market stage 1-4 from a p-candle average (150 on daily candles, about 30 weeks) and its slope
+  over m candles (20): 1 basing, 2 advancing (average rising, price above it), 3 topping, 4 declining.
+  "Stage 2" / "stage two" = stage eq num 2. "ST S2" = Supertrend + Stage 2: entry stage eq num 2 AND price xa
+  supertrend; exit price xb supertrend. On intraday candles use stage with "tf": "1d".
   adx: trend strength 0-100 (p = length); stoch_k: stochastic %K 0-100 (p = length, m = smoothing);
   atr_pct: average true range as % of price (p = length); atr: average true range in price points (p = length);
   dc_upper / dc_lower: highest high / lowest low of the previous p candles (use "price" "xa" "dc_upper" for a

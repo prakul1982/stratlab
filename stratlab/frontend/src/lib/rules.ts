@@ -13,6 +13,7 @@ export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boo
   { t: "bb_lower", name: "Bollinger lower", friendly: "lower Bollinger band", pro: true },
   { t: "vwap", name: "VWAP", friendly: "VWAP", pro: true },
   { t: "supertrend", name: "Supertrend", friendly: "Supertrend", pro: true },
+  { t: "stage", name: "Stage (1–4, Weinstein)", friendly: "the market stage", pro: true },
   { t: "adx", name: "ADX (trend strength)", friendly: "trend strength", pro: true },
   { t: "stoch_k", name: "Stochastic %K", friendly: "stochastic", pro: true },
   { t: "atr_pct", name: "ATR % (volatility)", friendly: "volatility", pro: true },
@@ -37,7 +38,7 @@ export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boo
 const PRO_TYPES = new Set(INDICATORS.filter((i) => i.pro).map((i) => i.t));
 export const DEFAULTS: Partial<Record<RefType, [number, number?]>> = {
   sma: [20], ema: [20], rsi: [14], macd: [12, 26], macd_signal: [12, 26], macd_hist: [12, 26],
-  bb_upper: [20, 2], bb_mid: [20, 2], bb_lower: [20, 2], vwap: [20], supertrend: [10, 3],
+  bb_upper: [20, 2], bb_mid: [20, 2], bb_lower: [20, 2], vwap: [20], supertrend: [10, 3], stage: [150, 20],
   adx: [14], stoch_k: [14, 3], atr_pct: [14], dc_upper: [20], dc_lower: [20], vol_sma: [20], atr: [14],
 };
 export const OPS: { op: Op; say: string; short: string }[] = [
@@ -45,6 +46,7 @@ export const OPS: { op: Op; say: string; short: string }[] = [
   { op: "xb", say: "crosses below", short: "crosses below" },
   { op: "gt", say: "is above", short: "is above" },
   { op: "lt", say: "is below", short: "is below" },
+  { op: "eq", say: "is", short: "is" },
 ];
 export const opSay = (op: Op) => OPS.find((o) => o.op === op)!.say;
 
@@ -227,7 +229,7 @@ export function questionFrom(text: string, instrument?: string | null): string {
   return `Does "${lead}" work${named ? "" : ` on ${instrument}`}?`;
 }
 
-const OP_SHORT: Record<Op, string> = { xa: "over", xb: "under", gt: "above", lt: "below" };
+const OP_SHORT: Record<Op, string> = { xa: "over", xb: "under", gt: "above", lt: "below", eq: "is" };
 
 /** A short notebook name from its first buy rule: "EMA 20 over EMA 50 · NIFTY 50". */
 export function nameFor(s: Strategy, instrument?: string | null): string {

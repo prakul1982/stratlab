@@ -64,3 +64,14 @@ def test_signature_check_is_real(monkeypatch):
     except rz.SignatureVerificationError:
         pass
     monkeypatch.setattr(billing, "_client", None)
+
+
+def test_admin_sees_razorpays_reason(monkeypatch):
+    from app import admin
+    try:
+        c = client(monkeypatch, create_subscription=boom(rz.BadRequestError("The id provided does not exist")))
+        assert "Razorpay said" not in c.post("/billing/subscribe", json={"plan": "pro"}).json()["detail"]["message"]
+        monkeypatch.setattr(admin, "is_admin", lambda p: True)
+        assert "does not exist" in c.post("/billing/subscribe", json={"plan": "pro"}).json()["detail"]["message"]
+    finally:
+        main.app.dependency_overrides.clear()
