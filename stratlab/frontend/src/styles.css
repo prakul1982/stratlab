@@ -722,3 +722,8 @@ table.legs input[type=number] { width: 72px !important; }
 .q-tag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .q-tag i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .rot-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; }
+.rot-read { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 20px; padding: 12px 14px; border-radius: 10px; background: var(--paper-2); }
+.rot-read > div { display: flex; flex-direction: column; gap: 2px; }
+.rot-read > p { grid-column: 1 / -1; }
+.rot-row { cursor: pointer; }
+.rot-row.on td { background: var(--chip); }

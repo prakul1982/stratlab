@@ -32,6 +32,9 @@ US_NAMES = {"XLK": "Technology", "XLF": "Financials", "XLV": "Health care", "XLE
             "XLY": "Consumer discretionary", "XLP": "Consumer staples", "XLU": "Utilities", "XLB": "Materials",
             "XLRE": "Real estate", "XLC": "Communication"}
 BENCHMARK_FALLBACK = {"IN": ["NIFTY 500", "NIFTY 50"], "US": ["SPY"]}
+# the sectors shown before the user picks: the broad, non-overlapping ones (the rest stay one click away)
+CORE_IN = {"NIFTY BANK", "NIFTY IT", "NIFTY AUTO", "NIFTY FMCG", "NIFTY PHARMA", "NIFTY METAL", "NIFTY REALTY",
+           "NIFTY ENERGY", "NIFTY MEDIA", "NIFTY PSU BANK", "NIFTY FIN SERVICE", "NIFTY INFRA"}
 
 _cache = TTLCache(max_items=200)
 
@@ -147,7 +150,7 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
         x, y = pts[-1]["x"], pts[-1]["y"]
         first = pts[0]
         rows.append({"id": iid, "symbol": sym, "name": _label(market, sym, inst), "points": pts, "x": x, "y": y,
-                     "quadrant": quadrant(x, y), "heading": heading(pts),
+                     "quadrant": quadrant(x, y), "heading": heading(pts), "core": market != "IN" or sym in CORE_IN,
                      "moved": None if len(pts) < 2 else quadrant(first["x"], first["y"])})
     order = {"leading": 0, "improving": 1, "weakening": 2, "lagging": 3}
     rows.sort(key=lambda r: (order[r["quadrant"]], -r["x"]))
@@ -183,5 +186,6 @@ def run(registry, market: str, set_id: str, members: list[dict] | None, interval
         for r in out["rows"]:
             inst = registry.provider(market).instrument(r["id"].split(":", 1)[1]) if registry.provider(market) else None
             r["name"] = (inst or {}).get("symbol") or r["symbol"]
+            r["core"] = True
     out["skipped"] = list(missing) + out["skipped"]
     return out
