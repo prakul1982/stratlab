@@ -70,8 +70,8 @@ Allowed types for this user: %TYPES%
   supertrend: p = ATR length, m = multiplier.
   stage: Weinstein market stage 1-4 from a p-candle average (150 on daily candles, about 30 weeks) and its slope
   over m candles (20): 1 basing, 2 advancing (average rising, price above it), 3 topping, 4 declining.
-  "Stage 2" / "stage two" = stage eq num 2. "ST S2" = Supertrend + Stage 2: entry stage eq num 2 AND price xa
-  supertrend; exit price xb supertrend. On intraday candles use stage with "tf": "1d".
+  "Stage 2" / "stage two" = stage eq num 2. "ST S2" = Supertrend + Stage 2: entry stage eq num 2 AND price gt
+  supertrend (is above, not crosses: the Supertrend often turns up before Stage 2 starts); exit price xb supertrend. On intraday candles use stage with "tf": "1d".
   adx: trend strength 0-100 (p = length); stoch_k: stochastic %K 0-100 (p = length, m = smoothing);
   atr_pct: average true range as % of price (p = length); atr: average true range in price points (p = length);
   dc_upper / dc_lower: highest high / lowest low of the previous p candles (use "price" "xa" "dc_upper" for a

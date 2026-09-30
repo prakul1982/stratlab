@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, pct, price, safeHref, signClass } from "../lib/format";
 import { HELP } from "../lib/help";
@@ -469,6 +470,117 @@ export function WatchlistPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/* ---------- Stage 2 + Supertrend scan (Pro) ---------- */
+interface ScanRow {
+  id: string; symbol: string; name: string | null; currency: string | null; price: number; chg: number | null;
+  stage: number | null; stage_days: number | null; st_up: boolean; st_days: number; signal: "fresh" | "st_s2" | "stage2" | null;
+}
+interface ScanOut { name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number> }
+interface ScanSets { sets: { id: string; name: string; count: number }[]; alerts: boolean; template: unknown; fresh_days: number }
+
+const STAGE_NAME: Record<number, string> = { 1: "Stage 1 · basing", 2: "Stage 2 · advancing", 3: "Stage 3 · topping", 4: "Stage 4 · declining" };
+const SIGNAL: Record<string, [string, string]> = {
+  fresh: ["Fresh ST S2", "pass"], st_s2: ["In ST S2", "pass"], stage2: ["Stage 2, Supertrend down", "warn"],
+};
+
+export function ScanPage() {
+  const [region, setRegion] = useRegion();
+  const { fail, notify, refreshNotebooks, me } = useApp();
+  const nav = useNavigate();
+  const [sets, setSets] = useState<ScanSets | null>(null);
+  const [setId, setSetId] = useState("watchlist");
+  const [out, setOut] = useState<ScanOut | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [only, setOnly] = useState(false);
+  const pro = !!me?.plan_info?.features?.scans;
+
+  useEffect(() => {
+    setOut(null);
+    api<ScanSets>(`/research/scan/sets?region=${region}`).then((s) => {
+      setSets(s);
+      setSetId((cur) => s.sets.some((x) => x.id === cur && (x.id !== "watchlist" || x.count)) ? cur : (s.sets.find((x) => x.id !== "watchlist" || x.count)?.id ?? "watchlist"));
+    }).catch(fail);
+  }, [region, fail]);
+
+  const runScan = async () => {
+    setBusy(true);
+    try { setOut(await api<ScanOut>("/research/scan", { method: "POST", body: { region, set: setId } })); } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  const toggleAlerts = async () => {
+    if (!sets) return;
+    try {
+      const r = await api<{ alerts: boolean }>("/research/scan/alerts", { method: "PUT", body: { on: !sets.alerts } });
+      setSets({ ...sets, alerts: r.alerts });
+      notify(r.alerts ? "You'll get a message after each close when a watchlist stock gives an ST S2 signal." : "ST S2 alerts off.");
+    } catch (e) { fail(e); }
+  };
+  const testIt = async () => {
+    if (!out || !sets) return;
+    const members = out.rows.map((r) => ({ id: r.id, symbol: r.symbol }));
+    if (members.length < 2) { notify("A group test needs at least two stocks."); return; }
+    try {
+      const nb = await api<{ id: string }>("/notebooks", { method: "POST", body: {
+        name: `ST S2 on ${out.name}`.slice(0, 80), question: "Does Stage 2 + Supertrend work on this group?",
+        strategy: sets.template, group: { id: setId, name: out.name.slice(0, 60), market: region, members: members.slice(0, 50), maxOpen: 5 } } });
+      await refreshNotebooks();
+      nav(`/n/${nb.id}`);
+    } catch (e) { fail(e); }
+  };
+
+  const rows = (out?.rows ?? []).filter((r) => !only || r.signal === "fresh" || r.signal === "st_s2");
+  const cur = sets?.sets.find((s) => s.id === setId);
+  return (
+    <div className="stack" style={{ gap: 24 }}>
+      <ResearchNav region={region} setRegion={setRegion} />
+      <Header eyebrow={`Scan · ${REGION_NAME[region]}`} title="Stage 2 + Supertrend"
+        sub="Which stocks are in Stage 2 (a rising 150-day average with the price above it) and have the Supertrend pointing up. Facts from the charts, not advice: your own rules decide." />
+      {!pro && <div className="banner"><span>Scans and ST S2 alerts are on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
+      <div className="row wrap" style={{ gap: 10, alignItems: "center" }}>
+        <span className="chip-select"><select aria-label="Group to scan" value={setId} onChange={(e) => { setSetId(e.target.value); setOut(null); }}>
+          {(sets?.sets ?? []).map((s) => <option key={s.id} value={s.id} disabled={s.id === "watchlist" && !s.count}>{s.name} ({s.count})</option>)}
+        </select></span>
+        <button className="btn" disabled={busy || !pro || !cur?.count} onClick={runScan}>{busy ? "Scanning…" : "Scan"}</button>
+        {sets && <label className="row small" style={{ gap: 8, marginLeft: "auto" }}>
+          <input type="checkbox" checked={sets.alerts} disabled={!pro} onChange={toggleAlerts} />
+          Alert me after each close when a watchlist stock gives an ST S2 signal
+          <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up on the Account page."}</Info>
+        </label>}
+      </div>
+      {cur && cur.id === "watchlist" && !cur.count && <p className="small muted">Your {REGION_NAME[region]} watchlist is empty. Press Watch on company pages to add stocks, or scan a ready-made group.</p>}
+      {busy && <Loading label="Reading each stock's daily chart" />}
+      {out && !busy && (
+        <section className="card stack" style={{ gap: 12 }}>
+          <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+            <div className="stack" style={{ gap: 2 }}>
+              <b>{out.name}</b>
+              <span className="small muted">{out.counts.fresh} fresh ST S2 (Supertrend turned up in the last {sets?.fresh_days ?? 5} days) · {out.counts.st_s2} already in ST S2 · {out.counts.stage2} in Stage 2 only</span>
+            </div>
+            <div className="row wrap" style={{ gap: 8 }}>
+              <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} />Only ST S2</label>
+              <button className="btn quiet sm" onClick={testIt}>Backtest ST S2 on this group</button>
+            </div>
+          </div>
+          {rows.length === 0 ? <p className="small muted">Nothing matches right now.</p> : (
+            <div className="table-wrap"><table>
+              <thead><tr><th>Stock</th><th className="num">Price</th><th>Stage</th><th>Supertrend</th><th>Signal</th></tr></thead>
+              <tbody>{rows.map((r) => (
+                <tr key={r.id}>
+                  <td><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.symbol}</Link>{r.name && r.name !== r.symbol && <div className="tiny muted">{r.name}</div>}</td>
+                  <td className="num">{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}<div className={`tiny ${signClass(r.chg)}`}>{r.chg == null ? "" : pct(r.chg, 2)}</div></td>
+                  <td>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <div className="tiny muted">{r.stage_days} day{r.stage_days === 1 ? "" : "s"}</div> : null}</td>
+                  <td>{r.st_up ? "Up" : "Down"}<div className="tiny muted">for {r.st_days} day{r.st_days === 1 ? "" : "s"}</div></td>
+                  <td>{r.signal ? <span className={`badge ${SIGNAL[r.signal][1]}`}>{SIGNAL[r.signal][0]}</span> : <span className="tiny muted">–</span>}</td>
+                </tr>))}</tbody>
+            </table></div>
+          )}
+          {(out.missing.length > 0 || out.problems.length > 0) && <p className="tiny muted">Skipped: {[...out.missing, ...out.problems].join(" · ")}</p>}
+        </section>
+      )}
+      <p className="small muted" style={{ maxWidth: "80ch" }}>Stage uses the 150-day average and its 20-day slope; Supertrend uses 10 days and 3× ATR. Past signals don't predict future returns, and nothing here is investment advice.</p>
     </div>
   );
 }

@@ -42,9 +42,9 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, public, push, risk
+from . import ask, daily_report, ideas, library, public, push, risk, scan
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, ModerateReq, PromoReq, ReportReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -70,6 +70,15 @@ def after_login() -> str:
 
 
 auto_login = AutoLogin(kite, after_login)
+
+
+def _scan_alert_ok(profile: dict) -> bool:
+    from .plans import access_plan
+    return allows(access_plan(profile), "scans") and bool(alerts.jobs_for(profile, "", ""))
+
+
+scan_alerts_job = scan.Alerts(markets, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
+                              can_alert=_scan_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 
 
@@ -88,6 +97,7 @@ async def lifespan(app: FastAPI):
     manager.start_loop()
     auto_login.start()
     recorder.start()
+    scan_alerts_job.start()
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     yield
 
@@ -622,6 +632,8 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
     nb = {"name": req.name or strategy.name, "question": req.question or "", "notes": req.notes or "",
           "strategy": strategy.model_dump(), "instrument": instrument_summary(req.instrument),
           "experiments": [], "summary": research.summary([])}
+    if req.group is not None and not req.instrument:
+        nb["group"] = group_body(req.group)     # e.g. "Backtest ST S2 on this group" from a scan
     return save_notebook(profile, nb)
 
 
@@ -648,10 +660,13 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
     if req.instrument is not None or req.clearGroup:
         nb.pop("group", None)                 # picking one instrument replaces a group
     if req.group is not None:
-        g = req.group
-        nb["group"] = {"id": g.id, "name": g.name, "market": g.market.upper(), "maxOpen": min(g.maxOpen, len(g.members)),
-                       "members": [m.model_dump(exclude_none=True) for m in g.members]}
+        nb["group"] = group_body(req.group)
     return ok(save_notebook(profile, nb))
+
+
+def group_body(g) -> dict:
+    return {"id": g.id, "name": g.name, "market": g.market.upper(), "maxOpen": min(g.maxOpen, len(g.members)),
+            "members": [m.model_dump(exclude_none=True) for m in g.members]}
 
 
 @app.get("/groups")
@@ -766,6 +781,45 @@ def share_experiment(nid: str, version: int, req: ShareReq, profile=Depends(curr
     nb["experiments"] = [exp if e["v"] == version else e for e in exps]
     save_notebook(profile, nb)
     return {"token": token, "url": public.url(token)}
+
+
+# ---------- Stage 2 + Supertrend scans (Pro) ----------
+def scan_members(profile, region: str, set_id: str) -> tuple[str, list[dict]]:
+    if set_id == "watchlist":
+        return "Your watchlist", scan.watchlist_members(profile["id"], region)
+    preset = next((p for p in universes.presets(region) if p["id"] == set_id), None)
+    if not preset:
+        err(404, "not_found", "That group isn't available.")
+    return preset["name"], [{"symbol": s} for s in preset["symbols"]]
+
+
+@app.get("/research/scan/sets")
+def scan_sets(region: str = "IN", profile=Depends(current_profile)):
+    region = "US" if region.upper() == "US" else "IN"
+    return {"sets": [{"id": "watchlist", "name": "Your watchlist", "count": len(scan.watchlist_members(profile["id"], region))}]
+            + [{"id": p["id"], "name": p["name"], "count": p["count"]} for p in universes.presets(region)],
+            "alerts": scan.alert_on(profile["id"]), "template": scan.ST_S2, "fresh_days": scan.FRESH}
+
+
+@app.post("/research/scan")
+def run_scan(req: ScanReq, profile=Depends(current_profile)):
+    """Stage and Supertrend for every stock in a group, fresh ST S2 signals first. Facts, never advice."""
+    need(profile, "scans", "Stage 2 + Supertrend scans")
+    name, members = scan_members(profile, req.region, req.set)
+    if not members:
+        err(400, "empty", "Your watchlist has no stocks in this market yet. Star a few companies in Research first.")
+    prov = markets.provider(req.region)
+    if prov is None or not prov.ready():
+        raise KiteNotReady("Market data for this market is offline right now.")
+    return ok({"name": name, "market": req.region, **scan.run(markets, req.region, members)})
+
+
+@app.put("/research/scan/alerts")
+def scan_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
+    if req.on:
+        need(profile, "scans", "ST S2 watchlist alerts")
+    scan.set_alert(profile["id"], req.on)
+    return {"alerts": req.on}
 
 
 # ---------- the public strategy library ----------

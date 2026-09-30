@@ -201,6 +201,15 @@ class ReportReq(BaseModel):
     reason: Literal["spam", "offensive", "misleading", "personal", "other"] = "other"
 
 
+class ScanReq(BaseModel):
+    region: Literal["IN", "US"] = "IN"
+    set: str = Field("watchlist", max_length=40)          # a preset group id, or "watchlist"
+
+
+class ScanAlertReq(BaseModel):
+    on: bool
+
+
 class PromoReq(BaseModel):
     days: int = Field(10, ge=1, le=90)
 

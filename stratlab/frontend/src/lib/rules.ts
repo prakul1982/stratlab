@@ -93,6 +93,7 @@ function baseName(r: Ref): string {
     case "dc_lower": return `${p}-candle low`;
     case "volume": return "Volume";
     case "vol_sma": return `Avg volume ${p}`;
+    case "stage": return p === 150 && m === 20 ? "Stage" : `Stage (${p}-candle avg)`;
     default: return `Supertrend ${p},${m}`;
   }
 }

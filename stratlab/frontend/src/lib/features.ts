@@ -44,6 +44,8 @@ export const FEATURES: Feature[] = [
   { id: "pulse", title: "Market pulse", what: "Index levels, headlines and today's mood.", to: "/research/pulse", words: "market pulse today news mood indices" },
   { id: "rcompare", title: "Compare two companies", what: "Side by side, with an AI read.", to: "/research/compare", words: "compare companies versus vs" },
   { id: "watchlist", title: "Watchlist", what: "Companies you're keeping an eye on.", to: "/research/watchlist", words: "watchlist saved favourites" },
+  { id: "scan", title: "Stage 2 + Supertrend scan", what: "Which stocks in a group are in Stage 2 with the Supertrend up (ST S2), with daily alerts.", to: "/research/scan",
+    words: "scan screener stage 2 stage two supertrend st s2 weinstein signals alert" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },
   { id: "account", title: "Account and connection check", what: "Your plan, usage and a check of every data and AI service.", to: "/account",
     words: "account settings usage connection check theme" },
