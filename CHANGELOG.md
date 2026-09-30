@@ -5,6 +5,7 @@
 ### Company deep dive
 - **Deep dive on every Indian company page (Pro):** ten years of sales, profit and operating margin, sales and profit growth over 3 and 5 years, the last 12 quarters with growth on a year earlier, and a capex and cash table (capex, capex as a share of sales, cash from operations, free cash flow, debt). Capex is the change in fixed assets and work in progress plus depreciation.
 - **From the company's own documents:** the AI reads its latest investor presentation and two latest earnings-call transcripts from the exchange, then lays out the business model (segments and their share) and every capex and growth plan (what, how much, by when, status) with the management's own words and a link to the document. Facts only, never advice; kept for a week, and counts toward the daily research AI limit.
+- **Management report card:** the AI reads up to six earnings-call transcripts from the last two years for the targets management gave (revenue and profit growth, operating margin, capex, and promises without a number), and each is checked against the reported annual or quarterly results: **met**, **missed**, **not due yet** or **can't check**. A target repeated on later calls counts once, and a later change is shown. Targets stated after the period had ended are ignored.
 - **Admin → Check filings feed** now also tries to read one company document from the server.
 
 ### Real prices for tests

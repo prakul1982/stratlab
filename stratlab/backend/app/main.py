@@ -18,7 +18,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, basket, billing, db, deepdive, fixtures, importer, universes
+from . import admin, basket, billing, db, deepdive, fixtures, importer, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -918,10 +918,19 @@ def deep_base(sym: str) -> dict:
 
 
 def deep_view(sym: str, base: dict) -> dict:
-    reads = deepdive.stored(sym)
+    reads, card = deepdive.stored(sym), report_card.stored(sym)
     p = base["p"]
-    return {"symbol": sym, "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": deepdive.numbers(p),
-            "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads)}
+    nums = deepdive.numbers(p)
+    return {"symbol": sym, "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
+            "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
+            "calls": sum(d["kind"] == "transcript" for d in base["docs"]),
+            "card": report_card.view(card, nums), "card_stale": not report_card.fresh(card)}
+
+
+def deep_ai_allowed(profile) -> None:
+    since = (datetime.now(IST) - timedelta(days=1)).isoformat()
+    if db.count_usage(profile["id"], "research_ai", since) >= settings.RESEARCH_AI_PER_DAY:
+        err(429, "research_ai_limit", f"You've used {settings.RESEARCH_AI_PER_DAY} fresh AI reads today. Stored reads still work; try again tomorrow.")
 
 
 @app.get("/research/deep/{symbol}")
@@ -943,9 +952,7 @@ def deep_dive_read(symbol: str, refresh: bool = False, profile=Depends(current_p
         return ok(deep_view(sym, base))
     if not base["docs"] and not base["p"].get("about"):
         err(404, "no_documents", "No investor presentation or call transcript was found for this company in the last two years.")
-    since = (datetime.now(IST) - timedelta(days=1)).isoformat()
-    if db.count_usage(profile["id"], "research_ai", since) >= settings.RESEARCH_AI_PER_DAY:
-        err(429, "research_ai_limit", f"You've used {settings.RESEARCH_AI_PER_DAY} fresh AI reads today. Stored reads still work; try again tomorrow.")
+    deep_ai_allowed(profile)
     p = base["p"]
     try:
         reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic))
@@ -955,6 +962,30 @@ def deep_dive_read(symbol: str, refresh: bool = False, profile=Depends(current_p
         err(422, "ai_failed", str(e))
     reads["problems"] = [public_text(x) for x in reads["problems"]]
     deepdive.store(sym, reads)
+    db.add_usage(profile["id"], "research_ai")
+    return ok(deep_view(sym, base))
+
+
+@app.post("/research/deep/{symbol}/card")
+def deep_dive_card(symbol: str, refresh: bool = False, profile=Depends(current_profile)):
+    """The management report card: targets given on past earnings calls, checked against the reported numbers."""
+    need(profile, "deepdive", "The company deep dive")
+    sym = research_routes.symbol_of(symbol)
+    base = deep_base(sym)
+    if report_card.fresh(report_card.stored(sym)) and not refresh:
+        return ok(deep_view(sym, base))
+    if not any(d["kind"] == "transcript" for d in base["docs"]):
+        err(404, "no_calls", "No earnings-call transcript was found for this company in the last two years.")
+    deep_ai_allowed(profile)
+    p = base["p"]
+    try:
+        card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic))
+    except AIBusy as e:
+        err(503, "ai_busy", str(e))
+    except AIError as e:
+        err(422, "ai_failed", str(e))
+    card["problems"] = [public_text(x) for x in card["problems"]]
+    report_card.store(sym, card)
     db.add_usage(profile["id"], "research_ai")
     return ok(deep_view(sym, base))
 
