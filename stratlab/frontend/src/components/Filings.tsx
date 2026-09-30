@@ -12,13 +12,13 @@ export interface FilingSummary {
 }
 export interface FilingReport { symbol: string; items: FilingItem[]; summary: FilingSummary; window_days: number; lookback_days: number }
 
-export const SEV_NAME: Record<Severity, string> = { red: "Red flag", amber: "Look closer", info: "Routine" };
+const SEV_NAME: Record<Severity, string> = { red: "Red flag", amber: "Look closer", info: "Routine" };
 
-export function day(at: string) {
+function day(at: string) {
   return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function SevBadge({ s, label }: { s: Severity; label: string }) {
+function SevBadge({ s, label }: { s: Severity; label: string }) {
   return <span className={`badge ${s === "red" ? "fail" : s === "amber" ? "warn" : "skip"}`} title={SEV_NAME[s]}>{s === "red" ? "⚑ " : ""}{label}</span>;
 }
 

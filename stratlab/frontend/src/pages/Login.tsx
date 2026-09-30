@@ -64,6 +64,12 @@ const BEYOND: [string, string, string][] = [
   ["Bring any strategy", "Drop in a config file, Pine Script, Python, MetaTrader, AmiBroker or plain words. StratLab works out what it is and sets it up in the right place: a notebook, a group, or the Options tab.", "Anything it can't carry over is listed"],
 ];
 
+const INVESTORS: [string, string, string][] = [
+  ["Stage 2 + Supertrend scan", "Which stocks in your watchlist or a ready-made group are in Stage 2 with the Supertrend pointing up, fresh signals first. Backtest the ST S2 rules on the whole group in one click, and get a message after the close when a new one lines up.", "ST S2, with a daily alert"],
+  ["Sector rotation", "Every sector against the market: Leading, Weakening, Lagging or Improving, with the path it took to get there. Click a sector to see its biggest stocks the same way. NSE sectors, S&P 500 sectors and US industries.", "Know where the money is moving"],
+  ["Filings and red flags", "What your watchlist companies told the exchange: fund raises like a QIP or preferential issue, promoter pledges, auditor or director resignations, defaults, regulator action, rating downgrades. A 3-month summary, and an evening alert.", "Read the filing before the chart"],
+];
+
 const MARKETS: [string, string, string][] = [
   ["₹", "India", "NSE stocks, indices and F&O"], ["₿", "Crypto", "BTC, ETH and hundreds of pairs"], ["$", "United States", "NYSE and NASDAQ stocks and ETFs"],
   ["£", "United Kingdom", "London Stock Exchange"], ["€", "Europe", "Xetra and Euronext"], ["¥", "Japan", "Tokyo Stock Exchange"],
@@ -80,7 +86,7 @@ const FAQ: [string, string][] = [
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
   ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a config file from your own bot, TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, sets up a group if it trades a list of stocks, opens option structures in the Options tab, and lists anything it couldn't translate."],
   ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE and MCX option prices, with fills at the real bid and ask. You can also let a notebook's rules decide when: long signals buy your structure and short signals its mirror. Backtesting options needs real historical prices for every strike, which nobody keeps for expired options, so StratLab is recording the NIFTY, BANKNIFTY and SENSEX chains every 5 minutes to build that history. We won't stand in a pricing model."],
-  ["What does it cost?", "It's free to start: experiments every month, AI strategy builds, and 5 market days of paper trading. Basic (₹999 a month) adds group and options paper trading and a daily report; Pro (₹2,999) adds options on your own signals, faster group entries, alerts for every trade, every indicator and F&O. Everything is unlocked while StratLab is in early access."],
+  ["What does it cost?", "It's free to start: experiments every month, AI strategy builds, and 5 market days of paper trading. Basic (₹999 a month) adds group and options paper trading and a daily report; Pro (₹2,999) adds options on your own signals, faster group entries, alerts for every trade, every indicator and F&O, and the investor tools: the ST S2 scan, sector rotation, and filings and red flags."],
   ["Can I test commodities?", "Yes, as two separate markets. Indian commodities are MCX futures in rupees (gold, silver, crude oil, natural gas, copper, zinc, aluminium, lead, and their mini contracts), sized in whole lots with MCX costs, on years of daily history stitched across expiries. Global commodities are COMEX, NYMEX and ICE futures in dollars (gold, silver, oil, gas, copper, grains, coffee, sugar, cocoa, cotton), sized per ounce or barrel."],
   ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon, and sends paper trades and the daily report as notifications."],
   ["Does it know market holidays?", "Yes. Exchange holidays in India, the US, UK, Europe and Japan are built in: the markets panel shows weekends and holidays, the daily report skips them, and they don't count toward the free trial."],
@@ -110,7 +116,7 @@ export function Login() {
       <header className="lp-nav">
         <a href="#top" className="brand" aria-label="StratLab home"><Logo size={46} /></a>
         <nav aria-label="Sections">
-          <a href="#how">How it works</a><a href="#checks">Honesty checks</a><a href="#beyond">Options &amp; groups</a><a href="#research">Research</a><a href="#markets">Markets</a><a href="#faq">FAQ</a>
+          <a href="#how">How it works</a><a href="#checks">Honesty checks</a><a href="#beyond">Options &amp; groups</a><a href="#research">Research</a><a href="#investors">For investors</a><a href="#markets">Markets</a><a href="#faq">FAQ</a>
         </nav>
         <button className="btn outline sm" onClick={signIn}>Sign in</button>
       </header>
@@ -232,7 +238,22 @@ export function Login() {
         </div>
       </section>
 
-      <section className="lp-sec lp-alt">
+      <section id="investors" className="lp-sec lp-alt">
+        <div className="lp-wrap stack" style={{ gap: 32 }}>
+          <div className="lp-head">
+            <span className="eyebrow">For investors</span>
+            <h2 className="serif lp-h2">Not just trades. The whole picture.</h2>
+            <p className="lp-p">Tools for holding a stock for months, not minutes. Facts from prices and filings, and your own rules decide.</p>
+          </div>
+          <div className="lp-beyond">
+            {INVESTORS.map(([t, b, tag]) => (
+              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="lp-sec">
         <div className="lp-wrap stack" style={{ gap: 32 }}>
           <div className="lp-head"><span className="eyebrow">The toolkit</span><h2 className="serif lp-h2">Everything a serious test needs.</h2></div>
           <div className="lp-tools">
@@ -241,7 +262,7 @@ export function Login() {
         </div>
       </section>
 
-      <section id="markets" className="lp-sec">
+      <section id="markets" className="lp-sec lp-alt">
         <div className="lp-wrap stack" style={{ gap: 32 }}>
           <div className="lp-head">
             <span className="eyebrow">Markets</span>
@@ -256,12 +277,12 @@ export function Login() {
         </div>
       </section>
 
-      <section id="faq" className="lp-sec lp-alt">
+      <section id="faq" className="lp-sec">
         <div className="lp-wrap lp-split">
           <div className="stack" style={{ gap: 14 }}>
             <span className="eyebrow">Questions</span>
             <h2 className="serif lp-h2">Good to know.</h2>
-            <p className="lp-p">StratLab is free while in early access, with every indicator and market unlocked.</p>
+            <p className="lp-p">Free to start, with every market. Paid plans add more tests, more live sessions and the Pro tools.</p>
           </div>
           <div className="lp-faq">
             {FAQ.map(([q, a]) => <details key={q}><summary>{q}</summary><p className="muted">{a}</p></details>)}

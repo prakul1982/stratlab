@@ -12,7 +12,7 @@ export const QUADRANTS: { id: Quadrant; name: string; says: string }[] = [
   { id: "lagging", name: "Lagging", says: "weaker than the benchmark and still slipping" },
   { id: "improving", name: "Improving", says: "weaker than the benchmark but picking up" },
 ];
-export const Q_NAME: Record<Quadrant, string> = { leading: "Leading", weakening: "Weakening", lagging: "Lagging", improving: "Improving" };
+const Q_NAME: Record<Quadrant, string> = { leading: "Leading", weakening: "Weakening", lagging: "Lagging", improving: "Improving" };
 const qColor = (q: Quadrant) => `var(--q-${q})`;
 
 /** The swatch that carries a quadrant's colour next to its (ink-coloured) name. */
@@ -123,7 +123,7 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
   );
 }
 
-export function quadrantOf(x: number, y: number): Quadrant {
+function quadrantOf(x: number, y: number): Quadrant {
   return x >= 100 ? (y >= 100 ? "leading" : "weakening") : y >= 100 ? "improving" : "lagging";
 }
 

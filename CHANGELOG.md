@@ -1,6 +1,32 @@
 # Changelog
 
-## October 2026
+## September 2026
+
+### Sector rotation
+- **Research → Rotation (Pro):** every sector against the market as **Leading**, **Weakening**, **Lagging** or **Improving**, with the trail it took (1 to 12 weekly or daily points) and an **Animate** replay. A plain-language summary lists which sectors sit in each quadrant and which moved into Leading.
+- **More to compare:** NSE sector indices and NSE size and style indices (Next 50, Midcap 100, Smallcap 100, Momentum 30, Quality 30, Alpha 50…) against the Nifty 500; S&P 500 sectors and US industries (semiconductors, software, biotech, regional banks, defense, gold miners, homebuilders…) against SPY; or any scan group and your watchlist.
+- **Stocks → on any sector** shows its biggest stocks against the sector itself, so Leading means beating its own sector.
+- Readable with 30+ sectors: India shows the 12 main sectors first; faint trails with the latest move in bold; hover or click one to follow it; names never overlap.
+
+### Filings and red flags
+- **Research → Red flags (Pro, India):** what your watchlist companies told the exchange in the last 3 months, red flags first, and whether a fund raise was filed.
+- **A Filings and red flags panel on every Indian company page:** the 3-month summary and a year of filings, each linked to the exchange's document.
+- Fixed rules label each filing: **red flags** (QIP, preferential or rights issue, warrants, fund raise, promoter pledge, auditor resignation, default, insolvency, regulator or tax action, rating downgrade), **look closer** (other resignations, debt raises) and routine items (results, calls, dividends, orders…).
+- **Evening alert:** at 8:30 pm IST, new red flags from your watchlist by phone, Telegram or email.
+- **Admin → Check filings feed** tries the exchange feed live from the server.
+
+### Room to grow
+- **Options paper trading scales:** every options session now shares one paced stream of broker price requests, so about 100 sessions run at once instead of 2 or 3.
+- **Storage stays small:** experiments older than a notebook's newest 10 keep their verdict, stats and chart but only their last 30 trades (the page says so), and recorded option chains older than 120 days are cleared daily (`OPTION_SNAPSHOT_KEEP_DAYS`).
+
+### Polish and clean-up
+- **Home:** the investor tools (scan, rotation, red flags) and alerts join the "What you can do here" cards; on a phone the cards sit two to a row.
+- **Sidebar:** Markets now folds into one line ("7 of 9 open") and opens with a tap, so Night mode and Tour stay in view on smaller screens. It remembers your choice.
+- **Landing page:** a new **For investors** section; the pricing answer lists the Pro investor tools and no longer says everything is unlocked.
+- **Plans:** Pro lists the scan, rotation and red flags. **Tour:** a step for the investor tools.
+- **Options:** when a leg has no price, the message names it ("No price yet for 23400 CE (buy)"), and after hours it says when the next entry is instead of an old message.
+- Removed unused styles and exports.
+
 
 ### Stage 2 + Supertrend (ST S2)
 - **Stage indicator:** Weinstein's market stage, 1 to 4, from the 150-day average (about 30 weeks) and its 20-day slope. Use it in any rule: "Stage is 2". The new **is** condition works for any whole-number value.
@@ -13,7 +39,6 @@
 - The AI builder understands "Stage 2" and "ST S2".
 - **Fixed:** starting a notebook with a group of stocks from outside the notebook page lost the group.
 
-## September 2026
 
 ### Launch offer, and quieter about data sources
 - **Launch offer:** from the Admin page, give every user every Pro feature free for a set number of days (10 by default). Users see a banner with the end date. Payments keep working during it, and each user returns to their own plan by themselves when it ends.

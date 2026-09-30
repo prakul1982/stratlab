@@ -42,7 +42,7 @@ export function useCreateNotebook(where?: Where | null) {
 }
 
 /** The big "type anything" bar: opens the search box, which works out what you mean and does it. */
-export function AskBar() {
+function AskBar() {
   return (
     <button className="ask-bar" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}>
       <Sparkle size={20} />

@@ -14,6 +14,7 @@ const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US",
 export function Shell({ children }: { children: ReactNode }) {
   const { notebooks, markets, theme, setTheme, me, level } = useApp();
   const [open, setOpen] = useState(false);
+  const [mktOpen, setMktOpen] = useState(() => { try { return localStorage.getItem("stratlab.markets.open") === "1"; } catch { return false; } });
   const [tour, setTour] = useState(false);
   const [search, setSearch] = useState(false);
   useEffect(() => {
@@ -76,7 +77,9 @@ export function Shell({ children }: { children: ReactNode }) {
         {me?.is_admin && <NavLink to="/admin"><Shield />Admin</NavLink>}
       </nav>
       <div className="stack small muted" style={{ marginTop: "auto", gap: 8 }}>
-        {live.length > 0 && <div className="eyebrow">Markets now</div>}
+        {live.length > 0 && (
+        <details className="mkt-box" open={mktOpen} onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; setMktOpen(o); try { localStorage.setItem("stratlab.markets.open", o ? "1" : "0"); } catch { /* private mode */ } }}>
+          <summary><span className="eyebrow">Markets now</span><span className="tiny muted">{live.filter((m) => marketState(m).open).length} of {live.length} open</span></summary>
         <div className="mkt-grid">
           {live.map((m) => {
             const st = marketState(m);
@@ -101,6 +104,8 @@ export function Shell({ children }: { children: ReactNode }) {
             );
           })}
         </div>
+        </details>
+        )}
         <div className="row side-foot" style={{ gap: 14 }}>
           <button className="link" onClick={() => setTheme(dark ? "light" : "dark")}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? "Light mode" : "Night mode"}</button>
           <button className="link" onClick={() => { setOpen(false); setTour(true); }} title="A quick tour of what StratLab can do"><Compass size={16} />Tour</button>
