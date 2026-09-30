@@ -549,7 +549,7 @@ a.chip-link:hover { border-color: var(--ink); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .lp-demo-body { animation: none; } }
 
 /* sidebar: markets now, verdict dots */
-.mkt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; }
+.mkt-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
 .mkt-now { display: flex; align-items: center; gap: 7px; color: var(--ink-2); font-size: 13px; padding: 2px 0; cursor: default; }
 .vdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--chip); border: 1.5px solid var(--dash); box-sizing: border-box; }
 .vdot.edge { background: var(--blue); border-color: var(--blue); }
@@ -646,7 +646,6 @@ table.legs input[type=number] { width: 72px !important; }
 .mkt-tip { display: none; position: absolute; bottom: calc(100% + 6px); left: -6px; z-index: 30; width: 230px; flex-direction: column; gap: 3px;
   padding: 10px 12px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-2); box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
   font-size: 12.5px; line-height: 1.4; color: var(--ink-2); white-space: normal; }
-.mkt-grid > .mkt-now:nth-child(2n) .mkt-tip { left: auto; right: -6px; }
 .mkt-now:hover .mkt-tip, .mkt-now:focus .mkt-tip { display: flex; }
 .mkt-tip b { color: var(--ink); font-size: 13px; }
 /* one look for every dropdown, in every browser (Safari otherwise draws its own box) */
