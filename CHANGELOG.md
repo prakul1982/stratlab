@@ -1,5 +1,18 @@
 # Changelog
 
+## October 2026
+
+### Stage 2 + Supertrend (ST S2)
+- **Stage indicator:** Weinstein's market stage, 1 to 4, from the 150-day average (about 30 weeks) and its 20-day slope. Use it in any rule: "Stage is 2". The new **is** condition works for any whole-number value.
+- **Research → Scan (Pro):** scan your watchlist or a ready-made group. Each stock shows its stage, whether the price is above the Supertrend and for how long, and a signal:
+  - **Fresh ST S2:** the Supertrend turned up in the last 5 days while in Stage 2
+  - **In ST S2**
+  - **Stage 2 only**
+- **Backtest ST S2 on this group:** one click makes a notebook with the ready-made ST S2 strategy (buy when in Stage 2 and the price is above the Supertrend; sell when it crosses back below) on the scanned group.
+- **Daily ST S2 alert (Pro):** after each close (India 4:05 pm IST, US 4:20 pm New York), a message by phone, Telegram or email lists watchlist stocks that just gave an ST S2 signal. At most once a day, even after a restart.
+- The AI builder understands "Stage 2" and "ST S2".
+- **Fixed:** starting a notebook with a group of stocks from outside the notebook page lost the group.
+
 ## September 2026
 
 ### Launch offer, and quieter about data sources

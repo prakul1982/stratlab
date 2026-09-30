@@ -13,7 +13,7 @@ import { Info } from "./ui";
 /* ---------- navigation ---------- */
 export function ResearchNav({ region, setRegion }: { region: Region; setRegion?: (r: Region) => void }) {
   const tabs: [string, string][] = [["/research", "Companies"], ["/research/themes", "Themes"], ["/research/pulse", "Market pulse"],
-    ["/research/compare", "Compare"], ["/research/watchlist", "Watchlist"]];
+    ["/research/compare", "Compare"], ["/research/watchlist", "Watchlist"], ["/research/scan", "Scan"]];
   return (
     <div className="spread research-nav" style={{ flexWrap: "wrap", gap: 12 }}>
       <nav className="seg" aria-label="Research sections">

@@ -28,10 +28,12 @@ PLANS = {
         "live_trial_days": None,
         "group_size": 50,
         # pro_features: advanced indicators and Indian F&O
-        "features": {"group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features"},
+        "features": {"group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features",
+                     "scans"},
     },
 }
-FEATURES = ("group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features")
+FEATURES = ("group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features",
+            "scans")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

@@ -39,6 +39,7 @@ function examplesFor(market?: string, symbol?: string | null): { placeholder: st
       `Buy${on(b)} when RSI drops below 30, sell when it goes back above 55`,
       `Buy${on(c)} when price is above the 200-day average and RSI crosses above 50`,
       `Short${on(a)} when the price falls below the lowest low of the last 20 days, with a 5% trailing stop`,
+      `ST S2: buy${on(b)} when it's in Stage 2 and the price is above the Supertrend, sell when it crosses back below`,
     ],
   };
 }
