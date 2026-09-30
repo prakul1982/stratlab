@@ -1173,7 +1173,8 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
         # wrong keys ("Authentication failed") or a plan ID the account doesn't have. Not the user's sign-in,
         # so never 401 here: that would sign them out of StratLab.
         print("razorpay subscribe refused:", e)
-        err(502, "billing_setup", "Payments aren't set up correctly on the server yet. Try again later.")
+        why = f" Razorpay said: {str(e)[:200]}" if admin.is_admin(profile) else ""   # only the site owner sees the reason
+        err(502, "billing_setup", "Payments aren't set up correctly on the server yet. Try again later." + why)
     except (rz_errors.ServerError, rz_errors.GatewayError) as e:
         print("razorpay subscribe failed:", e)
         err(502, "billing_unavailable", "The payment service didn't answer. Try again in a minute.")

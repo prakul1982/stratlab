@@ -60,14 +60,14 @@ function RefEditor({ value, onChange, allowNum, isPro, tf }: { value: Ref; onCha
         }} /></label>
       )}
       {def && (
-        <label className="field">{value.t.startsWith("macd") ? "Fast length" : value.t === "supertrend" ? "ATR length" : "Length (candles)"}
+        <label className="field">{value.t.startsWith("macd") ? "Fast length" : value.t === "supertrend" ? "ATR length" : value.t === "stage" ? "Average length" : "Length (candles)"}
           <input type="number" min={1} max={500} value={value.p ?? def[0]} onChange={(e) => {
             const p = parseInt(e.target.value, 10);
             if (p >= 1 && p <= 500) onChange({ ...value, p });
           }} /></label>
       )}
       {def && def[1] != null && (
-        <label className="field">{value.t.startsWith("macd") ? "Slow length" : value.t.startsWith("bb") ? "Std devs" : value.t === "stoch_k" ? "Smoothing" : "Multiplier"}
+        <label className="field">{value.t.startsWith("macd") ? "Slow length" : value.t.startsWith("bb") ? "Std devs" : value.t === "stoch_k" ? "Smoothing" : value.t === "stage" ? "Slope over (candles)" : "Multiplier"}
           <input type="number" min={0.1} step="0.1" value={value.m ?? def[1]} onChange={(e) => {
             const m = parseFloat(e.target.value);
             if (m > 0 && m <= 500) onChange({ ...value, m });
