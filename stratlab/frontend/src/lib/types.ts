@@ -68,6 +68,7 @@ export interface GroupResult {
   members: { symbol: string; id: string; trades: number; pnl: number; win: number | null; buy_hold: number | null }[];
 }
 export interface Experiment {
+  trades_trimmed?: number;           // older experiments keep only their last few trades
   v: number; label: string; created_at: string; strategy: Strategy; instrument: Instrument; days: number; tf: Tf;
   candles: number; range: { from: string; to: string }; stats: Stats; costs: Costs; verdict: Verdict;
   series: { t: string[]; close: number[]; equity: (number | null)[]; buy_hold: (number | null)[];

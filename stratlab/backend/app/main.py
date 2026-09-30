@@ -55,7 +55,8 @@ hub = TickHub(kite)
 markets = Registry(kite)
 options_data = OptionsData(kite)
 manager = LiveManager(kite, hub, markets, options_data)
-recorder = Recorder(options_data, db.add_option_snapshot, parse_targets(settings.OPTION_SNAPSHOTS), settings.OPTION_SNAPSHOT_MINUTES)
+recorder = Recorder(options_data, db.add_option_snapshot, parse_targets(settings.OPTION_SNAPSHOTS), settings.OPTION_SNAPSHOT_MINUTES,
+                    prune=db.delete_option_snapshots_before, keep_days=settings.OPTION_SNAPSHOT_KEEP_DAYS)
 research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
 
 
@@ -724,7 +725,7 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
             req.instrument = (nb.get("instrument") or {}).get("id")
         out = run_test(profile, strategy, req)
         rec = research.record(out, strategy, req.label, version, db.now_iso())
-    experiments = (experiments + [rec])[-50:]
+    experiments = research.slim((experiments + [rec])[-50:])
     nb["experiments"], nb["summary"] = experiments, research.summary(experiments)
     save_notebook(profile, nb)
     return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"]})

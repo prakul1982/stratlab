@@ -78,6 +78,8 @@ class Settings:
     # option chains recorded every few minutes in market hours, for options backtesting later ("" turns it off)
     OPTION_SNAPSHOTS = _env("OPTION_SNAPSHOTS", "NFO:NIFTY,NFO:BANKNIFTY,BFO:SENSEX") or ""
     OPTION_SNAPSHOT_MINUTES = int(_env("OPTION_SNAPSHOT_MINUTES", "5") or 5)
+    # days of recorded option chains kept (about 70 MB a month for three underlyings); 120 fits the free database
+    OPTION_SNAPSHOT_KEEP_DAYS = int(_env("OPTION_SNAPSHOT_KEEP_DAYS", "120") or 120)
     # phone and browser notifications: generate a pair with `python -m app.push keys`
     VAPID_PUBLIC_KEY = _env("VAPID_PUBLIC_KEY")
     VAPID_PRIVATE_KEY = _env("VAPID_PRIVATE_KEY")
