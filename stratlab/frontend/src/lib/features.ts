@@ -46,6 +46,8 @@ export const FEATURES: Feature[] = [
   { id: "watchlist", title: "Watchlist", what: "Companies you're keeping an eye on.", to: "/research/watchlist", words: "watchlist saved favourites" },
   { id: "scan", title: "Stage 2 + Supertrend scan", what: "Which stocks in a group are in Stage 2 with the Supertrend up (ST S2), with daily alerts.", to: "/research/scan",
     words: "scan screener stage 2 stage two supertrend st s2 weinstein signals alert" },
+  { id: "rotation", title: "Sector rotation", what: "Which sectors (or stocks) are leading, weakening, lagging or improving against the market, with their recent trail.", to: "/research/rotation",
+    words: "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },
   { id: "account", title: "Account and connection check", what: "Your plan, usage and a check of every data and AI service.", to: "/account",
     words: "account settings usage connection check theme" },

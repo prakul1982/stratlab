@@ -42,7 +42,7 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, public, push, risk, scan
+from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -811,7 +811,33 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     prov = markets.provider(req.region)
     if prov is None or not prov.ready():
         raise KiteNotReady("Market data for this market is offline right now.")
-    return ok({"name": name, "market": req.region, **scan.run(markets, req.region, members)})
+    out = scan.run(markets, req.region, members)
+    out["problems"] = [public_text(x) for x in out["problems"]]          # data-source errors can name the source
+    return ok({"name": name, "market": req.region, **out})
+
+
+@app.get("/research/rotation")
+def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "weekly", tail: int = 5,
+                    profile=Depends(current_profile)):
+    """Where each sector (or stock in a group) sits against the benchmark: relative strength and its momentum."""
+    need(profile, "scans", "Sector rotation")
+    region = "US" if region.upper() == "US" else "IN"
+    interval = "daily" if interval == "daily" else "weekly"
+    prov = markets.provider(region)
+    if prov is None or not prov.ready():
+        raise KiteNotReady("Market data for this market is offline right now.")
+    if set == "sectors":
+        members, name = None, rotation.SECTORS[region]["name"]
+    else:
+        name, members = scan_members(profile, region, set[:40])
+        if len(members) < 2:
+            err(400, "empty", "Pick a group with at least two stocks, or star more companies for your watchlist.")
+    try:
+        out = rotation.run(markets, region, set, members, interval, tail)
+    except LookupError as e:
+        err(503, "no_benchmark", str(e))
+    out["skipped"] = [public_text(x) for x in out["skipped"]]
+    return ok({"name": name, "market": region, **out})
 
 
 @app.put("/research/scan/alerts")

@@ -13,6 +13,7 @@ import {
   QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars, ValuationGauge,
 } from "../components/Research";
 import { Info, Loading } from "../components/ui";
+import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type RotationRow } from "../components/Rotation";
 
 function useRegion(): [Region, (r: Region) => void] {
   const [params, setParams] = useSearchParams();
@@ -581,6 +582,105 @@ export function ScanPage() {
         </section>
       )}
       <p className="small muted" style={{ maxWidth: "80ch" }}>Stage uses the 150-day average and its 20-day slope; Supertrend uses 10 days and 3× ATR. Past signals don't predict future returns, and nothing here is investment advice.</p>
+    </div>
+  );
+}
+
+interface RotationOut {
+  name: string; market: Region; benchmark: string; interval: "weekly" | "daily"; tail: number;
+  rows: RotationRow[]; skipped: string[]; as_of: string | null;
+}
+
+const ARROW = (deg: number | null) => deg == null ? "–" : ["→", "↗", "↑", "↖", "←", "↙", "↓", "↘"][Math.round(((deg + 360) % 360) / 45) % 8];
+
+export function RotationPage() {
+  const [region, setRegion] = useRegion();
+  const { fail, me } = useApp();
+  const [sets, setSets] = useState<ScanSets | null>(null);
+  const [setId, setSetId] = useState("sectors");
+  const [interval, setIv] = useState<"weekly" | "daily">("weekly");
+  const [tail, setTail] = useState(5);
+  const [askTail, setAskTail] = useState(5);          // the slider settles before it asks the server
+  const [out, setOut] = useState<RotationOut | null>(null);
+  const [busy, setBusy] = useState(false);
+  const pro = !!me?.plan_info?.features?.scans;
+  const [step, animate] = useAnimate(out?.tail ?? tail);
+
+  useEffect(() => {
+    api<ScanSets>(`/research/scan/sets?region=${region}`).then(setSets).catch(fail);
+  }, [region, fail]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setAskTail(tail), 250);
+    return () => window.clearTimeout(t);
+  }, [tail]);
+
+  useEffect(() => {
+    if (!pro) return;
+    let live = true;
+    setBusy(true);
+    api<RotationOut>(`/research/rotation?region=${region}&set=${encodeURIComponent(setId)}&interval=${interval}&tail=${askTail}`)
+      .then((r) => { if (live) setOut(r); }).catch((e) => { if (live) { setOut(null); fail(e); } })
+      .finally(() => { if (live) setBusy(false); });
+    return () => { live = false; };
+  }, [region, setId, interval, askTail, pro, fail]);
+
+  const groups = (sets?.sets ?? []).filter((s) => s.count >= 2);
+  const unit = interval === "weekly" ? "week" : "day";
+  return (
+    <div className="stack" style={{ gap: 24 }}>
+      <ResearchNav region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); }} />
+      <Header eyebrow={`Rotation · ${REGION_NAME[region]}`} title="Sector rotation"
+        sub="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
+      {!pro && <div className="banner"><span>Sector rotation is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
+      <div className="row wrap" style={{ gap: 10, alignItems: "center" }}>
+        <span className="chip-select"><select aria-label="What to compare" value={setId} onChange={(e) => setSetId(e.target.value)}>
+          <option value="sectors">{region === "IN" ? "NSE sector indices" : "S&P 500 sectors"}</option>
+          {groups.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.count})</option>)}
+        </select></span>
+        <div className="seg" role="group" aria-label="Candle size">
+          {(["weekly", "daily"] as const).map((v) => <button key={v} aria-pressed={interval === v} onClick={() => setIv(v)}>{v === "weekly" ? "Weekly" : "Daily"}</button>)}
+        </div>
+        <label className="row small" style={{ gap: 8 }}>
+          Trail
+          <input type="range" min={1} max={12} value={tail} onChange={(e) => setTail(+e.target.value)} aria-label="Trail length" />
+          <span className="mono">{tail} {unit}{tail === 1 ? "" : "s"}</span>
+        </label>
+        <button className="btn quiet sm" disabled={!out || busy || step !== null || (out?.tail ?? 1) < 2} onClick={animate}>{step !== null ? "Playing…" : "Animate"}</button>
+      </div>
+      {busy && !out && <Loading label="Comparing each one with the market" />}
+      {out && (
+        <section className="card stack" style={{ gap: 14, opacity: busy ? 0.6 : 1 }}>
+          <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+            <div className="stack" style={{ gap: 2 }}>
+              <b>{out.name} vs {out.benchmark}</b>
+              <span className="small muted">{out.rows.length} shown · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${out.as_of}` : ""}{step !== null ? ` · replaying ${unit} ${step} of ${out.tail}` : ""}</span>
+            </div>
+            <div className="rot-legend" aria-label="Legend">
+              {QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}
+            </div>
+          </div>
+          {out.rows.length === 0 ? <p className="small muted">Not enough price history to draw this yet.</p> : <RotationChart rows={out.rows} benchmark={out.benchmark} step={step} />}
+          {out.rows.length > 0 && (
+            <div className="table-wrap"><table>
+              <thead><tr><th>{setId === "sectors" ? "Sector" : "Stock"}</th><th>Now</th><th className="num">Strength</th><th className="num">Momentum</th><th>Heading</th><th>{out.tail} {unit}s ago</th></tr></thead>
+              <tbody>{out.rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{setId === "sectors" ? r.name : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>}</td>
+                  <td><QuadrantTag q={r.quadrant} /></td>
+                  <td className="num mono">{r.x.toFixed(2)}</td>
+                  <td className="num mono">{r.y.toFixed(2)}</td>
+                  <td aria-label={r.heading == null ? "no move" : `${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</td>
+                  <td>{r.moved ? (r.moved === r.quadrant ? <span className="small muted">same</span> : <QuadrantTag q={r.moved} />) : "–"}</td>
+                </tr>))}</tbody>
+            </table></div>
+          )}
+          {out.skipped.length > 0 && <p className="tiny muted">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
+        </section>
+      )}
+      <p className="small muted" style={{ maxWidth: "80ch" }}>
+        Strength: each one's price divided by {region === "IN" ? "the Nifty 500" : "the S&P 500"}, compared with its own last 14 {unit}s (100 = its usual level). Momentum: the same for the change in that strength. StratLab's own calculation. Where something sits today doesn't predict where it goes next, and nothing here is investment advice.
+      </p>
     </div>
   );
 }
