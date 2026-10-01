@@ -96,3 +96,12 @@ def test_deep_view_has_checklist_and_deck_and_investor_home(api):  # noqa: F811
     assert [x["symbol"] for x in rows] == ["ACME", "NOPE"]
     assert rows[0]["name"] == "Acme Industries" and rows[0]["checks"]["pass"] >= 3 and rows[0]["red"] == 0
     assert rows[1]["checks"] is None and "Screener" not in (rows[1]["problem"] or "")
+
+
+def test_bank_deck_skips_capex_and_uses_lender_labels():
+    v = view_for_deck()
+    v["numbers"] = {**v["numbers"], "bank": True}
+    v["snapshot"] = {"roe": 16.5, "div_yield": 1.2}
+    prs = Presentation(io.BytesIO(deck.build(v)))
+    text = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
+    assert "Capex and cash" not in text and "Revenue and net profit" in text and "ROE" in text and "Debt / equity" not in text

@@ -112,8 +112,10 @@ def build(v: dict) -> bytes:
     s = d.slide(f"{name}", f"NSE: {sym} · Company deep dive")
     d.text(s, (v.get("about") or "")[:600], Inches(0.6), Inches(1.8), Inches(11.5), Inches(2.5), 16)
     snap = v.get("snapshot") or {}
-    tiles = [("Market cap", f"₹{_cr(snap.get('market_cap_cr'))} cr"), ("P/E", "–" if snap.get("pe") is None else f"{snap['pe']:.1f}"),
-             ("ROCE", _pc(snap.get("roce"))), ("Debt / equity", "–" if snap.get("debt_equity") is None else f"{snap['debt_equity']:.2f}"),
+    ret = ("ROE", _pc(snap.get("roe"))) if n.get("bank") else ("ROCE", _pc(snap.get("roce")))
+    lev = (("Dividend yield", _pc(snap.get("div_yield"))) if n.get("bank")
+           else ("Debt / equity", "–" if snap.get("debt_equity") is None else f"{snap['debt_equity']:.2f}"))
+    tiles = [("Market cap", f"₹{_cr(snap.get('market_cap_cr'))} cr"), ("P/E", "–" if snap.get("pe") is None else f"{snap['pe']:.1f}"), ret, lev,
              ("Sales growth, 3y", _pc(n["growth"].get("sales_cagr_3y"), True)), ("Profit growth, 3y", _pc(n["growth"].get("profit_cagr_3y"), True))]
     for i, (label, val) in enumerate(tiles):
         x = Inches(0.6 + i * 2.05)
@@ -127,10 +129,10 @@ def build(v: dict) -> bytes:
 
     # 2. sales and profit
     if years:
-        s = d.slide("Sales and net profit", f"{n['unit']}, financial years ending March")
+        s = d.slide("Revenue and net profit" if n.get("bank") else "Sales and net profit", f"{n['unit']}, financial years ending March")
         cd = CategoryChartData()
         cd.categories = [y["year"].replace("Mar ", "FY") for y in years]
-        cd.add_series("Sales", [y["sales"] for y in years])
+        cd.add_series("Revenue" if n.get("bank") else "Sales", [y["sales"] for y in years])
         cd.add_series("Net profit", [y["profit"] or 0 for y in years])
         ch = s.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(0.6), Inches(1.6), Inches(12), Inches(5.2), cd).chart
         ch.has_legend, ch.legend.position, ch.legend.include_in_layout = True, XL_LEGEND_POSITION.TOP, False
@@ -146,10 +148,11 @@ def build(v: dict) -> bytes:
     if q:
         s = d.slide("The last eight quarters", "Sales and profit in ₹ crore; growth on the same quarter a year before")
         rows = [[x["quarter"], _cr(x["sales"]), _pc(x["sales_yoy"], True), _pc(x["opm"]), _cr(x["profit"])] for x in q[-8:]]
-        d.table(s, ["Quarter", "Sales", "vs a year ago", "Operating margin", "Net profit"], rows, Inches(0.6), Inches(1.7), Inches(12))
+        d.table(s, ["Quarter", "Revenue" if n.get("bank") else "Sales", "vs a year ago", "Financing margin" if n.get("bank") else "Operating margin",
+                    "Net profit"], rows, Inches(0.6), Inches(1.7), Inches(12))
 
-    # 4. capex and cash
-    if years:
+    # 4. capex and cash (not for lenders: capex and free cash flow don't describe a bank)
+    if years and not n.get("bank"):
         s = d.slide("Capex and cash", "Capex estimated from the balance sheet: rise in fixed assets and work in progress, plus depreciation. ₹ crore.")
         rows = [[y["year"], _cr(y["sales"]), _cr(y["capex"]), _pc(y["capex_pct_sales"]), _cr(y["cfo"]), _cr(y["fcf"]), _cr(y["debt"])]
                 for y in list(reversed(years))[:8]]

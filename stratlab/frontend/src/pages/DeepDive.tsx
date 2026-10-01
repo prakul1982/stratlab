@@ -22,7 +22,7 @@ type Card = { rows: Target[]; met: number; missed: number; pending: number; unch
 export interface DeepView {
   symbol: string; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
-  numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null;
+  numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean;
     growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null } };
   reads: null | {
     at: string; problems: string[]; read: { kind: string; at: string; title: string }[];
@@ -189,7 +189,7 @@ export function DeepDivePage() {
             </div>
             {n.quarters.length > 0 && (
               <div className="table-wrap"><table>
-                <thead><tr><th>Quarter</th><th className="num">Sales</th><th className="num">vs a year ago</th><th className="num">Operating margin</th><th className="num">Net profit</th></tr></thead>
+                <thead><tr><th>Quarter</th><th className="num">Sales</th><th className="num">vs a year ago</th><th className="num">{n.bank ? "Financing margin" : "Operating margin"}</th><th className="num">Net profit</th></tr></thead>
                 <tbody>{n.quarters.slice(-8).map((q) => (
                   <tr key={q.quarter}><td>{q.quarter}</td><td className="num">{cr(q.sales)}</td><td className={`num ${signClass(q.sales_yoy)}`}>{q.sales_yoy == null ? "–" : pct(q.sales_yoy)}</td>
                     <td className="num">{pc(q.opm)}</td><td className="num">{cr(q.profit)}</td></tr>))}</tbody>
@@ -199,6 +199,11 @@ export function DeepDivePage() {
 
           {v.checklist && <ChecklistPanel c={v.checklist} />}
 
+          {n.bank ? (
+            <Panel title="Capex and cash" span="full">
+              <p className="small muted" style={{ margin: 0 }}>This is a bank or lender: its revenue is mostly interest, and lending runs through its cash flow, so capex, free cash flow, operating margin and debt to equity don't describe it. The checklist uses return on equity instead.</p>
+            </Panel>
+          ) : (
           <Panel title="Capex and cash" span="full" info="Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ₹ crore.">
             {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>About <b>₹{cr(n.capex_3y_total)} crore</b> spent on capex over the last three years. Figures in ₹ crore.</p>}
             <div className="table-wrap"><table>
@@ -208,6 +213,7 @@ export function DeepDivePage() {
                   <td className="num">{cr(y.cfo)}</td><td className={`num ${signClass(y.fcf)}`}>{cr(y.fcf)}</td><td className="num">{cr(y.debt)}</td></tr>))}</tbody>
             </table></div>
           </Panel>
+          )}
 
           <section className="card stack" style={{ gap: 12 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
