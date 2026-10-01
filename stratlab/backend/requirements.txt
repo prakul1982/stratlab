@@ -12,6 +12,6 @@ httpx>=0.28.1,<1
 beautifulsoup4>=4.12,<5  # parses Screener.in pages for Indian company fundamentals
 pywebpush>=2,<3          # phone and browser notifications
 sentry-sdk>=2,<3          # optional error alerts, used only when SENTRY_DSN is set
-exchange_calendars>=4.13,<5  # exchange holidays; update yearly for the next year's dates
+exchange_calendars>=4.13.2,<5  # exchange holidays; update yearly for the next year's dates
 pypdf>=6,<7                # reads company presentations and call transcripts (deep dive)
 python-pptx>=1.0,<2       # the company deck download
