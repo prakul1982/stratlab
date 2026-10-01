@@ -11,6 +11,8 @@
 - **Download as slides:** the deep dive as a PowerPoint deck (numbers and charts, business model, plans, report card, checklist and sources).
 - **Admin → Check filings feed** now also tries to read one company document from the server.
 - **Banks and lenders:** the deep dive, checklist, report card and deck use return on equity and revenue, and leave out capex, free cash flow, operating margin and debt to equity, which don't describe a lender.
+- **Industry-aware checks:** the checklist now reads each company's industry and uses the rules that fit it. Insurers and holding companies are judged on return on equity like banks; for power, telecom and infrastructure, real estate and cyclicals (metals, cement, chemicals) the checks their industry would always fail (debt, cash flow, growth through the cycle) show as watch with the reason. The rule set used is shown above the checklist.
+- **Industry measures, from the company:** the presentation read now pulls the numbers each industry is judged on, such as revenue per occupied bed and occupancy for hospitals, NIM and NPAs for banks, RevPAR for hotels, ARPU for telecom, EBITDA per tonne for cement and metals, pre-sales for real estate, with the quote and source. They have their own panel and slide. Lenders, insurers and holding companies show P/B instead of P/E in the deck.
 - **Cover letters skipped:** a filing that attaches only a short cover letter instead of the presentation or transcript is passed over for the next one.
 
 ### Real prices for tests

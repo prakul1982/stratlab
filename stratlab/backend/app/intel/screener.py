@@ -89,6 +89,11 @@ def parse(html: str) -> dict:
         if key:
             out["growth"][key] = rows
 
+    peers = soup.find(id="peers")       # the exchange-style classification: sector › industry › basic industry
+    path = [_text(a) for a in (peers.find_all("a", href=True) if peers else []) if a["href"].startswith("/market/")]
+    if path:
+        out["industry_path"] = path[:4]
+
     for cls in ("pros", "cons"):
         box = soup.find(class_=cls)
         if box:

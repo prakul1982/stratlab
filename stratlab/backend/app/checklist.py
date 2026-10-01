@@ -2,6 +2,7 @@
 and its management report card. Each check says pass, watch or fail with the number behind it.
 
 These are screening rules the user can read and disagree with, not a view on the stock; the page says so."""
+from . import industry
 from .intel.screener import summary
 
 GROUPS = ["Trend", "Growth", "Quality", "Balance sheet", "Cash", "Promoters", "Filings", "Management"]
@@ -27,14 +28,21 @@ def _row(table: dict | None, prefix: str) -> list:
     return []
 
 
-def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: dict | None = None, card: dict | None = None) -> dict:
+def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: dict | None = None, card: dict | None = None,
+             symbol: str | None = None) -> dict:
     s = summary(p)
+    ind = industry.classify(p, nums, symbol)
+    grp = ind["group"]
+    financial = grp in ("lender", "insurer", "holding")
     g = nums.get("growth") or {}
     years = [y for y in nums.get("years") or [] if y.get("sales") is not None]
     quarters = [q for q in nums.get("quarters") or [] if q.get("sales_yoy") is not None]
     out: list[dict] = []
 
-    def add(group, label, state, value, rule):
+    def add(group, label, state, value, rule, soft=False):
+        """`soft`: this industry's normal shape would fail the rule, so a fail shows as watch, saying why."""
+        if soft and state == "fail":
+            state, rule = "watch", f"{rule} Shown as watch for {ind['label'].lower()}."
         out.append({"group": group, "label": label, "state": state, "value": value, "rule": rule})
 
     # trend
@@ -47,32 +55,34 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
 
     # growth
     add("Growth", "Sales growth, 3 years", _state(g.get("sales_cagr_3y"), 10, 0), _pct(g.get("sales_cagr_3y")) + " a year",
-        "Pass at 10% a year or more; fail if sales shrank.")
+        "Pass at 10% a year or more; fail if sales shrank.", soft=grp in ("cyclical", "holding", "realty"))
     add("Growth", "Profit growth, 3 years", _state(g.get("profit_cagr_3y"), 10, 0), _pct(g.get("profit_cagr_3y")) + " a year",
-        "Pass at 10% a year or more; fail if profit shrank.")
+        "Pass at 10% a year or more; fail if profit shrank.", soft=grp in ("cyclical", "holding", "realty"))
     last_q = quarters[-1] if quarters else None
     add("Growth", "Latest quarter sales vs a year ago", _state(last_q and last_q["sales_yoy"], 5, 0),
-        f"{_pct(last_q['sales_yoy'])} ({last_q['quarter']})" if last_q else "–", "Pass at +5% or more; fail if lower than a year ago.")
+        f"{_pct(last_q['sales_yoy'])} ({last_q['quarter']})" if last_q else "–", "Pass at +5% or more; fail if lower than a year ago.",
+        soft=grp in ("cyclical", "holding", "realty"))
 
     # quality
-    bank = bool(nums.get("bank"))
-    if bank:
-        add("Quality", "Return on equity", _state(s.get("roe"), 15, 10), _pct(s.get("roe"), False),
-            "For a lender, return on equity: pass at 15% or more; fail below 10%.")
+    if financial:
+        good, bad = {"lender": (15, 10), "insurer": (14, 8), "holding": (10, 5)}[grp]
+        add("Quality", "Return on equity", _state(s.get("roe"), good, bad), _pct(s.get("roe"), False),
+            f"For {'a ' if grp != 'insurer' else 'an '}{ind['label'].lower()}, return on equity: pass at {good}% or more; fail below {bad}%.")
     else:
         add("Quality", "Return on capital employed", _state(s.get("roce"), 15, 10), _pct(s.get("roce"), False),
             "Pass at 15% or more; fail below 10%.")
-    if not bank:                  # margin, debt and cash-flow checks mean something else for a lender
+    if not financial:             # margin, debt and cash-flow checks mean something else for lenders, insurers, holding companies
         opm_now = years[-1]["opm"] if years and years[-1].get("opm") is not None else None
         opm_then = years[-4]["opm"] if len(years) >= 4 and years[-4].get("opm") is not None else None
         d_opm = opm_now - opm_then if opm_now is not None and opm_then is not None else None
         add("Quality", "Operating margin holding up", _state(d_opm, -1, -4),
             f"{_pct(opm_now, False)}, from {_pct(opm_then, False)}" if d_opm is not None else "–",
-            "Pass if within 1 point of three years ago or better; fail if down more than 4 points.")
+            "Pass if within 1 point of three years ago or better; fail if down more than 4 points.", soft=grp in ("cyclical", "realty"))
 
         # balance sheet
         add("Balance sheet", "Debt to equity", _state(s.get("debt_equity"), 0.5, 1.0, higher_better=False),
-            "–" if s.get("debt_equity") is None else f"{s['debt_equity']:.2f}", "Pass at 0.5 or less; fail above 1.")
+            "–" if s.get("debt_equity") is None else f"{s['debt_equity']:.2f}", "Pass at 0.5 or less; fail above 1.",
+            soft=grp in ("utility", "realty"))
 
         # cash
         last3 = years[-3:]
@@ -80,7 +90,8 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
         prof = [y["profit"] for y in last3 if y.get("profit") is not None]
         conv = sum(cfo) / sum(prof) if len(cfo) == 3 and len(prof) == 3 and sum(prof) > 0 else None
         add("Cash", "Profit turning into cash", _state(conv, 0.8, 0.5),
-            "–" if conv is None else f"{conv:.2f}× profit over 3 years", "Cash from operations ÷ net profit over 3 years: pass at 0.8 or more; fail below 0.5.")
+            "–" if conv is None else f"{conv:.2f}× profit over 3 years", "Cash from operations ÷ net profit over 3 years: pass at 0.8 or more; fail below 0.5.",
+            soft=grp == "realty")
         fcf = [y["fcf"] for y in last3 if y.get("fcf") is not None]
         fcf_sum = sum(fcf) if len(fcf) == 3 else None
         add("Cash", "Free cash flow, 3 years", "na" if fcf_sum is None else "pass" if fcf_sum > 0 else "watch",
@@ -110,4 +121,4 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
             "From the management report card: pass at 70% of checkable targets met; fail below 40%.")
 
     counts = {k: sum(1 for c in out if c["state"] == k) for k in ("pass", "watch", "fail", "na")}
-    return {"checks": out, "counts": counts, "scored": counts["pass"] + counts["watch"] + counts["fail"]}
+    return {"checks": out, "counts": counts, "scored": counts["pass"] + counts["watch"] + counts["fail"], "industry": ind}

@@ -115,7 +115,10 @@ def build(v: dict) -> bytes:
     ret = ("ROE", _pc(snap.get("roe"))) if n.get("bank") else ("ROCE", _pc(snap.get("roce")))
     lev = (("Dividend yield", _pc(snap.get("div_yield"))) if n.get("bank")
            else ("Debt / equity", "–" if snap.get("debt_equity") is None else f"{snap['debt_equity']:.2f}"))
-    tiles = [("Market cap", f"₹{_cr(snap.get('market_cap_cr'))} cr"), ("P/E", "–" if snap.get("pe") is None else f"{snap['pe']:.1f}"), ret, lev,
+    group = ((v.get("checklist") or {}).get("industry") or {}).get("group")
+    val = (("P/B", "–" if snap.get("pb") is None else f"{snap['pb']:.1f}") if group in ("lender", "insurer", "holding")
+           else ("P/E", "–" if snap.get("pe") is None else f"{snap['pe']:.1f}"))
+    tiles = [("Market cap", f"₹{_cr(snap.get('market_cap_cr'))} cr"), val, ret, lev,
              ("Sales growth, 3y", _pc(n["growth"].get("sales_cagr_3y"), True)), ("Profit growth, 3y", _pc(n["growth"].get("profit_cagr_3y"), True))]
     for i, (label, val) in enumerate(tiles):
         x = Inches(0.6 + i * 2.05)
@@ -184,6 +187,14 @@ def build(v: dict) -> bytes:
         bullets += [f"Drives revenue: {x}" for x in b.get("drivers", [])[:3]] + [f"Risk it names: {x}" for x in b.get("risks", [])[:3]]
         d.text(s, bullets, Inches(0.6), Inches(4.2), Inches(6.2), Inches(2.6), 12)
 
+    # 5b. the industry's own operating measures
+    ms = (b or {}).get("measures") or []
+    if ms:
+        s = d.slide(f"{b.get('industry') or 'Operating'} measures", "As the company states them in its investor presentation")
+        rows = [[m["name"], m["value"], m.get("period") or "–", m.get("change") or "–",
+                 f"{m['source']['title'][:36]}, {m['source']['at'][:10]}" if m.get("source") else "–"] for m in ms[:8]]
+        d.table(s, ["Measure", "Value", "Period", "Change", "Source"], rows, Inches(0.6), Inches(1.6), Inches(12), [3.4, 2, 1.4, 2, 3], size=12)
+
     # 6. capex plans
     if p and (p.get("capex") or p.get("outlook")):
         s = d.slide("Capex and growth plans, in management's words", "From the latest investor presentation and earnings calls")
@@ -217,7 +228,9 @@ def build(v: dict) -> bytes:
     cl = v.get("checklist")
     if cl and cl.get("checks"):
         c = cl["counts"]
-        s = d.slide("Investor checklist", f"{c['pass']} pass · {c['watch']} watch · {c['fail']} fail, on fixed rules written below each check")
+        ind = (cl.get("industry") or {}).get("label")
+        s = d.slide("Investor checklist", f"{c['pass']} pass · {c['watch']} watch · {c['fail']} fail"
+                    + (f" · rules for: {ind}" if ind and ind != "General" else ""))
         rows, colors = [], {}
         for i, x in enumerate(cl["checks"][:16]):
             label, color = STATE[x["state"]]

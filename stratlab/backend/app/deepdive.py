@@ -125,8 +125,11 @@ BUSINESS = """You explain how an Indian listed company makes money, from its own
 Return {"summary": "2-3 sentences: what it sells, to whom, and how it earns",
  "segments": [{"name": "...", "share_pct": number or null, "what": "one line"}],
  "customers": "who buys, in one line", "drivers": ["what moves revenue", ...],
- "strengths": ["advantages the company itself points to", ...], "risks": ["risks the company names", ...]}
-At most 6 segments and 5 items per list.
+ "strengths": ["advantages the company itself points to", ...], "risks": ["risks the company names", ...],
+ "measures": [{"name": "the operating measure", "value": "as stated, with its unit", "period": "e.g. Q1 FY27", "change": "vs a year
+  earlier if stated, else null", "quote": "short exact quote", "source": "S1"}]}
+At most 6 segments and 5 items per list. For "measures", look for the INDUSTRY MEASURES listed with the company (the numbers
+this industry is judged on, such as revenue per occupied bed for a hospital); include only those the excerpts state, up to 8.
 """ + RULES
 
 PLANS = """You pull out capacity, capex and growth plans an Indian listed company's management stated, from its investor
@@ -153,6 +156,16 @@ def _num(v):
         return f if 0 <= f <= 100 else None
     except (TypeError, ValueError):
         return None
+
+
+def clean_measures(d: dict, labels: dict) -> list[dict]:
+    out = []
+    for m in (d.get("measures") or [])[:8]:
+        if isinstance(m, dict) and str(m.get("name") or "").strip() and str(m.get("value") or "").strip():
+            out.append({"name": str(m["name"])[:80], "value": str(m["value"])[:60], "period": (str(m["period"])[:30] if m.get("period") else None),
+                        "change": (str(m["change"])[:60] if m.get("change") else None), "quote": str(m.get("quote") or "")[:240],
+                        "source": labels.get(str(m.get("source") or "").strip().upper())})
+    return out
 
 
 def clean_business(d: dict) -> dict:
@@ -217,16 +230,23 @@ def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int) -> 
     return "\n\n".join(parts), labels
 
 
-def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai) -> dict:
+def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai, kpis: dict | None = None) -> dict:
     """Both document reads for one company. `ai` is (gemini, anthropic) for the provider chain."""
     out = {"business": None, "plans": None, "problems": [], "read": []}
     pres = readable(docs_api, [d for d in docs_list if d["kind"] == "presentation"], 1, out["problems"])
     trans = readable(docs_api, [d for d in docs_list if d["kind"] == "transcript"], 2, out["problems"])
-    head = f"COMPANY: {name} ({symbol}, NSE)\nPROFILE: {about[:1200]}\n\nEXCERPTS:\n"
-    text, labels = _excerpts(pres, BUSINESS_WORDS, 14000)
+    kpis = kpis or {}
+    want = kpis.get("measures") or []
+    head = (f"COMPANY: {name} ({symbol}, NSE)\nPROFILE: {about[:1200]}\n"
+            f"INDUSTRY MEASURES ({kpis.get('label') or 'this company'}): {'; '.join(want)}\n\nEXCERPTS:\n")
+    words = BUSINESS_WORDS + [re.escape(w.split(" (")[0]) for w in want if not w.startswith("The operating")]
+    text, labels = _excerpts(pres, words, 14000)
     if text or about:
         raw = complete(BUSINESS, head + (text or "(no presentation available)"), gemini=ai[0], anthropic=ai[1], max_tokens=1500, kind="long")
-        out["business"] = clean_business(extract_json(raw))
+        parsed = extract_json(raw)
+        out["business"] = clean_business(parsed)
+        out["business"]["measures"] = clean_measures(parsed, labels)
+        out["business"]["industry"] = kpis.get("label")
         out["business"]["sources"] = list(labels.values())
     text, labels = _excerpts(pres + trans, PLAN_WORDS, 9000)
     if text:

@@ -19,7 +19,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, basket, billing, checklist, db, deck, deepdive, fixtures, importer, investor, report_card, universes
+from . import admin, basket, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -935,11 +935,12 @@ def deep_view(sym: str, base: dict) -> dict:
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
     return {"symbol": sym, "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
-            "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "roce", "roe", "debt_equity", "div_yield")},
+            "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
+            "industry_measures": industry.measures(p, sym),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
             "calls": sum(d["kind"] == "transcript" for d in base["docs"]),
             "card": card_view, "card_stale": not report_card.fresh(card), "trend": base["trend"], "filings": base["filings"],
-            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view)}
+            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, sym)}
 
 
 def deep_ai_allowed(profile) -> None:
@@ -970,7 +971,8 @@ def deep_dive_read(symbol: str, refresh: bool = False, profile=Depends(current_p
     deep_ai_allowed(profile)
     p = base["p"]
     try:
-        reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic))
+        reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic),
+                              industry.measures(p, sym))
     except AIBusy as e:
         err(503, "ai_busy", str(e))
     except AIError as e:
@@ -1010,7 +1012,7 @@ def investor_home(profile=Depends(current_profile)):
         trend = price_trend(sym)
         nums = deepdive.numbers(p) if p else None
         card = report_card.view(report_card.stored(sym), nums) if nums else None
-        checks = checklist.evaluate(p, nums, fsum, trend, card) if p else None
+        checks = checklist.evaluate(p, nums, fsum, trend, card, sym) if p else None
         sec = investor.sector_of("IN", sym)
         sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label("IN", sec, None), "quadrant": None} if sec else None)
         return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(sym) is not None, problem)
