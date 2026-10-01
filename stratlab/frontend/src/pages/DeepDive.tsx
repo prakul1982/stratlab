@@ -16,17 +16,19 @@ type Target = { metric: string; low: number | null; high: number | null; period:
   revised?: { low: number | null; high: number | null; at: string; quote: string } | null };
 export type CheckState = "pass" | "watch" | "fail" | "na";
 type Checklist = { checks: { group: string; label: string; state: CheckState; value: string; rule: string }[];
-  counts: Record<CheckState, number>; scored: number };
+  counts: Record<CheckState, number>; scored: number; industry?: { group: string; label: string; path: string[]; note: string } };
+type Measure = { name: string; value: string; period: string | null; change: string | null; quote: string; source: Source };
 type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; score: number | null;
   read: { kind: string; at: string; title: string }[]; problems: string[]; at: string };
 export interface DeepView {
   symbol: string; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
+  industry_measures?: { key: string; label: string | null; measures: string[] };
   numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean;
     growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null } };
   reads: null | {
     at: string; problems: string[]; read: { kind: string; at: string; title: string }[];
-    business: null | { summary: string; customers: string; drivers: string[]; strengths: string[]; risks: string[];
+    business: null | { summary: string; customers: string; drivers: string[]; strengths: string[]; risks: string[]; measures?: Measure[]; industry?: string | null;
       segments: { name: string; share_pct: number | null; what: string }[]; sources: Source[] };
     plans: null | { capex: { what: string; amount: string | null; timeline: string | null; status: string; quote: string; source: Source }[];
       outlook: { statement: string; quote: string; source: Source }[]; sources: Source[] };
@@ -92,6 +94,8 @@ function ChecklistPanel({ c }: { c: Checklist }) {
   return (
     <Panel title="Investor checklist" span="full" info="Fixed rules on the reported numbers, the price trend, the filings and the management report card. Each rule is written under its check. A screen to help you look closer, not a recommendation.">
       <p className="small" style={{ margin: 0 }}><b>{c.counts.pass} pass</b> · {c.counts.watch} watch · {c.counts.fail} fail{c.counts.na ? ` · ${c.counts.na} without data` : ""}</p>
+      {c.industry && c.industry.group !== "general" && (
+        <p className="tiny muted" style={{ margin: 0 }}><b>Rules for: {c.industry.label}{c.industry.path.length ? ` (${c.industry.path.join(" › ")})` : ""}.</b> {c.industry.note}</p>)}
       <div className="checklist">{groups.map((g) => (
         <div key={g} className="check-group">
           <span className="eyebrow">{g}</span>
@@ -226,7 +230,7 @@ export function DeepDivePage() {
             </div>
             {v.doc_note && <p className="tiny muted" style={{ margin: 0 }}>Filings: {v.doc_note}</p>}
             {reading && <Loading label="Reading the latest investor presentation and earnings calls" />}
-            {!v.reads && !reading && <p className="small muted" style={{ margin: 0 }}>The business model, capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
+            {!v.reads && !reading && <p className="small muted" style={{ margin: 0 }}>The business model, {v.industry_measures?.label ? `the ${v.industry_measures.label.toLowerCase()} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
             {v.reads?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.reads.problems.join(" · ")}</p> : null}
           </section>
 
@@ -252,6 +256,24 @@ export function DeepDivePage() {
               <div className="row wrap" style={{ gap: 10 }}>{b.sources.map((s, i) => <SourceLink key={i} s={s} />)}</div>
             </Panel>
           )}
+
+          {b && (b.measures?.length || v.industry_measures?.label) ? (
+            <Panel title={`${b.industry ?? v.industry_measures?.label ?? "Operating"} measures, from the company`} span="full"
+              info="The numbers this industry is judged on (for a hospital, revenue per occupied bed and occupancy), as the company states them in its presentation. They aren't in the financial tables.">
+              {b.measures?.length ? (
+                <div className="promises">{b.measures.map((m, i) => (
+                  <div key={i} className="promise">
+                    <div className="spread" style={{ gap: 10, alignItems: "baseline" }}><span className="small"><b>{m.name}</b></span><b className="num">{m.value}</b></div>
+                    <div className="promise-facts tiny">
+                      {m.period && <span><span className="muted">Period</span> {m.period}</span>}
+                      {m.change && <span><span className="muted">Change</span> {m.change}</span>}
+                      <SourceLink s={m.source} />
+                    </div>
+                    {m.quote && <span className="tiny muted">"{m.quote}"</span>}
+                  </div>))}</div>
+              ) : <p className="small muted" style={{ margin: 0 }}>The presentation read didn't state these: {v.industry_measures?.measures.join(", ")}.</p>}
+            </Panel>
+          ) : null}
 
           {p && (p.capex.length > 0 || p.outlook.length > 0) && (
             <Panel title="Capex and growth plans, in management's words" span="full">

@@ -1,0 +1,107 @@
+"""Industry-aware checks: which rule set and which operating measures fit a company, the classification read from the
+company page, the measures pulled from its presentation, and the deck slide that shows them."""
+import io
+import json
+
+from pptx import Presentation
+
+from app import checklist, deck, deepdive, industry
+from app.intel.screener import parse
+from tests.test_deepdive import FakeDocs, company
+from tests.test_investor import view_for_deck
+
+
+def labels(p, sym=None):
+    res = checklist.evaluate(p, deepdive.numbers(p), symbol=sym)
+    return res["industry"]["group"], {c["label"]: c for c in res["checks"]}
+
+
+def test_classification_from_page_name_statements_and_lists():
+    assert industry.classify({"industry_path": ["Financial Services", "Insurance", "Life Insurance"]})["group"] == "insurer"
+    assert industry.classify({"name": "Bajaj Holdings & Investment Ltd"})["group"] == "holding"
+    assert industry.classify({"industry_path": ["Utilities", "Power", "Power Generation"]})["group"] == "utility"
+    assert industry.classify({"industry_path": ["Realty", "Residential, Commercial Projects"]})["group"] == "realty"
+    assert industry.classify({"industry_path": ["Commodities", "Cement & Cement Products"]})["group"] == "cyclical"
+    assert industry.classify({"industry_path": ["Capital Goods", "Electrical Equipment"]})["group"] == "general"
+    assert industry.classify({"name": "Some Co"}, {"bank": True})["group"] == "lender"     # the statements say lender
+    assert industry.classify({"name": "X"}, None, "DLF")["group"] == "realty"              # StratLab's sector lists
+    assert industry.classify({"name": "X"}, None, "NTPC")["group"] == "utility"
+    assert industry.classify({"name": "X"}, None, "TCS")["group"] == "general"
+
+
+def test_page_classification_is_parsed():
+    html = """<html><h1>Apollo Hospitals Enterprise Ltd</h1><section id="peers"><p class="sub">
+      <a href="/market/IN05/" title="Broad Sector">Healthcare</a> <a href="/market/IN05/IN0501/" title="Sector">Healthcare</a>
+      <a href="/market/IN05/IN0501/IN050101/" title="Industry">Healthcare Services</a>
+      <a href="/market/IN05/IN0501/IN050101/IN050101001/" title="Basic Industry">Hospital</a>
+      <a href="/company/compare/">Edit columns</a></p></section></html>"""
+    p = parse(html)
+    assert p["industry_path"] == ["Healthcare", "Healthcare", "Healthcare Services", "Hospital"]
+    assert industry.measures(p)["key"] == "hospital"
+    assert any("ARPOB" in m for m in industry.measures(p)["measures"])
+
+
+def test_rules_soften_for_the_industry_that_would_always_fail():
+    p = company()
+    p["balance"]["rows"]["Reserves"] = [5] * 6           # tiny equity: debt to equity far above 1
+    p["balance"]["rows"]["Equity Capital"] = [1] * 6
+    p["industry_path"] = ["Utilities", "Power", "Power Generation"]
+    grp, c = labels(p)
+    assert grp == "utility" and c["Debt to equity"]["state"] == "watch" and "Shown as watch for power" in c["Debt to equity"]["rule"]
+    p["industry_path"] = ["Capital Goods", "Industrial Machinery"]
+    grp, c = labels(p)
+    assert grp == "general" and c["Debt to equity"]["state"] == "fail"
+
+
+def test_insurers_and_holding_companies_use_return_on_equity():
+    p = company()
+    p["ratios"] = {"ROE": "12 %", "ROCE": "30 %"}
+    p["industry_path"] = ["Financial Services", "Insurance"]
+    grp, c = labels(p)
+    assert grp == "insurer" and c["Return on equity"]["state"] == "watch"   # 12%: between 8 and 14
+    assert not {"Return on capital employed", "Debt to equity", "Operating margin holding up"} & c.keys()
+    p.pop("industry_path")
+    p["name"] = "Tata Investment Corporation Ltd"
+    grp, c = labels(p)
+    assert grp == "holding" and c["Return on equity"]["state"] == "pass"   # holding: pass at 10%
+
+
+def test_measures_by_industry():
+    assert industry.measures({"industry_path": ["Consumer Services", "Hotels & Resorts"]})["label"] == "Hotels"
+    assert industry.measures({"name": "X"}, "INFY")["key"] == "it"
+    assert industry.measures({"name": "X"}, "HDFCBANK")["measures"][0].startswith("Net interest margin")
+    assert industry.measures({"name": "Unknown Widgets"})["key"] == "general"
+
+
+def test_presentation_read_pulls_the_measures(monkeypatch):
+    seen = []
+
+    def complete(system, text, **kw):
+        seen.append(text)
+        if "makes money" in system:
+            return json.dumps({"summary": "Hospitals.", "segments": [], "measures": [
+                {"name": "ARPOB", "value": "Rs 62,000 a day", "period": "Q1 FY27", "change": "+8% YoY", "quote": "ARPOB rose to 62,000", "source": "S1"},
+                {"name": "Occupancy", "value": "", "source": "S1"},                       # no value: dropped
+                {"name": "Beds", "value": "10,000", "source": "S7"}]})                    # unknown source: kept, unlinked
+        return json.dumps({"capex": [], "outlook": []})
+    monkeypatch.setattr(deepdive, "complete", complete)
+    docs = [{"kind": "presentation", "at": "2026-08-01T10:00", "title": "Investor Presentation", "url": "u1"}]
+    out = deepdive.read("APOLLOHOSP", "Apollo", "Hospitals", docs, FakeDocs({"u1": "ARPOB rose to 62,000. Occupancy 70%."}), (None, None),
+                        industry.measures({"industry_path": ["Hospital"]}))
+    assert "INDUSTRY MEASURES (Hospitals): ARPOB (average revenue per occupied bed)" in seen[0]
+    ms = out["business"]["measures"]
+    assert [m["name"] for m in ms] == ["ARPOB", "Beds"] and ms[0]["source"]["url"] == "u1" and ms[1]["source"] is None
+    assert out["business"]["industry"] == "Hospitals"
+
+
+def test_deck_shows_measures_and_price_to_book_for_financials():
+    v = view_for_deck()
+    v["reads"]["business"]["measures"] = [{"name": "ARPOB", "value": "Rs 62,000", "period": "Q1 FY27", "change": None, "quote": "",
+                                           "source": {"title": "Deck", "at": "2026-08-01", "url": "u", "kind": "presentation"}}]
+    v["reads"]["business"]["industry"] = "Hospitals"
+    text = " ".join(sh.text_frame.text for s in Presentation(io.BytesIO(deck.build(v))).slides for sh in s.shapes if sh.has_text_frame)
+    assert "Hospitals measures" in text and "P/E" in text
+    v["checklist"]["industry"] = {"group": "lender", "label": "Bank or lender", "path": [], "note": ""}
+    v["snapshot"]["pb"] = 2.4
+    text = " ".join(sh.text_frame.text for s in Presentation(io.BytesIO(deck.build(v))).slides for sh in s.shapes if sh.has_text_frame)
+    assert "P/B" in text and "2.4" in text and "P/E" not in text
