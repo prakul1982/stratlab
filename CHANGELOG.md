@@ -10,6 +10,8 @@
 - **Research → Investor home (Pro):** every India watchlist company on one page with its trend, its sector's place in the rotation, red flags, checklist and report card, the ones that need a look first.
 - **Download as slides:** the deep dive as a PowerPoint deck (numbers and charts, business model, plans, report card, checklist and sources).
 - **Admin → Check filings feed** now also tries to read one company document from the server.
+- **Banks and lenders:** the deep dive, checklist, report card and deck use return on equity and revenue, and leave out capex, free cash flow, operating margin and debt to equity, which don't describe a lender.
+- **Cover letters skipped:** a filing that attaches only a short cover letter instead of the presentation or transcript is passed over for the next one.
 
 ### Real prices for tests
 - **Admin → Save real prices for testing** downloads about two years of real daily prices (benchmarks, every sector index, the ready-made groups and a few sectors' stocks). Saved as `stratlab/backend/tests/fixtures/real_prices.json.gz`, it makes the test suite also check the calculations on real market data. Prices only: no user data.

@@ -46,6 +46,8 @@ def _align(cols_a: list[str], vals_a: list, cols_b: list[str]) -> list:
 def numbers(p: dict) -> dict:
     """Growth, margins, estimated capex and free cash flow from the reported annual and quarterly tables."""
     pl, bal, cf, q = p.get("pl"), p.get("balance"), p.get("cashflow"), p.get("quarters")
+    # banks and lenders report "Financing Profit / Margin"; capex, free cash flow and operating margin don't apply
+    bank = any(k.lower().startswith("financing") for k in ((pl or {}).get("rows") or {}))
     ycols = [c for c in _years(pl) if c.upper() != "TTM"]
     n = len(ycols)
     sales = _series(pl, "Sales", "Revenue")[:n]
@@ -63,7 +65,7 @@ def numbers(p: dict) -> dict:
     years = []
     for i, y in enumerate(ycols):
         capex = None          # estimated: growth in fixed assets and work in progress, plus the year's depreciation
-        if i > 0 and fa[i] is not None and fa[i - 1] is not None:
+        if not bank and i > 0 and fa[i] is not None and fa[i - 1] is not None:
             d_cwip = cwip[i] - cwip[i - 1] if cwip[i] is not None and cwip[i - 1] is not None else 0
             d_dep = dep[i] if i < len(dep) and dep[i] is not None else 0
             capex = (fa[i] - fa[i - 1]) + d_cwip + d_dep
@@ -88,7 +90,7 @@ def numbers(p: dict) -> dict:
         "growth": {"sales_cagr_3y": _cagr(sales, 3), "sales_cagr_5y": _cagr(sales, 5),
                    "profit_cagr_3y": _cagr(profit, 3), "profit_cagr_5y": _cagr(profit, 5)},
         "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None,
-        "unit": "₹ crore",
+        "unit": "₹ crore", "bank": bank,
     }
 
 
@@ -180,40 +182,58 @@ def clean_plans(d: dict, labels: dict) -> dict:
     return {"capex": capex, "outlook": outlook}
 
 
-def _excerpts(docs_api, picked: list[dict], words: list[str], per_doc: int) -> tuple[str, dict, list[str]]:
-    """Labelled excerpts S1, S2… for the AI, the label → document map, and documents that couldn't be read."""
-    parts, labels, problems = [], {}, []
-    for n, d in enumerate(picked, 1):
+MIN_CHARS = 2500              # less than this is a cover letter or an intimation, not the document itself
+MAX_TRIES = 8                 # documents downloaded at most per read, looking for real ones
+
+
+def readable(docs_api, candidates: list[dict], need: int, problems: list[str]) -> list[tuple[dict, str]]:
+    """The first `need` candidates whose PDF holds real text. Exchange filings often attach only a one-page cover
+    letter under a "presentation" or "transcript" subject; those are skipped and the next candidate is tried."""
+    out, short = [], 0
+    for d in candidates[:max(MAX_TRIES, need * 2)]:
+        if len(out) >= need:
+            break
         try:
             text = docs_api.text(d["url"])
         except Exception as e:
             problems.append(f"{d['title'][:60]}: {str(e)[:80]}")
             continue
+        if len(text) < MIN_CHARS:
+            short += 1
+            continue
+        out.append((d, text))
+    if short and len(out) < need:
+        problems.append(f"{short} filing{'s' if short > 1 else ''} held only a short cover letter, not the document itself")
+    return out
+
+
+def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int) -> tuple[str, dict]:
+    """Labelled excerpts S1, S2… for the AI, and the label → document map."""
+    parts, labels = [], {}
+    for n, (d, text) in enumerate(pairs, 1):
         label = f"S{n}"
         labels[label] = {"title": d["title"], "at": d["at"], "url": d["url"], "kind": d["kind"]}
         parts.append(f"[{label}] {d['kind']} filed {d['at'][:10]}: {d['title']}\n{windows(text, words, limit=per_doc)}")
-    return "\n\n".join(parts), labels, problems
+    return "\n\n".join(parts), labels
 
 
 def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai) -> dict:
     """Both document reads for one company. `ai` is (gemini, anthropic) for the provider chain."""
-    pres = [d for d in docs_list if d["kind"] == "presentation"][:1]
-    trans = [d for d in docs_list if d["kind"] == "transcript"][:2]
     out = {"business": None, "plans": None, "problems": [], "read": []}
+    pres = readable(docs_api, [d for d in docs_list if d["kind"] == "presentation"], 1, out["problems"])
+    trans = readable(docs_api, [d for d in docs_list if d["kind"] == "transcript"], 2, out["problems"])
     head = f"COMPANY: {name} ({symbol}, NSE)\nPROFILE: {about[:1200]}\n\nEXCERPTS:\n"
-    text, labels, probs = _excerpts(docs_api, pres, BUSINESS_WORDS, 14000)
-    out["problems"] += probs
+    text, labels = _excerpts(pres, BUSINESS_WORDS, 14000)
     if text or about:
         raw = complete(BUSINESS, head + (text or "(no presentation available)"), gemini=ai[0], anthropic=ai[1], max_tokens=1500, kind="long")
         out["business"] = clean_business(extract_json(raw))
         out["business"]["sources"] = list(labels.values())
-    text, labels, probs = _excerpts(docs_api, pres + trans, PLAN_WORDS, 9000)
-    out["problems"] += [p for p in probs if p not in out["problems"]]
+    text, labels = _excerpts(pres + trans, PLAN_WORDS, 9000)
     if text:
         raw = complete(PLANS, head + text, gemini=ai[0], anthropic=ai[1], max_tokens=2000, kind="long")
         out["plans"] = clean_plans(extract_json(raw), labels)
         out["plans"]["sources"] = list(labels.values())
-    out["read"] = [{"kind": d["kind"], "at": d["at"], "title": d["title"]} for d in pres + trans]
+    out["read"] = [{"kind": d["kind"], "at": d["at"], "title": d["title"]} for d, _ in pres + trans]
     return out
 
 

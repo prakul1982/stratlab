@@ -74,12 +74,15 @@ def test_windows_keep_the_passages_that_matter():
     assert docs.windows("no keywords here", [r"capex"], limit=5) == "no k" + "e"
 
 
+FILLER = " Further discussion of the quarter." * 100       # real documents run to pages; cover letters don't
+
+
 class FakeDocs:
-    def __init__(self, texts): self.texts = texts
+    def __init__(self, texts, pad=True): self.texts, self.pad = texts, pad
     def text(self, url):
         if url not in self.texts:
             raise SourceError("the exchange", "gone")
-        return self.texts[url]
+        return self.texts[url] + (FILLER if self.pad and not self.texts[url].startswith("COVER") else "")
 
 
 DOCS = [{"kind": "transcript", "at": "2026-08-10T10:00", "title": "Q1 FY27 call transcript", "url": "u1"},
@@ -167,3 +170,29 @@ def test_endpoints_are_pro_store_reads_and_respect_the_daily_limit(api):
     c.post("/research/deep/ACME/read?refresh=true")
     assert len(usage) == 2
     assert c.post("/research/deep/ACME/read?refresh=true").status_code == 429
+
+
+def test_cover_letters_are_skipped_for_the_next_document():
+    docs = [{"kind": "presentation", "at": "2026-08-05", "title": "Updates", "url": "c1"},
+            {"kind": "presentation", "at": "2026-08-01", "title": "Investor Presentation", "url": "p1"}]
+    problems = []
+    got = deepdive.readable(FakeDocs({"c1": "COVER Please find enclosed the presentation.", "p1": "Business overview"}), docs, 1, problems)
+    assert [d["url"] for d, _ in got] == ["p1"] and problems == []
+    problems = []
+    assert deepdive.readable(FakeDocs({"c1": "COVER only"}), docs[:1], 1, problems) == []
+    assert "short cover letter" in problems[0]
+
+
+def test_banks_get_no_capex_or_operating_margin_checks():
+    from app import checklist
+    p = company()
+    p["pl"]["rows"] = {"Revenue": p["pl"]["rows"]["Sales"], "Financing Profit": [1] * 7, "Financing Margin %": [-17] * 7,
+                       "Depreciation": p["pl"]["rows"]["Depreciation"], "Net Profit": p["pl"]["rows"]["Net Profit"]}
+    p["ratios"] = {"ROCE": "7 %", "ROE": "16.5 %"}
+    n = deepdive.numbers(p)
+    assert n["bank"] and all(y["capex"] is None and y["fcf"] is None for y in n["years"])
+    labels = {c["label"]: c for c in checklist.evaluate(p, n)["checks"]}
+    assert labels["Return on equity"]["state"] == "pass" and "Return on capital employed" not in labels
+    assert not {"Operating margin holding up", "Debt to equity", "Free cash flow, 3 years", "Profit turning into cash"} & labels.keys()
+    from app import report_card as rc
+    assert rc.check({"metric": "margin", "low": 4.0, "high": None, "period": "FY25"}, n)["result"] == "unchecked"

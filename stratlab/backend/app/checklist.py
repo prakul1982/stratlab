@@ -55,30 +55,36 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
         f"{_pct(last_q['sales_yoy'])} ({last_q['quarter']})" if last_q else "–", "Pass at +5% or more; fail if lower than a year ago.")
 
     # quality
-    add("Quality", "Return on capital employed", _state(s.get("roce"), 15, 10), _pct(s.get("roce"), False),
-        "Pass at 15% or more; fail below 10%.")
-    opm_now = years[-1]["opm"] if years and years[-1].get("opm") is not None else None
-    opm_then = years[-4]["opm"] if len(years) >= 4 and years[-4].get("opm") is not None else None
-    d_opm = opm_now - opm_then if opm_now is not None and opm_then is not None else None
-    add("Quality", "Operating margin holding up", _state(d_opm, -1, -4),
-        f"{_pct(opm_now, False)}, from {_pct(opm_then, False)}" if d_opm is not None else "–",
-        "Pass if within 1 point of three years ago or better; fail if down more than 4 points.")
+    bank = bool(nums.get("bank"))
+    if bank:
+        add("Quality", "Return on equity", _state(s.get("roe"), 15, 10), _pct(s.get("roe"), False),
+            "For a lender, return on equity: pass at 15% or more; fail below 10%.")
+    else:
+        add("Quality", "Return on capital employed", _state(s.get("roce"), 15, 10), _pct(s.get("roce"), False),
+            "Pass at 15% or more; fail below 10%.")
+    if not bank:                  # margin, debt and cash-flow checks mean something else for a lender
+        opm_now = years[-1]["opm"] if years and years[-1].get("opm") is not None else None
+        opm_then = years[-4]["opm"] if len(years) >= 4 and years[-4].get("opm") is not None else None
+        d_opm = opm_now - opm_then if opm_now is not None and opm_then is not None else None
+        add("Quality", "Operating margin holding up", _state(d_opm, -1, -4),
+            f"{_pct(opm_now, False)}, from {_pct(opm_then, False)}" if d_opm is not None else "–",
+            "Pass if within 1 point of three years ago or better; fail if down more than 4 points.")
 
-    # balance sheet
-    add("Balance sheet", "Debt to equity", _state(s.get("debt_equity"), 0.5, 1.0, higher_better=False),
-        "–" if s.get("debt_equity") is None else f"{s['debt_equity']:.2f}", "Pass at 0.5 or less; fail above 1.")
+        # balance sheet
+        add("Balance sheet", "Debt to equity", _state(s.get("debt_equity"), 0.5, 1.0, higher_better=False),
+            "–" if s.get("debt_equity") is None else f"{s['debt_equity']:.2f}", "Pass at 0.5 or less; fail above 1.")
 
-    # cash
-    last3 = years[-3:]
-    cfo = [y["cfo"] for y in last3 if y.get("cfo") is not None]
-    prof = [y["profit"] for y in last3 if y.get("profit") is not None]
-    conv = sum(cfo) / sum(prof) if len(cfo) == 3 and len(prof) == 3 and sum(prof) > 0 else None
-    add("Cash", "Profit turning into cash", _state(conv, 0.8, 0.5),
-        "–" if conv is None else f"{conv:.2f}× profit over 3 years", "Cash from operations ÷ net profit over 3 years: pass at 0.8 or more; fail below 0.5.")
-    fcf = [y["fcf"] for y in last3 if y.get("fcf") is not None]
-    fcf_sum = sum(fcf) if len(fcf) == 3 else None
-    add("Cash", "Free cash flow, 3 years", "na" if fcf_sum is None else "pass" if fcf_sum > 0 else "watch",
-        "–" if fcf_sum is None else f"{'-' if fcf_sum < 0 else ''}₹{abs(fcf_sum):,.0f} crore", "Cash from operations minus estimated capex. Negative is common while building capacity: watch, not fail.")
+        # cash
+        last3 = years[-3:]
+        cfo = [y["cfo"] for y in last3 if y.get("cfo") is not None]
+        prof = [y["profit"] for y in last3 if y.get("profit") is not None]
+        conv = sum(cfo) / sum(prof) if len(cfo) == 3 and len(prof) == 3 and sum(prof) > 0 else None
+        add("Cash", "Profit turning into cash", _state(conv, 0.8, 0.5),
+            "–" if conv is None else f"{conv:.2f}× profit over 3 years", "Cash from operations ÷ net profit over 3 years: pass at 0.8 or more; fail below 0.5.")
+        fcf = [y["fcf"] for y in last3 if y.get("fcf") is not None]
+        fcf_sum = sum(fcf) if len(fcf) == 3 else None
+        add("Cash", "Free cash flow, 3 years", "na" if fcf_sum is None else "pass" if fcf_sum > 0 else "watch",
+            "–" if fcf_sum is None else f"{'-' if fcf_sum < 0 else ''}₹{abs(fcf_sum):,.0f} crore", "Cash from operations minus estimated capex. Negative is common while building capacity: watch, not fail.")
 
     # promoters
     prom = _row(p.get("shareholding"), "Promoters")

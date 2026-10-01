@@ -11,7 +11,7 @@ from datetime import date, datetime, timezone
 
 from . import db
 from .ai_providers import complete, extract_json
-from .deepdive import KEEP, RULES, _excerpts
+from .deepdive import KEEP, RULES, _excerpts, readable
 
 MAX_CALLS = 6                  # earnings calls read, spread over the last two years
 
@@ -122,10 +122,13 @@ def pick_calls(docs_list: list[dict], n: int = MAX_CALLS) -> list[dict]:
 
 
 def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai) -> dict:
-    calls = pick_calls(docs_list)
-    out = {"guidance": [], "problems": [], "read": [{"kind": d["kind"], "at": d["at"], "title": d["title"]} for d in calls]}
-    text, labels, probs = _excerpts(docs_api, calls, GUIDANCE_WORDS, 5000)
-    out["problems"] = probs
+    picked = pick_calls(docs_list)
+    rest = [d for d in docs_list if d["kind"] == "transcript" and d not in picked]
+    out = {"guidance": [], "problems": [], "read": []}
+    pairs = readable(docs_api, picked + rest, len(picked), out["problems"])
+    pairs.sort(key=lambda p: p[0]["at"], reverse=True)
+    out["read"] = [{"kind": d["kind"], "at": d["at"], "title": d["title"]} for d, _ in pairs]
+    text, labels = _excerpts(pairs, GUIDANCE_WORDS, 5000)
     if text:
         head = f"COMPANY: {name} ({symbol}, NSE)\nEach excerpt shows the date of the call.\n\nEXCERPTS:\n"
         raw = complete(GUIDANCE, head + text, gemini=ai[0], anthropic=ai[1], max_tokens=2500, kind="long")
@@ -168,6 +171,8 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
     res = {**g, "actual": None, "result": "unchecked", "unit": "crore" if g["metric"] == "capex" else "%"}
     if g["metric"] == "other" or not per:
         return res
+    if nums.get("bank") and g["metric"] in ("margin", "capex"):
+        return res                      # a lender's margin (NIM) and capex aren't in the reported tables
     a = _actual(g["metric"], per, nums)
     if a is None:
         # quarterly results come out within ~45 days of the quarter, annual ones within ~60

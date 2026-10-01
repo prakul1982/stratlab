@@ -1611,11 +1611,13 @@ def admin_filings_check(symbol: str = "RELIANCE", _=Depends(admin.admin_profile)
     doc = None
     found = deepdive.documents(filings_feed.announcements(sym, deepdive.DOC_DAYS))
     if found:
-        try:
-            text = deep_docs.text(found[0]["url"])
-            doc = {"ok": True, "title": found[0]["title"], "kind": found[0]["kind"], "chars": len(text), "start": text[:160]}
-        except SourceError as e:
-            doc = {"ok": False, "title": found[0]["title"], "kind": found[0]["kind"], "error": str(e)}
+        probs: list[str] = []
+        got = deepdive.readable(deep_docs, found, 1, probs)
+        if got:
+            d, text = got[0]
+            doc = {"ok": True, "title": d["title"], "kind": d["kind"], "chars": len(text), "start": text[:160]}
+        else:
+            doc = {"ok": False, "title": found[0]["title"], "kind": found[0]["kind"], "error": public_text("; ".join(probs) or "nothing readable")}
     return {"ok": True, "symbol": sym, "count": len(items), "latest": [{k: i[k] for k in ("at", "label", "subject")} for i in items[:3]],
             "alerts": filing_alerts_job.status, "document": doc, "documents_found": len(found)}
 
