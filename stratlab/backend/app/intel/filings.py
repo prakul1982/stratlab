@@ -177,6 +177,22 @@ class NSEFilings:
         self.cache.set(key, items, 1800)
         return items
 
+    def industry(self, symbol: str) -> list[str]:
+        """The exchange's own classification: macro sector › sector › industry › basic industry."""
+        key = ("industry", symbol)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        data = self._get("/api/quote-equity", {"symbol": symbol})
+        info = (data or {}).get("industryInfo") or {} if isinstance(data, dict) else {}
+        path = []
+        for k in ("macro", "sector", "industry", "basicIndustry"):
+            v = str(info.get(k) or "").strip()
+            if v and v not in path:
+                path.append(v)
+        self.cache.set(key, path, 7 * 86400)
+        return path
+
 
 def report(feed, symbol: str) -> dict:
     """Timeline plus the 3-month summary for one NSE symbol."""

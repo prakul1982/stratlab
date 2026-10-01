@@ -105,3 +105,57 @@ def test_deck_shows_measures_and_price_to_book_for_financials():
     v["snapshot"]["pb"] = 2.4
     text = " ".join(sh.text_frame.text for s in Presentation(io.BytesIO(deck.build(v))).slides for sh in s.shapes if sh.has_text_frame)
     assert "P/B" in text and "2.4" in text and "P/E" not in text
+
+
+def test_valuation_fits_the_business():
+    p = company()                                       # operating profit isn't in the sample P&L: add it, TTM last
+    p["pl"]["rows"]["Operating Profit"] = [15, 18, 22, 27, 31, 38, 40]
+    p["balance"]["rows"]["Borrowings"] = [20, 22, 25, 30, 28, 26]
+    snap = {"market_cap_cr": 1174, "pe": 45.0, "pb": 3.2}
+    v = industry.valuation(p, snap, "general", "hospital")
+    assert v["short"] == "EV/EBITDA" and v["value"] == 30.0 and v["pe"] == 45.0      # (1174 + 26) / 40
+    assert industry.valuation(p, snap, "lender", "lender")["short"] == "P/B"
+    assert industry.valuation(p, snap, "utility", "general")["short"] == "EV/EBITDA"
+    assert industry.valuation(p, snap, "general", "it") == {"name": "Price to earnings", "short": "P/E", "value": 45.0, "pe": 45.0,
+                                                            "why": "Most businesses are compared on price to earnings."}
+    p["pl"]["rows"]["Operating Profit"][-1] = -5        # a loss at the operating level: no multiple, not a negative one
+    assert industry.valuation(p, snap, "general", "hospital")["value"] is None
+
+
+def test_exchange_classification_fills_a_missing_industry():
+    import httpx
+    from app.intel.filings import NSEFilings
+
+    def handler(r):
+        if r.url.path == "/api/quote-equity":
+            return httpx.Response(200, json={"industryInfo": {"macro": "Healthcare", "sector": "Healthcare",
+                                                              "industry": "Healthcare Services", "basicIndustry": "Hospital"}})
+        return httpx.Response(200, text="<html></html>")
+    feed = NSEFilings(transport=httpx.MockTransport(handler))
+    assert feed.industry("APOLLOHOSP") == ["Healthcare", "Healthcare Services", "Hospital"]
+    from app import main
+    old = main.filings_feed
+    main.filings_feed = feed
+    try:
+        p = main.with_industry("APOLLOHOSP", {"name": "Apollo"})
+        assert industry.measures(p)["key"] == "hospital"
+        assert main.with_industry("X", {"industry_path": ["Banks"]})["industry_path"] == ["Banks"]   # the page's own wins
+    finally:
+        main.filings_feed = old
+
+
+def test_measures_are_also_read_from_call_transcripts(monkeypatch):
+    seen = []
+
+    def complete(system, text, **kw):
+        seen.append(text)
+        return json.dumps({"summary": "x", "segments": [], "measures": [
+            {"name": "Occupancy", "value": "68%", "period": "Q1 FY27", "quote": "occupancy of 68%", "source": "S2"}]}) \
+            if "makes money" in system else json.dumps({"capex": [], "outlook": []})
+    monkeypatch.setattr(deepdive, "complete", complete)
+    docs = [{"kind": "presentation", "at": "2026-08-01T10:00", "title": "Investor Presentation", "url": "u1"},
+            {"kind": "transcript", "at": "2026-08-05T10:00", "title": "Q1 call", "url": "u2"}]
+    out = deepdive.read("APOLLOHOSP", "Apollo", "", docs, FakeDocs({"u1": "Hospitals overview.", "u2": "Bed occupancy was 68% this quarter."}),
+                        (None, None), industry.measures({"industry_path": ["Hospital"]}))
+    assert "[S2] transcript" in seen[0] and "occupancy was 68%" in seen[0]
+    assert out["business"]["measures"][0]["source"]["title"] == "Q1 call"

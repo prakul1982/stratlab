@@ -115,9 +115,14 @@ def build(v: dict) -> bytes:
     ret = ("ROE", _pc(snap.get("roe"))) if n.get("bank") else ("ROCE", _pc(snap.get("roce")))
     lev = (("Dividend yield", _pc(snap.get("div_yield"))) if n.get("bank")
            else ("Debt / equity", "–" if snap.get("debt_equity") is None else f"{snap['debt_equity']:.2f}"))
+    vv = v.get("valuation") or {}
     group = ((v.get("checklist") or {}).get("industry") or {}).get("group")
-    val = (("P/B", "–" if snap.get("pb") is None else f"{snap['pb']:.1f}") if group in ("lender", "insurer", "holding")
-           else ("P/E", "–" if snap.get("pe") is None else f"{snap['pe']:.1f}"))
+    if vv.get("short"):
+        val = (vv["short"], "–" if vv.get("value") is None else f"{vv['value']:.1f}×")
+    elif group in ("lender", "insurer", "holding"):
+        val = ("P/B", "–" if snap.get("pb") is None else f"{snap['pb']:.1f}")
+    else:
+        val = ("P/E", "–" if snap.get("pe") is None else f"{snap['pe']:.1f}")
     tiles = [("Market cap", f"₹{_cr(snap.get('market_cap_cr'))} cr"), val, ret, lev,
              ("Sales growth, 3y", _pc(n["growth"].get("sales_cagr_3y"), True)), ("Profit growth, 3y", _pc(n["growth"].get("profit_cagr_3y"), True))]
     for i, (label, val) in enumerate(tiles):
@@ -128,7 +133,11 @@ def build(v: dict) -> bytes:
         box.line.color.rgb = LINE
         d.text(s, label, x + Inches(0.15), Inches(4.7), Inches(1.7), Inches(0.4), 11, color=MUTED)
         d.text(s, val, x + Inches(0.15), Inches(5.1), Inches(1.7), Inches(0.6), 20, bold=True)
-    d.text(s, DISCLAIMER, Inches(0.6), Inches(6.3), Inches(12), Inches(0.4), 12, color=MUTED)
+    note = DISCLAIMER
+    if vv.get("short") and vv["short"] != "P/E":
+        pe = "–" if vv.get("pe") is None else f"{vv['pe']:.1f}"
+        note = f"{vv['short']}: {vv['why']} P/E: {pe}. " + DISCLAIMER
+    d.text(s, note, Inches(0.6), Inches(6.15), Inches(12), Inches(0.8), 10 if note != DISCLAIMER else 12, color=MUTED)
 
     # 2. sales and profit
     if years:

@@ -110,3 +110,35 @@ def measures(p: dict, symbol: str | None = None) -> dict:
                 label, ms = next((lb, m) for k, lb, _, m in MEASURES if k == key)
                 return {"key": key, "label": label, "measures": ms}
     return {"key": "general", "label": None, "measures": GENERAL_MEASURES}
+
+
+# ---------- how each kind of business is usually valued ----------
+EV_EBITDA = {"hospital", "hotel", "telecom", "cement", "metal", "power", "airline"}
+BOOK = {"lender", "insurer", "holding", "realty"}
+
+
+def _last(table: dict | None, prefix: str):
+    for label, vals in ((table or {}).get("rows") or {}).items():
+        if label.lower().startswith(prefix.lower()):
+            v = [x for x in vals if x is not None]
+            return v[-1] if v else None
+    return None
+
+
+def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
+    """The multiple this kind of business is usually valued on, with P/E alongside. Facts, not a verdict."""
+    pe = snap.get("pe")
+    if group in BOOK or measure_key in BOOK:
+        v = snap.get("pb")
+        return {"name": "Price to book", "short": "P/B", "value": round(v, 2) if v is not None else None, "pe": pe,
+                "why": "Lenders, insurers, holding companies and developers are usually valued on their book (net worth)."}
+    if measure_key in EV_EBITDA or group == "utility":
+        ebitda = _last(p.get("pl"), "Operating Profit")          # the latest column is the trailing twelve months
+        mcap, debt = snap.get("market_cap_cr"), _last(p.get("balance"), "Borrowings") or 0
+        v = (mcap + debt) / ebitda if mcap and ebitda and ebitda > 0 else None
+        return {"name": "EV / EBITDA", "short": "EV/EBITDA", "value": round(v, 1) if v is not None else None, "pe": pe,
+                "why": "Asset-heavy businesses (hospitals, hotels, telecom, cement, metals, power, airlines) are usually valued on "
+                       "enterprise value to EBITDA, because depreciation and debt differ so much between them. Here EV is market "
+                       "value plus borrowings (cash isn't subtracted) and EBITDA is the last twelve months' operating profit."}
+    return {"name": "Price to earnings", "short": "P/E", "value": round(pe, 1) if pe is not None else None, "pe": pe,
+            "why": "Most businesses are compared on price to earnings."}

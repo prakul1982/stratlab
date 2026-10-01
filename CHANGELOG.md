@@ -13,6 +13,9 @@
 - **Banks and lenders:** the deep dive, checklist, report card and deck use return on equity and revenue, and leave out capex, free cash flow, operating margin and debt to equity, which don't describe a lender.
 - **Industry-aware checks:** the checklist now reads each company's industry and uses the rules that fit it. Insurers and holding companies are judged on return on equity like banks; for power, telecom and infrastructure, real estate and cyclicals (metals, cement, chemicals) the checks their industry would always fail (debt, cash flow, growth through the cycle) show as watch with the reason. The rule set used is shown above the checklist.
 - **Industry measures, from the company:** the presentation read now pulls the numbers each industry is judged on, such as revenue per occupied bed and occupancy for hospitals, NIM and NPAs for banks, RevPAR for hotels, ARPU for telecom, EBITDA per tonne for cement and metals, pre-sales for real estate, with the quote and source. They have their own panel and slide. Lenders, insurers and holding companies show P/B instead of P/E in the deck.
+- **Valued the way the industry is:** a "How it's valued" panel and deck tile show EV/EBITDA for hospitals, hotels, telecom, cement, metals, power and airlines; price to book for lenders, insurers, holding companies and developers; P/E for the rest, with P/E always alongside.
+- **The exchange's own industry** fills in when the company page has no classification, so fewer companies fall back to the general rules.
+- **Industry measures from earnings calls too:** when the presentation leaves out a measure (occupancy, NIM, ARPU…), the latest call transcripts are searched for it.
 - **Cover letters skipped:** a filing that attaches only a short cover letter instead of the presentation or transcript is passed over for the next one.
 
 ### Real prices for tests

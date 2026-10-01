@@ -220,10 +220,10 @@ def readable(docs_api, candidates: list[dict], need: int, problems: list[str]) -
     return out
 
 
-def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int) -> tuple[str, dict]:
+def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int, start: int = 1) -> tuple[str, dict]:
     """Labelled excerpts S1, S2… for the AI, and the label → document map."""
     parts, labels = [], {}
-    for n, (d, text) in enumerate(pairs, 1):
+    for n, (d, text) in enumerate(pairs, start):
         label = f"S{n}"
         labels[label] = {"title": d["title"], "at": d["at"], "url": d["url"], "kind": d["kind"]}
         parts.append(f"[{label}] {d['kind']} filed {d['at'][:10]}: {d['title']}\n{windows(text, words, limit=per_doc)}")
@@ -241,6 +241,10 @@ def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai
             f"INDUSTRY MEASURES ({kpis.get('label') or 'this company'}): {'; '.join(want)}\n\nEXCERPTS:\n")
     words = BUSINESS_WORDS + [re.escape(w.split(" (")[0]) for w in want if not w.startswith("The operating")]
     text, labels = _excerpts(pres, words, 14000)
+    if want and trans:     # calls often state the operating measures the deck leaves out
+        mtext, mlabels = _excerpts(trans, [re.escape(w.split(" (")[0]) for w in want if not w.startswith("The operating")] or [r"\d"],
+                                   4000, start=len(labels) + 1)
+        text, labels = (text + "\n\n" + mtext).strip(), {**labels, **mlabels}
     if text or about:
         raw = complete(BUSINESS, head + (text or "(no presentation available)"), gemini=ai[0], anthropic=ai[1], max_tokens=1500, kind="long")
         parsed = extract_json(raw)

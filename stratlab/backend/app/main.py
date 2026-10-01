@@ -908,9 +908,19 @@ def filings_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
 deep_docs = Docs()
 
 
+def with_industry(sym: str, p: dict) -> dict:
+    """The company page's industry classification, or the exchange's own when the page has none."""
+    if p.get("industry_path") or not hasattr(filings_feed, "industry"):
+        return p
+    try:
+        return {**p, "industry_path": filings_feed.industry(sym)}
+    except Exception:            # a missing classification only means the general rules
+        return p
+
+
 def deep_base(sym: str) -> dict:
     """Numbers and the list of readable documents for one company (no AI)."""
-    p = research_routes.source_call(lambda: research_hub.screener.company(sym))
+    p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(sym)))
     try:
         items = filings_feed.announcements(sym, deepdive.DOC_DAYS)
         doc_note, fsum = None, filings.summarise(items)
@@ -937,6 +947,7 @@ def deep_view(sym: str, base: dict) -> dict:
     return {"symbol": sym, "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
             "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
             "industry_measures": industry.measures(p, sym),
+            "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
             "calls": sum(d["kind"] == "transcript" for d in base["docs"]),
             "card": card_view, "card_stale": not report_card.fresh(card), "trend": base["trend"], "filings": base["filings"],
@@ -1002,7 +1013,7 @@ def investor_home(profile=Depends(current_profile)):
     def one(sym):
         problem = None
         try:
-            p = research_hub.screener.company(sym)
+            p = with_industry(sym, research_hub.screener.company(sym))
         except Exception as e:
             p, problem = None, public_text(str(e))[:120]
         try:
