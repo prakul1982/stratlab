@@ -24,6 +24,7 @@ export interface DeepView {
   symbol: string; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
   industry_measures?: { key: string; label: string | null; measures: string[] };
+  valuation?: { name: string; short: string; value: number | null; pe: number | null; why: string };
   numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean;
     growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null } };
   reads: null | {
@@ -200,6 +201,16 @@ export function DeepDivePage() {
               </table></div>
             )}
           </Panel>
+
+          {v.valuation && (
+            <Panel title="How it's valued" span="full" info={v.valuation.why}>
+              <div className="stat-row">
+                <div className="stat"><span className="tiny muted">{v.valuation.name}</span><b className="num">{v.valuation.value == null ? "–" : `${v.valuation.value.toFixed(1)}×`}</b></div>
+                {v.valuation.short !== "P/E" && <div className="stat"><span className="tiny muted">Price to earnings</span><b className="num">{v.valuation.pe == null ? "–" : `${v.valuation.pe.toFixed(1)}×`}</b></div>}
+              </div>
+              <p className="tiny muted" style={{ margin: 0 }}>{v.valuation.why} A number to compare with similar companies, not a verdict on the price.</p>
+            </Panel>
+          )}
 
           {v.checklist && <ChecklistPanel c={v.checklist} />}
 
