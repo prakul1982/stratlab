@@ -98,7 +98,15 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     assert len(api.calls) == 2 and len(api.usage) == 2
 
 
-def test_daily_ai_allowance(api):
+def test_daily_ai_allowance(api, monkeypatch):
+    from app.intel import routes
+    day = routes.datetime.now(routes.IST)
+
+    class Fixed(routes.datetime):          # the cache key carries the date: hold it, so a run across midnight IST passes
+        @classmethod
+        def now(cls, tz=None):
+            return day
+    monkeypatch.setattr(routes, "datetime", Fixed)
     for sym in ("NVDA", "AAPL", "MSFT"):
         assert api.get(f"/research/company/US/{sym}/ai").status_code == 200
     r = api.get("/research/sector?q=AI data centers&region=US")

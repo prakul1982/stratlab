@@ -16,8 +16,13 @@ STRAT = {"name": "Short straddle", "structure": "short_straddle", "exchange": "N
          "timing": {"entry": "00:00", "lastEntry": "23:58", "squareoff": "23:59"}}
 
 
+
+def midday() -> datetime:
+    """The session's clock for these tests: noon today, inside the entry window whatever time CI runs at."""
+    return datetime.now(IST).replace(hour=12, minute=0, second=0, microsecond=0)
+
 def setup(monkeypatch, live=True):
-    data = OptionsData(FakeOptionsKite(live=live, drift={}))
+    data = OptionsData(FakeOptionsKite(live=live, drift={}, clock=midday))
     monkeypatch.setattr(main, "options_data", data)
     monkeypatch.setattr(main.manager, "options", data)
     rows = {}
@@ -66,7 +71,7 @@ def test_session_trades_on_live_quotes_and_survives_a_restart(monkeypatch):
         snap = c.post("/options/sessions", json={"strategy": STRAT}).json()
         sid = snap["id"]
         s = main.manager.sessions[sid]
-        s.on_timer(datetime.now(IST))
+        s.on_timer(midday())
         snap = c.get(f"/live/sessions/{sid}").json()
         assert snap["kind"] == "options" and snap["fresh"] and len(snap["legs"]) == 2
         assert snap["position"]["credit"] > 0 and len(snap["orders"]) == 2
@@ -88,7 +93,7 @@ def test_no_entry_on_old_quotes(monkeypatch):
     try:
         c = TestClient(app)
         sid = c.post("/options/sessions", json={"strategy": STRAT}).json()["id"]
-        main.manager.sessions[sid].on_timer(datetime.now(IST))
+        main.manager.sessions[sid].on_timer(midday())
         snap = c.get(f"/live/sessions/{sid}").json()
         assert snap["position"] is None and not snap["fresh"] and "live prices" in snap["note"]
     finally:

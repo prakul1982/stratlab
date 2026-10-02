@@ -44,7 +44,7 @@ class _Inner:
         return rows
 
     def quote(self, keys):
-        now = datetime.now(IST)
+        now = self.o.clock()
         out = {}
         for key in keys:
             px = self.o.price(key, now)
@@ -57,7 +57,7 @@ class _Inner:
         return out
 
     def ltp(self, keys):
-        return {k: {"instrument_token": TOKENS[k], "last_price": self.o.spot(k, datetime.now(IST))} for k in keys if k in TOKENS}
+        return {k: {"instrument_token": TOKENS[k], "last_price": self.o.spot(k, self.o.clock())} for k in keys if k in TOKENS}
 
     def basket_order_margins(self, orders, consider_positions=False, mode="compact"):
         sold = sum(o["quantity"] for o in orders if o["transaction_type"] == "SELL")
@@ -69,8 +69,9 @@ class _Inner:
 class FakeOptionsKite:
     """Spot moves in a slow wave so demos show P&L changing; `live=False` makes every quote days old."""
 
-    def __init__(self, live=True, drift=None):
+    def __init__(self, live=True, drift=None, clock=None):
         self.live = live
+        self.clock = clock or (lambda: datetime.now(IST))      # tests can pin the feed's time to the session's
         self.drift = drift          # fixed spot offsets per spot key, for tests
         self.kite = _Inner(self)
 
@@ -87,7 +88,7 @@ class FakeOptionsKite:
         """Candles of the spot's wave in market hours, for rules that drive option trades."""
         key = next(k for k, v in TOKENS.items() if v == token)
         step = {"5m": 5, "15m": 15, "1h": 60}[tf]
-        now = datetime.now(IST)
+        now = self.clock()
         out = []
         for d in range(min(days, 30), -1, -1):
             day = (now - timedelta(days=d)).replace(hour=9, minute=15, second=0, microsecond=0)
