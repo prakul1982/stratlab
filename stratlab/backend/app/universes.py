@@ -14,13 +14,13 @@ PRESETS = {
             "BHARTIARTL", "CIPLA", "COALINDIA", "DRREDDY", "EICHERMOT", "ETERNAL", "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE",
             "HEROMOTOCO", "HINDALCO", "HINDUNILVR", "ICICIBANK", "INDUSINDBK", "INFY", "ITC", "JIOFIN", "JSWSTEEL", "KOTAKBANK",
             "LT", "M&M", "MARUTI", "NESTLEIND", "NTPC", "ONGC", "POWERGRID", "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN",
-            "SUNPHARMA", "TATACONSUM", "TATAMOTORS", "TATASTEEL", "TCS", "TECHM", "TITAN", "TRENT", "ULTRACEMCO", "WIPRO"]},
+            "SUNPHARMA", "TATACONSUM", "TMPV", "TATASTEEL", "TCS", "TECHM", "TITAN", "TRENT", "ULTRACEMCO", "WIPRO"]},
         {"id": "banknifty", "name": "NIFTY Bank stocks", "symbols": [
             "HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", "INDUSINDBK", "BANKBARODA", "PNB", "CANBK",
             "FEDERALBNK", "IDFCFIRSTB", "AUBANK"]},
         {"id": "fno_liquid", "name": "25 most liquid F&O stocks", "symbols": [
             "RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", "SBIN", "AXISBANK", "KOTAKBANK", "LT", "BHARTIARTL",
-            "ITC", "BAJFINANCE", "TATAMOTORS", "TATASTEEL", "MARUTI", "M&M", "SUNPHARMA", "HINDALCO", "ADANIENT",
+            "ITC", "BAJFINANCE", "TMPV", "TATASTEEL", "MARUTI", "M&M", "SUNPHARMA", "HINDALCO", "ADANIENT",
             "JSWSTEEL", "TITAN", "HCLTECH", "WIPRO", "ONGC", "COALINDIA"]},
     ],
     "US": [

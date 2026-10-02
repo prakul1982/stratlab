@@ -57,10 +57,8 @@ by feature, against what people would otherwise use:
 ## Precision: known gaps (India)
 Found while checking live companies. Each shows a note on the page today instead of a wrong number.
 
-- **Transcripts hosted off the company's own domain** (investor-relations providers): not fetched, for safety. Could
-  allow a short list of known IR hosts.
-- **Filings that link to a web page instead of a PDF** ("see our Investors page"): the PDF isn't found. Could read
-  that page for its transcript link, on the company's own site only.
+- **Letters with no link at all** ("available on the website of the Company"): about a fifth of large companies in
+  the first audit. Could look up the company's investor page from its website, but that's guesswork per site.
 - **Scanned (image-only) PDFs**: no text without OCR.
 - **Audio- or video-only calls**: no transcript to read.
 - **EV/EBITDA without cash**: EV is market value plus borrowings; cash isn't subtracted because the fundamentals

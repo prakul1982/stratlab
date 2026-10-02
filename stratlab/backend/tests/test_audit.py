@@ -36,13 +36,16 @@ def test_mismatches_against_the_source_are_caught(monkeypatch):
     p = company()
     p["ratios"] = {"Market Cap": "520", "Stock P/E": "35", "Current Price": "100"}
     p["pl"]["rows"]["Sales"][-1] = 260              # trailing revenue far from the last four quarters (204)
-    p["pl"]["rows"]["Net Profit"][2] = 140          # profit above revenue in one year
+    p["pl"]["rows"]["Net Profit"][2] = 140          # profit above revenue in one year (other income): not flagged
     row = run(p, monkeypatch, trend={"price": 100.0}, exchange_price=lambda s: 92.0)
     found = " | ".join(issues(row, "mismatch"))
-    assert "P/E 35.0 on the company page, 20.0" in found
     assert "Trailing revenue 260 cr vs last four quarters 204 cr" in found
-    assert "Profit above revenue in Mar 2018" in found or "Profit above revenue" in found
     assert "Last close 100.00 vs 92.00 on the exchange" in found
+    assert "Profit above revenue" not in found and "P/E" not in found      # real data, and a P/E gap the page explains
+    nums = main.deep_view("ACME", base_for(p)("ACME"))["numbers"]
+    assert any("P/E is based on" in n for n in nums["notes"])
+    p["pl"]["rows"]["OPM %"][3] = 140
+    assert "Numbers: Operating margin above 100% in" in " ".join(issues(run(p, monkeypatch), "mismatch"))
     assert "Industry: No industry classification" in " ".join(issues(row, "gap"))
 
 
@@ -63,7 +66,7 @@ def test_unreadable_documents_are_listed(monkeypatch):
     docs = [{"kind": "presentation", "title": "Deck", "at": "2026-08-01", "url": "u1"},
             {"kind": "transcript", "title": "Call", "at": "2026-08-05", "url": "u2"}]
 
-    def read(cands, problems):
+    def read(cands, problems, p):
         if cands[0]["kind"] == "transcript":
             problems.append("a 900-character letter with no link")
             return []
@@ -99,18 +102,63 @@ def test_admin_audit_endpoint_runs_and_reports(monkeypatch):
     from app import admin
     monkeypatch.setattr(main, "audit_runner", audit.Runner())
     monkeypatch.setattr(audit.db, "set_setting", lambda k, v: None)
-    monkeypatch.setattr(main, "audit_one", lambda s, docs: {"symbol": s, "name": s, "seconds": 0, "issues": []})
+    monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None: {"symbol": s, "name": s, "seconds": 0, "issues": []})
     main.app.dependency_overrides[admin.admin_profile] = lambda: {"id": "a", "role": "admin"}
     try:
         c = TestClient(main.app)
         assert c.post("/admin/audit", json={"set": "nope"}).status_code == 400
         r = c.post("/admin/audit", json={"set": "banknifty"}).json()
         assert r["label"] == "NIFTY Bank stocks" and r["total"] == 12
-        for _ in range(100):
-            s = c.get("/admin/audit").json()
-            if not s["running"]:
+        for _ in range(100):                      # wait on the runner itself: polling the API would spend the rate limit
+            if not main.audit_runner.status()["running"]:
                 break
             time.sleep(0.02)
+        s = c.get("/admin/audit").json()
         assert s["done"] == 12 and s["summary"]["clean"] == 12 and any(x["id"] == "sectors" for x in s["sets"])
     finally:
-        main.app.dependency_overrides.clear()
+        main.app.dependency_overrides.pop(admin.admin_profile, None)
+
+
+def test_breaker_stops_after_repeated_refusals():
+    calls = []
+
+    def refuse(sym):
+        calls.append(sym)
+        raise RuntimeError("refused (403)")
+    b = audit.Breaker(refuse, limit=2)
+    rows = [audit.audit_company(s, lambda sym: (_ for _ in ()).throw(RuntimeError("x")), main.deep_view) for s in "AB"]
+    assert rows                                   # a dead company source is one error row each, and the run goes on
+    for s in "ABCD":
+        try:
+            b(s)
+        except audit.Skipped:
+            pass
+        except RuntimeError:
+            pass
+    assert calls == ["A", "B"]
+
+
+def test_loss_makers_get_a_reason_not_a_blank():
+    from app import industry
+    p = company()
+    p["pl"]["rows"]["Net Profit"][-1] = -12
+    v = industry.valuation(p, {"pe": None, "market_cap_cr": 500}, "general", "general")
+    assert v["value"] is None and "made a loss over the last 12 months" in v["why"]
+    p["balance"]["rows"]["Reserves"] = [80, 90, 100, 110, 120, 130]
+    p["balance"]["rows"]["Equity Capital"] = [20] * 6
+    assert industry.valuation(p, {"pb": None, "market_cap_cr": 450}, "lender", "lender")["value"] == 3.0   # 450 / 150
+
+
+def test_exchange_quote_is_asked_like_its_own_page():
+    import httpx
+    from app.intel.filings import NSEFilings
+    seen = []
+
+    def handler(r):
+        seen.append((r.url.path, r.headers.get("referer")))
+        if r.url.path == "/api/quote-equity":
+            if "get-quotes/equity?symbol=M%26M" not in (r.headers.get("referer") or ""):
+                return httpx.Response(403)
+            return httpx.Response(200, json={"priceInfo": {"lastPrice": 3120.5}})
+        return httpx.Response(200, text="<html></html>")
+    assert NSEFilings(transport=httpx.MockTransport(handler)).last_price("M&M") == 3120.5
