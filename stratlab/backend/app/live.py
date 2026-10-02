@@ -302,11 +302,12 @@ class LiveManager:
                 profile = db.get_profile(s.user_id)
                 if alerts_on(profile):
                     sym, cur = ev.get("sym") or s.inst["symbol"], s.inst.get("currency", "INR")
-                    if ev["side"] == "buy":
-                        text = f"StratLab paper trade: BUY {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur} ({s.name})"
-                    else:
-                        text = (f"StratLab paper trade: SELL {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur}, "
-                                f"{ev['why'].lower()}, P&L {ev['pnl']:,.0f} {cur} ({s.name})")
+                    head = f"StratLab paper trade: {ev['side'].upper()} {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur}"
+                    if ev.get("pnl") is None:      # opening a trade (a buy, a short sale or a written option)
+                        text = f"{head} ({s.name})"
+                    else:                          # closing one
+                        why = f"{str(ev.get('why') or 'closed').lower()}, " if ev.get("why") else ""
+                        text = f"{head}, {why}P&L {ev['pnl']:,.0f} {cur} ({s.name})"
                     notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False, url=f"/paper/{s.id}")
             except Exception as e:
                 print("order record failed:", e)

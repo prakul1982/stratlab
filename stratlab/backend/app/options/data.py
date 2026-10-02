@@ -1,9 +1,9 @@
 """Option contracts, chains, live quotes and margins from Kite (NSE, BSE and MCX)."""
 import threading
 import time
-from datetime import date
 
 from .engine import Contracts
+from ..kite_service import ist_date
 
 # the index each index option settles against; stock options use the NSE cash stock
 INDEX_SPOT = {
@@ -42,7 +42,7 @@ class OptionsData:
 
     # ---------- contracts ----------
     def _load(self):
-        today = date.today().isoformat()
+        today = ist_date().isoformat()
         with self._lock:
             if self._day == today and self._rows:
                 return
@@ -63,7 +63,7 @@ class OptionsData:
 
     def underlyings(self) -> list[dict]:
         self._load()
-        today = date.today().isoformat()
+        today = ist_date().isoformat()
         seen: dict[tuple, dict] = {}
         for exch, rows in self._rows.items():
             for r in rows:
@@ -84,7 +84,7 @@ class OptionsData:
 
     def expiries(self, exchange: str, name: str) -> list[str]:
         self._load()
-        today = date.today().isoformat()
+        today = ist_date().isoformat()
         return sorted({r["expiry"] for r in self._rows.get(exchange, [])
                        if r["name"] == name and r["type"] != "FUT" and r["expiry"] >= today})
 
@@ -117,7 +117,7 @@ class OptionsData:
         if exchange == "MCX":   # commodity options settle into the future; use the nearest one at or after expiry
             self._load()
             futs = sorted((r for r in self._rows.get("MCX", []) if r["name"] == name and r["type"] == "FUT"
-                           and r["expiry"] >= (expiry or date.today().isoformat())), key=lambda r: r["expiry"])
+                           and r["expiry"] >= (expiry or ist_date().isoformat())), key=lambda r: r["expiry"])
             return f"MCX:{futs[0]['symbol']}" if futs else None
         return f"NSE:{name}"
 

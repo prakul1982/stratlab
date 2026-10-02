@@ -10,7 +10,7 @@ import threading
 import traceback
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,7 +49,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, AuditReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, AuditReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -1590,7 +1590,50 @@ def server_status() -> dict:
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
-            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS))}
+            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)),
+            "calendar": calendar_status()}
+
+
+def calendar_status() -> dict:
+    """How far ahead India's exchange holidays are known: the installed calendar, plus the list the admin pasted."""
+    until = trading_calendar.known_until("IN")
+    added = sorted(trading_calendar.extra_holidays("IN"))
+    last = max([d for d in added] + [until.isoformat() if until else ""]) or None
+    days_left = (date.fromisoformat(last) - datetime.now(IST).date()).days if last else None
+    return {"known_until": until.isoformat() if until else None, "added": added, "covered_until": last, "days_left": days_left}
+
+
+@app.post("/admin/holidays")
+def admin_holidays(req: HolidaysReq, _=Depends(admin.admin_profile)):
+    """Save the exchange's official holiday list (pasted from its circular), for days the built-in calendar lacks."""
+    found = parse_holidays(req.text)
+    if not found:
+        err(400, "no_dates", "No dates found. Paste the exchange's list, with dates like 26-Jan-2027 or 2027-01-26.")
+    trading_calendar.set_extra_holidays("IN", found)
+    return calendar_status()
+
+
+MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), 1)}
+
+
+def parse_holidays(text: str) -> list[str]:
+    """Dates in a pasted holiday list: 2027-01-26, 26-Jan-2027, 26 January 2027 or 26/01/2027."""
+    import re as _re
+    out = set()
+    for y, m, d in _re.findall(r"\b(20\d\d)-(\d\d)-(\d\d)\b", text):
+        out.add((int(y), int(m), int(d)))
+    for d, mon, y in _re.findall(r"\b(\d{1,2})[-\s/]([A-Za-z]{3,9})[-\s/,]*(20\d\d)\b", text):
+        if mon[:3].lower() in MONTHS:
+            out.add((int(y), MONTHS[mon[:3].lower()], int(d)))
+    for d, m, y in _re.findall(r"\b(\d{1,2})/(\d{1,2})/(20\d\d)\b", text):
+        out.add((int(y), int(m), int(d)))
+    valid = []
+    for y, m, d in out:
+        try:
+            valid.append(date(y, m, d).isoformat())
+        except ValueError:
+            continue
+    return sorted(valid)
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------

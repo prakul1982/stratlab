@@ -2,6 +2,11 @@
 
 ## October 2026
 
+### Stress test, round 3: every tricky moment
+- **The whole app is run at 16 moments that trip trading apps up**: a holiday on the weekly expiry day and the moved expiry the day before, a minute after an expiry's close, 1 am India time (the server's UTC date is still yesterday), either side of the broker's 6 am token reset, the open, a weekend, Diwali, the US and UK clock changes, MCX's late session, year end, and days past the known holiday calendar. Every page and action runs, paper sessions and alert jobs tick, and the option chain must never offer an expired or closed-day expiry.
+- **The holiday calendar no longer runs out:** the installed calendar ends with 2026, after which every weekday would have counted as a trading day. India's fixed national holidays now close the market in any year, and Admin → Exchange holidays shows how far ahead holidays are known (with a warning under 60 days) and takes the exchange's yearly list pasted as it's published.
+- **Fixed from it:** between midnight and 5:30 am India time the option chain, MCX contracts, the risk view, company pages and the report card used the server's UTC date (yesterday), so the chain could offer a contract that expired the day before; and with alerts on, a paper trade that opens with a sale (short selling or writing an option) didn't send its alert.
+
 ### Stress test, round 2: every source failing
 - **Each data source, the broker feed, the database and the AI are broken on purpose**, one at a time and in every way they fail in real life (down, timing out, server errors, rate limits, refusals, a web page instead of data, an empty answer), while every page and action is used. Each must answer with what it can still show or a clear message: never a crash, broken data, a number that isn't a number, or a provider's name. Runs on every change.
 - **A source that's down is skipped for a minute** after three failures in a row, instead of every page waiting up to 8 seconds behind it. Applies to every research source and the exchange feed.

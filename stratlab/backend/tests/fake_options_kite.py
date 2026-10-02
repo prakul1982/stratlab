@@ -13,14 +13,22 @@ UNDERLYINGS = {  # (exchange, name): (spot key, spot, strike gap, lot)
 TOKENS = {sk: 900001 + i for i, (sk, *_) in enumerate(UNDERLYINGS.values())}
 
 
-def _expiries():
-    d = date.today()
-    out = []
+def _expiries(lingering: bool = False):
+    """Weekly Tuesday expiries in India's date, moved to the trading day before when Tuesday is a holiday (as the
+    exchange does). `lingering` adds the contract that expired in the last two days: the broker's instrument list
+    keeps it until its morning refresh, so the app has to drop it by date."""
+    from app.data.calendar import is_trading_day
+    today = datetime.now(IST).date()
+    out, d = [], today - timedelta(days=2) if lingering else today
     while len(out) < 4:
+        if d.weekday() == 1:
+            e = d
+            while not is_trading_day("IN", e):
+                e -= timedelta(days=1)
+            if e >= today or (lingering and e not in out and e >= today - timedelta(days=2)):
+                out.append(e)
         d += timedelta(days=1)
-        if d.weekday() == 1:   # Tuesdays
-            out.append(d)
-    return [date.today()] + out if date.today().weekday() == 1 else out
+    return out
 
 
 class _Inner:
@@ -32,7 +40,7 @@ class _Inner:
         for (ex, name), (_, spot, gap, lot) in UNDERLYINGS.items():
             if ex != exch:
                 continue
-            for e in _expiries():
+            for e in _expiries(lingering=True):
                 for i in range(-30, 31):
                     k = round(spot / gap) * gap + i * gap
                     for t in ("CE", "PE"):

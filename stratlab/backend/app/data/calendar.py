@@ -26,6 +26,58 @@ def warm():
         _calendar(code)
 
 
+# India's fixed-date exchange holidays, used for years the installed calendar doesn't cover yet (the moving ones,
+# like Diwali and Holi, come from the list the admin pastes in from the exchange each December)
+FIXED_IN = [(1, 26), (5, 1), (8, 15), (10, 2), (12, 25)]
+SETTING = "holidays:"             # app_settings: holidays:IN = ["2027-03-22", ...], the exchange's official list
+_extra: dict[str, tuple[float, set]] = {}
+
+
+def extra_holidays(market: str) -> set:
+    """Holidays the admin added (the exchange's published list), cached for ten minutes."""
+    import json
+    import time
+    key = "IN" if market == "MCX" else market
+    hit = _extra.get(key)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    days: set = set()
+    try:
+        from .. import db
+        raw = db.get_setting(SETTING + key)
+        days = {str(d)[:10] for d in json.loads(raw)} if raw else set()
+    except Exception:                 # no database (tests, an outage): the built-in calendar alone
+        days = hit[1] if hit else set()
+    _extra[key] = (time.time(), days)
+    return days
+
+
+def set_extra_holidays(market: str, days: list[str]) -> list[str]:
+    import json
+    from .. import db
+    clean = sorted({d for d in (str(x).strip()[:10] for x in days) if _iso(d)})
+    db.set_setting(SETTING + market, json.dumps(clean))
+    _extra.pop(market, None)
+    return clean
+
+
+def _iso(d: str) -> bool:
+    try:
+        date.fromisoformat(d)
+        return True
+    except ValueError:
+        return False
+
+
+def known_until(market: str) -> date | None:
+    """The last day the installed calendar has the exchange's holidays for."""
+    cal = _calendar(CODES[market]) if market in CODES else None
+    try:
+        return cal.last_session.date() if cal is not None else None
+    except Exception:
+        return None
+
+
 def is_trading_day(market: str, day: date) -> bool:
     if market == "CRYPTO":
         return True
@@ -33,12 +85,15 @@ def is_trading_day(market: str, day: date) -> bool:
         return False                          # Sunday evening's open counts toward Monday
     if day.weekday() >= 5:
         return False
+    if market in ("IN", "MCX") and day.isoformat() in extra_holidays(market):
+        return False
     cal = _calendar(CODES[market]) if market in CODES else None
     if cal is None:
-        return True
+        return not (market in ("IN", "MCX") and (day.month, day.day) in FIXED_IN)
     try:
         if not (cal.first_session.date() <= day <= cal.last_session.date()):
-            return True
+            # past the published calendar: weekdays count, bar India's fixed national holidays
+            return not (market in ("IN", "MCX") and (day.month, day.day) in FIXED_IN)
         return bool(cal.is_session(day.isoformat()))
     except Exception:
         return True

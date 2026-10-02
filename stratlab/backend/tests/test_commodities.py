@@ -39,7 +39,7 @@ def test_mcx_front_month_rolls_before_expiry():
 
 def test_mcx_instruments_are_whole_lots_in_rupees(monkeypatch):
     import app.data.mcx as mcx
-    monkeypatch.setattr(mcx, "date", type("D", (date,), {"today": staticmethod(lambda: date(2026, 9, 26))}))
+    monkeypatch.setattr(mcx, "ist_date", lambda: date(2026, 9, 26))
     p = MCXProvider(FakeKite())
     g = p.instrument("GOLDM")
     assert g["id"] == "MCX:GOLDM" and g["token"] == 1 and g["market"] == "MCX" and g["currency"] == "INR"

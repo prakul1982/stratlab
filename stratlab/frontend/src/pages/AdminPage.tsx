@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, dateOnly, money } from "../lib/format";
 import { Loading, Modal } from "../components/ui";
 import { AuditPanel } from "../components/AuditPanel";
+import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
 
 type Plan = "free" | "basic" | "pro";
 type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quick_rank?: number | null; research_rank?: number | null };
@@ -14,6 +15,7 @@ interface Overview {
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     recent_errors?: { ref: string; at: string; method: string; path: string; error: string; where: string }[];
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
+    calendar?: CalendarStatus;
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number };
@@ -278,6 +280,8 @@ export function AdminPage() {
           </div>
 
           <AuditPanel />
+
+          {sv?.calendar && <HolidaysPanel status={sv.calendar} onSaved={(c) => setOv((o) => o && { ...o, server: { ...o.server, calendar: c } })} />}
 
           {!!sv?.recent_errors?.length && (
             <section className="card stack" style={{ gap: 12 }}>

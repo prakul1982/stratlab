@@ -6,10 +6,10 @@ cached and shared between users, so a popular stock or theme costs one AI call."
 import hashlib
 import json
 import time
-from datetime import date
 
 from ..ai_providers import complete, extract_json
 from .net import TTLCache
+from ..kite_service import ist_date
 
 _cache = TTLCache(max_items=2000)
 BASICS = "price, simple moving average (SMA), exponential moving average (EMA) and RSI"
@@ -71,7 +71,7 @@ def company_facts(c: dict) -> dict:
              "analyst_ratings": c.get("analysts"), "shareholding": c.get("shareholding"),
              "screener_pros": c.get("pros"), "screener_cons": c.get("cons"),
              "about": ((c.get("about") or {}).get("wiki") or {}).get("extract") or (c.get("about") or {}).get("profile"),
-             "recent_headlines": [n["headline"] for n in (c.get("news") or [])[:6]], "today": date.today().isoformat()}
+             "recent_headlines": [n["headline"] for n in (c.get("news") or [])[:6]], "today": ist_date().isoformat()}
     return {k: v for k, v in facts.items() if v not in (None, [], {}, "")}
 
 
@@ -135,7 +135,7 @@ Return ONLY this JSON:
 Sizes: 4-5 clusters of 4-6 real companies (empty ticker for private ones), 4 sub-themes, 6-8 ranked screen names
 (composite 0-100), up to 4 ETFs, 4-5 value-chain layers of 3-5 companies, 4 tailwinds, 4 risks. Nothing generic.
 {RULES}"""
-    r = _ask(system, f"THEME: {q}\nTODAY: {date.today().isoformat()}", ai, 6000)
+    r = _ask(system, f"THEME: {q}\nTODAY: {ist_date().isoformat()}", ai, 6000)
 
     def cos(x):
         return [{"name": str(c.get("name") or "")[:60], "ticker": str(c.get("ticker") or "").upper()[:20]}
@@ -173,7 +173,7 @@ Return ONLY this JSON:
  "themes": [{{"theme": "", "detail": "2 sentences", "example": "ticker"}}]}}
 Exactly 4 hot names, 4 flows and 4 themes. Tickers are {'NSE symbols' if region == 'IN' else 'US tickers'}.
 {RULES}"""
-    facts = {"today": date.today().isoformat(), "indices": indices,
+    facts = {"today": ist_date().isoformat(), "indices": indices,
              "headlines": [f"[{(h.get('at') or '')[:10]}] {h['headline']}" for h in headlines[:14]]}
     r = _ask(system, facts, ai, 2500)
 

@@ -216,6 +216,10 @@ class AuditReq(BaseModel):
     docs: bool = False
 
 
+class HolidaysReq(BaseModel):
+    text: str = Field(..., min_length=8, max_length=20000)
+
+
 class PromoReq(BaseModel):
     days: int = Field(10, ge=1, le=90)
 

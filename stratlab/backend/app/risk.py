@@ -2,7 +2,7 @@
 
 Sessions in different currencies are never added together; each currency gets its own totals. Works on
 session snapshots, so single instruments, groups and option structures all count the same way."""
-from datetime import date
+from .kite_service import ist_date
 
 
 def _currency(snap: dict) -> str:
@@ -31,7 +31,7 @@ def _daily(curve: list[dict]) -> dict[str, float]:
 
 
 def summary(snaps: list[dict], today: str | None = None) -> dict:
-    today = today or date.today().isoformat()
+    today = today or ist_date().isoformat()
     sessions, by_cur = [], {}
     for s in snaps:
         acct = s.get("account") or {}

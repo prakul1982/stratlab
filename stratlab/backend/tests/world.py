@@ -115,7 +115,7 @@ def _no_network(self, request):
     raise httpx.ConnectError("network disabled in tests", request=request)
 
 
-def build(monkeypatch) -> dict:
+def build(monkeypatch, real_clock: bool = False) -> dict:
     """Wire the app to fakes. Returns handles the tests use: the client, the fake AI, the fake database."""
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _no_network)
     fake_db = FakeSupabase()
@@ -137,7 +137,8 @@ def build(monkeypatch) -> dict:
                        yahoo=Yahoo(transport=sw("market data")(fake_yahoo())))
     ticks = TickHub(kite)
     monkeypatch.setattr(ticks, "start", lambda: None)
-    options = OptionsData(FakeOptionsKite(live=True, drift={}, clock=lambda: datetime.now(IST).replace(hour=12, minute=0)))
+    clock = (lambda: datetime.now(IST)) if real_clock else (lambda: datetime.now(IST).replace(hour=12, minute=0))
+    options = OptionsData(FakeOptionsKite(live=True, drift={}, clock=clock))
     manager = LiveManager(kite, ticks, markets, options)
     for name, v in (("kite", kite), ("hub", ticks), ("markets", markets), ("options_data", options), ("manager", manager)):
         monkeypatch.setattr(main, name, v)

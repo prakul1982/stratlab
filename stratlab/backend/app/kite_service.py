@@ -26,6 +26,11 @@ def today_ist() -> str:
     return datetime.now(IST).date().isoformat()
 
 
+def ist_date():
+    """Today in India. The server's own clock is UTC, where "today" is still yesterday until 5:30 am IST."""
+    return datetime.now(IST).date()
+
+
 RESET_HOUR = 6        # Zerodha expires every token at about 6 am India time the next morning
 
 
