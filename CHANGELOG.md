@@ -1,5 +1,16 @@
 # Changelog
 
+## October 2026
+
+### Built around what you came for
+- **One question at the start: investing, trading or both.** It sets what the menu, the home page and the examples show first; nothing is hidden, and it can be changed on the Account page. People who already answered the experience question are asked this once.
+- **An investor home page:** "Which company do you want to look into?" with the company search, popular names, and four starting questions (leading sectors, Stage 2 stocks in NIFTY 50, red flags, the watchlist at a glance). Notebooks move to their own page for investors.
+- **The investing tools are in the menu:** Companies, Investor home, Stage 2 scan, Sector rotation, Red flags and Watchlist each one tap away, under Investing; the trading tools under Trading. Whichever you came for is on top, and the main button follows it (Look up a company / New notebook).
+- **The home page is grouped by goal** (find stocks, understand a company, test an idea, trade with fake money) instead of a wall of equal cards.
+- **Search understands investor questions:** "deep dive Apollo Hospitals", "which sectors are leading?", "red flags in my watchlist", "Stage 2 stocks in NIFTY 50" and "compare TCS and Infosys" open the right page directly.
+- **Placeholders show real examples,** rotating every few seconds and matched to what you came for, instead of "Search…".
+- **The next step where you need it:** a Deep dive link on every scan result and every red-flag company; on a company page, Deep dive comes first for investors.
+
 ## September 2026
 
 ### Company deep dive

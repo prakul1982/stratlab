@@ -306,7 +306,7 @@ def me(profile=Depends(current_profile)):
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
-        "prefs": {"level": prefs_of(profile["id"]).get("level")},
+        "prefs": {k: prefs_of(profile["id"]).get(k) for k in ("level", "focus")},
         "data_online": kite.ready(),
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
@@ -335,10 +335,11 @@ def prefs_of(uid: str) -> dict:
 
 @app.put("/me/prefs")
 def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
-    """Experience level: only changes defaults (what's expanded, which tools are suggested), never what's allowed."""
-    prefs = {**prefs_of(profile["id"]), "level": req.level}
+    """Experience level and what the user came for (investing, trading or both): they only change defaults (what's
+    expanded, what's suggested first, the menu order), never what's allowed."""
+    prefs = {**prefs_of(profile["id"]), **{k: v for k, v in (("level", req.level), ("focus", req.focus)) if v}}
     db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
-    return {"prefs": {"level": req.level}}
+    return {"prefs": {k: prefs.get(k) for k in ("level", "focus")}}
 
 
 @app.get("/push/key")

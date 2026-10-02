@@ -112,6 +112,7 @@ export interface PlanInfo {
 }
 /** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
 export type Level = "new" | "some" | "pro";
+export type Focus = "invest" | "trade" | "both";
 
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
@@ -124,7 +125,7 @@ export interface Me {
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
   plans?: Record<string, { price: number; price_year: number }>;
   paid_plan?: "free" | "basic" | "pro"; promo?: { until: string } | null;
-  prefs?: { level: Level | null };
+  prefs?: { level: Level | null; focus?: Focus | null };
 }
 
 export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number }

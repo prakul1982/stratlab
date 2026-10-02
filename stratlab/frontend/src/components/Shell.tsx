@@ -12,7 +12,7 @@ const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US",
 
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, theme, setTheme, me, level } = useApp();
+  const { notebooks, markets, theme, setTheme, me, level, focus } = useApp();
   const [open, setOpen] = useState(false);
   const [mktOpen, setMktOpen] = useState(() => { try { return localStorage.getItem("stratlab.markets.open") === "1"; } catch { return false; } });
   const [tour, setTour] = useState(false);
@@ -30,7 +30,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [, tick] = useState(0);
   useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
   // ask the experience level once, then show the tour to anyone who hasn't seen it
-  const askLevel = !!me && !level;
+  const askLevel = !!me && (!level || !focus);
   useEffect(() => { if (me && level && !tourSeen()) setTour(true); }, [me, level]);
   const loc = useLocation();
   const nav = useNavigate();
@@ -38,20 +38,33 @@ export function Shell({ children }: { children: ReactNode }) {
   const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
   const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
 
-  const sidebar = (
-    <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
-      <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
-      <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>
-      <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
-        <Sparkle size={17} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
-      </button>
-      <nav className="side-nav" aria-label="Research">
-        <NavLink to="/research" className={() => (loc.pathname.startsWith("/research") ? "active" : "")}><Lens />Research</NavLink>
+  const onResearch = (p: string, exact = false) => () => (exact ? loc.pathname === p : loc.pathname.startsWith(p)) ? "active" : "";
+  // the investor tools, each one tap away instead of hidden behind a single "Research" link
+  const investing = (
+    <nav className="side-nav stack side-group" style={{ gap: 2 }} aria-label="Investing">
+      <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Investing</div>
+      <NavLink to="/research" className={() => (/^\/research(\/(IN|US)\/.*)?$/.test(loc.pathname) ? "active" : "")}><Lens />Companies</NavLink>
+      <NavLink to="/research/investor" className={onResearch("/research/investor")}><Compass />Investor home</NavLink>
+      <NavLink to="/research/scan" className={onResearch("/research/scan")}><Search />Stage 2 scan</NavLink>
+      <NavLink to="/research/rotation" className={onResearch("/research/rotation")}><Pulse />Sector rotation</NavLink>
+      <NavLink to="/research/filings" className={onResearch("/research/filings")}><Shield />Red flags</NavLink>
+      <NavLink to="/research/watchlist" className={onResearch("/research/watchlist")}><Pin />Watchlist</NavLink>
+    </nav>
+  );
+  const trading = (
+    <div className="stack side-group" style={{ gap: 12 }}>
+      <nav className="side-nav stack" style={{ gap: 2 }} aria-label="Trading">
+        <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Trading</div>
+        <NavLink to={focus === "invest" ? "/notebooks" : "/"} end><Book />All notebooks</NavLink>
+        <NavLink to="/paper"><Pulse />Paper trading</NavLink>
+        <NavLink to="/options"><Layers />Options</NavLink>
+        <NavLink to="/import"><Upload />Import a strategy</NavLink>
+        <NavLink to="/library"><Library />Strategy library</NavLink>
       </nav>
       <nav className="stack" style={{ gap: 4 }} aria-label="Notebooks">
-        <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Notebooks</div>
+        {!(focus === "invest" && notebooks?.length === 0) && <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Your notebooks</div>}
         {notebooks === null && <span className="small muted" style={{ padding: "0 12px" }}>Loading…</span>}
-        {notebooks?.length === 0 && <span className="small muted" style={{ padding: "0 12px" }}>Your notebooks will show up here.</span>}
+        {notebooks?.length === 0 && focus !== "invest" && <span className="small muted" style={{ padding: "0 12px" }}>Each idea you test becomes a notebook here.</span>}
         {notebooks?.map((n) => {
           const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : null;
           const count = n.summary?.experiments ?? 0;
@@ -67,12 +80,20 @@ export function Shell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
-      <nav className="side-nav stack" style={{ gap: 2 }} aria-label="Main">
-        <NavLink to="/" end><Book />All notebooks</NavLink>
-        <NavLink to="/paper"><Pulse />Paper trading</NavLink>
-        <NavLink to="/options"><Layers />Options</NavLink>
-        <NavLink to="/import"><Upload />Import a strategy</NavLink>
-        <NavLink to="/library"><Library />Strategy library</NavLink>
+    </div>
+  );
+
+  const sidebar = (
+    <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
+      <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
+      {focus === "invest"
+        ? <button className="btn" onClick={() => nav("/research")}><Lens size={18} />Look up a company</button>
+        : <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>}
+      <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
+        <Sparkle size={17} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+      </button>
+      {focus === "invest" ? <>{investing}{trading}</> : <>{trading}{investing}</>}
+      <nav className="side-nav stack" style={{ gap: 2 }} aria-label="Account">
         <NavLink to="/account" className={() => (loc.pathname === "/account" || loc.pathname === "/plans" ? "active" : "")}><User />Account{me && <span className="badge skip" style={{ marginLeft: "auto" }}>{me.plan_info.name}</span>}</NavLink>
         {me?.is_admin && <NavLink to="/admin"><Shield />Admin</NavLink>}
       </nav>
