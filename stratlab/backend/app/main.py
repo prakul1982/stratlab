@@ -150,9 +150,39 @@ async def unexpected_errors(request: Request, call_next):
         del RECENT_ERRORS[:-25]
         _save_errors()
         report(e, ref=ref, path=f"{request.method} {request.url.path}")
+        if _source_failed(e, tb):
+            return JSONResponse(status_code=503, content={"detail": {"code": "data_unavailable",
+                                "message": "A market data source failed while answering this. Try again in a minute "
+                                           f"(ref {ref})."}})
+        if _database_failed(e, tb):
+            return JSONResponse(status_code=503, content={"detail": {"code": "database_unavailable",
+                                "message": "StratLab's database isn't answering right now. Nothing you saved is lost; "
+                                           f"try again in a minute (ref {ref})."}})
         return JSONResponse(status_code=500, content={"detail": {"code": "server_error",
                             "message": f"Something went wrong on our side ({request.method} {request.url.path}, ref {ref}). "
                                        "Try again in a moment; the admin page lists what failed."}})
+
+
+SOURCE_FILES = ("/app/kite_service.py", "/app/data/", "/app/intel/net.py", "/app/intel/yahoo.py", "/app/intel/screener.py",
+                "/app/intel/finnhub.py", "/app/intel/filings.py", "/app/intel/news.py", "/app/options/data.py", "/app/docs.py")
+
+
+def _source_failed(e: Exception, tb) -> bool:
+    """The crash came from inside a call to a market data source (its library or our client for it), not from
+    StratLab's own logic: the user gets "try again", the admin page still lists it."""
+    deepest = [f for f in tb if "site-packages" not in f.filename]
+    return bool(deepest) and any(x in deepest[-1].filename for x in SOURCE_FILES)
+
+
+def _database_failed(e: Exception, tb) -> bool:
+    """The crash was the database (or the network to it) failing during a database call, not StratLab's code."""
+    import httpx
+    try:
+        from postgrest.exceptions import APIError
+    except ImportError:
+        APIError = ()
+    network = isinstance(e, (httpx.TransportError, ConnectionError, TimeoutError)) or (APIError and isinstance(e, APIError))
+    return bool(network) and any(f.filename.endswith(("/app/db.py", "/app/admin.py")) or "/postgrest/" in f.filename for f in tb)
 
 
 def _save_errors():
@@ -1243,6 +1273,10 @@ def start_session(profile, s, inst):
             upgrade(str(e), "live_limit")
         if isinstance(e, ValueError):
             err(400, "cannot_start", str(e))
+        if not isinstance(e, HTTPException):     # the price feed failed while loading the warm-up candles
+            report(e, where="start paper session")
+            err(503, "prices_unavailable", "Couldn't load the price history this strategy needs to start. Nothing was "
+                                           "started; try again in a minute.")
         raise
     return sess
 
@@ -1686,6 +1720,13 @@ def admin_audit_start(req: AuditReq, _=Depends(admin.admin_profile)):
         return {**audit_runner.start(syms, label, lambda s: audit_one(s, req.docs, exchange), req.docs), "sets": audit.sets()}
     except RuntimeError as e:
         err(409, "audit_running", str(e))
+
+
+@app.delete("/admin/audit")
+def admin_audit_stop(_=Depends(admin.admin_profile)):
+    """Stop a running audit after the current company; the rows so far are kept."""
+    audit_runner.cancel()
+    return audit_runner.status()
 
 
 @app.post("/admin/promo")

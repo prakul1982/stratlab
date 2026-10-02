@@ -2,6 +2,13 @@
 
 ## October 2026
 
+### Stress test, round 2: every source failing
+- **Each data source, the broker feed, the database and the AI are broken on purpose**, one at a time and in every way they fail in real life (down, timing out, server errors, rate limits, refusals, a web page instead of data, an empty answer), while every page and action is used. Each must answer with what it can still show or a clear message: never a crash, broken data, a number that isn't a number, or a provider's name. Runs on every change.
+- **A source that's down is skipped for a minute** after three failures in a row, instead of every page waiting up to 8 seconds behind it. Applies to every research source and the exchange feed.
+- **Database or sign-in down:** a clear "isn't answering right now, nothing you saved is lost" instead of "something went wrong", and nobody is told their session expired because the sign-in service was unreachable.
+- **Fixed from it:** junk from the crypto price source crashed backtests; a broker failure while starting paper trading, or while loading the sector chart's benchmark, crashed the request (now "couldn't load prices, nothing was started"); a block page from the company-data site could have been remembered as "no such company" for six hours; two AI model-list readers crashed on a non-data reply. Any other failure inside a data-source call now says "a market data source failed, try again" and is still listed on the admin page.
+- **The data audit can be stopped** from Admin; the rows so far are kept.
+
 ### Stress test, round 1: every route, every input
 - **A fuzz test now calls all 90 server routes** signed out and as each kind of user, with realistic requests (every strategy feature, every market, options, groups, paper trading, research, admin) and then with each field broken: empty, huge, negative, not-a-number, wrong type, hostile text. The AI answers well, with junk, fails or is busy in turn. Nothing may crash, answer with broken data or take over 10 seconds; it runs on every change.
 - **Fixed from it:** granting a plan to a user who doesn't exist crashed (now "No user with that ID"); payment webhook errors now use the same format as every other error; a mistyped Indian symbol took up to 18 seconds (it now answers at once, checked against the exchange's own list, and misses are remembered); a 20-stock US scan or US sector chart took 12 to 14 seconds (the lookup and the price history now share one download).

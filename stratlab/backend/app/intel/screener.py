@@ -159,6 +159,10 @@ class Screener(Source):
     def _page(self, path: str) -> dict | None:
         html = self.fetch(path, ttl=6 * 3600, kind="text")
         if "top-ratios" not in html:
+            if "<h1" not in html:          # not a company page at all: a block or check page, not "no such company"
+                self.cache.set((path, (), "text"), None, 0)
+                self._failed(True)
+                raise SourceError(self.name, f"{self.name} sent a page that isn't a company page (it may be blocking us).", busy=True)
             return None
         p = parse(html)
         if not p["ratios"]:

@@ -104,7 +104,9 @@ def operations():
 
 @pytest.fixture
 def w(monkeypatch):
-    return world.build(monkeypatch)
+    built = world.build(monkeypatch)
+    yield built
+    built["close"]()
 
 
 def seed(w):

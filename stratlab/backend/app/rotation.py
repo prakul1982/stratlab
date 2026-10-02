@@ -150,7 +150,13 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
     `load(id, days)` gives daily bars."""
     days = 700 if interval == "weekly" else 220
     bid, bsym = bench or benchmark_id(registry, market)
-    bench_s = closes(load(bid, days), interval)
+    try:
+        bench_s = closes(load(bid, days), interval)
+    except LookupError:
+        raise
+    except Exception as e:      # without the benchmark there's no chart: say so instead of failing
+        raise LookupError(f"The benchmark's prices couldn't be loaded right now ({str(e)[:80] or e.__class__.__name__}). "
+                          "Try again in a minute.") from None
     prov = registry.provider(market)
 
     def one(item):

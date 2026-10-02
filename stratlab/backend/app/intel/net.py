@@ -84,28 +84,49 @@ class Source:
                                  headers={"User-Agent": UA, **(headers or {})})
         self.limit = RateLimit(per_minute, burst)
         self.cache = TTLCache()
+        self._fails, self._down_until = 0, 0.0
+        self._lock = threading.Lock()
+
+    BREAK_AFTER, BREAK_FOR = 3, 60.0     # failures in a row, then seconds treated as down
 
     def fetch(self, path: str, params: dict | None = None, ttl: float = 300, kind: str = "json"):
         key = (path, tuple(sorted((params or {}).items())), kind)
         hit = self.cache.get(key)
         if hit is not None:
             return hit
+        if time.time() < self._down_until:   # down a moment ago: answer now instead of queueing behind the outage
+            raise SourceError(self.name, f"{self.name} isn't answering right now. Try again in a minute.", busy=True)
         if not self.limit.take():
             raise SourceError(self.name, f"{self.name} is busy (our rate limit). Try again in a minute.", busy=True)
         try:
-            r = self.http.get(path, params=params)
-        except httpx.HTTPError as e:
-            raise SourceError(self.name, f"Couldn't reach {self.name} ({e.__class__.__name__}).", busy=True) from None
-        self.check(r)
-        if kind == "json":
             try:
-                value = r.json()
-            except ValueError:
-                raise SourceError(self.name, f"{self.name} sent something that isn't data.") from None
-        else:
-            value = r.text
+                r = self.http.get(path, params=params)
+            except httpx.HTTPError as e:
+                raise SourceError(self.name, f"Couldn't reach {self.name} ({e.__class__.__name__}).", busy=True) from None
+            self.check(r)
+            if kind == "json":
+                try:
+                    value = r.json()
+                except ValueError:
+                    raise SourceError(self.name, f"{self.name} sent something that isn't data.", busy=True) from None
+            else:
+                value = r.text
+        except SourceError as e:
+            self._failed(e.busy)
+            raise
+        self._failed(False, ok=True)
         self.cache.set(key, value, ttl)
         return value
+
+    def _failed(self, outage: bool, ok: bool = False):
+        """Count outages (unreachable, 5xx, 429, a page instead of data); a normal answer, even a 404, resets it."""
+        with self._lock:
+            if ok or not outage:
+                self._fails = 0
+                return
+            self._fails += 1
+            if self._fails >= self.BREAK_AFTER:
+                self._down_until, self._fails = time.time() + self.BREAK_FOR, 0
 
     def check(self, r: httpx.Response):
         if r.status_code == 429:
