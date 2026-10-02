@@ -954,6 +954,13 @@ def deep_view(sym: str, base: dict) -> dict:
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, sym)}
 
 
+def company_hosts(p: dict) -> tuple[str, ...]:
+    """The company's own website, where exchange filings often point for the full transcript or presentation."""
+    from .docs import site_domain
+    d = site_domain(p.get("website"))
+    return (d,) if d else ()
+
+
 def deep_ai_allowed(profile) -> None:
     since = (datetime.now(IST) - timedelta(days=1)).isoformat()
     if db.count_usage(profile["id"], "research_ai", since) >= settings.RESEARCH_AI_PER_DAY:
@@ -983,7 +990,7 @@ def deep_dive_read(symbol: str, refresh: bool = False, profile=Depends(current_p
     p = base["p"]
     try:
         reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic),
-                              industry.measures(p, sym))
+                              industry.measures(p, sym), company_hosts(p))
     except AIBusy as e:
         err(503, "ai_busy", str(e))
     except AIError as e:
@@ -1055,7 +1062,10 @@ def deep_dive_card(symbol: str, refresh: bool = False, profile=Depends(current_p
     deep_ai_allowed(profile)
     p = base["p"]
     try:
-        card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic))
+        card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic), company_hosts(p))
+    except report_card.NoCalls as e:          # nothing read, nothing charged
+        detail = "; ".join(public_text(x) for x in e.problems[:3])
+        err(422, "no_readable_calls", "None of the earnings-call transcripts could be read. " + (detail or "")[:400])
     except AIBusy as e:
         err(503, "ai_busy", str(e))
     except AIError as e:

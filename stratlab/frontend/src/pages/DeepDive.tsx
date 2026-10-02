@@ -31,7 +31,7 @@ export interface DeepView {
     at: string; problems: string[]; read: { kind: string; at: string; title: string }[];
     business: null | { summary: string; customers: string; drivers: string[]; strengths: string[]; risks: string[]; measures?: Measure[]; industry?: string | null;
       segments: { name: string; share_pct: number | null; what: string }[]; sources: Source[] };
-    plans: null | { capex: { what: string; amount: string | null; timeline: string | null; status: string; quote: string; source: Source }[];
+    plans: null | { capex: { what: string; amount: string | null; size?: string | null; timeline: string | null; status: string; quote: string; source: Source }[];
       outlook: { statement: string; quote: string; source: Source }[]; sources: Source[] };
   };
 }
@@ -289,12 +289,20 @@ export function DeepDivePage() {
           {p && (p.capex.length > 0 || p.outlook.length > 0) && (
             <Panel title="Capex and growth plans, in management's words" span="full">
               {p.capex.length > 0 && (
-                <div className="table-wrap"><table>
-                  <thead><tr><th>Plan</th><th>Amount</th><th>When</th><th>Status</th><th>Source</th></tr></thead>
-                  <tbody>{p.capex.map((c, i) => (
-                    <tr key={i}><td>{c.what}{c.quote && <div className="tiny muted">"{c.quote}"</div>}</td><td>{c.amount ?? "–"}</td><td>{c.timeline ?? "–"}</td>
-                      <td><span className={`badge ${c.status === "done" ? "pass" : c.status === "under way" ? "next" : "skip"}`}>{c.status}</span></td><td><SourceLink s={c.source} /></td></tr>))}</tbody>
-                </table></div>
+                <div className="promises">{p.capex.map((c, i) => (
+                  <div key={i} className="promise">
+                    <div className="spread" style={{ gap: 10, alignItems: "flex-start" }}>
+                      <span className="small"><b>{c.what}</b></span>
+                      <span className={`badge ${c.status === "done" ? "pass" : c.status === "under way" ? "next" : "skip"}`}>{c.status}</span>
+                    </div>
+                    <div className="promise-facts tiny">
+                      {c.amount && <span><span className="muted">Amount</span> <b>{c.amount}</b></span>}
+                      {c.size && <span><span className="muted">Size</span> <b>{c.size}</b></span>}
+                      {c.timeline && <span><span className="muted">When</span> {c.timeline}</span>}
+                      <SourceLink s={c.source} />
+                    </div>
+                    {c.quote && <span className="tiny muted">"{c.quote}"</span>}
+                  </div>))}</div>
               )}
               {p.outlook.length > 0 && (
                 <div className="stack" style={{ gap: 8 }}>

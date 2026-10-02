@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
-from .docs import quote_found, ranked_windows, windows
+from .docs import pdf_links, quote_found, ranked_windows, windows
 
 KEEP = 7 * 86400              # a document read is reused for a week
 DOC_DAYS = 730                # filings searched for documents: two years
@@ -139,9 +139,14 @@ this industry is judged on, such as revenue per occupied bed for a hospital); in
 
 PLANS = """You pull out capacity, capex and growth plans an Indian listed company's management stated, from its investor
 presentation and earnings-call transcripts.
-Return {"capex": [{"what": "the project or expansion", "amount": "as stated, e.g. Rs 1,200 crore, or null",
+Return {"capex": [{"what": "the project or expansion", "amount": "money with its unit, e.g. Rs 1,200 crore, or null",
+  "size": "capacity with its unit, e.g. 400 beds or 2 MTPA, or null",
   "timeline": "as stated or null", "status": "planned | under way | done | unclear", "quote": "short exact quote", "source": "S1"}],
- "outlook": [{"statement": "a growth, margin or demand statement, in one line", "quote": "short exact quote", "source": "S2"}]}
+ "outlook": [{"statement": "what management expects for the future, in one line", "quote": "short exact quote", "source": "S2"}]}
+- In tables, read the column headers: put rupees in "amount" (always with "Rs" and "crore" or "lakh") and beds, rooms,
+  tonnes or MW in "size". If a number's unit isn't clear from the header, leave it out rather than guess.
+- "outlook" is only about the FUTURE (expects, targets, will, plans). Results already reported ("revenue grew 21%") are
+  not outlook.
 Up to 8 capex items and 6 outlook items. "source" is the label of the excerpt it came from.
 """ + RULES
 
@@ -190,6 +195,17 @@ def clean_business(d: dict) -> dict:
             "drivers": _clip(d.get("drivers"), 5), "strengths": _clip(d.get("strengths"), 5), "risks": _clip(d.get("risks"), 5)}
 
 
+def _with_unit(v) -> str | None:
+    """An amount or size only if it says what it is ("Rs 945 crore", "400 beds"); a bare "945" or "%70" is dropped."""
+    t = str(v or "").strip()[:80]
+    return t if re.search(r"[A-Za-z₹]{2,}|₹", t) and re.search(r"\d", t) else None
+
+
+PAST = re.compile(r"\b(?:grew|rose|increased|declined|fell|was|were|reported|recorded|stood at|achieved)\b", re.I)
+FUTURE = re.compile(r"\b(?:will|expect|expects|expected to|target|targets|plan|plans|aim|aims|guid|going forward|outlook|"
+                    r"next|anticipate|should|would|intend|by fy|by 20)", re.I)
+
+
 def clean_plans(d: dict, labels: dict, texts: dict | None = None) -> dict:
     def src(v):
         return labels.get(str(v or "").strip().upper())
@@ -197,12 +213,15 @@ def clean_plans(d: dict, labels: dict, texts: dict | None = None) -> dict:
     for c in (d.get("capex") or [])[:8]:
         if isinstance(c, dict) and str(c.get("what") or "").strip() and _real(c, texts):
             status = str(c.get("status") or "unclear").lower()
-            capex.append({"what": str(c["what"])[:200], "amount": (str(c["amount"])[:80] if c.get("amount") else None),
+            capex.append({"what": str(c["what"])[:200], "amount": _with_unit(c.get("amount")), "size": _with_unit(c.get("size")),
                           "timeline": (str(c["timeline"])[:80] if c.get("timeline") else None),
                           "status": status if status in ("planned", "under way", "done", "unclear") else "unclear",
                           "quote": str(c.get("quote") or "")[:300], "source": src(c.get("source"))})
     outlook = []
     for o in (d.get("outlook") or [])[:6]:
+        said = f"{o.get('statement') or ''} {o.get('quote') or ''}" if isinstance(o, dict) else ""
+        if PAST.search(said) and not FUTURE.search(said):
+            continue                       # a result already reported, not an outlook
         if isinstance(o, dict) and str(o.get("statement") or "").strip() and _real(o, texts):
             outlook.append({"statement": str(o["statement"])[:240], "quote": str(o.get("quote") or "")[:300], "source": src(o.get("source"))})
     return {"capex": capex, "outlook": outlook}
@@ -212,10 +231,11 @@ MIN_CHARS = 2500              # less than this is a cover letter or an intimatio
 MAX_TRIES = 8                 # documents downloaded at most per read, looking for real ones
 
 
-def readable(docs_api, candidates: list[dict], need: int, problems: list[str]) -> list[tuple[dict, str]]:
-    """The first `need` candidates whose PDF holds real text. Exchange filings often attach only a one-page cover
-    letter under a "presentation" or "transcript" subject; those are skipped and the next candidate is tried."""
-    out, short = [], 0
+def readable(docs_api, candidates: list[dict], need: int, problems: list[str], hosts: tuple[str, ...] = ()) -> list[tuple[dict, str]]:
+    """The first `need` candidates whose PDF holds real text. Exchange filings often attach only a one-page letter
+    under a "presentation" or "transcript" subject, many saying the document is on the company's website at a link:
+    that link is followed when it's a PDF on the company's own site (`hosts`); other letters are skipped."""
+    out, short, notes, seen = [], 0, [], set()
     for d in candidates[:max(MAX_TRIES, need * 2)]:
         if len(out) >= need:
             break
@@ -224,12 +244,30 @@ def readable(docs_api, candidates: list[dict], need: int, problems: list[str]) -
         except Exception as e:
             problems.append(f"{d['title'][:60]}: {str(e)[:80]}")
             continue
-        if len(text) < MIN_CHARS:
-            short += 1
+        if len(text) >= MIN_CHARS:
+            out.append((d, text))
             continue
-        out.append((d, text))
+        links = [u for u in pdf_links(text) if u not in seen][:2]
+        got = None
+        for link in links:
+            seen.add(link)
+            try:
+                full = docs_api.text(link, extra_hosts=hosts)
+            except Exception as e:
+                notes.append(f"{d['at'][:10]}: the letter links to {link[:90]}, which couldn't be read ({str(e)[:70]})")
+                continue
+            if len(full) >= MIN_CHARS:
+                got = ({**d, "url": link, "via": d["url"]}, full)
+                break
+        if got:
+            out.append(got)
+        else:
+            short += 1
+            if not links:
+                notes.append(f"{d['at'][:10]}: a {len(text):,}-character letter with no link to the document")
     if short and len(out) < need:
-        problems.append(f"{short} filing{'s' if short > 1 else ''} held only a short cover letter, not the document itself")
+        problems.append(f"{short} filing{'s' if short > 1 else ''} held only a short letter, not the document itself")
+        problems += notes[:4]
     return out
 
 
@@ -257,11 +295,13 @@ def _parse(raw: str, keys: tuple[str, ...]) -> dict:
         return got
 
 
-def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai, kpis: dict | None = None) -> dict:
-    """Both document reads for one company. `ai` is (gemini, anthropic) for the provider chain."""
+def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai, kpis: dict | None = None,
+         hosts: tuple[str, ...] = ()) -> dict:
+    """Both document reads for one company. `ai` is (gemini, anthropic) for the provider chain; `hosts` the company's
+    own website, where filings often point for the full document."""
     out = {"business": None, "plans": None, "problems": [], "read": []}
-    pres = readable(docs_api, [d for d in docs_list if d["kind"] == "presentation"], 1, out["problems"])
-    trans = readable(docs_api, [d for d in docs_list if d["kind"] == "transcript"], 2, out["problems"])
+    pres = readable(docs_api, [d for d in docs_list if d["kind"] == "presentation"], 1, out["problems"], hosts)
+    trans = readable(docs_api, [d for d in docs_list if d["kind"] == "transcript"], 2, out["problems"], hosts)
     kpis = kpis or {}
     want = kpis.get("measures") or []
     head = (f"COMPANY: {name} ({symbol}, NSE)\nPROFILE: {about[:1200]}\n"
@@ -290,7 +330,7 @@ def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai
 
 # ---------- stored reads ----------
 def _key(symbol: str) -> str:
-    return f"deep:v2:{symbol}"        # v2: checked quotes and ranked call passages; v1 reads are ignored
+    return f"deep:v3:{symbol}"        # v3: rupee sign fixed, unit-checked amounts, company-site documents
 
 
 def stored(symbol: str) -> dict | None:

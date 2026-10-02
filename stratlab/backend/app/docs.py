@@ -17,12 +17,79 @@ MAX_PAGES = 80
 _cache = TTLCache(max_items=300)
 
 
-def allowed(url: str | None) -> bool:
+def _host_ok(host: str | None, extra_hosts: tuple[str, ...]) -> bool:
+    if not host:
+        return False
+    return host in ALLOWED_HOSTS or any(host == h or host.endswith("." + h) for h in extra_hosts)
+
+
+def allowed(url: str | None, extra_hosts: tuple[str, ...] = ()) -> bool:
+    """An https PDF on the exchanges' document hosts, or on the company's own website when `extra_hosts` names it."""
     try:
         u = urlparse(url or "")
     except ValueError:
         return False
-    return u.scheme == "https" and u.hostname in ALLOWED_HOSTS and u.path.lower().endswith(".pdf")
+    return u.scheme == "https" and _host_ok(u.hostname, extra_hosts) and u.path.lower().endswith(".pdf")
+
+
+def public_host(host: str) -> bool:
+    """The name resolves only to public internet addresses (a company website, never this server's own network)."""
+    import ipaddress
+    import socket
+    try:
+        ipaddress.ip_address(host)
+        return False                           # bare IP addresses aren't company websites
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return False
+    addrs = {i[4][0] for i in infos}
+    return bool(addrs) and all(ipaddress.ip_address(a.split("%")[0]).is_global for a in addrs)
+
+
+def site_domain(website: str | None) -> str | None:
+    """'https://www.apollohospitals.com/' → 'apollohospitals.com'."""
+    try:
+        host = urlparse(website or "").hostname or ""
+    except ValueError:
+        return None
+    host = host.lower()
+    host = host[4:] if host.startswith("www.") else host
+    return host if "." in host else None
+
+
+PDF_LINK = re.compile(r"(?:https?://|www\.)[^\s\"'<>()\[\]]+?\.pdf\b", re.I)
+
+
+def pdf_links(text: str) -> list[str]:
+    """PDF links written in a filing (a cover letter often just points to the transcript on the company's website).
+    Links broken across a line by the PDF are joined back first."""
+    joined = re.sub(r"(https?://\S+|www\.\S+)\s*\n\s*(\S+)", lambda m: m.group(1) + m.group(2)
+                    if not m.group(1).lower().endswith(".pdf") else m.group(0), text or "")
+    out = []
+    for m in PDF_LINK.finditer(joined):
+        url = m.group(0)
+        url = "https://" + url if url.lower().startswith("www.") else url.replace("http://", "https://", 1)
+        if url not in out:
+            out.append(url)
+    return out
+
+
+# Indian company PDFs often draw the rupee sign with a font that maps it to another character; the text then reads
+# "¥186,630", "`1,200", "X 70,435" or "%640". Put the rupee sign back.
+_YEN = re.compile(r"¥\s?(?=\d)")
+_TICK = re.compile(r"`\s?(?=\d)")
+_ODD = re.compile(r"(?<![A-Za-z0-9%])([X%])\s?(?=\d{1,3}(?:,\d{2,3})+(?:\.\d+)?\b|\d{2,}(?:\.\d+)?\b)")
+
+
+def fix_rupee(text: str) -> str:
+    text = _TICK.sub("₹", _YEN.sub("₹", text))
+    # "X945" or "%640" (a percent sign BEFORE a number) only stand in for ₹ when the document does it repeatedly
+    if len(_ODD.findall(text)) >= 3:
+        text = _ODD.sub("₹", text)
+    return text
 
 
 def pdf_text(data: bytes, max_pages: int = MAX_PAGES) -> str:
@@ -35,32 +102,47 @@ def pdf_text(data: bytes, max_pages: int = MAX_PAGES) -> str:
         except Exception:                     # one bad page mustn't lose the document
             continue
     text = "\n".join(parts)
-    return re.sub(r"[ \t]+", " ", re.sub(r"\n{3,}", "\n\n", text)).strip()
+    return fix_rupee(re.sub(r"[ \t]+", " ", re.sub(r"\n{3,}", "\n\n", text)).strip())
 
 
 class Docs:
-    def __init__(self, http: httpx.Client | None = None, transport: httpx.BaseTransport | None = None):
+    def __init__(self, http: httpx.Client | None = None, transport: httpx.BaseTransport | None = None, check_host=public_host):
         self.http = http or httpx.Client(timeout=30, transport=transport, follow_redirects=False,
                                          headers={"User-Agent": BROWSER_UA, "Accept": "application/pdf,*/*",
                                                   "Referer": "https://www.nseindia.com/"})
+        self.check_host = check_host
 
-    def text(self, url: str) -> str:
-        if not allowed(url):
-            raise SourceError("the exchange", "That document isn't on the exchange's own site.")
+    def text(self, url: str, extra_hosts: tuple[str, ...] = ()) -> str:
+        """The text of a PDF on the exchange's site, or on the company's own website (`extra_hosts`). Up to three
+        redirects are followed, each one checked the same way."""
+        if not allowed(url, extra_hosts):
+            raise SourceError("the exchange", "That document isn't on the exchange's or the company's own site.")
         hit = _cache.get(url)
         if hit is not None:
             return hit
+        target = url
         try:
-            with self.http.stream("GET", url) as r:
-                if r.status_code >= 400:
-                    raise SourceError("the exchange", f"The document couldn't be downloaded ({r.status_code}).", busy=r.status_code >= 500)
-                if 300 <= r.status_code < 400:
-                    raise SourceError("the exchange", "The document moved; it wasn't followed.")
-                buf = bytearray()
-                for chunk in r.iter_bytes():
-                    buf += chunk
-                    if len(buf) > MAX_BYTES:
-                        raise SourceError("the exchange", "The document is too large to read here.")
+            for _ in range(4):
+                host = urlparse(target).hostname or ""
+                if host not in ALLOWED_HOSTS and not self.check_host(host):
+                    raise SourceError("the exchange", "That website isn't reachable from here.")
+                with self.http.stream("GET", target) as r:
+                    if 300 <= r.status_code < 400:
+                        nxt = httpx.URL(target).join(r.headers.get("location", "")).__str__()
+                        if not _host_ok(urlparse(nxt).hostname, extra_hosts) or urlparse(nxt).scheme != "https":
+                            raise SourceError("the exchange", "The document moved off the company's site; it wasn't followed.")
+                        target = nxt
+                        continue
+                    if r.status_code >= 400:
+                        raise SourceError("the exchange", f"The document couldn't be downloaded ({r.status_code}).", busy=r.status_code >= 500)
+                    buf = bytearray()
+                    for chunk in r.iter_bytes():
+                        buf += chunk
+                        if len(buf) > MAX_BYTES:
+                            raise SourceError("the exchange", "The document is too large to read here.")
+                    break
+            else:
+                raise SourceError("the exchange", "The document moved too many times.")
         except httpx.HTTPError as e:
             raise SourceError("the exchange", f"Couldn't reach the document ({e.__class__.__name__}).", busy=True) from None
         if not bytes(buf[:5]).startswith(b"%PDF"):

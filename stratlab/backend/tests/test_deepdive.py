@@ -61,7 +61,7 @@ def test_document_reader_is_limited_to_exchange_pdfs():
     d = docs.Docs(transport=t)
     assert "Rs 500 crore" in d.text("https://nsearchives.nseindia.com/ok.pdf")
     for bad, msg in (("https://nsearchives.nseindia.com/big.pdf", "too large"), ("https://nsearchives.nseindia.com/page.pdf", "didn't return a PDF"),
-                     ("https://example.com/ok.pdf", "exchange's own site")):
+                     ("https://example.com/ok.pdf", "the exchange's or the company's own site")):
         with pytest.raises(SourceError) as e:
             d.text(bad)
         assert msg in str(e.value)
@@ -79,7 +79,7 @@ FILLER = " Further discussion of the quarter." * 100       # real documents run 
 
 class FakeDocs:
     def __init__(self, texts, pad=True): self.texts, self.pad = texts, pad
-    def text(self, url):
+    def text(self, url, extra_hosts=()):
         if url not in self.texts:
             raise SourceError("the exchange", "gone")
         return self.texts[url] + (FILLER if self.pad and not self.texts[url].startswith("COVER") else "")
@@ -181,7 +181,7 @@ def test_cover_letters_are_skipped_for_the_next_document():
     assert [d["url"] for d, _ in got] == ["p1"] and problems == []
     problems = []
     assert deepdive.readable(FakeDocs({"c1": "COVER only"}), docs[:1], 1, problems) == []
-    assert "short cover letter" in problems[0]
+    assert "short letter" in problems[0] and "no link" in problems[1]
 
 
 def test_banks_get_no_capex_or_operating_margin_checks():
@@ -224,3 +224,63 @@ def test_plans_survive_a_cut_off_reply_and_drop_misattributed_quotes(monkeypatch
     d = FakeDocs({"u1": "We plan capex of Rs 500 crore for a new plant.", "u2": "Business overview: pumps."})
     p = deepdive.read("ACME", "Acme", "Pumps", DOCS, d, (None, None))["plans"]
     assert [c["what"] for c in p["capex"]] == ["New plant"] and p["capex"][0]["source"]["kind"] == "transcript"
+
+
+def test_a_letter_pointing_to_the_company_website_is_followed():
+    pdf = make_pdf(["Transcript of the Q1 FY27 earnings call."] + ["CFO: We expect EBITDA margin of 24% in FY27."] * 80)
+    letter = make_pdf(["Dear Sir, the transcript of the earnings call is available at",
+                       "https://www.apollohospitals.com/apollo_pdf/transcript-q1fy27.pdf"])
+    seen = []
+
+    def handler(r):
+        seen.append(str(r.url))
+        if r.url.host == "www.apollohospitals.com" and r.url.path == "/old.pdf":
+            return httpx.Response(301, headers={"location": "/apollo_pdf/transcript-q1fy27.pdf"})
+        if r.url.host == "www.apollohospitals.com":
+            return httpx.Response(200, content=pdf)
+        return httpx.Response(200, content=letter)
+    d = docs.Docs(transport=httpx.MockTransport(handler), check_host=lambda h: h == "www.apollohospitals.com")
+    cands = [{"kind": "transcript", "at": "2026-08-19", "title": "Con. Call Updates", "url": "https://nsearchives.nseindia.com/l1.pdf"}]
+    problems = []
+    got = deepdive.readable(d, cands, 1, problems, ("apollohospitals.com",))
+    assert got and got[0][0]["url"].startswith("https://www.apollohospitals.com/") and got[0][0]["via"].endswith("l1.pdf")
+    assert "margin of 24%" in got[0][1] and problems == []
+    assert "margin of 24%" in d.text("https://www.apollohospitals.com/old.pdf", ("apollohospitals.com",))   # redirect within the site
+    # without the company's site allowed, or to a host that isn't public, the link isn't fetched
+    assert deepdive.readable(d, cands, 1, [], ()) == []
+    blocked = docs.Docs(transport=httpx.MockTransport(handler), check_host=lambda h: False)
+    with pytest.raises(SourceError):
+        blocked.text("https://www.apollohospitals.com/x.pdf", ("apollohospitals.com",))
+    assert not docs.allowed("https://evil.example.com/x.pdf", ("apollohospitals.com",))
+    assert not docs.allowed("https://apollohospitals.com.evil.io/x.pdf", ("apollohospitals.com",))
+    assert not docs.public_host("127.0.0.1") and not docs.public_host("10.0.0.5")
+
+
+def test_rupee_sign_is_put_back():
+    assert docs.fix_rupee("ARPP grew 8% to ¥186,630") == "ARPP grew 8% to ₹186,630"
+    assert docs.fix_rupee("capex of `1,200 crore") == "capex of ₹1,200 crore"
+    t = docs.fix_rupee("Revenue X 70,435 mio; Sarjapur X944; Varanasi % 640; margin 24%; Model X1")
+    assert "₹70,435" in t and "₹944" in t and "₹640" in t and "24%" in t and "Model X1" in t
+    assert docs.fix_rupee("growth to X 70,435 once") == "growth to X 70,435 once"     # once isn't a pattern
+
+
+def test_no_readable_call_is_not_charged(api):
+    c, who, _calls, usage = api
+    from app import main
+    main.deep_docs.texts = {}                       # every transcript fails to download
+    who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
+    r = c.post("/research/deep/ACME/card")
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "no_readable_calls" and usage == []
+
+
+def test_capex_amounts_need_a_unit_and_outlook_is_the_future():
+    labels = {"S1": {"title": "Deck", "at": "2026-08-12", "url": "u", "kind": "presentation"}}
+    p = deepdive.clean_plans({"capex": [{"what": "Sarjapur", "amount": "%70", "size": "455 beds", "status": "planned"},
+                                        {"what": "Chennai", "amount": "₹945", "status": "under way"},
+                                        {"what": "Jubilee Hills", "amount": "2230", "status": "planned"},
+                                        {"what": "Varanasi", "amount": "Rs 640 crore", "status": "planned"}],
+                              "outlook": [{"statement": "Revenue grew by 21% to Rs 70,435 mio", "quote": "x"},
+                                          {"statement": "Expects 20% growth next year", "quote": "y"}]}, labels)
+    assert [(c["what"], c["amount"], c["size"]) for c in p["capex"]] == [("Sarjapur", None, "455 beds"), ("Chennai", "₹945", None),
+                                                                        ("Jubilee Hills", None, None), ("Varanasi", "Rs 640 crore", None)]
+    assert [o["statement"] for o in p["outlook"]] == ["Expects 20% growth next year"]
