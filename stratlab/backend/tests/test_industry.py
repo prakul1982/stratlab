@@ -82,7 +82,7 @@ def test_presentation_read_pulls_the_measures(monkeypatch):
             return json.dumps({"summary": "Hospitals.", "segments": [], "measures": [
                 {"name": "ARPOB", "value": "Rs 62,000 a day", "period": "Q1 FY27", "change": "+8% YoY", "quote": "ARPOB rose to 62,000", "source": "S1"},
                 {"name": "Occupancy", "value": "", "source": "S1"},                       # no value: dropped
-                {"name": "Beds", "value": "10,000", "source": "S7"}]})                    # unknown source: kept, unlinked
+                {"name": "Beds", "value": "10,000", "source": "S7"}]})                    # no quote in any document: dropped
         return json.dumps({"capex": [], "outlook": []})
     monkeypatch.setattr(deepdive, "complete", complete)
     docs = [{"kind": "presentation", "at": "2026-08-01T10:00", "title": "Investor Presentation", "url": "u1"}]
@@ -90,7 +90,7 @@ def test_presentation_read_pulls_the_measures(monkeypatch):
                         industry.measures({"industry_path": ["Hospital"]}))
     assert "INDUSTRY MEASURES (Hospitals): ARPOB (average revenue per occupied bed)" in seen[0]
     ms = out["business"]["measures"]
-    assert [m["name"] for m in ms] == ["ARPOB", "Beds"] and ms[0]["source"]["url"] == "u1" and ms[1]["source"] is None
+    assert [m["name"] for m in ms] == ["ARPOB"] and ms[0]["source"]["url"] == "u1"
     assert out["business"]["industry"] == "Hospitals"
 
 
@@ -150,7 +150,7 @@ def test_measures_are_also_read_from_call_transcripts(monkeypatch):
     def complete(system, text, **kw):
         seen.append(text)
         return json.dumps({"summary": "x", "segments": [], "measures": [
-            {"name": "Occupancy", "value": "68%", "period": "Q1 FY27", "quote": "occupancy of 68%", "source": "S2"}]}) \
+            {"name": "Occupancy", "value": "68%", "period": "Q1 FY27", "quote": "Bed occupancy was 68% this quarter", "source": "S2"}]}) \
             if "makes money" in system else json.dumps({"capex": [], "outlook": []})
     monkeypatch.setattr(deepdive, "complete", complete)
     docs = [{"kind": "presentation", "at": "2026-08-01T10:00", "title": "Investor Presentation", "url": "u1"},
@@ -159,3 +159,16 @@ def test_measures_are_also_read_from_call_transcripts(monkeypatch):
                         (None, None), industry.measures({"industry_path": ["Hospital"]}))
     assert "[S2] transcript" in seen[0] and "occupancy was 68%" in seen[0]
     assert out["business"]["measures"][0]["source"]["title"] == "Q1 call"
+
+
+
+def test_low_promoter_stake_fails_only_when_falling():
+    def state(holding):
+        p = company()
+        p["shareholding"] = {"cols": [f"Q{i}" for i in range(len(holding))], "rows": {"Promoters": holding}}
+        return {c["label"]: c for c in checklist.evaluate(p, deepdive.numbers(p))["checks"]}["Promoter holding"]
+    assert state([28.2, 28.1, 28.0, 28.0, 28.0])["state"] == "watch"       # Apollo-like: low and steady
+    assert "professionally run" in state([28.2, 28.1, 28.0, 28.0, 28.0])["rule"]
+    assert state([34, 33, 31, 29, 27.5])["state"] == "fail"                # low and falling
+    assert state([25])["state"] == "watch"                                 # no history to judge
+    assert state([55, 55, 55, 55, 55])["state"] == "pass"

@@ -102,3 +102,69 @@ def windows(text: str, keywords: list[str], width: int = 700, limit: int = 12000
         if total >= limit:
             break
     return "\n…\n".join(out)
+
+
+BOILERPLATE = re.compile(r"forward[- ]looking statement|safe harbou?r|actual results (?:may|could) differ|undue reliance|"
+                         r"no obligation to (?:update|revise)|this transcript (?:has been|is) edited|disclaimer", re.I)
+
+
+def ranked_windows(text: str, keywords: list[str], width: int = 600, limit: int = 16000) -> str:
+    """Like `windows`, but the passages that pack the most different keywords (and numbers) win, legal boilerplate is
+    left out, and the chosen passages are put back in document order. Keeps a long call transcript's guidance instead
+    of whatever keyword match happens to come first."""
+    if not text:
+        return ""
+    pats = [re.compile(k, re.I) for k in keywords]
+    spans = []
+    for p in pats:
+        for m in p.finditer(text):
+            spans.append((max(0, m.start() - width), min(len(text), m.end() + width)))
+    if not spans:
+        return text[:limit]
+    spans.sort()
+    merged = [list(spans[0])]
+    for a, b in spans[1:]:
+        if a <= merged[-1][1] and b - merged[-1][0] <= 3 * width:      # keep passages short enough to rank
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    scored = []
+    for a, b in merged:
+        piece = text[a:b]
+        if BOILERPLATE.search(piece):
+            continue
+        kinds = sum(1 for p in pats if p.search(piece))
+        nums = len(re.findall(r"\d+(?:\.\d+)?\s*(?:%|per ?cent|crore|cr\b|bps|basis points)", piece, re.I))
+        scored.append((kinds * 2 + min(nums, 6), a, b))
+    picked, total = [], 0
+    for score, a, b in sorted(scored, key=lambda x: (-x[0], x[1])):
+        if total + (b - a) > limit:
+            continue
+        picked.append((a, b))
+        total += b - a
+    picked.sort()
+    return "\n…\n".join(text[a:b].strip() for a, b in picked) or text[:limit]
+
+
+FILLER = {"a", "an", "the", "of", "to", "in", "on", "for", "and", "or", "is", "are", "be", "will", "would", "we", "our",
+          "that", "this", "it", "so", "as", "at", "by", "with", "about", "around", "approximately", "roughly", "some"}
+
+
+def _words(s: str) -> list[str]:
+    return [w for w in re.sub(r"[^a-z0-9%.]+", " ", (s or "").lower().replace("per cent", "%").replace("percent", "%")).split()
+            if w not in FILLER and w != "."]
+
+
+def quote_found(quote: str, text: str) -> bool:
+    """Whether a quote the AI gave really is in the document. Small words, case and punctuation are ignored (the AI
+    often trims or tidies a spoken sentence); then the whole quote, or most of its 3-word runs, must be there.
+    A quote that fails this is treated as made up."""
+    q, t = _words(quote), " ".join(_words(text))
+    if len(q) < 2 or not t:
+        return False
+    if " ".join(q) in t:
+        return True
+    if len(q) < 4:
+        return False
+    runs = [" ".join(q[i:i + 3]) for i in range(len(q) - 2)]
+    return sum(1 for r in runs if r in t) / len(runs) >= 0.6

@@ -131,6 +131,46 @@ def extract_json(raw: str) -> dict:
     return data
 
 
+def salvage_items(raw: str, key: str) -> list[dict]:
+    """The complete objects in a reply's `key` list, even when the reply was cut off mid-list (long reads hit the
+    output limit). Returns [] if nothing complete is there."""
+    text = raw or ""
+    i = text.find(f'"{key}"')
+    if i < 0:
+        return []
+    i = text.find("[", i)
+    out, depth, start, in_str, esc = [], 0, None, False, False
+    for j in range(i + 1, len(text)):
+        c = text[j]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c == "{":
+            if depth == 0:
+                start = j
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    obj = json.loads(text[start:j + 1])
+                    if isinstance(obj, dict):
+                        out.append(obj)
+                except json.JSONDecodeError:
+                    pass
+                start = None
+        elif c == "]" and depth == 0:
+            break
+    return out
+
+
 class OpenAIStyle:
     def __init__(self, name: str, transport: httpx.BaseTransport | None = None):
         self.name = name
