@@ -132,6 +132,23 @@ def summary(p: dict) -> dict:
     }
 
 
+def _years_of(p: dict) -> int:
+    pl = p.get("pl") or {}
+    return sum(1 for c in pl.get("cols") or [] if str(c).upper() != "TTM")
+
+
+def _pick(pages: dict) -> dict:
+    """Consolidated numbers, unless they go back much less far than the standalone ones (a subsidiary set up
+    recently): then standalone, with a note saying so."""
+    con, std = pages.get("consolidated"), pages.get("standalone")
+    if con and con.get("pl") and not (std and std.get("pl") and _years_of(con) < 6 and _years_of(std) >= _years_of(con) + 2):
+        return {**con, "basis": "consolidated"}
+    if std and std.get("pl"):
+        note = (f"Standalone results: the consolidated accounts only go back {_years_of(con)} years." if con and con.get("pl") else None)
+        return {**std, "basis": "standalone", "basis_note": note}
+    return {**(con or std), "basis": "consolidated" if con else "standalone"}
+
+
 class Screener(Source):
     name = "Screener.in"
 
@@ -139,25 +156,47 @@ class Screener(Source):
         super().__init__("https://www.screener.in", per_minute=20, burst=6, transport=transport,
                          headers={"User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml"})
 
+    def _page(self, path: str) -> dict | None:
+        html = self.fetch(path, ttl=6 * 3600, kind="text")
+        if "top-ratios" not in html:
+            return None
+        p = parse(html)
+        if not p["ratios"]:
+            return None
+        p["url"] = f"https://www.screener.in{path}"
+        return p
+
+    def _search(self, sym: str) -> str | None:
+        """The company's page path when the symbol has changed (a rename or demerger), from the site's own search."""
+        try:
+            hits = self.fetch("/api/company/search/", {"q": sym, "v": 3}, ttl=7 * 86400)
+        except SourceError:
+            return None
+        for h in hits if isinstance(hits, list) else []:
+            url = str(h.get("url") or "")
+            if url.startswith("/company/") and f"/company/{sym}/" not in url:
+                return url.split("consolidated/")[0]
+        return None
+
     def company(self, symbol: str) -> dict:
         sym = re.sub(r"[^A-Z0-9&\-]", "", symbol.upper())
-        last, fallback = None, None
-        # consolidated first; companies without subsidiaries only have standalone numbers
-        for path in (f"/company/{sym}/consolidated/", f"/company/{sym}/"):
-            try:
-                html = self.fetch(path, ttl=6 * 3600, kind="text")
-            except SourceError as e:
-                last = e
-                continue
-            if "top-ratios" not in html:
-                continue
-            p = parse(html)
-            if not p["ratios"]:
-                continue
-            p["url"] = f"https://www.screener.in{path}"
-            if p.get("pl"):
-                return p
-            fallback = fallback or p
-        if fallback:
-            return fallback
+        last = None
+        base = f"/company/{sym}/"
+        for attempt in (0, 1):
+            pages = {}
+            # consolidated first; companies without subsidiaries only have standalone numbers
+            for kind, path in (("consolidated", base + "consolidated/"), ("standalone", base)):
+                try:
+                    p = self._page(path)
+                except SourceError as e:
+                    last = e
+                    continue
+                if p:
+                    pages[kind] = p
+            if pages:
+                return _pick(pages)
+            found = self._search(sym) if attempt == 0 else None
+            if not found or found == base:
+                break
+            base = found
         raise last or SourceError(self.name, f"Screener.in has no page for {sym}.")

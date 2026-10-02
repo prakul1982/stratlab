@@ -141,17 +141,23 @@ class NSEFilings:
                 raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
             self._primed = time.time()
 
-    def _get(self, path: str, params: dict):
+    def _get(self, path: str, params: dict, referer: str | None = None):
         self._prime()
+        headers = {"Referer": referer} if referer else None
         for attempt in (0, 1):
             if not self.limit.take():
                 raise SourceError(self.name, "The exchange feed is busy (our rate limit). Try again in a minute.", busy=True)
             try:
-                r = self.http.get(path, params=params)
+                r = self.http.get(path, params=params, headers=headers)
             except httpx.HTTPError as e:
                 raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
             if r.status_code in (401, 403) and attempt == 0:
                 self._prime(force=True)          # cookies expired: fetch fresh ones once
+                if referer:                      # the quote API also wants the cookies set by the stock's own page
+                    try:
+                        self.http.get(referer, headers={"Accept": "text/html"})
+                    except httpx.HTTPError:
+                        pass
                 continue
             if r.status_code == 429 or r.status_code >= 500:
                 raise SourceError(self.name, f"The exchange feed is busy ({r.status_code}). Try again in a minute.", busy=True)
@@ -177,14 +183,20 @@ class NSEFilings:
         self.cache.set(key, items, 1800)
         return items
 
+    def _quote(self, symbol: str) -> dict:
+        """The exchange's quote for one stock, asked the way its own quote page asks (it refuses bare requests)."""
+        from urllib.parse import quote as q
+        data = self._get("/api/quote-equity", {"symbol": symbol},
+                         referer=f"https://www.nseindia.com/get-quotes/equity?symbol={q(symbol)}")
+        return data if isinstance(data, dict) else {}
+
     def industry(self, symbol: str) -> list[str]:
         """The exchange's own classification: macro sector › sector › industry › basic industry."""
         key = ("industry", symbol)
         hit = self.cache.get(key)
         if hit is not None:
             return hit
-        data = self._get("/api/quote-equity", {"symbol": symbol})
-        info = (data or {}).get("industryInfo") or {} if isinstance(data, dict) else {}
+        info = self._quote(symbol).get("industryInfo") or {}
         path = []
         for k in ("macro", "sector", "industry", "basicIndustry"):
             v = str(info.get(k) or "").strip()
@@ -195,8 +207,7 @@ class NSEFilings:
 
     def last_price(self, symbol: str) -> float | None:
         """The exchange's own last traded price, for checking StratLab's prices against the source."""
-        data = self._get("/api/quote-equity", {"symbol": symbol})
-        info = (data or {}).get("priceInfo") or {} if isinstance(data, dict) else {}
+        info = self._quote(symbol).get("priceInfo") or {}
         try:
             return float(info.get("lastPrice")) or None
         except (TypeError, ValueError):

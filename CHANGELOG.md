@@ -4,6 +4,13 @@
 
 ### Checking the data at scale (admin)
 - **Data audit:** Admin → Data audit runs every company in a set (NIFTY 50, NIFTY Bank, the liquid F&O stocks, or every sector's main stocks, about 180) through the deep dive on the live server, with no AI. Each company's P/E is recomputed from market cap and trailing profit, trailing revenue is checked against the last four quarters, the last close against the exchange's own price, and profit, margins and capex for impossible values; missing industry, valuation, checklist answers, presentations and transcripts are listed as gaps, and optionally whether each document can actually be read. Results by area, a CSV download, and the last run kept across restarts.
+- **Fixes from the first audit (about 180 companies):**
+  - Call transcripts and presentations that a company's filing links to on a CDN or a separate investor site are now read (still only public addresses, size-capped, PDFs only); a letter that points to an investor web page has that page opened and its matching PDF read.
+  - The exchange's own quote is now asked for the way its quote page asks, so the price check and the industry fallback work from the server.
+  - Companies whose consolidated accounts are new (a subsidiary set up recently) show their longer standalone history, with a note saying so. Renamed symbols are looked up (Tata Motors → TMPV in the ready-made groups).
+  - When a group's net profit includes minority shareholders' share or one-off gains (Bajaj Finserv, Grasim, Siemens and others), the deep dive says so and shows earnings per share growth.
+  - Loss-making companies say why there's no P/E; P/B is worked out from the balance sheet when the page has no book value.
+  - The audit no longer flags real but unusual years (a loss bigger than sales, profit above sales from other income), and reports one exchange refusal instead of one per company.
 - **International cards in the payments check:** Check payments setup now says whether Razorpay takes cards issued outside India (or where to look when Razorpay's answer doesn't say) and which currencies the plans are priced in.
 
 ### Built around what you came for

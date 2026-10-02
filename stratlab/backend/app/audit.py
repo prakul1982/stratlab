@@ -9,7 +9,8 @@ from . import db, sector_members, universes
 
 KEY = "audit:last"
 MAX_SYMBOLS = 300
-PE_TOLERANCE = 0.15            # our P/E from market cap and trailing profit vs the page's stated P/E
+PE_TOLERANCE = 0.25            # our P/E from market cap and trailing profit vs the page's stated P/E (minority
+                               # shares and one-offs beyond this are explained on the page by a note)
 TTM_TOLERANCE = 0.05           # trailing-year revenue vs the last four quarters added up
 PRICE_TOLERANCE = 0.03         # prices from different sources, allowing for a day's move
 
@@ -72,19 +73,18 @@ def check_numbers(p: dict, nums: dict, snap: dict) -> list[dict]:
     if missing:
         out.append(_issue("gap", "Numbers", f"Revenue or profit missing for {', '.join(missing[:4])}"))
     if not nums.get("bank"):
-        above = [y["year"] for y in years if y.get("sales") and y.get("profit") is not None and y["profit"] > y["sales"]]
-        if above:
-            out.append(_issue("mismatch", "Numbers", f"Profit above revenue in {', '.join(above[:4])}"))
-        odd = [y["year"] for y in years if y.get("opm") is not None and not -100 <= y["opm"] <= 100]
+        # a margin below -100% (a loss bigger than sales) or profit above sales (other income) happen; above 100% can't
+        odd = [y["year"] for y in years if y.get("opm") is not None and y["opm"] > 100]
         if odd:
-            out.append(_issue("mismatch", "Numbers", f"Operating margin outside -100% to 100% in {', '.join(odd[:4])}"))
+            out.append(_issue("mismatch", "Numbers", f"Operating margin above 100% in {', '.join(odd[:4])}"))
         if len(years) >= 3 and all(y.get("capex") is None for y in years[-3:]):
             out.append(_issue("gap", "Capex", "No capex estimate for the last three years"))
     ttm = _last_ttm(p.get("pl"), "Net Profit")
     if snap.get("pe") and snap.get("market_cap_cr") and ttm and ttm > 0:
         ours = snap["market_cap_cr"] / ttm
         off = _off(ours, snap["pe"])
-        if off is not None and off > PE_TOLERANCE:
+        explained = any("P/E is based on" in n for n in nums.get("notes") or [])
+        if off is not None and off > PE_TOLERANCE and not explained:
             out.append(_issue("mismatch", "Valuation", f"P/E {snap['pe']:.1f} on the company page, {ours:.1f} from market cap ÷ trailing profit"))
     ttm_sales = _last_ttm(p.get("pl"), "Sales", "Revenue")
     q = [x.get("sales") for x in (nums.get("quarters") or [])[-4:]]
@@ -115,8 +115,8 @@ def check_view(view: dict) -> list[dict]:
     ind = cl.get("industry") or {}
     if not ind.get("path"):
         out.append(_issue("gap", "Industry", f"No industry classification; treated as {ind.get('label') or 'a general business'}"))
-    if (view.get("valuation") or {}).get("value") is None:
-        v = view.get("valuation") or {}
+    v = view.get("valuation") or {}
+    if v.get("value") is None and "made a loss" not in (v.get("why") or ""):
         out.append(_issue("gap", "Valuation", f"No {v.get('short') or 'valuation'} figure"))
     na = [c["label"] for c in cl.get("checks", []) if c.get("state") == "na"]
     if len(na) >= 3:
@@ -150,6 +150,29 @@ def check_documents(docs: list[dict], read) -> list[dict]:
     return out
 
 
+class Skipped(Exception):
+    pass
+
+
+class Breaker:
+    """Stops calling a source after it has failed `limit` times in a row (the same refusal on every company is one
+    finding, not two hundred); later calls raise Skipped."""
+
+    def __init__(self, fn, limit: int = 3):
+        self.fn, self.limit, self.fails = fn, limit, 0
+
+    def __call__(self, *a):
+        if self.fails >= self.limit:
+            raise Skipped()
+        try:
+            out = self.fn(*a)
+        except Exception:
+            self.fails += 1
+            raise
+        self.fails = 0
+        return out
+
+
 def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None) -> dict:
     """One company, start to finish. Each source failing shows up as an error row, never stops the run."""
     t0 = time.monotonic()
@@ -164,12 +187,14 @@ def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None) ->
         if exchange_price:
             try:
                 ex = exchange_price(sym)
+            except Skipped:
+                ex = None
             except Exception as e:
                 issues.append(_issue("error", "Prices", f"Exchange price unavailable: {str(e)[:120]}"))
         issues += check_prices(view.get("snapshot") or {}, base.get("trend"), ex)
         issues += check_view(view)
         if read and view.get("documents"):
-            issues += check_documents(view["documents"], read)
+            issues += check_documents(view["documents"], lambda c, pr: read(c, pr, base["p"]))
     except Exception as e:
         d = getattr(e, "detail", None)          # an HTTP error from a data source carries its message here
         msg = d.get("message") if isinstance(d, dict) else d if isinstance(d, str) else str(e)

@@ -1,3 +1,4 @@
+import httpx
 import pytest
 
 from app.config import settings
@@ -141,3 +142,23 @@ def test_search_quotes_chart_indices_headlines(research):
     assert [i["name"] for i in idx] == ["NIFTY 50", "SENSEX", "NIFTY BANK"] and idx[0]["from_high_pct"] <= 0
     assert research.headlines("US")[0]["source"] == "Reuters"
     assert research.headlines("IN")[0]["source"] == "Economic Times"
+
+
+def test_screener_follows_a_renamed_symbol():
+    def handler(req: httpx.Request):
+        if req.url.path == "/api/company/search/":
+            return httpx.Response(200, json=[{"name": "Tata Motors Passenger Vehicles", "url": "/company/TMPV/consolidated/"}])
+        if req.url.path.startswith("/company/TMPV/"):
+            return httpx.Response(200, text=SCREENER_HTML)
+        return httpx.Response(404, text="<html>Not found</html>")
+    p = Screener(transport=httpx.MockTransport(handler)).company("TATAMOTORS")
+    assert p["url"] == "https://www.screener.in/company/TMPV/consolidated/" and p["basis"] == "consolidated"
+
+
+def test_screener_prefers_standalone_when_consolidated_history_is_short():
+    pl = lambda n: {"cols": [f"Mar {2026 - n + i}" for i in range(n)] + ["TTM"], "rows": {"Sales": [1] * (n + 1)}}
+    con, std = {"ratios": {"x": 1}, "pl": pl(4)}, {"ratios": {"x": 1}, "pl": pl(11)}
+    picked = scr._pick({"consolidated": con, "standalone": std})
+    assert picked["basis"] == "standalone" and "only go back 4 years" in picked["basis_note"]
+    assert scr._pick({"consolidated": {**con, "pl": pl(8)}, "standalone": std})["basis"] == "consolidated"
+    assert scr._pick({"consolidated": con})["basis"] == "consolidated"

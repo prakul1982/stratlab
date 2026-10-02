@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
 from .docs import pdf_links, quote_found, ranked_windows, windows
+from .intel.net import num
 
 KEEP = 7 * 86400              # a document read is reused for a week
 DOC_DAYS = 730                # filings searched for documents: two years
@@ -87,13 +88,43 @@ def numbers(p: dict) -> dict:
         quarters.append({"quarter": c, "sales": qs[i] if i < len(qs) else None, "profit": qp[i] if i < len(qp) else None,
                          "opm": qo[i] if i < len(qo) else None, "sales_yoy": round(yoy, 1) if yoy is not None else None})
     recent_capex = [y["capex"] for y in years[-3:] if y["capex"] is not None]
+    eps = _series(pl, "EPS")[:n]
+    notes = [p["basis_note"]] if p.get("basis_note") else []
+    note = profit_note(p)
+    if note:
+        notes.append(note)
     return {
         "years": years[-10:], "quarters": quarters[-12:],
         "growth": {"sales_cagr_3y": _cagr(sales, 3), "sales_cagr_5y": _cagr(sales, 5),
-                   "profit_cagr_3y": _cagr(profit, 3), "profit_cagr_5y": _cagr(profit, 5)},
+                   "profit_cagr_3y": _cagr(profit, 3), "profit_cagr_5y": _cagr(profit, 5),
+                   "eps_cagr_3y": _cagr(eps, 3), "eps_cagr_5y": _cagr(eps, 5)},
         "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None,
-        "unit": "₹ crore", "bank": bank,
+        "unit": "₹ crore", "bank": bank, "basis": p.get("basis"), "notes": notes,
     }
+
+
+def profit_note(p: dict) -> str | None:
+    """When the reported net profit and the earnings behind the P/E are far apart, say why: the group's net profit
+    includes the share belonging to minority shareholders of its subsidiaries, and one-off gains or losses."""
+    r = p.get("ratios") or {}
+    mcap, pe = num(r.get("Market Cap")), num(r.get("Stock P/E"))
+    pl = p.get("pl") or {}
+    cols = pl.get("cols") or []
+    if not (mcap and pe and pe > 0 and cols and str(cols[-1]).upper() == "TTM"):
+        return None
+    ttm = next((v[-1] for k, v in (pl.get("rows") or {}).items() if k.lower().startswith("net profit") and len(v) == len(cols)), None)
+    if not ttm or ttm <= 0:
+        return None
+    owners = mcap / pe
+    ratio = ttm / owners
+    if ratio > 1.25:
+        return (f"Net profit over the last 12 months (₹{ttm:,.0f} cr) is about {ratio:.1f}× the earnings the P/E is based on "
+                f"(₹{owners:,.0f} cr): it includes the share owned by minority shareholders of subsidiaries, or one-off gains. "
+                "Earnings per share growth shows what belongs to this company's shareholders.")
+    if ratio < 0.8:
+        return (f"Net profit over the last 12 months (₹{ttm:,.0f} cr) is well below the earnings the P/E is based on "
+                f"(₹{owners:,.0f} cr), usually because of one-off losses. Earnings per share growth is the cleaner guide.")
+    return None
 
 
 # ---------- which documents to read ----------
@@ -233,8 +264,9 @@ MAX_TRIES = 8                 # documents downloaded at most per read, looking f
 
 def readable(docs_api, candidates: list[dict], need: int, problems: list[str], hosts: tuple[str, ...] = ()) -> list[tuple[dict, str]]:
     """The first `need` candidates whose PDF holds real text. Exchange filings often attach only a one-page letter
-    under a "presentation" or "transcript" subject, many saying the document is on the company's website at a link:
-    that link is followed when it's a PDF on the company's own site (`hosts`); other letters are skipped."""
+    under a "presentation" or "transcript" subject, saying the document is on the company's website. A PDF link in
+    the letter is followed (on whatever site the company's own filing names, still only public addresses); a link to
+    an investor web page is opened and its matching PDF tried. Other letters are skipped."""
     out, short, notes, seen = [], 0, [], set()
     for d in candidates[:max(MAX_TRIES, need * 2)]:
         if len(out) >= need:
@@ -247,28 +279,61 @@ def readable(docs_api, candidates: list[dict], need: int, problems: list[str], h
         if len(text) >= MIN_CHARS:
             out.append((d, text))
             continue
-        links = [u for u in pdf_links(text) if u not in seen][:2]
-        got = None
-        for link in links:
-            seen.add(link)
-            try:
-                full = docs_api.text(link, extra_hosts=hosts)
-            except Exception as e:
-                notes.append(f"{d['at'][:10]}: the letter links to {link[:90]}, which couldn't be read ({str(e)[:70]})")
-                continue
-            if len(full) >= MIN_CHARS:
-                got = ({**d, "url": link, "via": d["url"]}, full)
-                break
+        got, tried = _follow(docs_api, d, text, hosts, seen, notes)
         if got:
             out.append(got)
         else:
             short += 1
-            if not links:
+            if not tried:
                 notes.append(f"{d['at'][:10]}: a {len(text):,}-character letter with no link to the document")
     if short and len(out) < need:
         problems.append(f"{short} filing{'s' if short > 1 else ''} held only a short letter, not the document itself")
         problems += notes[:4]
     return out
+
+
+def _follow(docs_api, d: dict, letter: str, hosts: tuple[str, ...], seen: set, notes: list[str]):
+    """The document a short letter points to: its PDF links first, then PDFs on the web pages it links to."""
+    from .docs import host_of, page_pdfs, web_links
+
+    def named(url):                  # the company's own filing names this site, so it may be read
+        h = host_of(url)
+        return hosts + ((h,) if h else ())
+
+    def attempt(link, via_page=None):
+        seen.add(link)
+        try:
+            full = docs_api.text(link, extra_hosts=named(via_page or link) + named(link))
+        except Exception as e:
+            notes.append(f"{d['at'][:10]}: the letter links to {link[:90]}, which couldn't be read ({str(e)[:70]})")
+            return None
+        if len(full) >= MIN_CHARS:
+            return ({**d, "url": link, "via": d["url"]}, full)
+        return None
+
+    pdfs = [u for u in pdf_links(letter) if u not in seen][:2]
+    for link in pdfs:
+        got = attempt(link)
+        if got:
+            return got, True
+    pages = [u for u in web_links(letter) if u not in seen][:2]
+    for page in pages:
+        seen.add(page)
+        if not hasattr(docs_api, "page"):
+            continue
+        try:
+            html = docs_api.page(page, extra_hosts=named(page))
+        except Exception as e:
+            notes.append(f"{d['at'][:10]}: the letter points to the page {page[:90]}, which couldn't be opened ({str(e)[:70]})")
+            continue
+        found = [u for u in page_pdfs(html, page, d.get("kind")) if u not in seen][:2]
+        if not found:
+            notes.append(f"{d['at'][:10]}: the page {page[:90]} it points to has no matching PDF")
+        for link in found:
+            got = attempt(link, via_page=page)
+            if got:
+                return got, True
+    return None, bool(pdfs or pages)
 
 
 def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int, start: int = 1) -> tuple[str, dict, dict]:

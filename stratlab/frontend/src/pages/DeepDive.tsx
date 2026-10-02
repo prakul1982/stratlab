@@ -25,8 +25,9 @@ export interface DeepView {
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
   industry_measures?: { key: string; label: string | null; measures: string[] };
   valuation?: { name: string; short: string; value: number | null; pe: number | null; why: string };
-  numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean;
-    growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null } };
+  numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean; notes?: string[];
+    growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null;
+      eps_cagr_3y?: number | null; eps_cagr_5y?: number | null } };
   reads: null | {
     at: string; problems: string[]; read: { kind: string; at: string; title: string }[];
     business: null | { summary: string; customers: string; drivers: string[]; strengths: string[]; risks: string[]; measures?: Measure[]; industry?: string | null;
@@ -187,7 +188,9 @@ export function DeepDivePage() {
             <div className="stat-row">
               <Stat label="Sales growth a year, last 3 years" v={n.growth.sales_cagr_3y} /><Stat label="Sales growth a year, last 5 years" v={n.growth.sales_cagr_5y} />
               <Stat label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} /><Stat label="Profit growth a year, last 5 years" v={n.growth.profit_cagr_5y} />
+              {n.growth.eps_cagr_5y != null && <Stat label="Earnings per share growth a year, last 5 years" v={n.growth.eps_cagr_5y} />}
             </div>
+            {(n.notes ?? []).map((t) => <p key={t} className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>{t}</p>)}
             <div className="rs-grid">
               <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.sales as number }))} label="Sales" unit={n.unit} />
               <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.profit as number }))} label="Net profit" unit={n.unit} tone="blue" />

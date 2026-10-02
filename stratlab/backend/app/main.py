@@ -1649,9 +1649,8 @@ def admin_filings_check(symbol: str = "RELIANCE", _=Depends(admin.admin_profile)
 audit_runner = audit.Runner()
 
 
-def audit_one(sym: str, docs: bool) -> dict:
-    exchange = getattr(filings_feed, "last_price", None)
-    read = (lambda cands, probs: deepdive.readable(deep_docs, cands, 1, probs)) if docs else None
+def audit_one(sym: str, docs: bool, exchange=None) -> dict:
+    read = (lambda cands, probs, p: deepdive.readable(deep_docs, cands, 1, probs, company_hosts(p))) if docs else None
     row = audit.audit_company(sym, deep_base, deep_view, exchange, read)
     for i in row["issues"]:
         i["detail"] = public_text(i["detail"])
@@ -1675,7 +1674,8 @@ def admin_audit_start(req: AuditReq, _=Depends(admin.admin_profile)):
     syms = [research_routes.symbol_of(s) for s in syms]
     label = f"{len(syms)} chosen companies" if req.symbols else next((s["name"] for s in audit.sets() if s["id"] == req.set), req.set)
     try:
-        return {**audit_runner.start(syms, label, lambda s: audit_one(s, req.docs), req.docs), "sets": audit.sets()}
+        exchange = audit.Breaker(filings_feed.last_price) if hasattr(filings_feed, "last_price") else None
+        return {**audit_runner.start(syms, label, lambda s: audit_one(s, req.docs, exchange), req.docs), "sets": audit.sets()}
     except RuntimeError as e:
         err(409, "audit_running", str(e))
 

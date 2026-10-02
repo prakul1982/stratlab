@@ -246,14 +246,41 @@ def test_a_letter_pointing_to_the_company_website_is_followed():
     assert got and got[0][0]["url"].startswith("https://www.apollohospitals.com/") and got[0][0]["via"].endswith("l1.pdf")
     assert "margin of 24%" in got[0][1] and problems == []
     assert "margin of 24%" in d.text("https://www.apollohospitals.com/old.pdf", ("apollohospitals.com",))   # redirect within the site
-    # without the company's site allowed, or to a host that isn't public, the link isn't fetched
-    assert deepdive.readable(d, cands, 1, [], ()) == []
+    # a site the company's own filing names (a CDN, a separate investor site) is read too, but never a private address
+    assert deepdive.readable(d, cands, 1, [], ())
+    probs = []
+    docs._cache.clear()                                    # downloaded text is cached by link
+    assert deepdive.readable(docs.Docs(transport=httpx.MockTransport(handler), check_host=lambda h: False), cands, 1, probs, ()) == []
+    assert "isn't reachable from here" in " ".join(probs)
     blocked = docs.Docs(transport=httpx.MockTransport(handler), check_host=lambda h: False)
     with pytest.raises(SourceError):
         blocked.text("https://www.apollohospitals.com/x.pdf", ("apollohospitals.com",))
     assert not docs.allowed("https://evil.example.com/x.pdf", ("apollohospitals.com",))
     assert not docs.allowed("https://apollohospitals.com.evil.io/x.pdf", ("apollohospitals.com",))
     assert not docs.public_host("127.0.0.1") and not docs.public_host("10.0.0.5")
+
+
+def test_a_letter_pointing_to_an_investor_page_finds_the_pdf_there():
+    pdf = make_pdf(["Transcript of the Q1 FY27 earnings call."] + ["CFO: We expect EBITDA margin of 24% in FY27."] * 80)
+    letter = make_pdf(["Dear Sir, the transcript is available on our website at", "www.acme.co.in/investors/calls"])
+    page = """<html><a href="/files/annual-report-2026.pdf">Annual report</a>
+      <a href="https://cdn.acme-files.net/q1fy27/earnings-call-transcript.pdf">Q1 FY27 Earnings call transcript</a></html>"""
+    seen = []
+
+    def handler(r):
+        seen.append(str(r.url))
+        if r.url.host == "www.acme.co.in":
+            return httpx.Response(200, text=page)
+        if r.url.host == "cdn.acme-files.net":
+            return httpx.Response(200, content=pdf)
+        return httpx.Response(200, content=letter)
+    d = docs.Docs(transport=httpx.MockTransport(handler), check_host=lambda h: True)
+    cands = [{"kind": "transcript", "at": "2026-08-19", "title": "Con. Call Updates", "url": "https://nsearchives.nseindia.com/l2-page.pdf"}]
+    got = deepdive.readable(d, cands, 1, [], ())
+    assert got and got[0][0]["url"] == "https://cdn.acme-files.net/q1fy27/earnings-call-transcript.pdf"
+    assert "https://www.acme.co.in/investors/calls" in seen and not any("annual-report" in u for u in seen)
+    assert docs.page_pdfs(page, "https://www.acme.co.in/x", "presentation")[0].endswith("annual-report-2026.pdf")   # no match: page order
+    assert docs.web_links("see www.acme.co.in/investors. Email ir@acme.co.in or https://x.co/a.pdf") == ["https://www.acme.co.in/investors"]
 
 
 def test_rupee_sign_is_put_back():
