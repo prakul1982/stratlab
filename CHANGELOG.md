@@ -9,6 +9,7 @@
 - **The home page is grouped by goal** (find stocks, understand a company, test an idea, trade with fake money) instead of a wall of equal cards.
 - **Search understands investor questions:** "deep dive Apollo Hospitals", "which sectors are leading?", "red flags in my watchlist", "Stage 2 stocks in NIFTY 50" and "compare TCS and Infosys" open the right page directly.
 - **Placeholders show real examples,** rotating every few seconds and matched to what you came for, instead of "Search…".
+- **The landing page speaks to both:** "Know the company. Test the idea.", with For investors and For traders buttons, the research and investor sections moved up to follow the opening, a card on industry measures and valuation, and a page title and link preview that cover investing too.
 - **The next step where you need it:** a Deep dive link on every scan result and every red-flag company; on a company page, Deep dive comes first for investors.
 
 ## September 2026

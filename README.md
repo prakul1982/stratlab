@@ -206,7 +206,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/landing-dark.png">
-  <img alt="The landing page: 'Is your trading idea real, or just lucky?', with an example idea, the rules StratLab reads from it, and its verdict" src="docs/images/landing-light.png">
+  <img alt="The landing page: 'Know the company. Test the idea.', for investors and traders, with an example idea, the rules StratLab reads from it, and its verdict" src="docs/images/landing-light.png">
 </picture>
 
 <sub>Screenshots use synthetic sample prices, not real market data.</sub>
