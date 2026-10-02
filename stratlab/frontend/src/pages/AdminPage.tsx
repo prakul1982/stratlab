@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly, money } from "../lib/format";
 import { Loading, Modal } from "../components/ui";
+import { AuditPanel } from "../components/AuditPanel";
 
 type Plan = "free" | "basic" | "pro";
 type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quick_rank?: number | null; research_rank?: number | null };
@@ -81,6 +82,7 @@ function PlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: () => v
 interface BillingCheck {
   key_id: string; mode: string; secret_length: number; webhook_secret_set: boolean; keys_ok: boolean; keys_error: string | null;
   plans: { label: string; id: string | null; ok: boolean; detail: string | null }[];
+  international?: { enabled: boolean | null; detail: string }; currencies?: string[];
 }
 
 interface ReportedRow {
@@ -252,6 +254,8 @@ export function AdminPage() {
                       detail={billingCheck.keys_ok ? `Razorpay accepts key ${billingCheck.key_id}` : `Key ${billingCheck.key_id}, secret ${billingCheck.secret_length} characters: ${billingCheck.keys_error}. Regenerate the key in Razorpay and paste BOTH the new Key ID and secret into Railway.`} />
                     {billingCheck.plans.map((p) => <Status key={p.label} ok={p.ok} warn={!p.id} label={p.label} detail={p.detail ?? ""} />)}
                     <Status ok={billingCheck.webhook_secret_set} label="Webhook secret" detail={billingCheck.webhook_secret_set ? "Set" : "RAZORPAY_WEBHOOK_SECRET is missing"} />
+                    {billingCheck.international && <Status ok={billingCheck.international.enabled === true} warn={billingCheck.international.enabled !== false}
+                      label="International cards" detail={`${billingCheck.international.detail}${billingCheck.currencies?.length ? ` Plans are priced in ${billingCheck.currencies.join(", ")}.` : ""}`} />}
                   </div>
                 )}
               </div>
@@ -272,6 +276,8 @@ export function AdminPage() {
               </div>
             </section>
           </div>
+
+          <AuditPanel />
 
           {!!sv?.recent_errors?.length && (
             <section className="card stack" style={{ gap: 12 }}>

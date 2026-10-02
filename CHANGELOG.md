@@ -2,6 +2,10 @@
 
 ## October 2026
 
+### Checking the data at scale (admin)
+- **Data audit:** Admin → Data audit runs every company in a set (NIFTY 50, NIFTY Bank, the liquid F&O stocks, or every sector's main stocks, about 180) through the deep dive on the live server, with no AI. Each company's P/E is recomputed from market cap and trailing profit, trailing revenue is checked against the last four quarters, the last close against the exchange's own price, and profit, margins and capex for impossible values; missing industry, valuation, checklist answers, presentations and transcripts are listed as gaps, and optionally whether each document can actually be read. Results by area, a CSV download, and the last run kept across restarts.
+- **International cards in the payments check:** Check payments setup now says whether Razorpay takes cards issued outside India (or where to look when Razorpay's answer doesn't say) and which currencies the plans are priced in.
+
 ### Built around what you came for
 - **One question at the start: investing, trading or both.** It sets what the menu, the home page and the examples show first; nothing is hidden, and it can be changed on the Account page. People who already answered the experience question are asked this once.
 - **An investor home page:** "Which company do you want to look into?" with the company search, popular names, and four starting questions (leading sectors, Stage 2 stocks in NIFTY 50, red flags, the watchlist at a glance). Notebooks move to their own page for investors.

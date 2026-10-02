@@ -210,6 +210,12 @@ class ScanAlertReq(BaseModel):
     on: bool
 
 
+class AuditReq(BaseModel):
+    set: str = Field("nifty50", max_length=40)
+    symbols: list[str] = Field(default_factory=list, max_length=300)
+    docs: bool = False
+
+
 class PromoReq(BaseModel):
     days: int = Field(10, ge=1, le=90)
 
