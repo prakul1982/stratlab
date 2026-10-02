@@ -6,14 +6,14 @@ import { dateOnly } from "../lib/format";
 import { LegalLinks } from "./LegalPage";
 import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
-import { LEVELS } from "../components/LevelPrompt";
+import { FOCUSES, LEVELS } from "../components/LevelPrompt";
 import { PhoneCard } from "../components/PhoneCard";
 import { Block } from "../components/More";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
 export function AccountPage() {
-  const { me, fail, notify, refreshMe, level, setLevel } = useApp();
+  const { me, fail, notify, refreshMe, level, setLevel, focus, setFocus } = useApp();
   const feats = me?.plan_info.features;
   const canReport = feats ? !!feats.daily_report : true, canAlert = feats ? !!feats.alerts : true;
   const [alerts, setAlerts] = useState({ enabled: false, tg: "", email: "", daily: true });
@@ -148,6 +148,14 @@ export function AccountPage() {
         </section>
 
         <PhoneCard />
+
+        <section className="card stack" style={{ gap: 12 }}>
+          <h2 className="h2">What you're here for</h2>
+          <div className="seg" role="radiogroup" aria-label="What you're here for" style={{ alignSelf: "flex-start" }}>
+            {FOCUSES.map(([f, title]) => <button key={f} role="radio" aria-checked={focus === f} aria-pressed={focus === f} onClick={() => setFocus(f)}>{title}</button>)}
+          </div>
+          {focus && <p className="small muted">{FOCUSES.find(([f]) => f === focus)?.[2]} This sets what the menu and home page show first.</p>}
+        </section>
 
         <section className="card stack" style={{ gap: 12 }}>
           <h2 className="h2">Experience</h2>

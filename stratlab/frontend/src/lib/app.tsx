@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
-import type { Level, Market, Me, NotebookItem } from "./types";
+import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
@@ -21,6 +21,9 @@ interface AppState {
   isPro: boolean;
   level: Level | null;
   setLevel: (l: Level) => Promise<void>;
+  /** What the user came for. Orders the menu, the home page and the examples; never hides anything. */
+  focus: Focus | null;
+  setFocus: (f: Focus) => Promise<void>;
   theme: "light" | "dark" | "system";
   setTheme: (t: "light" | "dark" | "system") => void;
 }
@@ -99,10 +102,16 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     try { await api("/me/prefs", { method: "PUT", body: { level: l } }); } catch (e) { fail(e); }
   }, [fail]);
 
+  const setFocus = useCallback(async (f: Focus) => {
+    setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), focus: f } } : m));
+    try { await api("/me/prefs", { method: "PUT", body: { focus: f } }); } catch (e) { fail(e); }
+  }, [fail]);
+
   const value = useMemo<AppState>(() => ({
     session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
-    isPro: !!me?.plan_info.pro_features, level: me?.prefs?.level ?? null, setLevel, theme, setTheme,
-  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, theme, setTheme]);
+    isPro: !!me?.plan_info.pro_features, level: me?.prefs?.level ?? null, setLevel,
+    focus: me?.prefs?.focus ?? null, setFocus, theme, setTheme,
+  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, theme, setTheme]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

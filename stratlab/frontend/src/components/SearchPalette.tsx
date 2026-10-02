@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { match, resolve } from "../lib/features";
+import { askExamples, useRotating } from "../lib/rotating";
 import type { Experiment, Instrument, Notebook } from "../lib/types";
 import { buildIdea, findInstrument } from "./IdeaComposer";
 import { Book, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
@@ -17,12 +18,33 @@ const HISTORY = { "1d": 1825, "1h": 365 } as Record<string, number>;
 
 const LAST_MARKET = "stratlab.lastMarket";
 const lastMarket = () => { try { return localStorage.getItem(LAST_MARKET) || "IN"; } catch { return "IN"; } };
+/** Investor phrasings that should open a page directly, before any AI guessing. `name` is a company to look up. */
+type Intent = { title: string; sub: string; to?: string; deep?: string; compare?: [string, string] };
+export function intentFor(q: string): Intent | null {
+  const t = q.trim();
+  let m = t.match(/^(?:deep ?dive|deepdive)(?:\s+(?:on|of|into|for))?\s+(.+)$/i) || t.match(/^(.+?)\s+deep ?dive$/i);
+  if (m) return { title: `Deep dive: ${m[1]}`, sub: "Its business, 10 years of numbers, capex plans and whether management delivered", deep: m[1] };
+  m = t.match(/^compare\s+(.+?)\s+(?:and|vs\.?|versus|with)\s+(.+)$/i);
+  if (m) return { title: `Compare ${m[1]} and ${m[2]}`, sub: "Side by side, with an AI read", compare: [m[1], m[2]] };
+  if (/\bsector(s)?\b.*\b(lead|leading|rotat|strong|weak|lagging|improving)|sector rotation/i.test(t))
+    return { title: "Sector rotation", sub: "Which sectors lead, weaken, lag or improve against the market", to: "/research/rotation" };
+  if (/red flags?|\bqip\b|pledge|fund ?raise|auditor resign/i.test(t))
+    return { title: "Red flags in your watchlist", sub: "Fund raises, pledges, resignations and defaults filed in the last 3 months", to: "/research/filings" };
+  if (/stage ?(2|two)|supertrend|\bst ?s2\b/i.test(t))
+    return { title: "Stage 2 + Supertrend scan", sub: "Which stocks are in Stage 2 with the Supertrend up",
+             to: /nifty ?50/i.test(t) ? "/research/scan?set=nifty50" : /bank ?nifty/i.test(t) ? "/research/scan?set=banknifty" : "/research/scan" };
+  if (/investor home|my watchlist|my portfolio|watchlist overview/i.test(t))
+    return { title: "Investor home", sub: "Every watchlist company: trend, sector, red flags, checklist", to: "/research/investor" };
+  return null;
+}
+
 const isQuestion = (q: string) => /\?|^(what|which|how|why|best|good|suggest|give|show|find|any)\b|\b(ideas?|strateg(y|ies) for|suggestions?)\b/i.test(q.trim());
 const looksLikeCode = (q: string) => /\n.*\n/.test(q) || /(\/\/@version|strategy\(|def |import |=>|\{[\s\S]*"entry")/.test(q);
 
 /** One box for everything: a stock, an idea, a question, a feature's name or a pasted script. Opens with Ctrl+K. */
 export function SearchPalette({ onClose }: { onClose: () => void }) {
-  const { notebooks, markets, fail, refreshMe, refreshNotebooks } = useApp();
+  const { notebooks, markets, fail, refreshMe, refreshNotebooks, focus } = useApp();
+  const example = useRotating(askExamples(focus));
   const [steps, setSteps] = useState<string[] | null>(null);
   const [answer, setAnswer] = useState<{ q: string; text: string; problem?: boolean } | null>(null);
   const nav = useNavigate();
@@ -38,6 +60,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const text = q.trim();
   const words = text.split(/\s+/).filter(Boolean).length;
   const code = looksLikeCode(q);
+  const intent = useMemo(() => (looksLikeCode(q) ? null : intentFor(q)), [q]);
 
   useEffect(() => { if (!steps) input.current?.focus(); }, [steps]);   // back to typing once the work is done
   useEffect(() => {
@@ -89,9 +112,26 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     go(`/n/${nb.id}/e/${out.experiment.v}`);
   };
 
+  const runIntent = async (it: Intent) => {
+    if (it.to) return go(it.to);
+    setSteps([it.deep ? `Finding ${it.deep}…` : "Finding both companies…"]);
+    try {
+      if (it.deep) {
+        const inst = await findInstrument(it.deep, "IN");
+        setSteps(null);
+        return go(inst && !inst.fno ? `/research/IN/${encodeURIComponent(inst.symbol)}/deep` : `/research?q=${encodeURIComponent(it.deep)}`);
+      }
+      const [a, b] = await Promise.all(it.compare!.map((n) => findInstrument(n, "IN")));
+      setSteps(null);
+      const qs = [a && `a=${encodeURIComponent(a.symbol)}`, b && `b=${encodeURIComponent(b.symbol)}`].filter(Boolean).join("&");
+      return go(`/research/compare?region=IN${qs ? "&" + qs : ""}`);   // a name that wasn't found is left for the user to pick
+    } catch (e) { setSteps(null); fail(e); }
+  };
+
   /** Work out what the line means, then do it. */
   const doIt = async () => {
     if (steps || !text) return;
+    if (intent) return runIntent(intent);
     setAnswer(null);
     setSteps(["Working out what you mean…"]);
     try {
@@ -122,13 +162,20 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const rows = useMemo(() => {
     const out: { group: string; items: Row[] }[] = [];
     if (!text) {
-      out.push({ group: "Try", items: [
-        { key: "t1", icon: <Sparkle size={18} />, title: "Test: buy NIFTY when RSI drops below 30, sell above 55", sub: "Builds the rules, runs the test, shows the verdict", run: () => setQ("Test: buy NIFTY when RSI drops below 30, sell above 55") },
-        { key: "t2", icon: <Sparkle size={18} />, title: "Paper trade a 20/50 EMA cross on Bitcoin", sub: "Builds it and starts paper trading", run: () => setQ("Paper trade a 20/50 EMA cross on Bitcoin with a 3% stop") },
-        { key: "t3", icon: <Compass size={18} />, title: "Momentum ideas for bank stocks", sub: "Ideas you can test in one click", run: () => setQ("momentum ideas for bank stocks") },
-        { key: "t4", icon: <Lens size={18} />, title: "What is a walk-forward test?", sub: "Ask anything about trading or StratLab", run: () => setQ("What is a walk-forward test?") },
-        { key: "t5", icon: <Lens size={18} />, title: "Research HDFC Bank", sub: "Open a company's numbers, news and AI read", run: () => setQ("Research HDFC Bank") },
-      ] });
+      const subs: Record<string, string> = {
+        "Deep dive Apollo Hospitals": "Business, 10 years of numbers, capex plans, management's record",
+        "Which sectors are leading right now?": "Sector rotation against the market",
+        "Red flags in my watchlist": "Fund raises, pledges, resignations, defaults",
+        "Stage 2 stocks in NIFTY 50": "The Stage 2 + Supertrend scan",
+        "Compare TCS and Infosys": "Side by side, with an AI read",
+        "Test: buy NIFTY when RSI drops below 30": "Builds the rules, runs the test, shows the verdict",
+        "Paper trade a 20/50 EMA cross on Bitcoin": "Builds it and starts paper trading",
+        "Short straddle on BANKNIFTY": "Opens options paper trading",
+        "What is a walk-forward test?": "Ask anything about investing, trading or StratLab",
+        "Momentum ideas for bank stocks": "Ideas you can test in one click",
+      };
+      out.push({ group: "Try", items: askExamples(focus).slice(0, 6).map((ex, n) => ({
+        key: `t${n}`, icon: intentFor(ex) ? <Lens size={18} /> : <Sparkle size={18} />, title: ex, sub: subs[ex], run: () => setQ(ex) })) });
       return out;
     }
     const act: Row[] = [];
@@ -141,6 +188,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       act.push({ key: "ideas", icon: <Compass size={18} />, title: thinking ? "Thinking of ideas…" : `Get strategy ideas for “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`,
         sub: "4 testable ideas, each one click from a verdict", run: () => { if (!thinking) getIdeas(); } });
     }
+    if (intent) act.unshift({ key: "intent", icon: <Lens size={18} />, title: intent.title, sub: intent.sub, run: () => { runIntent(intent); } });
     out.push({ group: "Do", items: act });
     if (ideas && ideasFor === text) out.push({ group: "Ideas", items: ideas.map((i, n) => ({
       key: `idea${n}`, icon: <Sparkle size={18} />, title: i.title, sub: `${i.symbol ? i.symbol + " · " : ""}${i.text}`, run: () => testIdea(i.text, i.market, i.symbol) })) });
@@ -165,7 +213,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, q, code, words, ideas, ideasFor, thinking, insts, notebooks, loc.pathname, steps]);
+  }, [text, q, code, words, ideas, ideasFor, thinking, insts, notebooks, loc.pathname, steps, intent, focus]);
 
   const flat = rows.flatMap((g) => g.items);
   useEffect(() => { setSel(0); setAnswer((a) => (a && a.q !== text ? null : a)); }, [text]);
@@ -185,7 +233,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         <div className="palette-in">
           <Sparkle size={20} />
           <textarea ref={input} rows={Math.min(6, Math.max(1, q.split("\n").length))} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={key}
-            placeholder="Type anything: test an idea, paper trade it, research a stock, ask a question…" aria-label="Search or ask anything" disabled={!!steps} />
+            placeholder={`Try: ${example}`} aria-label="Search or ask anything" disabled={!!steps} />
           <kbd className="small muted">Esc</kbd>
         </div>
         {steps && (

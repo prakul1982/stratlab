@@ -58,7 +58,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
         <span className="sr-only">Search {market.name}</span>
         <input autoFocus={autoFocus} value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
-          placeholder={PLACEHOLDER[market.id] ?? "Search…"} />
+          placeholder={PLACEHOLDER[market.id] ?? "Search by name or symbol"} />
         {results && (
           <div className="results">
             {results.length === 0 && <p className="small muted" style={{ padding: 14 }}>No matches in {market.name}.</p>}

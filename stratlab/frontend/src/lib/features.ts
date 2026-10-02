@@ -3,29 +3,43 @@
 export interface Feature {
   id: string; title: string; what: string; to: string; words: string; home?: boolean;
   state?: Record<string, unknown>; level?: "all" | "advanced";
+  /** Which goal it serves on the home page, grouped and ordered by what the user came for. */
+  goal?: Goal;
 }
+
+export type Goal = "find" | "understand" | "test" | "trade";
+export const GOALS: Record<Goal, { title: string; sub: string }> = {
+  find: { title: "Find stocks worth a look", sub: "What's strong, which sectors lead, and what to avoid." },
+  understand: { title: "Understand a company", sub: "The business, its numbers and whether management delivers." },
+  test: { title: "Test a trading idea", sub: "Honest results on years of real prices, after costs." },
+  trade: { title: "Trade it with fake money", sub: "Live prices, real fills, no real money at risk." },
+};
+export const GOAL_ORDER: Record<string, Goal[]> = {
+  invest: ["find", "understand", "test", "trade"], trade: ["test", "trade", "find", "understand"],
+  both: ["understand", "test", "find", "trade"],
+};
 
 export const FEATURES: Feature[] = [
   { id: "idea", title: "Test an idea", what: "Describe a strategy in plain words and get an honest verdict on years of real prices.", to: "/new",
-    words: "new notebook backtest test idea strategy rules describe plain english build", home: true },
+    words: "new notebook backtest test idea strategy rules describe plain english build", home: true, goal: "test" },
   { id: "research", title: "Research a company", what: "Price, key numbers, results, news and an AI read that ends with ideas to test.", to: "/research",
-    words: "company stock fundamentals analysis ai read valuation news research", home: true },
+    words: "company stock fundamentals analysis ai read valuation news research", home: true, goal: "understand" },
   { id: "group", title: "Test on a whole group", what: "Run one set of rules on NIFTY 50, F&O stocks, US mega caps, big coins or your own list.", to: "@market",
-    words: "group basket portfolio universe scanner momentum nifty 50 many stocks list", home: true },
+    words: "group basket portfolio universe scanner momentum nifty 50 many stocks list", home: true, goal: "test" },
   { id: "options", title: "Paper trade options", what: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask.", to: "/options",
-    words: "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o", home: true },
+    words: "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o", home: true, goal: "trade" },
   { id: "options_signal", title: "Options on your own signal", what: "Let a notebook's rules decide: long buys your structure, short buys its mirror.", to: "/options?enter=rules",
-    words: "options signal ema rsi rules trigger buy call put directional", home: true, level: "advanced" },
+    words: "options signal ema rsi rules trigger buy call put directional", home: true, level: "advanced", goal: "trade" },
   { id: "library", title: "Strategy library", what: "Rules other traders published with their honest verdicts. Copy one and re-test it.", to: "/library",
-    words: "library community shared strategies browse copy others public published marketplace", home: true },
+    words: "library community shared strategies browse copy others public published marketplace", home: true, goal: "test" },
   { id: "publish", title: "Publish to the library", what: "Share a strategy's rules with its verdict. From a verdict: Share verdict → Publish.", to: "@verdict",
     words: "publish library share rules community" },
   { id: "phone", title: "Install on your phone", what: "Put StratLab on your home screen and get trade alerts and the daily report as notifications.", to: "/account",
     words: "install app phone mobile home screen notifications push alerts pwa android iphone" },
   { id: "import", title: "Import a strategy", what: "Pine Script, Python, MetaTrader, AmiBroker, a config file or plain words.", to: "/import",
-    words: "import pine script tradingview python metatrader amibroker config json bot code upload", home: true },
+    words: "import pine script tradingview python metatrader amibroker config json bot code upload", home: true, goal: "test" },
   { id: "paper", title: "Paper trade", what: "Run rules live on real prices with fake money, until you stop them.", to: "/paper",
-    words: "paper trading live forward test sessions running fake money simulate", home: true },
+    words: "paper trading live forward test sessions running fake money simulate", home: true, goal: "trade" },
   { id: "risk", title: "All running sessions together", what: "Open value, today, total P&L, worst day and deepest fall across every paper session.", to: "/paper",
     words: "risk exposure portfolio overview all sessions combined drawdown worst day total pnl" },
   { id: "walkforward", title: "Walk-forward test", what: "Re-tune on the past, trade the next unseen stretch, repeat. On any verdict.", to: "@verdict",
@@ -39,21 +53,21 @@ export const FEATURES: Feature[] = [
   { id: "share", title: "Share a verdict", what: "A card from your phone or a public link. Your rules stay private.", to: "@verdict",
     words: "share link card image whatsapp twitter public verdict" },
   { id: "alerts", title: "Alerts and the daily report", what: "Telegram or email for each trade, and a report after the market closes.", to: "/account",
-    words: "alerts telegram email notifications daily report close", home: true },
-  { id: "themes", title: "Themes", what: "Map a sector and get a ranked shortlist.", to: "/research/themes", words: "themes sector industry shortlist ev defence banks" },
+    words: "alerts telegram email notifications daily report close", home: true, goal: "trade" },
+  { id: "themes", title: "Themes", what: "Map a sector and get a ranked shortlist.", to: "/research/themes", words: "themes sector industry shortlist ev defence banks", goal: "understand" },
   { id: "pulse", title: "Market pulse", what: "Index levels, headlines and today's mood.", to: "/research/pulse", words: "market pulse today news mood indices" },
-  { id: "rcompare", title: "Compare two companies", what: "Side by side, with an AI read.", to: "/research/compare", words: "compare companies versus vs" },
+  { id: "rcompare", title: "Compare two companies", what: "Side by side, with an AI read.", to: "/research/compare", words: "compare companies versus vs", home: true, goal: "understand" },
   { id: "watchlist", title: "Watchlist", what: "Companies you're keeping an eye on.", to: "/research/watchlist", words: "watchlist saved favourites" },
   { id: "scan", title: "Stage 2 + Supertrend scan", what: "Which stocks are in Stage 2 with the Supertrend up (ST S2), with a daily watchlist alert.", to: "/research/scan",
-    words: "scan screener stage 2 stage two supertrend st s2 weinstein signals alert", home: true },
+    words: "scan screener stage 2 stage two supertrend st s2 weinstein signals alert", home: true, goal: "find" },
   { id: "rotation", title: "Sector rotation", what: "Which sectors lead, weaken, lag or improve against the market. Click one to see its stocks.", to: "/research/rotation",
-    words: "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors", home: true },
+    words: "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors", home: true, goal: "find" },
   { id: "filings", title: "Filings and red flags", what: "Fund raises (QIP), pledges, resignations and defaults your watchlist companies filed, with an evening alert.", to: "/research/filings",
-    words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true },
-  { id: "deepdive", title: "Company deep dive", what: "Growth, margins, capex and cash for an Indian company, plus its business model and plans read from its own presentations and calls.", to: "/research",
-    words: "deep dive business model segments capex capacity expansion growth margins cash flow free cash flow presentation concall transcript management guidance report card promises checklist deck slides powerpoint pptx" },
+    words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true, goal: "find" },
+  { id: "deepdive", title: "Company deep dive", what: "Open any Indian company, then Deep dive: 10 years of numbers, its business, capex plans and whether management delivered.", to: "/research",
+    words: "deep dive business model segments capex capacity expansion growth margins cash flow free cash flow presentation concall transcript management guidance report card promises checklist deck slides powerpoint pptx", home: true, goal: "understand" },
   { id: "investor", title: "Investor home", what: "Every India watchlist company on one page: trend, sector, red flags, checklist and management's track record.", to: "/research/investor",
-    words: "investor home dashboard watchlist checklist report card management track record long term", home: true },
+    words: "investor home dashboard watchlist checklist report card management track record long term", home: true, goal: "find" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },
   { id: "account", title: "Account and connection check", what: "Your plan, usage and a check of every data and AI service.", to: "/account",
     words: "account settings usage connection check theme" },

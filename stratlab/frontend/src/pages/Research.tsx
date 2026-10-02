@@ -104,7 +104,7 @@ export function CompanyPage() {
   const { region: r = "IN", symbol = "" } = useParams();
   const region: Region = r.toUpperCase() === "US" ? "US" : "IN";
   const sym = symbol.toUpperCase();
-  const { fail } = useApp();
+  const { fail, focus } = useApp();
   const test = useTestOnStratLab();
   const [c, setC] = useState<Company | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -139,10 +139,11 @@ export function CompanyPage() {
           <Change q={c.quote} currency={ccy} />
         </div>
         <div className="toolbar">
-          {c.testable && <button className="btn blue sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
+          {region === "IN" && focus === "invest" && <Link className="btn blue sm" to={`/research/IN/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
+          {c.testable && <button className={`btn ${focus === "invest" && region === "IN" ? "outline" : "blue"} sm`} onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
+          {region === "IN" && focus !== "invest" && <Link className="btn outline sm" to={`/research/IN/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
-          {region === "IN" && <Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
           {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
           {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
         </div>
@@ -401,7 +402,7 @@ export function ComparePage() {
   const Pick = ({ k, v }: { k: "a" | "b"; v: string }) => (
     <div className="stack" style={{ gap: 6, flex: "1 1 260px" }}>
       <span className="label">{k === "a" ? "First company" : "Second company"}{v && <b style={{ marginLeft: 8 }}>{v}</b>}</span>
-      <CompanySearch region={region} onPick={(s) => setSide(k, s)} placeholder={v ? `Change ${v}…` : "Search…"} />
+      <CompanySearch region={region} onPick={(s) => setSide(k, s)} placeholder={v ? `Change ${v}…` : k === "a" ? "First company, e.g. TCS" : "Second company, e.g. Infosys"} />
     </div>
   );
   const rows = (c: Company) => Object.fromEntries(c.metrics.flatMap((g) => g.items.map((i) => [i.label, i])));
@@ -498,7 +499,7 @@ export function ScanPage() {
   const { fail, notify, refreshNotebooks, me } = useApp();
   const nav = useNavigate();
   const [sets, setSets] = useState<ScanSets | null>(null);
-  const [setId, setSetId] = useState("watchlist");
+  const [setId, setSetId] = useState(() => new URLSearchParams(window.location.search).get("set") || "watchlist");
   const [out, setOut] = useState<ScanOut | null>(null);
   const [busy, setBusy] = useState(false);
   const [only, setOnly] = useState(false);
@@ -575,7 +576,8 @@ export function ScanPage() {
               <thead><tr><th>Stock</th><th className="num">Price</th><th>Stage</th><th>Supertrend</th><th>Signal</th></tr></thead>
               <tbody>{rows.map((r) => (
                 <tr key={r.id}>
-                  <td><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.symbol}</Link>{r.name && r.name !== r.symbol && <div className="tiny muted">{r.name}</div>}</td>
+                  <td><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.symbol}</Link>{r.name && r.name !== r.symbol && <div className="tiny muted">{r.name}</div>}
+                    {region === "IN" && <Link className="link tiny" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link>}</td>
                   <td className="num">{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}<div className={`tiny ${signClass(r.chg)}`}>{r.chg == null ? "" : pct(r.chg, 2)}</div></td>
                   <td>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <div className="tiny muted">{r.stage_days} day{r.stage_days === 1 ? "" : "s"}</div> : null}</td>
                   <td>{r.st_up ? "Up" : "Down"}<div className="tiny muted">for {r.st_days} day{r.st_days === 1 ? "" : "s"}</div></td>
@@ -784,7 +786,10 @@ export function FilingsPage() {
             {data.rows.map((r) => (
               <section key={r.symbol} className="card stack" style={{ gap: 10 }}>
                 <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
-                  <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
+                  <span className="row" style={{ gap: 12 }}>
+                    <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
+                    <Link className="link tiny" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link>
+                  </span>
                   <SummaryLine s={r.summary} />
                 </div>
                 {r.flags.length > 0 ? <div className="filings">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>

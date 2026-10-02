@@ -247,7 +247,7 @@ export function NotebookPage() {
             <span className="small muted" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>
           </div>
           <AutoGrow className="question" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
-            placeholder="What are you trying to find out?" onChange={(e) => patch({ question: e.target.value })} />
+            placeholder="The question you want answered, e.g. Does buying NIFTY on RSI dips beat just holding it?" onChange={(e) => patch({ question: e.target.value })} />
           <div className="row" style={{ gap: 10 }}>
             <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`} aria-label={group ? `Testing on the group ${group.name}. Change it` : inst ? `Testing on ${inst.symbol}. Change market or instrument` : "Pick what to test it on"}>
               <span className="eyebrow" style={{ fontSize: 11 }}>{inst || group ? "Testing on" : "Not chosen yet"}</span>

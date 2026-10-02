@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
+import { useRotating } from "../lib/rotating";
 import { ago, pct, price, priceAxis, safeHref, signClass } from "../lib/format";
 import {
   bandPosition, metricText, ordinal, researchApi, trendValue, useWatchlist,
@@ -38,6 +39,8 @@ export function ResearchNav({ region, setRegion }: { region: Region; setRegion?:
 export function CompanySearch({ region, autoFocus, onPick, placeholder }: {
   region: Region; autoFocus?: boolean; onPick?: (symbol: string) => void; placeholder?: string;
 }) {
+  const example = useRotating(region === "IN" ? ["Apollo Hospitals", "HDFC Bank", "Titan", "Tata Motors", "Polycab", "Dixon"]
+    : ["Nvidia", "Apple", "Costco", "Vertiv", "Eli Lilly"], 3200);
   const nav = useNavigate();
   const { fail } = useApp();
   const [q, setQ] = useState("");
@@ -71,7 +74,7 @@ export function CompanySearch({ region, autoFocus, onPick, placeholder }: {
           else if (e.key === "ArrowDown" && rows) { e.preventDefault(); setActive((a) => Math.min(rows.length - 1, a + 1)); }
           else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
         }}
-        placeholder={placeholder ?? (region === "IN" ? "Search any NSE company: Reliance, TCS, HDFCBANK…" : "Search any US company: NVDA, Apple, Vertiv…")} />
+        placeholder={placeholder ?? `Try “${example}”`} aria-label={region === "IN" ? "Search any NSE company" : "Search any US company"} />
       {rows && (
         <div className="results">
           {rows.length === 0 && <p className="small muted" style={{ padding: 14 }}>No matches. Press Enter to try "{q.toUpperCase()}" as a ticker.</p>}

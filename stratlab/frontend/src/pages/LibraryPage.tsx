@@ -88,7 +88,7 @@ export function LibraryPage() {
         <p className="page-sub">Real rules with honest verdicts, published by other traders. Copy one and test it yourself: a verdict here is a starting point, not a promise.</p>
       </div>
       <div className="row wrap" style={{ gap: 10 }}>
-        <label className="search-box" style={{ flex: "1 1 240px" }}><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, stock or idea" aria-label="Search the library" /></label>
+        <label className="search-box" style={{ flex: "1 1 240px" }}><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search strategies: RSI, BANKNIFTY, breakout, Supertrend…" aria-label="Search the library" /></label>
         <span className="chip-select"><select aria-label="Market" value={market} onChange={(e) => setMarket(e.target.value)}>
           <option value="">Every market</option>{live.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></span>
         <span className="chip-select"><select aria-label="Verdict" value={verdict} onChange={(e) => setVerdict(e.target.value)}>

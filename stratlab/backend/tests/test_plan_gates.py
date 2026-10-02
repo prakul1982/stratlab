@@ -102,9 +102,12 @@ def test_experience_level_is_saved_with_other_prefs(monkeypatch):
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
     try:
         c = as_plan("free")
-        assert c.put("/me/prefs", json={"level": "pro"}).json() == {"prefs": {"level": "pro"}}
+        assert c.put("/me/prefs", json={"level": "pro"}).json() == {"prefs": {"level": "pro", "focus": None}}
         assert '"daily_report": false' in store["prefs:u1"] and '"level": "pro"' in store["prefs:u1"]
+        # what the user came for is saved alongside, without touching the level
+        assert c.put("/me/prefs", json={"focus": "invest"}).json() == {"prefs": {"level": "pro", "focus": "invest"}}
         assert c.put("/me/prefs", json={"level": "expert"}).status_code == 422
+        assert c.put("/me/prefs", json={"focus": "gamble"}).status_code == 422
         assert main.prefs_of("nobody") == {}
     finally:
         main.app.dependency_overrides.clear()

@@ -12,6 +12,8 @@ import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
 import { Pin, Search, Sparkle, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
+import { CompanySearch } from "../components/Research";
+import { askExamples, useRotating } from "../lib/rotating";
 
 export type Where = { market: string; instrument: Instrument | null };
 
@@ -43,12 +45,14 @@ export function useCreateNotebook(where?: Where | null) {
 
 /** The big "type anything" bar: opens the search box, which works out what you mean and does it. */
 function AskBar() {
+  const { focus } = useApp();
+  const example = useRotating(askExamples(focus));
   return (
     <button className="ask-bar" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}>
       <Sparkle size={20} />
       <span className="stack" style={{ gap: 2, minWidth: 0 }}>
         <b>Ask or do anything</b>
-        <span className="small muted">"Test: buy NIFTY when RSI drops below 30" · "Paper trade an EMA cross on BTC" · "Research HDFC Bank" · "What is walk-forward?"</span>
+        <span className="small muted ask-example" aria-live="off">Try: “{example}”</span>
       </span>
       <kbd className="small muted">{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
     </button>
@@ -214,10 +218,62 @@ export function NewNotebook() {
   );
 }
 
+/** The home page for someone who came to invest: start from a company or a question, not from a trading rule. */
+function InvestorStart() {
+  const { notebooks } = useApp();
+  const nav = useNavigate();
+  const [region, setRegion] = useState<"IN" | "US">("IN");
+  const quick: [string, string, string][] = [
+    ["Sectors leading right now", "Which sectors are beating the market, and their stocks", "/research/rotation"],
+    ["Stage 2 stocks in NIFTY 50", "Rising trend with the Supertrend up", "/research/scan?set=nifty50"],
+    ["Red flags in my watchlist", "Fund raises, pledges, resignations, defaults", "/research/filings"],
+    ["My watchlist at a glance", "Trend, sector, red flags and checklist for each", "/research/investor"],
+  ];
+  const popular = region === "IN" ? ["RELIANCE", "HDFCBANK", "TCS", "APOLLOHOSP", "TITAN", "LT"] : ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"];
+  return (
+    <div className="stack" style={{ gap: 28, maxWidth: 960, margin: "0 auto" }}>
+      <div className="stack" style={{ gap: 10 }}>
+        <span className="eyebrow">Your research desk</span>
+        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+          Which company do you want to look into?
+        </h1>
+        <p className="muted" style={{ fontSize: 17 }}>The numbers, the business in its own words, red flags and whether management delivers. Facts, not tips.</p>
+      </div>
+      <section className="card stack" style={{ gap: 14 }}>
+        <div className="seg" role="radiogroup" aria-label="Market" style={{ alignSelf: "flex-start" }}>
+          {(["IN", "US"] as const).map((r) => <button key={r} role="radio" aria-checked={region === r} aria-pressed={region === r} onClick={() => setRegion(r)}>{r === "IN" ? "₹ India" : "$ United States"}</button>)}
+        </div>
+        <CompanySearch region={region} autoFocus />
+        <div className="row wrap" style={{ gap: 8 }}>
+          <span className="small muted">Popular:</span>
+          {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}
+        </div>
+      </section>
+      <div className="stack" style={{ gap: 10 }}>
+        <h2 className="h2">Or start from a question</h2>
+        <div className="explore-grid">
+          {quick.map(([t, sub, to]) => (
+            <button key={t} className="card explore-card" onClick={() => nav(to)}><b>{t}</b><span className="small muted">{sub}</span></button>
+          ))}
+        </div>
+      </div>
+      <AskBar />
+      {!!notebooks?.length && <p className="small muted">You also have {notebooks.length} trading notebook{notebooks.length === 1 ? "" : "s"}: <Link className="link" to="/notebooks">open them</Link>.</p>}
+      <Explore title="Everything else" skip={["find"]} />
+    </div>
+  );
+}
+
 const VERDICT_RANK: Record<string, number> = { edge: 0, mixed: 1, not_enough: 2, luck: 3, no_edge: 4 };
 type Sort = "recent" | "name" | "verdict";
 
 export function Home() {
+  const { focus, notebooks } = useApp();
+  if (focus === "invest" && notebooks !== null) return <InvestorStart />;
+  return <NotebooksHome />;
+}
+
+export function NotebooksHome() {
   const { notebooks, me, refreshNotebooks, fail } = useApp();
   const nav = useNavigate();
   const [q, setQ] = useState("");
@@ -255,7 +311,7 @@ export function Home() {
         <div className="row wrap" style={{ gap: 10 }}>
           <label className="search-box" style={{ flex: "1 1 260px" }}>
             <Search size={18} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, question or instrument" aria-label="Search notebooks" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a notebook: name, stock or question" aria-label="Search notebooks" />
           </label>
           <div className="seg" role="radiogroup" aria-label="Sort notebooks">
             {([["recent", "Recent"], ["name", "Name"], ["verdict", "Best verdict"]] as [Sort, string][]).map(([k, label]) => (

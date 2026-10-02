@@ -234,7 +234,8 @@ class PushReq(BaseModel):
 
 
 class PrefsReq(BaseModel):
-    level: Literal["new", "some", "pro"]
+    level: Literal["new", "some", "pro"] | None = None
+    focus: Literal["invest", "trade", "both"] | None = None     # what the user came for: orders menus and suggestions
 
 
 class IdeasReq(BaseModel):

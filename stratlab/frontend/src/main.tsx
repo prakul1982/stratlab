@@ -18,7 +18,7 @@ import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { Login } from "./pages/Login";
 import { LEGAL_PAGES, LegalPage } from "./pages/LegalPage";
-import { Home, NewNotebook } from "./pages/Home";
+import { Home, NewNotebook, NotebooksHome } from "./pages/Home";
 
 // every page but the first ones loads when it's opened, so the app starts fast
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -100,6 +100,7 @@ function Routed() {
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/notebooks" element={<NotebooksHome />} />
         <Route path="/new" element={<NewNotebook />} />
         <Route path="/n/:id" element={<NotebookPage />} />
         <Route path="/n/:id/market" element={<MarketPage />} />
