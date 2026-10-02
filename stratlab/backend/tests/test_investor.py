@@ -72,7 +72,10 @@ def test_deck_is_a_real_presentation():
 def test_deck_without_reads_still_builds():
     v = view_for_deck()
     v.update(reads=None, card=None, checklist=None)
-    assert len(Presentation(io.BytesIO(deck.build(v))).slides) == 5
+    prs = Presentation(io.BytesIO(deck.build(v)))
+    assert len(prs.slides) == 6
+    text = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
+    assert "Not in this deck yet" in text and "Read the documents" in text and "Check past calls" in text
 
 
 def test_sector_of_prefers_main_sectors():
