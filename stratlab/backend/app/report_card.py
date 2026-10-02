@@ -145,6 +145,13 @@ def pick_calls(docs_list: list[dict], n: int = MAX_CALLS) -> list[dict]:
     return [calls[round(i * (len(calls) - 1) / (n - 1))] for i in range(n)]
 
 
+class NoCalls(Exception):
+    """No call transcript could be read: nothing to send to the AI, and nothing to charge for."""
+    def __init__(self, problems: list[str]):
+        super().__init__("no readable calls")
+        self.problems = problems
+
+
 PER_CALL = 16000            # characters of each call sent to the AI: the passages richest in guidance
 
 
@@ -162,11 +169,13 @@ def read_call(symbol: str, name: str, d: dict, text: str, ai) -> list[dict]:
     return clean(parsed, labels, texts)
 
 
-def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai) -> dict:
+def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai, hosts: tuple[str, ...] = ()) -> dict:
     picked = pick_calls(docs_list)
     rest = [d for d in docs_list if d["kind"] == "transcript" and d not in picked]
     out = {"guidance": [], "problems": [], "read": []}
-    pairs = readable(docs_api, picked + rest, len(picked), out["problems"])
+    pairs = readable(docs_api, picked + rest, len(picked), out["problems"], hosts)
+    if not pairs:
+        raise NoCalls(out["problems"])
     pairs.sort(key=lambda p: p[0]["at"], reverse=True)
     failed, last = 0, None
     for d, text in pairs:
@@ -264,7 +273,7 @@ def view(stored_card: dict | None, nums: dict, today: date | None = None) -> dic
 
 # ---------- stored reads ----------
 def _key(symbol: str) -> str:
-    return f"deep:card:v2:{symbol}"   # v2: per-call reads with checked quotes; v1 reads are ignored
+    return f"deep:card:v3:{symbol}"   # v3: transcripts behind company-site links are read
 
 
 def stored(symbol: str) -> dict | None:

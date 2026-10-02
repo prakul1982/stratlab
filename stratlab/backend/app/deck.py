@@ -207,10 +207,10 @@ def build(v: dict) -> bytes:
     # 6. capex plans
     if p and (p.get("capex") or p.get("outlook")):
         s = d.slide("Capex and growth plans, in management's words", "From the latest investor presentation and earnings calls")
-        rows = [[c["what"], c.get("amount") or "–", c.get("timeline") or "–", c["status"],
+        rows = [[c["what"], " · ".join(x for x in (c.get("amount"), c.get("size")) if x) or "–", c.get("timeline") or "–", c["status"],
                  f"{c['source']['title'][:40]}, {c['source']['at'][:10]}" if c.get("source") else "–"] for c in p.get("capex", [])[:7]]
         if rows:
-            d.table(s, ["Plan", "Amount", "When", "Status", "Source"], rows, Inches(0.6), Inches(1.6), Inches(12), [4, 1.6, 1.4, 1.2, 3], size=11)
+            d.table(s, ["Plan", "Amount / size", "When", "Status", "Source"], rows, Inches(0.6), Inches(1.6), Inches(12), [4, 1.6, 1.4, 1.2, 3], size=11)
         if p.get("outlook"):
             d.text(s, [f"“{o['quote'] or o['statement']}”" for o in p["outlook"][:3]], Inches(0.6), Inches(1.9 + 0.42 * (len(rows) + 1)),
                    Inches(12), Inches(1.6), 12, color=MUTED)
