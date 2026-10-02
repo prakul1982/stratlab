@@ -196,3 +196,10 @@ def test_banks_get_no_capex_or_operating_margin_checks():
     assert not {"Operating margin holding up", "Debt to equity", "Free cash flow, 3 years", "Profit turning into cash"} & labels.keys()
     from app import report_card as rc
     assert rc.check({"metric": "margin", "low": 4.0, "high": None, "period": "FY25"}, n)["result"] == "unchecked"
+
+
+def test_negative_capex_estimate_is_left_blank():
+    p = company()
+    p["balance"]["rows"]["Fixed Assets"][3] = 40          # FY23 assets fall (a write-down): estimate would be negative
+    y = {r["year"]: r for r in deepdive.numbers(p)["years"]}
+    assert y["Mar 2023"]["capex"] is None and y["Mar 2023"]["fcf"] is None and y["Mar 2025"]["capex"] == 23

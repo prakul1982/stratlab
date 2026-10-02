@@ -69,6 +69,8 @@ def numbers(p: dict) -> dict:
             d_cwip = cwip[i] - cwip[i - 1] if cwip[i] is not None and cwip[i - 1] is not None else 0
             d_dep = dep[i] if i < len(dep) and dep[i] is not None else 0
             capex = (fa[i] - fa[i - 1]) + d_cwip + d_dep
+            if capex < 0:     # assets sold, written down or reclassified that year: the estimate means nothing
+                capex = None
         s = sales[i] if i < len(sales) else None
         c = cfo[i] if cfo else None
         years.append({"year": y, "sales": s, "profit": profit[i] if i < len(profit) else None, "opm": opm[i] if i < len(opm) else None,

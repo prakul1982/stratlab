@@ -247,6 +247,19 @@ def build(v: dict) -> bytes:
             colors[(i, 3)] = color
         d.table(s, ["Area", "Check", "Value", "Result"], rows, Inches(0.6), Inches(1.5), Inches(12), [1.6, 4, 3.4, 1.2], size=10, colors=colors)
 
+    # 8b. say what's missing, so a deck without document reads isn't mistaken for a complete one
+    if not (v.get("reads") or {}).get("business") or not (card and card.get("rows")):
+        missing = []
+        if not (v.get("reads") or {}).get("business"):
+            missing.append("the business model, the industry's own measures and the capex plans (Read the documents)")
+        if not (card and card.get("rows")):
+            missing.append("the management report card (Check past calls)")
+        s = d.slide("Not in this deck yet")
+        d.text(s, ["These come from the company's own presentations and earnings calls, and haven't been read for this company yet:"]
+               + [f"• {m}" for m in missing]
+               + ["", "Press those buttons on the company's deep dive page, then download the deck again."],
+               Inches(0.6), Inches(1.5), Inches(12), Inches(4), 16)
+
     # 9. sources
     docs = v.get("documents") or []
     s = d.slide("Sources")
