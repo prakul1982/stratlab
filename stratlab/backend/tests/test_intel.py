@@ -162,3 +162,14 @@ def test_screener_prefers_standalone_when_consolidated_history_is_short():
     assert picked["basis"] == "standalone" and "only go back 4 years" in picked["basis_note"]
     assert scr._pick({"consolidated": {**con, "pl": pl(8)}, "standalone": std})["basis"] == "consolidated"
     assert scr._pick({"consolidated": con})["basis"] == "consolidated"
+
+
+def test_screener_never_guesses_a_different_company():
+    def handler(req: httpx.Request):
+        if req.url.path == "/api/company/search/":
+            return httpx.Response(200, json=[{"name": "All Time Plastics", "url": "/company/ALLTIME/"}])
+        if req.url.path.startswith("/company/ALLTIME/"):
+            return httpx.Response(200, text=SCREENER_HTML)
+        return httpx.Response(404, text="<html>Not found</html>")
+    with pytest.raises(SourceError):
+        Screener(transport=httpx.MockTransport(handler)).company("LTIM")

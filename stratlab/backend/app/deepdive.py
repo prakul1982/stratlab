@@ -128,6 +128,13 @@ def profit_note(p: dict) -> str | None:
 
 
 # ---------- which documents to read ----------
+# what companies call the quarterly deck: TCS and HCL file a "fact sheet", Bharti a "quarterly report", others an
+# "investor release" or "earnings update"
+PRESENTATION = re.compile(r"investor presentation|earnings presentation|results presentation|analyst presentation|"
+                          r"fact ?sheet|quarterly report|investor (?:release|update)|earnings (?:release|update)|"
+                          r"performance (?:update|review) presentation|corporate presentation", re.I)
+
+
 def documents(items: list[dict]) -> list[dict]:
     """Investor presentations and earnings-call transcripts among a company's filings, newest first, with a PDF link."""
     out = []
@@ -137,7 +144,7 @@ def documents(items: list[dict]) -> list[dict]:
         hay = f"{i.get('subject', '')} {i.get('text', '')}".lower()
         if "transcript" in hay:
             kind = "transcript"
-        elif i.get("category") == "presentation" or "investor presentation" in hay or "earnings presentation" in hay:
+        elif i.get("category") == "presentation" or PRESENTATION.search(hay):
             kind = "presentation"
         elif "annual report" in hay:
             kind = "annual_report"
@@ -311,7 +318,12 @@ def _follow(docs_api, d: dict, letter: str, hosts: tuple[str, ...], seen: set, n
             return ({**d, "url": link, "via": d["url"]}, full)
         return None
 
-    pdfs = [u for u in pdf_links(letter) if u not in seen][:2]
+    from .docs import KIND_WORDS
+    words = KIND_WORDS.get(d.get("kind") or "")
+    pdfs = [u for u in pdf_links(letter) if u not in seen]
+    if words:                        # a letter may link the annual report too: the transcript or deck first
+        pdfs.sort(key=lambda u: 0 if words.search(u) else 1)
+    pdfs = pdfs[:3]
     for link in pdfs:
         got = attempt(link)
         if got:

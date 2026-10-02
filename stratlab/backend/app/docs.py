@@ -12,7 +12,7 @@ import httpx
 from .intel.net import BROWSER_UA, SourceError, TTLCache
 
 ALLOWED_HOSTS = {"nsearchives.nseindia.com", "archives.nseindia.com", "www.nseindia.com", "www.bseindia.com"}
-MAX_BYTES = 15 * 1024 * 1024
+MAX_BYTES = 30 * 1024 * 1024        # large investor decks run to 20 MB
 MAX_PAGES = 80
 _cache = TTLCache(max_items=300)
 
@@ -83,7 +83,13 @@ WEB_LINK = re.compile(r"(?:https?://|www\.)[^\s\"'<>()\[\]]+", re.I)
 def web_links(text: str) -> list[str]:
     """Links to web pages (not PDFs) written in a filing, e.g. "available at www.company.com/investors"."""
     out = []
-    for m in WEB_LINK.finditer(text or ""):
+    def rejoin(m):                   # a link broken across lines: the host is cut short, or the next line goes on with a path
+        url, nxt = m.group(1), m.group(2)
+        host = re.sub(r"^https?://", "", url).split("/")[0]
+        cut = not re.search(r"\.(com|in|co|net|org|bank|io)$", host) and "/" not in url[8:]
+        return url + nxt if cut or nxt.startswith("/") or (url.endswith("/") and "/" in nxt) else m.group(0)
+    joined = re.sub(r"(https?://\S+|www\.\S+)[ \t]*\n[ \t]*(\S+)", rejoin, text or "")
+    for m in WEB_LINK.finditer(joined):
         url = m.group(0).rstrip(".,;:")
         if url.lower().endswith(".pdf") or "@" in url:
             continue
