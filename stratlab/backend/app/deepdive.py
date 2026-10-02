@@ -9,8 +9,8 @@ import time
 from datetime import datetime, timezone
 
 from . import db
-from .ai_providers import complete, extract_json
-from .docs import windows
+from .ai_providers import AIError, complete, extract_json, salvage_items
+from .docs import quote_found, ranked_windows, windows
 
 KEEP = 7 * 86400              # a document read is reused for a week
 DOC_DAYS = 730                # filings searched for documents: two years
@@ -121,6 +121,9 @@ RULES = """Rules:
 - Use ONLY the company's own words in the EXCERPTS. If something isn't there, leave it out; never guess figures.
 - Facts and the company's statements only: no opinion on the stock, no advice, no "buy" or "sell".
 - Plain English a retail investor understands. No markdown.
+- Every "quote" is copied word for word from the excerpts, never paraphrased. Items whose quote isn't in the document are
+  thrown away, so leave an item out rather than invent its quote.
+- On call transcripts, use only what the company's management said, never an analyst's question or the moderator.
 - Reply with ONLY one JSON object in exactly the shape asked for."""
 
 BUSINESS = """You explain how an Indian listed company makes money, from its own investor presentation and filings.
@@ -160,10 +163,18 @@ def _num(v):
         return None
 
 
-def clean_measures(d: dict, labels: dict) -> list[dict]:
+def _real(item: dict, texts: dict | None) -> bool:
+    """With the documents' text at hand, keep an item only if its quote is really in the document it cites."""
+    if texts is None:
+        return True
+    label = str(item.get("source") or "").strip().upper()
+    return quote_found(str(item.get("quote") or ""), texts.get(label, ""))
+
+
+def clean_measures(d: dict, labels: dict, texts: dict | None = None) -> list[dict]:
     out = []
     for m in (d.get("measures") or [])[:8]:
-        if isinstance(m, dict) and str(m.get("name") or "").strip() and str(m.get("value") or "").strip():
+        if isinstance(m, dict) and str(m.get("name") or "").strip() and str(m.get("value") or "").strip() and _real(m, texts):
             out.append({"name": str(m["name"])[:80], "value": str(m["value"])[:60], "period": (str(m["period"])[:30] if m.get("period") else None),
                         "change": (str(m["change"])[:60] if m.get("change") else None), "quote": str(m.get("quote") or "")[:240],
                         "source": labels.get(str(m.get("source") or "").strip().upper())})
@@ -179,12 +190,12 @@ def clean_business(d: dict) -> dict:
             "drivers": _clip(d.get("drivers"), 5), "strengths": _clip(d.get("strengths"), 5), "risks": _clip(d.get("risks"), 5)}
 
 
-def clean_plans(d: dict, labels: dict) -> dict:
+def clean_plans(d: dict, labels: dict, texts: dict | None = None) -> dict:
     def src(v):
         return labels.get(str(v or "").strip().upper())
     capex = []
     for c in (d.get("capex") or [])[:8]:
-        if isinstance(c, dict) and str(c.get("what") or "").strip():
+        if isinstance(c, dict) and str(c.get("what") or "").strip() and _real(c, texts):
             status = str(c.get("status") or "unclear").lower()
             capex.append({"what": str(c["what"])[:200], "amount": (str(c["amount"])[:80] if c.get("amount") else None),
                           "timeline": (str(c["timeline"])[:80] if c.get("timeline") else None),
@@ -192,7 +203,7 @@ def clean_plans(d: dict, labels: dict) -> dict:
                           "quote": str(c.get("quote") or "")[:300], "source": src(c.get("source"))})
     outlook = []
     for o in (d.get("outlook") or [])[:6]:
-        if isinstance(o, dict) and str(o.get("statement") or "").strip():
+        if isinstance(o, dict) and str(o.get("statement") or "").strip() and _real(o, texts):
             outlook.append({"statement": str(o["statement"])[:240], "quote": str(o.get("quote") or "")[:300], "source": src(o.get("source"))})
     return {"capex": capex, "outlook": outlook}
 
@@ -222,14 +233,28 @@ def readable(docs_api, candidates: list[dict], need: int, problems: list[str]) -
     return out
 
 
-def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int, start: int = 1) -> tuple[str, dict]:
-    """Labelled excerpts S1, S2… for the AI, and the label → document map."""
-    parts, labels = [], {}
+def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int, start: int = 1) -> tuple[str, dict, dict]:
+    """Labelled excerpts S1, S2… for the AI, the label → document map, and label → full text (to check quotes).
+    Transcripts are long and repetitive, so their richest passages are picked; presentations are read in order."""
+    parts, labels, texts = [], {}, {}
     for n, (d, text) in enumerate(pairs, start):
         label = f"S{n}"
         labels[label] = {"title": d["title"], "at": d["at"], "url": d["url"], "kind": d["kind"]}
-        parts.append(f"[{label}] {d['kind']} filed {d['at'][:10]}: {d['title']}\n{windows(text, words, limit=per_doc)}")
-    return "\n\n".join(parts), labels
+        texts[label] = text
+        cut = ranked_windows(text, words, limit=per_doc) if d["kind"] == "transcript" else windows(text, words, limit=per_doc)
+        parts.append(f"[{label}] {d['kind']} filed {d['at'][:10]}: {d['title']}\n{cut}")
+    return "\n\n".join(parts), labels, texts
+
+
+def _parse(raw: str, keys: tuple[str, ...]) -> dict:
+    """The reply's JSON, or the complete items of each list if the reply was cut off."""
+    try:
+        return extract_json(raw)
+    except AIError:
+        got = {k: salvage_items(raw, k) for k in keys}
+        if not any(got.values()):
+            raise
+        return got
 
 
 def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai, kpis: dict | None = None) -> dict:
@@ -242,22 +267,22 @@ def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai
     head = (f"COMPANY: {name} ({symbol}, NSE)\nPROFILE: {about[:1200]}\n"
             f"INDUSTRY MEASURES ({kpis.get('label') or 'this company'}): {'; '.join(want)}\n\nEXCERPTS:\n")
     words = BUSINESS_WORDS + [re.escape(w.split(" (")[0]) for w in want if not w.startswith("The operating")]
-    text, labels = _excerpts(pres, words, 14000)
+    text, labels, texts = _excerpts(pres, words, 14000)
     if want and trans:     # calls often state the operating measures the deck leaves out
-        mtext, mlabels = _excerpts(trans, [re.escape(w.split(" (")[0]) for w in want if not w.startswith("The operating")] or [r"\d"],
-                                   4000, start=len(labels) + 1)
-        text, labels = (text + "\n\n" + mtext).strip(), {**labels, **mlabels}
+        mtext, mlabels, mtexts = _excerpts(trans, [re.escape(w.split(" (")[0]) for w in want if not w.startswith("The operating")] or [r"\d"],
+                                           6000, start=len(labels) + 1)
+        text, labels, texts = (text + "\n\n" + mtext).strip(), {**labels, **mlabels}, {**texts, **mtexts}
     if text or about:
-        raw = complete(BUSINESS, head + (text or "(no presentation available)"), gemini=ai[0], anthropic=ai[1], max_tokens=1500, kind="long")
-        parsed = extract_json(raw)
+        raw = complete(BUSINESS, head + (text or "(no presentation available)"), gemini=ai[0], anthropic=ai[1], max_tokens=2000, kind="long")
+        parsed = _parse(raw, ("segments", "measures"))
         out["business"] = clean_business(parsed)
-        out["business"]["measures"] = clean_measures(parsed, labels)
+        out["business"]["measures"] = clean_measures(parsed, labels, texts)
         out["business"]["industry"] = kpis.get("label")
         out["business"]["sources"] = list(labels.values())
-    text, labels = _excerpts(pres + trans, PLAN_WORDS, 9000)
+    text, labels, texts = _excerpts(pres + trans, PLAN_WORDS, 11000)
     if text:
-        raw = complete(PLANS, head + text, gemini=ai[0], anthropic=ai[1], max_tokens=2000, kind="long")
-        out["plans"] = clean_plans(extract_json(raw), labels)
+        raw = complete(PLANS, head + text, gemini=ai[0], anthropic=ai[1], max_tokens=2500, kind="long")
+        out["plans"] = clean_plans(_parse(raw, ("capex", "outlook")), labels, texts)
         out["plans"]["sources"] = list(labels.values())
     out["read"] = [{"kind": d["kind"], "at": d["at"], "title": d["title"]} for d, _ in pres + trans]
     return out
@@ -265,7 +290,7 @@ def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai
 
 # ---------- stored reads ----------
 def _key(symbol: str) -> str:
-    return f"deep:v1:{symbol}"
+    return f"deep:v2:{symbol}"        # v2: checked quotes and ranked call passages; v1 reads are ignored
 
 
 def stored(symbol: str) -> dict | None:

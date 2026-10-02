@@ -100,7 +100,15 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
     # promoters
     prom = _row(p.get("shareholding"), "Promoters")
     if prom:
-        add("Promoters", "Promoter holding", _state(prom[-1], 50, 30), _pct(prom[-1], False), "Pass at 50% or more; fail below 30%.")
+        ch_year = prom[-1] - prom[-5] if len(prom) >= 5 else None
+        state = _state(prom[-1], 50, 30)
+        rule = "Pass at 50% or more; below 30% fails only if it is also falling."
+        if state == "fail" and (ch_year is None or ch_year >= -0.5):
+            # a low stake that isn't falling is normal for professionally run companies (no controlling family)
+            state = "watch"
+            rule += (" Low but steady over the last year: common for professionally run companies, so watch."
+                     if ch_year is not None else " Low; no year of history to tell if it's falling, so watch.")
+        add("Promoters", "Promoter holding", state, _pct(prom[-1], False), rule)
         if len(prom) >= 5:
             ch = prom[-1] - prom[-5]
             add("Promoters", "Promoter holding over a year", _state(ch, -0.5, -2), f"{ch:+.2f} points",

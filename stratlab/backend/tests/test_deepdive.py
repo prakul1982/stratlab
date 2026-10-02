@@ -107,14 +107,15 @@ def fake_ai(calls):
 def test_read_builds_clean_business_and_plans(monkeypatch):
     calls = []
     monkeypatch.setattr(deepdive, "complete", fake_ai(calls))
-    d = FakeDocs({"u1": "We plan capex of Rs 500 crore for a new plant. We expect 15% growth.", "u2": "Business overview: pumps."})
+    d = FakeDocs({"u1": "We plan capex of Rs 500 crore for a new plant. We expect 15% growth.",
+                  "u2": "Business overview: pumps. We plan capex of Rs 500 crore for a new plant."})
     out = deepdive.read("ACME", "Acme", "Pumps", DOCS, d, (None, None))
     assert all(c[2] == "long" for c in calls) and "[S1] presentation" in calls[0][1]
     b = out["business"]
     assert [s["name"] for s in b["segments"]] == ["Water", "Oil"] and b["segments"][1]["share_pct"] == 40.0
     assert b["sources"][0]["title"] == "Investor Presentation"
     p = out["plans"]
-    assert p["capex"][0]["source"]["url"] == "u2" and p["capex"][1]["status"] == "unclear" and p["capex"][1]["source"] is None
+    assert p["capex"][0]["source"]["url"] == "u2" and len(p["capex"]) == 1        # "Odd" has no quote in any document: dropped
     assert p["outlook"][0]["source"]["url"] == "u1"            # labels are matched case-insensitively
     assert any("Q4 FY26" in x for x in out["problems"])         # an unreadable document is reported, not fatal
 
@@ -145,7 +146,7 @@ def api(monkeypatch):
                     for d in DOCS]
     monkeypatch.setattr(main.research_hub, "screener", Scr())
     monkeypatch.setattr(main, "filings_feed", Feed())
-    monkeypatch.setattr(main, "deep_docs", FakeDocs({"https://nsearchives.nseindia.com/u1.pdf": "capex of Rs 500 crore", "https://nsearchives.nseindia.com/u2.pdf": "pumps"}))
+    monkeypatch.setattr(main, "deep_docs", FakeDocs({"https://nsearchives.nseindia.com/u1.pdf": "capex of Rs 500 crore", "https://nsearchives.nseindia.com/u2.pdf": "pumps. We plan capex of Rs 500 crore"}))
     calls = []
     monkeypatch.setattr(deepdive, "complete", fake_ai(calls))
     who = {"p": {"id": "u1", "plan": "free", "_plan": "free"}}
@@ -203,3 +204,23 @@ def test_negative_capex_estimate_is_left_blank():
     p["balance"]["rows"]["Fixed Assets"][3] = 40          # FY23 assets fall (a write-down): estimate would be negative
     y = {r["year"]: r for r in deepdive.numbers(p)["years"]}
     assert y["Mar 2023"]["capex"] is None and y["Mar 2023"]["fcf"] is None and y["Mar 2025"]["capex"] == 23
+
+
+def test_transcript_passages_rank_guidance_over_boilerplate():
+    t = ("Safe harbour: this call may contain forward-looking statements; we expect nothing. " * 5 + "Small talk. " * 400
+         + "CFO: For FY27 we expect revenue growth of 18% and EBITDA margin of 24%, with capex of Rs 1,500 crore." + " Other. " * 400)
+    cut = docs.ranked_windows(t, deepdive.PLAN_WORDS, width=120, limit=600)
+    assert "revenue growth of 18%" in cut and "Safe harbour" not in cut
+
+
+def test_plans_survive_a_cut_off_reply_and_drop_misattributed_quotes(monkeypatch):
+    def complete(system, text, **kw):
+        if "makes money" in system:
+            return json.dumps({"summary": "Pumps.", "segments": []})
+        return ('{"capex": [{"what": "New plant", "amount": "Rs 500 crore", "status": "planned", "quote": "We plan capex of Rs 500 crore", "source": "S2"},'
+                ' {"what": "Wrong doc", "status": "planned", "quote": "We plan capex of Rs 500 crore", "source": "S1"},'
+                ' {"what": "Cut off", "amo')
+    monkeypatch.setattr(deepdive, "complete", complete)
+    d = FakeDocs({"u1": "We plan capex of Rs 500 crore for a new plant.", "u2": "Business overview: pumps."})
+    p = deepdive.read("ACME", "Acme", "Pumps", DOCS, d, (None, None))["plans"]
+    assert [c["what"] for c in p["capex"]] == ["New plant"] and p["capex"][0]["source"]["kind"] == "transcript"

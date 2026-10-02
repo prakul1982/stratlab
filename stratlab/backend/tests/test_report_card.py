@@ -37,7 +37,7 @@ AI = {"guidance": [g("revenue_growth", 15, "FY25", high=18), g("margin", 21, "FY
 
 
 def test_clean_keeps_sourced_forward_targets():
-    out = rc.clean(AI, CALLS)
+    out = rc.clean(AI, CALLS)              # no texts given: quotes aren't checked here (see the next tests)
     assert len(out) == 9
     assert not any(x["period"] == "FY24" for x in out) and all(x["source"]["url"] in ("u-old", "u-mid") for x in out)
     capex = next(x for x in out if x["metric"] == "capex")
@@ -82,7 +82,7 @@ def test_endpoint_reads_calls_once_and_counts_toward_the_limit(api, monkeypatch)
 
     def complete(system, text, **kw):
         seen.append(text)
-        return json.dumps({"guidance": [{"metric": "margin", "low": 20, "period": "FY27", "what": "20% margin", "quote": "about 20%", "source": "S1"}]})
+        return json.dumps({"guidance": [{"metric": "margin", "low": 20, "period": "FY27", "what": "20% margin", "quote": "capex of Rs 500 crore", "source": "S1"}]})
     monkeypatch.setattr(rc, "complete", complete)
     who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
     assert c.get("/research/deep/ACME").json()["card"] is None
@@ -94,3 +94,52 @@ def test_endpoint_reads_calls_once_and_counts_toward_the_limit(api, monkeypatch)
     assert len(seen) == 1 and len(usage) == 1
     c.post("/research/deep/ACME/card?refresh=true")
     assert c.post("/research/deep/ACME/card?refresh=true").status_code == 429
+
+
+def test_relative_periods_resolve_from_the_call_date():
+    said = date(2025, 8, 10)                                    # in FY26
+    assert rc.fy_of(said) == 2026 and rc.fy_of(date(2026, 2, 1)) == 2026 and rc.fy_of(date(2026, 4, 1)) == 2027
+    assert rc.parse_period("next year", said) == {"kind": "FY", "fy": 2027}
+    assert rc.parse_period("this fiscal", said) == {"kind": "FY", "fy": 2026}
+    assert rc.parse_period("current financial year", said) == {"kind": "FY", "fy": 2026}
+    assert rc.parse_period("Q3 FY26", said) == {"kind": "Q", "fy": 2026, "q": 3}
+    assert rc.parse_period("next year") is None                 # without a date it can't be pinned down
+    out = rc.clean({"guidance": [g("revenue_growth", 15, None, what="15% growth next year")]},
+                   {"S1": {"title": "Call", "at": "2025-08-10T10:00", "url": "u"}})
+    assert out[0]["period"] == "FY27"
+
+
+def test_made_up_quotes_and_analyst_numbers_are_dropped():
+    text = ("Analyst: Would margins reach 25%? CFO: We are confident EBITDA margin will be about 21% for the full year. "
+            "We plan capex of Rs 1,200 crore in FY27 for new beds.")
+    items = {"guidance": [
+        {"metric": "margin", "low": 21, "period": "FY26", "what": "21% margin", "quote": "EBITDA margin will be about 21% for the full year", "source": "S1"},
+        {"metric": "margin", "low": 25, "period": "FY26", "what": "25% margin", "quote": "margins will reach 25% by the end of the year", "source": "S1"},
+        {"metric": "capex", "low": 1200, "period": "FY27", "what": "Capex", "quote": "capex of Rs 1,200 crore in FY27", "source": "S1"}]}
+    labels = {"S1": {"title": "Call", "at": "2025-08-10T10:00", "url": "u"}}
+    out = rc.clean(items, labels, {"S1": text})
+    assert [x["low"] for x in out] == [21.0, 1200.0]          # the 25% "quote" isn't in the call
+
+
+def test_each_call_is_read_on_its_own_and_a_cut_off_reply_keeps_what_is_complete(monkeypatch):
+    calls = [{"kind": "transcript", "at": f"2025-{m:02d}-10T10:00", "title": f"Call {m}", "url": f"u{m}"} for m in (5, 8, 11)]
+    texts = {"u5": "We expect revenue growth of 15% in FY26.", "u8": "EBITDA margin should be 22% in FY27.", "u11": "x"}
+    seen = []
+
+    def complete(system, text, **kw):
+        seen.append(text)
+        if "Call 8" in text:      # cut off after the first complete item
+            return '{"guidance": [{"metric": "margin", "low": 22, "period": "FY27", "what": "22% margin", "quote": "EBITDA margin should be 22% in FY27", "source": "S1"}, {"metric": "capex", "lo'
+        if "Call 11" in text:
+            raise rc.AIError("busy")
+        return json.dumps({"guidance": [{"metric": "revenue_growth", "low": 15, "period": "FY26", "what": "15% growth",
+                                         "quote": "revenue growth of 15% in FY26", "source": "S1"}]})
+    monkeypatch.setattr(rc, "complete", complete)
+    out = rc.read("ACME", "Acme", calls, FakeDocs(texts), (None, None))
+    assert len(seen) == 3 and all(t.count("[S1]") == 1 for t in seen) and "CALL DATE: 2025-08-10 (that is FY26)" in seen[1]
+    assert sorted(x["low"] for x in out["guidance"]) == [15.0, 22.0]
+    assert [r["title"] for r in out["read"]] == ["Call 11", "Call 8", "Call 5"][1:] and any("Call 11" in p for p in out["problems"])
+    monkeypatch.setattr(rc, "complete", lambda *a, **k: (_ for _ in ()).throw(rc.AIError("down")))
+    import pytest
+    with pytest.raises(rc.AIError):
+        rc.read("ACME", "Acme", calls, FakeDocs(texts), (None, None))
