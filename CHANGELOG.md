@@ -2,6 +2,11 @@
 
 ## October 2026
 
+### Stress test, round 1: every route, every input
+- **A fuzz test now calls all 90 server routes** signed out and as each kind of user, with realistic requests (every strategy feature, every market, options, groups, paper trading, research, admin) and then with each field broken: empty, huge, negative, not-a-number, wrong type, hostile text. The AI answers well, with junk, fails or is busy in turn. Nothing may crash, answer with broken data or take over 10 seconds; it runs on every change.
+- **Fixed from it:** granting a plan to a user who doesn't exist crashed (now "No user with that ID"); payment webhook errors now use the same format as every other error; a mistyped Indian symbol took up to 18 seconds (it now answers at once, checked against the exchange's own list, and misses are remembered); a 20-stock US scan or US sector chart took 12 to 14 seconds (the lookup and the price history now share one download).
+- **From the second audit:** presentations filed as a "fact sheet", "quarterly report" or "investor release" (TCS, HCL, Bharti and others) are recognised; when a letter links several PDFs the transcript or deck is tried first; links split across two lines are joined; decks up to 30 MB are read; the audit checks prices against the broker's live exchange quote (the exchange's website turns servers away); finance companies aren't flagged for margins above 100%; a renamed symbol is only followed when the rename is known (a site search once matched LTIM to a different company), and LTIM is out of the IT group until its new symbol is confirmed.
+
 ### Checking the data at scale (admin)
 - **Data audit:** Admin → Data audit runs every company in a set (NIFTY 50, NIFTY Bank, the liquid F&O stocks, or every sector's main stocks, about 180) through the deep dive on the live server, with no AI. Each company's P/E is recomputed from market cap and trailing profit, trailing revenue is checked against the last four quarters, the last close against the exchange's own price, and profit, margins and capex for impossible values; missing industry, valuation, checklist answers, presentations and transcripts are listed as gaps, and optionally whether each document can actually be read. Results by area, a CSV download, and the last run kept across restarts.
 - **Fixes from the first audit (about 180 companies):**

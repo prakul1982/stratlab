@@ -72,4 +72,7 @@ def set_plan(user_id: str, plan: str, days: int | None) -> dict:
     else:
         until = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat() if days else None
         fields = {"plan": plan, "plan_status": "active", "current_period_end": until, "cancel_at_period_end": False}
-    return db.update_profile(user_id, **fields)
+    row = db.update_profile(user_id, **fields)
+    if row is None:
+        raise HTTPException(404, {"code": "no_user", "message": "No user with that ID."})
+    return row

@@ -106,10 +106,12 @@ class YahooProvider:
         hit = self._known.get(key)
         if hit:
             return hit
-        try:
-            m = self.yahoo.meta(key)
+        try:      # the long daily window: the backtest or scan that usually follows reuses it
+            raw = self.yahoo.chart(key, "1d", self.yahoo.WINDOW)["meta"]
         except SourceError:
             return None
+        m = {"price": raw.get("regularMarketPrice"), "name": raw.get("longName") or raw.get("shortName"),
+             "currency": raw.get("currency"), "type": raw.get("instrumentType")}
         if m.get("price") is None:
             return None
         itype = "FX" if self.market == "FX" else "FUT" if self.market == "CMDTY" else ("ETF" if m.get("type") == "ETF" else "EQ")

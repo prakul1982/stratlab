@@ -64,7 +64,10 @@ def _last_ttm(table: dict | None, *prefixes: str):
     return None
 
 
-def check_numbers(p: dict, nums: dict, snap: dict) -> list[dict]:
+FINANCIAL = {"lender", "insurer", "holding"}
+
+
+def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None) -> list[dict]:
     out = []
     years = nums.get("years") or []
     if len(years) < 5:
@@ -72,7 +75,7 @@ def check_numbers(p: dict, nums: dict, snap: dict) -> list[dict]:
     missing = [y["year"] for y in years if y.get("sales") is None or y.get("profit") is None]
     if missing:
         out.append(_issue("gap", "Numbers", f"Revenue or profit missing for {', '.join(missing[:4])}"))
-    if not nums.get("bank"):
+    if not nums.get("bank") and group not in FINANCIAL:
         # a margin below -100% (a loss bigger than sales) or profit above sales (other income) happen; above 100% can't
         odd = [y["year"] for y in years if y.get("opm") is not None and y["opm"] > 100]
         if odd:
@@ -100,7 +103,7 @@ def check_prices(snap: dict, trend: dict | None, exchange: float | None) -> list
     if not trend:
         out.append(_issue("gap", "Prices", "No daily prices, so no trend or stage"))
     ours = trend.get("price") if trend else None
-    for label, other in (("the exchange", exchange), ("the company page", snap.get("price"))):
+    for label, other in (("the exchange's live quote", exchange), ("the company page", snap.get("price"))):
         off = _off(ours, other)
         if off is not None and off > PRICE_TOLERANCE:
             out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {other:,.2f} on {label}"))
@@ -182,7 +185,8 @@ def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None) ->
         base = base_fn(sym)
         view = view_fn(sym, base)
         name = view.get("name") or sym
-        issues += check_numbers(base["p"], view["numbers"], view.get("snapshot") or {})
+        group = ((view.get("checklist") or {}).get("industry") or {}).get("group")
+        issues += check_numbers(base["p"], view["numbers"], view.get("snapshot") or {}, group)
         ex = None
         if exchange_price:
             try:

@@ -3,7 +3,7 @@
 Used for index levels, charts, Indian quotes when Kite is offline, and as the
 data source for US, UK, European, Japanese and forex backtests."""
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -20,11 +20,28 @@ class Yahoo(Source):
     def __init__(self, transport: httpx.BaseTransport | None = None):
         super().__init__("https://query1.finance.yahoo.com", per_minute=90, burst=15,
                          headers={"User-Agent": BROWSER_UA, "Accept": "application/json"}, transport=transport)
+        self._recent: dict = {}
 
-    def chart(self, symbol: str, tf: str = "1d", days: int = 365, ttl: float | None = None) -> dict:
-        """{"meta": {...}, "candles": [{t, o, h, l, c, v}]} with times in the exchange's zone."""
+    WINDOW = 760                 # days of daily candles fetched when looking an instrument up (scan and rotation need ~700)
+
+    def chart(self, symbol: str, tf: str = "1d", days: int = 365, ttl: float | None = None, exact: bool = False) -> dict:
+        """{"meta": {...}, "candles": [{t, o, h, l, c, v}]} with times in the exchange's zone. A shorter window of
+        daily candles is cut from a longer one fetched recently, so a lookup followed by a backtest costs one call."""
         interval, max_days = INTERVAL[tf]
         days = max(1, min(days, max_days))
+        keep = ttl if ttl is not None else (1800 if tf == "1d" else 60)
+        recent = self._recent.get((symbol, tf)) if tf == "1d" and not exact else None
+        if recent and recent[1] >= days and time.time() - recent[0] < keep:
+            cut = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+            return {"meta": recent[2]["meta"], "candles": [b for b in recent[2]["candles"] if b["t"][:10] >= cut]}
+        out = self._chart(symbol, tf, days, interval, ttl)
+        if tf == "1d" and not exact and (not recent or days >= recent[1] or time.time() - recent[0] >= keep):
+            if len(self._recent) > 500:
+                self._recent.clear()
+            self._recent[(symbol, tf)] = (time.time(), days, out)
+        return out
+
+    def _chart(self, symbol: str, tf: str, days: int, interval: str, ttl: float | None) -> dict:
         now = int(time.time())
         # round the window so repeated calls share a cache entry
         step = 3600 if tf == "1d" else 60
@@ -63,7 +80,8 @@ class Yahoo(Source):
 
     def meta(self, symbol: str) -> dict:
         """Price, previous close, day range and 52-week range for one symbol."""
-        m = self.chart(symbol, "1d", 7, ttl=60)["meta"]
+        # exact: the previous close in a chart's meta is the close before its window, so it must be this short window
+        m = self.chart(symbol, "1d", 7, ttl=60, exact=True)["meta"]
         price, prev = m.get("regularMarketPrice"), m.get("chartPreviousClose") or m.get("previousClose")
         return {
             "symbol": m.get("symbol", symbol), "name": m.get("longName") or m.get("shortName"),

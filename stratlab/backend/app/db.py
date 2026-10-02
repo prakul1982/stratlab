@@ -57,7 +57,8 @@ def update_profile(user_id: str, **fields) -> dict:
     fields["updated_at"] = now_iso()
     forget_profile(user_id)
     try:
-        return sb().table("profiles").update(fields).eq("id", user_id).execute().data[0]
+        rows = sb().table("profiles").update(fields).eq("id", user_id).execute().data
+        return rows[0] if rows else None      # no such user
     finally:
         forget_profile(user_id)   # also drop a copy a request re-read while the update ran
 

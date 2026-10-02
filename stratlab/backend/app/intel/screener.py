@@ -166,20 +166,15 @@ class Screener(Source):
         p["url"] = f"https://www.screener.in{path}"
         return p
 
-    def _search(self, sym: str) -> str | None:
-        """The company's page path when the symbol has changed (a rename or demerger), from the site's own search."""
-        try:
-            hits = self.fetch("/api/company/search/", {"q": sym, "v": 3}, ttl=7 * 86400)
-        except SourceError:
-            return None
-        for h in hits if isinstance(hits, list) else []:
-            url = str(h.get("url") or "")
-            if url.startswith("/company/") and f"/company/{sym}/" not in url:
-                return url.split("consolidated/")[0]
-        return None
+    RENAMED = {"TATAMOTORS": "TMPV"}   # known symbol changes only: a fuzzy site search can land on another company
 
     def company(self, symbol: str) -> dict:
         sym = re.sub(r"[^A-Z0-9&\-]", "", symbol.upper())
+        if not sym:
+            raise SourceError(self.name, "That isn't a company symbol.")
+        missing = self.cache.get(("missing", sym))
+        if missing:                              # asked recently and the site has no such company
+            raise SourceError(self.name, missing)
         last = None
         base = f"/company/{sym}/"
         for attempt in (0, 1):
@@ -195,8 +190,11 @@ class Screener(Source):
                     pages[kind] = p
             if pages:
                 return _pick(pages)
-            found = self._search(sym) if attempt == 0 else None
-            if not found or found == base:
+            new = self.RENAMED.get(sym) if attempt == 0 else None
+            if not new:
                 break
-            base = found
-        raise last or SourceError(self.name, f"Screener.in has no page for {sym}.")
+            base = f"/company/{new}/"
+        err = last or SourceError(self.name, f"Screener.in has no page for {sym}.")
+        if not getattr(err, "busy", False):
+            self.cache.set(("missing", sym), str(err), 6 * 3600)
+        raise err

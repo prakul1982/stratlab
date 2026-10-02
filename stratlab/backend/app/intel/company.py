@@ -291,6 +291,14 @@ class Research:
     def _company_in(self, sym: str) -> dict:
         kite_ok = self._kite()
         inst = self.kite.by_symbol(sym) if kite_ok else None
+        if kite_ok and not inst:
+            # the exchange's own list has every NSE stock: a symbol that isn't there (bar a known rename) is a typo,
+            # answered now instead of spending the company-data source's per-minute allowance on it
+            renamed = [h for h in self.kite.search(sym, False, 3) if not h.get("fno") and h.get("type") == "EQ"
+                       and sym in getattr(self.kite, "ALIASES", {})]
+            if not renamed:
+                raise SourceError("Research", f"Couldn't find {sym} on the NSE. Use the NSE symbol, like RELIANCE, TCS or HDFCBANK.")
+            sym, inst = renamed[0]["symbol"], renamed[0]
         tasks = {"scr": ("Screener.in", lambda: self.screener.company(sym))}
         if inst:
             tasks["kq"] = ("Kite", lambda: self.kite.quote([sym]).get(sym))

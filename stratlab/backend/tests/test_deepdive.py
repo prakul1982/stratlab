@@ -311,3 +311,33 @@ def test_capex_amounts_need_a_unit_and_outlook_is_the_future():
     assert [(c["what"], c["amount"], c["size"]) for c in p["capex"]] == [("Sarjapur", None, "455 beds"), ("Chennai", "₹945", None),
                                                                         ("Jubilee Hills", None, None), ("Varanasi", "Rs 640 crore", None)]
     assert [o["statement"] for o in p["outlook"]] == ["Expects 20% growth next year"]
+
+
+def test_what_companies_call_their_deck_and_links_split_across_lines():
+    items = [{"at": "2026-07-10T10:00", "category": "", "subject": "Updates", "text": "Fact Sheet for the quarter ended June 30, 2026", "url": "u1"},
+             {"at": "2026-07-11T10:00", "category": "", "subject": "Quarterly Report", "text": "", "url": "u2"},
+             {"at": "2026-07-12T10:00", "category": "", "subject": "Investor Release", "text": "Q1 FY27", "url": "u3"},
+             {"at": "2026-07-13T10:00", "category": "", "subject": "Outcome of Board Meeting", "text": "Financial results", "url": "u4"}]
+    assert [d["kind"] for d in deepdive.documents(items)] == ["presentation"] * 3
+    letter = "The transcript is on our website at https://www.maruti\nsuzuki.com/corporate/investors for reference."
+    assert docs.web_links(letter) == ["https://www.marutisuzuki.com/corporate/investors"]
+    assert docs.web_links("see https://www.acme.com/investors\nfor details") == ["https://www.acme.com/investors"]
+
+
+def test_a_letter_linking_the_annual_report_first_reads_the_transcript():
+    pdf = make_pdf(["Transcript of the Q1 FY27 earnings call."] + ["CFO: We expect EBITDA margin of 24% in FY27."] * 80)
+    letter = make_pdf(["Annual report: https://www.lt.com/ar/AnnualReport2026.pdf",
+                       "Call transcript: https://www.lt.com/calls/Q1FY27-Earnings-Call-Transcript.pdf"])
+    seen = []
+
+    def handler(r):
+        seen.append(r.url.path)
+        if r.url.path.endswith("Transcript.pdf"):
+            return httpx.Response(200, content=pdf)
+        if r.url.path.endswith("AnnualReport2026.pdf"):
+            return httpx.Response(500)
+        return httpx.Response(200, content=letter)
+    d = docs.Docs(transport=httpx.MockTransport(handler), check_host=lambda h: True)
+    cands = [{"kind": "transcript", "at": "2026-08-03", "title": "Con. Call Updates", "url": "https://nsearchives.nseindia.com/lt-letter.pdf"}]
+    got = deepdive.readable(d, cands, 1, [], ())
+    assert got and got[0][0]["url"].endswith("Transcript.pdf") and "/ar/AnnualReport2026.pdf" not in seen
