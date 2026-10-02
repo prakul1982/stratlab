@@ -65,12 +65,12 @@ const BEYOND: [string, string, string][] = [
 ];
 
 const INVESTORS: [string, string, string][] = [
-  ["Stage 2 + Supertrend scan", "Which stocks in your watchlist or a ready-made group are in Stage 2 with the Supertrend pointing up, fresh signals first. Backtest the ST S2 rules on the whole group in one click, and get a message after the close when a new one lines up.", "ST S2, with a daily alert"],
-  ["Sector rotation", "Every sector against the market: Leading, Weakening, Lagging or Improving, with the path it took to get there. Click a sector to see its biggest stocks the same way. NSE sectors, S&P 500 sectors and US industries.", "Know where the money is moving"],
+  ["Stage 2 scan and sector rotation", "Which stocks are in Stage 2 with the Supertrend up, fresh signals first, and which sectors are Leading, Weakening, Lagging or Improving against the market, down to their biggest stocks. A daily alert when a new one lines up.", "Know where the money is moving"],
   ["Filings and red flags", "What your watchlist companies told the exchange: fund raises like a QIP or preferential issue, promoter pledges, auditor or director resignations, defaults, regulator action, rating downgrades. A 3-month summary, and an evening alert.", "Read the filing before the chart"],
   ["Company deep dive", "Ten years of sales, margins, capex and free cash flow, then the business model and every capex plan read from the company's own presentations and earnings calls, each linked to its source.", "In the company's own words"],
+  ["Measured like its industry", "A hospital on revenue per occupied bed and occupancy, a bank on NIM and bad loans, a hotel on RevPAR, cement on EBITDA per tonne; valued on EV/EBITDA, price to book or P/E, whichever its industry uses.", "The right yardstick"],
   ["Management report card", "What management said it would deliver on past earnings calls (growth, margins, capex) checked against what the results later showed: met, missed or not due yet.", "Do they deliver?"],
-  ["Checklist, home and deck", "Fixed, written-down checks on growth, quality, debt, cash, promoters, filings and trend; every watchlist company on one investor home; and the whole deep dive as slides.", "All in one place"],
+  ["Checklist, home and deck", "Fixed, written-down checks on growth, quality, debt, cash, promoters, filings and trend, adjusted for the company's industry; every watchlist company on one investor home; and the whole deep dive as slides.", "All in one place"],
 ];
 
 const MARKETS: [string, string, string][] = [
@@ -110,7 +110,7 @@ export function Login() {
   }, []);
 
   const signIn = () => supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/" } });
-  const cta = (label = "Test your idea free") => (
+  const cta = (label = "Start free") => (
     <button className="btn lp-cta" onClick={signIn}><Google />{label}</button>
   );
 
@@ -119,7 +119,7 @@ export function Login() {
       <header className="lp-nav">
         <a href="#top" className="brand" aria-label="StratLab home"><Logo size={46} /></a>
         <nav aria-label="Sections">
-          <a href="#how">How it works</a><a href="#checks">Honesty checks</a><a href="#beyond">Options &amp; groups</a><a href="#research">Research</a><a href="#investors">For investors</a><a href="#markets">Markets</a><a href="#faq">FAQ</a>
+          <a href="#investors">For investors</a><a href="#how">For traders</a><a href="#checks">Honesty checks</a><a href="#beyond">Options &amp; groups</a><a href="#markets">Markets</a><a href="#faq">FAQ</a>
         </nav>
         <button className="btn outline sm" onClick={signIn}>Sign in</button>
       </header>
@@ -127,16 +127,16 @@ export function Login() {
       <section id="top" className="lp-hero ruled">
         <div className="lp-wrap lp-hero-grid">
           <div className="stack" style={{ gap: 24 }}>
-            <span className="eyebrow">Backtesting that tells you the truth</span>
-            <h1 className="serif lp-h1">Is your trading idea real, or just <em>lucky</em>?</h1>
-            <p className="serif lp-lede">Write a strategy in plain words. StratLab tests it on years of real prices, after real costs, runs four honesty checks, and tells you straight.</p>
+            <span className="eyebrow">For investors and traders · Before your money does</span>
+            <h1 className="serif lp-h1">Know the company. <em>Test</em> the idea.</h1>
+            <p className="serif lp-lede">Investing? Get the business in its own words, ten years of numbers, red flags, and whether management delivered what it promised. Trading? Write a strategy in plain words; we test it on years of real prices, after real costs, and tell you straight if the edge is real.</p>
             <div className="row wrap" style={{ gap: 12 }}>
               {cta()}
-              <a className="btn quiet lp-cta-2" href="#how">See how it works</a>
+              <a className="btn quiet lp-cta-2" href="#investors">For investors</a>
+              <a className="btn quiet lp-cta-2" href="#how">For traders</a>
             </div>
-            <a className="link small" href="#investors">Investing for the long term? See the deep dive, management report card and red flags →</a>
             {error && <p className="banner" role="alert">{error}</p>}
-            <p className="small muted">Free to start · No code · 7 markets · Paper trading only, no real orders</p>
+            <p className="small muted">Free to start · No code · Indian and US companies · 7 markets to test on · Paper trading only, no real orders</p>
           </div>
           <HeroDemo />
         </div>
@@ -144,11 +144,43 @@ export function Login() {
 
       <section className="lp-band">
         <div className="lp-wrap lp-facts">
-          {[["4", "honesty checks on every test"], ["7", "markets, plus your own data"], ["20+", "indicators, long or short"], ["₹0", "to start, no card needed"]].map(([n, t]) => (
+          {[["10 yrs", "of numbers on every Indian company"], ["4", "honesty checks on every strategy test"], ["7", "markets to test on, plus your own data"], ["₹0", "to start, no card needed"]].map(([n, t]) => (
             <div key={t}><b className="serif">{n}</b><span>{t}</span></div>
           ))}
         </div>
       </section>
+
+      <section id="research" className="lp-sec">
+        <div className="lp-wrap lp-split">
+          <div className="stack" style={{ gap: 14 }}>
+            <span className="eyebrow">Research</span>
+            <h2 className="serif lp-h2">Start with any company, Indian or US.</h2>
+            <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, analyst ratings, insider trades and news. An AI read scores it, lays out the bull and bear case, and ends with three ideas you can test in one click.</p>
+            <ul className="bullets lp-p" style={{ fontSize: 16 }}>
+              <li><b>Themes:</b> map a sector and get a ranked shortlist.</li>
+              <li><b>Market pulse:</b> index levels, headlines and today's mood.</li>
+              <li><b>Compare</b> two companies, and keep a <b>watchlist</b>.</li>
+            </ul>
+          </div>
+          <ResearchMock />
+        </div>
+      </section>
+
+      <section id="investors" className="lp-sec lp-alt">
+        <div className="lp-wrap stack" style={{ gap: 32 }}>
+          <div className="lp-head">
+            <span className="eyebrow">For investors</span>
+            <h2 className="serif lp-h2">Know the company before you own it.</h2>
+            <p className="lp-p">For holding a stock for months or years, not minutes. Everything comes from the company's own filings and reported numbers, every quote is checked against its source, and nothing here tells you what to buy.</p>
+          </div>
+          <div className="lp-beyond">
+            {INVESTORS.map(([t, b, tag]) => (
+              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
+            ))}
+          </div>
+        </div>
+      </section>
+
 
       <section className="lp-sec">
         <div className="lp-wrap lp-split">
@@ -220,37 +252,6 @@ export function Login() {
           </div>
           <div className="lp-beyond">
             {BEYOND.map(([t, b, tag]) => (
-              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="research" className="lp-sec">
-        <div className="lp-wrap lp-split">
-          <div className="stack" style={{ gap: 14 }}>
-            <span className="eyebrow">Research</span>
-            <h2 className="serif lp-h2">Don't have an idea yet? Start with a company.</h2>
-            <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, analyst ratings, insider trades and news. An AI read scores it, lays out the bull and bear case, and ends with three ideas you can test in one click.</p>
-            <ul className="bullets lp-p" style={{ fontSize: 16 }}>
-              <li><b>Themes:</b> map a sector and get a ranked shortlist.</li>
-              <li><b>Market pulse:</b> index levels, headlines and today's mood.</li>
-              <li><b>Compare</b> two companies, and keep a <b>watchlist</b>.</li>
-            </ul>
-          </div>
-          <ResearchMock />
-        </div>
-      </section>
-
-      <section id="investors" className="lp-sec lp-alt">
-        <div className="lp-wrap stack" style={{ gap: 32 }}>
-          <div className="lp-head">
-            <span className="eyebrow">For investors</span>
-            <h2 className="serif lp-h2">Not just trades. The whole picture.</h2>
-            <p className="lp-p">Tools for holding a stock for months, not minutes. Facts from prices and filings, and your own rules decide.</p>
-          </div>
-          <div className="lp-beyond">
-            {INVESTORS.map(([t, b, tag]) => (
               <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
             ))}
           </div>
