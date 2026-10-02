@@ -310,7 +310,7 @@ Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on t
 
 ## What's new
 
-See the [changelog](CHANGELOG.md).
+See the [changelog](CHANGELOG.md) for what has shipped and the [roadmap](docs/ROADMAP.md) for what is planned and the known gaps.
 
 ## Disclaimer
 
