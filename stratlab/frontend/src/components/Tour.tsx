@@ -8,8 +8,8 @@ const SEEN = "stratlab.tour.v1";
 type Step = { icon: ReactNode; title: string; body: string; where: string };
 
 const STEPS: Step[] = [
-  { icon: <LogoMark size={52} />, title: "Welcome to your trading lab",
-    body: "StratLab tests trading ideas honestly. You describe an idea, we run it on years of real prices after real costs, and tell you if the edge is real or just luck. Here is everything you can do, in about a minute.",
+  { icon: <LogoMark size={52} />, title: "Welcome to StratLab",
+    body: "For investors: understand a company from its own filings, its numbers and management's track record. For traders: describe an idea, test it on years of real prices after real costs, and learn if the edge is real or just luck. Here is everything, in about a minute.",
     where: "Each idea lives in its own notebook, listed in the sidebar (the ☰ menu on phones)." },
   { icon: <Compass size={34} />, title: "Ask or do anything",
     body: "One box that gets things done. \"Test: buy NIFTY when RSI drops below 30\" builds the rules and shows the verdict; \"paper trade an EMA cross on BTC\" starts paper trading; \"research HDFC Bank\", \"momentum ideas for banks\" or \"what is walk-forward?\" work too. Paste a strategy to import it.",
@@ -21,8 +21,8 @@ const STEPS: Step[] = [
     body: "Look up any Indian or US company: price, valuation, growth, who owns it, news, and an AI read that ends with trading ideas you can test in one click. Themes, the market pulse and side-by-side comparisons are there too.",
     where: "\"Research\" in the sidebar menu. Press Watch on a company to keep it on your watchlist." },
   { icon: <Pulse size={34} />, title: "Tools for investors",
-    body: "Scan a group for Stage 2 stocks with the Supertrend up (ST S2), see which sectors lead or lag the market and click through to their stocks, read your watchlist companies' filings with red flags like a QIP, pledges or resignations, and open any Indian company's deep dive: business, capex plans, a management report card and an investor checklist. The investor home puts your whole watchlist on one page.",
-    where: "Research → Scan, Rotation and Red flags. These are Pro tools." },
+    body: "Scan a group for Stage 2 stocks with the Supertrend up (ST S2), see which sectors lead or lag the market and click through to their stocks, read your watchlist companies' filings with red flags like a QIP, pledges or resignations, and open any Indian company's deep dive: business, the measures its industry is judged on, how it's valued, capex plans, a management report card and an investor checklist. The investor home puts your whole watchlist on one page.",
+    where: "The Investing section of the menu: Investor home, Stage 2 scan, Sector rotation, Red flags. Deep dive is on every Indian company page. These are Pro tools." },
   { icon: <Globe size={34} />, title: "Test on any market",
     body: "The same rules run on Indian stocks, indices and F&O, US, UK, European and Japanese stocks, forex, crypto, or any market you have a CSV for. Prices, hours, currency and costs switch to match.",
     where: "Pick the market first on a new notebook, or press the \"Testing on\" button at the top of any notebook to change it." },

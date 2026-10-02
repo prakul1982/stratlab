@@ -134,6 +134,7 @@ export function Login() {
               {cta()}
               <a className="btn quiet lp-cta-2" href="#how">See how it works</a>
             </div>
+            <a className="link small" href="#investors">Investing for the long term? See the deep dive, management report card and red flags →</a>
             {error && <p className="banner" role="alert">{error}</p>}
             <p className="small muted">Free to start · No code · 7 markets · Paper trading only, no real orders</p>
           </div>

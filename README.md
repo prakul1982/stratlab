@@ -7,7 +7,11 @@
 
 **Test your trading idea before your money does.**
 
-Research a company, describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex, crypto or commodities (MCX and global), then paper trade it on live prices with fake money. For investors: a Stage 2 + Supertrend scan, sector rotation, exchange filings with red flags, and a deep dive into a company's business, capex and plans from its own documents.
+**For investors:** understand any Indian company from its own filings: ten years of numbers, the business in its own words, the measures its industry is judged on, how it's valued, red flags, and whether management delivered what it promised. Scan for Stage 2 stocks and see which sectors lead.
+
+**For traders:** describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex, crypto or commodities (MCX and global), then paper trade it on live prices with fake money.
+
+One question when you sign up (investing, trading or both) puts what you came for first.
 
 ### [🌐 stratlab.studio](https://stratlab.studio)
 
@@ -24,6 +28,11 @@ Research a company, describe a strategy in plain English, test it honestly on In
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/verdict-dark.png">
   <img alt="A verdict page: 'No edge here', with four honesty checks: unseen data, nearby settings, bad-luck drawdown and enough trades" src="docs/images/verdict-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/investor-start-dark.png">
+  <img alt="The investor home: 'Which company do you want to look into?' with company search, popular names and four starting questions, and the Investing section of the menu" src="docs/images/investor-start-light.png">
 </picture>
 
 ## What makes it different
@@ -57,13 +66,16 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
     - A spread and commission estimate per side.
     - Sunday 6 pm to Friday 5 pm New York, US holiday calendar.
 - **Research built in.** Company pages for India and the US: live price and chart, valuation and growth with context, sales and profit history, results against estimates, who owns it, insider trades, news, and an AI read whose trading ideas open as a notebook in one click. Plus AI theme maps, a daily market pulse, side-by-side comparisons and a watchlist.
-- **For investors, not just traders.**
-  - **Stage 2 + Supertrend scan (ST S2):** which stocks in your watchlist or a ready-made group are in Weinstein's Stage 2 with the Supertrend up, fresh signals first. Backtest the ready-made ST S2 rules on the whole group in one click, and get a message after each close when a watchlist stock lines up.
-  - **Sector rotation:** every sector against the market, as Leading, Weakening, Lagging or Improving, with the trail it took and a plain-language summary. Click a sector to see its biggest stocks against that sector. NSE sectors, NSE size and style indices, S&P 500 sectors and US industries.
-  - **Filings and red flags (India):** what a company told the exchange: fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades, each linked to the filing. A 3-month summary per watchlist stock and an evening alert.
-  - **Company deep dive (India):** ten years of sales, profit, margins, capex and free cash flow, then the business model and the capex and growth plans read from the company's own investor presentations and earnings-call transcripts, each plan linked to the document it came from.
-  - **Management report card (India):** the targets management gave on its earnings calls over two years (revenue and profit growth, margins, capex), each checked against what the reported numbers later showed: met, missed or not due yet, with the quote and the call it came from.
-  - **Investor checklist, investor home and deck (India):** fixed, written-down checks (trend, growth, return on capital, margins, debt, cash conversion, promoter holding, filings, management's record) on every deep dive; every watchlist company on one **Investor home**; and the deep dive as a PowerPoint deck.
+- **For investors, not just traders.** The **Investing** section of the menu has every tool one tap away, and investors get their own home page: "Which company do you want to look into?"
+  - **Company deep dive (India):** ten years of sales, profit, margins, capex and free cash flow; the business model and every capex plan read from the company's own investor presentations and call transcripts. Every quote is checked against the document it's credited to, and anything that can't be found there is dropped. Transcripts the company only links to from its own website are fetched from there.
+  - **Industry-aware:** banks, insurers, holding companies, real estate, power and telecom, and cyclicals each get rules that fit them. Each industry's own measures (revenue per occupied bed and occupancy for hospitals, NIM and NPAs for banks, RevPAR for hotels, ARPU for telecom, EBITDA per tonne for cement and metals) are pulled from the company's documents, with the quote.
+  - **How it's valued:** EV/EBITDA for asset-heavy businesses, price to book for lenders, insurers and developers, P/E for the rest, always with P/E alongside.
+  - **Management report card:** the targets management gave on up to six earnings calls over two years, each checked against the reported results: met, missed or not due yet, with the quote and the call. "This year" and "next year" are resolved to the right financial year; analysts' numbers never count.
+  - **Investor checklist:** fixed, written-down pass / watch / fail checks on trend, growth, return on capital or equity, margins, debt, cash conversion, promoter holding, filings and management's record.
+  - **Investor home and deck:** every watchlist company on one page (trend, sector, red flags, checklist, report card), and any deep dive as a PowerPoint deck.
+  - **Stage 2 + Supertrend scan (ST S2):** which stocks in your watchlist or a ready-made group are in Weinstein's Stage 2 with the Supertrend up, fresh signals first, with a daily alert and a one-click backtest of the ST S2 rules on the whole group.
+  - **Sector rotation:** every sector against the market, as Leading, Weakening, Lagging or Improving, with the trail it took. Click a sector to see its biggest stocks against it. NSE sectors, size and style indices, S&P 500 sectors and US industries.
+  - **Filings and red flags (India):** fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades, each linked to the filing, with an evening alert.
 - **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
 - **Import any strategy.** One **Import a strategy** page takes a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words. It sets up the right thing: a notebook for rules on one instrument, a group notebook for strategies that scan a list (like an F&O momentum scanner), or an Options structure. Anything that can't be carried over is listed.
 - **Paper trading in every market.** Run the rules on live prices with fake money: India, the US, UK, Europe, Japan and forex during their market hours, crypto around the clock. A single instrument, a whole group with shared capital, or an option structure. Sessions keep running until you stop them. With alerts on, each trade comes as a phone notification, on Telegram or by email, plus a short report a few minutes after each market closes.
@@ -87,6 +99,16 @@ Most backtesting tools show a flattering chart. StratLab tells you whether the e
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/import-dark.png">
   <img alt="Import a strategy: one place for any format, which sets up a notebook, a group or an options structure" src="docs/images/import-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/deepdive-dark.png">
+  <img alt="A company deep dive for Reliance Industries: growth over 3 and 5 years, ten years of sales and profit, and quarters with growth on a year earlier" src="docs/images/deepdive-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/reportcard-dark.png">
+  <img alt="The management report card: 3 of 4 checkable targets met, each with the quote, the call it came from, the target and the actual result" src="docs/images/reportcard-light.png">
 </picture>
 
 <picture>
@@ -130,15 +152,15 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 
 | You want to… | Where it is |
 | --- | --- |
-| Find an idea | **Research** in the sidebar: a company's AI read ends with ideas to test in one click |
+| Find an idea | **Investing → Companies** in the menu: a company's AI read ends with ideas to test in one click |
 | Explore a sector | **Research → Themes**: a map of who's involved, where the margin sits, and a ranked shortlist |
 | See the market's mood | **Research → Market pulse**: index levels, headlines and an AI read of what's moving |
-| Keep an eye on companies | **Watch** on a company page; they're listed under **Research → Watchlist** |
-| Find Stage 2 stocks with the Supertrend up | **Research → Scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
-| See which sectors are leading | **Research → Rotation**: sectors, size and style indices or US industries, weekly or daily, with a trail and **Animate**; **Stocks →** on a sector shows its biggest stocks against it (Pro) |
-| Check a company's filings for red flags | **Research → Red flags** for your India watchlist, or **Filings and red flags** on any Indian company page; tick the box for an evening alert (Pro) |
+| Keep an eye on companies | **Watch** on a company page; they're listed under **Investing → Watchlist** |
+| Find Stage 2 stocks with the Supertrend up | **Investing → Stage 2 scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
+| See which sectors are leading | **Investing → Sector rotation**: sectors, size and style indices or US industries, weekly or daily, with a trail and **Animate**; **Stocks →** on a sector shows its biggest stocks against it (Pro) |
+| Check a company's filings for red flags | **Investing → Red flags** for your India watchlist, or **Filings and red flags** on any Indian company page; tick the box for an evening alert (Pro) |
 | Understand a company's business and its capex plans | On any Indian company page, **Deep dive: business, capex, management**; **Read the documents** has the AI read its latest presentation and call transcripts; **Check past calls** builds the management report card; **Download as slides** gives a PowerPoint deck (Pro) |
-| See the whole watchlist the investor way | **Research → Investor home**: trend, sector rotation, red flags, checklist and report card for each India watchlist company (Pro) |
+| See the whole watchlist the investor way | **Investing → Investor home**: trend, sector rotation, red flags, checklist and report card for each India watchlist company (Pro) |
 | Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
 | Bring a strategy you already have | **Import a strategy** in the sidebar (or on New notebook): it sets up a notebook, a group notebook or an Options structure depending on what you bring; a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
 | Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
@@ -167,10 +189,11 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Paper trade | **Paper trade** at the top of a notebook or verdict; running sessions are under **Paper trading** |
 | Share a result | **Share verdict** on a verdict: send the card (chart, the four checks, the numbers) straight to an app on your phone or save it on a computer, or **Make a public link**: a read-only page anyone can open without an account. It shows the verdict, not your rules, and you can turn it off at any time |
 | Save the rules | **Export** in a notebook saves the rules as a file |
+| Put investing or trading first | **Account → What you're here for**: Investing, Trading or Both (asked once when you sign up). It orders the menu, the home page and the examples; nothing is hidden |
 | Set how much is shown up front | **Account → Experience**: New to trading, I've traded a bit, or I trade actively. It changes only what starts open; every tool stays available |
 | See all your paper trading at once | **Paper trading** shows **All running sessions** on top: open position value, today, total P&L, the worst day and the deepest fall for everything together, per currency, with each session's share |
 | Borrow a strategy, or share yours | **Strategy library** in the sidebar: rules other traders published with their honest verdict (luck included). **Copy and re-test** puts them in a notebook of your own. Publish yours from a verdict: **Share verdict → Publish to the strategy library** |
-| Ask or do anything | **Ask or do anything** at the top of the sidebar or on your notebooks page, or **Ctrl+K** (⌘K) anywhere. Type a line and press Enter: "Test: buy NIFTY when RSI drops below 30" builds the rules and shows the verdict, "paper trade an EMA cross on BTC" starts paper trading, "research HDFC Bank" opens research, "what is walk-forward?" is answered in place, "momentum ideas for banks" gives testable ideas. Pasting a strategy imports it |
+| Ask or do anything | **Ask or do anything** at the top of the sidebar or on your home page, or **Ctrl+K** (⌘K) anywhere. Type a line and press Enter: "deep dive Apollo Hospitals", "which sectors are leading?", "red flags in my watchlist", "Stage 2 stocks in NIFTY 50" and "compare TCS and Infosys" open the right page; "Test: buy NIFTY when RSI drops below 30" builds the rules and shows the verdict, "paper trade an EMA cross on BTC" starts paper trading, "research HDFC Bank" opens research, "what is walk-forward?" is answered in place, "momentum ideas for banks" gives testable ideas. Pasting a strategy imports it |
 | See your plan or upgrade | **Account → Plan and usage** (Plans lives inside Account) |
 | Put it on your phone | **Account → On your phone**: install StratLab to the home screen (its own icon, full screen) and **Turn on notifications** to get trade alerts and the daily report on that device, no Telegram needed. On an iPhone, first Share → Add to Home Screen |
 | Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
