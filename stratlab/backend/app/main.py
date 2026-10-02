@@ -19,7 +19,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, basket, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
+from . import admin, audit, basket, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -49,7 +49,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, AuditReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -1644,6 +1644,40 @@ def admin_filings_check(symbol: str = "RELIANCE", _=Depends(admin.admin_profile)
             doc = {"ok": False, "title": found[0]["title"], "kind": found[0]["kind"], "error": public_text("; ".join(probs) or "nothing readable")}
     return {"ok": True, "symbol": sym, "count": len(items), "latest": [{k: i[k] for k in ("at", "label", "subject")} for i in items[:3]],
             "alerts": filing_alerts_job.status, "document": doc, "documents_found": len(found)}
+
+
+audit_runner = audit.Runner()
+
+
+def audit_one(sym: str, docs: bool) -> dict:
+    exchange = getattr(filings_feed, "last_price", None)
+    read = (lambda cands, probs: deepdive.readable(deep_docs, cands, 1, probs)) if docs else None
+    row = audit.audit_company(sym, deep_base, deep_view, exchange, read)
+    for i in row["issues"]:
+        i["detail"] = public_text(i["detail"])
+    return row
+
+
+@app.get("/admin/audit")
+def admin_audit_status(_=Depends(admin.admin_profile)):
+    """The running or last data audit, and the sets it can run on."""
+    return {**audit_runner.status(), "sets": audit.sets()}
+
+
+@app.post("/admin/audit")
+def admin_audit_start(req: AuditReq, _=Depends(admin.admin_profile)):
+    """Run every company in a set through the deep dive's numbers, prices, checks and documents, comparing each
+    against its source. Runs in the background (about 3 to 10 seconds a company); no AI is used."""
+    try:
+        syms = audit.symbols_for(req.set, req.symbols)
+    except ValueError:
+        err(400, "bad_set", "Pick one of the listed sets.")
+    syms = [research_routes.symbol_of(s) for s in syms]
+    label = f"{len(syms)} chosen companies" if req.symbols else next((s["name"] for s in audit.sets() if s["id"] == req.set), req.set)
+    try:
+        return {**audit_runner.start(syms, label, lambda s: audit_one(s, req.docs), req.docs), "sets": audit.sets()}
+    except RuntimeError as e:
+        err(409, "audit_running", str(e))
 
 
 @app.post("/admin/promo")

@@ -94,6 +94,7 @@ def test_setup_check_reports_keys_and_plans(monkeypatch):
                  "RAZORPAY_PLAN_BASIC": "plan_good", "RAZORPAY_PLAN_PRO": "plan_typo", "RAZORPAY_PLAN_BASIC_YEAR": "",
                  "RAZORPAY_PLAN_PRO_YEAR": ""}.items():
         monkeypatch.setattr(settings, k, v)
+    monkeypatch.setattr(billing, "international_status", lambda k, s: {"enabled": None, "detail": "x"})
     bad = {"auth": True}
     monkeypatch.setattr(billing.razorpay, "Client", lambda auth: type("C", (), {"plan": FakePlan(bad["auth"])})())
     r = billing.check_setup()
@@ -105,3 +106,17 @@ def test_setup_check_reports_keys_and_plans(monkeypatch):
     assert r["keys_ok"] and plans["Basic monthly"]["ok"] and "₹999" in plans["Basic monthly"]["detail"]
     assert not plans["Pro monthly"]["ok"] and "can't find" in plans["Pro monthly"]["detail"]
     assert plans["Basic yearly"]["detail"] == "Not set" and r["webhook_secret_set"] is False
+    assert r["currencies"] == ["INR"] and r["international"]["enabled"] is None
+
+
+def test_international_status_reads_razorpay_or_points_to_the_dashboard():
+    import httpx
+
+    def via(body, status=200):
+        return httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(status, json=body)))
+    assert billing.international_status("k", "s", via({"card": True, "international": True}))["enabled"] is True
+    off = billing.international_status("k", "s", via({"card": True, "options": {"international_cards": False}}))
+    assert off["enabled"] is False and "International payments" in off["detail"]
+    assert billing.international_status("k", "s", via({"card": True}))["enabled"] is None          # answer doesn't say
+    gone = billing.international_status("k", "s", via({}, 401))
+    assert gone["enabled"] is None and "Couldn't ask" in gone["detail"]

@@ -193,6 +193,15 @@ class NSEFilings:
         self.cache.set(key, path, 7 * 86400)
         return path
 
+    def last_price(self, symbol: str) -> float | None:
+        """The exchange's own last traded price, for checking StratLab's prices against the source."""
+        data = self._get("/api/quote-equity", {"symbol": symbol})
+        info = (data or {}).get("priceInfo") or {} if isinstance(data, dict) else {}
+        try:
+            return float(info.get("lastPrice")) or None
+        except (TypeError, ValueError):
+            return None
+
 
 def report(feed, symbol: str) -> dict:
     """Timeline plus the 3-month summary for one NSE symbol."""

@@ -50,6 +50,42 @@ def _mask(v: str) -> str:
     return f"{v[:9]}…{v[-4:]}" if len(v) > 14 else ("set" if v else "missing")
 
 
+def _find_international(obj):
+    """The first true/false flag whose name mentions international payments, anywhere in Razorpay's answer."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if "international" in str(k).lower() and isinstance(v, bool):
+                return v
+        for v in obj.values():
+            found = _find_international(v)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = _find_international(v)
+            if found is not None:
+                return found
+    return None
+
+
+def international_status(key: str, secret: str, http=None) -> dict:
+    """Whether the account takes cards issued outside India. Razorpay switches this on per account (after review),
+    and its payment-methods answer doesn't always say; when it doesn't, the admin is pointed to the dashboard."""
+    import httpx
+    where = "Razorpay Dashboard → Account & Settings → International payments"
+    try:
+        r = (http or httpx).get("https://api.razorpay.com/v1/methods", auth=(key, secret), timeout=15)
+        r.raise_for_status()
+        flag = _find_international(r.json())
+    except Exception as e:
+        return {"enabled": None, "detail": f"Couldn't ask Razorpay ({e.__class__.__name__}). Check {where}."}
+    if flag is True:
+        return {"enabled": True, "detail": "Cards issued outside India are accepted."}
+    if flag is False:
+        return {"enabled": False, "detail": f"Off: only Indian cards and UPI work. Apply in {where}."}
+    return {"enabled": None, "detail": f"Razorpay's answer doesn't say. Check {where}."}
+
+
 def check_setup() -> dict:
     """Ask Razorpay whether the keys work and each plan exists, for the admin's "Check payments setup" button.
     Nothing secret is returned: the key ID is shortened and the secret only reported by length."""
@@ -67,6 +103,8 @@ def check_setup() -> dict:
     except Exception as e:
         out["keys_error"] = (str(e) or e.__class__.__name__)[:200]
         return out
+    out["international"] = international_status(key, secret)
+    currencies = set()
     for label, pid in (("Basic monthly", settings.RAZORPAY_PLAN_BASIC), ("Pro monthly", settings.RAZORPAY_PLAN_PRO),
                        ("Basic yearly", settings.RAZORPAY_PLAN_BASIC_YEAR), ("Pro yearly", settings.RAZORPAY_PLAN_PRO_YEAR)):
         row = {"label": label, "id": pid or None, "ok": False, "detail": "Not set" if not pid else None}
@@ -74,11 +112,15 @@ def check_setup() -> dict:
             try:
                 p = probe.plan.fetch(pid)
                 item = p.get("item") or {}
-                row.update(ok=True, detail=f"{item.get('name', '')}: ₹{(item.get('amount') or 0) / 100:,.0f} every "
+                currencies.add(item.get("currency") or "INR")
+                cur = item.get("currency") or "INR"
+                sign = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£"}.get(cur, cur + " ")
+                row.update(ok=True, detail=f"{item.get('name', '')}: {sign}{(item.get('amount') or 0) / 100:,.0f} every "
                                            f"{p.get('interval', 1)} {p.get('period', '')}".strip())
             except Exception as e:
                 row["detail"] = f"Razorpay can't find this plan with these keys ({(str(e) or 'error')[:120]})"
         out["plans"].append(row)
+    out["currencies"] = sorted(currencies)
     return out
 
 

@@ -32,8 +32,8 @@ USDJPY) traded in India. Today only the USDINR spot rate is available, through t
 
 ### International payments
 Payments are in rupees through Razorpay today. To let people outside India subscribe:
-- Turn on international cards in the Razorpay dashboard (needs Razorpay's approval) and check the account's status;
-  Admin → Check billing should report whether international payments are enabled.
+- Turn on international cards in the Razorpay dashboard (needs Razorpay's approval). *Done:* Admin → Check payments
+  setup reports whether international cards are on, when Razorpay's answer says so.
 - Prices per currency (at least USD, plus GBP and EUR), shown by the visitor's country, with the matching Razorpay plans.
 - Taxes and invoices for overseas customers (GST rules for export of services), and the legal pages updated.
 - A clear note on what works for people outside India: Indian market data, US and other markets, the deep dive.
@@ -41,6 +41,8 @@ Payments are in rupees through Razorpay today. To let people outside India subsc
 ### Extreme stress test: one stop for everything StratLab offers
 The goal: nobody needs to open another site to check something StratLab already covers. A structured test, feature
 by feature, against what people would otherwise use:
+- *Started:* Admin → Data audit covers the deep dive's numbers, prices, industry, valuation, checklist and documents
+  for up to 300 companies, compared against their sources. Still to cover: the rest below, a Nifty 500 list, and load.
 - **Every feature on real data at scale:** the deep dive, report card, checklist and measures on the Nifty 500 (not
   just a few names), every industry; the scan and rotation on every set; backtests and paper trading in every market;
   options on every underlying.
