@@ -236,18 +236,29 @@ def _a(url: str | None, text: str) -> str:
     return f'<a href="{escape(url)}" style="color:#1a56db;text-decoration:none">{t}</a>' if ok else t
 
 
-def render(issue: dict) -> tuple[str, str]:
-    """(html, text) for one issue. Inline styles only, no images or web fonts, one column that fits a phone.
-    The footer carries the {unsubscribe_url} placeholder for the sender."""
-    view = f"{origin()}/news/{issue['id']}" if issue.get("id") else None
-    html = ['<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            f"<title>{escape(issue['subject'])}</title></head>"
+link = _a            # for the other emails built in this style (app/lifecycle.py)
+
+
+def frame(title: str, body: list[str], footer: str) -> str:
+    """An email around its body: inline styles only, no images or web fonts, one column that fits a phone. `body` and
+    `footer` are HTML, already escaped."""
+    return ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            f"<title>{escape(title)}</title></head>"
             '<body style="margin:0;padding:0;background:#f4f5f7">'
             '<div style="max-width:600px;margin:0 auto;padding:16px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
             'color:#1f2328;font-size:15px;line-height:1.5">'
             '<div style="background:#ffffff;border-radius:8px;padding:20px">'
-            f'<div style="font-size:12px;color:#6b7280;letter-spacing:.04em;text-transform:uppercase">StratLab</div>'
-            f'<h1 style="font-size:20px;line-height:1.3;margin:4px 0 12px">{escape(issue["subject"])}</h1>']
+            '<div style="font-size:12px;color:#6b7280;letter-spacing:.04em;text-transform:uppercase">StratLab</div>'
+            f'<h1 style="font-size:20px;line-height:1.3;margin:4px 0 12px">{escape(title)}</h1>'
+            + "".join(body) + "</div>"
+            f'<p style="font-size:12px;color:#6b7280;margin:16px 4px">{footer}</p>'
+            "</div></body></html>")
+
+
+def render(issue: dict) -> tuple[str, str]:
+    """(html, text) for one issue. The footer carries the {unsubscribe_url} placeholder for the sender."""
+    view = f"{origin()}/news/{issue['id']}" if issue.get("id") else None
+    html = []
     text = [issue["subject"], ""]
     if issue.get("summary"):
         html.append(f'<p style="margin:0 0 16px">{escape(issue["summary"])}</p>')
@@ -267,9 +278,6 @@ def render(issue: dict) -> tuple[str, str]:
     if view:
         html.append(f'<p style="margin:20px 0 0">{_a(view, "Read this in StratLab")}</p>')
         text += [f"Read this in StratLab: {view}", ""]
-    html.append("</div>"
-                f'<p style="font-size:12px;color:#6b7280;margin:16px 4px">{escape(FOOTER)}<br>'
-                f'<a href="{UNSUBSCRIBE}" style="color:#6b7280">Unsubscribe or change how often</a></p>'
-                "</div></body></html>")
+    footer = f'{escape(FOOTER)}<br><a href="{UNSUBSCRIBE}" style="color:#6b7280">Unsubscribe or change how often</a>'
     text += [FOOTER, f"Unsubscribe or change how often: {UNSUBSCRIBE}"]
-    return "".join(html), "\n".join(text)
+    return frame(issue["subject"], html, footer), "\n".join(text)

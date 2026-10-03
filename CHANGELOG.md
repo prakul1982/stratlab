@@ -2,6 +2,12 @@
 
 ## October 2026
 
+### Lifecycle emails, first steps and the offer countdown
+- **Emails that follow an account:** a welcome right after signing up, a nudge on day 2 to test a first strategy (only if they haven't), a reminder the day before and on the last day of the free paper-trading trial and of the launch offer, and what's new after 14 quiet days. Each goes once per person, at most one a day, from 8 am to 9 pm India time. **Tips and reminders** can be turned off in Account or from the link in each email; payment receipts and a note when a paid plan stops always go.
+- **Admin → Services** previews each of these emails, or sends one to you as a test.
+- **Your first steps** on Home for a new account: run a backtest, add a stock to the watchlist, open a deep dive, start paper trading, set up newsletters or phone alerts. Each ticks itself from what you've done; hide it any time, and it goes by itself when everything's done.
+- **The launch offer counts down** on Home and Plans while it runs.
+
 ### Newsletters, and research reads that stay factual
 - **Newsletters:** the Market Brief for India and the US after each close (or a weekly digest on Saturday morning), and My Stocks with what changed for the stocks in your watchlist, notebooks and paper trading. Choose daily, weekly or off in **Account → Newsletters**; past issues are on the **News** page. The weekly Market Brief is free, the daily one is on Basic and My Stocks on Pro.
 - **Email you can trust:** newsletters go only to an address confirmed from a link, every email has a one-click unsubscribe (the page asks first, so mail scanners opening links don't unsubscribe anyone), and email can go through Brevo as well as Resend or SMTP.

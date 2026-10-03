@@ -51,11 +51,11 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_pages, weekly
+from . import ask, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
 from .models import (ShareReq, GroupLiveReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -124,6 +124,7 @@ kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 newsletter_job = news.Job()
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
+lifecycle_job = lifecycle.Job()
 
 
 @asynccontextmanager
@@ -151,6 +152,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
     newsletter_job.start()
     results_job.start()
+    lifecycle_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
@@ -415,6 +417,10 @@ def admin_set_prices(req: PricesReq, _=Depends(admin.admin_profile)):
 
 @app.get("/me")
 def me(profile=Depends(current_profile)):
+    try:
+        lifecycle.seen(profile)       # remembers the visit; welcomes a brand-new account
+    except Exception as e:
+        print("lifecycle visit failed:", str(e)[:160])
     plan = profile["_plan"]
     info = plan_info(plan)
     return ok({
@@ -540,7 +546,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
     if not got or got[1] not in alerts.NEWSLETTER_NAMES:
         return None
     uid, what = got
-    if act:
+    if act and what in ("tips", "all"):
+        lifecycle.set_tips(uid, False)
+    if act and what != "tips":
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
@@ -1325,7 +1333,12 @@ def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile))
     need(profile, "deepdive", "The company deep dive")
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
-    return ok(deep_view(sym, deep_base(sym, region)))
+    out = ok(deep_view(sym, deep_base(sym, region)))
+    try:
+        first_steps.mark(profile["id"], "deepdive")
+    except Exception as e:
+        print("first steps:", str(e)[:120])
+    return out
 
 
 @app.post("/research/deep/{symbol}/read")
@@ -2653,6 +2666,42 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
     return {"sent_to": to}
 
 
+def lifecycle_kind(kind: str) -> str:
+    if kind not in lifecycle.EMAILS:
+        err(404, "not_found", "There's no such email.")
+    return kind
+
+
+@app.get("/admin/lifecycle")
+def admin_lifecycle(_=Depends(admin.admin_profile)):
+    """The lifecycle emails, for Admin → Services, and how the hourly sweep last went."""
+    return {"emails": [{"kind": k, "name": n, "transactional": t} for k, (n, t) in lifecycle.EMAILS.items()],
+            "job": lifecycle_job.status, "email_ready": alerts.email_ready()}
+
+
+@app.post("/admin/lifecycle/{kind}/preview")
+def admin_lifecycle_preview(kind: str, profile=Depends(admin.admin_profile)):
+    """One lifecycle email with made-up details, as the user would see it. Nothing is sent."""
+    return lifecycle.preview(lifecycle_kind(kind), profile)
+
+
+@app.post("/admin/lifecycle/{kind}/test")
+def admin_lifecycle_test(kind: str, profile=Depends(admin.admin_profile)):
+    """One lifecycle email with made-up details to the admin's own address, now. Not recorded as sent."""
+    kind = lifecycle_kind(kind)
+    throttle(profile, "admin_mail_test", 5, 3600, "You've sent 5 test emails this hour. Try again later.")
+    if not alerts.email_ready():
+        err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
+    to = alerts.email_for(profile)
+    if not to:
+        err(400, "no_email", "Your admin account has no email address to send to.")
+    try:
+        subject = lifecycle.send_test(kind, profile, to)
+    except Exception as e:
+        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+    return {"sent_to": to, "subject": subject}
+
+
 @app.post("/admin/weekly/test")
 def admin_weekly_test(profile=Depends(admin.admin_profile)):
     """This week's summary, built and sent to the admins now. Monday's automatic one still goes out."""
@@ -2711,6 +2760,29 @@ def set_newsletters(req: NewsletterReq, profile=Depends(current_profile)):
         need(profile, "newsletter_stocks", "The My Stocks newsletter")
     newsletter_prefs.set(profile["id"], **req.model_dump(exclude_none=True))
     return newsletters_view(profile)
+
+
+@app.get("/me/emails")
+def my_emails(profile=Depends(current_profile)):
+    """Whether tips and reminders emails are on. Receipts always go."""
+    return {"tips": lifecycle.tips_on(profile["id"]), "email": lifecycle.address(profile)}
+
+
+@app.put("/me/emails")
+def set_my_emails(req: EmailPrefsReq, profile=Depends(current_profile)):
+    return {**lifecycle.set_tips(profile["id"], req.tips), "email": lifecycle.address(profile)}
+
+
+@app.get("/me/first-steps")
+def my_first_steps(profile=Depends(current_profile)):
+    """The checklist on Home for a new account, each step ticked from the user's own data."""
+    return first_steps.view(profile)
+
+
+@app.put("/me/first-steps")
+def set_first_steps(req: FirstStepsReq, profile=Depends(current_profile)):
+    first_steps.dismiss(profile["id"], req.dismissed)
+    return first_steps.view(profile)
 
 
 @app.post("/admin/news/build")

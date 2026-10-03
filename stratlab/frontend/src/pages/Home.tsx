@@ -14,6 +14,8 @@ import { Pin, Search, Sparkle, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
 import { CompanySearch } from "../components/CompanySearch";
 import { askExamples, useRotating } from "../lib/rotating";
+import { FirstSteps } from "../components/FirstSteps";
+import { PromoCountdown } from "../components/PromoCountdown";
 
 export type Where = { market: string; instrument: Instrument | null };
 
@@ -273,8 +275,13 @@ type Sort = "recent" | "name" | "verdict";
 
 export function Home() {
   const { focus, notebooks } = useApp();
-  if (focus === "invest" && notebooks !== null) return <InvestorStart />;
-  return <NotebooksHome />;
+  return (
+    <>
+      <PromoCountdown />
+      <FirstSteps />
+      {focus === "invest" && notebooks !== null ? <InvestorStart /> : <NotebooksHome />}
+    </>
+  );
 }
 
 export function NotebooksHome() {

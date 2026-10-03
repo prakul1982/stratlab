@@ -137,7 +137,7 @@ function Routed() {
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
-      {me?.promo && <PromoBanner until={me.promo.until} />}
+      {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && <PromoBanner until={me.promo.until} />}{/* those two show a countdown */}
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<Home />} />

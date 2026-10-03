@@ -262,6 +262,14 @@ class NewsletterReq(BaseModel):
     my_stocks: Literal["daily", "weekly", "off"] | None = None
 
 
+class EmailPrefsReq(BaseModel):
+    tips: bool                              # tips and reminders emails (receipts always go)
+
+
+class FirstStepsReq(BaseModel):
+    dismissed: bool
+
+
 class IdeasReq(BaseModel):
     q: str = Field(..., min_length=2, max_length=4000)
 

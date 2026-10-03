@@ -4,14 +4,20 @@ import { expect, test, type Page } from "@playwright/test";
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
   refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
 
-async function open(page: Page, path: string, ready: string) {
+/** Signed in as another of the fake database's users instead (free-token, basic-token, ...). */
+function sessionAs(token: string, id: string, email: string) {
+  return { ...session, access_token: token, user: { ...session.user, id, email } };
+}
+
+async function open(page: Page, path: string, ready: string, who: typeof session = session) {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.route("**/*", (r) => {
     const host = new URL(r.request().url()).hostname;
-    return host === "127.0.0.1" || host === "localhost" ? r.continue() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
+    // fallback: a test's own route for a backend call (registered before this) still gets its turn
+    return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
-  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, session);
+  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
   // a first visit asks what the person came for; answer it like a new user would
   const ask = page.getByText("What brings you to StratLab?");
@@ -160,5 +166,52 @@ test("invoices: in Account for the customer, with the GST setup in Admin", async
   await sane(page, errors);
   errors = await open(page, "/admin?tab=billing", "LUT ARN");
   await expect(page.getByText(/Financial year \d{4}-\d{2}/)).toBeVisible();
+  await sane(page, errors);
+});
+
+const API = process.env.E2E_API ?? "http://127.0.0.1:8765";     // the fake backend (tests/visual_server.py)
+
+test("first steps on Home tick themselves from real data, and hide for good", async ({ page, request }, info) => {
+  // each project signs in as its own brand-new user, so hiding the list on one doesn't hide it on the other
+  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["free-token", "u-free", "free@example.com"];
+  const auth = { Authorization: `Bearer ${token}` };
+  await request.put(`${API}/me/prefs`, { headers: auth, data: { level: "some", focus: "both" } });     // skip the welcome questions
+  expect((await request.put(`${API}/me/first-steps`, { headers: auth, data: { dismissed: false } })).ok()).toBeTruthy();
+  expect((await request.put(`${API}/research/watchlist`, { headers: auth, data: { items: [{ region: "IN", symbol: "TCS" }] } })).ok()).toBeTruthy();
+  const errors = await open(page, "/", "Your first steps", sessionAs(token, id, email));
+  const list = page.locator(".first-steps");
+  await expect(list.locator("li")).toHaveCount(5);
+  await expect(list.locator('[data-step="watchlist"]')).toHaveClass(/done/);
+  await expect(list.locator('[data-step="backtest"] a')).toHaveAttribute("href", "/new");
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  expect((await request.get(`${API}/research/deep/RELIANCE?region=IN`, { headers: auth })).ok()).toBeTruthy();
+  await page.reload();
+  await expect(list.locator('[data-step="deepdive"]')).toHaveClass(/done/, { timeout: 30_000 });
+  await expect(page.getByText(/\d of 5 done/)).toBeVisible();
+
+  await list.getByRole("button", { name: "Hide this" }).click();
+  await expect(page.getByText("Your first steps")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText("notebook", { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(600);
+  await expect(page.getByText("Your first steps")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("the launch offer counts down on Home and Plans", async ({ page }, info) => {
+  const until = new Date(Date.now() + (2 * 24 + 5) * 3600_000 + 10 * 60_000).toISOString();
+  await page.route(`${API}/me`, async (r) => {
+    const res = await r.fetch();
+    await r.fulfill({ response: res, json: { ...(await res.json()), promo: { until } } });
+  });
+  let errors = await open(page, "/", "Launch offer:");
+  await expect(page.locator(".promo-countdown")).toContainText("2 days 5 hours");
+  await expect(page.getByText("Launch offer:")).toHaveCount(1);              // the countdown replaces the site-wide note here
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+  errors = await open(page, "/plans", "Launch offer:");
+  await expect(page.locator(".promo-countdown")).toContainText("2 days 5 hours");
   await sane(page, errors);
 });

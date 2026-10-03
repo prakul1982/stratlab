@@ -63,6 +63,20 @@ def update_profile(user_id: str, **fields) -> dict:
         forget_profile(user_id)   # also drop a copy a request re-read while the update ran
 
 
+def all_profiles(page: int = 1000) -> list[dict]:
+    """Every profile, read a page at a time by id (the server caps one read)."""
+    out, after = [], ""
+    while True:
+        q = sb().table("profiles").select("*")
+        if after:
+            q = q.gt("id", after)
+        rows = q.order("id").limit(page).execute().data
+        out += rows
+        if len(rows) < page:
+            return out
+        after = rows[-1]["id"]
+
+
 def profile_by_subscription(sub_id: str) -> dict | None:
     r = sb().table("profiles").select("*").eq("razorpay_subscription_id", sub_id).limit(1).execute()
     return r.data[0] if r.data else None

@@ -135,7 +135,8 @@ def email_for(profile: dict) -> str | None:
 
 CONFIRMED = "email-confirmed:"          # app_settings key prefix: the address the user confirmed
 NEWSLETTER_NAMES = {"market_in": "the India market email", "market_us": "the US market email",
-                    "my_stocks": "the My stocks email", "all": "all StratLab newsletters"}
+                    "my_stocks": "the My stocks email", "tips": "tips and reminders emails",
+                    "all": "all StratLab newsletters, tips and reminders"}
 
 
 def newsletter_email(profile: dict) -> str | None:
