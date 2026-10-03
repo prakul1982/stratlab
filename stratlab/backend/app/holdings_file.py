@@ -10,12 +10,13 @@ import math
 import re
 import zipfile
 from html.parser import HTMLParser
-from xml.etree import ElementTree as ET
+from xml.parsers import expat
 
 MAX_BYTES = 2 * 1024 * 1024        # a holdings file is a few kilobytes; this is far more than a big portfolio needs
 MAX_ROWS = 5000
 MAX_COLS = 60
 MAX_XML = 20 * 1024 * 1024         # one sheet inside an .xlsx, unpacked (a zip bomb stops here)
+MAX_NODES = 400_000                # elements in one sheet: a big portfolio has a few thousand (each costs server time)
 HEADER_SCAN = 60                   # the column names are within the first rows, after the broker's account lines
 
 # column names, lower case with everything but letters and digits removed ("Avg. cost" -> "avgcost")
@@ -90,29 +91,74 @@ def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-def _member(zf: zipfile.ZipFile, name: str) -> bytes:
+class _Stop(Exception):
+    """Enough read: a handler ends the stream early."""
+
+
+def _too_large():
+    return FileError("That spreadsheet is too large to read.")
+
+
+def _stream(zf: zipfile.ZipFile, name: str, start=None, end=None, text=None):
+    """Read one XML file in the workbook as a stream of start, end and text events, element and attribute names
+    without their namespaces. Nothing is kept but what the handlers keep, so millions of empty elements cost
+    nothing; the unpacked size is capped (a zip bomb stops there); and a document type declaration is refused, so
+    no entity is ever expanded or fetched. A handler raises _Stop to end early. KeyError when the file is missing."""
     info = zf.getinfo(name)
     if info.file_size > MAX_XML:
-        raise FileError("That spreadsheet is too large to read.")
-    with zf.open(info) as f:
-        data = f.read(MAX_XML + 1)
-    if len(data) > MAX_XML:
-        raise FileError("That spreadsheet is too large to read.")
-    return data
+        raise _too_large()
+    p = expat.ParserCreate(namespace_separator="}")
+
+    def refuse(*_):
+        raise FileError("That spreadsheet has parts we don't read. Open it and save it again as .xlsx or CSV.")
+    p.StartDoctypeDeclHandler = p.EntityDeclHandler = refuse
+    seen = [0]
+
+    def on_start(tag, attrs):
+        seen[0] += 1
+        if seen[0] > MAX_NODES:
+            raise _too_large()
+        if start:
+            start(_local(tag), {_local(k): v for k, v in attrs.items()})
+    p.StartElementHandler = on_start
+    if end:
+        p.EndElementHandler = lambda tag: end(_local(tag))
+    if text:
+        p.CharacterDataHandler = text
+    size = 0
+    try:
+        with zf.open(info) as f:
+            while chunk := f.read(1 << 16):
+                size += len(chunk)
+                if size > MAX_XML:
+                    raise _too_large()
+                p.Parse(chunk, False)
+        p.Parse(b"", True)
+    except _Stop:
+        pass
 
 
 def _first_sheet(zf: zipfile.ZipFile) -> str:
     names = set(zf.namelist())
     try:                                   # the workbook's first sheet, through its relationships file
-        wb = ET.fromstring(_member(zf, "xl/workbook.xml"))
-        rels = ET.fromstring(_member(zf, "xl/_rels/workbook.xml.rels"))
-        first = next(e for e in wb.iter() if _local(e.tag) == "sheet")
-        rid = next(v for k, v in first.attrib.items() if _local(k) == "id")
-        target = next(e.attrib.get("Target", "") for e in rels.iter() if e.attrib.get("Id") == rid)
+        found: dict = {}
+
+        def sheet(tag, attrs):
+            if tag == "sheet":
+                found["rid"] = attrs.get("id")
+                raise _Stop
+
+        def rel(tag, attrs):
+            if tag == "Relationship" and attrs.get("Id") == found.get("rid"):
+                found["target"] = attrs.get("Target", "")
+                raise _Stop
+        _stream(zf, "xl/workbook.xml", start=sheet)
+        _stream(zf, "xl/_rels/workbook.xml.rels", start=rel)
+        target = found.get("target") or ""
         path = target.lstrip("/") if target.startswith("/") else "xl/" + target
-        if path in names:
+        if target and path in names:
             return path
-    except (KeyError, StopIteration, ET.ParseError):
+    except (KeyError, expat.ExpatError):
         pass
     sheets = sorted(n for n in names if re.match(r"xl/worksheets/sheet\d+\.xml$", n))
     if not sheets:
@@ -120,41 +166,84 @@ def _first_sheet(zf: zipfile.ZipFile) -> str:
     return sheets[0]
 
 
+def _shared(zf: zipfile.ZipFile) -> list[str]:
+    """The workbook's shared strings (each cell's text when the cell points at one), up to what a sheet can use."""
+    out: list[str] = []
+    cur: dict = {"si": None, "t": False}
+
+    def start(tag, attrs):
+        if tag == "si":
+            cur["si"] = []
+        elif tag == "t":
+            cur["t"] = True
+
+    def end(tag):
+        if tag == "t":
+            cur["t"] = False
+        elif tag == "si" and cur["si"] is not None:
+            out.append("".join(cur["si"]))
+            cur["si"] = None
+            if len(out) >= MAX_ROWS * MAX_COLS:
+                raise _Stop
+
+    def text(data):
+        if cur["t"] and cur["si"] is not None:
+            cur["si"].append(data)
+    if "xl/sharedStrings.xml" in zf.namelist():
+        _stream(zf, "xl/sharedStrings.xml", start, end, text)
+    return out
+
+
 def _xlsx(data: bytes) -> list[list[str]]:
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
         raise FileError("That file looks like Excel but couldn't be opened. Save it again as .xlsx or CSV.") from None
-    shared: list[str] = []
-    if "xl/sharedStrings.xml" in zf.namelist():
-        for si in ET.fromstring(_member(zf, "xl/sharedStrings.xml")):
-            if _local(si.tag) == "si":
-                shared.append("".join(t.text or "" for t in si.iter() if _local(t.tag) == "t"))
+    shared = _shared(zf)
     rows: list[list[str]] = []
-    for row in ET.fromstring(_member(zf, _first_sheet(zf))).iter():
-        if _local(row.tag) != "row":
-            continue
-        cells: dict[int, str] = {}
-        for i, c in enumerate(x for x in row if _local(x.tag) == "c"):
-            col = _col(c.attrib.get("r", "")) if c.attrib.get("r") else i
-            if col >= MAX_COLS:
-                continue
-            kind = c.attrib.get("t")
-            if kind == "inlineStr":
-                text = "".join(t.text or "" for t in c.iter() if _local(t.tag) == "t")
+    st: dict = {"cells": None, "n": 0, "cell": None, "in": None}
+
+    def start(tag, attrs):
+        if tag == "row":
+            st.update(cells={}, n=0)
+        elif tag == "c" and st["cells"] is not None:
+            ref = attrs.get("r")
+            st["cell"] = {"col": _col(ref) if ref else st["n"], "kind": attrs.get("t"), "v": [], "t": [], "got_v": False}
+            st["n"] += 1
+        elif tag in ("v", "t") and st["cell"] is not None and not (tag == "v" and st["cell"]["got_v"]):
+            st["in"] = tag
+
+    def end(tag):
+        c = st["cell"]
+        if tag in ("v", "t"):
+            if tag == "v" and c is not None and st["in"] == "v":
+                c["got_v"] = True          # the first value only
+            st["in"] = None
+        elif tag == "c" and c is not None:
+            st["cell"] = None
+            if c["col"] >= MAX_COLS:
+                return
+            if c["kind"] == "inlineStr":
+                value = "".join(c["t"])
             else:
-                v = next((x.text for x in c if _local(x.tag) == "v"), None) or ""
-                if kind == "s":
+                value = "".join(c["v"])
+                if c["kind"] == "s":
                     try:
-                        text = shared[int(v)]
+                        value = shared[int(value)]
                     except (ValueError, IndexError):
-                        text = ""
-                else:
-                    text = v
-            cells[col] = text
-        rows.append([cells.get(i, "") for i in range(max(cells) + 1)] if cells else [])
-        if len(rows) >= MAX_ROWS:
-            break
+                        value = ""
+            st["cells"][c["col"]] = value
+        elif tag == "row" and st["cells"] is not None:
+            cells = st["cells"]
+            rows.append([cells.get(i, "") for i in range(max(cells) + 1)] if cells else [])
+            st["cells"] = None
+            if len(rows) >= MAX_ROWS:
+                raise _Stop
+
+    def text(data):
+        if st["in"] and st["cell"] is not None:
+            st["cell"][st["in"]].append(data)
+    _stream(zf, _first_sheet(zf), start, end, text)
     return rows
 
 

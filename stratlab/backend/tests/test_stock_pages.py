@@ -138,3 +138,9 @@ def test_hostile_text_is_escaped(w):
     page = stock_pages.render(f, "IN", "ACME", None)
     assert "<script>alert" not in page and "<img src=x" not in page and "&lt;script&gt;" in page
     assert page.count("</script>") == 1                 # only the JSON-LD block's own end
+
+
+def test_a_sitemap_name_with_a_huge_number_is_a_404_not_a_crash(w):
+    c = w["client"]
+    assert c.get("/sitemaps/stocks-in-" + "9" * 5000 + ".xml").status_code == 404
+    assert c.get("/sitemaps/stocks-in-1.xml").status_code == 200
