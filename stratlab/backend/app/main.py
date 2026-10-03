@@ -1673,6 +1673,7 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
 def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     """Save the holdings as edited by hand: add a stock, change a quantity or average price, remove one. Symbols
     that match no listed company are sent back and left out."""
+    throttle(profile, "holdings_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
     limit = holdings_limit(profile["_plan"])
     if len(req.items) > limit:
         upgrade(f"Your plan keeps up to {limit} stocks in My Holdings.", "holdings_limit")

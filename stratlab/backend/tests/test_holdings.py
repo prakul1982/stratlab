@@ -335,3 +335,83 @@ def test_holdings_count_in_the_my_stocks_newsletter(w):
     assert got[0] == ("IN", "RELIANCE") and {("IN", "BHARTIARTL"), ("IN", "LT"), ("IN", "TINYCO")} <= set(got)
     db.set_setting("holdings:u-pro", "{broken")                                          # a damaged row costs nothing
     assert content.my_stocks("u-pro") == [("IN", "RELIANCE")]
+
+
+# ---------- hostile files ----------
+def _zipped(sheet: bytes, extra: dict | None = None) -> bytes:
+    import io
+    import zipfile
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("xl/worksheets/sheet1.xml", sheet)
+        for name, data in (extra or {}).items():
+            z.writestr(name, data)
+    return out.getvalue()
+
+
+def test_millions_of_tiny_elements_dont_eat_the_memory():
+    """A few kilobytes zipped can unpack to millions of empty rows or strings: read as a stream, never as a tree."""
+    import tracemalloc
+    rows = b"<worksheet><sheetData>" + b"<row/>" * 3_000_000 + b"</sheetData></worksheet>"
+    strings = b"<sst>" + b"<si/>" * 3_000_000 + b"</sst>"
+    for data in (_zipped(rows), _zipped(b"<worksheet><sheetData/></worksheet>", {"xl/sharedStrings.xml": strings})):
+        assert len(data) < 100_000
+        tracemalloc.start()
+        try:
+            with pytest.raises(hf.FileError):
+                hf.parse(data)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        assert peak < 40 * 1024 * 1024, peak
+
+
+def test_entity_tricks_in_a_spreadsheet_are_refused():
+    """No document type declarations at all: no entity expansion (billion laughs) and nothing read from outside (XXE)."""
+    head = (b'<row><c t="inlineStr"><is><t>Symbol</t></is></c><c t="inlineStr"><is><t>Qty</t></is></c></row>')
+    laughs = (b'<?xml version="1.0"?><!DOCTYPE worksheet [<!ENTITY a "aaaaaaaaaa">'
+              + b"".join(b'<!ENTITY %c "%s">' % (98 + i, (b"&%c;" % (97 + i)) * 10) for i in range(8))
+              + b"]><worksheet><sheetData>" + head + b'<row><c t="inlineStr"><is><t>&i;</t></is></c><c><v>1</v></c></row></sheetData></worksheet>')
+    xxe = (b'<?xml version="1.0"?><!DOCTYPE worksheet [<!ENTITY x SYSTEM "file:///etc/passwd">]><worksheet><sheetData>' + head
+           + b'<row><c t="inlineStr"><is><t>&x;</t></is></c><c><v>1</v></c></row></sheetData></worksheet>')
+    plain = (b'<?xml version="1.0"?><!DOCTYPE worksheet><worksheet><sheetData>' + head
+             + b'<row><c t="inlineStr"><is><t>TCS</t></is></c><c><v>1</v></c></row></sheetData></worksheet>')
+    for sheet in (laughs, xxe, plain):
+        with pytest.raises(hf.FileError):
+            hf.parse(_zipped(sheet))
+    with pytest.raises(hf.FileError):                                                     # the strings file too
+        hf.parse(_zipped(b"<worksheet/>", {"xl/sharedStrings.xml": laughs.replace(b"worksheet", b"sst")}))
+
+
+def test_a_real_workbook_still_reads_as_a_stream():
+    rows = hf.parse(xlsxmaker.make_xlsx([["Symbol", "Qty", "Avg price"], ["RELIANCE", 3, 2500], ["TCS", "4", "3,100.50"]]))["rows"]
+    assert [(r["symbol"], r["qty"], r["avg"]) for r in rows] == [("RELIANCE", 3, 2500), ("TCS", 4, 3100.5)]
+
+
+def test_a_file_of_lines_that_match_nothing_is_still_quick():
+    """Each unmatched line used to walk the whole instrument list (F&O included) several times, so a small file of
+    made-up lines took minutes of the server's time. Lookups go through an index now."""
+    import time
+    from datetime import date as day
+    from tests import fake_kite
+    k = fake_kite.online()
+    k.kite.rows["NFO"] += [{"instrument_token": 900_000 + i, "tradingsymbol": f"OPT{i}CE", "name": f"OPT{i % 500}",
+                            "segment": "NFO-OPT", "instrument_type": "CE", "lot_size": 50, "expiry": day(2030, 1, 1),
+                            "strike": 100} for i in range(60_000)]
+    m = holdings.Matcher(k.equity, k.equity_by_name, lambda c: None, {}, True)
+    junk = [{"line": i, "symbol": f"ZZ{i}", "name": f"No Such Company {i}", "isin": "", "qty": 1} for i in range(1500)]
+    real = [{"line": 0, "symbol": "RELIANCE", "qty": 1}, {"line": 0, "name": "Tiny Co Ltd", "qty": 1},
+            {"line": 0, "symbol": "543210", "qty": 1}, {"line": 0, "symbol": "SLOWCO", "qty": 1}]
+    k.equity("RELIANCE")                                   # the day's instrument list loads outside the timing
+    t = time.time()
+    found, missed = holdings.match_all(junk + real, m)
+    assert time.time() - t < 3
+    assert len(missed) == 1500
+    assert {(f["symbol"], f["exchange"]) for f in found} == {("RELIANCE", "NSE"), ("TINYCO", "BSE"), ("SLOWCO-BE", "NSE")}
+
+
+def test_manual_edits_are_throttled_too(w):
+    c = w["client"]
+    for _ in range(120):
+        assert c.put("/holdings", headers=PRO, json={"items": [{"symbol": "RELIANCE", "qty": 1}]}).status_code == 200
+    assert c.put("/holdings", headers=PRO, json={"items": [{"symbol": "RELIANCE", "qty": 1}]}).status_code == 429
