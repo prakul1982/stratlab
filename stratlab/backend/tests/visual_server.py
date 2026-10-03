@@ -3,9 +3,11 @@ loss years (TCS stands in for one, as only listed symbols open) so the charts' h
 
     python -m tests.visual_server            # serves on 127.0.0.1:8765
 """
+import base64
 import copy
 import os
 import sys
+from pathlib import Path
 
 import pytest
 import uvicorn
@@ -36,6 +38,10 @@ def build():
     scr = main.research_hub.screener
     real = scr.company
     mp.setattr(scr, "company", lambda sym: loss_company(real("RELIANCE")) if sym.upper() == LOSS else real(sym))
+    # the owner's holdings, imported from a Zerodha Console file, for the My Holdings page
+    sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
+    w["client"].post("/holdings/import", headers=world.headers("admin-token"),
+                     json={"filename": sample.name, "data": base64.b64encode(sample.read_bytes()).decode()})
     return w
 
 

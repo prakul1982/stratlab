@@ -215,7 +215,7 @@ def test_whole_market_audit_reads_the_exchange_list_and_checks_only_new_listings
         assert main.market_audit.step() == "NEWCO"                                       # listed today
         assert main.market_audit.step() is None                                          # the rest are long listed: not re-run
         s = w["client"].get("/admin/audit/market", headers=h).json()
-        assert s["listed"] == 122 and s["checked"] == 1 and s["due"] == 0                # the bond series is left out
+        assert s["listed"] == 132 and s["checked"] == 1 and s["due"] == 0                # the bond series is left out
         assert s["new_listings"][0]["symbol"] == "NEWCO" and s["new_listings"][0]["checked"]
         assert [r["symbol"] for r in s["rows"]] == ["NEWCO"]                             # only rows with something to show
         assert w["client"].post("/admin/audit/market", headers=W.headers("pro-token"), json={"on": False}).status_code == 403

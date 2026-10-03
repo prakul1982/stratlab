@@ -10,11 +10,11 @@ from .ideas import MARKETS, guess_market
 ACTIONS = ("test", "paper", "research", "ideas", "answer", "library", "options", "open")
 PAGES = {"paper": "/paper", "options": "/options", "library": "/library", "research": "/research", "import": "/import",
          "notebooks": "/", "new": "/new", "account": "/account", "plans": "/plans", "themes": "/research/themes",
-         "pulse": "/research/pulse", "watchlist": "/research/watchlist"}
+         "pulse": "/research/pulse", "watchlist": "/research/watchlist", "holdings": "/holdings"}
 
 SYSTEM = """You turn one line typed into StratLab (a trading backtester and paper-trading app) into ONE action. Reply with JSON only:
 {"action":"test|paper|research|ideas|answer|library|options|open","text":"...","market":"IN|US|UK|EU|JP|CRYPTO|FX|null",
-"symbol":"ticker or null","page":"paper|options|library|research|import|notebooks|new|account|plans|themes|pulse|watchlist|null",
+"symbol":"ticker or null","page":"paper|options|library|research|import|notebooks|new|account|plans|themes|pulse|watchlist|holdings|null",
 "answer":"...","title":"what you'll do, under 60 characters"}
 - test: they describe trading rules or ask to backtest/test one. "text" = the full rule in plain English (what to buy, when, exit, stop).
 - paper: they want to paper trade / run live / forward test a rule. "text" = the rule, like test.

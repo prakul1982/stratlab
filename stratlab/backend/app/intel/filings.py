@@ -116,6 +116,41 @@ def summarise(items: list[dict], now: datetime | None = None) -> dict:
                       if any(i["category"] == c and i["severity"] != "info" for i in recent)]}
 
 
+_MEETING_ON = re.compile(r"(?:held|scheduled|convened|meet|meeting)\s+on\s+(?:[A-Za-z]+day,?\s+)?(?:the\s+)?"
+                        r"(\d{1,2}(?:st|nd|rd|th)?[-/.\s]+(?:[A-Za-z]{3,9}|\d{1,2})[-/.,\s]+\d{4}|[A-Za-z]{3,9}\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})", re.I)
+
+
+def _meeting_day(text: str):
+    """The date in "board meeting to be held on 17-Oct-2026" (and the other ways companies write it)."""
+    m = _MEETING_ON.search(text or "")
+    if not m:
+        return None
+    raw = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", m.group(1), flags=re.I)
+    raw = " ".join(re.split(r"[-/.,\s]+", raw))
+    for fmt in ("%d %b %Y", "%d %B %Y", "%d %m %Y", "%b %d %Y", "%B %d %Y"):
+        try:
+            return datetime.strptime(raw, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def upcoming_results(items: list[dict], today=None) -> dict | None:
+    """The next board meeting a company has announced to consider its results, from its own intimation filing:
+    {"date", "subject", "url"}, or None when none is scheduled from today on."""
+    today = today or ist_now().date()
+    for i in items:                         # newest filing first: a later intimation replaces an earlier one
+        if i.get("category") not in ("results", "board"):
+            continue
+        hay = f"{i.get('subject') or ''} {i.get('text') or ''}"
+        if not re.search(r"result", hay, re.I) or not re.search(r"board", hay, re.I):
+            continue
+        day = _meeting_day(hay)
+        if day and day >= today:
+            return {"date": day.isoformat(), "subject": i.get("subject") or "", "url": i.get("url")}
+    return None
+
+
 class NSEFilings:
     """NSE's public corporate-announcements feed. The site hands out session cookies on its home page and refuses
     API calls without them, so we visit the home page first and again whenever the cookies expire."""
@@ -245,7 +280,7 @@ class NSEFilings:
 
     def all_equities(self) -> list[dict]:
         """Every company listed on NSE's main board (series EQ and BE), from the exchange's own daily file:
-        [{symbol, name, listed}] with the listing date as ISO. New listings appear the day they list."""
+        [{symbol, name, listed, isin}] with the listing date as ISO. New listings appear the day they list."""
         import csv
         import io
         try:
@@ -264,7 +299,8 @@ class NSEFilings:
                 listed = datetime.strptime(row.get("DATE OF LISTING", ""), "%d-%b-%Y").date().isoformat()
             except ValueError:
                 listed = None
-            out.append({"symbol": sym, "name": row.get("NAME OF COMPANY") or sym, "listed": listed})
+            out.append({"symbol": sym, "name": row.get("NAME OF COMPANY") or sym, "listed": listed,
+                        "isin": row.get("ISIN NUMBER", "").upper() or None})
         if len(out) < 100:                      # the real file has about two thousand; fewer means a broken answer
             raise SourceError(self.name, f"The exchange's list of companies looked wrong ({len(out)} companies).")
         return list({c["symbol"]: c for c in out}.values())

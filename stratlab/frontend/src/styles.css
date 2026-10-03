@@ -807,3 +807,8 @@ table.legs input[type=number] { width: 72px !important; }
 }
 
 .news-lines { margin: 4px 0 2px; padding-left: 18px; color: var(--ink-2); font-size: 14px; }
+
+/* My Holdings */
+.holdings-add { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+@media (max-width: 640px) { .holdings-add { grid-template-columns: minmax(0, 1fr); } }
+label.btn.disabled { opacity: .5; }

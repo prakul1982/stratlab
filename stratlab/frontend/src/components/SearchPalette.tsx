@@ -33,7 +33,9 @@ function intentFor(q: string): Intent | null {
   if (/stage ?(2|two)|supertrend|\bst ?s2\b/i.test(t))
     return { title: "Stage 2 + Supertrend scan", sub: "Which stocks are in Stage 2 with the Supertrend up",
              to: /nifty ?50/i.test(t) ? "/research/scan?set=nifty50" : /bank ?nifty/i.test(t) ? "/research/scan?set=banknifty" : "/research/scan" };
-  if (/investor home|my watchlist|my portfolio|watchlist overview/i.test(t))
+  if (/my holdings|my portfolio|(import|upload) (my )?(holdings|portfolio)|holdings (file|csv)/i.test(t))
+    return { title: "My Holdings", sub: "Your stocks from your broker's file: value, P&L, sectors and filings", to: "/holdings" };
+  if (/investor home|my watchlist|watchlist overview/i.test(t))
     return { title: "Investor home", sub: "Every watchlist company: trend, sector, red flags, checklist", to: "/research/investor" };
   return null;
 }

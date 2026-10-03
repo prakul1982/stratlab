@@ -66,7 +66,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/investor", "Investor"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -127,5 +127,55 @@ test("invoices: in Account for the customer, with the GST setup in Admin", async
   await sane(page, errors);
   errors = await open(page, "/admin?tab=billing", "LUT ARN");
   await expect(page.getByText(/Financial year \d{4}-\d{2}/)).toBeVisible();
+  await sane(page, errors);
+});
+
+const HOLDINGS_FILES = new URL("../../backend/tests/fixtures/holdings/", import.meta.url).pathname;
+
+/** The first-visit questions stay open over the page until answered; these tests click on the page, so answer them. */
+async function settle(page: Page) {
+  const level = page.getByRole("dialog", { name: /How much .* have you done/ });
+  await level.waitFor({ timeout: 4000 }).then(() => level.getByRole("button", { name: /done a bit/ }).click()).catch(() => undefined);
+  await expect(level).toHaveCount(0);
+}
+
+test("my holdings: positions, sectors and facts per stock, then a broker file added", async ({ page }, info) => {
+  const errors = await open(page, "/holdings", "By sector");
+  await settle(page);
+  const table = page.getByRole("table", { name: "Positions" });
+  await expect(table.getByText("RELIANCE", { exact: true })).toBeVisible();
+  await expect(table.getByText("TINYCO", { exact: true })).toBeVisible();            // listed only on BSE
+  await expect(page.getByText(/your Zerodha Console file/)).toBeVisible();
+  await expect(table.getByText(/red flag/).first()).toBeVisible({ timeout: 30_000 });  // the QIP filing, once the facts arrive
+  await expect(table.getByText(/Stage \d/).first()).toBeVisible();
+  await expect(page.getByText("Recent filings")).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
+  await page.getByRole("radio", { name: "Add to them" }).click();
+  await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "groww_holdings_statement.xlsx");
+  await expect(page.getByText("Read as a Groww file")).toBeVisible();
+  const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
+  await expect(missed.getByText(/INE000X01000/)).toBeVisible();
+  await expect(table.getByText("INFY", { exact: true })).toBeVisible();
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+});
+
+test("my holdings: edit by hand and delete them all", async ({ page }, info) => {
+  const errors = await open(page, "/holdings", "By sector");
+  await settle(page);
+  await page.getByRole("button", { name: "Edit RELIANCE" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit RELIANCE" });
+  await expect(dialog.getByRole("button", { name: "Save" })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await dialog.getByRole("button", { name: "Close" }).click();
+  // the delete is answered here, so the shared fake account keeps its holdings for the other tests
+  const empty = { rows: [], allocation: [], totals: { value: 0, invested: 0, pnl: null, pnl_pct: null, day: null, day_pct: null, count: 0, priced: 0 },
+    source: null, updated_at: null, prices: true, limit: 300, facts_max: 40 };
+  await page.route("**/holdings", (r) => r.fulfill({ status: 200, contentType: "application/json",
+    body: JSON.stringify(r.request().method() === "DELETE" ? { deleted: true } : empty) }));
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Delete my holdings" }).click();
+  await expect(page.getByText("No holdings yet")).toBeVisible();
+  await expect(page.getByText("Your holdings are deleted.")).toBeVisible();
   await sane(page, errors);
 });
