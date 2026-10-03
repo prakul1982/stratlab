@@ -108,12 +108,16 @@ export function CompanyPage() {
   const test = useTestOnStratLab();
   const [c, setC] = useState<Company | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<{ next: ResultRow | null; last: ResultRow | null } | null>(null);
   useEffect(() => {
     let live = true;
-    setC(null); setError(null);
+    setC(null); setError(null); setResults(null);
     researchApi.company(region, sym).then((x) => live && setC(x)).catch((e) => live && setError((e as Error).message));
+    api<{ next: ResultRow | null; last: ResultRow | null }>(`/research/results/${region}/${encodeURIComponent(sym)}`)
+      .then((x) => live && setResults(x)).catch(() => undefined);      // the calendar is a nice-to-have here
     return () => { live = false; };
   }, [region, sym, fail]);
+  const nextResults = results?.next?.date ?? c?.next_earnings?.date ?? null;
 
   if (error) return (
     <div className="stack" style={{ gap: 20 }}>
@@ -134,7 +138,7 @@ export function CompanyPage() {
           <div className="stack" style={{ gap: 6, minWidth: 0, flex: "1 1 320px" }}>
             <span className="eyebrow">{c.exchange || REGION_NAME[region]} · {c.symbol}{c.industry ? ` · ${c.industry}` : ""}</span>
             <h1 className="serif" style={{ fontSize: "clamp(32px, 4.4vw, 50px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.05 }}>{c.name}</h1>
-            {c.market_cap != null && <span className="small muted">Market value {bigMoney(c.market_cap, ccy)}{c.next_earnings ? ` · Next results ${c.next_earnings.date}` : ""}</span>}
+            {c.market_cap != null && <span className="small muted">Market value {bigMoney(c.market_cap, ccy)}</span>}
           </div>
           <Change q={c.quote} currency={ccy} />
         </div>
@@ -143,6 +147,10 @@ export function CompanyPage() {
           {c.testable && <button className={`btn ${focus === "invest" && region === "IN" ? "outline" : "blue"} sm`} onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
           {(region === "IN" || region === "US") && focus !== "invest" && <Link className="btn outline sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
+          {nextResults && <Link className="btn quiet sm" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
+          {!nextResults && results?.last?.out && (results.last.out.url
+            ? <a className="btn quiet sm" href={safeHref(results.last.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.last.out.at)} ↗</a>
+            : <Link className="btn quiet sm" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
           {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
           {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
@@ -742,6 +750,125 @@ export function RotationPage() {
         {drilled && out?.parent ? `Here each stock is measured against the ${out.parent.name} index itself, so Leading means it's beating its own sector. These are the sector's largest stocks, not its full official list. ` : ""}
         Strength: each one's price divided by {drilled && out?.parent ? `the ${out.parent.name} index` : region === "IN" ? "the Nifty 500" : "the S&P 500"}, compared with its own last 14 {unit}s (100 = its usual level). Momentum: the same for the change in that strength. StratLab's own calculation. Where something sits today doesn't predict where it goes next, and nothing here is investment advice.
       </p>
+    </div>
+  );
+}
+
+/* ---------- Results calendar ---------- */
+interface ResultNumber { label: string; value: string }
+export interface ResultRow {
+  region: Region; symbol: string; name: string | null; date: string; when: string | null; purpose: string; url: string | null;
+  mine?: boolean; out?: { at: string; title: string; url: string | null; numbers: ResultNumber[] } | null;
+}
+interface ResultsView {
+  region: Region; scope: "mine" | "all"; today: string; updated_at: string | null; more: number; mine_count: number; alerts: boolean; note: string;
+  weeks: { label: string; from: string; to: string; rows: ResultRow[] }[];
+}
+
+/** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
+export function resultDay(iso: string) {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+
+function ResultLine({ r, showMine }: { r: ResultRow; showMine: boolean }) {
+  return (
+    <div className="result-row">
+      <span className="row wrap" style={{ gap: 8 }}>
+        <Link className="btn quiet sm" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>
+        {r.name && <span className="small muted">{r.name}</span>}
+        {showMine && r.mine && <span className="badge">Yours</span>}
+      </span>
+      <span className="small">{r.purpose}{r.when ? `, ${r.when}` : ""}</span>
+      {r.out && (
+        <span className="small">
+          Results filed {resultDay(r.out.at)}{r.out.url ? <>: <a className="link" href={safeHref(r.out.url)} target="_blank" rel="noopener noreferrer">{r.out.title} ↗</a></> : `: ${r.out.title}`}
+          {r.out.numbers.length > 0 && <span className="muted"> · {r.out.numbers.map((n) => `${n.label} ${n.value}`).join(" · ")} (as stated)</span>}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function ResultsPage() {
+  const [region, setRegion] = useRegion();
+  const [params, setParams] = useSearchParams();
+  const scope = params.get("scope") === "all" ? "all" : "mine";
+  const { fail, notify } = useApp();
+  const [q, setQ] = useState("");
+  const [data, setData] = useState<ResultsView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setError(null);
+    const t = setTimeout(() => {
+      const qs = new URLSearchParams({ region, scope, q: scope === "all" ? q : "" });
+      api<ResultsView>(`/research/results?${qs}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
+    }, q ? 300 : 0);
+    return () => { live = false; clearTimeout(t); };
+  }, [region, scope, q]);
+
+  const setScope = (s: "mine" | "all") => { const p = new URLSearchParams(params); p.set("scope", s); setParams(p, { replace: true }); };
+  const toggleAlerts = async () => {
+    if (!data) return;
+    try {
+      const r = await api<{ alerts: boolean }>("/research/results/alerts", { method: "PUT", body: { on: !data.alerts } });
+      setData({ ...data, alerts: r.alerts });
+      notify(r.alerts ? "You'll get a message on the morning of each results day for your stocks, and when the results are filed." : "Results messages off.");
+    } catch (e) { fail(e); }
+  };
+  const empty = data && data.weeks.every((w) => w.rows.length === 0);
+
+  return (
+    <div className="stack" style={{ gap: 24 }}>
+      <ResearchNav region={region} setRegion={setRegion} />
+      <Header eyebrow={`Results calendar · ${REGION_NAME[region]}`} title="Results this week and next"
+        sub={region === "IN" ? "Board meetings companies have called to consider their financial results, from their filings with the exchange."
+          : "The dates US companies have set for their quarterly results, and the earnings release once it's filed."} />
+      <div className="row wrap" style={{ gap: 12 }}>
+        <div className="seg" role="radiogroup" aria-label="Which companies">
+          <button role="radio" aria-checked={scope === "mine"} aria-pressed={scope === "mine"} onClick={() => setScope("mine")}>My stocks</button>
+          <button role="radio" aria-checked={scope === "all"} aria-pressed={scope === "all"} onClick={() => setScope("all")}>All companies</button>
+        </div>
+        {scope === "all" && <input className="input" style={{ flex: "1 1 200px", maxWidth: 320 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a company" aria-label="Find a company" />}
+      </div>
+      {data && (
+        <label className="row small" style={{ gap: 8 }}>
+          <input type="checkbox" checked={data.alerts} onChange={toggleAlerts} />
+          Message me on the morning of a results day for my stocks, and when the results are filed
+          <Info>Sent by phone notification or Telegram, whichever you set up on the Account page. If you get the My Stocks newsletter, it lists the week's results dates too.</Info>
+        </label>
+      )}
+      {error && <p className="small muted">{error}</p>}
+      {!data && !error && <Loading label="Opening the results calendar" />}
+      {data && empty && (
+        <div className="card stack" style={{ gap: 10 }}>
+          <p className="muted">{scope === "mine"
+            ? (data.mine_count ? `None of your ${REGION_NAME[region]} stocks has a results date in these two weeks.` : `You have no ${REGION_NAME[region]} stocks yet: they come from your watchlist, notebooks and paper sessions.`)
+            : q ? "No company by that name has a results date in these two weeks." : "No results dates announced for these two weeks yet."}</p>
+          {scope === "mine" && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setScope("all")}>See all companies</button>}
+        </div>
+      )}
+      {data && !empty && data.weeks.map((w) => {
+        const days = [...new Set(w.rows.map((r) => r.date))];
+        return (
+          <section key={w.label} className="card stack" style={{ gap: 14 }}>
+            <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
+              <h2 className="h3">{w.label}</h2>
+              <span className="small muted">{resultDay(w.from)} to {resultDay(w.to)}</span>
+            </div>
+            {days.length === 0 ? <span className="small muted">Nothing announced for this week yet.</span> : days.map((d) => (
+              <div key={d} className="stack" style={{ gap: 8 }}>
+                <span className="eyebrow">{resultDay(d)}{d === data.today ? " · today" : ""}</span>
+                {w.rows.filter((r) => r.date === d).map((r) => <ResultLine key={`${r.symbol}-${r.date}`} r={r} showMine={scope === "all"} />)}
+              </div>
+            ))}
+          </section>
+        );
+      })}
+      {data && data.more > 0 && <p className="tiny muted">And {data.more} more. Find a company by name to narrow the list.</p>}
+      {data && <p className="small muted" style={{ maxWidth: "80ch" }}>{data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>
   );
 }

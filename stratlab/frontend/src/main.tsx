@@ -61,6 +61,7 @@ const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
 const FilingsPage = page(research, "FilingsPage");
+const ResultsPage = page(research, "ResultsPage");
 const CompanyPage = page(research, "CompanyPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
@@ -164,6 +165,7 @@ function Routed() {
         <Route path="/research/scan" element={<ScanPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
+        <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/IN/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/US/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/investor" element={<InvestorHomePage />} />

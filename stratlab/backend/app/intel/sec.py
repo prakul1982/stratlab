@@ -336,9 +336,10 @@ class SEC(Source):
             raise SourceError(self.name, f"{sym} isn't a company that files with the SEC (funds and most foreign companies don't).")
         return hit["cik"]
 
-    def submissions(self, cik: int) -> dict:
+    def submissions(self, cik: int, fresh: bool = False) -> dict:
+        """The company's details and recent filing list, cached six hours (`fresh` asks again, for a results day)."""
         key = ("subs", cik)
-        hit = self.cache.get(key)
+        hit = None if fresh else self.cache.get(key)
         if hit is None:
             hit = self._json(f"/submissions/CIK{cik:010d}.json")
             recent = (hit.get("filings") or {}).get("recent") or {}
