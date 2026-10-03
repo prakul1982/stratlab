@@ -61,7 +61,8 @@ function lossNote(values: (number | null | undefined)[], years: number): string 
 const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", other: "" };
 const RESULT: Record<string, [string, string]> = { met: ["Met", "pass"], missed: ["Missed", "fail"], pending: ["Not due yet", "next"], unchecked: ["Can't check", "skip"] };
 const target = (lo: number | null, hi: number | null, unit: string) =>
-  lo == null ? "–" : unit === "crore" ? `₹${cr(lo)}${hi != null ? `–${cr(hi)}` : ""} cr` : `${lo}${hi != null ? `–${hi}` : ""}%`;
+  lo == null ? "–" : unit === "crore" ? `₹${cr(lo)}${hi != null ? `–${cr(hi)}` : ""} cr`
+    : unit === "million" ? `$${usd(lo)}${hi != null ? `–${usd(hi)}` : ""} m` : `${lo}${hi != null ? `–${hi}` : ""}%`;
 
 function ReportCard({ c }: { c: Card }) {
   const checked = c.met + c.missed;
@@ -88,7 +89,7 @@ function ReportCard({ c }: { c: Card }) {
               <div className="promise-facts tiny">
                 {r.period && <span><span className="muted">For</span> {r.period}</span>}
                 {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit)}</b></span>}
-                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? `₹${cr(r.actual)} cr` : `${r.actual.toFixed(1)}%`}</b></span>}
+                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? `₹${cr(r.actual)} cr` : r.unit === "million" ? `$${usd(r.actual)} m` : `${r.actual.toFixed(1)}%`}</b></span>}
                 <a className="link" href={r.source.url} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
               </div>
               {r.quote && <span className="tiny muted">"{r.quote}"</span>}
@@ -340,28 +341,25 @@ export function DeepDivePage() {
             </Panel>
           )}
 
-          {us ? (
-            <Panel title="Management report card" span="full">
-              <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Not available for US companies yet: the report card checks targets given on earnings calls,
-                and US companies don't file call transcripts with the SEC. The outlook management gives in its earnings releases is under the plans above.</p>
-            </Panel>
-          ) : (
           <section className="card stack" style={{ gap: 12 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
               <div className="stack" style={{ gap: 2 }}>
                 <h2 className="h3">Management report card</h2>
-                <span className="small muted">{v.card ? `What they said on ${v.card.read.length} earnings call${v.card.read.length === 1 ? "" : "s"}, and what the numbers showed. Checked ${day(v.card.at)}.`
+                <span className="small muted">{us
+                  ? (v.card ? `What they said in ${v.card.read.length} earnings release${v.card.read.length === 1 ? "" : "s"}, and what the numbers showed. Checked ${day(v.card.at)}.`
+                    : `What management forecast in its earnings releases, against what happened. ${v.calls} release${v.calls === 1 ? "" : "s"} found.`)
+                  : v.card ? `What they said on ${v.card.read.length} earnings call${v.card.read.length === 1 ? "" : "s"}, and what the numbers showed. Checked ${day(v.card.at)}.`
                   : `What management promised on past earnings calls, against what happened. ${v.calls} call transcript${v.calls === 1 ? "" : "s"} found.`}</span>
               </div>
               <button className="btn sm" disabled={carding || !v.calls} onClick={() => checkCalls(!!v.card)}>
-                {carding ? "Reading the calls… about a minute" : v.card ? (v.card_stale ? "Check the newest calls" : "Check again") : "Check past calls"}</button>
+                {carding ? (us ? "Reading the releases… about a minute" : "Reading the calls… about a minute") : v.card ? (v.card_stale ? (us ? "Check the newest releases" : "Check the newest calls") : "Check again") : us ? "Check past releases" : "Check past calls"}</button>
             </div>
-            {carding && <Loading label="Reading past earnings calls" />}
-            {!v.card && !carding && <p className="small muted" style={{ margin: 0 }}>{v.calls ? "Reads up to six calls over the last two years for the targets management gave (growth, margins, capex), then checks each against the reported results. Counts as one of your daily AI reads; kept for a week and shared." : "No earnings-call transcripts were found in the company's filings for the last two years."}</p>}
+            {carding && <Loading label={us ? "Reading past earnings releases" : "Reading past earnings calls"} />}
+            {!v.card && !carding && <p className="small muted" style={{ margin: 0 }}>{v.calls ? `Reads up to six ${us ? "earnings releases" : "calls"} over the last two years for the targets management gave (growth, margins, capex), then checks each against the reported results. Counts as one of your daily AI reads; kept for a week and shared.`
+              : us ? "No earnings releases were found in the company's filings for the last two years." : "No earnings-call transcripts were found in the company's filings for the last two years."}</p>}
             {v.card && <ReportCard c={v.card} />}
             {v.card?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.card.problems.join(" · ")}</p> : null}
           </section>
-          )}
 
           {v.documents.length > 0 && (
             <Panel title="Documents" span="full">

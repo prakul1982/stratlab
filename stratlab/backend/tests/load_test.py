@@ -144,7 +144,9 @@ def run(users: int, seconds: int, port: int = 8765) -> dict:
     async def go():
         # one client for every simulated user (as many browsers would be many machines): building 300 clients would
         # cost the load generator itself seconds of CPU and show up as server time
-        limits = httpx.Limits(max_connections=users, max_keepalive_connections=users)
+        # idle connections are dropped before the server's 5-second keep-alive ends: reusing one the server is closing
+        # at that moment gives a ReadError that a browser would retry, which isn't a server failure
+        limits = httpx.Limits(max_connections=users, max_keepalive_connections=users, keepalive_expiry=3)
         async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=120, limits=limits) as c:
             await asyncio.gather(*(user(n, c, [f"load-{i}" for i in range(users)], mix(ctx), until, results, errors)
                                    for n in range(users)))

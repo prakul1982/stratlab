@@ -43,8 +43,6 @@ GUIDANCE_WORDS = [r"guidance", r"we expect", r"we are targeting", r"target", r"g
 METRICS = {"revenue_growth": "Revenue growth", "profit_growth": "Profit growth", "margin": "Operating margin",
            "capex": "Capex", "other": "Other promise"}
 TOLERANCE = {"revenue_growth": 1.0, "profit_growth": 2.0, "margin": 0.5}      # percentage points; capex uses 10%
-Q_END = {1: (6, 30), 2: (9, 30), 3: (12, 31), 4: (3, 31)}
-Q_LABEL = {1: "Jun", 2: "Sep", 3: "Dec", 4: "Mar"}
 
 
 # ---------- periods ----------
@@ -53,20 +51,26 @@ def _fy(s: str) -> int | None:
     return 2000 + n if n < 100 else n if 2000 <= n <= 2100 else None
 
 
-def fy_of(d: date) -> int:
-    """The Indian financial year a date falls in: 2025-08-10 is FY26."""
-    return d.year + 1 if d.month >= 4 else d.year
+def fy_of(d: date, fye: int = 3) -> int:
+    """The financial year a date falls in, named by the year it ends: with India's year ending in March (fye 3),
+    2025-08-10 is FY26; with Apple's ending in September (fye 9), 2025-10-15 is FY2026."""
+    return d.year + 1 if d.month > fye else d.year
 
 
-def parse_period(text: str | None, said: date | None = None) -> dict | None:
+def _month_end(y: int, m: int) -> date:
+    import calendar as cal
+    return date(y, m, cal.monthrange(y, m)[1])
+
+
+def parse_period(text: str | None, said: date | None = None, fye: int = 3) -> dict | None:
     """'FY26', 'FY2025-26', 'Q2 FY26', '2QFY26', 'Q2FY2026' → {"kind": "FY"|"Q", "fy": 2026, "q": 2}. With the call date,
     'this year' / 'current fiscal' / 'next year' are resolved too."""
     raw = str(text or "").lower()
     if said is not None:
         if re.search(r"\bnext (?:financial |fiscal )?year\b|\bnext fiscal\b", raw):
-            return {"kind": "FY", "fy": fy_of(said) + 1}
+            return {"kind": "FY", "fy": fy_of(said, fye) + 1}
         if re.search(r"\b(?:this|current) (?:financial |fiscal )?year\b|\b(?:this|current) fiscal\b", raw):
-            return {"kind": "FY", "fy": fy_of(said)}
+            return {"kind": "FY", "fy": fy_of(said, fye)}
     s = re.sub(r"\s+", "", str(text or "").upper())
     m = re.search(r"(?:Q([1-4])|([1-4])Q)FY'?(\d{2,4})(?:[-/](\d{2,4}))?", s)
     if m:
@@ -79,22 +83,23 @@ def parse_period(text: str | None, said: date | None = None) -> dict | None:
     return None
 
 
-def period_end(p: dict) -> date:
-    if p["kind"] == "FY":
-        return date(p["fy"], 3, 31)
-    mo, d = Q_END[p["q"]]
-    return date(p["fy"] if p["q"] == 4 else p["fy"] - 1, mo, d)
+def period_end(p: dict, fye: int = 3) -> date:
+    """The last day of a financial year or quarter, for a year ending in month `fye`."""
+    months_before = 0 if p["kind"] == "FY" else 3 * (4 - p["q"])
+    m = fye - months_before
+    y = p["fy"]
+    while m <= 0:
+        m, y = m + 12, y - 1
+    return _month_end(y, m)
 
 
 def period_label(p: dict) -> str:
     return f"FY{p['fy'] % 100:02d}" if p["kind"] == "FY" else f"Q{p['q']} FY{p['fy'] % 100:02d}"
 
 
-def _table_label(p: dict) -> str:
-    """The column label the fundamentals tables use: 'Mar 2026', 'Sep 2025'."""
-    if p["kind"] == "FY":
-        return f"Mar {p['fy']}"
-    return f"{Q_LABEL[p['q']]} {p['fy'] if p['q'] == 4 else p['fy'] - 1}"
+def _table_label(p: dict, fye: int = 3) -> str:
+    """The column label the fundamentals tables use: 'Mar 2026', 'Sep 2025' (the month the period ends)."""
+    return period_end(p, fye).strftime("%b %Y")
 
 
 # ---------- the AI read ----------
@@ -106,7 +111,7 @@ def _f(v):
         return None
 
 
-def clean(d: dict, labels: dict, texts: dict | None = None) -> list[dict]:
+def clean(d: dict, labels: dict, texts: dict | None = None, fye: int = 3) -> list[dict]:
     """`texts` (label → full text) checks each quote really is in the call it's credited to."""
     out = []
     for g in (d.get("guidance") or [])[:15]:
@@ -120,7 +125,7 @@ def clean(d: dict, labels: dict, texts: dict | None = None) -> list[dict]:
         if texts is not None and not quote_found(str(g.get("quote") or ""), texts.get(label, "")):
             continue                                    # the quote isn't in that call: treated as made up
         said = date.fromisoformat(src["at"][:10])
-        per = parse_period(g.get("period"), said) or parse_period(g.get("what"), said)
+        per = parse_period(g.get("period"), said, fye) or parse_period(g.get("what"), said, fye)
         metric = str(g.get("metric") or "other").lower().replace(" ", "_")
         metric = metric if metric in METRICS else "other"
         low, high = _f(g.get("low")), _f(g.get("high"))
@@ -130,7 +135,7 @@ def clean(d: dict, labels: dict, texts: dict | None = None) -> list[dict]:
             low, high = high, low
         if metric != "other" and low is None:
             metric = "other"
-        if per and period_end(per) <= said:
+        if per and period_end(per, fye) <= said:
             continue                                    # said after the period ended: a result, not a promise
         out.append({"metric": metric, "low": low, "high": high, "period": period_label(per) if per else None,
                     "what": what[:200], "quote": str(g.get("quote") or "")[:300], "said_at": src["at"],
@@ -193,7 +198,7 @@ def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai, hosts: tup
 
 # ---------- checking against the numbers ----------
 def _actual(metric: str, per: dict, nums: dict) -> float | None:
-    label = _table_label(per)
+    label = _table_label(per, nums.get("fye") or 3)
     if per["kind"] == "FY":
         rows = nums.get("years") or []
         idx = next((i for i, r in enumerate(rows) if r["year"] == label), None)
@@ -223,7 +228,8 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
     """One promise against the numbers: met, missed, pending (not reported yet) or unchecked (not a number we have)."""
     today = today or ist_date()
     per = parse_period(g.get("period"))
-    res = {**g, "actual": None, "result": "unchecked", "unit": "crore" if g["metric"] == "capex" else "%"}
+    us = (nums.get("unit") or "").startswith("$")
+    res = {**g, "actual": None, "result": "unchecked", "unit": ("million" if us else "crore") if g["metric"] == "capex" else "%"}
     if g["metric"] == "other" or not per:
         return res
     if nums.get("bank") and g["metric"] in ("margin", "capex"):
@@ -231,7 +237,7 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
     a = _actual(g["metric"], per, nums)
     if a is None:
         # quarterly results come out within ~45 days of the quarter, annual ones within ~60
-        res["result"] = "pending" if (today - period_end(per)).days < 75 else "unchecked"
+        res["result"] = "pending" if (today - period_end(per, nums.get("fye") or 3)).days < 75 else "unchecked"
         return res
     res["actual"] = round(a, 1)
     target = g["low"]
@@ -293,3 +299,66 @@ def store(symbol: str, card: dict) -> dict:
 
 def fresh(v: dict | None) -> bool:
     return bool(v) and time.time() - float(v.get("ts") or 0) < KEEP
+
+
+# ---------- US companies: guidance in earnings releases ----------
+GUIDANCE_US = """You pull out the targets a US listed company's management gave in its earnings press releases: what they
+said a number WOULD be for a future quarter or fiscal year. Examples: "revenue growth in the low double digits for
+fiscal 2026", "operating margin of 30% to 31% in the fourth quarter", "capital expenditures of about $14 billion".
+Return {"guidance": [{"metric": "revenue_growth | profit_growth | margin | capex | other",
+  "low": number or null, "high": number or null, "unit": "% | million",
+  "period": "FY2026 or Q3 FY2026 (the company's own fiscal year)", "what": "the target in one short line",
+  "quote": "short exact quote", "source": "S1"}]}
+- Only forward-looking targets for a period that had NOT ended when the release was published. Not past results.
+- The company's fiscal year end and the release date are given. Turn "the fourth quarter", "next quarter", "the full
+  year" and "fiscal 2026" into Qn FYyyyy or FYyyyy in the COMPANY'S fiscal year (named by the calendar year it ends in).
+- "margin" is an operating or gross margin in %. Growth is year-on-year in %. Capex is in $ million ($1.2 billion is 1200).
+- Revenue given as a dollar range (e.g. "$94 billion to $97 billion") is not a growth rate: use metric "other".
+- A single figure goes in "low" with "high" null; a range fills both. "Low to mid single digits" is low 1, high 5.
+- "quote" must be copied word for word from the excerpt, 6 to 25 words. Don't paraphrase it.
+- Up to 12 items. "source" is the label of the excerpt it came from.
+""" + RULES
+
+GUIDANCE_WORDS_US = [r"outlook", r"guidance", r"expects?", r"anticipates?", r"forecast", r"fiscal (?:year )?20\d\d",
+                     r"(?:first|second|third|fourth) quarter", r"full[- ]year", r"capital expenditures", r"margin", r"growth"]
+
+
+def read_us(symbol: str, name: str, docs_list: list[dict], sec_api, ai, fye: int) -> dict:
+    """The report card's reads for a US company: up to six earnings releases (exhibit 99 of the 8-K) over two years,
+    one AI request each, with periods in the company's own fiscal year."""
+    releases = sorted([d for d in docs_list if d["kind"] == "earnings_release"], key=lambda d: d["at"], reverse=True)
+    if len(releases) > MAX_CALLS:
+        releases = [releases[round(i * (len(releases) - 1) / (MAX_CALLS - 1))] for i in range(MAX_CALLS)]
+    out = {"guidance": [], "problems": [], "read": []}
+    pairs = []
+    for d in releases:
+        try:
+            url, text = sec_api.release_doc(d)
+        except Exception as e:
+            out["problems"].append(f"{d['title'][:60]} {d['at'][:10]}: {str(e)[:80]}")
+            continue
+        if len(text) >= 400:
+            pairs.append(({**d, "url": url}, text))
+    if not pairs:
+        raise NoCalls(out["problems"] or ["No earnings release was found in the last two years."])
+    month = date(2000, fye, 1).strftime("%B")
+    failed, last = 0, None
+    for d, text in pairs:
+        said = date.fromisoformat(d["at"][:10])
+        labels, texts = {"S1": {"title": d["title"], "at": d["at"], "url": d["url"], "kind": d["kind"]}}, {"S1": text}
+        head = (f"COMPANY: {name} ({symbol}, US). Its fiscal year ends in {month}.\nRELEASE DATE: {d['at'][:10]} (in FY{fy_of(said, fye)})\n\n"
+                f"[S1] earnings release: {d['title']}\n{ranked_windows(text, GUIDANCE_WORDS_US, limit=PER_CALL)}")
+        try:
+            raw = complete(GUIDANCE_US, head, gemini=ai[0], anthropic=ai[1], max_tokens=3000, kind="long")
+            try:
+                parsed = extract_json(raw)
+            except AIError:
+                parsed = {"guidance": salvage_items(raw, "guidance")}
+            out["guidance"] += clean(parsed, labels, texts, fye)
+            out["read"].append({"kind": d["kind"], "at": d["at"], "title": d["title"]})
+        except AIError as e:
+            failed, last = failed + 1, e
+            out["problems"].append(f"{d['title'][:60]}: {str(e)[:80]}")
+    if failed == len(pairs):
+        raise last
+    return out

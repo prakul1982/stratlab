@@ -365,14 +365,17 @@ class SEC(Source):
         return out or full[:120000]
 
 
-    def release(self, d: dict) -> str:
-        """An earnings 8-K's press release: the exhibit 99 file in the filing's folder (the 8-K itself is a cover page)."""
+    def release_doc(self, d: dict) -> tuple[str, str]:
+        """(link, text) of an earnings 8-K's press release: the exhibit 99 file in the filing's folder (the 8-K itself
+        is a cover page), so quotes link to the release they came from."""
         idx = self._json(d["folder"] + "index.json")
         names = [i.get("name", "") for i in ((idx.get("directory") or {}).get("item") or [])]
         ex = [n for n in names if re.search(r"ex-?99", n, re.I) and n.lower().endswith((".htm", ".html", ".txt"))]
-        if not ex:
-            return self.document(d["url"])
-        return self.document(d["folder"] + sorted(ex)[0])
+        url = d["folder"] + sorted(ex)[0] if ex else d["url"]
+        return url, self.document(url)
+
+    def release(self, d: dict) -> str:
+        return self.release_doc(d)[1]
 
     def company(self, symbol: str) -> dict:
         """The company's numbers in the deep dive's shape (cached six hours), with its filing list under "filings"."""

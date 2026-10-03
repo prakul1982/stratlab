@@ -1,4 +1,5 @@
 """US company numbers from the SEC's XBRL filings, in the same shape as the Indian company pages."""
+import json
 import pytest
 
 from app import deepdive
@@ -101,12 +102,11 @@ def test_us_deep_dive_through_the_api(monkeypatch):
         assert v["numbers"]["capex_reported"] and v["numbers"]["years"][-1]["capex"] == 12715
         assert v["snapshot"]["market_cap_cr"] and v["snapshot"]["pe"]                 # from the price and the share count
         assert v["checklist"]["industry"]["path"] == ["Manufacturing", "Electronic Computers"]
-        assert v["ai"] and not v["report_card"] and any(d["kind"] == "annual_report" for d in v["documents"])
+        assert v["ai"] and v["report_card"] and any(d["kind"] == "annual_report" for d in v["documents"])
         fcf = next(x for x in v["checklist"]["checks"] if x["label"] == "Free cash flow, 3 years")
         assert fcf["value"].startswith("$") and fcf["value"].endswith(" m")
         deck = c.get("/research/deep/AAPL/deck?region=US", headers=h)
         assert deck.status_code == 200 and deck.content[:2] == b"PK"
-        assert c.post("/research/deep/AAPL/card?region=US", headers=h).json()["detail"]["code"] == "us_no_calls"
         assert c.get("/research/deep/AAPL?region=JP", headers=h).status_code == 400
         missing = c.get("/research/deep/ZZZZ?region=US", headers=h)
         assert missing.status_code in (404, 502, 503) and "SEC" in missing.text
@@ -154,5 +154,69 @@ def test_us_documents_are_read_with_ai_and_stored(monkeypatch):
         assert [d["kind"] for d in stored["read"]] == ["annual_report", "earnings_release"]
         assert "AAPL" not in saved                                      # never mixed up with an Indian symbol's read
         assert w["ai"].calls >= 1
+    finally:
+        w["close"]()
+
+
+def test_report_card_periods_follow_the_companys_own_fiscal_year():
+    from datetime import date
+    from app import report_card as rc
+    assert rc.fy_of(date(2025, 10, 15), 9) == 2026 and rc.fy_of(date(2025, 9, 15), 9) == 2025
+    assert rc.period_end({"kind": "FY", "fy": 2026}, 9) == date(2026, 9, 30)
+    assert rc.period_end({"kind": "Q", "fy": 2026, "q": 1}, 9) == date(2025, 12, 31)       # Apple's December quarter
+    assert rc.period_end({"kind": "Q", "fy": 2026, "q": 4}, 3) == date(2026, 3, 31)        # India unchanged
+    assert rc.period_end({"kind": "Q", "fy": 2026, "q": 1}, 3) == date(2025, 6, 30)
+    assert rc._table_label({"kind": "Q", "fy": 2026, "q": 2}, 9) == "Mar 2026"
+    assert rc.parse_period("next fiscal year", date(2025, 10, 30), 9) == {"kind": "FY", "fy": 2027}
+
+
+def test_us_report_card_from_earnings_releases(monkeypatch):
+    from app import deepdive, report_card
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        saved = {}
+        monkeypatch.setattr(deepdive, "stored", lambda k: None)
+        monkeypatch.setattr(report_card, "stored", lambda k: saved.get(k))
+        monkeypatch.setattr(report_card, "store", lambda k, v: saved.__setitem__(k, {**v, "at": "2026-10-03", "ts": 9e18}) or v)
+        quote = "The Company expects revenue to grow in the low to mid single digits in the June quarter."
+        monkeypatch.setattr(report_card, "complete", lambda *a, **k: json.dumps({"guidance": [
+            {"metric": "revenue_growth", "low": 1, "high": 5, "unit": "%", "period": "Q3 FY2026",
+             "what": "Revenue growth of low to mid single digits", "quote": quote, "source": "S1"},
+            {"metric": "margin", "low": 99, "period": "FY2020", "what": "invented", "quote": "not in the release at all here", "source": "S1"}]}))
+        c, h = w["client"], W.headers("pro-token")
+        r = c.post("/research/deep/AAPL/card?region=US", headers=h)
+        assert r.status_code == 200, r.text
+        card = r.json()["card"]
+        assert len(card["rows"]) == 1 and card["rows"][0]["period"] == "Q3 FY26"          # the made-up quote is dropped
+        row = card["rows"][0]
+        assert row["metric"] == "revenue_growth" and row["source"]["url"].endswith("a8-kex991q2.htm")   # the exhibit 99 release
+        assert "US:AAPL" in saved and r.json()["report_card"] and r.json()["calls"] == 2
+    finally:
+        w["close"]()
+
+
+def test_insider_buying_and_selling_in_the_us_checklist():
+    from datetime import date
+    from app.checklist import insider_flow
+    rows = [{"name": "A", "change": 1000, "transactionCode": "P", "transactionDate": "2026-08-01"},
+            {"name": "B", "change": -5000, "transactionCode": "S", "transactionDate": "2026-09-01"},
+            {"name": "C", "change": 90000, "transactionCode": "M", "transactionDate": "2026-09-02"},     # an option exercise
+            {"name": "D", "change": -4000, "transactionCode": "S", "transactionDate": "2025-01-01"}]     # too old
+    assert insider_flow(rows, date(2026, 10, 3)) == {"bought": 1000, "sold": 5000, "buyers": 1, "sellers": 1}
+    assert insider_flow([], date(2026, 10, 3)) is None
+
+
+def test_us_checklist_shows_insiders(monkeypatch):
+    from app import deepdive, report_card
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        monkeypatch.setattr(deepdive, "stored", lambda k: None)
+        monkeypatch.setattr(report_card, "stored", lambda k: None)
+        v = w["client"].get("/research/deep/AAPL?region=US", headers=W.headers("pro-token")).json()
+        ins = [c for c in v["checklist"]["checks"] if c["group"] == "Insiders"]
+        assert ins and ins[0]["label"] == "Insider buying and selling, 6 months"
+        assert not [c for c in v["checklist"]["checks"] if c["group"] == "Promoters"]
     finally:
         w["close"]()
