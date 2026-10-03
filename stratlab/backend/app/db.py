@@ -90,6 +90,13 @@ def count_usage(user_id: str, kind: str, since_iso: str) -> int:
     return r.count or 0
 
 
+def usage_times(user_id: str, kind: str, since_iso: str, until_iso: str, limit: int = 500) -> list[str]:
+    """When each of a user's events of one kind happened, between two times."""
+    r = (sb().table("usage_events").select("created_at").eq("user_id", user_id).eq("kind", kind)
+         .gte("created_at", since_iso).lt("created_at", until_iso).limit(limit).execute())
+    return [x["created_at"] for x in r.data if x.get("created_at")]
+
+
 def add_usage(user_id: str, kind: str) -> None:
     sb().table("usage_events").insert({"user_id": user_id, "kind": kind}).execute()
 

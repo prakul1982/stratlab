@@ -429,7 +429,8 @@ test("account: your invite link, how many friends joined, and sharing it", async
   const phone = info.project.name === "phone";
   await watchSharing(page);
   const errors = await open(page, "/account", "Invite friends");
-  await expect(page.getByTestId("friends-joined")).toHaveText(/^\d+ friends? joined$/);
+  await expect(page.getByTestId("friends-joined")).toHaveText(/^3 friends joined · 1 free month earned$/);
+  await expect(page.getByTestId("invite-reward-line")).toHaveText(/you both get a month of Basic free \(up to 12 months for you\)/);
   await expect(page.getByLabel("Your invite link")).toHaveValue(/\/\?ref=[A-Za-z0-9_-]{12}$/);
   if (phone) await touchable(page);
   await page.getByRole("button", { name: "Share your link" }).click();
@@ -457,7 +458,32 @@ test("an invite link is remembered through sign-in, sent once, and taken out of 
 
 test("admin: invite counts in the Users tab", async ({ page }, info) => {
   const errors = await open(page, "/admin?tab=users", "Paper trading now");
-  await expect(page.locator("th", { hasText: "Invited" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Invited", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Free months", exact: true })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});
+
+test("admin: invite rewards waiting for review are approved or rejected", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/admin?tab=users", "Invite rewards");
+  const panel = page.getByTestId("invite-rewards");
+  await expect(panel.getByText("Waiting for your review")).toBeVisible();
+  await expect(panel.locator("tr", { hasText: "load3@example.com" })).toBeVisible();          // given
+  if (phone) await touchable(page);
+  // each run decides its own row: desktop rejects one, phone approves the other
+  const row = panel.locator("tr", { hasText: phone ? "load2@example.com" : "load1@example.com" }).filter({ has: page.getByRole("button") });
+  await row.getByRole("button", { name: phone ? "Approve" : "Reject" }).click();
+  await expect(page.getByRole("status")).toContainText(phone ? "Approved" : "Rejected");
+  await expect(row).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("account: free Basic from invites shows on the plan", async ({ page }, info) => {
+  const errors = await open(page, "/account", "Invite friends", sessionAs("load-3", "u-load-3", "load3@example.com"));
+  await expect(page.getByText("Free Basic from invites")).toBeVisible();
+  await expect(page.getByText("Basic (free from invites)")).toBeVisible();
+  await expect(page.getByTestId("friends-joined")).toHaveText("0 friends joined · 1 free month earned");
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });

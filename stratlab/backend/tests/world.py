@@ -160,6 +160,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     fake_db = FakeSupabase()
     monkeypatch.setattr(db, "_client", fake_db)
     db._profiles.clear()
+    from app import invite_rewards, plans
+    plans.forget_free_basic()                   # free Basic time another test gave
+    invite_rewards._touched.clear()
     main._results.clear()                       # shared scan and rotation answers from an earlier test
     main._bse_map.clear()                       # the BSE-only list another test loaded
     from app import stock_pages

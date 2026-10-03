@@ -47,10 +47,28 @@ def build():
     sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
     w["client"].post("/holdings/import", headers=world.headers("admin-token"),
                      json={"filename": sample.name, "data": base64.b64encode(sample.read_bytes()).decode()})
+    invite_rewards()
     screen_index()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     return w
+
+
+def invite_rewards():
+    """The owner invited friends: one became active (a free month each), and a link with too many sign-ups in a day
+    left two rewards waiting for review in Admin (one for the desktop run to reject, one for the phone run to
+    approve)."""
+    import json
+    from app import db, plans
+    joined = [{"id": f"u-load-{i}", "at": "2026-10-01T10:00:00+00:00"} for i in range(1, 4)]
+    db.set_setting("ref:joined:u-admin", json.dumps(joined))
+    given = {"by": "u-admin", "at": "2026-10-01T10:00:00+00:00", "status": "given", "signups_that_day": 3,
+             "referrer_months": 1, "newcomer_months": 1, "given_at": "2026-10-03T10:00:00+00:00"}
+    db.set_setting("reward:u-load-3", json.dumps(given))
+    for i in (1, 2):
+        db.set_setting(f"reward:u-load-{i}", json.dumps({**given, "status": "review", "signups_that_day": 6,
+                                                        "referrer_months": 0, "newcomer_months": 0, "given_at": None}))
+    plans.add_free_basic(db.get_profile("u-load-3"), 30)
 
 
 def screen_index():

@@ -1,8 +1,8 @@
 """Invite links: every user has a personal link (/?ref=CODE), and a new account that arrived through one remembers
 who sent it.
 
-Only tracked for now, with no reward: the owner hasn't decided on one. When they do, it goes in on_referral_joined,
-the one place a counted referral lands.
+When the friend becomes active, both get a free month of Basic: on_referral_joined, the one place a counted referral
+lands, hands it to invite_rewards.py.
 
 Kept in app_settings, so no new database columns:
   ref:code:{CODE}   -> the id of the user the code belongs to
@@ -142,6 +142,7 @@ def record(newcomer: dict, code: str | None, now: datetime | None = None) -> str
 
 
 def on_referral_joined(referrer: dict, newcomer: dict) -> None:
-    """Called once when a new account that came through `referrer`'s invite link is counted. Does nothing for now:
-    no reward or free plan time is given until the owner decides on one. A reward goes here."""
-    return None
+    """Called once when a new account that came through `referrer`'s invite link is counted. Starts the invite reward:
+    a free month of Basic for both once the newcomer is active (invite_rewards.py)."""
+    from . import invite_rewards
+    invite_rewards.joined(referrer, newcomer)

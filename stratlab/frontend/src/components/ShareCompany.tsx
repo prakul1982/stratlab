@@ -34,9 +34,11 @@ export function ShareCompanyButton({ region, symbol }: { region: "IN" | "US"; sy
   );
 }
 
-type Invites = { code: string; link: string; joined: number };
+type Invites = { code: string; link: string; joined: number; months?: number; cap?: number; free_basic_until?: string | null; banked_days?: number };
 
-/** Account → Invite friends: the user's own link, and how many friends joined through it. */
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** Account → Invite friends: the user's own link, how many friends joined through it and the free months earned. */
 export function InviteCard() {
   const { notify } = useApp();
   const [v, setV] = useState<Invites | null>(null);
@@ -56,9 +58,10 @@ export function InviteCard() {
     <section className="card stack" style={{ gap: 12 }} id="invite">
       <div className="spread" style={{ gap: 12, flexWrap: "wrap" }}>
         <h2 className="h2">Invite friends</h2>
-        <span className="pill" data-testid="friends-joined">{v.joined} {v.joined === 1 ? "friend" : "friends"} joined</span>
+        <span className="pill" data-testid="friends-joined">{plural(v.joined, "friend", "friends")} joined · {plural(v.months ?? 0, "free month", "free months")} earned</span>
       </div>
-      <p className="small muted" style={{ margin: 0 }}>Your own link to StratLab. When someone signs up through it, they're counted here.</p>
+      <p className="small muted" style={{ margin: 0 }} data-testid="invite-reward-line">When a friend joins through your link and uses StratLab on 3 different days in their first two weeks, you both get a month of Basic free (up to {v.cap ?? 12} months for you).</p>
+      {(v.banked_days ?? 0) > 0 && <p className="small muted" style={{ margin: 0 }}>{v.banked_days} days of free Basic are kept for you: they start if your paid plan stops.</p>}
       <div className="row wrap" style={{ gap: 10 }}>
         <input className="input" readOnly value={link} aria-label="Your invite link" style={{ flex: "1 1 260px", minWidth: 0 }} onFocus={(e) => e.target.select()} />
         <button className="btn outline" onClick={share}><Share size={16} /> Share your link</button>

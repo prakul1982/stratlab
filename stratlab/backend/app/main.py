@@ -54,7 +54,7 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, company_cards, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
+from . import ask, company_cards, daily_report, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
@@ -63,7 +63,7 @@ from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, Newslett
 from .plans import holdings_limit
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
-from .plans import access_plan, screens as screens_limit
+from .plans import access_plan, free_basic_until, screens as screens_limit
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -153,6 +153,7 @@ newsletter_job = news.Job()
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
 lifecycle_job = lifecycle.Job()
+invite_job = invite_rewards.Job()
 
 
 @asynccontextmanager
@@ -181,6 +182,7 @@ async def lifespan(app: FastAPI):
     newsletter_job.start()
     results_job.start()
     lifecycle_job.start()
+    invite_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
@@ -457,6 +459,7 @@ def me(profile=Depends(current_profile)):
         "id": profile["id"], "email": profile.get("email"),
         "plan": plan, "plan_info": info, "paid_plan": profile.get("_paid_plan", plan),
         "promo": {"until": until.isoformat()} if (until := promo_until()) and promo_active() else None,
+        "free_basic_until": fb.isoformat() if profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
         "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                     "renews_or_ends": profile.get("current_period_end"),
                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
@@ -824,6 +827,7 @@ def run_test(profile, strategy: Strategy, req) -> dict:
     check_features(profile, strategy, data["inst"])
     out = compute.run(strategy, data)                   # in a worker process: other pages stay quick meanwhile
     db.add_usage(profile["id"], "backtest")
+    invite_rewards.safe_touch(profile, "backtest")
     used = backtests_used(profile)
     out["usage"] = {"backtests_used": used, "backtests_limit": limit}
     return out
@@ -850,6 +854,7 @@ def run_group_test(profile, strategy: Strategy, group: dict, req, version: int) 
     max_days = min(d["max_days"] for d in datasets)
     result = research.run_group(datasets, strategy, group, min(req.days, max_days), max_days)
     db.add_usage(profile["id"], "backtest")
+    invite_rewards.safe_touch(profile, "backtest")
     rec = research.record_group(result, strategy, req.label, version, db.now_iso(), group, datasets, problems)
     return rec, {"backtests_used": backtests_used(profile), "backtests_limit": limit}
 
@@ -1463,6 +1468,7 @@ def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile))
         first_steps.mark(profile["id"], "deepdive")
     except Exception as e:
         print("first steps:", str(e)[:120])
+    invite_rewards.safe_touch(profile, "deepdive")
     return out
 
 
@@ -1672,6 +1678,7 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
     if found:                             # nothing matched: the saved holdings stay as they were
         known = {i["symbol"]: i.get("sector") for i in before["items"]}
         holdings.save(profile["id"], with_sectors(found, known), parsed["broker"])
+        invite_rewards.safe_touch(profile, "holdings")
     return ok({"broker": parsed["broker"], "imported": len(found), "saved": bool(found), "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
@@ -2149,6 +2156,7 @@ def start_session(profile, s, inst):
             err(503, "prices_unavailable", "Couldn't load the price history this strategy needs to start. Nothing was "
                                            "started; try again in a minute.")
         raise
+    invite_rewards.safe_touch(profile, "paper")
     return sess
 
 
@@ -2583,6 +2591,24 @@ def admin_overview(_=Depends(admin.admin_profile)):
 @app.get("/admin/users")
 def admin_users(q: str = "", _=Depends(admin.admin_profile)):
     return admin.users(q, month_start_iso())
+
+
+@app.get("/admin/invite-rewards")
+def admin_invite_rewards(_=Depends(admin.admin_profile)):
+    """Invite rewards: those waiting for review (a link with more than 5 sign-ups in a day), and the newest given."""
+    return {**invite_rewards.admin_view(), "job": invite_job.status}
+
+
+@app.post("/admin/invite-rewards/{user_id}/{decision}")
+def admin_review_invite_reward(user_id: str, decision: str, who=Depends(admin.admin_profile)):
+    """Approve or reject a reward waiting for review. Approved, it's given once the friend is active."""
+    if decision not in ("approve", "reject") or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", user_id):
+        err(404, "not_found", "That reward isn't waiting for review.")
+    status = invite_rewards.review(user_id, decision == "approve")
+    if status is None:
+        err(404, "not_found", "That reward isn't waiting for review.")
+    log.info("admin %s: invite reward for %s, %s -> %s", who.get("email"), user_id, decision, status)
+    return {"status": status, **invite_rewards.admin_view()}
 
 
 @app.post("/admin/users/{user_id}/plan")
@@ -3200,16 +3226,22 @@ def set_first_steps(req: FirstStepsReq, profile=Depends(current_profile)):
 # ---------- invite links ----------
 @app.get("/me/referrals")
 def my_referrals(profile=Depends(current_profile)):
-    """The user's personal invite link and how many friends joined through it."""
+    """The user's personal invite link, how many friends joined through it and the free months it earned."""
     code = referrals.code_for(profile["id"])
-    return {"code": code, "link": referrals.link(code), "joined": len(referrals.joined(profile["id"]))}
+    try:
+        mine = invite_rewards.mine(profile)
+    except Exception as e:         # the link still shows without the counts
+        print("invite rewards:", str(e)[:160])
+        mine = {"joined": len(referrals.joined(profile["id"])), "months": 0, "cap": invite_rewards.REFERRER_CAP,
+                "free_basic_until": None, "banked_days": 0}
+    return {"code": code, "link": referrals.link(code), **mine}
 
 
 @app.post("/me/referral")
 def record_referral(req: ReferralReq, profile=Depends(current_profile)):
     """A new account says which invite link it arrived by (the app sends it once, right after the first sign-in).
-    Counted once, for a new account only, and never for the user's own link. No reward is given. A few tries an
-    hour, so nobody can run through codes looking for real ones."""
+    Counted once, for a new account only, and never for the user's own link; the free-month reward waits for the
+    newcomer to become active. A few tries an hour, so nobody can run through codes looking for real ones."""
     throttle(profile, "referral", 10, 3600, "Too many invite codes tried. Try again later.")
     return {"recorded": referrals.record(profile, req.code) == "recorded"}
 

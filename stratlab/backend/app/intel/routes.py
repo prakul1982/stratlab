@@ -204,5 +204,11 @@ def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
         if k not in seen:
             seen.add(k)
             items.append({"region": i.region, "symbol": symbol_of(i.symbol), "name": i.name})
+    before = get_watchlist(profile)["items"]
+    before = before if isinstance(before, list) else []
     db.set_setting(_watch_key(profile), json.dumps({"items": items}))
+    had = {(i.get("region"), str(i.get("symbol") or "").upper()) for i in before if isinstance(i, dict)}
+    if any((i["region"], i["symbol"].upper()) not in had for i in items):     # a stock added, not only removed
+        from .. import invite_rewards
+        invite_rewards.safe_touch(profile, "watchlist")
     return {"items": items}

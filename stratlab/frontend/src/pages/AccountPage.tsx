@@ -106,10 +106,11 @@ export function AccountPage() {
         <section className="card stack" style={{ gap: 0 }}>
           <div className="spread" style={{ marginBottom: 6 }}>
             <h2 className="h2 row" style={{ gap: 0 }}>Plan and usage<Info>{HELP.experimentsQuota}</Info></h2>
-            <span className="badge skip">{me.plan_info.name}{me.promo ? " (launch offer)" : ""}</span>
+            <span className="badge skip">{me.plan_info.name}{me.promo ? " (launch offer)" : me.free_basic_until ? " (free from invites)" : ""}</span>
           </div>
           {[
             ...(me.promo ? [["Launch offer", `Every Pro feature free until ${dateOnly(me.promo.until)}`]] : []),
+            ...(!me.promo && me.free_basic_until ? [["Free Basic from invites", `Until ${dateOnly(me.free_basic_until)}`]] : []),
             ...(paid !== "free" ? [[b.cancel_at_period_end ? "Ends on" : "Renews on", dateOnly(b.renews_or_ends)]] : []),
             ["Experiments this month", u.backtests_limit == null ? `${u.backtests_used} (unlimited)` : `${u.backtests_used} of ${u.backtests_limit}`],
             ["AI builds this month", u.ai_limit == null ? `${u.ai_used} (unlimited)` : `${u.ai_used} of ${u.ai_limit}`],
