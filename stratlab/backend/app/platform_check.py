@@ -139,6 +139,16 @@ def check_filings(feed) -> dict:
     return _result("Exchange filings", "Filings", "pass", f"{len(items)} Reliance filings; newest {newest}.")
 
 
+def check_bse_filings(bse) -> dict:
+    """BSE's feed, which serves the companies listed only on BSE; Reliance (500325) files on both exchanges."""
+    items = bse.announcements("500325")
+    if not items:
+        return _result("BSE filings", "Filings", "warn", "Reliance has no BSE filings in the window, which is unusual.")
+    pdfs = sum(1 for i in items if i.get("url"))
+    return _result("BSE filings", "Filings", "pass" if pdfs else "warn",
+                   f"{len(items)} Reliance filings on BSE, {pdfs} with a document; newest {items[0]['at'][:10]}.")
+
+
 def check_company(hub, region: str, symbol: str) -> dict:
     c = hub.company(region, symbol)
     down = [s["source"] for s in c.get("sources", []) if not s.get("ok")]

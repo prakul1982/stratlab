@@ -6,6 +6,7 @@ through this file so it can be swapped for a licensed vendor later."""
 import math
 import secrets
 import threading
+import re
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -20,6 +21,27 @@ IST = ZoneInfo("Asia/Kolkata")
 # our timeframe -> (kite interval, max days per request, candles per trading day)
 INTERVALS = {"1d": ("day", 1900, 1), "1h": ("60minute", 380, 7), "15m": ("15minute", 190, 25), "5m": ("5minute", 95, 75)}
 DEFAULT_SYMBOLS = [("NSE", "NIFTY 50"), ("NSE", "NIFTY BANK")]
+
+
+def norm_name(n: str | None) -> str:
+    """A company name for matching across exchanges: lower case, without Ltd, Limited, India and the like."""
+    n = re.sub(r"[^a-z0-9 ]", " ", (n or "").lower())
+    return " ".join(w for w in n.split() if w not in ("ltd", "limited", "the", "co", "company", "india", "inds", "industries"))
+
+
+def bse_only_rows(raw: list[dict], nse_rows: list[dict]) -> list[dict]:
+    """BSE equities that aren't on NSE too (a company on both is the NSE one): matched by symbol and by name."""
+    syms = {r["symbol"].upper() for r in nse_rows if r["exchange"] == "NSE"}
+    names = {norm_name(r["name"]) for r in nse_rows if r["exchange"] == "NSE" and r["type"] == "EQ"}
+    out = []
+    for x in raw:
+        ts, code = str(x.get("tradingsymbol") or ""), str(x.get("exchange_token") or "")
+        if x.get("instrument_type") != "EQ" or x.get("segment") != "BSE" or not ts or not code.isdigit():
+            continue
+        if ts.upper() in syms or norm_name(x.get("name")) in names:
+            continue
+        out.append(x)
+    return out
 
 
 def today_ist() -> str:
@@ -154,9 +176,18 @@ class KiteService:
             return
         self._require()
         rows = []
-        for exch in ("NSE", "NFO"):
+        for exch in ("NSE", "NFO", "BSE"):
             self._throttle()
-            for x in self.kite.instruments(exch):
+            try:
+                raw = self.kite.instruments(exch)
+            except Exception as e:
+                if exch != "BSE":
+                    raise
+                print("BSE instruments unavailable:", e)       # NSE and F&O still work
+                continue
+            if exch == "BSE":
+                raw = bse_only_rows(raw, rows)
+            for x in raw:
                 itype = x.get("instrument_type")
                 if exch == "NSE" and itype != "EQ" and x.get("segment") != "INDICES":
                     continue
@@ -174,6 +205,7 @@ class KiteService:
                     "strike": x.get("strike") or None,
                     "fno": exch == "NFO",
                     "market": "IN", "currency": "INR", "tz": "Asia/Kolkata",
+                    **({"bse_code": str(x["exchange_token"])} if exch == "BSE" else {}),
                 })
         self._inst = rows
         self._by_token = {r["token"]: r for r in rows}
@@ -232,7 +264,7 @@ class KiteService:
             if r["fno"] and not allow_fno:
                 continue
             sym, name = r["symbol"].upper(), r["name"].upper()
-            if sym == q:
+            if sym == q or r.get("bse_code") == q:
                 score = 0
             elif sym.startswith(q):
                 score = 1
@@ -258,6 +290,17 @@ class KiteService:
         v = data.get(key) or data.get(str(token)) or next(iter(data.values()), None)
         return v["last_price"] if v else None
 
+    def equity(self, symbol: str) -> dict | None:
+        """A listed company's stock: on NSE by symbol, or listed only on BSE, by its BSE symbol or six-digit code."""
+        hit = self.by_symbol(symbol)
+        if hit and hit["type"] == "EQ":
+            return hit
+        symbol = symbol.strip().upper()
+        for r in self._inst:
+            if r["exchange"] == "BSE" and (r["symbol"] == symbol or r.get("bse_code") == symbol):
+                return r
+        return None
+
     def by_symbol(self, symbol: str, exchange: str = "NSE") -> dict | None:
         """The cash stock or index with this trading symbol."""
         self._load_instruments()
@@ -268,19 +311,27 @@ class KiteService:
         return None
 
     def quote(self, symbols: list[str]) -> dict[str, dict]:
-        """Last price, day range and previous close for NSE symbols, in one call (Kite allows 500)."""
+        """Last price, day range and previous close for stocks (NSE symbols, or BSE-only symbols or codes), in one
+        call (Kite allows 500). Answers are keyed by the symbol asked for."""
         self._require()
-        keys = [f"NSE:{s.strip().upper()}" for s in symbols if s.strip()][:500]
+        self._load_instruments()
+        keys: dict[str, str] = {}
+        for s in symbols[:500]:
+            s = s.strip().upper()
+            if not s:
+                continue
+            hit = self.equity(s)
+            keys[f"{hit['exchange']}:{hit['symbol']}" if hit and hit["exchange"] == "BSE" else f"NSE:{s}"] = s
         if not keys:
             return {}
         self._throttle()
-        data = self.kite.quote(keys)
+        data = self.kite.quote(list(keys))
         out = {}
         for k, v in data.items():
             ohlc = v.get("ohlc") or {}
             prev = ohlc.get("close") or None
             last = v.get("last_price")
-            out[k.split(":", 1)[1]] = {
+            out[keys.get(k, k.split(":", 1)[1])] = {
                 "price": last, "prev_close": prev, "open": ohlc.get("open"), "high": ohlc.get("high"),
                 "low": ohlc.get("low"), "volume": v.get("volume"),
                 "change": (last - prev) if last is not None and prev else None,

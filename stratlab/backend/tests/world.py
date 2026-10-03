@@ -136,6 +136,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     monkeypatch.setattr(db, "_client", fake_db)
     db._profiles.clear()
     main._results.clear()                       # shared scan and rotation answers from an earlier test
+    main._bse_map.clear()                       # the BSE-only list another test loaded
+    from app import scan as _scan
+    _scan._cache.clear()                        # daily bars another test cached under the same instrument id
     main.trading_calendar._holiday_cache.clear()
     from app import auth
     auth._cache.clear()
@@ -165,7 +168,10 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
                    wiki=Wikipedia(transport=sw("wikipedia")(fake_wiki())))
     monkeypatch.setattr(main, "research_hub", hub)
     routes.setup(hub, None, None)
-    monkeypatch.setattr(main, "filings_feed", _nse(sw("exchange")))
+    from app.intel.filings import BSEFilings, IndiaFilings
+    from tests.fake_intel import fake_bse
+    monkeypatch.setattr(main, "filings_feed", IndiaFilings(_nse(sw("exchange")), BSEFilings(transport=sw("bse filings")(fake_bse())),
+                                                           lambda s: main.bse_code(s)))
     monkeypatch.setattr(main, "deep_docs", _docs(sw("documents")))
     from app.intel.sec import SEC
     from tests import fake_sec

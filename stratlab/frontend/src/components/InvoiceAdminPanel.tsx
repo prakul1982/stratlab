@@ -48,7 +48,7 @@ export function InvoiceAdminPanel() {
       <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
         <b className="small">Financial year {year}: {rows.length} invoice{rows.length === 1 ? "" : "s"}</b>
         <span className="row" style={{ gap: 8 }}>
-          <input placeholder="2026-27" style={{ width: 90 }} onKeyDown={(e) => { if (e.key === "Enter") load((e.target as HTMLInputElement).value.trim()); }} aria-label="Financial year" />
+          <input className="input" placeholder="2026-27" style={{ width: 100 }} onKeyDown={(e) => { if (e.key === "Enter") load((e.target as HTMLInputElement).value.trim()); }} aria-label="Financial year" />
           {!!rows.length && <button className="btn quiet sm" onClick={csv}>Download CSV</button>}
         </span>
       </div>

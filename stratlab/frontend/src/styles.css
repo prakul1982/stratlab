@@ -241,7 +241,7 @@ td.num, .num { font-family: var(--mono); }
 .block-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .cond-row { display: flex; align-items: flex-start; gap: 8px; }
 .cond-row .sentence { flex: 1; min-width: 0; }
-.cond-x { flex: none; width: 30px; height: 30px; margin-top: 4px; border-radius: 8px; border: 1px solid transparent; background: none;
+.cond-x { flex: none; width: 36px; height: 36px; margin-top: 4px; border-radius: 8px; border: 1px solid transparent; background: none;
   color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; opacity: .55; }
 .cond-row:hover .cond-x, .cond-x:focus-visible { opacity: 1; border-color: var(--line); }
 .cond-x:hover { color: var(--orange-ink); }
@@ -760,3 +760,28 @@ table.legs input[type=number] { width: 72px !important; }
 .chip:hover { border-color: var(--ink); color: var(--ink); }
 .side-group + .side-group, .side-group + nav { margin-top: 6px; }
 .ask-example { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- phones ---------- */
+@media (max-width: 640px) {
+  /* a wide table scrolls inside its card: the first column (what each row is) stays put, and a soft edge shows
+     there's more to the side */
+  .table-wrap {
+    background:
+      linear-gradient(to right, var(--card) 30%, transparent) left / 24px 100% no-repeat local,
+      linear-gradient(to left, var(--card) 30%, transparent) right / 24px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, .14), transparent) left / 10px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, .14), transparent) right / 10px 100% no-repeat scroll;
+  }
+  .table-wrap td:first-child, .table-wrap th:first-child { position: sticky; left: 0; z-index: 1; background: var(--card); }
+  .table-wrap th:first-child { background: var(--paper-2); }
+  .table-wrap tr.atm td:first-child, .rot-row.on td:first-child { background: var(--chip); }
+  th, td { padding: 9px 12px; }
+  .tbar-num { font-size: 11px; }
+}
+/* fingers, not a mouse: controls big enough to hit */
+@media (max-width: 640px), (pointer: coarse) {
+  select { min-height: 40px; }
+  input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
+  .nb-name { min-height: 34px; }
+  .legal-links a, a.link.tiny { display: inline-block; padding: 8px 0; }
+}

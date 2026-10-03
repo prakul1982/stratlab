@@ -154,7 +154,7 @@ export function LegalPage() {
 /** The row of policy links for footers. */
 export function LegalLinks() {
   return (
-    <nav className="row wrap small" style={{ gap: 14 }} aria-label="Policies">
+    <nav className="row wrap small legal-links" style={{ gap: 14 }} aria-label="Policies">
       {LEGAL_PAGES.map((p) => <Link key={p.path} className="muted" to={p.path}>{p.title}</Link>)}
     </nav>
   );

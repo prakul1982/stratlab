@@ -74,7 +74,7 @@ export function CompanySearch({ region, autoFocus, onPick, placeholder }: {
           else if (e.key === "ArrowDown" && rows) { e.preventDefault(); setActive((a) => Math.min(rows.length - 1, a + 1)); }
           else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
         }}
-        placeholder={placeholder ?? `Try “${example}”`} aria-label={region === "IN" ? "Search any NSE company" : "Search any US company"} />
+        placeholder={placeholder ?? `Try “${example}”`} aria-label={region === "IN" ? "Search any company listed in India (NSE or BSE)" : "Search any US company"} />
       {rows && (
         <div className="results">
           {rows.length === 0 && <p className="small muted" style={{ padding: 14 }}>No matches. Press Enter to try "{q.toUpperCase()}" as a ticker.</p>}

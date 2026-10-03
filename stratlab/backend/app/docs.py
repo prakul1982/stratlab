@@ -184,7 +184,9 @@ class Docs:
                 host = urlparse(target).hostname or ""
                 if host not in ALLOWED_HOSTS and not self.check_host(host):
                     raise SourceError("the exchange", "That website isn't reachable from here.")
-                with self.http.stream("GET", target) as r:
+                # each exchange's archive wants to be asked from its own site
+                ref = {"Referer": "https://www.bseindia.com/"} if host.endswith("bseindia.com") else None
+                with self.http.stream("GET", target, headers=ref) as r:
                     if 300 <= r.status_code < 400:
                         nxt = str(httpx.URL(target).join(r.headers.get("location", "")))
                         if not _host_ok(urlparse(nxt).hostname, extra_hosts) or urlparse(nxt).scheme != "https":

@@ -74,7 +74,7 @@ const INVESTORS: [string, string, string][] = [
 ];
 
 const MARKETS: [string, string, string][] = [
-  ["₹", "India", "NSE stocks, indices and F&O"], ["₿", "Crypto", "BTC, ETH and hundreds of pairs"], ["$", "United States", "NYSE and NASDAQ stocks and ETFs"],
+  ["₹", "India", "NSE and BSE stocks, indices and F&O"], ["₿", "Crypto", "BTC, ETH and hundreds of pairs"], ["$", "United States", "NYSE and NASDAQ stocks and ETFs"],
   ["£", "United Kingdom", "London Stock Exchange"], ["€", "Europe", "Xetra and Euronext"], ["¥", "Japan", "Tokyo Stock Exchange"],
   ["€$", "Forex", "Major and minor currency pairs"],
   ["₹Au", "Indian commodities", "MCX futures in rupees: gold, silver, crude, natural gas, base metals, in whole lots"],

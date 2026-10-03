@@ -21,7 +21,7 @@ const instKind = (r: Instrument) =>
     : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
 
 const PLACEHOLDER: Record<string, string> = {
-  IN: "Search any NSE stock, index or F&O contract: RELIANCE, NIFTY 50…", CRYPTO: "Search any coin: BTC, ETH, SOL…",
+  IN: "Search any NSE or BSE stock, index or F&O contract: RELIANCE, NIFTY 50…", CRYPTO: "Search any coin: BTC, ETH, SOL…",
   US: "Search any US stock or ETF: AAPL, NVDA, SPY…", UK: "Search any London listing: Shell, VOD.L, ISF.L…",
   EU: "Search European stocks: SAP, ASML, LVMH…", JP: "Search Tokyo listings: Toyota, Sony, 7203…",
   FX: "Search a currency pair: EURUSD, USDJPY, GBPUSD…",

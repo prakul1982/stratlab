@@ -43,7 +43,7 @@ from .intel.net import SourceError
 from .docs import Docs
 from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
-from .kite_service import IST, KiteNotReady, KiteService, TickHub
+from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_pro
 from .options import importer as opt_importer
 from .options.data import FREEZE, OptionsData
@@ -114,7 +114,7 @@ def _filing_alert_ok(profile: dict) -> bool:
     return allows(access_plan(profile), "filings") and bool(alerts.jobs_for(profile, "", ""))
 
 
-filings_feed = filings.NSEFilings()
+filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), lambda s: bse_code(s))
 filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                    can_alert=_filing_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
@@ -1024,7 +1024,8 @@ def filings_watchlist(profile=Depends(current_profile)):
 
 @app.get("/research/filings/{symbol}")
 def filings_company(symbol: str, profile=Depends(current_profile)):
-    """One NSE company's filings for the last year, with red flags and the 3-month summary."""
+    """One Indian company's filings for the last year (NSE, or BSE for a company listed only there), with red flags
+    and the 3-month summary."""
     need(profile, "filings", "Filings and red flags")
     sym = research_routes.symbol_of(symbol)
     return ok(filing_call(lambda: filings.report(filings_feed, sym)))
@@ -1095,7 +1096,8 @@ def deep_base(sym: str, region: str = "IN", years: int = 2) -> dict:
     """Numbers and the list of readable documents for one company (no AI), documents from the last `years` years."""
     if region == "US":
         return deep_base_us(sym, years)
-    p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(sym)))
+    code = bse_code(sym)                                  # listed only on BSE: its numbers are under the BSE code
+    p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(code or sym)))
     try:
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
     except Exception:
@@ -1151,7 +1153,11 @@ def deep_ai_allowed(profile) -> None:
 
 
 def deep_symbol(symbol: str, region: str) -> str:
-    return research_routes.symbol_of(symbol) if region == "IN" else re.sub(r"[^A-Z0-9.\-]", "", symbol.upper())[:12]
+    if region != "IN":
+        return re.sub(r"[^A-Z0-9.\-]", "", symbol.upper())[:12]
+    s = research_routes.symbol_of(symbol)
+    # a BSE code and the company's BSE symbol are the same page (and share its stored reads)
+    return bse_symbol(s) if s.isdigit() and len(s) == 6 else s
 
 
 @app.get("/research/deep/{symbol}")
@@ -1222,7 +1228,7 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
     def one(sym):
         problem, key = None, f"US:{sym}" if us else sym
         try:
-            p = deep_base_us(sym)["p"] if us else with_industry(sym, research_hub.screener.company(sym))
+            p = deep_base_us(sym)["p"] if us else with_industry(sym, research_hub.screener.company(bse_code(sym) or sym))
         except Exception as e:
             p, problem = None, public_text(str(e))[:120]
         fsum = None
@@ -2021,11 +2027,6 @@ def _nse_check(sym: str) -> dict:
 BSE_ONLY = "audit:bse-only"                # the last good list of BSE-only companies: {code: {ts, token, name}}
 
 
-def _norm_name(n: str | None) -> str:
-    n = re.sub(r"[^a-z0-9 ]", " ", (n or "").lower())
-    return " ".join(w for w in n.split() if w not in ("ltd", "limited", "the", "co", "company", "india", "inds", "industries"))
-
-
 def bse_only(nse: list[dict]) -> list[dict]:
     """Companies listed on BSE but not on NSE: the broker's BSE equity list less every NSE symbol and company name.
     Kept as the last good list, so a broker outage never looks like thousands of delistings. The first time, none
@@ -2037,15 +2038,9 @@ def bse_only(nse: list[dict]) -> list[dict]:
     if not kite.ready():
         got = saved
     else:
-        syms, names = {r["symbol"] for r in nse}, {_norm_name(r.get("name")) for r in nse}
-        got = {}
-        for x in kite.instruments_of("BSE"):
-            ts, code = str(x.get("tradingsymbol") or ""), str(x.get("exchange_token") or "")
-            if x.get("instrument_type") != "EQ" or x.get("segment") != "BSE" or not ts or not code.isdigit():
-                continue
-            if ts.upper() in syms or _norm_name(x.get("name")) in names:
-                continue                               # listed on NSE too: already in the audit
-            got[code] = {"ts": ts, "token": int(x["instrument_token"]), "name": x.get("name") or ts}
+        listed = [{"symbol": r["symbol"], "name": r.get("name") or r["symbol"], "exchange": "NSE", "type": "EQ"} for r in nse]
+        got = {str(x["exchange_token"]): {"ts": x["tradingsymbol"], "token": int(x["instrument_token"]), "name": x.get("name") or x["tradingsymbol"]}
+               for x in bse_only_rows(kite.instruments_of("BSE"), listed)}   # on NSE too: already in the audit
         if len(got) < 100 and saved:                   # a broken answer: keep the last good list
             got = saved
         elif got:
@@ -2068,32 +2063,51 @@ def india_listing() -> list[dict]:
         return nse
 
 
-def bse_base(code: str) -> dict:
-    """A BSE-only company: its numbers by BSE code, and its trend from BSE's own daily prices. Exchange filings and
-    documents come from NSE's feed, so they aren't read for these."""
-    p = with_industry(code, research_routes.source_call(lambda: research_hub.screener.company(code)))
-    info = _bse_map.get(code) or {}
-    trend = None
-    if info.get("token") and kite.ready():
+def _load_bse_map():
+    if not _bse_map:
         try:
-            trend = scan.analyse(kite.history(int(info["token"]), "1d", 400))
+            _bse_map.update(json.loads(db.get_setting(BSE_ONLY) or "{}"))
+        except (ValueError, TypeError):
+            pass
+
+
+def bse_code(sym: str) -> str | None:
+    """The BSE scrip code when `sym` is a company listed only on BSE (its six-digit code, or its BSE symbol);
+    None for an NSE company."""
+    s = (sym or "").strip().upper()
+    if s.isdigit() and len(s) == 6:
+        return s
+    if kite.ready():
+        try:
+            hit = kite.equity(s)
         except Exception:
-            trend = None
-    return {"p": p, "docs": [], "doc_note": "Listed only on BSE: its filings and documents aren't read yet.", "filings": None,
-            "trend": trend}
+            hit = None
+        if hit:
+            return hit.get("bse_code") if hit["exchange"] == "BSE" else None
+    _load_bse_map()                           # the broker offline: the saved BSE-only list
+    return next((c for c, v in _bse_map.items() if str(v.get("ts") or "").upper() == s), None)
+
+
+def bse_symbol(code: str) -> str:
+    """A BSE-only company's trading symbol, for its page address; the code itself when unknown."""
+    if kite.ready():
+        try:
+            hit = kite.equity(code)
+            if hit and hit["exchange"] == "BSE":
+                return hit["symbol"]
+        except Exception:
+            pass
+    _load_bse_map()
+    return str((_bse_map.get(code) or {}).get("ts") or code)
 
 
 def _market_check(sym: str) -> dict:
     if sym.startswith("BSE:"):
         code = sym.split(":", 1)[1]
-        if not _bse_map:
-            try:
-                _bse_map.update(json.loads(db.get_setting(BSE_ONLY) or "{}"))
-            except (ValueError, TypeError):
-                pass
+        _load_bse_map()
         ts = (_bse_map.get(code) or {}).get("ts")
         price = (lambda _s: kite.ltp_key(f"BSE:{ts}")) if ts and kite.ready() else None
-        row = audit.audit_company(code, bse_base, deep_view, price, None)
+        row = audit.audit_company(code, deep_base, deep_view, price, None)
         for i in row["issues"]:
             i["detail"] = public_text(i["detail"])
         return {**row, "symbol": sym, "name": row.get("name") or (_bse_map.get(code) or {}).get("name") or sym}
@@ -2195,6 +2209,7 @@ def platform_checks() -> list:
                ("Sector rotation: US", "Rotation", lambda: pc.check_rotation(markets, "US")),
                ("Option chain: NIFTY", "Options", lambda: pc.check_options(options_data, today)),
                ("Exchange filings", "Filings", lambda: pc.check_filings(filings_feed)),
+               ("BSE filings", "Filings", lambda: pc.check_bse_filings(filings_feed.bse)),
                ("Company page: RELIANCE", "Research", lambda: pc.check_company(research_hub, "IN", "RELIANCE")),
                ("Company page: AAPL", "Research", lambda: pc.check_company(research_hub, "US", "AAPL")),
                ("News", "Research", lambda: pc.check_news(research_hub)),

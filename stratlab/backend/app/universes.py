@@ -63,8 +63,9 @@ def resolve(registry, market: str, members: list[dict]) -> tuple[list[str], list
             continue
         sym = str(m.get("symbol") or "").upper()
         if market == "IN":
-            hit = next((r for r in prov.search(sym, allow_fno=False, limit=8)
-                        if r["symbol"] == sym and r.get("type") == "EQ" and r.get("exchange") == "NSE"), None)
+            hit = next((r for r in prov.search(sym, allow_fno=False, limit=8)       # NSE, or listed only on BSE
+                        if (r["symbol"] == sym or r.get("bse_code") == sym) and r.get("type") == "EQ"
+                        and r.get("exchange") in ("NSE", "BSE")), None)
             iid = hit["id"] if hit else None
         else:
             iid = f"{market}:{sym}"
