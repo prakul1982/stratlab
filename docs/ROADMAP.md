@@ -31,8 +31,9 @@ Still to do:
 
 ### International payments
 *Done:* international cards are on in Razorpay, so anyone abroad can subscribe. The Plans page shows prices in the
-visitor's currency (from their country; they can switch) for 18 currencies, starting at rounded conversions of the
-rupee prices; Admin → Prices outside India changes any of them without a deploy. A currency is charged in that
+visitor's currency (from their country; they can switch) for 18 currencies, following the rupee price at the day's
+exchange rate, rounded to a tidy amount (rates read daily), so changing the rupee price changes them all; Admin →
+Prices outside India can fix any of them instead. A currency is charged in that
 currency once its Razorpay plans are created and their IDs pasted there; until then it is charged in rupees and the
 page says so. Admin → Check payments setup checks those plans too.
 

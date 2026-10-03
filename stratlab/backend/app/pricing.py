@@ -1,5 +1,6 @@
-"""Prices by currency for visitors outside India. Rupee prices live in plans.py; every other currency starts at a
-rounded conversion of them and can be changed in Admin → Prices without a deploy.
+"""Prices by currency for visitors outside India. Rupee prices live in plans.py; every other currency follows them
+automatically: the rupee price at today's exchange rate, rounded to a tidy amount (rates are read once a day). The
+admin can fix any price in Admin → Prices instead, and clear it to go back to automatic.
 
 Charging: a currency is charged in that currency when its Razorpay plan IDs are set in Admin (plans are created in
 the Razorpay dashboard, one per currency, plan and period). Until then visitors see the local price for reference
@@ -10,6 +11,7 @@ from . import db
 from .plans import PLANS
 
 KEY = "prices"
+RATES = "fx-rates"             # app_settings: {"at": ISO, "rates": {"USD": 88.2, ...}} rupees per unit, read daily
 
 # code: (symbol, name, monthly Basic, monthly Pro); yearly is ten months (two free), as in rupees
 CURRENCIES = {
@@ -46,13 +48,64 @@ FIELDS = ("basic", "pro", "basic_year", "pro_year")
 PLAN_FIELDS = ("plan_basic", "plan_pro", "plan_basic_year", "plan_pro_year")
 
 
+def nice(v: float) -> int:
+    """A tidy price: whole units under 100, then steps of 5, 50 and 500 (yen and krona run into the thousands)."""
+    step = 1 if v < 100 else 5 if v < 1000 else 50 if v < 10000 else 500
+    return max(step, int(round(v / step) * step))
+
+
+_rates_cache: list = [0.0, {}]
+
+
+def rates() -> dict:
+    """{code: rupees per unit} from the last daily read, cached for ten minutes; {} before the first read."""
+    import time
+    if time.time() - _rates_cache[0] < 600:
+        return _rates_cache[1]
+    try:
+        got = (json.loads(db.get_setting(RATES) or "{}").get("rates")) or {}
+    except Exception:
+        got = _rates_cache[1]
+    _rates_cache[:] = [time.time(), got]
+    return got
+
+
+def refresh_rates(fetch) -> dict:
+    """Read every currency's rate (rupees per unit) with `fetch(code)`; keep the last good one for any that fails."""
+    from datetime import datetime, timezone
+    try:
+        old = json.loads(db.get_setting(RATES) or "{}")
+    except Exception:
+        old = {}
+    out, errors = dict(old.get("rates") or {}), []
+    for code in CURRENCIES:
+        if code == "INR":
+            continue
+        try:
+            r = float(fetch(code))
+            if r > 0:
+                out[code] = r
+        except Exception as e:
+            errors.append(f"{code}: {str(e)[:60]}")
+    state = {"at": datetime.now(timezone.utc).isoformat(), "rates": out, "errors": errors}
+    db.set_setting(RATES, json.dumps(state))
+    _rates_cache[0] = 0.0
+    return state
+
+
 def defaults() -> dict:
-    out = {}
+    """Automatic prices: the rupee price at today's rate, tidied; the built-in amounts until a rate has been read."""
+    out, fx = {}, rates()
+    inr = {f: PLANS[f.split("_")[0]]["price" + ("_year" if f.endswith("_year") else "")] for f in FIELDS}
     for code, (_, _, basic, pro) in CURRENCIES.items():
         if code == "INR":
-            basic, pro = PLANS["basic"]["price"], PLANS["pro"]["price"]
-        out[code] = {"basic": basic, "pro": pro, "basic_year": basic * 10, "pro_year": pro * 10,
-                     **{f: None for f in PLAN_FIELDS}}
+            row = dict(inr)
+        elif fx.get(code):
+            row = {f: nice(inr[f] / fx[code]) for f in ("basic", "pro")}
+            row.update(basic_year=row["basic"] * 10, pro_year=row["pro"] * 10)
+        else:
+            row = {"basic": basic, "pro": pro, "basic_year": basic * 10, "pro_year": pro * 10}
+        out[code] = {**row, **{f: None for f in PLAN_FIELDS}, "rate": fx.get(code)}
     return out
 
 
@@ -69,7 +122,9 @@ def table() -> dict:
     `charged_in` is the currency the card is actually charged in for that row (its own, or rupees)."""
     saved, out = _saved(), {}
     for code, row in defaults().items():
-        row = {**row, **{k: v for k, v in (saved.get(code) or {}).items() if k in FIELDS + PLAN_FIELDS}}
+        mine = saved.get(code) or {}
+        row = {**row, **{k: v for k, v in mine.items() if k in FIELDS + PLAN_FIELDS},
+               "auto": not any(f in mine for f in FIELDS)}
         if code == "INR":                                  # rupee prices are plans.py's, charged on the main plans
             row.update({f: PLANS[f.split("_")[0]]["price" + ("_year" if f.endswith("_year") else "")] for f in FIELDS})
         symbol, name = CURRENCIES[code][:2]
@@ -81,7 +136,7 @@ def table() -> dict:
 
 def public() -> dict:
     """What the Plans page needs: prices, symbols and which currency is charged. Plan IDs stay on the server."""
-    return {"currencies": {c: {k: v for k, v in r.items() if k not in PLAN_FIELDS} for c, r in table().items()},
+    return {"currencies": {c: {k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto")} for c, r in table().items()},
             "countries": COUNTRIES}
 
 

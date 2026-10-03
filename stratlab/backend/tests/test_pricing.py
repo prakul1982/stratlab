@@ -78,3 +78,27 @@ def test_pricing_routes(monkeypatch):
         assert c.post("/billing/subscribe", headers=W.headers("free-token"), json={"plan": "pro", "currency": "us"}).status_code == 422
     finally:
         w["close"]()
+
+
+def test_prices_follow_the_rupee_price_at_todays_rate(store, monkeypatch):
+    pricing._rates_cache[0] = 0.0
+    state = pricing.refresh_rates(lambda code: {"USD": 88.0, "GBP": 118.0, "JPY": 0.59}.get(code) or 1 / 0)
+    assert state["rates"] == {"USD": 88.0, "GBP": 118.0, "JPY": 0.59} and any("EUR" in e for e in state["errors"])
+    t = pricing.table()
+    assert t["USD"]["basic"] == 11 and t["USD"]["pro"] == 34 and t["USD"]["auto"]        # 999/88, 2999/88, tidied
+    assert t["GBP"]["basic"] == 8 and t["JPY"]["basic"] == 1700 and t["USD"]["basic_year"] == 110
+    assert t["EUR"]["basic"] == 11                                                       # no rate yet: the built-in amount
+    monkeypatch.setitem(pricing.PLANS["basic"], "price", 1499)                          # the rupee price changes...
+    assert pricing.table()["USD"]["basic"] == 17                                        # ...and every currency follows
+    pricing.save({"USD": {"basic": 15}})                                                # fixed by the admin
+    t = pricing.table()
+    assert t["USD"]["basic"] == 15 and not t["USD"]["auto"] and t["USD"]["pro"] == 34
+    pricing.save({"USD": {"basic": None}})                                              # back to automatic
+    assert pricing.table()["USD"]["auto"]
+    pricing._rates_cache[0] = 0.0
+    again = pricing.refresh_rates(lambda code: 1 / 0)                                    # the source is down
+    assert again["rates"]["USD"] == 88.0                                                 # the last good rates stay
+
+
+def test_nice_amounts():
+    assert [pricing.nice(v) for v in (0.3, 11.35, 99.6, 137, 1694, 12340)] == [1, 11, 100, 135, 1700, 12500]
