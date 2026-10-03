@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from "react";
 import { supabase } from "../lib/api";
 import { Google } from "../components/Icons";
-import { LegalLinks } from "./LegalPage";
+import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 
 /* The public landing page: what StratLab is, why it's different, and one way in (Google sign-in). */

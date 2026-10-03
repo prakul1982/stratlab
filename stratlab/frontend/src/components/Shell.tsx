@@ -1,12 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { Book, Compass, Layers, Library, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
-import { SearchPalette } from "./SearchPalette";
-import { LevelPrompt } from "./LevelPrompt";
-import { Tour, tourSeen } from "./Tour";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
+
+// the pop-ups load when they first open, so they don't slow down the first page
+const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
+const LevelPrompt = lazy(() => import("./LevelPrompt").then((m) => ({ default: m.LevelPrompt })));
+const Tour = lazy(() => import("./Tour").then((m) => ({ default: m.Tour })));
+
+export const TOUR_SEEN = "stratlab.tour.v1";
+const tourSeen = () => { try { return localStorage.getItem(TOUR_SEEN) === "1"; } catch { return true; } };
 
 const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US", UK: "UK", EU: "Europe", JP: "Japan", FX: "Forex", MCX: "MCX", CDS: "Currency F&O", CMDTY: "Cmdty" };
 
@@ -148,9 +153,11 @@ export function Shell({ children }: { children: ReactNode }) {
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
       <main className="main"><div className="page">{children}</div></main>
-      {tour && <Tour onClose={() => setTour(false)} />}
-      {search && <SearchPalette onClose={() => setSearch(false)} />}
-      {askLevel && !tour && <LevelPrompt onDone={() => undefined} />}
+      <Suspense fallback={null}>
+        {tour && <Tour onClose={() => setTour(false)} />}
+        {search && <SearchPalette onClose={() => setSearch(false)} />}
+        {askLevel && !tour && <LevelPrompt onDone={() => undefined} />}
+      </Suspense>
     </div>
   );
 }

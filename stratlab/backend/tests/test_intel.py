@@ -64,6 +64,23 @@ def test_screener_survives_a_layout_change():
     assert scr.summary(p)["pe"] == 12 and scr.summary(p)["sales_yoy"] is None
 
 
+def test_screener_parses_a_cached_page_once(monkeypatch):
+    """The page is parsed once while it stays cached, and every caller gets its own copy to change."""
+    calls = []
+    real = scr.parse
+    monkeypatch.setattr(scr, "parse", lambda html: calls.append(1) or real(html))
+    s = Screener(transport=fake_screener())
+    a = s.company("RELIANCE")
+    a["pl"]["rows"].clear()
+    a["name"] = "changed"
+    b = s.company("RELIANCE")
+    assert len(calls) == 2                       # consolidated and standalone pages, once each
+    assert b["name"] != "changed" and b["pl"]["rows"]
+    s.cache.clear()                              # the page fetched again: parsed again
+    s.company("RELIANCE")
+    assert len(calls) == 4
+
+
 def test_screener_unknown_company():
     with pytest.raises(SourceError):
         Screener(transport=fake_screener()).company("NOPE")
