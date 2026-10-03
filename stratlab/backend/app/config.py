@@ -69,11 +69,18 @@ class Settings:
     SMTP_PASSWORD = _env("SMTP_PASSWORD")
     ALERT_FROM_EMAIL = _env("ALERT_FROM_EMAIL")
     RESEND_API_KEY = _env("RESEND_API_KEY")                       # email over HTTPS (hosts that block SMTP, like Railway)
+    BREVO_API_KEY = _env("BREVO_API_KEY")                         # email over HTTPS; tried before Resend and SMTP
+    # signs unsubscribe and email-confirmation links; when unset, one is derived from SUPABASE_SERVICE_KEY
+    MAIL_TOKEN_SECRET = _env("MAIL_TOKEN_SECRET")
 
     FRONTEND_ORIGIN = _env("FRONTEND_ORIGIN", "http://localhost:5500")
     # comma-separated, e.g. "https://stratlab.studio,http://localhost:5500"
     FRONTEND_ORIGINS = origins(FRONTEND_ORIGIN)
     PUBLIC_SITE_URL = (_env("PUBLIC_SITE_URL", "https://stratlab.studio") or "").rstrip("/")   # where public verdict links point
+    # the backend's own public address, for links in emails that the server answers itself (unsubscribe, confirm);
+    # on Railway it defaults to the service's public domain
+    PUBLIC_API_URL = (_env("PUBLIC_API_URL") or (f"https://{_env('RAILWAY_PUBLIC_DOMAIN')}" if _env("RAILWAY_PUBLIC_DOMAIN")
+                      else "http://localhost:8000")).rstrip("/")
     ADMIN_EMAILS = _env("ADMIN_EMAILS")                           # comma-separated Google emails that can open /admin
     ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails
     # option chains recorded every few minutes in market hours, for options backtesting later ("" turns it off)
