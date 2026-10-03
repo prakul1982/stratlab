@@ -21,6 +21,9 @@ HEADERS = [
     (b"x-frame-options", b"DENY"),
     (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
 ]
+# the API's own HTML pages (public company pages, share previews, unsubscribe) need no script at all: none may run
+HTML_CSP = (b"content-security-policy", b"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; "
+                                         b"form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 
 
 class Window:
@@ -98,8 +101,9 @@ class Guard:
 
         async def send_with_headers(msg):
             if msg["type"] == "http.response.start":
-                have = {k.lower() for k, _ in msg.get("headers") or []}
-                msg = {**msg, "headers": list(msg.get("headers") or []) + [h for h in HEADERS if h[0] not in have]}
+                got = {k.lower(): v for k, v in msg.get("headers") or []}
+                extra = HEADERS + ([HTML_CSP] if got.get(b"content-type", b"").startswith(b"text/html") else [])
+                msg = {**msg, "headers": list(msg.get("headers") or []) + [h for h in extra if h[0] not in got]}
             await send(msg)
 
         await self.app(scope, receive, send_with_headers)

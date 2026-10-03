@@ -86,6 +86,7 @@ def test_invoice_routes(monkeypatch):
         assert mine["invoices"][0]["number"] == "SL/2026-27/0001" and "27" in mine["states"]
         page = c.get("/billing/invoices/2026-27/0001", headers=W.headers("pro-token"))
         assert page.status_code == 200 and "Tax invoice" in page.text and "CGST 9%" in page.text
+        assert page.headers["content-security-policy"] == invoices.CSP          # its own, not the guard's script-free one
         assert c.get("/billing/invoices/2026-27/0001", headers=W.headers("basic-token")).status_code == 404   # not theirs
         assert c.get("/billing/invoices/2026-27/0001", headers=W.headers("admin-token")).status_code == 200
         assert c.get("/admin/invoices?year=2026-27", headers=W.headers("admin-token")).json()["invoices"][0]["tax"] > 0

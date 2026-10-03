@@ -2448,7 +2448,7 @@ def invoice_page(year: str, n: str, profile=Depends(current_profile)):
         inv = next((i for i in invoices.of_year(year) if i["number"].endswith(f"/{year}/{n}")), None)
     if inv is None:
         err(404, "not_found", "No such invoice.")
-    return Response(invoices.html(inv), media_type="text/html; charset=utf-8")
+    return Response(invoices.html(inv), media_type="text/html; charset=utf-8", headers={"Content-Security-Policy": invoices.CSP})
 
 
 @app.get("/admin/invoices")

@@ -158,6 +158,7 @@ def billing_of(uid: str) -> dict:
 
 PRINT_JS = 'document.getElementById("print").onclick=function(){print()};'
 PRINT_HASH = base64.b64encode(hashlib.sha256(PRINT_JS.encode()).digest()).decode()
+CSP = f"default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-{PRINT_HASH}'"
 
 
 def html(inv: dict) -> str:
@@ -170,7 +171,7 @@ def html(inv: dict) -> str:
     rows = "".join(f"<tr><td>{e(t['name'])}</td><td class=n>{money(t['amount'])}</td></tr>" for t in inv["taxes"])
     # opened under the site's own origin: no script may run but the print button's own (a second guard after escaping)
     return f"""<!doctype html><html><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-{PRINT_HASH}'">
+<meta http-equiv="Content-Security-Policy" content="{CSP}">
 <title>{e(title)} {e(inv['number'])}</title>
 <style>body{{font:14px/1.5 system-ui,sans-serif;color:#1d1b17;max-width:760px;margin:32px auto;padding:0 16px}}
 h1{{font-size:22px;margin:0 0 4px}}table{{width:100%;border-collapse:collapse;margin:12px 0}}td,th{{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}}
