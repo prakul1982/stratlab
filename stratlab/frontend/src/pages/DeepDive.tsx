@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { pct, signClass } from "../lib/format";
+import { pct, safeHref, signClass } from "../lib/format";
 import { scaleFor } from "../lib/research";
 import { Panel, ResearchNav, TrendBars } from "../components/Research";
 import { Loading } from "../components/ui";
@@ -98,7 +98,7 @@ function ReportCard({ c }: { c: Card }) {
                 {r.period && <span><span className="muted">For</span> {r.period}</span>}
                 {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit)}</b></span>}
                 {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? inrAmount(r.actual) : r.unit === "million" ? usdAmount(r.actual) : `${r.actual.toFixed(1)}%`}</b></span>}
-                <a className="link" href={r.source.url} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
+                <a className="link" href={safeHref(r.source.url)} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
               </div>
               {r.quote && <span className="tiny muted">"{r.quote}"</span>}
               {r.revised && <span className="tiny muted">Later changed to {target(r.revised.low, r.revised.high, r.unit)} ({day(r.revised.at)}).</span>}
@@ -134,7 +134,7 @@ function ChecklistPanel({ c }: { c: Checklist }) {
 }
 
 function SourceLink({ s }: { s: Source }) {
-  return s ? <a className="link tiny" href={s.url} target="_blank" rel="noopener noreferrer" title={s.title}>{KIND[s.kind] ?? "Filing"}, {day(s.at)} ↗</a> : null;
+  return s ? <a className="link tiny" href={safeHref(s.url)} target="_blank" rel="noopener noreferrer" title={s.title}>{KIND[s.kind] ?? "Filing"}, {day(s.at)} ↗</a> : null;
 }
 
 export function DeepDivePage() {
@@ -202,7 +202,7 @@ export function DeepDivePage() {
         <span className="eyebrow">Deep dive · {us ? "United States" : "India"} · {sym}</span>
         <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{v?.name ?? sym}: business, capex and growth</h1>
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>{us
-          ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={v.source_url} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
+          ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
         {v && <div className="row wrap" style={{ gap: 10 }}>
           <button className="btn quiet sm" disabled={decking} onClick={downloadDeck} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking ? "Making the deck…" : "Download as slides (PowerPoint)"}</button>
@@ -258,7 +258,7 @@ export function DeepDivePage() {
             : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
             {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total) : inrAmount(n.capex_3y_total)}</b> spent on capex over the last three years. Figures in {capS.unit}.</p>}
             <div className="table-wrap"><table>
-              <thead><tr><th>Year</th><th className="num">Sales</th><th className="num">Capex</th><th className="num">Capex / sales</th><th className="num">Cash from operations</th><th className="num">Free cash flow</th><th className="num">Debt</th></tr></thead>
+              <thead><tr><th>Year <span className="tiny muted">({capS.unit})</span></th><th className="num">Sales</th><th className="num">Capex</th><th className="num">Capex / sales</th><th className="num">Cash from operations</th><th className="num">Free cash flow</th><th className="num">Debt</th></tr></thead>
               <tbody>{[...years].reverse().slice(0, 8).map((y) => (
                 <tr key={y.year}><td>{y.year}</td><td className="num">{capS.fmt(y.sales)}</td><td className="num">{capS.fmt(y.capex)}</td><td className="num">{pc(y.capex_pct_sales)}</td>
                   <td className="num">{capS.fmt(y.cfo)}</td><td className={`num ${signClass(y.fcf)}`}>{capS.fmt(y.fcf)}</td><td className="num">{capS.fmt(y.debt)}</td></tr>))}</tbody>
@@ -376,7 +376,7 @@ export function DeepDivePage() {
               <div className="filings">{v.documents.map((d) => (
                 <div key={d.url} className="filing"><span className="tiny muted mono">{day(d.at)}</span>
                   <div className="stack" style={{ gap: 2, minWidth: 0 }}><span className="small">{d.title}</span><span className="tiny muted">{KIND[d.kind] ?? d.kind}</span></div>
-                  <a className="link tiny" href={d.url} target="_blank" rel="noopener noreferrer">Open ↗</a></div>))}</div>
+                  <a className="link tiny" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer">Open ↗</a></div>))}</div>
             </Panel>
           )}
           <p className="small muted" style={{ maxWidth: "80ch" }}>Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report." : ""}

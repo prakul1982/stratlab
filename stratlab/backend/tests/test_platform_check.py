@@ -49,3 +49,34 @@ def test_stale_prices_are_caught(w, monkeypatch):
 
 def test_only_the_admin_can_run_it(w):
     assert w["client"].post("/admin/platform/check", headers=world.headers("pro-token")).status_code == 403
+
+
+def test_daily_check_retries_and_only_tells_admins_about_what_still_fails(monkeypatch):
+    from app import main, platform_check as pc
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        tries = {"flaky": 0}
+
+        def flaky():
+            tries["flaky"] += 1
+            return pc._result("Flaky source", "Research", "fail" if tries["flaky"] == 1 else "pass", "busy once")
+        monkeypatch.setattr(main, "platform_checks", lambda: [
+            ("Flaky source", "Research", flaky),
+            ("Broken source", "Research", lambda: pc._result("Broken source", "Research", "fail", "down")),
+            ("Fine", "Server", lambda: pc._result("Fine", "Server", "pass", "ok"))])
+        told = []
+        monkeypatch.setattr(main, "tell_admins", lambda subject, text: told.append((subject, text)) or 1)
+        out = main.daily_platform_check(retry_after=0.01)
+        assert out["counts"] == {"pass": 2, "warn": 0, "fail": 1} and tries["flaky"] == 2
+        assert told and "1 check failing" in told[0][0] and "Broken source" in told[0][1] and "Flaky" not in told[0][1]
+        c = w["client"]
+        last = c.get("/admin/platform/last", headers=W.headers("admin-token")).json()
+        assert last["last"]["auto"] and last["history"][-1]["failed"] == ["Broken source"]
+        assert c.get("/admin/platform/last", headers=W.headers("pro-token")).status_code == 403
+        told.clear()
+        monkeypatch.setattr(main, "platform_checks", lambda: [("Fine", "Server", lambda: pc._result("Fine", "Server", "pass", "ok"))])
+        main.daily_platform_check(retry_after=0.01)
+        assert told == []                                                    # all well: nobody is bothered
+    finally:
+        w["close"]()

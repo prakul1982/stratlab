@@ -284,3 +284,34 @@ def test_us_companies_are_audited_from_their_sec_filings(monkeypatch):
         assert w["client"].get("/admin/audit/market", headers=h).json()["checked"] == 0    # India's is separate
     finally:
         w["close"]()
+
+
+def test_whole_market_audit_retries_a_company_whose_source_was_down(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        listing = [{"symbol": s, "name": s, "listed": "2001-01-01"} for s in ("AAA", "BBB")]
+        down = {"AAA": True}
+
+        def check(sym):
+            if down.get(sym):
+                return {**_clean(sym), "issues": [{"level": "error", "area": "Company page", "detail": "source busy"}]}
+            return _clean(sym)
+        a = audit.MarketAudit(lambda: listing, check, pause=0)
+        a.set_enabled(True)
+        assert [a.step(), a.step(), a.step()] == ["AAA", "BBB", None]          # AAA failed: not straight away again
+        old = (datetime.now(timezone.utc) - timedelta(hours=audit.RETRY_HOURS + 1)).isoformat()
+        a.rows["AAA"]["at"] = old                                               # six hours on
+        assert a.queue() == ["AAA"] and a.step() == "AAA" and a.rows["AAA"]["tries"] == 2
+        a.rows["AAA"]["at"] = old
+        assert a.step() == "AAA" and a.rows["AAA"]["tries"] == 3
+        a.rows["AAA"]["at"] = old
+        assert a.queue() == []                                                  # three tries: waits for the monthly check
+        down["AAA"] = False
+        a.restart()
+        a.step()
+        assert a.rows["AAA"]["tries"] == 1 and a.rows["AAA"]["issues"] == []
+        assert audit._transient({"issues": [{"level": "mismatch", "area": "Numbers"}]}) is False   # wrong data isn't retried
+    finally:
+        w["close"]()

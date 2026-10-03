@@ -615,10 +615,6 @@ def fresh(v: dict | None) -> bool:
     return bool(v) and time.time() - float(v.get("ts") or 0) < KEEP
 
 
-def safe_symbol(s: str) -> str:
-    return re.sub(r"[^A-Z0-9&\-]", "", s.upper())[:20]
-
-
 # ---------- US companies: the 10-K and earnings releases filed with the SEC ----------
 BUSINESS_US = BUSINESS.replace("an Indian listed company", "a US listed company").replace(
     "from its own investor presentation and filings", "from its annual report (10-K) filed with the SEC").replace("Q1 FY27", "Q2 2026")

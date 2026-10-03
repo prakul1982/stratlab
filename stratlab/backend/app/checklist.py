@@ -36,6 +36,15 @@ def insider_flow(rows: list[dict], today=None, days: int = 180) -> dict | None:
     return {"bought": bought, "sold": sold, "buyers": len(buyers), "sellers": len(sellers)}
 
 
+def insider_text(f: dict) -> str:
+    """"2 insiders sold 150,000 shares", "1 insider bought 5,000 · 3 sold 80,000 shares": only the sides that happened."""
+    def side(n, verb, qty):
+        return f"{n} insider{'s' if n != 1 else ''} {verb} {qty:,.0f}"
+    parts = [side(f["buyers"], "bought", f["bought"]) if f["bought"] else None,
+             side(f["sellers"], "sold", f["sold"]) if f["sold"] else None]
+    return " · ".join(p for p in parts if p) + " shares"
+
+
 def _state(v, good, bad, higher_better=True) -> str:
     """pass beyond `good`, fail beyond `bad`, watch in between."""
     if v is None:
@@ -152,7 +161,7 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
         else:
             net = flow["bought"] - flow["sold"]
             add("Insiders", "Insider buying and selling, 6 months", "pass" if net > 0 else "watch",
-                f"{flow['buyers']} bought {flow['bought']:,.0f} · {flow['sellers']} sold {flow['sold']:,.0f} shares",
+                insider_text(flow),
                 "Pass when insiders bought more than they sold on the open market. Selling shows as watch, not fail: it is "
                 "often a planned sale or tax on stock awards.")
 

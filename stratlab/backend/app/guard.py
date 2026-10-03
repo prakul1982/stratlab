@@ -109,6 +109,7 @@ HEAVY = [  # (method, path pattern): work that holds the CPU for a second or mor
     ("POST", re.compile(r"^/notebooks/[^/]+/experiments(/[^/]+/(basket|walkforward))?$")),
     ("POST", re.compile(r"^/research/scan$")),
     ("GET", re.compile(r"^/research/rotation$")),
+    ("GET", re.compile(r"^/research/investor$")),             # up to 20 companies' numbers at once
     ("GET", re.compile(r"^/research/deep/[^/]+/deck$")),
     ("POST", re.compile(r"^/research/deep/[^/]+/(read|card)$")),
     ("POST", re.compile(r"^/live/(sessions|groups)$")),

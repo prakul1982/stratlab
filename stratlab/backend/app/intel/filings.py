@@ -325,12 +325,12 @@ def set_alert(uid: str, on: bool):
     db.set_setting(ALERT_KEY + uid, json.dumps(st))
 
 
-def watchlist_symbols(uid: str) -> list[str]:
+def watchlist_symbols(uid: str, region: str = "IN") -> list[str]:
     try:
         items = json.loads(db.get_setting(f"watchlist:{uid}") or "{}").get("items") or []
     except (ValueError, TypeError):
         items = []
-    return [i["symbol"] for i in items if i.get("region") == "IN" and i.get("symbol")][:MAX_SYMBOLS]
+    return [i["symbol"] for i in items if i.get("region") == region and i.get("symbol")][:MAX_SYMBOLS]
 
 
 def overview(feed, symbols: list[str]) -> dict:

@@ -18,6 +18,9 @@ class ResearchError(Exception):
         super().__init__(message)
         self.status, self.code, self.message = status, code, message
 
+    def __reduce__(self):                  # sent back from a backtest worker process intact
+        return (ResearchError, (self.status, self.code, self.message))
+
 
 def parse_t(t: str) -> datetime:
     d = datetime.fromisoformat(str(t).strip().replace("Z", "+00:00").replace(" ", "T", 1))

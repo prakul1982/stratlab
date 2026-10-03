@@ -8,7 +8,7 @@ import { money, usePricing } from "../lib/currency";
 
 const FEATURES: Record<string, string[]> = {
   free: ["5 experiments a month, each with a full verdict", "10 AI strategy builds a month", "Group tests of up to 10 instruments",
-    "Paper trading free for 5 market days", "Every market: India, crypto, the US, UK, Europe, Japan, forex, Indian and global commodities, and your own CSV",
+    "Paper trading free for 5 market days", "Every market: India, crypto, the US, UK, Europe, Japan, forex, Indian commodities and currency futures, global commodities, and your own CSV",
     "SMA, EMA, RSI and price rules", "Share cards and public links"],
   basic: ["50 experiments a month", "100 AI builds a month", "Group tests of up to 25 instruments", "Paper trade 2 strategies at a time",
     "Paper trade a whole group", "Options paper trading at set times", "A daily report after each market closes",

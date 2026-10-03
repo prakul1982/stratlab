@@ -492,23 +492,23 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
         : !r ? <div className="row muted" style={{ gap: 10 }}><span className="spinner" />Reading the numbers…</div> : (
           <>
             {r.summary && <p className="serif" style={{ fontSize: 19, lineHeight: 1.45 }}>{r.summary}</p>}
-            <div className="ai-top">
+            {(r.composite != null || Object.values(r.scores).some((x) => x != null) || r.valuation) && <div className="ai-top">
               <Composite v={r.composite} />
               <div className="stack" style={{ gap: 6, flex: "1 1 240px" }}>
                 <ScoreBar label="Moat" v={r.scores.moat} /><ScoreBar label="Growth" v={r.scores.growth} />
                 <ScoreBar label="Value" v={r.scores.value} /><ScoreBar label="Momentum" v={r.scores.momentum} />
                 <ScoreBar label="Health" v={r.scores.health} />
               </div>
-              <div className="stack" style={{ gap: 8, flex: "1 1 200px" }}>
+              {(r.valuation || r.valuation_note) && <div className="stack" style={{ gap: 8, flex: "1 1 200px" }}>
                 <span className="eyebrow">Valuation</span>
                 <ValuationGauge tag={r.valuation} />
                 {r.valuation_note && <p className="small muted">{r.valuation_note}</p>}
-              </div>
-            </div>
-            <div className="grid2" style={{ gap: 20 }}>
-              <div className="stack" style={{ gap: 8 }}><b className="pos">Bull case</b><ul className="bullets">{r.bull.map((b) => <li key={b}>{b}</li>)}</ul></div>
-              <div className="stack" style={{ gap: 8 }}><b className="neg">Bear case</b><ul className="bullets">{r.bear.map((b) => <li key={b}>{b}</li>)}</ul></div>
-            </div>
+              </div>}
+            </div>}
+            {(r.bull.length > 0 || r.bear.length > 0) && <div className="grid2" style={{ gap: 20 }}>
+              {r.bull.length > 0 && <div className="stack" style={{ gap: 8 }}><b className="pos">Bull case</b><ul className="bullets">{r.bull.map((b) => <li key={b}>{b}</li>)}</ul></div>}
+              {r.bear.length > 0 && <div className="stack" style={{ gap: 8 }}><b className="neg">Bear case</b><ul className="bullets">{r.bear.map((b) => <li key={b}>{b}</li>)}</ul></div>}
+            </div>}
             {(r.position || r.watch.length > 0) && (
               <div className="grid2" style={{ gap: 20 }}>
                 {r.position && <div className="stack" style={{ gap: 6 }}><b>Where it sits</b><p className="small">{r.position}</p></div>}

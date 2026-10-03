@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct, signClass } from "../lib/format";
 import { ResearchNav } from "../components/Research";
+import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/research";
 import { Loading } from "../components/ui";
 
 type Row = {
@@ -26,11 +27,16 @@ export function InvestorHomePage() {
   const pro = !!me?.plan_info?.features?.deepdive;
   const [rows, setRows] = useState<Row[] | null>(null);
   const [order, setOrder] = useState<"list" | "attention">("attention");
+  const [region, setRegion] = useState<Region>(savedRegion);
+  const us = region === "US";
+  const place = us ? "US" : "India";
 
   useEffect(() => {
     if (!pro) return;
-    api<{ rows: Row[] }>("/research/investor").then((x) => setRows(x.rows)).catch(fail);
-  }, [pro, fail]);
+    setRows(null);
+    api<{ rows: Row[] }>(`/research/investor?region=${region}`).then((x) => setRows(x.rows)).catch(fail);
+  }, [pro, fail, region]);
+  const pick = (r: Region) => { saveRegion(r); setRegion(r); };
 
   const shown = useMemo(() => (rows && order === "attention" ? [...rows].sort((a, b) => attention(b) - attention(a)) : rows), [rows, order]);
   const s2 = rows?.filter((r) => r.stage === 2).length ?? 0;
@@ -39,22 +45,25 @@ export function InvestorHomePage() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region="IN" />
+      <ResearchNav region={region} />
       <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Investor home · India</span>
+        <span className="eyebrow">Investor home · {REGION_NAME[region]}</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your watchlist, all in one place</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>For each India watchlist company: the price trend, where its sector sits in the rotation, red-flag filings, the investor checklist and how well management delivered on past targets. A place to see what needs a closer look, not advice.</p>
+        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>For each {place} watchlist company: the price trend, where its sector sits in the rotation, {us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. A place to see what needs a closer look, not advice.</p>
+        <div className="seg" role="radiogroup" aria-label="Market" style={{ alignSelf: "flex-start" }}>
+          {(["IN", "US"] as Region[]).map((r) => <button key={r} role="radio" aria-checked={region === r} aria-pressed={region === r} onClick={() => pick(r)}>{REGION_NAME[r]}</button>)}
+        </div>
       </div>
       {!pro && <div className="banner"><span>The investor home is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       {pro && !rows && <Loading label="Checking each watchlist company" />}
-      {rows && rows.length === 0 && <p className="small muted">Your watchlist has no India stocks yet. Press Watch on a company page to add some.</p>}
+      {rows && rows.length === 0 && <p className="small muted">Your watchlist has no {place} stocks yet. Press Watch on a company page to add some.</p>}
       {rows && rows.length > 0 && (
         <>
           <div className="stat-row">
             <div className="stat"><span className="tiny muted">Companies</span><b className="num">{rows.length}</b></div>
             <div className="stat"><span className="tiny muted">In Stage 2</span><b className="num">{s2}</b></div>
             <div className="stat"><span className="tiny muted">Sector leading the market</span><b className="num">{leading}</b></div>
-            <div className="stat"><span className="tiny muted">With red-flag filings</span><b className="num">{flagged}</b></div>
+            {!us && <div className="stat"><span className="tiny muted">With red-flag filings</span><b className="num">{flagged}</b></div>}
           </div>
           <div className="seg" role="radiogroup" aria-label="Order" style={{ alignSelf: "flex-start" }}>
             <button role="radio" aria-checked={order === "attention"} aria-pressed={order === "attention"} onClick={() => setOrder("attention")}>Needs a look first</button>
@@ -65,18 +74,18 @@ export function InvestorHomePage() {
               <section key={r.symbol} className="card stack" style={{ gap: 12 }}>
                 <div className="spread" style={{ gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
                   <div className="stack" style={{ gap: 2, minWidth: 0 }}>
-                    <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}><b>{r.name}</b></Link>
+                    <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}><b>{r.name}</b></Link>
                     <span className="tiny muted mono">{r.symbol}</span>
                   </div>
-                  {r.price != null && <span className="mono small">₹{r.price.toLocaleString("en-IN", { maximumFractionDigits: 2 })} <span className={signClass(r.chg)}>{r.chg == null ? "" : pct(r.chg)}</span></span>}
+                  {r.price != null && <span className="mono small">{us ? "$" : "₹"}{r.price.toLocaleString(us ? "en-US" : "en-IN", { maximumFractionDigits: 2 })} <span className={signClass(r.chg)}>{r.chg == null ? "" : pct(r.chg)}</span></span>}
                 </div>
                 {r.problem && <p className="tiny muted" style={{ margin: 0 }}>Company numbers unavailable: {r.problem}</p>}
                 <div className="inv-grid">
                   <Cell label="Trend">{r.stage == null ? "–" : <>Stage {r.stage} · Supertrend {r.st_up ? "up" : "down"}{r.signal && <> · <span className={`badge ${r.signal === "fresh" ? "pass" : "next"}`}>{SIGNAL[r.signal]}</span></>}</>}</Cell>
                   <Cell label="Sector">{r.sector ? <>{r.sector.name}{r.sector.quadrant && <> · <span className={`badge ${QUAD[r.sector.quadrant][1]}`}>{QUAD[r.sector.quadrant][0]}</span></>}</> : "–"}</Cell>
-                  <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span className="neg">{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · fund raise filed" : ""}</Cell>
+                  {!us && <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span className="neg">{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · fund raise filed" : ""}</Cell>}
                   <Cell label="Checklist">{r.checks ? <><b>{r.checks.pass} pass</b> · {r.checks.watch} watch · {r.checks.fail} fail</> : "–"}</Cell>
-                  <Cell label="Management report card">{r.card ? `${r.card.met} of ${r.card.met + r.card.missed} targets met` : <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Not checked yet</Link>}</Cell>
+                  <Cell label="Management report card">{r.card ? `${r.card.met} of ${r.card.met + r.card.missed} targets met` : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>Not checked yet</Link>}</Cell>
                 </div>
                 {r.fails.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>Failed checks: {r.fails.join(" · ")}</p>}
               </section>

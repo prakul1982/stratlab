@@ -220,3 +220,23 @@ def test_us_checklist_shows_insiders(monkeypatch):
         assert not [c for c in v["checklist"]["checks"] if c["group"] == "Promoters"]
     finally:
         w["close"]()
+
+
+def test_investor_home_for_us_watchlist(monkeypatch):
+    import json
+    from app import db, deepdive, report_card
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        monkeypatch.setattr(deepdive, "stored", lambda s: None)
+        monkeypatch.setattr(report_card, "stored", lambda s: None)
+        c, h = w["client"], W.headers("pro-token")
+        uid = c.get("/me", headers=h).json()["id"]
+        db.set_setting(f"watchlist:{uid}", json.dumps({"items": [{"region": "IN", "symbol": "RELIANCE"}, {"region": "US", "symbol": "AAPL"}]}))
+        us = c.get("/research/investor?region=US", headers=h).json()
+        assert us["region"] == "US" and [r["symbol"] for r in us["rows"]] == ["AAPL"]
+        row = us["rows"][0]
+        assert row["checks"] and row["red"] is None and row["problem"] is None
+        assert [r["symbol"] for r in c.get("/research/investor", headers=h).json()["rows"]] == ["RELIANCE"]
+    finally:
+        w["close"]()

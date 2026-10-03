@@ -37,12 +37,7 @@ FEATURES = ("group_live", "options", "options_signal", "fast_entries", "alerts",
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
-BASIC_REFS = {"price", "sma", "ema", "rsi", "num"}
-PRO_REFS = BASIC_REFS | {
-    "macd", "macd_signal", "macd_hist",
-    "bb_upper", "bb_mid", "bb_lower",
-    "vwap", "supertrend", "stage",
-}
+BASIC_REFS = {"price", "sma", "ema", "rsi", "num"}      # every other indicator (MACD, Bollinger, VWAP…) is Pro
 
 GRACE = timedelta(days=1)
 

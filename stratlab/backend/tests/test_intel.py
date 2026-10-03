@@ -173,3 +173,14 @@ def test_screener_never_guesses_a_different_company():
         return httpx.Response(404, text="<html>Not found</html>")
     with pytest.raises(SourceError):
         Screener(transport=httpx.MockTransport(handler)).company("LTIM")
+
+
+def test_an_empty_ai_read_is_an_error_not_a_blank_card(monkeypatch):
+    import pytest
+    from app.ai_providers import AIError
+    from app.intel import ai as A
+    monkeypatch.setattr(A, "_ask", lambda *a, **k: {"valuation": "", "bull": [], "bear": [], "scores": {}})
+    with pytest.raises(AIError, match="empty"):
+        A.company({"name": "X", "symbol": "X", "region": "US"}, None, False)
+    monkeypatch.setattr(A, "_ask", lambda *a, **k: {"summary": "Makes chips.", "bull": ["Demand"], "bear": []})
+    assert A.company({"name": "X", "symbol": "X", "region": "US"}, None, False)["bull"] == ["Demand"]

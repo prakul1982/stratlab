@@ -20,7 +20,7 @@ const LAST_MARKET = "stratlab.lastMarket";
 const lastMarket = () => { try { return localStorage.getItem(LAST_MARKET) || "IN"; } catch { return "IN"; } };
 /** Investor phrasings that should open a page directly, before any AI guessing. `name` is a company to look up. */
 type Intent = { title: string; sub: string; to?: string; deep?: string; compare?: [string, string] };
-export function intentFor(q: string): Intent | null {
+function intentFor(q: string): Intent | null {
   const t = q.trim();
   let m = t.match(/^(?:deep ?dive|deepdive)(?:\s+(?:on|of|into|for))?\s+(.+)$/i) || t.match(/^(.+?)\s+deep ?dive$/i);
   if (m) return { title: `Deep dive: ${m[1]}`, sub: "Its business, 10 years of numbers, capex plans and whether management delivered", deep: m[1] };

@@ -306,6 +306,9 @@ class Runner:
 
 MARKET = "audit:market"        # settings keys: the switch and list state, the list itself, and results in shards
 REFRESH_DAYS = 30              # a company is checked again once its last check is this old
+RETRY_HOURS = 6                # a check that failed because a source was down is tried again after this long
+MAX_TRIES = 3                  # ...this many times in all, then it waits for the monthly refresh like the rest
+TRANSIENT_AREAS = {"Company page", "Prices", "Audit"}      # errors from a source being unreachable, not from the data
 NEW_DAYS = 30                  # listed within this many days: checked before anything else
 LIST_EVERY = 86400             # re-read the exchange's list of companies once a day
 
@@ -313,6 +316,11 @@ LIST_EVERY = 86400             # re-read the exchange's list of companies once a
 def _shard(sym: str, key: str = MARKET) -> str:
     c = sym[:1].upper()
     return f"{key}:rows:{c if c.isalpha() else '0'}"
+
+
+def _transient(row: dict) -> bool:
+    """The check failed because a source couldn't be reached (busy, down, blocked), not because the data was wrong."""
+    return any(i.get("level") == "error" and i.get("area") in TRANSIENT_AREAS for i in row.get("issues") or [])
 
 
 class MarketAudit:
@@ -415,14 +423,18 @@ class MarketAudit:
         now = datetime.now(timezone.utc)
         today = now.date()
         cutoff = max(self.state.get("since") or "", (now - timedelta(days=REFRESH_DAYS)).isoformat())
-        new, never, stale = [], [], []
+        retry_cut = (now - timedelta(hours=RETRY_HOURS)).isoformat()
+        new, never, retry, stale = [], [], [], []
         for sym in sorted(self.listing):
-            at = (self.rows.get(sym) or {}).get("at")
+            row = self.rows.get(sym) or {}
+            at = row.get("at")
             if not at:
                 (new if self._is_new(sym, today) else never).append(sym)
             elif at < cutoff:
                 stale.append((at, sym))
-        return new + never + [s for _, s in sorted(stale)]
+            elif _transient(row) and (row.get("tries") or 1) < MAX_TRIES and at < retry_cut:
+                retry.append((at, sym))           # a source was down or busy: try again soon, not in a month
+        return new + never + [s for _, s in sorted(retry)] + [s for _, s in sorted(stale)]
 
     # work
     def step(self) -> str | None:
@@ -446,6 +458,8 @@ class MarketAudit:
                 self.current = None
         row["at"] = datetime.now(timezone.utc).isoformat()
         with self.lock:
+            prev = self.rows.get(sym) or {}
+            row["tries"] = (prev.get("tries") or 1) + 1 if _transient(prev) and _transient(row) else 1
             if sym in self.listing:
                 self.rows[sym] = row
                 self.secs = (self.secs + [row.get("seconds") or 0])[-50:]

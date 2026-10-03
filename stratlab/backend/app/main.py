@@ -20,7 +20,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, audit, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
+from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -36,6 +36,7 @@ from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research
+from .intel.net import TTLCache
 from .intel import filings, sec
 from .intel.sec import SEC
 from .intel.net import SourceError
@@ -140,6 +141,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
     threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
+    threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     yield
@@ -664,7 +666,7 @@ def run_test(profile, strategy: Strategy, req) -> dict:
     limit = use_backtest(profile)
     data = research.load(markets, strategy, req)
     check_features(profile, strategy, data["inst"])
-    out = research.run(strategy, data)
+    out = compute.run(strategy, data)                   # in a worker process: other pages stay quick meanwhile
     db.add_usage(profile["id"], "backtest")
     used = backtests_used(profile)
     out["usage"] = {"backtests_used": used, "backtests_limit": limit}
@@ -818,7 +820,9 @@ def duplicate_notebook(nid: str, profile=Depends(current_profile)):
 @app.delete("/notebooks/{nid}")
 def delete_notebook(nid: str, profile=Depends(current_profile)):
     row = db.get_strategy(profile["id"], check_id(nid))
-    for e in (notebook_from_row(row).get("experiments") or []) if row else []:
+    if not row:
+        err(404, "not_found", "Notebook not found.")
+    for e in notebook_from_row(row).get("experiments") or []:
         if e.get("public"):
             public.unpublish(e["public"])   # its public links go with it
     db.delete_strategy(profile["id"], check_id(nid))
@@ -942,9 +946,21 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     prov = markets.provider(req.region)
     if prov is None or not prov.ready():
         raise KiteNotReady("Market data for this market is offline right now.")
-    out = scan.run(markets, req.region, members)
+    key = ("scan", req.region, tuple(_member_key(m) for m in members))
+    out = _results.get(key)
+    if out is None:                       # the same group gives everyone the same answer until prices move
+        out = scan.run(markets, req.region, members)
+        _results.set(key, out, 300)
+    out = dict(out)
     out["problems"] = [public_text(x) for x in out["problems"]]          # data-source errors can name the source
     return ok({"name": name, "market": req.region, **out})
+
+
+_results = TTLCache(max_items=300)        # scan and rotation answers, shared: weekly and daily charts move slowly
+
+
+def _member_key(m) -> str:
+    return json.dumps(m, sort_keys=True, default=str) if isinstance(m, dict) else str(m)
 
 
 @app.get("/research/rotation")
@@ -967,10 +983,15 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
         name, members = scan_members(profile, region, set)
         if len(members) < 2:
             err(400, "empty", "Pick a group with at least two stocks, or star more companies for your watchlist.")
-    try:
-        out = rotation.run(markets, region, set, members, interval, tail)
-    except LookupError as e:
-        err(404 if set.startswith("sector:") else 503, "no_benchmark", str(e))
+    key = ("rotation", region, set, tuple(_member_key(m) for m in members or []), interval, tail)
+    out = _results.get(key)
+    if out is None:
+        try:
+            out = rotation.run(markets, region, set, members, interval, tail)
+        except LookupError as e:
+            err(404 if set.startswith("sector:") else 503, "no_benchmark", str(e))
+        _results.set(key, out, 600)
+    out = dict(out)
     out["skipped"] = [public_text(x) for x in out["skipped"]]
     return ok({"name": name, "market": region, **out})
 
@@ -1174,38 +1195,43 @@ _investor_pool = ThreadPoolExecutor(max_workers=4)
 
 
 @app.get("/research/investor")
-def investor_home(profile=Depends(current_profile)):
-    """Every India watchlist company: trend, sector rotation, red flags, checklist and report card on one page."""
+def investor_home(region: str = "IN", profile=Depends(current_profile)):
+    """Every watchlist company in one market (India or US): trend, sector rotation, red flags (India), checklist and
+    report card on one page."""
     need(profile, "deepdive", "The investor home")
-    syms = filings.watchlist_symbols(profile["id"])[:investor.MAX]
+    region = "US" if region.upper() == "US" else "IN"
+    us = region == "US"
+    syms = filings.watchlist_symbols(profile["id"], region)[:investor.MAX]
     if not syms:
-        return ok({"rows": [], "as_of": None})
+        return ok({"rows": [], "as_of": None, "region": region})
     try:
-        rot = rotation.run(markets, "IN", "sectors", None, "weekly", 4)
+        rot = rotation.run(markets, region, "sectors", None, "weekly", 4)
         quad = {r["symbol"]: {"symbol": r["symbol"], "name": r["name"], "quadrant": r["quadrant"]} for r in rot["rows"]}
     except Exception:
         quad = {}
 
     def one(sym):
-        problem = None
+        problem, key = None, f"US:{sym}" if us else sym
         try:
-            p = with_industry(sym, research_hub.screener.company(sym))
+            p = deep_base_us(sym)["p"] if us else with_industry(sym, research_hub.screener.company(sym))
         except Exception as e:
             p, problem = None, public_text(str(e))[:120]
-        try:
-            fsum = filings.summarise(filings_feed.announcements(sym))
-        except Exception:
-            fsum = None
-        trend = price_trend(sym)
+        fsum = None
+        if not us:                        # exchange filings are Indian; US companies have no red-flag feed here
+            try:
+                fsum = filings.summarise(filings_feed.announcements(sym))
+            except Exception:
+                fsum = None
+        trend = price_trend(sym, region)
         nums = deepdive.numbers(p) if p else None
-        card = report_card.view(report_card.stored(sym), nums) if nums else None
-        checks = checklist.evaluate(p, nums, fsum, trend, card, sym) if p else None
-        sec = investor.sector_of("IN", sym)
-        sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label("IN", sec, None), "quadrant": None} if sec else None)
-        return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(sym) is not None, problem)
+        card = report_card.view(report_card.stored(key), nums) if nums else None
+        checks = checklist.evaluate(p, nums, fsum, trend, card, None if us else sym) if p else None
+        sec = investor.sector_of(region, sym)
+        sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label(region, sec, None), "quadrant": None} if sec else None)
+        return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem)
 
     rows = list(_investor_pool.map(one, syms))
-    return ok({"rows": rows, "as_of": datetime.now(IST).isoformat(timespec="minutes")})
+    return ok({"rows": rows, "region": region, "as_of": datetime.now(IST).isoformat(timespec="minutes")})
 
 
 @app.get("/research/deep/{symbol}/deck")
@@ -1383,6 +1409,8 @@ def public_verdict_page(token: str):
 @app.delete("/notebooks/{nid}/experiments/{version}")
 def delete_experiment(nid: str, version: int, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
+    if not any(e["v"] == version for e in nb.get("experiments") or []):
+        err(404, "not_found", "Experiment not found.")
     for e in nb.get("experiments") or []:
         if e["v"] == version and e.get("public"):
             public.unpublish(e["public"])
@@ -2045,6 +2073,25 @@ def admin_audit_start(req: AuditReq, _=Depends(admin.admin_profile)):
 def admin_platform_check(_=Depends(admin.admin_profile)):
     """Every feature once on live data: prices and their freshness per market, a backtest per market, the scans,
     sector rotation, the option chain, filings, company pages, news, the database and the holiday calendar."""
+    return run_platform_check(retry_after=0)
+
+
+@app.get("/admin/platform/last")
+def admin_platform_last(_=Depends(admin.admin_profile)):
+    """The latest check, automatic or by hand, and the last two weeks' tallies."""
+    try:
+        last = json.loads(db.get_setting(PLATFORM_LAST) or "null")
+        hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")
+    except (ValueError, TypeError):
+        last, hist = None, []
+    return {"last": last, "history": hist}
+
+
+PLATFORM_LAST, PLATFORM_HISTORY = "platform:last", "platform:history"
+PLATFORM_AT = (16, 50)                   # IST, every day: after India's close, before the evening reports
+
+
+def platform_checks() -> list:
     pc, today = platform_check, datetime.now(IST).date()
     checks = [(f"Prices: {m}", "Prices", (lambda m=m: pc.check_market(markets, m, today))) for m in markets.providers]
     checks += [(f"Backtest: {m}", "Backtests", (lambda m=m: pc.check_backtest(markets, m))) for m in markets.providers]
@@ -2059,9 +2106,71 @@ def admin_platform_check(_=Depends(admin.admin_profile)):
                ("News", "Research", lambda: pc.check_news(research_hub)),
                ("Database", "Server", lambda: pc.check_database(db)),
                ("Holiday calendar", "Server", lambda: pc.check_calendar(today))]
-    out = pc.run_all(checks)
+    return checks
+
+
+def run_platform_check(retry_after: float = 120, auto: bool = False) -> dict:
+    """Run every check; anything that failed is tried once more after `retry_after` seconds (a source that was
+    briefly busy shouldn't page anyone), and only what still fails counts. The result is kept for the Admin page."""
+    checks = platform_checks()
+    out = platform_check.run_all(checks)
+    failed = {r["name"] for r in out["checks"] if r["state"] == "fail"}
+    if failed and retry_after:
+        time.sleep(retry_after)
+        again = {r["name"]: r for r in platform_check.run_all([c for c in checks if c[0] in failed])["checks"]}
+        out["checks"] = [{**again[r["name"]], "retried": True} if r["name"] in again else r for r in out["checks"]]
+        out["counts"] = {k: sum(1 for r in out["checks"] if r["state"] == k) for k in ("pass", "warn", "fail")}
     for r in out["checks"]:
         r["detail"] = public_text(r["detail"])
+    out["auto"] = auto
+    try:
+        db.set_setting(PLATFORM_LAST, json.dumps(out))
+        hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")[-13:]
+        hist.append({"at": out["at"], "auto": auto, **out["counts"],
+                     "failed": [r["name"] for r in out["checks"] if r["state"] == "fail"]})
+        db.set_setting(PLATFORM_HISTORY, json.dumps(hist))
+    except Exception as e:
+        print("couldn't keep the platform check:", e)
+    return out
+
+
+def tell_admins(subject: str, text: str) -> int:
+    """Send to each admin's own alert channels (push, Telegram, email, as set in their Account). Returns how many
+    admins could be reached."""
+    reached = 0
+    for email in admin.admin_emails():
+        try:
+            rows = db.sb().table("profiles").select("*").eq("email", email).limit(1).execute().data
+        except Exception:
+            rows = []
+        if rows and alerts.notify(rows[0], subject, text, background=False, url="/admin"):
+            reached += 1
+    return reached
+
+
+def platform_job():
+    """Every day at PLATFORM_AT (IST): check every feature, retry failures, and tell the admins only if something
+    is still broken. Nothing to do when all is well."""
+    while True:
+        now = datetime.now(IST)
+        at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
+        if at <= now:
+            at += timedelta(days=1)
+        time.sleep((at - now).total_seconds())
+        try:
+            daily_platform_check()
+        except Exception as e:
+            print("platform check job failed:", e)
+
+
+def daily_platform_check(retry_after: float = 120) -> dict:
+    out = run_platform_check(retry_after=retry_after, auto=True)
+    bad = [r for r in out["checks"] if r["state"] == "fail"]
+    if bad:
+        lines = "\n".join(f"- {r['name']}: {r['detail'][:160]}" for r in bad[:10])
+        tell_admins(f"StratLab: {len(bad)} check{'s' if len(bad) > 1 else ''} failing",
+                    f"Today's automatic check found {len(bad)} feature{'s' if len(bad) > 1 else ''} still failing "
+                    f"after a retry:\n{lines}\nDetails on the Admin page.")
     return out
 
 

@@ -11,6 +11,7 @@ USERS = {
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),
+    "email-signup-admin-token": ("u-imposter", "owner@example.com", "free"),   # the admin's address, but by email sign-up
     "admin-token": ("u-admin", "owner@example.com", "pro"),
 }
 
@@ -156,7 +157,9 @@ class FakeAuth:
         u = USERS.get(token)
         if not u:
             raise AuthApiError("invalid JWT: unable to parse or verify signature", 401, "bad_jwt")
-        return SimpleNamespace(user=SimpleNamespace(id=u[0], email=u[1], email_confirmed_at="2026-01-01T00:00:00Z"))
+        provider = "email" if token == "email-signup-admin-token" else "google"
+        return SimpleNamespace(user=SimpleNamespace(id=u[0], email=u[1], email_confirmed_at="2026-01-01T00:00:00Z",
+                                                    app_metadata={"provider": provider, "providers": [provider]}))
 
 
 class FakeSupabase:
