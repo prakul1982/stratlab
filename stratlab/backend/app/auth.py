@@ -7,6 +7,7 @@ from . import db
 from .plans import access_plan, effective_plan
 
 _cache: dict[str, tuple[float, str, str, bool]] = {}
+_rejected: dict[str, float] = {}          # tokens the sign-in service just refused, until when
 _lock = threading.Lock()
 
 
@@ -31,6 +32,9 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
     now = time.time()
     with _lock:
         hit = _cache.get(token)
+        bad = _rejected.get(token)
+    if bad and bad > now:                           # the same made-up or expired token again: no sign-in service call
+        raise HTTPException(401, {"code": "login_required", "message": "Your session expired. Sign in again."})
     if hit and hit[0] > now:
         uid, email, verified = hit[1], hit[2], hit[3]
     else:
@@ -42,10 +46,17 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
                                           "You're still signed in; try again in a minute."}) from None
             user = None
         if not user:
+            with _lock:
+                if len(_rejected) > 20000:
+                    _rejected.clear()
+                _rejected[token] = now + 60
             raise HTTPException(401, {"code": "login_required", "message": "Your session expired. Sign in again."})
         uid, email = user.id, user.email
-        # Google sign-in always verifies the address; only a verified one is trusted for admin access
-        verified = bool(getattr(user, "email_confirmed_at", None))
+        # only an address proven by Google sign-in is trusted for admin access: Supabase's own email sign-up can be
+        # called by anyone with the public key, and whether it confirms addresses is a dashboard setting
+        meta = getattr(user, "app_metadata", None) or {}
+        providers = set(meta.get("providers") or []) | {meta.get("provider")}
+        verified = bool(getattr(user, "email_confirmed_at", None)) and "google" in providers
         with _lock:
             if len(_cache) > 5000:
                 _cache.clear()

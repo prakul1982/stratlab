@@ -8,6 +8,8 @@
 - A seller without a GSTIN issues a plain invoice that says it isn't registered under GST.
 - Numbers run in one series per Indian financial year: SL/2026-27/0001.
 Not tax advice: the rules above are the standard ones; the owner's accountant should confirm them."""
+import base64
+import hashlib
 import json
 import threading
 from datetime import datetime, timedelta, timezone
@@ -155,7 +157,7 @@ def billing_of(uid: str) -> dict:
 
 
 PRINT_JS = 'document.getElementById("print").onclick=function(){print()};'
-PRINT_HASH = __import__("base64").b64encode(__import__("hashlib").sha256(PRINT_JS.encode()).digest()).decode()
+PRINT_HASH = base64.b64encode(hashlib.sha256(PRINT_JS.encode()).digest()).decode()
 
 
 def html(inv: dict) -> str:

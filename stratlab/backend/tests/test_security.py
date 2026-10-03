@@ -105,3 +105,20 @@ def test_public_preview_escapes_the_shared_name():
     page = public.preview_html("tok", {"name": "\"><script>alert(1)</script>", "verdict": {"headline": "<b>x</b>"},
                                        "instrument": {"symbol": "<i>"}}, False)
     assert "<script>alert" not in page and "&lt;script&gt;" in page
+
+
+def test_an_email_signup_with_the_admins_address_is_not_admin(client):
+    assert client.get("/admin/overview", headers=W.headers("admin-token")).status_code == 200
+    r = client.get("/admin/overview", headers=W.headers("email-signup-admin-token"))
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "not_admin"
+
+
+def test_a_made_up_token_costs_one_sign_in_lookup_not_one_per_request(client, monkeypatch):
+    from app import auth, db
+    calls = []
+    real = db.sb().auth.get_user
+    monkeypatch.setattr(db.sb().auth, "get_user", lambda t: calls.append(t) or real(t))
+    for _ in range(5):
+        assert client.get("/me", headers={"Authorization": "Bearer made-up-123"}).status_code == 401
+    assert calls == ["made-up-123"]
+    auth._rejected.clear()

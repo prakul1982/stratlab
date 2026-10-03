@@ -139,6 +139,7 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     main.trading_calendar._holiday_cache.clear()
     from app import auth
     auth._cache.clear()
+    auth._rejected.clear()
     monkeypatch.setattr(settings, "ADMIN_EMAILS", "owner@example.com")
     monkeypatch.setattr(settings, "FINNHUB_API_KEY", "k")
     faults: dict[str, Switch] = {}
