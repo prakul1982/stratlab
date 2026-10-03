@@ -311,6 +311,19 @@ class KiteService:
                 return r
         return None
 
+    def equity_by_name(self, name: str) -> dict | None:
+        """A listed company's stock by its name as a broker writes it ("Reliance Industries Ltd"): NSE first, then
+        listed only on BSE. Only an exact match after dropping Ltd, Limited, India and the like."""
+        self._load_instruments()
+        want = norm_name(name)
+        if not want:
+            return None
+        for exch in ("NSE", "BSE"):
+            for r in self._inst:
+                if r["exchange"] == exch and r["type"] == "EQ" and norm_name(r["name"]) == want:
+                    return r
+        return None
+
     def by_symbol(self, symbol: str, exchange: str = "NSE") -> dict | None:
         """The cash stock or index with this trading symbol."""
         self._load_instruments()

@@ -166,6 +166,22 @@ class ImportReq(BaseModel):
     filename: str = Field("", max_length=120)
 
 
+class HoldingsImportReq(BaseModel):
+    filename: str = Field("", max_length=200)
+    data: str = Field(..., min_length=1)        # the file, base64 (a data: URL is fine): 2 MB at most, checked once decoded
+    mode: Literal["replace", "add"] = "replace"                    # replace the saved holdings, or add to them
+
+
+class HoldingItem(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=20)
+    qty: float = Field(..., gt=0, le=1e9)
+    avg: Optional[float] = Field(None, ge=0, le=1e8)
+
+
+class HoldingsReq(BaseModel):
+    items: list[HoldingItem] = Field(default_factory=list, max_length=500)
+
+
 class ExperimentReq(DataReq):
     label: str = Field("", max_length=120)
 
@@ -208,6 +224,18 @@ class ScanReq(BaseModel):
 
 class ScanAlertReq(BaseModel):
     on: bool
+
+
+class StockAlertReq(BaseModel):
+    """One stock alert; stock_alerts.clean checks the combination (a price level, an MA length…)."""
+    region: Literal["IN", "US"] = "IN"
+    symbol: str = Field(..., min_length=1, max_length=20)
+    kind: Literal["price", "move", "ma", "rsi", "stage", "high52", "low52"]
+    op: Optional[Literal["above", "below", "up", "down", "either"]] = None
+    value: Optional[float] = None
+    period: Optional[int] = Field(None, ge=1, le=500)
+    repeat: bool = False
+    note: Optional[str] = Field(None, max_length=120)
 
 
 class MarketAuditReq(BaseModel):
@@ -260,6 +288,14 @@ class NewsletterReq(BaseModel):
     market_in: Literal["daily", "weekly", "off"] | None = None
     market_us: Literal["daily", "weekly", "off"] | None = None
     my_stocks: Literal["daily", "weekly", "off"] | None = None
+
+
+class EmailPrefsReq(BaseModel):
+    tips: bool                              # tips and reminders emails (receipts always go)
+
+
+class FirstStepsReq(BaseModel):
+    dismissed: bool
 
 
 class IdeasReq(BaseModel):

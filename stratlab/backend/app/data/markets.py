@@ -5,7 +5,7 @@ MARKETS = [
     {"id": "IN", "name": "India", "venues": "NSE and BSE", "currency": "INR", "symbol": "₹",
      "tz": "Asia/Kolkata", "hours": {"open": "09:15", "close": "15:30", "days": "Mon–Fri"},
      "what": "Stocks, indices, F&O", "costs": "STT, stamp duty, GST", "provider": "kite", "brokerage": 20},
-    {"id": "CRYPTO", "name": "Crypto", "venues": "Coinbase", "currency": "USD", "symbol": "₿",
+    {"id": "CRYPTO", "name": "Crypto", "venues": "Spot pairs, priced in USD", "currency": "USD", "symbol": "₿",
      "tz": "UTC", "hours": {"open": None, "close": None, "days": "Every day, 24 hours"},
      "what": "BTC, ETH and hundreds of pairs", "costs": "0.1% exchange fee each way", "provider": "coinbase",
      "brokerage": 0},

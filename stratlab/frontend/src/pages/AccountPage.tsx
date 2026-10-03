@@ -11,6 +11,7 @@ import { PhoneCard } from "../components/PhoneCard";
 import { Block } from "../components/More";
 import { InvoicesCard } from "../components/InvoicesCard";
 import { NewslettersCard } from "../components/NewslettersCard";
+import { TipsCard } from "../components/TipsCard";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
@@ -91,16 +92,16 @@ export function AccountPage() {
 
   const paid = me.paid_plan ?? me.plan;   // what they pay for; me.plan is Pro for everyone during the launch offer
   return (
-    <div className="stack" style={{ gap: 26 }}>
+    <div className="stack" style={{ gap: 26, maxWidth: 820 }}>
       <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div className="stack" style={{ gap: 6 }}>
-          <span className="eyebrow">{me.email}</span>
-          <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Account</h1>
+        <div className="stack" style={{ gap: 6, minWidth: 0 }}>
+          <span className="eyebrow" style={{ overflowWrap: "anywhere" }}>{me.email}</span>
+          <h1 className="page-title">Account</h1>
         </div>
         <button className="btn outline" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </div>
 
-      <div className="stack" style={{ gap: 18, maxWidth: 820 }}>
+      <div className="stack" style={{ gap: 18 }}>
         <section className="card stack" style={{ gap: 0 }}>
           <div className="spread" style={{ marginBottom: 6 }}>
             <h2 className="h2 row" style={{ gap: 0 }}>Plan and usage<Info>{HELP.experimentsQuota}</Info></h2>
@@ -153,22 +154,27 @@ export function AccountPage() {
 
         <NewslettersCard />
 
+        <TipsCard />
+
         <PhoneCard />
 
-        <section className="card stack" style={{ gap: 12 }}>
-          <h2 className="h2">What you're here for</h2>
-          <div className="seg" role="radiogroup" aria-label="What you're here for" style={{ alignSelf: "flex-start" }}>
-            {FOCUSES.map(([f, title]) => <button key={f} role="radio" aria-checked={focus === f} aria-pressed={focus === f} onClick={() => setFocus(f)}>{title}</button>)}
+        <section className="card stack" style={{ gap: 16 }}>
+          <div className="stack" style={{ gap: 4 }}>
+            <h2 className="h2">What you see first</h2>
+            <p className="small muted">Changes only the order of the menu and home page, and which settings start open. Every tool stays available.</p>
           </div>
-          {focus && <p className="small muted">{FOCUSES.find(([f]) => f === focus)?.[2]} This sets what the menu and home page show first.</p>}
-        </section>
-
-        <section className="card stack" style={{ gap: 12 }}>
-          <h2 className="h2">Experience</h2>
-          <div className="seg" role="radiogroup" aria-label="Experience" style={{ alignSelf: "flex-start" }}>
-            {LEVELS.map(([l, title]) => <button key={l} role="radio" aria-checked={level === l} aria-pressed={level === l} onClick={() => setLevel(l)}>{title}</button>)}
-          </div>
-          {level && <p className="small muted">{LEVELS.find(([l]) => l === level)?.[2]} Everything stays available either way.</p>}
+          <Block title="What you're here for">
+            <div className="seg" role="radiogroup" aria-label="What you're here for" style={{ justifySelf: "start" }}>
+              {FOCUSES.map(([f, title]) => <button key={f} role="radio" aria-checked={focus === f} aria-pressed={focus === f} onClick={() => setFocus(f)}>{title}</button>)}
+            </div>
+            {focus && <p className="small muted">{FOCUSES.find(([f]) => f === focus)?.[2]}</p>}
+          </Block>
+          <Block title="Experience">
+            <div className="seg" role="radiogroup" aria-label="Experience" style={{ justifySelf: "start" }}>
+              {LEVELS.map(([l, title]) => <button key={l} role="radio" aria-checked={level === l} aria-pressed={level === l} onClick={() => setLevel(l)}>{title}</button>)}
+            </div>
+            {level && <p className="small muted">{LEVELS.find(([l]) => l === level)?.[2]}</p>}
+          </Block>
         </section>
 
         <section className="card stack" style={{ gap: 12 }}>

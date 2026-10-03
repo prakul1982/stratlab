@@ -14,6 +14,8 @@ import { Pin, Search, Sparkle, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
 import { CompanySearch } from "../components/CompanySearch";
 import { askExamples, useRotating } from "../lib/rotating";
+import { FirstSteps } from "../components/FirstSteps";
+import { PromoCountdown } from "../components/PromoCountdown";
 
 export type Where = { market: string; instrument: Instrument | null };
 
@@ -192,7 +194,6 @@ export function NewNotebook() {
           <p className="small muted">Not sure what to test? <Link to="/research" className="link">Research a company first</Link>: its AI read suggests ideas you can test in one click.</p>
         )}
       </div>
-      <AskBar />
       <ol className="how" aria-label="How StratLab works">
         <li><b>1. Describe it</b><span>In plain words. We turn it into rules you can read and edit.</span></li>
         <li><b>2. Test it honestly</b><span>On years of real prices, after real costs, with four checks for luck.</span></li>
@@ -273,8 +274,13 @@ type Sort = "recent" | "name" | "verdict";
 
 export function Home() {
   const { focus, notebooks } = useApp();
-  if (focus === "invest" && notebooks !== null) return <InvestorStart />;
-  return <NotebooksHome />;
+  return (
+    <>
+      <PromoCountdown />
+      <FirstSteps />
+      {focus === "invest" && notebooks !== null ? <InvestorStart /> : <NotebooksHome />}
+    </>
+  );
 }
 
 export function NotebooksHome() {

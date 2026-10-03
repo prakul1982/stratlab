@@ -1,5 +1,7 @@
 """StratLab API."""
-from concurrent.futures import ThreadPoolExecutor
+import base64
+import binascii
+from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
 import logging
 from html import escape as html_escape
@@ -21,6 +23,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
+from . import holdings, holdings_file
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
@@ -51,13 +54,15 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_pages, weekly
+from . import ask, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
-from .models import (ShareReq, GroupLiveReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
+from .plans import holdings_limit
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
+from .plans import stock_alerts as stock_alert_limit
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -108,8 +113,30 @@ def _scan_alert_ok(profile: dict) -> bool:
     return allows(access_plan(profile), "scans") and bool(alerts.jobs_for(profile, "", ""))
 
 
+def alert_quotes(region: str, syms: list[str]) -> dict:
+    """Quotes for a batch of stocks: one broker call for India when the feed is up, else the research quotes."""
+    if region == "IN" and kite.ready():
+        try:
+            return kite.quote(syms)
+        except Exception:
+            pass
+    return research_hub.quotes(region, syms)
+
+
+def alert_bars(region: str, sym: str) -> list[dict]:
+    """Daily candles (shared with the scans' cache) for the alerts on moving averages, RSI, Stage and 52-week levels."""
+    ids, _ = universes.resolve(markets, region, [{"symbol": sym}])
+    return scan._bars(markets, ids[0]) if ids else []
+
+
+def _alert_limit(profile: dict) -> int:
+    from .plans import access_plan
+    return stock_alert_limit(access_plan(profile))
+
+
+stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit)
 scan_alerts_job = scan.Alerts(markets, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
-                              can_alert=_scan_alert_ok)
+                              can_alert=_scan_alert_ok, checks=[lambda now: stock_checker.tick(now)])
 
 
 def _filing_alert_ok(profile: dict) -> bool:
@@ -124,6 +151,7 @@ kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 newsletter_job = news.Job()
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
+lifecycle_job = lifecycle.Job()
 
 
 @asynccontextmanager
@@ -151,6 +179,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
     newsletter_job.start()
     results_job.start()
+    lifecycle_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
@@ -415,6 +444,10 @@ def admin_set_prices(req: PricesReq, _=Depends(admin.admin_profile)):
 
 @app.get("/me")
 def me(profile=Depends(current_profile)):
+    try:
+        lifecycle.seen(profile)       # remembers the visit; welcomes a brand-new account
+    except Exception as e:
+        print("lifecycle visit failed:", str(e)[:160])
     plan = profile["_plan"]
     info = plan_info(plan)
     return ok({
@@ -540,7 +573,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
     if not got or got[1] not in alerts.NEWSLETTER_NAMES:
         return None
     uid, what = got
-    if act:
+    if act and what in ("tips", "all"):
+        lifecycle.set_tips(uid, False)
+    if act and what != "tips":
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
@@ -1120,6 +1155,98 @@ def scan_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
     return {"alerts": req.on}
 
 
+# ---------- stock alerts people set (price, day move, moving average, RSI, Stage, 52-week high or low) ----------
+ALERT_ID = re.compile(r"^[0-9a-f]{6,24}$")
+
+
+def alert_view(a: dict) -> dict:
+    return {**{k: v for k, v in a.items() if k not in ("state", "rev")}, "text": stock_alerts.describe(a)}
+
+
+def alerts_page(profile) -> dict:
+    mine = stock_alerts.items(profile["id"])
+    active = sorted((a for a in mine if a.get("status") == "active"), key=lambda a: a.get("created_at") or "", reverse=True)
+    done = sorted((a for a in mine if a.get("status") != "active"), key=lambda a: a.get("triggered_at") or "", reverse=True)
+    to = alerts.newsletter_email(profile)
+    return {"active": [alert_view(a) for a in active], "triggered": [alert_view(a) for a in done],
+            "limit": stock_alert_limit(profile["_plan"]), "count": len(active), "channels": stock_alerts.channels(profile),
+            "email": to, "email_confirmed": bool(to) and alerts.email_confirmed(profile)}
+
+
+def alert_seed(region: str, sym: str) -> dict | None:
+    """The stock's quote now, to check it exists and to start a price alert on the right side of its level. A source
+    that can't be reached doesn't block saving; a stock with no price does."""
+    try:
+        q = alert_quotes(region, [sym]) or {}
+    except Exception:
+        return None
+    hit = q.get(sym)
+    if not hit or not isinstance(hit.get("price"), (int, float)):
+        err(400, "no_price", f"There's no price for {sym} in {'India' if region == 'IN' else 'the US'}. Check the ticker.")
+    return hit
+
+
+def alert_note(a: dict, q: dict | None) -> str | None:
+    """Say so when the price is already past the level, since the alert waits for the next crossing."""
+    p = (q or {}).get("price")
+    if a["kind"] != "price" or not isinstance(p, (int, float)) or (a.get("state") or {}).get("side") != a["op"]:
+        return None
+    m = stock_alerts.money
+    return (f"{a['symbol']} is already {a['op']} {m(a['value'], a['region'])} (now {m(p, a['region'])}), so the alert "
+            f"fires the next time it crosses {a['op']} it.")
+
+
+def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
+    limit = stock_alert_limit(profile["_plan"])
+    try:
+        body = stock_alerts.clean(req.model_dump())
+    except stock_alerts.AlertError as e:
+        err(400, "bad_alert", str(e))
+    q = alert_seed(body["region"], body["symbol"])
+    try:
+        a = (stock_alerts.update(profile["id"], aid, body, limit, q) if aid else stock_alerts.create(profile["id"], body, limit, q))
+    except stock_alerts.LimitReached as e:
+        nxt = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["stock_alerts"] > e.limit), None)
+        upgrade(f"Your plan has {e.limit} active alert{'s' if e.limit != 1 else ''}. Delete one"
+                + (f", or move to {nxt} for more." if nxt else " to add another."), "alert_limit")
+    if a is None:
+        err(404, "not_found", "That alert is gone. Reload the page.")
+    return {"alert": alert_view(a), "note": alert_note(a, q), **alerts_page(profile)}
+
+
+@app.get("/alerts")
+def list_stock_alerts(profile=Depends(current_profile)):
+    return ok(alerts_page(profile))
+
+
+@app.post("/alerts")
+def create_stock_alert(req: StockAlertReq, profile=Depends(current_profile)):
+    throttle(profile, "stock_alert", 60, 3600, "That's a lot of alerts in an hour. Try again later.")
+    return ok(save_alert(profile, req))
+
+
+@app.put("/alerts/{aid}")
+def edit_stock_alert(aid: str, req: StockAlertReq, profile=Depends(current_profile)):
+    if not ALERT_ID.match(aid):
+        err(404, "not_found", "That alert is gone. Reload the page.")
+    throttle(profile, "stock_alert", 60, 3600, "That's a lot of alert changes in an hour. Try again later.")
+    return ok(save_alert(profile, req, aid))
+
+
+@app.delete("/alerts/{aid}")
+def delete_stock_alert(aid: str, profile=Depends(current_profile)):
+    if not ALERT_ID.match(aid) or not stock_alerts.delete(profile["id"], aid):
+        err(404, "not_found", "That alert is gone. Reload the page.")
+    return ok(alerts_page(profile))
+
+
+@app.delete("/alerts")
+def clear_triggered_alerts(profile=Depends(current_profile)):
+    """Clear the list of alerts that already fired."""
+    stock_alerts.delete(profile["id"], triggered=True)
+    return ok(alerts_page(profile))
+
+
 # ---------- exchange filings and red flags (Pro, India) ----------
 def filing_call(fn):
     try:
@@ -1325,7 +1452,12 @@ def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile))
     need(profile, "deepdive", "The company deep dive")
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
-    return ok(deep_view(sym, deep_base(sym, region)))
+    out = ok(deep_view(sym, deep_base(sym, region)))
+    try:
+        first_steps.mark(profile["id"], "deepdive")
+    except Exception as e:
+        print("first steps:", str(e)[:120])
+    return out
 
 
 @app.post("/research/deep/{symbol}/read")
@@ -1405,6 +1537,169 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
 
     rows = list(_investor_pool.map(one, syms))
     return ok({"rows": rows, "region": region, "as_of": datetime.now(IST).isoformat(timespec="minutes")})
+
+
+# ---------- My Holdings: the user's own stocks, from their broker's export (everyone; paid plans keep more) ----------
+ISIN_KEY = "isin:nse"            # the exchange's ISINs, saved once a day: {"day", "map": {isin: [symbol, name]}}
+_isin: dict = {"day": None, "map": {}, "tried": 0.0}
+HOLDINGS_FACTS = 40              # stocks checked for trend and filings, largest first
+SECTOR_WAIT = 12.0               # seconds a save waits for the exchange's sector names; the rest use the sector index
+_holdings_pool = ThreadPoolExecutor(max_workers=6)
+
+
+def isin_list() -> dict[str, list]:
+    """ISIN -> [NSE symbol, company name] from the exchange's list of companies: fetched once a day, with the last
+    good list kept for when the exchange turns us away."""
+    day = datetime.now(IST).date().isoformat()
+    if _isin["day"] == day:
+        return _isin["map"]
+    if not _isin["map"]:
+        try:
+            saved = json.loads(db.get_setting(ISIN_KEY) or "{}")
+            _isin["map"] = saved.get("map") or {}
+            _isin["day"] = saved.get("day") if saved.get("day") == day else None
+        except (ValueError, TypeError, AttributeError):
+            pass
+    if _isin["day"] != day and time.time() - _isin["tried"] > 3600:
+        _isin["tried"] = time.time()
+        try:
+            got = {c["isin"]: [c["symbol"], c["name"]] for c in filings_feed.all_equities() if c.get("isin")}
+            if len(got) >= 100:
+                _isin.update(day=day, map=got)
+                db.set_setting(ISIN_KEY, json.dumps({"day": day, "map": got}))
+        except Exception as e:                  # the saved list, or none: symbols and names still match
+            print("ISIN list unavailable:", e)
+    return _isin["map"]
+
+
+def _quiet(fn, *a):
+    try:
+        return fn(*a)
+    except Exception:
+        return None
+
+
+def holdings_matcher() -> holdings.Matcher:
+    isins = isin_list()
+    listed = {v[0]: v[1] for v in isins.values() if isinstance(v, list) and len(v) == 2}
+    return holdings.Matcher(lambda s: _quiet(kite.equity, s), lambda n: _quiet(kite.equity_by_name, n),
+                            lambda c: (isins.get(c) or [None])[0], listed, kite.ready())
+
+
+def with_sectors(items: list[dict], known: dict[str, str] | None = None) -> list[dict]:
+    """Each holding with its broad sector: the exchange's own, or its sector index's when the exchange is slow."""
+    known = known or {}
+
+    def path(i):
+        return [] if i["exchange"] != "NSE" else filings_feed.industry(i["symbol"])
+    todo = {i["symbol"]: _holdings_pool.submit(path, i) for i in items if not known.get(i["symbol"])}
+    if todo:
+        wait_all(list(todo.values()), timeout=SECTOR_WAIT)
+    out = []
+    for i in items:
+        f = todo.get(i["symbol"])
+        got = f.result() if f is not None and f.done() and not f.exception() else None
+        out.append({**i, "sector": known.get(i["symbol"]) or holdings.sector_label(investor.sector_of("IN", i["symbol"]), got)})
+    return out
+
+
+def holdings_view(profile) -> dict:
+    h = holdings.load(profile["id"])
+    quotes, live = {}, bool(h["items"]) and kite.ready()
+    if live:
+        try:
+            quotes = kite.quote([i["symbol"] for i in h["items"]])
+        except Exception:
+            live = False
+    return {**holdings.view(h["items"], quotes), "source": h["source"], "updated_at": h["updated_at"], "prices": live,
+            "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
+
+
+@app.get("/holdings")
+def my_holdings(profile=Depends(current_profile)):
+    """The user's holdings at today's prices: value, gain or loss, the day's change and the mix by sector."""
+    return ok(holdings_view(profile))
+
+
+@app.get("/holdings/facts")
+def holdings_facts(profile=Depends(current_profile)):
+    """For each held stock (the largest 40): its stage and Supertrend and, on plans with filings, red flags in the
+    last 3 months, the latest filings and a scheduled results meeting. The same facts the other pages show."""
+    items = sorted(holdings.load(profile["id"])["items"], key=lambda i: -(i["qty"] * (i.get("avg") or 1)))
+    can = allows(profile["_plan"], "filings")
+    today = datetime.now(IST).date()
+
+    def one(i):
+        sym = i["symbol"]
+        found = _quiet(filings_feed.announcements, sym) if can else None
+        return sym, holdings.facts(price_trend(sym), found, today, filings.upcoming_results)
+    rows = dict(_investor_pool.map(one, items[:HOLDINGS_FACTS]))
+    return ok({"rows": rows, "filings": can, "filings_plan": PLANS[FEATURE_PLAN["filings"]]["name"],
+               "checked": min(len(items), HOLDINGS_FACTS), "count": len(items)})
+
+
+@app.post("/holdings/import")
+def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
+    """Read a holdings export from the user's broker (or any CSV with symbol and quantity), match each line to a
+    listed company and save the holdings. Lines that don't match are listed, never guessed."""
+    throttle(profile, "holdings_import", 30, 3600, "That's a lot of uploads in an hour. Try again a little later.")
+    raw = re.sub(r"^data:[^,]{0,200},", "", req.data.strip())
+    if len(raw) > holdings_file.MAX_BYTES * 4 // 3 + 8:
+        err(413, "file_too_big", f"That file is larger than {holdings_file.MAX_BYTES // (1024 * 1024)} MB. "
+                                 "A holdings export is much smaller; check it's the right file.")
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError):
+        err(400, "bad_upload", "The file didn't arrive whole. Pick it again.")
+    try:
+        parsed = holdings_file.parse(data, req.filename)
+    except holdings_file.FileError as e:
+        err(400, "bad_file", str(e))
+    found, missed = holdings.match_all(parsed["rows"], holdings_matcher())
+    missed = sorted(parsed["problems"] + missed, key=lambda m: m.get("line") or 0)
+    before = holdings.load(profile["id"])
+    if req.mode == "add":
+        found = holdings.merge(before["items"] + found)
+    limit = holdings_limit(profile["_plan"])
+    over, found = [i["symbol"] for i in found[limit:]], found[:limit]
+    if found:                             # nothing matched: the saved holdings stay as they were
+        known = {i["symbol"]: i.get("sector") for i in before["items"]}
+        holdings.save(profile["id"], with_sectors(found, known), parsed["broker"])
+    return ok({"broker": parsed["broker"], "imported": len(found), "saved": bool(found), "unmatched": missed[:200],
+               "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
+
+
+@app.put("/holdings")
+def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
+    """Save the holdings as edited by hand: add a stock, change a quantity or average price, remove one. Symbols
+    that match no listed company are sent back and left out."""
+    limit = holdings_limit(profile["_plan"])
+    if len(req.items) > limit:
+        upgrade(f"Your plan keeps up to {limit} stocks in My Holdings.", "holdings_limit")
+    before = holdings.load(profile["id"])
+    saved = {i["symbol"]: i for i in before["items"]}
+    kept, rows = [], []
+    for n, i in enumerate(req.items, 1):
+        old = saved.get(i.symbol.strip().upper())
+        if old:                           # already matched: kept as it is, even while market data is offline
+            kept.append({**old, "qty": i.qty, "avg": i.avg or None})
+        else:
+            rows.append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
+    found, missed = holdings.match_all(rows, holdings_matcher()) if rows else ([], [])
+    found = holdings.merge(kept + found)
+    if found:
+        known = {i["symbol"]: i.get("sector") for i in before["items"]}
+        holdings.save(profile["id"], with_sectors(found, known), before["source"] or "Manual")
+    elif not missed:
+        holdings.delete(profile["id"])    # every row removed
+    return ok({"unmatched": missed, "holdings": holdings_view(profile)})
+
+
+@app.delete("/holdings")
+def holdings_delete(profile=Depends(current_profile)):
+    """Delete my holdings: every saved position, at once."""
+    holdings.delete(profile["id"])
+    return {"deleted": True}
 
 
 @app.get("/research/deep/{symbol}/deck")
@@ -2653,6 +2948,42 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
     return {"sent_to": to}
 
 
+def lifecycle_kind(kind: str) -> str:
+    if kind not in lifecycle.EMAILS:
+        err(404, "not_found", "There's no such email.")
+    return kind
+
+
+@app.get("/admin/lifecycle")
+def admin_lifecycle(_=Depends(admin.admin_profile)):
+    """The lifecycle emails, for Admin → Services, and how the hourly sweep last went."""
+    return {"emails": [{"kind": k, "name": n, "transactional": t} for k, (n, t) in lifecycle.EMAILS.items()],
+            "job": lifecycle_job.status, "email_ready": alerts.email_ready()}
+
+
+@app.post("/admin/lifecycle/{kind}/preview")
+def admin_lifecycle_preview(kind: str, profile=Depends(admin.admin_profile)):
+    """One lifecycle email with made-up details, as the user would see it. Nothing is sent."""
+    return lifecycle.preview(lifecycle_kind(kind), profile)
+
+
+@app.post("/admin/lifecycle/{kind}/test")
+def admin_lifecycle_test(kind: str, profile=Depends(admin.admin_profile)):
+    """One lifecycle email with made-up details to the admin's own address, now. Not recorded as sent."""
+    kind = lifecycle_kind(kind)
+    throttle(profile, "admin_mail_test", 5, 3600, "You've sent 5 test emails this hour. Try again later.")
+    if not alerts.email_ready():
+        err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
+    to = alerts.email_for(profile)
+    if not to:
+        err(400, "no_email", "Your admin account has no email address to send to.")
+    try:
+        subject = lifecycle.send_test(kind, profile, to)
+    except Exception as e:
+        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+    return {"sent_to": to, "subject": subject}
+
+
 @app.post("/admin/weekly/test")
 def admin_weekly_test(profile=Depends(admin.admin_profile)):
     """This week's summary, built and sent to the admins now. Monday's automatic one still goes out."""
@@ -2711,6 +3042,29 @@ def set_newsletters(req: NewsletterReq, profile=Depends(current_profile)):
         need(profile, "newsletter_stocks", "The My Stocks newsletter")
     newsletter_prefs.set(profile["id"], **req.model_dump(exclude_none=True))
     return newsletters_view(profile)
+
+
+@app.get("/me/emails")
+def my_emails(profile=Depends(current_profile)):
+    """Whether tips and reminders emails are on. Receipts always go."""
+    return {"tips": lifecycle.tips_on(profile["id"]), "email": lifecycle.address(profile)}
+
+
+@app.put("/me/emails")
+def set_my_emails(req: EmailPrefsReq, profile=Depends(current_profile)):
+    return {**lifecycle.set_tips(profile["id"], req.tips), "email": lifecycle.address(profile)}
+
+
+@app.get("/me/first-steps")
+def my_first_steps(profile=Depends(current_profile)):
+    """The checklist on Home for a new account, each step ticked from the user's own data."""
+    return first_steps.view(profile)
+
+
+@app.put("/me/first-steps")
+def set_first_steps(req: FirstStepsReq, profile=Depends(current_profile)):
+    first_steps.dismiss(profile["id"], req.dismissed)
+    return first_steps.view(profile)
 
 
 @app.post("/admin/news/build")

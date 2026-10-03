@@ -254,17 +254,19 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <div className="toolbar" role="toolbar" aria-label="What next">
         <span className="small muted" style={{ alignSelf: "center" }}>Next:</span>
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "edit_rules" } })}><Pencil size={17} />Change the rules</button>
-        <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/market`)}><Globe size={17} />Try another market</button>
-        {!nb.group && <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/market#group`)}><Layers size={17} />Test on a group</button>}
         <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "paper_trade" } })}><Pulse size={17} />Paper trade it</button>
-        {(e.instrument.market ?? nb.instrument?.market) === "IN" && !nb.group && (
-          <button className="btn quiet sm" title="Use these rules as the signal for an option structure" onClick={() => nav(`/options?enter=rules&nb=${nb.id}`)}><Layers size={17} />Trade it with options</button>
-        )}
-        <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "note" } })}><Book size={17} />Write a lab note</button>
         {nb.experiments.some((x) => x.v < e.v) && (
           <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/compare?a=${Math.max(...nb.experiments.filter((x) => x.v < e.v).map((x) => x.v))}&b=${e.v}`)}>Compare with the previous run</button>
         )}
-        <button className="btn danger sm" style={{ marginLeft: "auto" }} onClick={remove}><Trash size={17} />Delete this experiment</button>
+        {/* the less common next steps wait behind More, so the verdict isn't buried under a row of buttons */}
+        <MoreMenu items={[
+          { label: "Try another market", icon: <Globe size={17} />, run: () => nav(`/n/${nb.id}/market`) },
+          ...(!nb.group ? [{ label: "Test on a group", icon: <Layers size={17} />, run: () => nav(`/n/${nb.id}/market#group`) }] : []),
+          ...((e.instrument.market ?? nb.instrument?.market) === "IN" && !nb.group
+            ? [{ label: "Trade it with options", icon: <Layers size={17} />, run: () => nav(`/options?enter=rules&nb=${nb.id}`) }] : []),
+          { label: "Write a lab note", icon: <Book size={17} />, run: () => nav(`/n/${nb.id}`, { state: { action: "note" } }) },
+          { label: "Delete this experiment", icon: <Trash size={17} />, run: remove, danger: true },
+        ]} />
       </div>
       {(st.skipped_size ?? 0) > 0 && (
         <div className="banner">
@@ -308,8 +310,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
             ]} />
           <Legend items={[{ label: "Strategy", color: "var(--ink)" }, { label: "Buy and hold", color: "var(--dash)", dash: true }]} />
         </div>
-        <div className="card stack" style={{ flex: "0 1 400px", gap: 12 }}>
-          <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>What you'd keep<Info>{HELP.keep}</Info></h2><span className="small muted">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span></div>
+        <div className="card stack" style={{ flex: "1 1 300px", gap: 12 }}>
+          <div className="spread" style={{ flexWrap: "wrap", gap: "4px 12px" }}><h2 className="h2 row" style={{ gap: 0, whiteSpace: "nowrap" }}>What you'd keep<Info>{HELP.keep}</Info></h2><span className="small muted">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span></div>
           <div className="costs-table">
             <div><span>Profit before costs</span><span>{money(e.costs.gross_pnl, cur)}</span></div>
             {e.costs.items.map((i) => <div key={i.label} className="sub"><span>{i.label}</span><span>−{money(i.amount, cur)}</span></div>)}

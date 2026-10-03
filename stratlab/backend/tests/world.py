@@ -96,6 +96,14 @@ def board_meetings(today=None) -> list[dict]:
             {"bm_symbol": "INFY", "sm_name": "Infosys Limited", "bm_date": f(3), "bm_purpose": "Dividend", "bm_desc": "Interim dividend"}]
 
 
+# real ISINs for the fake exchange's list, so broker files that carry only an ISIN and a name can be matched
+ISINS = [("TCS", "Tata Consultancy Services Limited", "INE467B01029"), ("INFY", "Infosys Limited", "INE009A01021"),
+         ("HDFCBANK", "HDFC Bank Limited", "INE040A01034"), ("ITC", "ITC Limited", "INE154A01025"),
+         ("SBIN", "State Bank of India", "INE062A01020"), ("TATASTEEL", "Tata Steel Limited", "INE081A01020"),
+         ("ICICIBANK", "ICICI Bank Limited", "INE090A01021"), ("BHARTIARTL", "Bharti Airtel Limited", "INE397D01024"),
+         ("LT", "Larsen & Toubro Limited", "INE018A01030"), ("ASIANPAINT", "Asian Paints Limited", "INE021A01026")]
+
+
 def _nse(sw=None):
     rows = [{"symbol": "RELIANCE", "desc": "Investor Presentation", "attchmntText": "Investor presentation for Q1 FY27",
              "sort_date": "2026-08-01 18:10:05", "seq_id": "1", "attchmntFile": "https://nsearchives.nseindia.com/p.pdf"},
@@ -117,10 +125,11 @@ def _nse(sw=None):
             names = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC"] if idx == "NIFTY 500" else []
             return httpx.Response(200, json={"data": [{"symbol": idx, "priority": 1}] + [{"symbol": n} for n in names]})
         if r.url.path == "/content/equities/EQUITY_L.csv":
-            lines = ["SYMBOL,NAME OF COMPANY, SERIES, DATE OF LISTING, PAID UP VALUE"]
-            lines += [f"CO{i},Company {i} Limited,EQ,01-Jan-2010,10" for i in range(120)]
-            lines += ["RELIANCE,Reliance Industries Limited,EQ,29-Nov-1995,10", "NEWCO,New Company Limited,EQ,"
-                      + datetime.now().strftime("%d-%b-%Y") + ",10", "SOMEBOND,Some Bond,N1,01-Jan-2020,1000"]
+            lines = ["SYMBOL,NAME OF COMPANY, SERIES, DATE OF LISTING, PAID UP VALUE, ISIN NUMBER"]
+            lines += [f"CO{i},Company {i} Limited,EQ,01-Jan-2010,10,INE{i:05d}A01{i % 10}" for i in range(120)]
+            lines += ["RELIANCE,Reliance Industries Limited,EQ,29-Nov-1995,10,INE002A01018", "NEWCO,New Company Limited,EQ,"
+                      + datetime.now().strftime("%d-%b-%Y") + ",10,INE999N01011", "SOMEBOND,Some Bond,N1,01-Jan-2020,1000,INE888B07019"]
+            lines += [f"{s},{n},EQ,01-Jan-2000,1,{isin}" for s, n, isin in ISINS]
             return httpx.Response(200, text="\n".join(lines))
         if r.url.path == "/api/holiday-master":
             return httpx.Response(200, json={"CM": [{"tradingDate": "26-Jan-2027", "weekDay": "Tuesday", "description": "Republic Day"},
@@ -156,6 +165,7 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     stock_pages._companies.clear()              # public company pages: the list and built pages another test made
     main.stock_page_store.mem.clear()
     main.stock_page_store.recent.clear()
+    main._isin.update(day=None, map={}, tried=0.0)   # the ISIN list another test loaded
     from app import scan as _scan
     _scan._cache.clear()                        # daily bars another test cached under the same instrument id
     main.trading_calendar._holiday_cache.clear()

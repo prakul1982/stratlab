@@ -1,17 +1,24 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 // Signed in as the site owner (the fake database's admin-token), with the tour already seen.
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
   refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
 
-async function open(page: Page, path: string, ready: string) {
+/** Signed in as another of the fake database's users instead (free-token, basic-token, ...). */
+function sessionAs(token: string, id: string, email: string) {
+  return { ...session, access_token: token, user: { ...session.user, id, email } };
+}
+
+async function open(page: Page, path: string, ready: string, who: typeof session = session) {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.route("**/*", (r) => {
     const host = new URL(r.request().url()).hostname;
-    return host === "127.0.0.1" || host === "localhost" ? r.continue() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
+    // fallback: a test's own route for a backend call (registered before this) still gets its turn
+    return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
-  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, session);
+  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
   // a first visit asks what the person came for; answer it like a new user would
   const ask = page.getByText("What brings you to StratLab?");
@@ -66,7 +73,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -118,7 +125,7 @@ for (const [path, name, symbol] of [["/stocks/in/RELIANCE", "Reliance Industries
   test(`public company page ${path}`, async ({ page }, info) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.goto("http://127.0.0.1:8765" + path);
+    await page.goto(API + path);
     await expect(page.locator("h1")).toContainText(name);
     await expect(page.getByRole("link", { name: `Test a strategy on ${symbol}` })).toBeVisible();
     await expect(page.getByRole("link", { name: "Open the full deep dive" })).toBeVisible();
@@ -160,5 +167,198 @@ test("invoices: in Account for the customer, with the GST setup in Admin", async
   await sane(page, errors);
   errors = await open(page, "/admin?tab=billing", "LUT ARN");
   await expect(page.getByText(/Financial year \d{4}-\d{2}/)).toBeVisible();
+  await sane(page, errors);
+});
+
+const API = process.env.E2E_API ?? "http://127.0.0.1:8765";     // the fake backend (tests/visual_server.py)
+
+test("first steps on Home tick themselves from real data, and hide for good", async ({ page, request }, info) => {
+  // each project signs in as its own brand-new user, so hiding the list on one doesn't hide it on the other
+  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["free-token", "u-free", "free@example.com"];
+  const auth = { Authorization: `Bearer ${token}` };
+  await request.put(`${API}/me/prefs`, { headers: auth, data: { level: "some", focus: "both" } });     // skip the welcome questions
+  expect((await request.put(`${API}/me/first-steps`, { headers: auth, data: { dismissed: false } })).ok()).toBeTruthy();
+  expect((await request.put(`${API}/research/watchlist`, { headers: auth, data: { items: [{ region: "IN", symbol: "TCS" }] } })).ok()).toBeTruthy();
+  const errors = await open(page, "/", "Your first steps", sessionAs(token, id, email));
+  const list = page.locator(".first-steps");
+  await expect(list.locator("li")).toHaveCount(5);
+  await expect(list.locator('[data-step="watchlist"]')).toHaveClass(/done/);
+  await expect(list.locator('[data-step="backtest"] a')).toHaveAttribute("href", "/new");
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  expect((await request.get(`${API}/research/deep/RELIANCE?region=IN`, { headers: auth })).ok()).toBeTruthy();
+  await page.reload();
+  await expect(list.locator('[data-step="deepdive"]')).toHaveClass(/done/, { timeout: 30_000 });
+  await expect(page.getByText(/\d of 5 done/)).toBeVisible();
+
+  await list.getByRole("button", { name: "Hide this" }).click();
+  await expect(page.getByText("Your first steps")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText("notebook", { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(600);
+  await expect(page.getByText("Your first steps")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("the launch offer counts down on Home and Plans", async ({ page }, info) => {
+  const until = new Date(Date.now() + (2 * 24 + 5) * 3600_000 + 10 * 60_000).toISOString();
+  await page.route(`${API}/me`, async (r) => {
+    const res = await r.fetch();
+    await r.fulfill({ response: res, json: { ...(await res.json()), promo: { until } } });
+  });
+  let errors = await open(page, "/", "Launch offer:");
+  await expect(page.locator(".promo-countdown")).toContainText("2 days 5 hours");
+  await expect(page.getByText("Launch offer:")).toHaveCount(1);              // the countdown replaces the site-wide note here
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+  errors = await open(page, "/plans", "Launch offer:");
+  await expect(page.locator(".promo-countdown")).toContainText("2 days 5 hours");
+  await sane(page, errors);
+});
+
+const HOLDINGS_FILES = new URL("../../backend/tests/fixtures/holdings/", import.meta.url).pathname;
+
+/** The first-visit questions stay open over the page until answered; these tests click on the page, so answer them. */
+async function settle(page: Page) {
+  const level = page.getByRole("dialog", { name: /How much .* have you done/ });
+  await level.waitFor({ timeout: 4000 }).then(() => level.getByRole("button", { name: /done a bit/ }).click()).catch(() => undefined);
+  await expect(level).toHaveCount(0);
+}
+
+test("my holdings: positions, sectors and facts per stock, then a broker file added", async ({ page, request }, info) => {
+  // start from the owner's Zerodha file again: the other project's run of this test added a Groww file to the shared account
+  const zerodha = "zerodha_console_holdings.xlsx";
+  expect((await request.post(`${API}/holdings/import`, { headers: { Authorization: "Bearer admin-token" },
+    data: { filename: zerodha, data: readFileSync(HOLDINGS_FILES + zerodha).toString("base64"), mode: "replace" } })).ok()).toBeTruthy();
+  const errors = await open(page, "/holdings", "By sector");
+  await settle(page);
+  const table = page.getByRole("table", { name: "Positions" });
+  await expect(table.getByText("RELIANCE", { exact: true })).toBeVisible();
+  await expect(table.getByText("TINYCO", { exact: true })).toBeVisible();            // listed only on BSE
+  await expect(page.getByText(/your Zerodha Console file/)).toBeVisible();
+  await expect(table.getByText(/red flag/).first()).toBeVisible({ timeout: 30_000 });  // the QIP filing, once the facts arrive
+  await expect(table.getByText(/Stage \d/).first()).toBeVisible();
+  await expect(page.getByText("Recent filings")).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
+  await page.getByRole("radio", { name: "Add to them" }).click();
+  await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "groww_holdings_statement.xlsx");
+  await expect(page.getByText("Read as a Groww file")).toBeVisible({ timeout: 30_000 });   // matching a first file reads the stock lists
+  const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
+  await expect(missed.getByText(/INE000X01000/)).toBeVisible();
+  await expect(table.getByText("INFY", { exact: true })).toBeVisible();
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+});
+
+test("my holdings: edit by hand and delete them all", async ({ page }, info) => {
+  const errors = await open(page, "/holdings", "By sector");
+  await settle(page);
+  await page.getByRole("button", { name: "Edit RELIANCE" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit RELIANCE" });
+  await expect(dialog.getByRole("button", { name: "Save" })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await dialog.getByRole("button", { name: "Close" }).click();
+  // the delete is answered here, so the shared fake account keeps its holdings for the other tests
+  const empty = { rows: [], allocation: [], totals: { value: 0, invested: 0, pnl: null, pnl_pct: null, day: null, day_pct: null, count: 0, priced: 0 },
+    source: null, updated_at: null, prices: true, limit: 300, facts_max: 40 };
+  await page.route("**/holdings", (r) => r.fulfill({ status: 200, contentType: "application/json",
+    body: JSON.stringify(r.request().method() === "DELETE" ? { deleted: true } : empty) }));
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Delete my holdings" }).click();
+  await expect(page.getByText("No holdings yet")).toBeVisible();
+  await expect(page.getByText("Your holdings are deleted.")).toBeVisible();
+  await sane(page, errors);
+});
+
+/** The experience question that follows the first one covers the page; answer it before clicking anything. */
+async function answerLevel(page: Page) {
+  const ask = page.getByText(/How much (trading|investing) have you done\?/);
+  await ask.waitFor({ timeout: 3000 }).then(() => page.getByRole("button", { name: /done a bit/ }).click()).catch(() => undefined);
+  await expect(ask).toHaveCount(0);
+}
+
+test("alerts: set one on a company page, then edit and delete it on the Alerts page", async ({ page }, info) => {
+  const tag = `e2e ${info.project.name} ${Date.now()}`;             // both projects share the fake database
+  let errors = await open(page, "/research/IN/RELIANCE", "Reliance");
+  await answerLevel(page);
+  await page.getByRole("button", { name: "Set alert" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Alert on RELIANCE" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Price level (₹)").fill("1");
+  await dialog.getByLabel("Note for yourself (optional)").fill(tag);
+  if (info.project.name === "phone") await touchable(page);
+  await dialog.getByRole("button", { name: "Set alert" }).click();
+  await expect(page.getByText(/already above ₹1/).first()).toBeVisible();   // the price is far above: it waits for a cross
+  await sane(page, errors);
+
+  errors = await open(page, "/alerts", "Your stock alerts");
+  await answerLevel(page);
+  const row = page.locator(".alert-row", { hasText: tag });
+  await expect(row).toContainText("Price crosses above ₹1");
+  if (info.project.name === "phone") await touchable(page);
+  await row.getByRole("button", { name: /Edit/ }).click();
+  const edit = page.getByRole("dialog", { name: "Edit alert on RELIANCE" });
+  await edit.getByLabel("Alert me when").selectOption("ma_below");
+  await edit.getByLabel("Moving average", { exact: true }).selectOption("200");
+  await edit.getByRole("button", { name: "Save alert" }).click();
+  await expect(row).toContainText("Price crosses below its 200-day average");
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("alerts: a new one from the Alerts page, for any stock", async ({ page }, info) => {
+  const tag = `e2e-new ${info.project.name} ${Date.now()}`;
+  const errors = await open(page, "/alerts", "Your stock alerts");
+  await answerLevel(page);
+  await page.getByRole("button", { name: "New alert" }).click();
+  await page.getByLabel("Stock").fill("TCS");
+  await page.getByLabel("Alert me when").selectOption("move_either");
+  await page.getByLabel("Move in a day (%)").fill("4");
+  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  await page.getByLabel(/Repeat/).check();
+  if (info.project.name === "phone") await touchable(page);
+  await page.getByRole("button", { name: "Set alert" }).click();
+  const row = page.locator(".alert-row", { hasText: tag });
+  await expect(row).toContainText("Moves 4% or more either way in a day");
+  await expect(row).toContainText("Repeats");
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, info) => {
+  const tag = `e2e-watch ${info.project.name} ${Date.now()}`;
+  const errors = await open(page, "/research/watchlist?region=IN", "Companies you're watching");
+  await answerLevel(page);
+  // a watchlist of one, without changing the shared one other tests read
+  await page.route("**/research/watchlist", (r) => r.request().method() === "GET"
+    ? r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [{ region: "IN", symbol: "RELIANCE", name: "Reliance Industries" }] }) })
+    : r.fallback());
+  await page.reload();
+  await page.getByRole("button", { name: "Set alert" }).click();
+  const dialog = page.getByRole("dialog", { name: "Set an alert" });
+  await expect(dialog.getByLabel("Stock")).toHaveValue("IN:RELIANCE");
+  await dialog.getByLabel("Alert me when", { exact: true }).selectOption("high52");
+  await dialog.getByLabel("Note for yourself (optional)").fill(tag);
+  if (info.project.name === "phone") await touchable(page);
+  await dialog.getByRole("button", { name: "Set alert" }).click();
+  await expect(page.getByText("Alert set on RELIANCE.")).toBeVisible();
+  await sane(page, errors);
+  await open(page, "/alerts", "Your stock alerts");
+  const row = page.locator(".alert-row", { hasText: tag });
+  await expect(row).toContainText("Makes a new 52-week high");
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
+});
+
+test("the tools grid shows one group until asked, and the menu reaches Account without scrolling", async ({ page }, info) => {
+  const errors = await open(page, "/new", "What trading idea do you want to test?");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 4000 }).catch(() => undefined);   // the experience question
+  await expect(page.getByRole("button", { name: "Paper trade options" })).toHaveCount(0);
+  await page.getByRole("button", { name: /Show \d+ more tools/ }).click();
+  await expect(page.getByRole("button", { name: "Paper trade options" })).toBeVisible();
+  if (info.project.name === "desktop") await expect(page.getByRole("link", { name: /^Account/ })).toBeInViewport();
   await sane(page, errors);
 });

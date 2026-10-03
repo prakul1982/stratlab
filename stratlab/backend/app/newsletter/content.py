@@ -7,7 +7,7 @@ import json
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from .. import daily_report, db, rotation, scan, universes
+from .. import daily_report, db, holdings, rotation, scan, universes
 from ..data.calendar import is_trading_day
 from ..intel.company import INDICES
 from ..intel.net import TTLCache
@@ -136,7 +136,7 @@ def _instrument(out: list, seen: set, inst):
 
 
 def my_stocks(uid: str) -> list[tuple[str, str]]:
-    """(region, symbol) for the user's watchlist, notebook instruments and running paper sessions, up to 25."""
+    """(region, symbol) for the user's watchlist, holdings, notebook instruments and running paper sessions, up to 25."""
     out, seen = [], set()
     try:
         items = json.loads(db.get_setting(f"watchlist:{uid}") or "{}").get("items") or []
@@ -145,6 +145,8 @@ def my_stocks(uid: str) -> list[tuple[str, str]]:
     for i in items:
         if isinstance(i, dict):
             _add(out, seen, i.get("region"), i.get("symbol"))
+    for sym in _safe(lambda: holdings.symbols(uid), []) or []:     # holdings count like watchlist names (Indian stocks)
+        _add(out, seen, "IN", sym)
     for nb in _safe(lambda: db.list_notebook_rows(uid), []) or []:
         _instrument(out, seen, nb.get("instrument"))
     for s in _safe(lambda: _main().manager.user_running(uid), []) or []:

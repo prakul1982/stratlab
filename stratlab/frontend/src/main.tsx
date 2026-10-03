@@ -57,12 +57,15 @@ const deep = () => import("./pages/DeepDive");
 const DeepDivePage = page(deep, "DeepDivePage");
 const investor = () => import("./pages/InvestorHome");
 const InvestorHomePage = page(investor, "InvestorHomePage");
+const holdingsPage = () => import("./pages/HoldingsPage");
+const HoldingsPage = page(holdingsPage, "HoldingsPage");
 const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
 const FilingsPage = page(research, "FilingsPage");
 const ResultsPage = page(research, "ResultsPage");
 const CompanyPage = page(research, "CompanyPage");
+const AlertsPage = page(() => import("./pages/AlertsPage"), "AlertsPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -77,6 +80,7 @@ function warmFirstPage(path: string) {
     : /^\/research\/(IN|US)\/[^/]+\/deep$/.test(path) ? deep
     : path === "/research/investor" ? investor
     : path === "/news" ? news
+    : path === "/holdings" ? holdingsPage
     : path.startsWith("/research") ? research
     : null;
   load?.().catch(() => undefined);    // only a head start: the page itself reports a failed download
@@ -137,7 +141,7 @@ function Routed() {
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
-      {me?.promo && <PromoBanner until={me.promo.until} />}
+      {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && <PromoBanner until={me.promo.until} />}{/* those two show a countdown */}
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<Home />} />
@@ -157,6 +161,8 @@ function Routed() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/news" element={<NewsPage />} />
+        <Route path="/holdings" element={<HoldingsPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />
         <Route path="/research/pulse" element={<PulsePage />} />

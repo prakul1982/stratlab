@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import razorpay
 from razorpay.errors import BadRequestError, SignatureVerificationError
 
-from . import db, invoices, pricing
+from . import db, invoices, lifecycle, pricing
 from .config import settings
 
 _client = None
@@ -187,10 +187,13 @@ def invoice_for(profile: dict, sub: dict, payment: dict | None):
         return None
     try:
         notes = sub.get("notes") or {}
-        return invoices.make(payment, profile, plan_for(sub) or "pro", notes.get("period") or "month")
+        plan, period = plan_for(sub) or "pro", notes.get("period") or "month"
+        inv = invoices.make(payment, profile, plan, period)
     except Exception as e:
         print("invoice failed:", e)
         return None
+    lifecycle.later(lifecycle.receipt, profile, inv, plan, period)      # once per payment, however often this runs
+    return inv
 
 
 def _sig(signature: str) -> str:
@@ -249,6 +252,8 @@ def _act(event: dict):
         if profile.get("razorpay_subscription_id") == sub["id"]:
             db.update_profile(profile["id"], plan="free", plan_status=sub.get("status", "cancelled"),
                               cancel_at_period_end=False)
+            if profile.get("plan") in ("basic", "pro"):
+                lifecycle.later(lifecycle.plan_ended, profile, sub["id"], profile.get("plan"))
 
 
 def cancel(profile: dict):

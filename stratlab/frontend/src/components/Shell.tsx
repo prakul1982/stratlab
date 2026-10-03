@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
+import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
 
@@ -12,6 +12,9 @@ const Tour = lazy(() => import("./Tour").then((m) => ({ default: m.Tour })));
 
 export const TOUR_SEEN = "stratlab.tour.v1";
 const tourSeen = () => { try { return localStorage.getItem(TOUR_SEEN) === "1"; } catch { return true; } };
+
+/** The menu lists this many notebooks (pinned first, then the latest); the rest are one tap away on the notebooks page. */
+const SIDE_NOTEBOOKS = 6;
 
 const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US", UK: "UK", EU: "Europe", JP: "Japan", FX: "Forex", MCX: "MCX", CDS: "Currency F&O", CMDTY: "Cmdty" };
 
@@ -41,6 +44,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
   const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  // pinned first, then the latest; the one you have open always stays in the list
+  const openId = loc.pathname.match(/^\/n\/([^/]+)/)?.[1];
+  const sideNotebooks = notebooks && [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
+    .filter((n, i) => i < SIDE_NOTEBOOKS || n.id === openId);
   const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
 
   const onResearch = (p: string, exact = false) => () => (exact ? loc.pathname === p : loc.pathname.startsWith(p)) ? "active" : "";
@@ -49,12 +56,14 @@ export function Shell({ children }: { children: ReactNode }) {
     <nav className="side-nav stack side-group" style={{ gap: 2 }} aria-label="Investing">
       <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Investing</div>
       <NavLink to="/research" className={() => (/^\/research(\/(IN|US)\/.*)?$/.test(loc.pathname) ? "active" : "")}><Lens />Companies</NavLink>
-      <NavLink to="/research/investor" className={onResearch("/research/investor")}><Compass />Investor home</NavLink>
+      <NavLink to="/holdings"><Book />My Holdings</NavLink>
+      <NavLink to="/research/investor" className={onResearch("/research/investor")} title="Investor home: every watchlist company on one page"><Compass />Watchlist at a glance</NavLink>
       <NavLink to="/news"><News />News</NavLink>
-      <NavLink to="/research/scan" className={onResearch("/research/scan")}><Search />Stage 2 scan</NavLink>
+      <NavLink to="/research/scan" className={onResearch("/research/scan")}><Search />Stage 2 trend scan</NavLink>
       <NavLink to="/research/rotation" className={onResearch("/research/rotation")}><Pulse />Sector rotation</NavLink>
       <NavLink to="/research/filings" className={onResearch("/research/filings")}><Shield />Red flags</NavLink>
       <NavLink to="/research/watchlist" className={onResearch("/research/watchlist")}><Pin />Watchlist</NavLink>
+      <NavLink to="/alerts"><Bell />Alerts</NavLink>
     </nav>
   );
   const trading = (
@@ -71,7 +80,7 @@ export function Shell({ children }: { children: ReactNode }) {
         {!(focus === "invest" && notebooks?.length === 0) && <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Your notebooks</div>}
         {notebooks === null && <span className="small muted" style={{ padding: "0 12px" }}>Loading…</span>}
         {notebooks?.length === 0 && focus !== "invest" && <span className="small muted" style={{ padding: "0 12px" }}>Each idea you test becomes a notebook here.</span>}
-        {notebooks?.map((n) => {
+        {sideNotebooks?.map((n) => {
           const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : null;
           const count = n.summary?.experiments ?? 0;
           return (
@@ -85,6 +94,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </NavLink>
           );
         })}
+        {notebooks && notebooks.length > SIDE_NOTEBOOKS && <Link to="/notebooks" className="nb-more">All {notebooks.length} notebooks →</Link>}
       </nav>
     </div>
   );

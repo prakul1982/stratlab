@@ -1,5 +1,6 @@
 """Realistic requests for every route, the way the app's own pages send them, used as the starting point for the
 stress tests (each is then broken in many ways). `{nid}`-style placeholders are filled from the seeded world."""
+import base64
 
 
 def cond(lt, op, rt, lp=None, rp=None, **kw):
@@ -38,6 +39,9 @@ OPT_SIGNAL = {**OPT, "name": "Signal straddle", "signal": {"rules": {**STRATEGIE
 GROUP = {"id": "custom", "name": "Mine", "market": "IN", "members": [{"symbol": "RELIANCE"}, {"symbol": "TCS"}, {"symbol": "INFY"}]}
 BARS = [{"t": f"2024-{1 + i // 28:02d}-{1 + i % 28:02d}", "o": 100 + i % 9, "h": 104 + i % 9, "l": 97 + i % 9, "c": 101 + i % 7, "v": 10}
         for i in range(320)]
+
+
+HOLDINGS_CSV = base64.b64encode(b"Symbol,ISIN,Quantity,Average price\nRELIANCE,INE002A01018,10,2500\nTCS,,4,3500\n").decode()
 
 
 def real_requests(ctx: dict) -> dict:
@@ -89,4 +93,7 @@ def real_requests(ctx: dict) -> dict:
         ("POST", "/research/deep/{symbol}/card"): [({}, None)],
         ("PUT", "/research/scan/alerts"): [({}, {"on": True})],
         ("PUT", "/research/filings/alerts"): [({}, {"on": True})],
+        ("POST", "/holdings/import"): [({}, {"filename": "holdings.csv", "data": HOLDINGS_CSV}),
+                                       ({}, {"filename": "holdings.csv", "data": HOLDINGS_CSV, "mode": "add"})],
+        ("PUT", "/holdings"): [({}, {"items": [{"symbol": "RELIANCE", "qty": 10, "avg": 2500}, {"symbol": "543210", "qty": 5}]})],
     }
