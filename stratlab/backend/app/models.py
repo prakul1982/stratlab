@@ -256,6 +256,12 @@ class PrefsReq(BaseModel):
     focus: Literal["invest", "trade", "both"] | None = None     # what the user came for: orders menus and suggestions
 
 
+class NewsletterReq(BaseModel):
+    market_in: Literal["daily", "weekly", "off"] | None = None
+    market_us: Literal["daily", "weekly", "off"] | None = None
+    my_stocks: Literal["daily", "weekly", "off"] | None = None
+
+
 class IdeasReq(BaseModel):
     q: str = Field(..., min_length=2, max_length=4000)
 
