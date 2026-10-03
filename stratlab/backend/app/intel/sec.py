@@ -331,6 +331,49 @@ class SEC(Source):
             self.cache.set(key, hit, 6 * 3600)
         return hit
 
+    def document(self, url: str, limit: int = 25 * 1024 * 1024) -> str:
+        """The text of one document in the SEC's archive (www.sec.gov only), cached for a week."""
+        from urllib.parse import urlparse
+        if urlparse(url).hostname != "www.sec.gov" or not urlparse(url).path.startswith("/Archives/"):
+            raise SourceError(self.name, "That isn't a document in the SEC's archive.")
+        hit = self.cache.get(("doc", url))
+        if hit is not None:
+            return hit
+        if not self.limit.take():
+            raise SourceError(self.name, f"{self.name} is busy (our rate limit). Try again in a minute.", busy=True)
+        try:
+            with self.http.stream("GET", url) as r:
+                self.check(r)
+                buf = bytearray()
+                for chunk in r.iter_bytes():
+                    buf += chunk
+                    if len(buf) > limit:
+                        raise SourceError(self.name, "The filing is too large to read here.")
+        except httpx.HTTPError as e:
+            raise SourceError(self.name, f"Couldn't reach {self.name} ({e.__class__.__name__}).", busy=True) from None
+        raw = bytes(buf).decode("utf-8", "replace")
+        text = html_text(raw) if "<" in raw[:2000] else raw
+        self.cache.set(("doc", url), text, 7 * 86400)
+        return text
+
+
+    def annual(self, d: dict) -> str:
+        """A 10-K cut down to what an investor reads first: the business, the risk factors and management's discussion."""
+        full = self.document(d["url"])
+        parts = [(k, section(full, *SECTIONS[k])) for k in ("business", "risks", "mdna")]
+        out = "\n\n".join(f"[{k.upper()}]\n{v}" for k, v in parts if len(v) > 500)
+        return out or full[:120000]
+
+
+    def release(self, d: dict) -> str:
+        """An earnings 8-K's press release: the exhibit 99 file in the filing's folder (the 8-K itself is a cover page)."""
+        idx = self._json(d["folder"] + "index.json")
+        names = [i.get("name", "") for i in ((idx.get("directory") or {}).get("item") or [])]
+        ex = [n for n in names if re.search(r"ex-?99", n, re.I) and n.lower().endswith((".htm", ".html", ".txt"))]
+        if not ex:
+            return self.document(d["url"])
+        return self.document(d["folder"] + sorted(ex)[0])
+
     def company(self, symbol: str) -> dict:
         """The company's numbers in the deep dive's shape (cached six hours), with its filing list under "filings"."""
         cik = self.cik(symbol)
@@ -378,3 +421,34 @@ def ratios(p: dict, price: float | None, high: float | None = None, low: float |
     if high and low:
         out["High / Low"] = f"{high} / {low}"
     return {k: v for k, v in out.items() if v is not None}
+
+
+# ---------- reading the filings themselves ----------
+def html_text(html: str) -> str:
+    """Plain text of an SEC HTML filing: inline XBRL tags, tables and styling flattened to readable lines."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    for t in soup(["script", "style", "ix:header"]):
+        t.decompose()
+    text = soup.get_text("\n")
+    text = re.sub(r"[ \t ]+", " ", text)
+    return re.sub(r"\n\s*\n+", "\n\n", text).strip()
+
+
+SECTIONS = {   # 10-K parts worth reading: (start heading, where the part ends)
+    "business": (r"item\s*1\.?\s*(?:—|-|:)?\s*business\b", r"\n\s*item\s*1a\.?\s"),
+    "risks": (r"item\s*1a\.?\s*(?:—|-|:)?\s*risk\s+factors", r"\n\s*item\s*(?:1b|1c|2)\.?\s"),
+    "mdna": (r"item\s*7\.?\s*(?:—|-|:)?\s*management.s\s+discussion", r"\n\s*item\s*(?:7a|8)\.?\s"),
+}
+
+
+def section(text: str, start: str, end: str, cap: int = 60000) -> str:
+    """One part of a 10-K. The table of contents names every part too, so of all the places the heading appears,
+    the one followed by the longest stretch before the next part is the part itself."""
+    best = ""
+    for m in re.finditer(start, text, re.I):
+        e = re.search(end, text[m.end():], re.I)
+        chunk = text[m.start(): m.end() + (e.start() if e else cap)]
+        if len(chunk) > len(best):
+            best = chunk
+    return best[:cap]

@@ -1097,7 +1097,7 @@ def deep_view(sym: str, base: dict) -> dict:
             "calls": sum(d["kind"] == "transcript" for d in base["docs"]),
             "card": card_view, "card_stale": not report_card.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym),
-            "ai": not us}
+            "ai": True, "report_card": not us}
 
 
 def company_hosts(p: dict) -> tuple[str, ...]:
@@ -1119,7 +1119,8 @@ def deep_symbol(symbol: str, region: str) -> str:
 
 def no_us_ai(region: str):
     if region == "US":
-        err(400, "us_ai_not_yet", "Reading US filings with AI isn't available yet; the numbers, checklist and filings are.")
+        err(400, "us_no_calls", "US companies don't file earnings-call transcripts with the SEC, so the management report card "
+                                "isn't available for them yet.")
 
 
 @app.get("/research/deep/{symbol}")
@@ -1134,27 +1135,34 @@ def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile))
 
 @app.post("/research/deep/{symbol}/read")
 def deep_dive_read(symbol: str, refresh: bool = False, region: str = "IN", profile=Depends(current_profile)):
-    """Read the latest investor presentation and call transcripts with AI: business model, capex and growth plans."""
+    """Read the company's own documents with AI: business model, capex and growth plans. India: the latest investor
+    presentation and call transcripts. US: the latest 10-K and earnings releases."""
     need(profile, "deepdive", "The company deep dive")
-    no_us_ai(deep_region(region))
-    sym = research_routes.symbol_of(symbol)
-    base = deep_base(sym)
-    have = deepdive.stored(sym)
+    region = deep_region(region)
+    sym = deep_symbol(symbol, region)
+    key = f"US:{sym}" if region == "US" else sym
+    base = deep_base(sym, region)
+    have = deepdive.stored(key)
     if deepdive.fresh(have) and not refresh:
         return ok(deep_view(sym, base))
     if not base["docs"] and not base["p"].get("about"):
-        err(404, "no_documents", "No investor presentation or call transcript was found for this company in the last two years.")
+        err(404, "no_documents", "No annual report or earnings release was found for this company in the last two years." if region == "US"
+            else "No investor presentation or call transcript was found for this company in the last two years.")
     deep_ai_allowed(profile)
     p = base["p"]
     try:
-        reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic),
-                              industry.measures(p, sym), company_hosts(p))
+        if region == "US":
+            reads = deepdive.read_us(sym, p.get("name") or sym, p.get("about") or "", base["docs"], sec_feed, (_gemini, _anthropic),
+                                     industry.measures(p, sym))
+        else:
+            reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic),
+                                  industry.measures(p, sym), company_hosts(p))
     except AIBusy as e:
         err(503, "ai_busy", str(e))
     except AIError as e:
         err(422, "ai_failed", str(e))
     reads["problems"] = [public_text(x) for x in reads["problems"]]
-    deepdive.store(sym, reads)
+    deepdive.store(key, reads)
     db.add_usage(profile["id"], "research_ai")
     return ok(deep_view(sym, base))
 

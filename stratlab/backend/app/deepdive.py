@@ -369,7 +369,8 @@ def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int, sta
         label = f"S{n}"
         labels[label] = {"title": d["title"], "at": d["at"], "url": d["url"], "kind": d["kind"]}
         texts[label] = text
-        cut = ranked_windows(text, words, limit=per_doc) if d["kind"] == "transcript" else windows(text, words, limit=per_doc)
+        cut = (ranked_windows(text, words, limit=per_doc) if d["kind"] in ("transcript", "annual_report")   # long: the richest parts
+               else windows(text, words, limit=per_doc))
         parts.append(f"[{label}] {d['kind']} filed {d['at'][:10]}: {d['title']}\n{cut}")
     return "\n\n".join(parts), labels, texts
 
@@ -443,3 +444,56 @@ def fresh(v: dict | None) -> bool:
 
 def safe_symbol(s: str) -> str:
     return re.sub(r"[^A-Z0-9&\-]", "", s.upper())[:20]
+
+
+# ---------- US companies: the 10-K and earnings releases filed with the SEC ----------
+BUSINESS_US = BUSINESS.replace("an Indian listed company", "a US listed company").replace(
+    "from its own investor presentation and filings", "from its annual report (10-K) filed with the SEC").replace("Q1 FY27", "Q2 2026")
+PLANS_US = PLANS.replace("an Indian listed company's management stated, from its investor\npresentation and earnings-call transcripts",
+                         "a US listed company's management stated, from its annual report (10-K) and\nearnings releases").replace(
+    "e.g. Rs 1,200 crore", "e.g. $1.2 billion").replace(
+    'put rupees in "amount" (always with "Rs" and "crore" or "lakh")', 'put dollars in "amount" (always with "$" and "million" or "billion")')
+PLAN_WORDS_US = [r"capital expenditures?", r"capex", r"capital investments?", r"expansion", r"new (?:facilit|plant|store)",
+                 r"capacity", r"guidance", r"outlook", r"we expect", r"expects?", r"anticipate", r"fiscal (?:year )?20\d\d",
+                 r"liquidity and capital resources", r"growth"]
+
+
+def read_us(symbol: str, name: str, about: str, docs_list: list[dict], sec_api, ai, kpis: dict | None = None) -> dict:
+    """Both reads for a US company: the business, risks and measures from the latest 10-K; plans and outlook from the
+    10-K's discussion and the latest earnings releases (US call transcripts aren't filed with the SEC)."""
+    out = {"business": None, "plans": None, "problems": [], "read": []}
+    pairs: list[tuple[dict, str]] = []
+    annual = next((d for d in docs_list if d["kind"] == "annual_report"), None)
+    for d, fn in ([(annual, sec_api.annual)] if annual else []) + \
+                 [(d, sec_api.release) for d in [x for x in docs_list if x["kind"] == "earnings_release"][:2]]:
+        try:
+            text = fn(d)
+        except Exception as e:
+            out["problems"].append(f"{d['title'][:60]}: {str(e)[:80]}")
+            continue
+        if len(text) >= MIN_CHARS:
+            pairs.append((d, text))
+    if not annual:
+        out["problems"].append("No annual report (10-K) filed in the last two years")
+    kpis = kpis or {}
+    want = kpis.get("measures") or []
+    head = (f"COMPANY: {name} ({symbol}, US)\nPROFILE: {about[:1200]}\n"
+            f"INDUSTRY MEASURES ({kpis.get('label') or 'this company'}): {'; '.join(want)}\n\nEXCERPTS:\n")
+    first = [p for p in pairs if p[0]["kind"] == "annual_report"]
+    words = BUSINESS_WORDS + [r"we (?:design|make|sell|provide|offer|operate)", r"risk"] + \
+        [re.escape(w.split(" (")[0]) for w in want if not w.startswith("The operating")]
+    text, labels, texts = _excerpts(first, words, 16000)
+    if text or about:
+        raw = complete(BUSINESS_US, head + (text or "(no annual report available)"), gemini=ai[0], anthropic=ai[1], max_tokens=2000, kind="long")
+        parsed = _parse(raw, ("segments", "measures"))
+        out["business"] = clean_business(parsed)
+        out["business"]["measures"] = clean_measures(parsed, labels, texts)
+        out["business"]["industry"] = kpis.get("label")
+        out["business"]["sources"] = list(labels.values())
+    text, labels, texts = _excerpts(pairs, PLAN_WORDS_US, 12000)
+    if text:
+        raw = complete(PLANS_US, head + text, gemini=ai[0], anthropic=ai[1], max_tokens=2500, kind="long")
+        out["plans"] = clean_plans(_parse(raw, ("capex", "outlook")), labels, texts)
+        out["plans"]["sources"] = list(labels.values())
+    out["read"] = [{"kind": d["kind"], "at": d["at"], "title": d["title"]} for d, _ in pairs]
+    return out
