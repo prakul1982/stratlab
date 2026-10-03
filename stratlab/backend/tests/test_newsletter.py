@@ -51,10 +51,12 @@ def market(region="IN", weekly=False, day=THU):
                           {"headline": "Brokerage says buy this stock now", "url": "https://example.com/b"}]}
 
 
-def reader(uid, email, plan="pro", **choices):
+def reader(uid, email, plan="pro", confirmed=True, **choices):
     db.get_profile(uid, email)
     db.update_profile(uid, plan=plan, plan_status="active", alert_email=email)
     newsletter_prefs.set(uid, **choices)
+    if confirmed:                                   # they clicked the link in the confirmation email
+        db.set_setting(alerts.CONFIRMED + uid, email)
 
 
 # ---------- facts ----------
@@ -148,7 +150,7 @@ def test_market_brief_goes_once_a_day_and_never_again_after_a_restart(w, monkeyp
     assert j.tick(AFTER_IN_CLOSE) == 1
     assert [(to, subj.split(",")[0]) for to, subj, *_ in outbox] == [("pro@example.com", "Market Brief India")]
     to, subj, text, html = outbox[0]
-    assert "{unsubscribe_url}" not in text + html and "/account" in text
+    assert "{unsubscribe_url}" not in text + html and "/unsubscribe?t=" in text and "/unsubscribe?t=" in html
     assert j.tick(AFTER_IN_CLOSE) == 0 and job.Job().tick(AFTER_IN_CLOSE) == 0     # same day, and after a restart
     assert len(outbox) == 1
     stored = job.load("market.IN.2026-10-01")
@@ -242,7 +244,7 @@ def test_market_issues_list_and_read(w, monkeypatch):
 def test_newsletter_choices(w):
     c = w["client"]
     me = c.get("/me/newsletters", headers=headers("pro-token")).json()
-    assert me == {"market_in": "off", "market_us": "off", "my_stocks": "off", "email": "pro@example.com", "confirmed": True,
+    assert me == {"market_in": "off", "market_us": "off", "my_stocks": "off", "email": "pro@example.com", "confirmed": False,
                   "allowed": {"market_daily": True, "my_stocks": True}}
     out = c.put("/me/newsletters", json={"market_in": "daily", "my_stocks": "weekly"}, headers=headers("pro-token")).json()
     assert (out["market_in"], out["market_us"], out["my_stocks"]) == ("daily", "off", "weekly")

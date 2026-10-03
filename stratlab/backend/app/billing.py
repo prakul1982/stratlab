@@ -193,7 +193,15 @@ def invoice_for(profile: dict, sub: dict, payment: dict | None):
         return None
 
 
+def _sig(signature: str) -> str:
+    """A signature is hex: anything else (non-ASCII crashes the comparison) is simply a mismatch."""
+    if not signature or not signature.isascii():
+        raise SignatureVerificationError("Malformed signature.")
+    return signature
+
+
 def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str):
+    signature = _sig(signature)
     client().utility.verify_subscription_payment_signature({
         "razorpay_subscription_id": sub_id, "razorpay_payment_id": payment_id, "razorpay_signature": signature,
     })
@@ -211,7 +219,7 @@ def handle_webhook(body: bytes, signature: str):
     if not settings.RAZORPAY_WEBHOOK_SECRET or not signature:
         # an empty secret would let anyone forge a valid signature
         raise SignatureVerificationError("Webhook secret is not configured.")
-    client().utility.verify_webhook_signature(body.decode(), signature, settings.RAZORPAY_WEBHOOK_SECRET)
+    client().utility.verify_webhook_signature(body.decode(errors="replace"), _sig(signature), settings.RAZORPAY_WEBHOOK_SECRET)
     event = json.loads(body)
     name = event.get("event", "")
     sub = (event.get("payload", {}).get("subscription") or {}).get("entity")
