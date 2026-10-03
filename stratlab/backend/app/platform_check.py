@@ -5,8 +5,10 @@ company pages, news, the database and the holiday calendar. No AI is used."""
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from .data import calendar
+from .data.markets import BY_ID
 
 TIMEOUT = 45          # seconds a single check may take before it counts as failed
 
@@ -25,8 +27,15 @@ def last_session(market: str, today: date) -> date:
     return d
 
 
-def check_market(registry, market: str, today: date) -> dict:
-    """Daily prices for the market's first ready-made instrument: present, sane, and no older than the last session."""
+def market_today(market: str) -> date:
+    """Today where the market trades: in India after midnight, New York's session may still be running."""
+    return datetime.now(ZoneInfo((BY_ID.get(market) or {}).get("tz") or "UTC")).date()
+
+
+def check_market(registry, market: str, today: date | None = None) -> dict:
+    """Daily prices for the market's first ready-made instrument: present, sane, and no older than the last session
+    (by the market's own date unless `today` is given)."""
+    today = today or market_today(market)
     prov = registry.provider(market)
     if prov is None:
         return _result(f"Prices: {market}", "Prices", "fail", "Market not connected.")

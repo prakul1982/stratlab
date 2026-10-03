@@ -4,21 +4,25 @@ numbers) with a public link that previews as that image on WhatsApp, X and Linke
 
 The facts are the public company page's own (never AI), so a card says nothing that page doesn't. The browser
 draws the image, the way verdict share cards are made; the server keeps it with the card under a random token. Each
-user has one link per company: sharing again refreshes it. The link carries the sharer's invite code, so someone who
-signs up from it counts as invited."""
+user has one link per company: sharing again refreshes it, and a user keeps links to their MAX_PER_USER most recently
+shared companies (sharing one more takes down the oldest), so the stored images can't grow without end. The link
+carries the sharer's invite code, so someone who signs up from it counts as invited."""
 import base64
 import binascii
 import json
 import re
 import secrets
+import threading
 from html import escape as e
 
 from . import db, referrals, stock_pages
 from .config import settings
 from .public import decode_image
 
-TOKEN = re.compile(r"^[A-Za-z0-9_-]{6,24}$")
+TOKEN = re.compile(r"^[A-Za-z0-9_-]{6,24}\Z")
 FACTS = 4
+MAX_PER_USER = 50
+_lock = threading.Lock()
 
 
 def _region(market: str | None) -> str | None:
@@ -59,15 +63,35 @@ def find(market: str, symbol: str) -> tuple[str, str, dict] | None:
 def publish(uid: str, c: dict, image: str | None, ref: str | None) -> str:
     """Store the card (and its image) under this user's link for the company; returns the link's token."""
     mine = f"cardtok:{uid}:{c['region']}:{c['symbol']}"
-    token = db.get_setting(mine)
-    if not token or not TOKEN.match(token):
-        token = secrets.token_urlsafe(8)
-        db.set_setting(mine, token)
-    db.set_setting(f"card:{token}", json.dumps({**c, "ref": ref}))
-    img = decode_image(image)
-    if img:
-        db.set_setting(f"cardimg:{token}", img)
+    with _lock:
+        token = db.get_setting(mine)
+        if not token or not TOKEN.match(token):
+            token = secrets.token_urlsafe(8)
+            db.set_setting(mine, token)
+        db.set_setting(f"card:{token}", json.dumps({**c, "ref": ref}))
+        img = decode_image(image)
+        if img:
+            db.set_setting(f"cardimg:{token}", img)
+        _keep(uid, mine, token)
     return token
+
+
+def _keep(uid: str, mine: str, token: str) -> None:
+    """Note the card as the user's newest, and take down their oldest ones beyond MAX_PER_USER."""
+    key = f"cards:user:{uid}"
+    try:
+        rows = json.loads(db.get_setting(key) or "[]")
+    except (ValueError, TypeError):
+        rows = []
+    rows = [r for r in rows if isinstance(r, dict) and r.get("t") != token] if isinstance(rows, list) else []
+    rows.append({"t": token, "k": mine})
+    for old in rows[:-MAX_PER_USER]:
+        if TOKEN.match(str(old.get("t") or "")):
+            db.delete_setting(f"card:{old['t']}")
+            db.delete_setting(f"cardimg:{old['t']}")
+        if str(old.get("k") or "").startswith(f"cardtok:{uid}:"):
+            db.delete_setting(old["k"])
+    db.set_setting(key, json.dumps(rows[-MAX_PER_USER:]))
 
 
 def load(token: str) -> dict | None:

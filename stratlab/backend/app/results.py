@@ -45,14 +45,6 @@ NOTICE = re.compile(r"intimation|to consider|will be held|is scheduled|scheduled
 WHEN = {"bmo": "before the open", "amc": "after the close", "dmh": "during market hours"}
 
 
-def _json(raw, default):
-    try:
-        v = json.loads(raw or "null")
-    except (ValueError, TypeError):
-        return default
-    return v if isinstance(v, type(default)) else default
-
-
 def local_today(region: str) -> date:
     return datetime.now(ZoneInfo(TZ[region])).date()
 
@@ -160,7 +152,7 @@ def reported(r: dict) -> list[dict]:
 
 # ---------- storage ----------
 def load(region: str) -> dict:
-    cal = _json(db.get_setting(KEY + region), {})
+    cal = db.json_value(db.get_setting(KEY + region), {})
     return {"at": cal.get("at"), "rows": [r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
 
 
@@ -210,7 +202,7 @@ def users() -> set[str]:
     """Everyone with something to track: a watchlist, a newsletter choice or a running paper session."""
     from . import newsletter_prefs
     uids = {k.split(":", 1)[1] for k, _ in db.all_settings_with_prefix("watchlist:") if ":" in k}
-    uids |= {_json(raw, {}).get("uid") for _, raw in db.all_settings_with_prefix(newsletter_prefs.KEY)}
+    uids |= {db.json_value(raw, {}).get("uid") for _, raw in db.all_settings_with_prefix(newsletter_prefs.KEY)}
     try:
         uids |= {r.get("user_id") for r in db.running_sessions()}
     except Exception:
@@ -335,7 +327,8 @@ def us_out(fh, sec, r: dict) -> dict | None:
     if sec is not None:
         try:
             subs = sec.submissions(sec.cik(r["symbol"]), fresh=True)
-            rel = next((d for d in sorted(documents(subs, days=14), key=lambda d: d["at"])
+            back = max(14, (date.today() - date.fromisoformat(r["date"])).days + 1)     # back to the results day
+            rel = next((d for d in sorted(documents(subs, days=back), key=lambda d: d["at"])
                         if d["kind"] == "earnings_release" and d["at"] >= r["date"]), None)
         except SourceError:
             rel = None

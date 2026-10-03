@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from . import db
 from .config import settings
 
-CODE = re.compile(r"^[A-Za-z0-9_-]{12}$")
+CODE = re.compile(r"^[A-Za-z0-9_-]{12}\Z")          # \Z, not $: "$" would let a trailing newline through
 NEW_FOR = timedelta(hours=24)        # an account older than this is not new: it can't be counted as invited
 _lock = threading.Lock()             # one server process: two requests from the same newcomer can't both count
 

@@ -111,7 +111,8 @@ def _nse(sw=None):
              "attchmntText": "Transcript of the earnings call", "sort_date": "2026-08-05 18:10:05", "seq_id": "2",
              "attchmntFile": "https://nsearchives.nseindia.com/t.pdf"},
             {"symbol": "RELIANCE", "desc": "Qualified Institutions Placement", "attchmntText": "QIP opened",
-             "sort_date": "2026-09-20 18:10:05", "seq_id": "3", "attchmntFile": "https://nsearchives.nseindia.com/q.pdf"}]
+             "sort_date": (date.today() - timedelta(days=13)).strftime("%Y-%m-%d 18:10:05"),     # recent whenever the tests run
+             "seq_id": "3", "attchmntFile": "https://nsearchives.nseindia.com/q.pdf"}]
 
     def handler(r: httpx.Request):
         if r.url.path == "/":

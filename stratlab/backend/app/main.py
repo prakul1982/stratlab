@@ -1911,6 +1911,7 @@ def company_card_data(market: str, symbol: str, profile=Depends(current_profile)
 @app.post("/cards/company/{market}/{symbol}")
 def share_company_card(market: str, symbol: str, req: ShareReq, profile=Depends(current_profile)):
     """Make (or refresh) the user's public link to a company card, with the image the browser drew."""
+    throttle(profile, "card_share", 30, 3600, "That's a lot of shared cards in an hour. Try again later.")
     c = company_card(market, symbol)
     token = company_cards.publish(profile["id"], c, req.image, referrals.code_for(profile["id"]))
     return {"token": token, "url": company_cards.url(token), "card": c}
@@ -2877,7 +2878,7 @@ PLATFORM_AT = (16, 50)                   # IST, every day: after India's close, 
 
 def platform_checks() -> list:
     pc, today = platform_check, datetime.now(IST).date()
-    checks = [(f"Prices: {m}", "Prices", (lambda m=m: pc.check_market(markets, m, today))) for m in markets.providers]
+    checks = [(f"Prices: {m}", "Prices", (lambda m=m: pc.check_market(markets, m))) for m in markets.providers]
     checks += [(f"Backtest: {m}", "Backtests", (lambda m=m: pc.check_backtest(markets, m))) for m in markets.providers]
     checks += [("Scan: NIFTY 50", "Scans", lambda: pc.check_scan(markets, "IN", "nifty50")),
                ("Scan: US large caps", "Scans", lambda: pc.check_scan(markets, "US", "us_mega")),
@@ -3207,7 +3208,9 @@ def my_referrals(profile=Depends(current_profile)):
 @app.post("/me/referral")
 def record_referral(req: ReferralReq, profile=Depends(current_profile)):
     """A new account says which invite link it arrived by (the app sends it once, right after the first sign-in).
-    Counted once, for a new account only, and never for the user's own link. No reward is given."""
+    Counted once, for a new account only, and never for the user's own link. No reward is given. A few tries an
+    hour, so nobody can run through codes looking for real ones."""
+    throttle(profile, "referral", 10, 3600, "Too many invite codes tried. Try again later.")
     return {"recorded": referrals.record(profile, req.code) == "recorded"}
 
 
