@@ -14,7 +14,25 @@ def telegram_ready() -> bool:
 
 
 def email_ready() -> bool:
-    return bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)
+    return bool(settings.RESEND_API_KEY or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD))
+
+
+# Resend's shared sender: it delivers only to the address the Resend account was made with, until a domain of your
+# own is verified there (then set ALERT_FROM_EMAIL to an address on it)
+RESEND_FROM = "StratLab <onboarding@resend.dev>"
+
+
+def _send_resend(to: str, subject: str, body: str) -> None:
+    import httpx
+    r = httpx.post("https://api.resend.com/emails", timeout=15,
+                   headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
+                   json={"from": settings.ALERT_FROM_EMAIL or RESEND_FROM, "to": [to], "subject": subject, "text": body})
+    if r.status_code >= 400:
+        try:
+            why = str((r.json() or {}).get("message") or "")[:160]
+        except ValueError:
+            why = ""
+        raise RuntimeError(f"Resend refused the email ({r.status_code}). {why}".strip())
 
 
 def ready_channels() -> dict:
@@ -43,6 +61,9 @@ def send_telegram(chat_id: str, text: str) -> None:
 
 def send_email(to: str, subject: str, body: str) -> None:
     if not to:
+        return
+    if settings.RESEND_API_KEY:                 # over HTTPS: works where outgoing mail ports are blocked
+        _send_resend(to, subject, body)
         return
     if not (settings.SMTP_HOST and settings.SMTP_USER):
         raise RuntimeError("Email isn't set up on the server (SMTP settings are missing).")
