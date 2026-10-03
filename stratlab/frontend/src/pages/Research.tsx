@@ -14,6 +14,7 @@ import {
 } from "../components/Research";
 import { Info, Loading } from "../components/ui";
 import { AlertButton } from "../components/AlertForm";
+import { ShareCompanyButton } from "../components/ShareCompany";
 import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 
@@ -154,6 +155,7 @@ export function CompanyPage() {
             : <Link className="btn quiet sm" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
           <AlertButton region={region} symbol={c.symbol} />
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
+          <ShareCompanyButton region={region} symbol={c.symbol} />
           {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
           {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
         </div>

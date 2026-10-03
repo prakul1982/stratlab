@@ -441,3 +441,7 @@ class GroupLiveReq(BaseModel):
 
 class ShareReq(BaseModel):
     image: Optional[str] = Field(None, max_length=3_000_000)   # the share card as a base64 PNG (data URL or bare)
+
+
+class ReferralReq(BaseModel):
+    code: Optional[str] = Field(None, max_length=64)            # the invite code from the link the newcomer arrived by

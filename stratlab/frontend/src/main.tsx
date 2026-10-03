@@ -15,6 +15,7 @@ import "./styles.css";
 import { AppProvider, useApp } from "./lib/app";
 import { NEXT_PAGE, SESSION_KEY } from "./lib/api";
 import { registerPwa } from "./lib/pwa";
+import { captureRef } from "./lib/share";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
@@ -195,6 +196,7 @@ function App() {
 }
 
 if (import.meta.env.PROD) registerPwa();
+captureRef();          // a friend's invite link: kept until sign-in
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

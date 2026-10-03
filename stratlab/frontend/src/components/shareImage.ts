@@ -4,14 +4,14 @@ import type { CheckStatus, Experiment, Notebook } from "../lib/types";
 
 /* A 1200×630 card of a verdict, sized for WhatsApp, X and LinkedIn previews. */
 
-const W = 1200, H = 630, PAD = 64;
-const THEMES = {
+export const W = 1200, H = 630, PAD = 64;
+export const THEMES = {
   light: { paper: "#F5F1E8", card: "#FFFDF7", rule: "#EAE3D3", line: "#DCD3C0", ink: "#1D1B17", ink2: "#2E2B25", muted: "#6B665B",
     blue: "#1F4FB5", blueSoft: "#DCE5F7", orange: "#B4500F", orangeSoft: "#F6E2D2", chip: "#ECE6D8", shade: "rgba(180,80,15,0.07)" },
   dark: { paper: "#161513", card: "#1E1D1A", rule: "#1F1E1B", line: "#34312A", ink: "#F2EDE3", ink2: "#DCD6CA", muted: "#A39C8C",
     blue: "#7FA2F0", blueSoft: "#1E2A45", orange: "#EE8A4A", orangeSoft: "#3A2518", chip: "#2A2823", shade: "rgba(238,138,74,0.08)" },
 };
-type Theme = typeof THEMES.light;
+export type Theme = typeof THEMES.light;
 
 export interface CardData {
   meta: string;            // "EMA 20/50 CROSSOVER · BTC/USD"
@@ -56,7 +56,7 @@ export function cardFromExperiment(nb: Notebook, e: Experiment): CardData {
   };
 }
 
-function loadMark(): Promise<HTMLImageElement> {
+export function loadMark(): Promise<HTMLImageElement> {
   return new Promise((ok, bad) => {
     const im = new Image();
     im.onload = () => ok(im); im.onerror = bad;
@@ -65,7 +65,7 @@ function loadMark(): Promise<HTMLImageElement> {
 }
 
 /** Trim to fit a width, ending in "…" when anything was cut. */
-function fit(g: CanvasRenderingContext2D, text: string, max: number): string {
+export function fit(g: CanvasRenderingContext2D, text: string, max: number): string {
   if (g.measureText(text).width <= max) return text;
   let t = text;
   while (t.length > 1 && g.measureText(t + "…").width > max) t = t.slice(0, -1);
@@ -73,7 +73,7 @@ function fit(g: CanvasRenderingContext2D, text: string, max: number): string {
 }
 
 /** Word-wrap into at most `lines` lines, the last one ending in "…" if the text runs on. */
-function wrap(g: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
+export function wrap(g: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
   const words = text.split(/\s+/).filter(Boolean), out: string[] = [];
   let cur = "";
   for (let i = 0; i < words.length; i++) {
@@ -86,7 +86,7 @@ function wrap(g: CanvasRenderingContext2D, text: string, max: number, lines: num
   return out;
 }
 
-function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+export function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
   g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
 }

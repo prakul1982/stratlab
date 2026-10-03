@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
+import { takeRef } from "./share";
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
@@ -88,6 +89,8 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
 
   useEffect(() => {
     if (!session) { setMe(null); setNotebooks(null); return; }
+    const ref = takeRef();          // arrived by a friend's invite link: say so once (the server counts new accounts only)
+    if (ref) api("/me/referral", { method: "POST", body: { code: ref } }).catch(() => undefined);
     refreshMe();
     refreshNotebooks();
     api<Market[]>("/markets").then(setMarkets).catch(() => {});

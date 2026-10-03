@@ -26,7 +26,7 @@ interface Overview {
 }
 interface UserRow {
   id: string; email: string | null; created_at: string | null; plan: Plan; plan_set: string; plan_status: string | null;
-  plan_until: string | null; paying: boolean; experiments: number; ai_builds: number;
+  plan_until: string | null; paying: boolean; experiments: number; ai_builds: number; referrals?: number;
 }
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null }
 type AITest = { label: string; ok: boolean; error: string | null; model: string | null; ms: number };
@@ -355,20 +355,20 @@ export function AdminPage() {
                 </div>
                 {!users ? <Loading label="Loading users" /> : users.length === 0 ? <p className="small muted">No users match.</p> : (
                   <div className="table-wrap"><table>
-                    <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th><th></th></tr></thead>
+                    <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th><th title="Accounts that signed up through this user's invite link">Invited</th><th></th></tr></thead>
                     <tbody>{users.slice(0, shownUsers).map((u) => (
                       <tr key={u.id}>
                         <td>{u.email ?? "–"}</td>
                         <td><span className={`badge ${u.plan === "free" ? "skip" : "next"}`}>{PLAN_NAME[u.plan]}</span>
                           {u.plan !== "free" && <span className="small muted" style={{ marginLeft: 8 }}>{u.plan_until ? `until ${dateOnly(u.plan_until)}` : u.paying ? "Razorpay" : "no end"}</span>}</td>
-                        <td>{dateOnly(u.created_at)}</td><td className="num">{u.experiments}</td><td className="num">{u.ai_builds}</td>
+                        <td>{dateOnly(u.created_at)}</td><td className="num">{u.experiments}</td><td className="num">{u.ai_builds}</td><td className="num">{u.referrals ?? 0}</td>
                         <td><button className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button></td>
                       </tr>
                     ))}</tbody>
                   </table></div>
                 )}
                 {users && users.length > shownUsers && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setShownUsers((n) => n + 50)}>Show more ({users.length - shownUsers} more)</button>}
-                <p className="hint">Counts are for this month. The newest 200 users are loaded; search by email to find others.</p>
+                <p className="hint">Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever. The newest 200 users are loaded; search by email to find others.</p>
               </section>
 
               <section className="card stack" style={{ gap: 12 }}>

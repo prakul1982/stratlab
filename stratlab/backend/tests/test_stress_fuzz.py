@@ -120,6 +120,8 @@ def seed(w):
     share = c.post(f"/notebooks/{nid}/experiments/1/share", headers=h, json={}).json()
     lib = c.post(f"/notebooks/{nid}/experiments/1/library", headers=h, json={"description": "x"}).json()
     sess = c.post("/live/sessions", headers=h, json={"strategy": stress_requests.EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    card = c.post("/cards/company/IN/RELIANCE", headers=h, json={"image": "data:image/png;base64,iVBORw0KGgo="}).json()
+    ctx.update(card=str(card.get("token") or "x"), market="IN", code=c.get("/me/referrals", headers=h).json().get("code", "x"))
     ctx.update(nid=nid, version="1", symbol="RELIANCE", region="IN", inst_id="CRYPTO:BTC-USD", user_id="u-free",
                token=(share.get("token") or share.get("url", "x").rsplit("/", 1)[-1]), eid=str(lib.get("id") or "x"),
                sid=str(sess.get("id") or "x"))
@@ -144,7 +146,7 @@ def test_no_route_crashes_on_any_input(w):
     crashes, slow = [], []
     for method, path, op, spec in operations():
         _reset(w)
-        if "{nid}" in path or "{eid}" in path or "{token}" in path or "{sid}" in path:
+        if "{nid}" in path or "{eid}" in path or "{token}" in path or "{sid}" in path or "{card}" in path:
             real = seed(w)                          # a fresh notebook, link and session: an earlier delete may have removed them
             reals = stress_requests.real_requests(real)
         params = [p for p in op.get("parameters", [])]

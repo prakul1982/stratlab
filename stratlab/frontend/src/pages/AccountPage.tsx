@@ -10,6 +10,7 @@ import { FOCUSES, LEVELS } from "../components/LevelPrompt";
 import { PhoneCard } from "../components/PhoneCard";
 import { Block } from "../components/More";
 import { InvoicesCard } from "../components/InvoicesCard";
+import { InviteCard } from "../components/ShareCompany";
 import { NewslettersCard } from "../components/NewslettersCard";
 import { TipsCard } from "../components/TipsCard";
 
@@ -124,6 +125,8 @@ export function AccountPage() {
         </section>
 
         <InvoicesCard />
+
+        <InviteCard />
 
         <section className="card stack" style={{ gap: 16 }}>
           <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>Alerts<Info>{HELP.alerts}</Info></h2>{!canReport && <span className="badge next">Basic</span>}</div>

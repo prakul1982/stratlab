@@ -362,3 +362,102 @@ test("the tools grid shows one group until asked, and the menu reaches Account w
   if (info.project.name === "desktop") await expect(page.getByRole("link", { name: /^Account/ })).toBeInViewport();
   await sane(page, errors);
 });
+
+// ---------- sharing: company fact cards and invite links ----------
+/** Watch what the page shares: the phone's share sheet (stubbed, as headless browsers have none) and the clipboard. */
+async function watchSharing(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __shared: unknown[]; __copied: string[] };
+    w.__shared = []; w.__copied = [];
+    Object.defineProperty(navigator, "share", { configurable: true, value: async (d: { url?: string; text?: string; files?: File[] }) => {
+      w.__shared.push({ url: d.url, text: d.text, files: (d.files ?? []).map((f) => ({ name: f.name, type: f.type, size: f.size })) });
+    } });
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t: string) => { w.__copied.push(t); }, write: async () => undefined } });
+  });
+}
+
+type SharedCall = { url: string; files: { type: string; size: number }[] };
+const shared = (page: Page) => page.evaluate(() => (window as unknown as { __shared: SharedCall[] }).__shared);
+const copied = (page: Page) => page.evaluate(() => (window as unknown as { __copied: string[] }).__copied);
+
+/** Phone: the share sheet got the card's link and image. Desktop: the link was copied. Returns the link. */
+async function sharedLink(page: Page, phone: boolean): Promise<string> {
+  if (phone) {
+    await expect.poll(async () => (await shared(page)).length, { timeout: 30_000 }).toBeGreaterThan(0);
+    const s = (await shared(page))[0];
+    expect(s.files[0]?.type, "the card image goes with the link").toBe("image/png");
+    expect(s.files[0].size).toBeGreaterThan(5000);
+    expect(await copied(page), "a phone uses its share sheet, not the clipboard").toEqual([]);
+    return s.url;
+  }
+  await expect.poll(async () => (await copied(page)).length, { timeout: 30_000 }).toBeGreaterThan(0);
+  await expect(page.getByRole("status")).toContainText("Link copied");
+  await expect(page.getByRole("status").getByRole("button", { name: "Save the image" })).toBeVisible();
+  expect(await shared(page), "a computer copies the link instead of a share sheet").toEqual([]);
+  return (await copied(page))[0];
+}
+
+for (const [path, ready] of [["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL/deep", "Growth and margins"]]) {
+  test(`share a company's fact card from ${path}`, async ({ page, request }, info) => {
+    const phone = info.project.name === "phone";
+    await watchSharing(page);
+    const errors = await open(page, path, ready);
+    await answerLevel(page);
+    const button = page.getByRole("button", { name: "Share", exact: true });
+    await expect(button).toBeVisible();
+    if (phone) await touchable(page);
+    await button.click();
+    const link = await sharedLink(page, phone);
+    const token = link.match(/\/c\/([A-Za-z0-9_-]+)$/)?.[1];
+    expect(token, `a card link: ${link}`).toBeTruthy();
+    // the public link previews as the card the browser drew, and opens the company's public page
+    const preview = await (await request.get(`${API}/c/${token}`)).text();
+    expect(preview).toContain('property="og:image"');
+    expect(preview).toContain(`/c/${token}.png`);
+    expect(preview).toMatch(/\/stocks\/(in\/RELIANCE|us\/AAPL)\?ref=[A-Za-z0-9_-]{12}/);
+    expect(preview).toContain("Facts, not advice");
+    expect(preview).not.toMatch(/kite|zerodha|yahoo|screener|finnhub/i);
+    const png = await request.get(`${API}/c/${token}.png`);
+    expect(png.status()).toBe(200);
+    expect((await png.body()).subarray(0, 4).toString("latin1")).toBe("\x89PNG");
+    await sane(page, errors);
+  });
+}
+
+test("account: your invite link, how many friends joined, and sharing it", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  await watchSharing(page);
+  const errors = await open(page, "/account", "Invite friends");
+  await expect(page.getByTestId("friends-joined")).toHaveText(/^\d+ friends? joined$/);
+  await expect(page.getByLabel("Your invite link")).toHaveValue(/\/\?ref=[A-Za-z0-9_-]{12}$/);
+  if (phone) await touchable(page);
+  await page.getByRole("button", { name: "Share your link" }).click();
+  const link = await page.getByLabel("Your invite link").inputValue();
+  if (phone) await expect.poll(async () => (await shared(page)).map((s) => s.url)).toEqual([link]);
+  else {
+    await expect.poll(() => copied(page)).toEqual([link]);
+    await expect(page.getByRole("status")).toContainText("Invite link copied");
+  }
+  await sane(page, errors);
+});
+
+test("an invite link is remembered through sign-in, sent once, and taken out of the address", async ({ page }) => {
+  const sent: unknown[] = [];
+  await page.route("**/me/referral", async (r) => { sent.push(r.request().postDataJSON()); await r.fulfill({ status: 200, contentType: "application/json", body: '{"recorded":false}' }); });
+  const errors = await open(page, "/?ref=AbCdEf123_-x", "notebook");
+  await expect.poll(() => sent).toEqual([{ code: "AbCdEf123_-x" }]);
+  expect(new URL(page.url()).search).toBe("");
+  await page.reload();
+  await expect(page.getByText("notebook").first()).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(sent, "sent only once").toHaveLength(1);
+  await sane(page, errors);
+});
+
+test("admin: invite counts in the Users tab", async ({ page }, info) => {
+  const errors = await open(page, "/admin?tab=users", "Paper trading now");
+  await expect(page.locator("th", { hasText: "Invited" })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});

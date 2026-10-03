@@ -11,6 +11,7 @@ crawler going through thousands of companies can't hammer the data sources: past
 or a "busy, come back later" answer."""
 import hashlib
 import json
+import re
 import threading
 import time
 from collections import deque
@@ -449,6 +450,16 @@ def _table(f: dict) -> str:
         growth.append(f"net profit {_fmt(g['profit_cagr_3y'], 1, '%')} a year")
     note = f'<p class="small muted">{e(f.get("unit") or "")}{". Compounded: " + ", ".join(growth) if growth else ""}.</p>'
     return f'<h2>Revenue and profit</h2><div class="card"><div class="tbl"><table><tr><th></th>{head}</tr>{body}</table></div>{note}</div>'
+
+
+def with_ref(page: str, code: str) -> str:
+    """A page whose links into the app (sign up, test, deep dive) carry an invite code, for someone who arrived from
+    a shared card. Links to other company pages, and the canonical address, stay as they are."""
+    site = re.escape(settings.PUBLIC_SITE_URL)
+
+    def add(m):
+        return f'{m.group(1)}{m.group(2)}{"&amp;" if "?" in m.group(2) else "?"}ref={code}"'
+    return re.sub(rf'(<a [^>]*?href=")({site}/(?!stocks/)[^"#]*)"', add, page)
 
 
 def not_found(region: str | None, symbol: str) -> str:

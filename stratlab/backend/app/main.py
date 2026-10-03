@@ -54,10 +54,10 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_alerts, stock_pages, weekly
+from . import ask, company_cards, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
-from .models import (ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
+from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
@@ -1880,6 +1880,51 @@ def public_verdict_page(token: str):
     return HTMLResponse(public.preview_html(token, snap, public.image(token) is not None))
 
 
+# ---------- company fact cards: an image and a public link that previews as it ----------
+def company_card(market: str, symbol: str) -> dict:
+    hit = company_cards.find(market, symbol)
+    if not hit:
+        err(404, "not_found", "There's no public page for that company to share.")
+    region, sym, co = hit
+    try:
+        f = stock_page_store.get(region, sym, co)
+    except stock_pages.Busy:
+        err(503, "busy", "The company's facts are being prepared. Try again in a few minutes.")
+    if not f:
+        err(404, "no_facts", "There aren't enough facts on this company to make a card yet.")
+    return company_cards.card(f, region, sym)
+
+
+@app.get("/cards/company/{market}/{symbol}")
+def company_card_data(market: str, symbol: str, profile=Depends(current_profile)):
+    """What a company's share card shows, for the browser to draw: facts from its public page, never AI."""
+    return company_card(market, symbol)
+
+
+@app.post("/cards/company/{market}/{symbol}")
+def share_company_card(market: str, symbol: str, req: ShareReq, profile=Depends(current_profile)):
+    """Make (or refresh) the user's public link to a company card, with the image the browser drew."""
+    c = company_card(market, symbol)
+    token = company_cards.publish(profile["id"], c, req.image, referrals.code_for(profile["id"]))
+    return {"token": token, "url": company_cards.url(token), "card": c}
+
+
+@app.get("/c/{card}.png")
+def company_card_image(card: str):
+    png = company_cards.image(card)
+    if not png:
+        err(404, "not_found", "No image for this link.")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/c/{card}")
+def company_card_page(card: str):
+    c = company_cards.load(card)
+    if not c:
+        return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
+    return HTMLResponse(company_cards.preview_html(card, c, company_cards.image(card) is not None))
+
+
 # ---------- public company pages, for search engines ----------
 def stock_page_facts(region: str, co: dict) -> dict | None:
     """One company's public page from the deep dive's cheap sources: reported numbers, the filings list and daily
@@ -1936,21 +1981,23 @@ def stock_list_job():
 
 
 @app.get("/stocks/{region}/{symbol}", response_class=HTMLResponse)
-def stock_page(region: str, symbol: str):
-    """A listed company's public page: facts only, built from stored or cheap data, never AI."""
+def stock_page(region: str, symbol: str, ref: str | None = None):
+    """A listed company's public page: facts only, built from stored or cheap data, never AI. Opened from a shared
+    card, `ref` is the sharer's invite code, and the page's links into the app carry it."""
     r = stock_pages.REGIONS.get(region.lower())
     hit = stock_pages.find(r, symbol) if r else None
     if not hit:
         return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
     sym, co = hit
+    ref = ref if ref and referrals.CODE.match(ref) else None
     if region != region.lower() or symbol != sym:          # one address per company
-        return RedirectResponse(stock_pages.path(r, sym), status_code=301)
+        return RedirectResponse(stock_pages.path(r, sym) + (f"?ref={ref}" if ref else ""), status_code=301)
     try:
         page = stock_page_store.html(r, sym, co)
     except stock_pages.Busy:
         return JSONResponse(status_code=503, headers={"Retry-After": "600"},
                             content={"detail": {"code": "busy", "message": "This page is being prepared. Try again in a few minutes."}})
-    return HTMLResponse(page, headers=SEO_HEADERS)
+    return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=SEO_HEADERS)
 
 
 @app.get("/robots.txt")
@@ -3066,6 +3113,21 @@ def my_first_steps(profile=Depends(current_profile)):
 def set_first_steps(req: FirstStepsReq, profile=Depends(current_profile)):
     first_steps.dismiss(profile["id"], req.dismissed)
     return first_steps.view(profile)
+
+
+# ---------- invite links ----------
+@app.get("/me/referrals")
+def my_referrals(profile=Depends(current_profile)):
+    """The user's personal invite link and how many friends joined through it."""
+    code = referrals.code_for(profile["id"])
+    return {"code": code, "link": referrals.link(code), "joined": len(referrals.joined(profile["id"]))}
+
+
+@app.post("/me/referral")
+def record_referral(req: ReferralReq, profile=Depends(current_profile)):
+    """A new account says which invite link it arrived by (the app sends it once, right after the first sign-in).
+    Counted once, for a new account only, and never for the user's own link. No reward is given."""
+    return {"recorded": referrals.record(profile, req.code) == "recorded"}
 
 
 @app.post("/admin/news/build")
