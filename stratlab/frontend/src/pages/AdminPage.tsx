@@ -10,6 +10,7 @@ import { InvoiceAdminPanel } from "../components/InvoiceAdminPanel";
 import { PlatformPanel } from "../components/PlatformPanel";
 import { LifecycleEmails } from "../components/LifecycleEmails";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
+import { analyticsDashboard } from "../lib/analytics";
 
 type Plan = "free" | "basic" | "pro";
 type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quick_rank?: number | null; research_rank?: number | null };
@@ -249,6 +250,13 @@ export function AdminPage() {
                   </div>
                 ))}
               </div>
+
+              {analyticsDashboard() && (
+                <section className="card spread" style={{ gap: 12, flexWrap: "wrap" }}>
+                  <span className="small muted" style={{ flex: "1 1 260px" }}>Usage analytics are on: page views and the sign-up to payment funnel, by user id only.</span>
+                  <a className="btn outline sm" href={analyticsDashboard()!} target="_blank" rel="noopener noreferrer" data-testid="posthog-dashboard">Open the PostHog dashboard</a>
+                </section>
+              )}
 
               <section className="card stack" style={{ gap: 6 }}>
                 <h2 className="h2">Needs your attention</h2>

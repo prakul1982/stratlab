@@ -16,6 +16,7 @@ import { AppProvider, useApp } from "./lib/app";
 import { NEXT_PAGE, SESSION_KEY } from "./lib/api";
 import { registerPwa } from "./lib/pwa";
 import { captureRef } from "./lib/share";
+import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
@@ -130,6 +131,7 @@ function Routed() {
   const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
   const nav = useNavigate();
+  useEffect(() => { pageview(loc.pathname); }, [loc.pathname]);    // usage analytics: off without a key
   useEffect(() => {
     if (!session) return;
     let next: string | null = null;

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import razorpay
 from razorpay.errors import BadRequestError, SignatureVerificationError
 
-from . import db, invoices, lifecycle, pricing
+from . import db, invoices, lifecycle, pricing, product_analytics
 from .config import settings
 
 _client = None
@@ -193,6 +193,10 @@ def invoice_for(profile: dict, sub: dict, payment: dict | None):
         print("invoice failed:", e)
         return None
     lifecycle.later(lifecycle.receipt, profile, inv, plan, period)      # once per payment, however often this runs
+    try:
+        product_analytics.payment_completed(profile, payment, plan, period)   # usage analytics, once per payment
+    except Exception as e:
+        print("payment analytics failed:", str(e)[:160])
     return inv
 
 

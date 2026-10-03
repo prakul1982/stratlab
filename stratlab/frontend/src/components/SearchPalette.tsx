@@ -6,6 +6,7 @@ import { match, resolve } from "../lib/features";
 import { askExamples, useRotating } from "../lib/rotating";
 import type { Experiment, Instrument, Notebook } from "../lib/types";
 import { buildIdea, findInstrument } from "./IdeaComposer";
+import { track, trackBacktest } from "../lib/analytics";
 import { Book, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
 
 interface Idea { title: string; text: string; why: string; market: string; symbol: string | null; tf: string }
@@ -102,6 +103,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     if (paper) {
       step("Starting paper trading with fake money…");
       const snap = await api<{ id: string }>("/live/sessions", { method: "POST", body: { strategy: b.strategy, instrument: inst.id } });
+      track("paper trading started", { kind: "single", source: "search" });
       refreshMe();
       go(`/paper/${snap.id}`);
       return;
@@ -110,6 +112,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     const want = HISTORY[tf] ?? 60, days = Math.min(want, market?.max_days?.[tf as keyof typeof market.max_days] ?? want);
     step(`Testing it on ${days >= 365 ? `${Math.round(days / 365)} years` : `${days} days`} of real ${inst.symbol} prices…`);
     const out = await api<{ experiment: Experiment }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body: { days, label: "From search" } });
+    trackBacktest("search");
     refreshMe();
     go(`/n/${nb.id}/e/${out.experiment.v}`);
   };

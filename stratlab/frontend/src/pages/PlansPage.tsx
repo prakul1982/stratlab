@@ -6,6 +6,7 @@ import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
 import { money, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
+import { track } from "../lib/analytics";
 
 const FEATURES: Record<string, string[]> = {
   free: ["5 experiments a month, each with a full verdict", "10 AI strategy builds a month", "Group tests of up to 10 instruments", "3 stock alerts on at a time", "1 saved stock screen",
@@ -51,10 +52,12 @@ export function PlansPage() {
 
   const subscribe = async (plan: "basic" | "pro") => {
     if (me && paid !== "free" && !confirm(`Switch to ${plan === "pro" ? "Pro" : "Basic"}? Your current subscription stops billing once the new one is active.`)) return;
+    track("upgrade clicked", { plan, period, source: "plans" });
     setBusy(plan);
     try {
       const d = await api<{ subscription_id: string; key_id: string; email: string; currency: string }>("/billing/subscribe", { method: "POST", body: { plan, period, currency } });
       await loadRazorpay();
+      track("checkout started", { plan, period });
       const rz = new window.Razorpay({
         key: d.key_id, subscription_id: d.subscription_id, name: "StratLab",
         description: `${plan === "pro" ? "Pro" : "Basic"} plan, ${d.currency === "INR" ? `₹${rupees(plan, period).toLocaleString("en-IN")}` : priceOf(plan, period).shown} / ${period}`,

@@ -9,6 +9,7 @@ import {
 import { LineChart } from "./Charts";
 import { Star } from "./Icons";
 import { Info } from "./ui";
+import { track } from "../lib/analytics";
 
 export { CompanySearch } from "./CompanySearch";
 
@@ -50,8 +51,11 @@ export function StarButton({ region, symbol, name }: { region: Region; symbol: s
   return (
     <button className={`btn quiet sm star-btn${on ? " on" : ""}`} aria-pressed={on}
       onClick={async () => {
-        try { await toggle({ region, symbol, name: name ?? null }); notify(on ? `${symbol} removed from your watchlist.` : `${symbol} added to your watchlist.`); }
-        catch (e) { fail(e); }
+        try {
+          await toggle({ region, symbol, name: name ?? null });
+          if (!on) track("watchlist add", { region });
+          notify(on ? `${symbol} removed from your watchlist.` : `${symbol} added to your watchlist.`);
+        } catch (e) { fail(e); }
       }}>
       <Star size={17} />{on ? "Watching" : "Watch"}
     </button>
