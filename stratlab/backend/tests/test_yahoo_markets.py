@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -70,3 +70,31 @@ def test_uk_stamp_duty_and_fx_spread():
     assert "stamp" not in C.order_costs("uk", "sell", 100, 10.0, 0)
     assert "stamp" not in C.order_costs("uk_etf", "buy", 100, 10.0, 0)
     assert C.order_costs("fx", "buy", 10000, 1.1, 0)["spread"] == pytest.approx(1.1)
+
+
+def _london(last_close, quote_day):
+    """Three London sessions as Yahoo sent them on 3 Oct 2026: the last (2 Oct) with a blank close, and a quote
+    whose time is that session's close."""
+    import httpx
+    day = lambda d: int(datetime(2026, 10, d, 7, 0, tzinfo=timezone.utc).timestamp())   # 08:00 London, stamped at the open
+    body = {"chart": {"result": [{
+        "meta": {"symbol": "ISF.L", "currency": "GBp", "exchangeTimezoneName": "Europe/London",
+                 "regularMarketTime": int(datetime(2026, 10, quote_day, 15, 35, tzinfo=timezone.utc).timestamp()), "regularMarketPrice": 905.4,
+                 "regularMarketDayHigh": 910.0, "regularMarketDayLow": 898.2, "regularMarketVolume": 4200000},
+        "timestamp": [int(datetime(2026, 9, 30, 7, tzinfo=timezone.utc).timestamp()), day(1), day(2)],
+        "indicators": {"quote": [{"open": [890.0, 896.0, None], "high": [895.0, 902.0, None], "low": [885.0, 893.0, None],
+                                  "close": [892.0, 900.0, last_close], "volume": [100, 200, None]}]}}], "error": None}}
+    return Yahoo(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)))
+
+
+def test_latest_session_with_a_blank_close_is_rebuilt_from_the_quote():
+    bars = _london(None, 2).chart("ISF.L", "1d", 10)["candles"]
+    last = bars[-1]
+    assert [b["t"][:10] for b in bars] == ["2026-09-30", "2026-10-01", "2026-10-02"]
+    assert last["c"] == 905.4 and last["h"] == 910.0 and last["l"] == 898.2 and last["v"] == 4200000
+    assert last["l"] <= last["o"] <= last["h"]                  # open unknown: the previous close, inside the range
+
+
+def test_a_blank_day_the_quote_doesnt_cover_stays_out():
+    bars = _london(None, 1).chart("ISF.L", "1d", 10)["candles"]      # quote is from an earlier day: nothing to fill with
+    assert [b["t"][:10] for b in bars] == ["2026-09-30", "2026-10-01"]
