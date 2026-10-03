@@ -149,16 +149,16 @@ export function DeepDivePage() {
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [carding, setCarding] = useState(false);
-  const [decking, setDecking] = useState(false);
+  const [decking, setDecking] = useState<"pptx" | "pdf" | null>(null);
 
-  const downloadDeck = async () => {
-    setDecking(true);
+  const downloadDeck = async (format: "pptx" | "pdf") => {
+    setDecking(format);
     try {
-      const r = await api<Response>(`/research/deep/${encodeURIComponent(sym)}/deck${q()}`, { raw: true });
+      const r = await api<Response>(`/research/deep/${encodeURIComponent(sym)}/deck${q(`format=${format}`)}`, { raw: true });
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob()); a.download = `${sym}-deep-dive.pptx`; a.click();
+      a.href = URL.createObjectURL(await r.blob()); a.download = `${sym}-deep-dive.${format}`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } catch (e) { fail(e); } finally { setDecking(false); }
+    } catch (e) { fail(e); } finally { setDecking(null); }
   };
 
   useEffect(() => {
@@ -205,7 +205,8 @@ export function DeepDivePage() {
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
         {v && <div className="row wrap" style={{ gap: 10 }}>
-          <button className="btn quiet sm" disabled={decking} onClick={downloadDeck} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking ? "Making the deck…" : "Download as slides (PowerPoint)"}</button>
+          <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
+          <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pdf")} title="The same slides as a PDF, to read or share anywhere">{decking === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
           <Link className="btn quiet sm" to="/research/investor">Investor home →</Link>
         </div>}
       </div>

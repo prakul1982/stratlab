@@ -110,8 +110,20 @@ class MCXProvider:
         if tf != "1d":       # no continuous intraday series: only the current contract's own life
             days = min(days, self.max_days[tf])
         try:
-            return self.kite.history(int(inst["token"]), tf, days, continuous=(tf == "1d"))
+            bars = self.kite.history(int(inst["token"]), tf, days, continuous=(tf == "1d"))
+            if tf == "1d" and not bars:
+                # the broker keeps no stitched series for some segments (currency futures): the current contract's own
+                # daily prices instead, which go back to its listing (about a year for monthly currency contracts)
+                bars = self.kite.history(int(inst["token"]), tf, days, continuous=False)
+            return bars
         except Exception as e:
+            if tf == "1d":
+                try:
+                    bars = self.kite.history(int(inst["token"]), tf, days, continuous=False)
+                    if bars:
+                        return bars
+                except Exception:
+                    pass
             raise DataError(f"{self.noun} prices couldn't be loaded: {e}") from None
 
     def closed_candles(self, inst: dict, tf: str, since: str | None) -> list[dict]:

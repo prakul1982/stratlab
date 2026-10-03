@@ -44,7 +44,8 @@ def test_currency_pairs_are_front_month_lots_in_rupees(monkeypatch):
     assert [i["symbol"] for i in p.defaults()] == ["USDINR", "JPYINR"]                      # only pairs with contracts
     p.history(u, "1d", 3000)
     p.history(u, "15m", 400)
-    assert p.kite.calls == [(11, "1d", 3000, True), (11, "15m", 120, False)]
+    # no stitched daily series in the fake: the contract's own daily prices are asked next
+    assert p.kite.calls == [(11, "1d", 3000, True), (11, "1d", 3000, False), (11, "15m", 120, False)]
     monkeypatch.setattr(mcx, "ist_date", lambda: date(2026, 10, 26))                        # two days to expiry: rolled
     p2 = CDSProvider(FakeKite())
     assert p2.instrument("USDINR")["token"] == 12
@@ -100,3 +101,20 @@ def test_exchange_holiday_list_by_segment():
     t = httpx.MockTransport(lambda r: httpx.Response(200, json=body) if r.url.path.startswith("/api") else httpx.Response(200, text="<html></html>"))
     f = NSEFilings(transport=t)
     assert f.holidays() == ["2027-01-26"] and f.holidays("CD") == ["2027-01-26", "2027-02-19"]
+
+
+def test_daily_prices_fall_back_to_the_contract_when_no_stitched_series(monkeypatch):
+    import app.data.mcx as mcx
+    monkeypatch.setattr(mcx, "ist_date", lambda: date(2026, 10, 3))
+    k = FakeKite()
+    bar = {"t": "2026-10-01T00:00:00+05:30", "o": 88, "h": 89, "l": 87, "c": 88.5, "v": 10}
+    k.history = lambda token, tf, days, continuous=None, ttl=None: (k.calls.append(continuous) or ([] if continuous else [bar]))
+    p = CDSProvider(k)
+    assert p.history(p.instrument("USDINR"), "1d", 3000) == [bar] and k.calls == [True, False]
+
+    def boom(token, tf, days, continuous=None, ttl=None):
+        if continuous:
+            raise RuntimeError("continuous data not available for this segment")
+        return [bar]
+    k.history = boom
+    assert p.history(p.instrument("USDINR"), "1d", 3000) == [bar]

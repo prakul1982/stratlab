@@ -62,8 +62,8 @@ def view_for_deck():
 def test_deck_is_a_real_presentation():
     prs = Presentation(io.BytesIO(deck.build(view_for_deck())))
     titles = [next((sh.text_frame.text for sh in s.shapes if sh.has_text_frame and sh.text_frame.text), "") for s in prs.slides]
-    assert titles == ["Acme Industries", "Sales and net profit", "The last eight quarters", "Capex and cash", "Business model",
-                      "Capex and growth plans, in management's words", "Management report card", "Investor checklist", "Sources"]
+    assert titles == ["Acme Industries", "At a glance", "Sales and net profit", "The last eight quarters", "Capex and cash", "Business model",
+                      "Capex and growth plans", "Management report card", "Investor checklist", "Sources"]
     text = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
     assert "Not investment advice" in text and "Screener" not in text
     assert deck._cr(1234567) == "12,34,567" and deck._cr(-950) == "-950" and deck._cr(None) == "–"
@@ -73,7 +73,7 @@ def test_deck_without_reads_still_builds():
     v = view_for_deck()
     v.update(reads=None, card=None, checklist=None)
     prs = Presentation(io.BytesIO(deck.build(v)))
-    assert len(prs.slides) == 6
+    assert len(prs.slides) == 7
     text = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
     assert "Not in this deck yet" in text and "Read the documents" in text and "Check past calls" in text
 
@@ -92,6 +92,8 @@ def test_deep_view_has_checklist_and_deck_and_investor_home(api):  # noqa: F811
     r = c.get("/research/deep/ACME/deck")
     assert r.status_code == 200 and r.headers["content-disposition"].endswith('ACME-deep-dive.pptx"')
     assert len(Presentation(io.BytesIO(r.content)).slides) >= 5
+    pdf = c.get("/research/deep/ACME/deck?format=pdf")
+    assert pdf.status_code == 200 and pdf.content[:5] == b"%PDF-" and pdf.headers["content-disposition"].endswith('ACME-deep-dive.pdf"')
     assert c.get("/research/investor").json()["rows"] == []
     db.set_setting("watchlist:u1", json.dumps({"items": [{"region": "IN", "symbol": "ACME"}, {"region": "IN", "symbol": "NOPE"},
                                                           {"region": "US", "symbol": "AAPL"}]}))
@@ -108,3 +110,13 @@ def test_bank_deck_skips_capex_and_uses_lender_labels():
     prs = Presentation(io.BytesIO(deck.build(v)))
     text = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
     assert "Capex and cash" not in text and "Revenue and net profit" in text and "ROE" in text and "Debt / equity" not in text
+
+
+def test_pdf_deck_has_the_same_slides_as_the_powerpoint():
+    from pypdf import PdfReader
+    v = view_for_deck()
+    pdf = PdfReader(io.BytesIO(deck.build_pdf(v)))
+    assert len(pdf.pages) == len(Presentation(io.BytesIO(deck.build(v))).slides)
+    text = " ".join(p.extract_text() for p in pdf.pages)
+    assert "At a glance" in text and "Investor checklist" in text and "₹" in text and "Not investment advice" in text
+    assert deck.sentences("Pumps for utilities. Exports grew. It is", 400) == "Pumps for utilities. Exports grew."

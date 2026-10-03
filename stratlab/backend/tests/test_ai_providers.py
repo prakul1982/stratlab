@@ -197,7 +197,10 @@ def test_empty_or_unreadable_reply_tries_the_providers_next_model(monkeypatch):
             return httpx.Response(200, json={"choices": [{"message": {"content": "Sure thing!"}}]})
         return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}}]})
     out = P.complete("s", "t", transport=httpx.MockTransport(handler))
-    assert "entry" in out and [b["model"] for b in seen] == ["llama-3.3-70b", "gpt-oss-120b", "qwen-3-32b"]
+    # the empty reply is asked once more with twice the room, then the next model
+    assert "entry" in out and [b["model"] for b in seen] == ["llama-3.3-70b", "llama-3.3-70b", "gpt-oss-120b", "qwen-3-32b"]
+    assert seen[1]["max_tokens"] >= 8000
+    assert P.thinks("qwen-3.8-27b") and P.thinks("gemma-4-31B-it") and P.thinks("openai/gpt-oss-120b") and not P.thinks("llama-3.3-70b")
     thinker = next(b for b in seen if b["model"] == "gpt-oss-120b")
     assert thinker["reasoning_effort"] == "low" and thinker["max_tokens"] >= 4000     # room to answer after reasoning
 

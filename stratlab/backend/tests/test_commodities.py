@@ -49,7 +49,7 @@ def test_mcx_instruments_are_whole_lots_in_rupees(monkeypatch):
     assert [i["symbol"] for i in p.search("gold")][:2] == ["GOLD", "GOLDM"]
     p.history(g, "1d", 3000)
     p.history(g, "5m", 400)
-    assert p.kite.calls == [(1, "1d", 3000, True), (1, "5m", 60, False)]    # stitched daily; intraday only this contract
+    assert p.kite.calls == [(1, "1d", 3000, True), (1, "1d", 3000, False), (1, "5m", 60, False)]    # stitched daily; intraday only this contract
 
 
 def test_global_commodities_are_separate_futures_in_dollars():

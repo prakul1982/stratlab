@@ -1235,13 +1235,17 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
 
 
 @app.get("/research/deep/{symbol}/deck")
-def deep_dive_deck(symbol: str, region: str = "IN", profile=Depends(current_profile)):
-    """The deep dive as a PowerPoint deck: numbers, business, plans, report card and checklist, with sources."""
+def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
+    """The deep dive as a deck, PowerPoint or PDF (the same slides): numbers, business, plans, report card and
+    checklist, with sources."""
     need(profile, "deepdive", "The company deck")
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
-    data = deck.build(deep_view(sym, deep_base(sym, region)))
-    return Response(data, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    view = deep_view(sym, deep_base(sym, region))
+    if format == "pdf":
+        return Response(deck.build_pdf(view), media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{sym}-deep-dive.pdf"'})
+    return Response(deck.build(view), media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     headers={"Content-Disposition": f'attachment; filename="{sym}-deep-dive.pptx"'})
 
 
