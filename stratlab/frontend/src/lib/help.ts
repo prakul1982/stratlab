@@ -72,4 +72,5 @@ export const HELP = {
   researchMetrics: "The main numbers, grouped. The dot on each line shows where this company sits in a typical range for its industry: blue is strong, orange is weak. The two ticks mark the edges of normal.",
   researchEarnings: "Each quarter's earnings per share against what analysts expected. Blue bars beat the estimate, orange bars missed it.",
   researchHolding: "Who owns the shares: the founders or promoters, foreign funds (FIIs), Indian funds (DIIs) and the public. Promoters selling or funds piling in can be worth watching.",
+  newsletters: "A short email after the market closes: what moved in India or the US, and what happened at the companies you follow. Weekly sends one summary a week instead. Every issue is also on the News page.",
 };

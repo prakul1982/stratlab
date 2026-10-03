@@ -57,6 +57,8 @@ const deep = () => import("./pages/DeepDive");
 const DeepDivePage = page(deep, "DeepDivePage");
 const investor = () => import("./pages/InvestorHome");
 const InvestorHomePage = page(investor, "InvestorHomePage");
+const news = () => import("./pages/NewsPage");
+const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
 const FilingsPage = page(research, "FilingsPage");
 const CompanyPage = page(research, "CompanyPage");
@@ -73,6 +75,7 @@ function warmFirstPage(path: string) {
     : /^\/n\/[^/]+\/e\//.test(path) ? experiment
     : /^\/research\/(IN|US)\/[^/]+\/deep$/.test(path) ? deep
     : path === "/research/investor" ? investor
+    : path === "/news" ? news
     : path.startsWith("/research") ? research
     : null;
   load?.().catch(() => undefined);    // only a head start: the page itself reports a failed download
@@ -145,6 +148,7 @@ function Routed() {
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/news" element={<NewsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />
         <Route path="/research/pulse" element={<PulsePage />} />

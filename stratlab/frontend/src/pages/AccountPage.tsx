@@ -10,6 +10,7 @@ import { FOCUSES, LEVELS } from "../components/LevelPrompt";
 import { PhoneCard } from "../components/PhoneCard";
 import { Block } from "../components/More";
 import { InvoicesCard } from "../components/InvoicesCard";
+import { NewslettersCard } from "../components/NewslettersCard";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
@@ -149,6 +150,8 @@ export function AccountPage() {
             <button className="btn outline" disabled={!canReport} onClick={testAlert}>Send a test</button>
           </div>
         </section>
+
+        <NewslettersCard />
 
         <PhoneCard />
 
