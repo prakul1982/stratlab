@@ -270,7 +270,7 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
             <div key={p.y} className="tbar" title={`${p.y}: ${p.v.toLocaleString(/cr/i.test(unit) ? "en-IN" : "en-US", { maximumFractionDigits: 2 })} ${unit}`}>
               <div className="tbar-plot" style={{ height: PLOT + 36 }}>
                 {down > 0 && <div className="tbar-zero" style={{ top: 18 + zero }} />}
-                <div className="tbar-bar" style={{ background: color, height: h, top: neg ? 18 + zero : 18 + zero - h,
+                <div className="tbar-bar" data-v={p.v} style={{ background: color, height: h, top: neg ? 18 + zero : 18 + zero - h,
                   borderRadius: neg ? "0 0 4px 4px" : "4px 4px 0 0" }} />
                 <span className={`num tiny tbar-num ${neg ? "neg" : ""}`} style={neg ? { top: 18 + zero + h + 2 } : { top: 18 + zero - h - 16 }}>
                   {trendValue(p.v, unit)}</span>
