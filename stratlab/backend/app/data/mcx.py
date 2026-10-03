@@ -41,7 +41,10 @@ def front(contracts: list[dict], today: date) -> dict | None:
 
 
 class MCXProvider:
-    market = "MCX"
+    """Front-month futures on one Kite exchange. Currency futures (cds.py) are the same with other contracts."""
+    market = exchange = "MCX"
+    contracts, default_names, aliases, per_day = CONTRACTS, DEFAULTS, ALIASES, PER_DAY
+    noun = "MCX"
     max_days = {"1d": 3650, "1h": 180, "15m": 120, "5m": 60}
 
     def __init__(self, kite):
@@ -56,51 +59,51 @@ class MCXProvider:
         today = ist_date().isoformat()
         if self._day == today and self._by_name:
             return
-        rows = self.kite.instruments_of("MCX")
+        rows = self.kite.instruments_of(self.exchange)
         by: dict[str, list[dict]] = {}
         for x in rows:
             name = str(x.get("name") or "").upper()
-            if x.get("instrument_type") != "FUT" or name not in CONTRACTS or not x.get("expiry"):
+            if x.get("instrument_type") != "FUT" or name not in self.contracts or not x.get("expiry"):
                 continue
             exp = x["expiry"] if isinstance(x["expiry"], date) else date.fromisoformat(str(x["expiry"])[:10])
             by.setdefault(name, []).append({"token": int(x["instrument_token"]), "symbol": x["tradingsymbol"], "expiry": exp})
         self._by_name, self._day = by, today
 
     def _make(self, name: str, c: dict) -> dict:
-        label, units, per = CONTRACTS[name]
-        return {"id": f"MCX:{name}", "token": c["token"], "symbol": name, "contract": c["symbol"],
+        label, units, per = self.contracts[name]
+        return {"id": f"{self.market}:{name}", "token": c["token"], "symbol": name, "contract": c["symbol"],
                 "name": f"{label} futures ({c['expiry'].strftime('%b %Y')} contract, price per {per})",
-                "exchange": "MCX", "type": "FUT", "market": "MCX", "currency": "INR", "tz": "Asia/Kolkata",
+                "exchange": self.exchange, "type": "FUT", "market": self.market, "currency": "INR", "tz": "Asia/Kolkata",
                 "lot": 1, "step": units, "lot_units": units, "unit": per,
                 "fno": False, "expiry": c["expiry"].isoformat(), "strike": None}
 
     def instrument(self, key: str) -> dict | None:
-        name = ALIASES.get(key.strip().upper(), key.strip().upper())
-        if name not in CONTRACTS:
+        name = self.aliases.get(key.strip().upper(), key.strip().upper())
+        if name not in self.contracts:
             return None
         self._load()
         c = front(self._by_name.get(name, []), ist_date())
         return self._make(name, c) if c else None
 
     def defaults(self) -> list[dict]:
-        return [i for i in (self.instrument(n) for n in DEFAULTS) if i]
+        return [i for i in (self.instrument(n) for n in self.default_names) if i]
 
     def search(self, q: str, allow_fno: bool = True, limit: int = 25) -> list[dict]:
         q = q.strip().upper()
         if not q:
             return []
-        q = ALIASES.get(q, q)
-        hits = [n for n, (label, _, _) in CONTRACTS.items() if n.startswith(q) or q in label.upper()]
+        q = self.aliases.get(q, q)
+        hits = [n for n, (label, _, _) in self.contracts.items() if n.startswith(q) or q in label.upper()]
         hits.sort(key=lambda n: (n != q, len(n)))
         return [i for i in (self.instrument(n) for n in hits[:limit]) if i]
 
     def ltp(self, inst: dict) -> float | None:
-        return self.kite.ltp_key(f"MCX:{inst['contract']}")
+        return self.kite.ltp_key(f"{self.exchange}:{inst['contract']}")
 
     def warmup_days(self, tf: str, candles: int = 210) -> int:
         if tf == "1d":
             return math.ceil(candles * 7 / 5) + 10
-        return math.ceil(candles / PER_DAY[tf] * 7 / 5) + 3
+        return math.ceil(candles / self.per_day[tf] * 7 / 5) + 3
 
     def history(self, inst: dict, tf: str, days: int) -> list[dict]:
         if tf != "1d":       # no continuous intraday series: only the current contract's own life
@@ -108,7 +111,7 @@ class MCXProvider:
         try:
             return self.kite.history(int(inst["token"]), tf, days, continuous=(tf == "1d"))
         except Exception as e:
-            raise DataError(f"MCX prices couldn't be loaded: {e}") from None
+            raise DataError(f"{self.noun} prices couldn't be loaded: {e}") from None
 
     def closed_candles(self, inst: dict, tf: str, since: str | None) -> list[dict]:
         """Candles that have fully closed after `since`, for live paper trading."""

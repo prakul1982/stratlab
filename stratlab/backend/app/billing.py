@@ -130,9 +130,13 @@ def check_setup() -> dict:
             item = p.get("item") or {}
             got = item.get("currency") or "INR"
             currencies.add(got)
-            row.update(ok=got == cur, detail=f"{item.get('name', '')}: {got} {(item.get('amount') or 0) / 100:,.2f} every "
-                                             f"{p.get('interval', 1)} {p.get('period', '')}".strip()
-                       + ("" if got == cur else f". This plan is in {got}, not {cur}: fix it in Admin → Prices."))
+            amount = (item.get("amount") or 0) / 100
+            shown = (pricing.table().get(cur) or {}).get(plan + ("_year" if period == "year" else ""))
+            same = shown is not None and abs(amount - float(shown)) < 0.005
+            row.update(ok=got == cur and same, detail=f"{item.get('name', '')}: {got} {amount:,.2f} every "
+                                                      f"{p.get('interval', 1)} {p.get('period', '')}".strip()
+                       + ("" if got == cur else f". This plan is in {got}, not {cur}: fix it in Admin → Prices.")
+                       + ("" if same else f". The Plans page shows {cur} {shown}: fix that price in Admin → Prices to match."))
         except Exception as e:
             row["detail"] = f"Razorpay can't find this plan with these keys ({(str(e) or 'error')[:120]})"
         out["plans"].append(row)

@@ -38,6 +38,9 @@ PRESETS = {
         {"id": "mcx_main", "name": "MCX main contracts", "symbols": [
             "GOLD", "SILVER", "CRUDEOIL", "NATURALGAS", "COPPER", "ZINC", "ALUMINIUM", "LEAD"]},
     ],
+    "CDS": [
+        {"id": "cds_all", "name": "The four rupee pairs", "symbols": ["USDINR", "EURINR", "GBPINR", "JPYINR"]},
+    ],
     "CMDTY": [
         {"id": "global_commodities", "name": "14 global commodity futures", "symbols": [
             "GC=F", "SI=F", "PL=F", "HG=F", "CL=F", "BZ=F", "NG=F", "ZC=F", "ZW=F", "ZS=F", "KC=F", "SB=F", "CC=F", "CT=F"]},

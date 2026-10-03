@@ -32,7 +32,7 @@ def _expiries(n=3):
 
 class FakeKiteConnect:
     def __init__(self):
-        self.rows = {"NSE": [], "NFO": [], "MCX": [], "BFO": []}
+        self.rows = {"NSE": [], "NFO": [], "MCX": [], "BFO": [], "CDS": []}
         token = 1000
         stocks = set()
         for p in universes.PRESETS["IN"]:
@@ -63,6 +63,13 @@ class FakeKiteConnect:
                 exp = e + timedelta(days=30 * i + 20)
                 self.rows["MCX"].append({"instrument_token": token, "tradingsymbol": f"{name}{exp:%y%b}FUT".upper(), "name": name,
                                          "segment": "MCX-FUT", "instrument_type": "FUT", "lot_size": 1, "expiry": exp, "strike": 0})
+        from app.data.cds import CONTRACTS as PAIRS
+        for name in PAIRS:
+            for i, e in enumerate(_expiries(2)):
+                token += 1
+                exp = e + timedelta(days=30 * i + 25)
+                self.rows["CDS"].append({"instrument_token": token, "tradingsymbol": f"{name}{exp:%y%b}FUT".upper(), "name": name,
+                                         "segment": "CDS-FUT", "instrument_type": "FUT", "lot_size": 1, "expiry": exp, "strike": 0})
         self.by_token = {r["instrument_token"]: r for rows in self.rows.values() for r in rows}
         self.by_key = {f"{ex}:{r['tradingsymbol']}": r for ex, rows in self.rows.items() for r in rows}
         self.calls = 0

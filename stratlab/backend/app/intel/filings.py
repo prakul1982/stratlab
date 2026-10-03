@@ -269,12 +269,12 @@ class NSEFilings:
             raise SourceError(self.name, f"The exchange's list of companies looked wrong ({len(out)} companies).")
         return list({c["symbol"]: c for c in out}.values())
 
-    def holidays(self) -> list[str]:
-        """The exchange's published trading holidays for the equity segment, as ISO dates (it lists the current
-        year, and the next one once announced, usually in December)."""
+    def holidays(self, segment: str = "CM") -> list[str]:
+        """The exchange's published trading holidays, as ISO dates (it lists the current year, and the next one once
+        announced, usually in December). `segment`: "CM" equities, "CD" currency derivatives."""
         data = self._get("/api/holiday-master", {"type": "trading"},
                          referer="https://www.nseindia.com/resources/exchange-communication-holidays")
-        rows = (data or {}).get("CM") if isinstance(data, dict) else None
+        rows = (data or {}).get(segment) if isinstance(data, dict) else None
         if not isinstance(rows, list):
             raise SourceError(self.name, "The exchange's holiday list wasn't in the expected shape.")
         out = []

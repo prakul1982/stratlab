@@ -139,6 +139,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
+    threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     yield
@@ -351,18 +352,53 @@ def prices():
     return pricing.public()
 
 
+def fx_rate(code: str) -> float:
+    """Rupees per unit of a currency, from the market data source (e.g. EURINR=X)."""
+    price = research_hub.yahoo.meta(f"{code}INR=X").get("price")
+    if not price:
+        raise ValueError("no rate")
+    return float(price)
+
+
+def rates_job():
+    """Once a day: exchange rates, so prices in other currencies follow the rupee price."""
+    time.sleep(120)
+    while True:
+        try:
+            pricing.refresh_rates(fx_rate)
+        except Exception as e:
+            print("exchange rate refresh failed:", e)
+        time.sleep(24 * 3600)
+
+
+def prices_view() -> dict:
+    try:
+        fx = json.loads(db.get_setting(pricing.RATES) or "{}")
+    except Exception:
+        fx = {}
+    return {"currencies": pricing.table(), "rates_at": fx.get("at"), "rate_errors": fx.get("errors") or []}
+
+
 @app.get("/admin/prices")
 def admin_prices(_=Depends(admin.admin_profile)):
-    """Every currency's prices and Razorpay plan IDs (blank: charged in rupees)."""
-    return {"currencies": pricing.table()}
+    """Every currency's prices (automatic from the rupee price unless fixed), rates and Razorpay plan IDs."""
+    return prices_view()
+
+
+@app.post("/admin/prices/rates")
+def admin_prices_rates(_=Depends(admin.admin_profile)):
+    """Read today's exchange rates now instead of waiting for the daily run."""
+    pricing.refresh_rates(fx_rate)
+    return prices_view()
 
 
 @app.put("/admin/prices")
 def admin_set_prices(req: PricesReq, _=Depends(admin.admin_profile)):
     try:
-        return {"currencies": pricing.save(req.currencies)}
+        pricing.save(req.currencies)
     except ValueError as e:
         err(400, "bad_price", str(e))
+    return prices_view()
 
 
 @app.get("/me")
@@ -1709,6 +1745,7 @@ def holiday_job():
     while True:
         try:
             trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
+            trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD"), "CDS")
         except Exception as e:
             print("holiday refresh failed:", e)
         time.sleep(24 * 3600)
@@ -1718,6 +1755,7 @@ def holiday_job():
 def admin_holidays_refresh(_=Depends(admin.admin_profile)):
     """Fetch the exchange's holiday list now instead of waiting for the daily run."""
     trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
+    trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD"), "CDS")
     return calendar_status()
 
 

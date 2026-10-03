@@ -28,9 +28,9 @@ Schema:
                 (e.g. "NIFTY 50", "NIFTY BANK", "RELIANCE"), a crypto pair (e.g. "BTC-USD"), a US ticker
                 (e.g. "AAPL", "SPY"), a London (e.g. "VOD.L"), European (e.g. "SAP.DE") or Tokyo (e.g. "7203.T")
                 listing, a forex pair (e.g. "EURUSD=X"), an MCX commodity future by name (e.g. "GOLDM", "CRUDEOIL",
-                "NATURALGAS") or a global commodity future (e.g. "GC=F" gold, "CL=F" WTI crude), or null if not named or if it's a whole universe,
+                "NATURALGAS"), an Indian currency future (e.g. "USDINR", "EURINR") or a global commodity future (e.g. "GC=F" gold, "CL=F" WTI crude), or null if not named or if it's a whole universe,
   "market": "IN" (Indian stocks and indices), "MCX" (Indian commodity futures: only when MCX, rupees or an MCX contract
-            name is mentioned), "CMDTY" (global commodity futures: gold, oil, grains in dollars), "CRYPTO", "US", "UK", "EU", "JP" or "FX", or null if unclear,
+            name is mentioned), "CDS" (Indian currency futures: USDINR, EURINR, GBPINR, JPYINR), "CMDTY" (global commodity futures: gold, oil, grains in dollars), "CRYPTO", "US", "UK", "EU", "JP" or "FX", or null if unclear,
   "universe": when the strategy scans or trades a LIST of instruments at once (a watchlist, "F&O stocks", "NIFTY 50
               stocks", several coins): {"preset": "nifty50" | "banknifty" | "fno_liquid" (liquid F&O stocks) |
               "us_mega" | "top_coins" | null, "symbols": [trading symbols, when the source lists them],
@@ -272,7 +272,7 @@ def write_strategy(text: str, pro: bool) -> dict:
     out["tf"] = data.get("tf") if data.get("tf") in ("1d", "1h", "15m", "5m") else None
     out["name"] = str(data.get("name") or "")[:80] or None
     out["instrument"] = str(data["instrument"])[:40] if data.get("instrument") else None
-    out["market"] = data.get("market") if data.get("market") in ("IN", "CRYPTO", "US", "UK", "EU", "JP", "FX", "MCX", "CMDTY") else None
+    out["market"] = data.get("market") if data.get("market") in ("IN", "CRYPTO", "US", "UK", "EU", "JP", "FX", "MCX", "CDS", "CMDTY") else None
     out["universe"] = _universe(data.get("universe"))
     if out["universe"]:
         out["instrument"] = None

@@ -5,7 +5,7 @@ to a built-in set when the AI can't be reached. Every idea is a plain-English ru
 turn into a notebook: an entry, an exit and a stop, on a named market."""
 import re
 
-MARKETS = {"IN", "US", "UK", "EU", "JP", "CRYPTO", "FX", "MCX", "CMDTY"}
+MARKETS = {"IN", "US", "UK", "EU", "JP", "CRYPTO", "FX", "MCX", "CDS", "CMDTY"}
 TFS = {"1d", "1h", "15m", "5m"}
 
 SYSTEM = """You suggest trading strategy ideas someone can test in a backtester. Reply with JSON only:
@@ -27,7 +27,8 @@ FALLBACK = [
 ]
 
 # words that point at a market when someone doesn't name one
-HINTS = [("MCX", r"\b(mcx|goldm|silverm|crudeoil|naturalgas|natgasmini)\b"),
+HINTS = [("CDS", r"\b(usdinr|eurinr|gbpinr|jpyinr|currency futures?)\b"),
+         ("MCX", r"\b(mcx|goldm|silverm|crudeoil|naturalgas|natgasmini)\b"),
          ("CMDTY", r"\b(gold|silver|crude|brent|wti|natural gas|copper|platinum|corn|wheat|soybeans?|coffee|sugar|cocoa|cotton|comex|nymex|commodit(y|ies))\b"),
          ("CRYPTO", r"\b(crypto|bitcoin|btc|eth|ethereum|sol|coin|coins)\b"), ("US", r"\b(us|usa|nasdaq|nyse|s&p|spy|qqq|apple|tesla|nvidia)\b"),
          ("FX", r"\b(forex|fx|eurusd|usdjpy|gbpusd|currency|currencies)\b"), ("UK", r"\b(uk|ftse|london)\b"),
