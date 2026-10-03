@@ -284,6 +284,7 @@ export function AdminPage() {
 
           <AuditPanel />
           <MarketAuditPanel />
+          <MarketAuditPanel region="US" />
 
           {sv?.calendar && <HolidaysPanel status={sv.calendar} onSaved={(c) => setOv((o) => o && { ...o, server: { ...o.server, calendar: c } })} />}
 

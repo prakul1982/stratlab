@@ -102,7 +102,7 @@ def test_admin_audit_endpoint_runs_and_reports(monkeypatch):
     from app import admin
     monkeypatch.setattr(main, "audit_runner", audit.Runner())
     monkeypatch.setattr(audit.db, "set_setting", lambda k, v: None)
-    monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None: {"symbol": s, "name": s, "seconds": 0, "issues": []})
+    monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN": {"symbol": s, "name": s, "seconds": 0, "issues": []})
     main.app.dependency_overrides[admin.admin_profile] = lambda: {"id": "a", "role": "admin"}
     try:
         c = TestClient(main.app)
@@ -168,7 +168,7 @@ def test_a_whole_index_comes_from_the_exchanges_list(monkeypatch):
     from tests import world as W
     w = W.build(monkeypatch)
     try:
-        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None: {"symbol": s, "name": s, "seconds": 0, "issues": []})
+        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN": {"symbol": s, "name": s, "seconds": 0, "issues": []})
         sets = {s["id"]: s for s in w["client"].get("/admin/audit", headers=W.headers("admin-token")).json()["sets"]}
         assert {"nifty500", "niftynext50", "midcap150", "smallcap250"} <= sets.keys()
         r = w["client"].post("/admin/audit", headers=W.headers("admin-token"), json={"set": "nifty500"}).json()
@@ -195,7 +195,7 @@ def test_whole_market_audit_reads_the_exchange_list_and_checks_new_listings_firs
     from tests import world as W
     w = W.build(monkeypatch)
     try:
-        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None: {**_clean(s), "issues": [{"level": "gap", "area": "Numbers", "detail": "x"}] if s == "CO10" else []})
+        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN": {**_clean(s), "issues": [{"level": "gap", "area": "Numbers", "detail": "x"}] if s == "CO10" else []})
         h = W.headers("admin-token")
         assert w["client"].get("/admin/audit/market", headers=h).json()["enabled"] is False
         assert main.market_audit.step() is None                                          # off: does nothing
@@ -252,5 +252,35 @@ def test_whole_market_audit_keeps_the_last_list_and_gives_way_to_a_hand_started_
         a.refresh_list(force=True)
         s = a.status()
         assert s["listed"] == 1 and "refused" in s["list_error"]                         # the last good list stays
+    finally:
+        w["close"]()
+
+
+def test_us_companies_are_audited_from_their_sec_filings(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        monkeypatch.setattr(deepdive, "stored", lambda s: None)
+        monkeypatch.setattr(report_card, "stored", lambda s: None)
+        h = W.headers("admin-token")
+        sets = w["client"].get("/admin/audit?region=US", headers=h).json()["sets"]
+        assert {s["id"] for s in sets} == {"us_mega", "sectors"}
+        r = w["client"].post("/admin/audit", headers=h, json={"region": "US", "symbols": ["aapl", "ZZZZ"]}).json()
+        assert r["region"] == "US" and r["total"] == 2
+        for _ in range(200):
+            if not main.audit_runner.status()["running"]:
+                break
+            time.sleep(0.02)
+        rows = {x["symbol"]: x for x in main.audit_runner.status()["rows"]}
+        apple = [f"{i['area']}: {i['detail']}" for i in rows["AAPL"]["issues"]]
+        assert not any(i["level"] == "error" for i in rows["AAPL"]["issues"]), apple
+        assert not any("presentation" in x or "transcript" in x for x in apple)        # US filings, not Indian documents
+        assert rows["ZZZZ"]["issues"][0]["level"] == "error" and "SEC" in rows["ZZZZ"]["issues"][0]["detail"]
+        # the whole US market: the SEC's own list of companies
+        w["client"].post("/admin/audit/market", headers=h, json={"region": "US", "on": True})
+        assert main.market_audit_us.step() == "AAPL"
+        s = w["client"].get("/admin/audit/market?region=US", headers=h).json()
+        assert s["listed"] == 2 and s["checked"] == 1 and s["new_listings"] == []          # the first list read isn't "new"
+        assert w["client"].get("/admin/audit/market", headers=h).json()["checked"] == 0    # India's is separate
     finally:
         w["close"]()

@@ -116,7 +116,8 @@ def summary(p: dict) -> dict:
     hl = r.get("High / Low", "")
     hi_lo = [num(x) for x in hl.split("/")] if "/" in hl else [None, None]
     net_margin = (profit[-1] / sales[-1] * 100) if sales and profit and sales[-1] else None
-    net_worth = (reserves[-1] + (equity[-1] if equity else 0)) if reserves else None
+    whole = [v for v in _row(bal, "Equity") if v is not None]       # US filings: one shareholders' equity row
+    net_worth = (reserves[-1] + (equity[-1] if equity else 0)) if reserves else (whole[-1] if whole else None)
     return {
         "market_cap_cr": num(r.get("Market Cap")), "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,

@@ -139,9 +139,9 @@ export function CompanyPage() {
           <Change q={c.quote} currency={ccy} />
         </div>
         <div className="toolbar">
-          {region === "IN" && focus === "invest" && <Link className="btn blue sm" to={`/research/IN/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
+          {(region === "IN" || region === "US") && focus === "invest" && <Link className="btn blue sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
           {c.testable && <button className={`btn ${focus === "invest" && region === "IN" ? "outline" : "blue"} sm`} onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
-          {region === "IN" && focus !== "invest" && <Link className="btn outline sm" to={`/research/IN/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
+          {(region === "IN" || region === "US") && focus !== "invest" && <Link className="btn outline sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
           {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
@@ -577,7 +577,7 @@ export function ScanPage() {
               <tbody>{rows.map((r) => (
                 <tr key={r.id}>
                   <td><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.symbol}</Link>{r.name && r.name !== r.symbol && <div className="tiny muted">{r.name}</div>}
-                    {region === "IN" && <Link className="link tiny" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link>}</td>
+                    {(region === "IN" || region === "US") && <Link className="link tiny" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link>}</td>
                   <td className="num">{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}<div className={`tiny ${signClass(r.chg)}`}>{r.chg == null ? "" : pct(r.chg, 2)}</div></td>
                   <td>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <div className="tiny muted">{r.stage_days} day{r.stage_days === 1 ? "" : "s"}</div> : null}</td>
                   <td>{r.st_up ? "Up" : "Down"}<div className="tiny muted">for {r.st_days} day{r.st_days === 1 ? "" : "s"}</div></td>

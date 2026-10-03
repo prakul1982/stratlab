@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct, signClass } from "../lib/format";
@@ -21,11 +21,11 @@ type Measure = { name: string; value: string; period: string | null; change: str
 type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; score: number | null;
   read: { kind: string; at: string; title: string }[]; problems: string[]; at: string };
 export interface DeepView {
-  symbol: string; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
+  symbol: string; region?: "IN" | "US"; ai?: boolean; source_url?: string | null; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
   industry_measures?: { key: string; label: string | null; measures: string[] };
   valuation?: { name: string; short: string; value: number | null; pe: number | null; why: string };
-  numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean; notes?: string[];
+  numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean; notes?: string[]; capex_reported?: boolean;
     growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null;
       eps_cagr_3y?: number | null; eps_cagr_5y?: number | null } };
   reads: null | {
@@ -38,9 +38,11 @@ export interface DeepView {
 }
 
 const cr = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-IN", { maximumFractionDigits: 2 }));
+const usd = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
 const pc = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);
 const day = (s: string) => new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report" };
+const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report",
+  quarterly_report: "Quarterly report", earnings_release: "Earnings release" };
 
 function Stat({ label, v, why }: { label: string; v: number | null; why?: string }) {
   return (
@@ -128,7 +130,12 @@ function SourceLink({ s }: { s: Source }) {
 
 export function DeepDivePage() {
   const { symbol = "" } = useParams();
+  const region: "IN" | "US" = useLocation().pathname.startsWith("/research/US/") ? "US" : "IN";
   const sym = symbol.toUpperCase();
+  const us = region === "US";
+  const q = (extra = "") => (us ? `?region=US${extra ? `&${extra}` : ""}` : extra ? `?${extra}` : "");
+  const num = us ? usd : cr;                                   // amounts in the company's own unit: $ million or ₹ crore
+  const unitWord = us ? "$ million" : "₹ crore";
   const { me, fail, notify } = useApp();
   const pro = !!me?.plan_info?.features?.deepdive;
   const [v, setV] = useState<DeepView | null>(null);
@@ -140,7 +147,7 @@ export function DeepDivePage() {
   const downloadDeck = async () => {
     setDecking(true);
     try {
-      const r = await api<Response>(`/research/deep/${encodeURIComponent(sym)}/deck`, { raw: true });
+      const r = await api<Response>(`/research/deep/${encodeURIComponent(sym)}/deck${q()}`, { raw: true });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(await r.blob()); a.download = `${sym}-deep-dive.pptx`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -151,14 +158,14 @@ export function DeepDivePage() {
     if (!pro) return;
     let live = true;
     setV(null); setError(null);
-    api<DeepView>(`/research/deep/${encodeURIComponent(sym)}`).then((x) => live && setV(x)).catch((e) => live && setError((e as Error).message));
+    api<DeepView>(`/research/deep/${encodeURIComponent(sym)}${q()}`).then((x) => live && setV(x)).catch((e) => live && setError((e as Error).message));
     return () => { live = false; };
-  }, [sym, pro]);
+  }, [sym, pro, region]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const readDocs = async (refresh = false) => {
     setReading(true);
     try {
-      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/read${refresh ? "?refresh=true" : ""}`, { method: "POST" });
+      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/read${q(refresh ? "refresh=true" : "")}`, { method: "POST" });
       setV(x);
       if (x.reads?.problems?.length) notify(`Read with ${x.reads.problems.length} document${x.reads.problems.length === 1 ? "" : "s"} skipped.`);
     } catch (e) { fail(e); } finally { setReading(false); }
@@ -167,7 +174,7 @@ export function DeepDivePage() {
   const checkCalls = async (refresh = false) => {
     setCarding(true);
     try {
-      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/card${refresh ? "?refresh=true" : ""}`, { method: "POST" });
+      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/card${q(refresh ? "refresh=true" : "")}`, { method: "POST" });
       setV(x);
       if (x.card?.problems?.length) notify(`Checked with ${x.card.problems.length} call${x.card.problems.length === 1 ? "" : "s"} skipped.`);
     } catch (e) { fail(e); } finally { setCarding(false); }
@@ -178,12 +185,14 @@ export function DeepDivePage() {
   const b = v?.reads?.business, p = v?.reads?.plans;
   return (
     <div className="stack" style={{ gap: 22 }}>
-      <ResearchNav region="IN" />
+      <ResearchNav region={region} />
       <div className="stack" style={{ gap: 8 }}>
-        <Link className="link small" to={`/research/IN/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
-        <span className="eyebrow">Deep dive · India · {sym}</span>
+        <Link className="link small" to={`/research/${region}/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
+        <span className="eyebrow">Deep dive · {us ? "United States" : "India"} · {sym}</span>
         <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{v?.name ?? sym}: business, capex and growth</h1>
-        <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice.</p>
+        <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>{us
+          ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in $ million{v?.source_url ? <> (<a className="link" href={v.source_url} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
+          : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
         {v && <div className="row wrap" style={{ gap: 10 }}>
           <button className="btn quiet sm" disabled={decking} onClick={downloadDeck} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking ? "Making the deck…" : "Download as slides (PowerPoint)"}</button>
           <Link className="btn quiet sm" to="/research/investor">Investor home →</Link>
@@ -203,15 +212,15 @@ export function DeepDivePage() {
             </div>
             {(n.notes ?? []).map((t) => <p key={t} className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>{t}</p>)}
             <div className="rs-grid">
-              <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.sales as number }))} label="Sales" unit={n.unit} />
+              <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.sales as number }))} label={us ? "Revenue" : "Sales"} unit={n.unit} />
               <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.profit as number }))} label="Net profit" unit={n.unit} tone="blue" />
             </div>
             {n.quarters.length > 0 && (
               <div className="table-wrap"><table>
                 <thead><tr><th>Quarter</th><th className="num">Sales</th><th className="num">vs a year ago</th><th className="num">{n.bank ? "Financing margin" : "Operating margin"}</th><th className="num">Net profit</th></tr></thead>
                 <tbody>{n.quarters.slice(-8).map((q) => (
-                  <tr key={q.quarter}><td>{q.quarter}</td><td className="num">{cr(q.sales)}</td><td className={`num ${signClass(q.sales_yoy)}`}>{q.sales_yoy == null ? "–" : pct(q.sales_yoy)}</td>
-                    <td className="num">{pc(q.opm)}</td><td className="num">{cr(q.profit)}</td></tr>))}</tbody>
+                  <tr key={q.quarter}><td>{q.quarter}</td><td className="num">{num(q.sales)}</td><td className={`num ${signClass(q.sales_yoy)}`}>{q.sales_yoy == null ? "–" : pct(q.sales_yoy)}</td>
+                    <td className="num">{pc(q.opm)}</td><td className="num">{num(q.profit)}</td></tr>))}</tbody>
               </table></div>
             )}
           </Panel>
@@ -233,17 +242,26 @@ export function DeepDivePage() {
               <p className="small muted" style={{ margin: 0 }}>This is a bank or lender: its revenue is mostly interest, and lending runs through its cash flow, so capex, free cash flow, operating margin and debt to equity don't describe it. The checklist uses return on equity instead.</p>
             </Panel>
           ) : (
-          <Panel title="Capex and cash" span="full" info="Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ₹ crore.">
-            {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>About <b>₹{cr(n.capex_3y_total)} crore</b> spent on capex over the last three years. Figures in ₹ crore.</p>}
+          <Panel title="Capex and cash" span="full" info={n.capex_reported
+            ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${unitWord}.`
+            : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${unitWord}.`}>
+            {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>{n.capex_reported ? "" : "About "}<b>{us ? `$${usd(n.capex_3y_total)} million` : `₹${cr(n.capex_3y_total)} crore`}</b> spent on capex over the last three years. Figures in {unitWord}.</p>}
             <div className="table-wrap"><table>
               <thead><tr><th>Year</th><th className="num">Sales</th><th className="num">Capex</th><th className="num">Capex / sales</th><th className="num">Cash from operations</th><th className="num">Free cash flow</th><th className="num">Debt</th></tr></thead>
               <tbody>{[...years].reverse().slice(0, 8).map((y) => (
-                <tr key={y.year}><td>{y.year}</td><td className="num">{cr(y.sales)}</td><td className="num">{cr(y.capex)}</td><td className="num">{pc(y.capex_pct_sales)}</td>
-                  <td className="num">{cr(y.cfo)}</td><td className={`num ${signClass(y.fcf)}`}>{cr(y.fcf)}</td><td className="num">{cr(y.debt)}</td></tr>))}</tbody>
+                <tr key={y.year}><td>{y.year}</td><td className="num">{num(y.sales)}</td><td className="num">{num(y.capex)}</td><td className="num">{pc(y.capex_pct_sales)}</td>
+                  <td className="num">{num(y.cfo)}</td><td className={`num ${signClass(y.fcf)}`}>{num(y.fcf)}</td><td className="num">{num(y.debt)}</td></tr>))}</tbody>
             </table></div>
           </Panel>
           )}
 
+          {us && (
+            <Panel title="Business, plans and management" span="full">
+              <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Reading the company's annual report for its business model, plans and risks is coming for US companies.
+                US companies don't file earnings-call transcripts with the SEC, so the management report card needs another source. The filings are linked below.</p>
+            </Panel>
+          )}
+          {!us && <>
           <section className="card stack" style={{ gap: 12 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
               <div className="stack" style={{ gap: 2 }}>
@@ -344,6 +362,8 @@ export function DeepDivePage() {
             {v.card?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.card.problems.join(" · ")}</p> : null}
           </section>
 
+          </>}
+
           {v.documents.length > 0 && (
             <Panel title="Documents" span="full">
               <div className="filings">{v.documents.map((d) => (
@@ -352,7 +372,9 @@ export function DeepDivePage() {
                   <a className="link tiny" href={d.url} target="_blank" rel="noopener noreferrer">Open ↗</a></div>))}</div>
             </Panel>
           )}
-          <p className="small muted" style={{ maxWidth: "80ch" }}>Numbers are the company's reported figures; capex and free cash flow are estimated from them. The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it. Nothing here is investment advice.</p>
+          <p className="small muted" style={{ maxWidth: "80ch" }}>Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us
+            ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report."
+            : " The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it."} Nothing here is investment advice.</p>
         </>
       )}
     </div>

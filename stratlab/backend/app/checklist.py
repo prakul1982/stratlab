@@ -3,6 +3,7 @@ and its management report card. Each check says pass, watch or fail with the num
 
 These are screening rules the user can read and disagree with, not a view on the stock; the page says so."""
 from . import industry
+from .deepdive import money
 from .intel.screener import summary
 
 GROUPS = ["Trend", "Growth", "Quality", "Balance sheet", "Cash", "Promoters", "Filings", "Management"]
@@ -95,7 +96,8 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
         fcf = [y["fcf"] for y in last3 if y.get("fcf") is not None]
         fcf_sum = sum(fcf) if len(fcf) == 3 else None
         add("Cash", "Free cash flow, 3 years", "na" if fcf_sum is None else "pass" if fcf_sum > 0 else "watch",
-            "–" if fcf_sum is None else f"{'-' if fcf_sum < 0 else ''}₹{abs(fcf_sum):,.0f} crore", "Cash from operations minus estimated capex. Negative is common while building capacity: watch, not fail.")
+            "–" if fcf_sum is None else money(fcf_sum, nums.get("unit")),
+            f"Cash from operations minus {'capex' if nums.get('capex_reported') else 'estimated capex'}. Negative is common while building capacity: watch, not fail.")
 
     # promoters
     prom = _row(p.get("shareholding"), "Promoters")

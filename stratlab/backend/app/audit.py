@@ -20,8 +20,11 @@ INDEX_SETS = {"nifty500": ("NIFTY 500", "NIFTY 500", 500), "niftynext50": ("NIFT
               "midcap150": ("NIFTY MIDCAP 150", "NIFTY Midcap 150", 150), "smallcap250": ("NIFTY SMALLCAP 250", "NIFTY Smallcap 250", 250)}
 
 
-def sets() -> list[dict]:
-    """The sets an audit can run on: the ready-made groups, every sector's main stocks, and whole NSE indices."""
+def sets(region: str = "IN") -> list[dict]:
+    """The sets an audit can run on: the ready-made groups, every sector's main stocks, and (India) whole NSE indices."""
+    if region == "US":
+        out = [{"id": p["id"], "name": p["name"], "count": len(p["symbols"])} for p in universes.PRESETS["US"]]
+        return out + [{"id": "sectors", "name": "Every sector's main US stocks", "count": len(all_sector_stocks("US"))}]
     out = [{"id": p["id"], "name": p["name"], "count": len(p["symbols"])} for p in universes.PRESETS["IN"]]
     every = all_sector_stocks()
     out.append({"id": "sectors", "name": "Every sector's main stocks", "count": len(every)})
@@ -29,26 +32,26 @@ def sets() -> list[dict]:
     return out
 
 
-def all_sector_stocks() -> list[str]:
+def all_sector_stocks(region: str = "IN") -> list[str]:
     seen: list[str] = []
-    for p in universes.PRESETS["IN"]:
+    for p in universes.PRESETS[region]:
         seen += [s for s in p["symbols"] if s not in seen]
-    for syms in sector_members.IN.values():
+    for syms in getattr(sector_members, region).values():
         seen += [s for s in syms if s not in seen]
     return seen
 
 
-def symbols_for(set_id: str, custom: list[str] | None = None, members=None) -> list[str]:
+def symbols_for(set_id: str, custom: list[str] | None = None, members=None, region: str = "IN") -> list[str]:
     """`members(index)` gives an NSE index's stocks (the exchange feed), for the whole-index sets."""
-    if set_id in INDEX_SETS and not custom:
+    if set_id in INDEX_SETS and not custom and region == "IN":
         if members is None:
             raise ValueError("Index lists aren't available here.")
         return members(INDEX_SETS[set_id][0])[:MAX_SYMBOLS]
     if custom:
         return list(dict.fromkeys(s.strip().upper() for s in custom if s.strip()))[:MAX_SYMBOLS]
     if set_id == "sectors":
-        return all_sector_stocks()[:MAX_SYMBOLS]
-    for p in universes.PRESETS["IN"]:
+        return all_sector_stocks(region)[:MAX_SYMBOLS]
+    for p in universes.PRESETS[region]:
         if p["id"] == set_id:
             return list(p["symbols"])
     raise ValueError("Unknown set")
@@ -123,7 +126,8 @@ def check_prices(snap: dict, trend: dict | None, exchange: float | None) -> list
 
 
 def check_view(view: dict) -> list[dict]:
-    """Classification, valuation, checklist and documents, from the same view a user sees."""
+    """Classification, valuation, checklist and documents, from the same view a user sees. US companies are checked
+    for their annual and quarterly reports; Indian ones for presentations and call transcripts."""
     out = []
     cl = view.get("checklist") or {}
     ind = cl.get("industry") or {}
@@ -137,6 +141,12 @@ def check_view(view: dict) -> list[dict]:
         out.append(_issue("gap", "Checklist", f"{len(na)} checks couldn't be judged: {', '.join(na[:5])}"))
     if view.get("doc_note"):
         out.append(_issue("error", "Documents", view["doc_note"]))
+    elif view.get("region") == "US":
+        kinds = [d["kind"] for d in view.get("documents") or []]
+        if "annual_report" not in kinds:
+            out.append(_issue("gap", "Documents", "No annual report (10-K) filed in the last two years"))
+        if "quarterly_report" not in kinds:
+            out.append(_issue("gap", "Documents", "No quarterly report (10-Q) filed in the last two years"))
     else:
         kinds = [d["kind"] for d in view.get("documents") or []]
         if "presentation" not in kinds:
@@ -260,11 +270,11 @@ class Runner:
         s["summary"] = summarise(s.get("rows") or [])
         return s
 
-    def start(self, symbols: list[str], label: str, check, docs: bool) -> dict:
+    def start(self, symbols: list[str], label: str, check, docs: bool, region: str = "IN") -> dict:
         with self.lock:
             if self.state.get("running"):
                 raise RuntimeError("An audit is already running.")
-            self.state = {"running": True, "label": label, "docs": docs, "total": len(symbols), "done": 0, "rows": [],
+            self.state = {"running": True, "label": label, "docs": docs, "region": region, "total": len(symbols), "done": 0, "rows": [],
                           "started_at": datetime.now(timezone.utc).isoformat(), "finished_at": None, "cancelled": False}
             self._stop.clear()
         threading.Thread(target=self._run, args=(symbols, check), daemon=True).start()
@@ -277,7 +287,10 @@ class Runner:
                 with self.lock:
                     self.state["cancelled"] = True
                 break
-            row = check(sym)
+            try:
+                row = check(sym)
+            except Exception as e:                # one company failing never stops the run, or leaves it "running"
+                row = {"symbol": sym, "name": sym, "seconds": 0, "issues": [_issue("error", "Audit", str(e)[:200] or e.__class__.__name__)]}
             with self.lock:
                 self.state["rows"].append(row)
                 self.state["done"] += 1
@@ -297,9 +310,9 @@ NEW_DAYS = 30                  # listed within this many days: checked before an
 LIST_EVERY = 86400             # re-read the exchange's list of companies once a day
 
 
-def _shard(sym: str) -> str:
+def _shard(sym: str, key: str = MARKET) -> str:
     c = sym[:1].upper()
-    return f"{MARKET}:rows:{c if c.isalpha() else '0'}"
+    return f"{key}:rows:{c if c.isalpha() else '0'}"
 
 
 class MarketAudit:
@@ -308,8 +321,8 @@ class MarketAudit:
     is read daily: a new listing is checked first, a delisted company is dropped, and each company is checked again
     once its last check is a month old. Gives way while a hand-started audit runs."""
 
-    def __init__(self, list_fn, check_fn, busy_fn=lambda: False, pause: float = 3.0):
-        self.list_fn, self.check_fn, self.busy_fn, self.pause = list_fn, check_fn, busy_fn, pause
+    def __init__(self, list_fn, check_fn, busy_fn=lambda: False, pause: float = 3.0, key: str = MARKET):
+        self.list_fn, self.check_fn, self.busy_fn, self.pause, self.key = list_fn, check_fn, busy_fn, pause, key
         self.lock = threading.Lock()
         self.loaded = False
         self.state: dict = {"enabled": False, "list_at": None, "list_tried_at": None, "list_error": None, "since": None}
@@ -324,10 +337,10 @@ class MarketAudit:
             return
         import json
         try:
-            self.state.update(json.loads(db.get_setting(MARKET) or "{}"))
-            self.listing = json.loads(db.get_setting(f"{MARKET}:list") or "{}")
+            self.state.update(json.loads(db.get_setting(self.key) or "{}"))
+            self.listing = json.loads(db.get_setting(f"{self.key}:list") or "{}")
             for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0":
-                self.rows.update(json.loads(db.get_setting(f"{MARKET}:rows:{c}") or "{}"))
+                self.rows.update(json.loads(db.get_setting(f"{self.key}:rows:{c}") or "{}"))
         except Exception as e:
             print("could not load the market audit:", e)
         self.loaded = True
@@ -337,12 +350,12 @@ class MarketAudit:
         try:
             for w in what:
                 if w == "state":
-                    db.set_setting(MARKET, json.dumps(self.state))
+                    db.set_setting(self.key, json.dumps(self.state))
                 elif w == "list":
-                    db.set_setting(f"{MARKET}:list", json.dumps(self.listing))
+                    db.set_setting(f"{self.key}:list", json.dumps(self.listing))
                 else:                                   # a symbol: save its shard
-                    key = _shard(w)
-                    db.set_setting(key, json.dumps({s: r for s, r in self.rows.items() if _shard(s) == key}))
+                    key = _shard(w, self.key)
+                    db.set_setting(key, json.dumps({s: r for s, r in self.rows.items() if _shard(s, self.key) == key}))
         except Exception as e:
             print("could not save the market audit:", e)
 
@@ -377,14 +390,16 @@ class MarketAudit:
             return False
         today = datetime.now(timezone.utc).date().isoformat()
         with self.lock:
+            first = not self.listing         # the first read: nothing in it is new, it's just the start
             fresh = {c["symbol"]: {"name": c.get("name") or c["symbol"], "listed": c.get("listed"),
-                                   "seen": (self.listing.get(c["symbol"]) or {}).get("seen") or today} for c in got}
+                                   "seen": (self.listing.get(c["symbol"]) or {}).get("seen") or (None if first else today)}
+                     for c in got}
             gone = [s for s in self.rows if s not in fresh]
             for s in gone:
                 self.rows.pop(s)
             self.listing = fresh
             self.state.update(list_at=self.state["list_tried_at"], list_error=None)
-            self._save("state", "list", *{_shard(s): s for s in gone}.values())
+            self._save("state", "list", *{_shard(s, self.key): s for s in gone}.values())
         return True
 
     def _is_new(self, sym: str, today) -> bool:

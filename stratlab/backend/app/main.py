@@ -36,7 +36,8 @@ from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research
-from .intel import filings
+from .intel import filings, sec
+from .intel.sec import SEC
 from .intel.net import SourceError
 from .docs import Docs
 from .intel.screener import summary as screener_summary
@@ -139,6 +140,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
+    threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     yield
 
 
@@ -973,8 +975,37 @@ def with_industry(sym: str, p: dict) -> dict:
         return p
 
 
-def deep_base(sym: str) -> dict:
+sec_feed = SEC()
+REGIONS = ("IN", "US")
+
+
+def deep_region(region: str) -> str:
+    r = (region or "IN").upper()
+    if r not in REGIONS:
+        err(400, "bad_region", "The deep dive covers Indian (IN) and US companies.")
+    return r
+
+
+def deep_base_us(sym: str) -> dict:
+    """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
+    p = dict(research_routes.source_call(lambda: sec_feed.company(sym)))
+    try:
+        m = research_hub.yahoo.meta(sym)
+    except Exception:                     # no price: the numbers still stand, the ratios that need a price don't
+        m = {}
+    p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+    try:
+        wiki = research_hub.wiki.company(p.get("name") or sym) or {}
+        p["about"] = wiki.get("extract") or ""
+    except Exception:
+        p["about"] = ""
+    return {"p": p, "docs": p.get("documents") or [], "doc_note": None, "filings": None, "trend": price_trend(sym, "US")}
+
+
+def deep_base(sym: str, region: str = "IN") -> dict:
     """Numbers and the list of readable documents for one company (no AI)."""
+    if region == "US":
+        return deep_base_us(sym)
     p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(sym)))
     try:
         items = filings_feed.announcements(sym, deepdive.DOC_DAYS)
@@ -994,19 +1025,23 @@ def price_trend(sym: str, market: str = "IN") -> dict | None:
 
 
 def deep_view(sym: str, base: dict) -> dict:
-    reads, card = deepdive.stored(sym), report_card.stored(sym)
     p = base["p"]
+    us = p.get("region") == "US"
+    key = f"US:{sym}" if us else sym          # stored AI reads: Indian symbols keep their old keys
+    reads, card = deepdive.stored(key), report_card.stored(key)
     nums = deepdive.numbers(p)
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
-    return {"symbol": sym, "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
+    return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
+            "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
             "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
             "industry_measures": industry.measures(p, sym),
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
             "calls": sum(d["kind"] == "transcript" for d in base["docs"]),
             "card": card_view, "card_stale": not report_card.fresh(card), "trend": base["trend"], "filings": base["filings"],
-            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, sym)}
+            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym),
+            "ai": not us}
 
 
 def company_hosts(p: dict) -> tuple[str, ...]:
@@ -1022,18 +1057,30 @@ def deep_ai_allowed(profile) -> None:
         err(429, "research_ai_limit", f"You've used {settings.RESEARCH_AI_PER_DAY} fresh AI reads today. Stored reads still work; try again tomorrow.")
 
 
+def deep_symbol(symbol: str, region: str) -> str:
+    return research_routes.symbol_of(symbol) if region == "IN" else re.sub(r"[^A-Z0-9.\-]", "", symbol.upper())[:12]
+
+
+def no_us_ai(region: str):
+    if region == "US":
+        err(400, "us_ai_not_yet", "Reading US filings with AI isn't available yet; the numbers, checklist and filings are.")
+
+
 @app.get("/research/deep/{symbol}")
-def deep_dive(symbol: str, profile=Depends(current_profile)):
-    """Growth, margins, capex and cash flow from the reported numbers, plus any stored read of the company's documents."""
+def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile)):
+    """Growth, margins, capex and cash flow from the reported numbers, plus any stored read of the company's documents.
+    India from the company pages and NSE filings; the US from the SEC's filings."""
     need(profile, "deepdive", "The company deep dive")
-    sym = research_routes.symbol_of(symbol)
-    return ok(deep_view(sym, deep_base(sym)))
+    region = deep_region(region)
+    sym = deep_symbol(symbol, region)
+    return ok(deep_view(sym, deep_base(sym, region)))
 
 
 @app.post("/research/deep/{symbol}/read")
-def deep_dive_read(symbol: str, refresh: bool = False, profile=Depends(current_profile)):
+def deep_dive_read(symbol: str, refresh: bool = False, region: str = "IN", profile=Depends(current_profile)):
     """Read the latest investor presentation and call transcripts with AI: business model, capex and growth plans."""
     need(profile, "deepdive", "The company deep dive")
+    no_us_ai(deep_region(region))
     sym = research_routes.symbol_of(symbol)
     base = deep_base(sym)
     have = deepdive.stored(sym)
@@ -1095,19 +1142,21 @@ def investor_home(profile=Depends(current_profile)):
 
 
 @app.get("/research/deep/{symbol}/deck")
-def deep_dive_deck(symbol: str, profile=Depends(current_profile)):
+def deep_dive_deck(symbol: str, region: str = "IN", profile=Depends(current_profile)):
     """The deep dive as a PowerPoint deck: numbers, business, plans, report card and checklist, with sources."""
     need(profile, "deepdive", "The company deck")
-    sym = research_routes.symbol_of(symbol)
-    data = deck.build(deep_view(sym, deep_base(sym)))
+    region = deep_region(region)
+    sym = deep_symbol(symbol, region)
+    data = deck.build(deep_view(sym, deep_base(sym, region)))
     return Response(data, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     headers={"Content-Disposition": f'attachment; filename="{sym}-deep-dive.pptx"'})
 
 
 @app.post("/research/deep/{symbol}/card")
-def deep_dive_card(symbol: str, refresh: bool = False, profile=Depends(current_profile)):
+def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", profile=Depends(current_profile)):
     """The management report card: targets given on past earnings calls, checked against the reported numbers."""
     need(profile, "deepdive", "The company deep dive")
+    no_us_ai(deep_region(region))
     sym = research_routes.symbol_of(symbol)
     base = deep_base(sym)
     if report_card.fresh(report_card.stored(sym)) and not refresh:
@@ -1783,9 +1832,10 @@ def live_price(sym: str) -> float | None:
     return filings_feed.last_price(sym)
 
 
-def audit_one(sym: str, docs: bool, exchange=None) -> dict:
-    read = (lambda cands, probs, p: deepdive.readable(deep_docs, cands, 1, probs, company_hosts(p))) if docs else None
-    row = audit.audit_company(sym, deep_base, deep_view, exchange, read)
+def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN") -> dict:
+    us = region == "US"
+    read = (lambda cands, probs, p: deepdive.readable(deep_docs, cands, 1, probs, company_hosts(p))) if docs and not us else None
+    row = audit.audit_company(sym, lambda s: deep_base(s, region), deep_view, None if us else exchange, read)
     for i in row["issues"]:
         i["detail"] = public_text(i["detail"])
     return row
@@ -1806,28 +1856,43 @@ market_audit = audit.MarketAudit(lambda: filings_feed.all_equities(), _market_ch
                                  busy_fn=lambda: bool(audit_runner.state.get("running")))
 
 
+def _sec_companies() -> list[dict]:
+    """Every company with a ticker that files with the SEC, from the SEC's own list."""
+    return [{"symbol": t, "name": v["name"], "listed": None} for t, v in sec_feed.tickers().items()]
+
+
+market_audit_us = audit.MarketAudit(lambda: _sec_companies(), lambda s: audit_one(s, False, None, "US"),
+                                    busy_fn=lambda: bool(audit_runner.state.get("running")), key="audit:market-us")
+
+
+def market_for(region: str):
+    return market_audit_us if region == "US" else market_audit
+
+
 @app.get("/admin/audit/market")
-def admin_market_audit(_=Depends(admin.admin_profile)):
-    """The whole-market audit: every NSE-listed company, checked in the background while switched on."""
-    return market_audit.status()
+def admin_market_audit(region: str = "IN", _=Depends(admin.admin_profile)):
+    """The whole-market audit: every NSE-listed company (or every company filing with the SEC), checked in the
+    background while switched on."""
+    return market_for(deep_region(region)).status()
 
 
 @app.post("/admin/audit/market")
 def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
     """Switch the whole-market audit on or off, re-read the exchange's list now, or check everything again."""
+    m = market_for(req.region)
     if req.on is not None:
-        market_audit.set_enabled(req.on)
+        m.set_enabled(req.on)
     if req.restart:
-        market_audit.restart()
+        m.restart()
     if req.read_list:
-        threading.Thread(target=market_audit.refresh_list, kwargs={"force": True}, daemon=True).start()
-    return market_audit.status()
+        threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()
+    return m.status()
 
 
 @app.get("/admin/audit")
-def admin_audit_status(_=Depends(admin.admin_profile)):
+def admin_audit_status(region: str = "IN", _=Depends(admin.admin_profile)):
     """The running or last data audit, and the sets it can run on."""
-    return {**audit_runner.status(), "sets": audit.sets()}
+    return {**audit_runner.status(), "sets": audit.sets(deep_region(region))}
 
 
 @app.post("/admin/audit")
@@ -1836,17 +1901,19 @@ def admin_audit_start(req: AuditReq, _=Depends(admin.admin_profile)):
     against its source. Runs in the background (about 3 to 10 seconds a company, so a NIFTY 500 run takes about an
     hour); no AI is used."""
     try:
-        syms = audit.symbols_for(req.set, req.symbols, getattr(filings_feed, "index_members", None))
+        syms = audit.symbols_for(req.set, req.symbols, getattr(filings_feed, "index_members", None), req.region)
     except ValueError:
         err(400, "bad_set", "Pick one of the listed sets.")
     except SourceError as e:
         err(503, "index_unavailable", f"The exchange's index list couldn't be read ({e}). Try again in a minute, "
                                       "or paste the symbols instead.")
-    syms = [research_routes.symbol_of(s) for s in syms]
-    label = f"{len(syms)} chosen companies" if req.symbols else next((s["name"] for s in audit.sets() if s["id"] == req.set), req.set)
+    syms = [deep_symbol(s, req.region) for s in syms]
+    label = (f"{len(syms)} chosen {'US ' if req.region == 'US' else ''}companies" if req.symbols
+             else next((s["name"] for s in audit.sets(req.region) if s["id"] == req.set), req.set))
     try:
         exchange = audit.Breaker(live_price)
-        return {**audit_runner.start(syms, label, lambda s: audit_one(s, req.docs, exchange), req.docs), "sets": audit.sets()}
+        return {**audit_runner.start(syms, label, lambda s: audit_one(s, req.docs, exchange, req.region), req.docs, req.region),
+                "sets": audit.sets(req.region)}
     except RuntimeError as e:
         err(409, "audit_running", str(e))
 

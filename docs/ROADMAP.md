@@ -7,19 +7,17 @@ something couldn't be read.
 ## Planned
 
 ### Company deep dive for US companies
-Today the deep dive, management report card, investor checklist and deck cover Indian (NSE) companies only. A US
-version would use the SEC's free EDGAR filings:
+*Done (first part):* the deep dive, checklist, valuation and deck for US companies, from the SEC's filings
+(XBRL numbers in 10-K and 10-Q reports): ten years of revenue, profit, operating margin, reported capex, cash flow,
+debt and cash; the last twelve quarters; industry from the SIC code; and links to the annual, quarterly and earnings
+filings. Ratios that need a price use the latest share price and the share count on the latest report. Admin → Data
+audit runs on US sets, and Admin → Whole market: US checks every company filing with the SEC.
 
-| Part | US source | Note |
-|---|---|---|
-| 10+ years of numbers | XBRL financial data in 10-K and 10-Q filings | Capex is reported directly, no estimate needed |
-| Business model and risks | 10-K Item 1 (Business) and Item 1A (Risk Factors) | Required and detailed |
-| Industry | SIC code on every filing | Drives industry rules, measures and valuation |
-| Report card | Guidance in earnings press releases (8-K, exhibit 99) | US call transcripts aren't filed with the SEC |
-| Checklist | Same rules in dollars and US fiscal years | Insider ownership instead of promoter holding |
-
-Reuses the page, checklist, report card checks, industry measures, valuation and deck; new work is the EDGAR client
-and the filing readers.
+Still to do:
+- Reading the 10-K (business, risk factors) and the earnings releases (8-K, exhibit 99) with AI, like the Indian
+  presentation read: needs the document reader to take SEC HTML filings, not only PDFs.
+- Report card from guidance in earnings releases (US call transcripts aren't filed with the SEC).
+- Insider ownership in the checklist instead of promoter holding.
 
 ### Indian currency derivatives (CDS)
 NSE's currency segment: USDINR, EURINR, GBPINR and JPYINR futures and options, plus the cross pairs (EURUSD, GBPUSD,
@@ -45,7 +43,9 @@ by feature, against what people would otherwise use:
   feature (prices, backtests, scans, rotation, options, filings, company pages, news, database, calendar on live data);
   tests that call every route with hostile input, break every source in every way, run the app at 16 tricky moments
   (holidays, expiries, midnight IST, clock changes, past the known calendar), and load the real server with hundreds
-  of users. Still to do: a Nifty 500 list for the audit, and re-running both admin checks after each big change.
+  of users. Also done: the NIFTY 500, Next 50, Midcap 150 and Smallcap 250 sets from the exchange's own lists, and
+  Admin → Whole market, which checks every NSE company (and every company filing with the SEC) in the background,
+  new listings first. Still to do: re-running the admin checks after each big change.
 - **Every feature on real data at scale:** the deep dive, report card, checklist and measures on the Nifty 500 (not
   just a few names), every industry; the scan and rotation on every set; backtests and paper trading in every market;
   options on every underlying.

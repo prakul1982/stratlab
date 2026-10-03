@@ -211,12 +211,14 @@ class ScanAlertReq(BaseModel):
 
 
 class MarketAuditReq(BaseModel):
+    region: Literal["IN", "US"] = "IN"
     on: bool | None = None
     restart: bool = False
     read_list: bool = False
 
 
 class AuditReq(BaseModel):
+    region: Literal["IN", "US"] = "IN"
     set: str = Field("nifty50", max_length=40)
     symbols: list[str] = Field(default_factory=list, max_length=600)
     docs: bool = False
