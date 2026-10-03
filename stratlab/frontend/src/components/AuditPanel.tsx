@@ -5,12 +5,13 @@ import { useApp } from "../lib/app";
 import { ago } from "../lib/format";
 
 type Level = "mismatch" | "gap" | "error";
+type Region = "IN" | "US";
 type Issue = { level: Level; area: string; detail: string };
 type Row = { symbol: string; name: string; seconds: number; issues: Issue[] };
 type Summary = { companies: number; clean: number; mismatches: number; gaps: number; errors: number; avg_seconds: number | null;
   by_area: Record<string, Record<Level, number>>; slowest: { symbol: string; seconds: number }[] };
 interface AuditState {
-  running: boolean; cancelled?: boolean; label?: string; docs?: boolean; total?: number; done?: number; rows?: Row[]; started_at?: string; finished_at?: string | null;
+  running: boolean; cancelled?: boolean; label?: string; docs?: boolean; region?: Region; total?: number; done?: number; rows?: Row[]; started_at?: string; finished_at?: string | null;
   summary?: Summary;
   sets: { id: string; name: string; count: number }[];
 }
@@ -22,12 +23,14 @@ const LEVEL: Record<Level, [string, string]> = { mismatch: ["Mismatch", "fail"],
 export function AuditPanel() {
   const { fail } = useApp();
   const [s, setS] = useState<AuditState | null>(null);
+  const [region, setRegion] = useState<Region>("IN");
   const [set, setSet] = useState("nifty50");
   const [custom, setCustom] = useState("");
   const [docs, setDocs] = useState(false);
 
-  const load = useCallback(async () => { try { setS(await api<AuditState>("/admin/audit")); } catch (e) { fail(e); } }, [fail]);
+  const load = useCallback(async () => { try { setS(await api<AuditState>(`/admin/audit?region=${region}`)); } catch (e) { fail(e); } }, [fail, region]);
   useEffect(() => { load(); }, [load]);
+  const pick = (r: Region) => { setRegion(r); setSet(r === "US" ? "us_mega" : "nifty50"); };
   useEffect(() => {
     if (!s?.running) return;
     const t = window.setInterval(load, 4000);
@@ -37,7 +40,7 @@ export function AuditPanel() {
   const stop = async () => { try { setS(await api<AuditState>("/admin/audit", { method: "DELETE" })); } catch (e) { fail(e); } };
   const start = async () => {
     const symbols = custom.split(/[\s,]+/).filter(Boolean);
-    try { setS(await api<AuditState>("/admin/audit", { method: "POST", body: { set, symbols, docs } })); } catch (e) { fail(e); }
+    try { setS(await api<AuditState>("/admin/audit", { method: "POST", body: { region, set, symbols, docs } })); } catch (e) { fail(e); }
   };
 
   const sum = s?.summary;
@@ -51,11 +54,15 @@ export function AuditPanel() {
       {!s ? <p className="small muted">Loading…</p> : (
         <>
           <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="seg" role="radiogroup" aria-label="Market">
+              {(["IN", "US"] as const).map((r) => (
+                <button key={r} role="radio" aria-checked={region === r} aria-pressed={region === r} disabled={s.running} onClick={() => pick(r)}>{r === "IN" ? "India" : "US"}</button>))}
+            </div>
             <select value={set} onChange={(e) => setSet(e.target.value)} disabled={s.running || !!custom.trim()} aria-label="Companies to check">
               {s.sets.map((x) => <option key={x.id} value={x.id}>{x.name} ({x.count})</option>)}
             </select>
             <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Or symbols, e.g. INFY TITAN" style={{ minWidth: 200 }} disabled={s.running} aria-label="Symbols to check" />
-            <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={docs} onChange={(e) => setDocs(e.target.checked)} disabled={s.running} />Also try reading documents (slower)</label>
+            {region === "IN" && <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={docs} onChange={(e) => setDocs(e.target.checked)} disabled={s.running} />Also try reading documents (slower)</label>}
             <button className="btn sm" disabled={s.running} onClick={start}>{s.running ? `Checking ${s.done ?? 0} of ${s.total}…` : "Run audit"}</button>
             {s.running && <button className="btn quiet sm" onClick={stop}>Stop</button>}
           </div>
@@ -64,7 +71,7 @@ export function AuditPanel() {
               <p className="small" style={{ margin: 0 }}><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
                 {" · "}{sum.companies} checked, {sum.clean} clean · <span className="neg">{sum.mismatches} mismatches</span> · {sum.gaps} gaps · {sum.errors} errors
                 {sum.avg_seconds != null && ` · ${sum.avg_seconds}s a company`}</p>
-              <Findings rows={s.rows ?? []} sum={sum} running={s.running} file="stratlab-audit.csv" />
+              <Findings rows={s.rows ?? []} sum={sum} running={s.running} file="stratlab-audit.csv" region={s.region ?? "IN"} />
             </>
           )}
         </>
@@ -81,29 +88,31 @@ interface MarketState {
 }
 
 /** Every NSE-listed company, checked in the background while switched on; new listings first. */
-export function MarketAuditPanel() {
+export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
   const { fail } = useApp();
+  const us = region === "US";
   const [m, setM] = useState<MarketState | null>(null);
-  const load = useCallback(async () => { try { setM(await api<MarketState>("/admin/audit/market")); } catch (e) { fail(e); } }, [fail]);
+  const load = useCallback(async () => { try { setM(await api<MarketState>(`/admin/audit/market?region=${region}`)); } catch (e) { fail(e); } }, [fail, region]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (!m?.enabled) return;
     const t = window.setInterval(load, 30000);
     return () => window.clearInterval(t);
   }, [m?.enabled, load]);
-  const send = async (body: object) => { try { setM(await api<MarketState>("/admin/audit/market", { method: "POST", body })); } catch (e) { fail(e); } };
+  const send = async (body: object) => { try { setM(await api<MarketState>("/admin/audit/market", { method: "POST", body: { region, ...body } })); } catch (e) { fail(e); } };
   const sum = m?.summary;
   const pct = m && m.listed ? Math.round((100 * (m.listed - m.due)) / m.listed) : 0;
 
   return (
     <section className="card stack" style={{ gap: 12 }}>
       <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-        <h2 className="h2">Whole market</h2>
-        {m && <button className="btn sm" onClick={() => send({ on: !m.enabled })}>{m.enabled ? "Pause" : "Check every NSE company"}</button>}
+        <h2 className="h2">Whole market: {us ? "US" : "India"}</h2>
+        {m && <button className="btn sm" onClick={() => send({ on: !m.enabled })}>{m.enabled ? "Pause" : us ? "Check every US company" : "Check every NSE company"}</button>}
       </div>
-      <p className="small muted" style={{ maxWidth: "80ch", margin: 0 }}>Every company listed on NSE, checked one at a time in the background at an easy pace, the same way as the
-        audit above (without documents). The exchange's list of companies is read every day: new listings are checked first, delisted companies drop off, and each
-        company is checked again once a month. It pauses while an audit above runs, and carries on after a restart.</p>
+      <p className="small muted" style={{ maxWidth: "80ch", margin: 0 }}>{us
+        ? "Every company with a ticker that files with the SEC, checked one at a time in the background from its filings, the same way as the audit above. The SEC's list is read every day: new companies are checked first, ones that drop off the list are removed, and each company is checked again once a month."
+        : "Every company listed on NSE, checked one at a time in the background at an easy pace, the same way as the audit above (without documents). The exchange's list of companies is read every day: new listings are checked first, delisted companies drop off, and each company is checked again once a month."}
+        {" "}It pauses while an audit above runs, and carries on after a restart.</p>
       {!m ? <p className="small muted">Loading…</p> : (
         <>
           <p className="small" style={{ margin: 0 }}>
@@ -120,13 +129,13 @@ export function MarketAuditPanel() {
           </p>
           {m.new_listings.length > 0 && (
             <p className="small" style={{ margin: 0 }}>New listings: {m.new_listings.slice(0, 12).map((n, i) => (
-              <span key={n.symbol}>{i ? ", " : ""}<Link className="link" to={`/research/IN/${encodeURIComponent(n.symbol)}/deep`}>{n.symbol}</Link>
+              <span key={n.symbol}>{i ? ", " : ""}<Link className="link" to={`/research/${region}/${encodeURIComponent(n.symbol)}/deep`}>{n.symbol}</Link>
                 <span className="muted">{n.listed ? ` (${n.listed})` : ""}{n.checked ? "" : " · queued"}</span></span>))}</p>
           )}
           {sum && sum.companies > 0 && (
             <>
               <p className="small" style={{ margin: 0 }}>{sum.companies.toLocaleString("en-IN")} checked, {sum.clean.toLocaleString("en-IN")} clean · <span className="neg">{sum.mismatches} mismatches</span> · {sum.gaps} gaps · {sum.errors} errors</p>
-              <Findings rows={m.rows} sum={sum} running={m.enabled} file="stratlab-market-audit.csv" />
+              <Findings rows={m.rows} sum={sum} running={m.enabled} file={`stratlab-${us ? "us" : "india"}-market-audit.csv`} region={region} />
             </>
           )}
         </>
@@ -136,7 +145,7 @@ export function MarketAuditPanel() {
 }
 
 /** The area table, the kind filter, each company's findings, and a CSV of every finding. */
-function Findings({ rows: all, sum, running, file }: { rows: Row[]; sum: Summary; running: boolean; file: string }) {
+function Findings({ rows: all, sum, running, file, region }: { rows: Row[]; sum: Summary; running: boolean; file: string; region: Region }) {
   const [show, setShow] = useState<Level | "all">("mismatch");
   const rows = useMemo(() => all.map((r) => ({ ...r, shown: r.issues.filter((i) => show === "all" || i.level === show) }))
     .filter((r) => r.shown.length), [all, show]);
@@ -170,7 +179,7 @@ function Findings({ rows: all, sum, running, file }: { rows: Row[]; sum: Summary
           {rows.length > SHOWN && <p className="small muted" style={{ margin: 0 }}>Showing {SHOWN} of {rows.length} companies; the CSV has all of them.</p>}
           {rows.slice(0, SHOWN).map((r) => (
             <div key={r.symbol} className="stack small" style={{ gap: 2 }}>
-              <span><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}><b>{r.name}</b></Link> <span className="mono tiny muted">{r.symbol} · {r.seconds}s</span></span>
+              <span><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}><b>{r.name}</b></Link> <span className="mono tiny muted">{r.symbol} · {r.seconds}s</span></span>
               {r.shown.map((i, n) => <span key={n}><span className={`badge ${LEVEL[i.level][1]}`}>{i.area}</span> {i.detail}</span>)}
             </div>
           ))}

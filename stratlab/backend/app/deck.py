@@ -92,7 +92,7 @@ class Deck:
                 p = cell.text_frame.paragraphs[0]
                 p.font.size, p.font.bold = Pt(size), r == 0
                 p.font.color.rgb = (colors or {}).get((r - 1, c), INK) if r else INK
-                if c > 0 and r >= 0 and isinstance(v, str) and (v[:1].isdigit() or v[:1] in "+-–₹"):
+                if c > 0 and r >= 0 and isinstance(v, str) and (v[:1].isdigit() or v[:1] in "+-–₹$"):
                     p.alignment = PP_ALIGN.RIGHT
         return t
 
@@ -107,9 +107,12 @@ def build(v: dict) -> bytes:
     n = v["numbers"]
     years = [y for y in n["years"] if y.get("sales") is not None]
     d = Deck(f"{name} ({sym})", datetime.now(timezone.utc).strftime("%d %b %Y"))
+    us = (n.get("unit") or "").startswith("$")
+    word = "$ million" if us else "₹ crore"
+    amt = (lambda x: "–" if x is None else f"${_cr(x)} m") if us else (lambda x: "–" if x is None else f"₹{_cr(x)} cr")  # noqa: E731
 
     # 1. title
-    s = d.slide(f"{name}", f"NSE: {sym} · Company deep dive")
+    s = d.slide(f"{name}", f"{'US' if us else 'NSE'}: {sym} · Company deep dive")
     d.text(s, (v.get("about") or "")[:600], Inches(0.6), Inches(1.8), Inches(11.5), Inches(2.5), 16)
     snap = v.get("snapshot") or {}
     ret = ("ROE", _pc(snap.get("roe"))) if n.get("bank") else ("ROCE", _pc(snap.get("roce")))
@@ -123,7 +126,7 @@ def build(v: dict) -> bytes:
         val = ("P/B", "–" if snap.get("pb") is None else f"{snap['pb']:.1f}")
     else:
         val = ("P/E", "–" if snap.get("pe") is None else f"{snap['pe']:.1f}")
-    tiles = [("Market cap", f"₹{_cr(snap.get('market_cap_cr'))} cr"), val, ret, lev,
+    tiles = [("Market cap", amt(snap.get("market_cap_cr"))), val, ret, lev,
              ("Sales growth, 3y", _pc(n["growth"].get("sales_cagr_3y"), True)), ("Profit growth, 3y", _pc(n["growth"].get("profit_cagr_3y"), True))]
     for i, (label, val) in enumerate(tiles):
         x = Inches(0.6 + i * 2.05)
@@ -158,14 +161,15 @@ def build(v: dict) -> bytes:
     # 3. margins and quarters
     q = n.get("quarters") or []
     if q:
-        s = d.slide("The last eight quarters", "Sales and profit in ₹ crore; growth on the same quarter a year before")
+        s = d.slide("The last eight quarters", f"Sales and profit in {word}; growth on the same quarter a year before")
         rows = [[x["quarter"], _cr(x["sales"]), _pc(x["sales_yoy"], True), _pc(x["opm"]), _cr(x["profit"])] for x in q[-8:]]
         d.table(s, ["Quarter", "Revenue" if n.get("bank") else "Sales", "vs a year ago", "Financing margin" if n.get("bank") else "Operating margin",
                     "Net profit"], rows, Inches(0.6), Inches(1.7), Inches(12))
 
     # 4. capex and cash (not for lenders: capex and free cash flow don't describe a bank)
     if years and not n.get("bank"):
-        s = d.slide("Capex and cash", "Capex estimated from the balance sheet: rise in fixed assets and work in progress, plus depreciation. ₹ crore.")
+        s = d.slide("Capex and cash", f"Capex as reported in the cash flow statement. {word}." if n.get("capex_reported") else
+                    f"Capex estimated from the balance sheet: rise in fixed assets and work in progress, plus depreciation. {word}.")
         rows = [[y["year"], _cr(y["sales"]), _cr(y["capex"]), _pc(y["capex_pct_sales"]), _cr(y["cfo"]), _cr(y["fcf"]), _cr(y["debt"])]
                 for y in list(reversed(years))[:8]]
         d.table(s, ["Year", "Sales", "Capex", "Capex / sales", "Cash from operations", "Free cash flow", "Debt"], rows,
@@ -225,7 +229,7 @@ def build(v: dict) -> bytes:
         rows, colors = [], {}
         for i, r in enumerate(card["rows"][:9]):
             unit = "crore" if r["metric"] == "capex" else "%"
-            fmt = (lambda x: f"₹{_cr(x)} cr") if unit == "crore" else (lambda x: f"{x:g}%")
+            fmt = amt if unit == "crore" else (lambda x: f"{x:g}%")
             tgt = "–" if r["low"] is None else fmt(r["low"]) + (f"–{fmt(r['high'])}" if r.get("high") is not None else "")
             label, color = STATE[r["result"]]
             rows.append([r["what"], r.get("period") or "–", tgt, "–" if r["actual"] is None else fmt(r["actual"]), label, r["said_at"][:10]])
@@ -264,6 +268,7 @@ def build(v: dict) -> bytes:
     docs = v.get("documents") or []
     s = d.slide("Sources")
     lines = ["Numbers: the company's reported annual and quarterly results.",
+             "Filings: the SEC's EDGAR system (10-K, 10-Q and 8-K reports)." if us else
              "Filings, presentations and call transcripts: the exchange (NSE)."]
     lines += [f"{x['at'][:10]} · {x['title'][:90]} · {x['url']}" for x in docs[:8]]
     lines += ["", DISCLAIMER + " The AI reads can miss or misread things: check the source document before relying on a point."]

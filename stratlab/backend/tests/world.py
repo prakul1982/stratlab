@@ -164,6 +164,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     routes.setup(hub, None, None)
     monkeypatch.setattr(main, "filings_feed", _nse(sw("exchange")))
     monkeypatch.setattr(main, "deep_docs", _docs(sw("documents")))
+    from app.intel.sec import SEC
+    from tests import fake_sec
+    monkeypatch.setattr(main, "sec_feed", SEC(transport=sw("sec")(fake_sec.transport())))
     import importlib
     for m in ("app.intel.ai", "app.ask", "app.ideas", "app.deepdive", "app.report_card", "app.ai_writer", "app.importer"):
         importlib.import_module(m)              # load them now, so their copy of `complete` is swapped below
@@ -178,6 +181,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     monkeypatch.setattr(main, "audit_runner", runner)
     monkeypatch.setattr(main, "market_audit", audit.MarketAudit(lambda: main.filings_feed.all_equities(), main._market_check,
                                                                 busy_fn=lambda: bool(runner.state.get("running")), pause=0))
+    monkeypatch.setattr(main, "market_audit_us", audit.MarketAudit(lambda: main._sec_companies(), lambda s: main.audit_one(s, False, None, "US"),
+                                                                   busy_fn=lambda: bool(runner.state.get("running")), pause=0,
+                                                                   key="audit:market-us"))
     client = TestClient(main.app, raise_server_exceptions=False)
 
     def close():

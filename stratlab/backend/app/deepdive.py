@@ -18,6 +18,14 @@ DOC_DAYS = 730                # filings searched for documents: two years
 
 
 # ---------- numbers ----------
+def money(v: float, unit: str | None = None, digits: int = 0) -> str:
+    """An amount in the company's reporting unit: "₹1,234 cr" (Indian pages) or "$1,234 m" (US filings)."""
+    sign = "-" if v < 0 else ""
+    if unit and unit.startswith("$"):
+        return f"{sign}${abs(v):,.{digits}f} m"
+    return f"{sign}₹{abs(v):,.{digits}f} cr"
+
+
 def _series(table: dict | None, *prefixes: str) -> list:
     if not table:
         return []
@@ -48,7 +56,7 @@ def numbers(p: dict) -> dict:
     """Growth, margins, estimated capex and free cash flow from the reported annual and quarterly tables."""
     pl, bal, cf, q = p.get("pl"), p.get("balance"), p.get("cashflow"), p.get("quarters")
     # banks and lenders report "Financing Profit / Margin"; capex, free cash flow and operating margin don't apply
-    bank = any(k.lower().startswith("financing") for k in ((pl or {}).get("rows") or {}))
+    bank = bool(p.get("bank")) or any(k.lower().startswith("financing") for k in ((pl or {}).get("rows") or {}))
     ycols = [c for c in _years(pl) if c.upper() != "TTM"]
     n = len(ycols)
     sales = _series(pl, "Sales", "Revenue")[:n]
@@ -62,11 +70,14 @@ def numbers(p: dict) -> dict:
     ccols = _years(cf)
     cfo = _align(ccols, _series(cf, "Cash from Operating"), ycols)
     cfi = _align(ccols, _series(cf, "Cash from Investing"), ycols)
+    reported = _align(ccols, _series(cf, "Capex"), ycols)     # US filings report it; Indian pages don't
 
     years = []
     for i, y in enumerate(ycols):
         capex = None          # estimated: growth in fixed assets and work in progress, plus the year's depreciation
-        if not bank and i > 0 and fa[i] is not None and fa[i - 1] is not None:
+        if not bank and reported and reported[i] is not None:
+            capex = abs(reported[i])
+        elif not bank and i > 0 and fa[i] is not None and fa[i - 1] is not None:
             d_cwip = cwip[i] - cwip[i - 1] if cwip[i] is not None and cwip[i - 1] is not None else 0
             d_dep = dep[i] if i < len(dep) and dep[i] is not None else 0
             capex = (fa[i] - fa[i - 1]) + d_cwip + d_dep
@@ -99,7 +110,7 @@ def numbers(p: dict) -> dict:
                    "profit_cagr_3y": _cagr(profit, 3), "profit_cagr_5y": _cagr(profit, 5),
                    "eps_cagr_3y": _cagr(eps, 3), "eps_cagr_5y": _cagr(eps, 5)},
         "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None,
-        "unit": "₹ crore", "bank": bank, "basis": p.get("basis"), "notes": notes,
+        "unit": p.get("unit") or "₹ crore", "capex_reported": any(v is not None for v in reported), "bank": bank, "basis": p.get("basis"), "notes": notes,
     }
 
 
@@ -118,12 +129,14 @@ def profit_note(p: dict) -> str | None:
     owners = mcap / pe
     ratio = ttm / owners
     if ratio > 1.25:
-        return (f"Net profit over the last 12 months (₹{ttm:,.0f} cr) is about {ratio:.1f}× the earnings the P/E is based on "
-                f"(₹{owners:,.0f} cr): it includes the share owned by minority shareholders of subsidiaries, or one-off gains. "
+        u = p.get("unit")
+        return (f"Net profit over the last 12 months ({money(ttm, u)}) is about {ratio:.1f}× the earnings the P/E is based on "
+                f"({money(owners, u)}): it includes the share owned by minority shareholders of subsidiaries, or one-off gains. "
                 "Earnings per share growth shows what belongs to this company's shareholders.")
     if ratio < 0.8:
-        return (f"Net profit over the last 12 months (₹{ttm:,.0f} cr) is well below the earnings the P/E is based on "
-                f"(₹{owners:,.0f} cr), usually because of one-off losses. Earnings per share growth is the cleaner guide.")
+        u = p.get("unit")
+        return (f"Net profit over the last 12 months ({money(ttm, u)}) is well below the earnings the P/E is based on "
+                f"({money(owners, u)}), usually because of one-off losses. Earnings per share growth is the cleaner guide.")
     return None
 
 

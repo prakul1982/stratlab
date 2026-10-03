@@ -26,10 +26,11 @@ GROUPS = {
 
 WORDS = [  # first match wins, checked against the industry classification and then the company name
     ("insurer", r"insurance|insurer"),
+    ("realty", r"real estate|realty|residential|commercial projects"),
     ("holding", r"holding compan|investment compan|\bholdings?\b|\binvestments?\b"),
     ("lender", r"\bbanks?\b|banking|non banking|nbfc|housing finance|microfinance|\blending|consumer finance|financial institution"),
-    ("realty", r"real estate|realty|residential|commercial projects"),
-    ("utility", r"\bpower\b|utilit|telecom|infrastructure|\broads?\b|\bports?\b|airport|gas transmission|gas distribution"),
+    ("utility", r"\bpower\b|utilit|telecom|infrastructure|\broads?\b|\bports?\b|airport|gas transmission|gas distribution|"
+                r"electric services|electric & other services|telephone communications|radiotelephone"),
     ("cyclical", r"metal|steel|alumin|copper|zinc|mining|\bcement|chemical|fertili[sz]er|\bsugar|\bpaper\b"),
 ]
 LISTS = {"lender": ["NIFTY BANK", "NIFTY PSU BANK", "NIFTY PVT BANK"], "realty": ["NIFTY REALTY"],
@@ -41,7 +42,8 @@ UTILITIES = {"NTPC", "POWERGRID", "TATAPOWER", "ADANIPOWER", "ADANIGREEN", "NHPC
 def classify(p: dict, nums: dict | None = None, symbol: str | None = None) -> dict:
     path = [x for x in (p.get("industry_path") or []) if x][:4]
     group = "lender" if (nums or {}).get("bank") else None
-    for hay in (" / ".join(path).lower(), (p.get("name") or "").lower()):
+    # the most specific part first: a US division like "Finance, Insurance & Real Estate" would otherwise decide
+    for hay in ((path[-1] if path else "").lower(), " / ".join(path).lower(), (p.get("name") or "").lower()):
         if group:
             break
         group = next((g for g, rx in WORDS if hay and re.search(rx, hay)), None)
@@ -64,9 +66,9 @@ MEASURES = [
      ["Value of new business (VNB) margin", "Gross written premium growth", "Solvency ratio", "Combined ratio or claims ratio", "13th-month persistency"]),
     ("hotel", "Hotels", r"hotel|resort",
      ["RevPAR (revenue per available room)", "ARR (average room rate)", "Occupancy %", "Rooms in operation", "Rooms in pipeline"]),
-    ("airline", "Airlines", r"airline|aviation",
+    ("airline", "Airlines", r"airline|aviation|air transportation, scheduled",
      ["Passenger load factor", "RASK (revenue per seat km)", "CASK (cost per seat km)", "Fleet size", "Market share"]),
-    ("telecom", "Telecom", r"telecom",
+    ("telecom", "Telecom", r"telecom|telephone communications|radiotelephone",
      ["ARPU (average revenue per user)", "Subscribers", "Data usage per user", "Towers or sites"]),
     ("cement", "Cement", r"\bcement",
      ["Installed capacity (MTPA)", "Capacity utilisation %", "Sales volume (tonnes)", "EBITDA per tonne", "Capacity being added"]),
@@ -74,13 +76,13 @@ MEASURES = [
      ["Production volume", "Sales volume", "EBITDA per tonne", "Capacity being added", "Net debt"]),
     ("realty", "Real estate", r"real estate|realty|residential|commercial projects",
      ["Pre-sales (bookings value)", "Collections", "Area sold (sq ft)", "New launches", "Net debt"]),
-    ("power", "Power", r"\bpower\b|electric utilit|renewable",
+    ("power", "Power", r"\bpower\b|electric utilit|renewable|electric services|electric & other services",
      ["Installed capacity (MW)", "Plant load factor (PLF)", "Renewable share of capacity", "Capacity under construction"]),
+    ("restaurant", "Restaurants", r"restaurant|quick service|\bqsr\b|food service|eating places",
+     ["Same-store sales growth", "Store count", "Average daily sales per store", "Delivery share"]),
     ("retail", "Retail", r"retail|department store|hypermarket|apparel retail",
      ["Revenue per sq ft", "Same-store sales growth", "Store count", "Retail area (sq ft)"]),
-    ("restaurant", "Restaurants", r"restaurant|quick service|\bqsr\b|food service",
-     ["Same-store sales growth", "Store count", "Average daily sales per store", "Delivery share"]),
-    ("it", "IT services", r"\bit\b|software|computers|information technology|it enabled",
+    ("it", "IT services", r"\bit\b|software|computer (?:programming|services|integrated|processing)|information technology|it enabled",
      ["Constant-currency revenue growth", "Deal wins (TCV)", "Attrition %", "Headcount", "Top-client concentration"]),
     ("pharma", "Pharmaceuticals", r"pharma|drug|formulation",
      ["US sales and growth", "India sales growth", "R&D spend % of sales", "Product approvals or filings"]),
@@ -99,8 +101,8 @@ GENERAL_MEASURES = ["The operating measures the company itself highlights (volum
 
 def measures(p: dict, symbol: str | None = None) -> dict:
     """{"key", "label", "measures"}: what to look for in this company's presentation."""
-    path = " / ".join(x for x in (p.get("industry_path") or []) if x).lower()
-    for hay in (path, (p.get("name") or "").lower()):
+    parts = [x for x in (p.get("industry_path") or []) if x]
+    for hay in ((parts[-1] if parts else "").lower(), " / ".join(parts).lower(), (p.get("name") or "").lower()):
         for key, label, rx, ms in MEASURES:
             if hay and re.search(rx, hay):
                 return {"key": key, "label": label, "measures": ms}
@@ -132,7 +134,8 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
     loss = ttm is not None and ttm <= 0
     if group in BOOK or measure_key in BOOK:
         v = snap.get("pb")
-        worth = (_last(p.get("balance"), "Reserves") or 0) + (_last(p.get("balance"), "Equity Capital") or 0)
+        worth = ((_last(p.get("balance"), "Reserves") or 0) + (_last(p.get("balance"), "Equity Capital") or 0)
+                 if _last(p.get("balance"), "Reserves") is not None else (_last(p.get("balance"), "Equity") or 0))
         if v is None and snap.get("market_cap_cr") and worth > 0:       # no book value on the page: from the balance sheet
             v = snap["market_cap_cr"] / worth
         return {"name": "Price to book", "short": "P/B", "value": round(v, 2) if v is not None else None, "pe": pe,
@@ -140,11 +143,13 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
     if measure_key in EV_EBITDA or group == "utility":
         ebitda = _last(p.get("pl"), "Operating Profit")          # the latest column is the trailing twelve months
         mcap, debt = snap.get("market_cap_cr"), _last(p.get("balance"), "Borrowings") or 0
-        v = (mcap + debt) / ebitda if mcap and ebitda and ebitda > 0 else None
+        cash = _last(p.get("balance"), "Cash")             # reported in US filings; the Indian pages don't give it
+        v = (mcap + debt - (cash or 0)) / ebitda if mcap and ebitda and ebitda > 0 else None
         return {"name": "EV / EBITDA", "short": "EV/EBITDA", "value": round(v, 1) if v is not None else None, "pe": pe,
                 "why": "Asset-heavy businesses (hospitals, hotels, telecom, cement, metals, power, airlines) are usually valued on "
                        "enterprise value to EBITDA, because depreciation and debt differ so much between them. Here EV is market "
-                       "value plus borrowings (cash isn't subtracted) and EBITDA is the last twelve months' operating profit."}
+                       + ("value plus borrowings less cash" if cash is not None else "value plus borrowings (cash isn't subtracted)")
+                       + " and EBITDA is the last twelve months' operating profit."}
     return {"name": "Price to earnings", "short": "P/E", "value": round(pe, 1) if pe is not None else None, "pe": pe,
             "why": "Most businesses are compared on price to earnings."
                    + (" There's no P/E here: the company made a loss over the last 12 months." if pe is None and loss else "")}

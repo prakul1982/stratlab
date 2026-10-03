@@ -124,6 +124,7 @@ function Routed() {
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/IN/:symbol/deep" element={<DeepDivePage />} />
+        <Route path="/research/US/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/investor" element={<InvestorHomePage />} />
         <Route path="/research/:region/:symbol" element={<CompanyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
