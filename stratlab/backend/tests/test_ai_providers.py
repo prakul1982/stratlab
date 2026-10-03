@@ -180,3 +180,54 @@ def test_research_uses_its_own_order(monkeypatch):
     assert P.order("research") == ["mistral"] and P.order() == ["gemini", "groq"]
     ranks = {h["name"]: (h["quick_rank"], h["research_rank"]) for h in P.health()}
     assert ranks["mistral"] == (None, 1) and ranks["gemini"] == (1, None)
+
+
+def test_empty_or_unreadable_reply_tries_the_providers_next_model(monkeypatch):
+    monkeypatch.setattr(settings, "CEREBRAS_API_KEY", "c")
+    seen = []
+
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "gpt-oss-120b"}, {"id": "llama-3.3-70b"}, {"id": "qwen-3-32b"}]})
+        body = json.loads(req.content)
+        seen.append(body)
+        if body["model"] == "llama-3.3-70b":
+            return httpx.Response(200, json={"choices": [{"message": {"content": None}, "finish_reason": "length"}]})
+        if body["model"] == "gpt-oss-120b":
+            return httpx.Response(200, json={"choices": [{"message": {"content": "Sure thing!"}}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}}]})
+    out = P.complete("s", "t", transport=httpx.MockTransport(handler))
+    assert "entry" in out and [b["model"] for b in seen] == ["llama-3.3-70b", "gpt-oss-120b", "qwen-3-32b"]
+    thinker = next(b for b in seen if b["model"] == "gpt-oss-120b")
+    assert thinker["reasoning_effort"] == "low" and thinker["max_tokens"] >= 4000     # room to answer after reasoning
+
+
+def test_a_short_rate_limit_is_waited_out_instead_of_failing(monkeypatch):
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
+    calls, slept = [], []
+    monkeypatch.setattr(P, "_sleep", lambda s: slept.append(s))
+
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "llama-3.3-70b-versatile"}]})
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"retry-after": "3"}, json={"error": "slow down"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}}]})
+    import time as _t
+    real = _t.time
+    clock = [real()]
+    monkeypatch.setattr(P.time, "time", lambda: clock[0])
+    monkeypatch.setattr(P, "_sleep", lambda s: (slept.append(s), clock.__setitem__(0, clock[0] + s)))
+    out = P.complete("s", "t", transport=httpx.MockTransport(handler))
+    assert "entry" in out and len(calls) == 2 and 3 <= slept[0] <= 4      # waited the 3 s asked for, then answered
+
+
+def test_a_long_rate_limit_still_fails_fast(monkeypatch):
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
+    monkeypatch.setattr(P, "_sleep", lambda s: (_ for _ in ()).throw(AssertionError("should not wait")))
+    t = httpx.MockTransport(lambda req: httpx.Response(200, json={"data": [{"id": "m-70b"}]}) if req.url.path.endswith("/models")
+                            else httpx.Response(429, headers={"retry-after": "90"}))
+    with pytest.raises(P.AIBusy, match="cooling down|busy"):
+        P.complete("s", "t", transport=t)
+    assert 80 < P.status("groq").cooldown_until - __import__("time").time() <= 120

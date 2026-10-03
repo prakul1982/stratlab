@@ -161,7 +161,9 @@ def _gemini(system: str, text: str, max_tokens: int = 8192) -> str:
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": text}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": max(max_tokens, 8192)},
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": max(max_tokens, 8192),
+                             # these are extraction jobs: thinking only spends the reply budget (and the free quota)
+                             "thinkingConfig": {"thinkingBudget": 0}},
     }
     last_err = None
     for model in _candidates()[:4]:
@@ -184,6 +186,9 @@ def _gemini(system: str, text: str, max_tokens: int = 8192) -> str:
                 last_err = 404
                 _model_cache.update(list=[], at=0)
                 break
+            if r.status_code == 400 and "thinking" in r.text.lower() and "thinkingConfig" in body["generationConfig"]:
+                body["generationConfig"].pop("thinkingConfig")      # a model that must think: let it
+                continue
             if r.status_code >= 400:
                 try:
                     detail = r.json().get("error", {}).get("message", "")
@@ -194,12 +199,16 @@ def _gemini(system: str, text: str, max_tokens: int = 8192) -> str:
                 raise AIError(f"The AI service returned an error ({r.status_code}) on model {model}: {detail[:160]}")
             try:
                 parts = r.json()["candidates"][0]["content"]["parts"]
-            except (KeyError, IndexError, ValueError):
+            except (KeyError, IndexError, ValueError, TypeError):
+                last_err = "empty"
+                break
+            out = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+            if not out.strip():                     # all thinking, no answer: the next model
                 last_err = "empty"
                 break
             _model_cache["name"] = model
             status("gemini").model = model
-            return "".join(p.get("text", "") for p in parts if not p.get("thought"))
+            return out
     if last_err == "empty":
         raise AIError("The AI didn't return a strategy. Try rephrasing it.")
     raise AIBusy("Google's models are busy or out of free quota.")
