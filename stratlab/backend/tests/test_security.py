@@ -1,6 +1,5 @@
 """Security sweep: every route refuses callers it shouldn't serve, users can't reach each other's things, and hostile
 input can't escape into HTML, links or other hosts."""
-import json
 
 import pytest
 from fastapi.routing import APIRoute

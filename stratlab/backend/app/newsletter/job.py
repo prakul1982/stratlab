@@ -133,13 +133,8 @@ def address(profile: dict) -> str | None:
 
 
 def confirmed(profile: dict) -> bool:
-    check = getattr(alerts, "email_confirmed", None)
-    return bool(check(profile)) if check else True
-
-
-def unsubscribe_url(uid: str, what: str) -> str:
-    make = getattr(alerts, "unsubscribe_url", None)
-    return make(uid, what) if make else f"{write.origin()}/account"
+    """The reader confirmed that address from the link sent to it."""
+    return alerts.email_confirmed(profile)
 
 
 def allowed(profile: dict, what: str, how: str) -> bool:
@@ -160,13 +155,6 @@ def subscribers() -> list[dict]:
     return out
 
 
-def send_email(to: str, subject: str, text: str, html: str, headers: dict):
-    try:
-        alerts.send_email(to, subject, text, html=html, headers=headers)
-    except TypeError:                          # an older sender that takes text only
-        alerts.send_email(to, subject, text)
-
-
 def teaser(profile: dict, issue: dict):
     """Two lines by phone notification or Telegram, for readers who set those up (the email is already on its way)."""
     quiet = {**profile, "alert_email": None, "email": None}         # never a second email
@@ -181,11 +169,11 @@ def deliver(profile: dict, issue: dict, what: str) -> bool:
     sent = False
     to = address(profile)
     if to and confirmed(profile) and alerts.email_ready():
-        unsub = unsubscribe_url(profile["id"], what)
+        unsub = alerts.unsubscribe_url(profile["id"], what)
         html, text = (x.replace(write.UNSUBSCRIBE, unsub) for x in (issue["html"], issue["text"]))
-        headers = alerts.list_unsubscribe_headers(profile["id"], what)
         try:
-            send_email(to, issue["subject"], text, html, headers)
+            alerts.send_email(to, issue["subject"], text, html=html,
+                              headers=alerts.list_unsubscribe_headers(profile["id"], what))
             sent = True
         except Exception as e:
             print("newsletter email failed:", str(e)[:160])

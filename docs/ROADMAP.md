@@ -76,7 +76,9 @@ Things only the account owner can do:
 - The launch offer (Admin → launch offer) when ready.
 - Invoices: fill the seller's details in Admin → Invoices, file the yearly LUT on the GST portal, and have the
   accountant confirm the setup.
-- Email: add `RESEND_API_KEY` in Railway, then **Send a test email** from Admin → Services. Until a sending domain is
-  verified with Resend, it delivers only to the address the Resend account was made with.
+- Email: add `BREVO_API_KEY` (or `RESEND_API_KEY`) in Railway, then **Send a test email** from Admin → Services. A
+  sending domain must be verified with that service before mail reaches anyone but the account's own address. Set
+  `PUBLIC_API_URL` if the backend's public address isn't the Railway domain, so newsletter unsubscribe and confirm
+  links work.
 - Open one downloaded deck in PowerPoint, and the PDF, to check their look.
 - Update the GitHub repository's About text to mention investing and US companies.

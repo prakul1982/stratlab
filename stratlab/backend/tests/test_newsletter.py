@@ -190,13 +190,13 @@ def test_my_stocks_issue_when_something_changed(w, monkeypatch, outbox):
     assert issue["uid"] == "u-pro" and "QIP" in issue["text"] and issue["subject"].startswith("My Stocks, Thu 01 Oct")
 
 
-def test_an_old_sender_without_html_still_works(w, monkeypatch):
-    sent = []
+def test_the_email_carries_one_click_unsubscribe_headers(w, monkeypatch):
+    got = []
     monkeypatch.setattr(alerts, "email_ready", lambda: True)
-    monkeypatch.setattr(alerts, "send_email", lambda to, subject, text: sent.append(to))
+    monkeypatch.setattr(alerts, "send_email", lambda to, subject, text, html=None, headers=None: got.append(headers))
     reader("u-pro", "pro@example.com", market_in="daily")
-    issue = job.make_issue(market(), "IN")
-    assert job.deliver(db.get_profile("u-pro"), issue, "market_in") and sent == ["pro@example.com"]
+    assert job.deliver(db.get_profile("u-pro"), job.make_issue(market(), "IN"), "market_in")
+    assert "/unsubscribe?t=" in got[0]["List-Unsubscribe"] and got[0]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
 
 
 def test_plan_gates_in_the_job(w, monkeypatch, outbox, paid):

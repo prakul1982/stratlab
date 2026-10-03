@@ -11,7 +11,7 @@ from datetime import date, datetime, timezone
 
 from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
-from .deepdive import KEEP, RULES, readable
+from .deepdive import RULES, readable
 from .docs import quote_found, ranked_windows
 from .kite_service import ist_date
 
@@ -385,10 +385,6 @@ def store(symbol: str, card: dict) -> dict:
     v = {**card, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "ts": time.time()}
     db.set_setting(_key(symbol), json.dumps(v, ensure_ascii=False))
     return v
-
-
-def fresh(v: dict | None) -> bool:
-    return bool(v) and time.time() - float(v.get("ts") or 0) < KEEP
 
 
 # ---------- US companies: guidance in earnings releases ----------

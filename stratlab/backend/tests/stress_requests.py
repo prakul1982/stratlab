@@ -57,7 +57,6 @@ def real_requests(ctx: dict) -> dict:
         ("POST", "/options/preview"): [({}, {"strategy": OPT}), ({}, {"strategy": OPT_SIGNAL}),
                                        ({}, {"strategy": {**OPT, "underlying": "BANKNIFTY", "expiry": "next"}})],
         ("POST", "/options/sessions"): [({}, {"strategy": OPT}), ({}, {"strategy": OPT_SIGNAL})],
-        ("POST", "/options/import"): [({}, {"text": "Sell NIFTY ATM straddle at 9:30, square off 3:15, stop 30%"})],
         ("GET", "/options/chain"): [({"exchange": "NFO", "underlying": "NIFTY"}, None), ({"exchange": "NFO", "underlying": "BANKNIFTY", "expiry": "next"}, None)],
         ("POST", "/research/scan"): [({}, {"region": r, "set": s}) for r, s in (("IN", "nifty50"), ("IN", "watchlist"), ("US", "us_mega"), ("IN", "banknifty"))],
         ("GET", "/research/rotation"): [({"region": r, "set": s, "interval": i, "tail": 5}, None)
