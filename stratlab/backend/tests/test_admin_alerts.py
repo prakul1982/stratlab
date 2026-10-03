@@ -49,13 +49,34 @@ def test_admin_can_send_themselves_a_test_email(monkeypatch):
     try:
         h = W.headers("admin-token")
         r = w["client"].post("/admin/alerts/test", headers=h)
-        assert r.status_code == 400 and "SMTP_HOST" in r.json()["detail"]["message"]     # not set up yet
+        assert r.status_code == 400 and "RESEND_API_KEY" in r.json()["detail"]["message"]     # not set up yet
         sent = _smtp(monkeypatch)
         assert w["client"].post("/admin/alerts/test", headers=h).json() == {"sent_to": "owner@example.com"}
         assert sent[0][0] == "owner@example.com"
         monkeypatch.setattr(main.alerts, "send_email", lambda *a: (_ for _ in ()).throw(OSError("Network is unreachable")))
         r = w["client"].post("/admin/alerts/test", headers=h)
-        assert r.status_code == 502 and "unreachable" in r.json()["detail"]["message"]
+        assert r.status_code == 502 and "RESEND_API_KEY" in r.json()["detail"]["message"]   # says what to do
         assert w["client"].post("/admin/alerts/test", headers=W.headers("pro-token")).status_code == 403
     finally:
         w["close"]()
+
+
+def test_email_goes_over_https_through_resend_when_its_key_is_set(monkeypatch):
+    import httpx
+    calls = []
+
+    def post(url, **kw):
+        calls.append((url, kw))
+        return httpx.Response(200 if len(calls) == 1 else 403, json={"message": "You can only send testing emails to your own address"})
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "re_test")
+    monkeypatch.setattr(settings, "SMTP_HOST", "")
+    monkeypatch.setattr(settings, "ALERT_FROM_EMAIL", "")
+    monkeypatch.setattr(httpx, "post", post)
+    assert alerts.email_ready()
+    alerts.send_email("owner@example.com", "Subject", "Body")
+    url, kw = calls[0]
+    assert url == "https://api.resend.com/emails" and kw["headers"]["Authorization"] == "Bearer re_test"
+    assert kw["json"] == {"from": alerts.RESEND_FROM, "to": ["owner@example.com"], "subject": "Subject", "text": "Body"}
+    import pytest
+    with pytest.raises(RuntimeError, match="own address"):
+        alerts.send_email("someone@example.com", "s", "b")

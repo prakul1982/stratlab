@@ -288,7 +288,7 @@ export function AdminPage() {
                 <Status ok={!!sv!.research?.finnhub} label="US company data" detail={sv!.research?.finnhub ? "Key is set" : "Add the company-data key in Railway for US company pages (setup guide, step 6). India needs no key."} />
                 {sv!.admin_alerts && <Status ok={sv!.admin_alerts.email_ready} label="Alerts to you"
                   detail={sv!.admin_alerts.email_ready ? `Emailed to ${sv!.admin_alerts.to.join(", ")}, plus your phone or Telegram if set in Account.`
-                    : `Email isn't set up on the server: add SMTP_HOST, SMTP_USER and SMTP_PASSWORD in Railway (for Gmail: smtp.gmail.com and an app password). Until then alerts reach only your phone or Telegram.`} />}
+                    : `Email isn't set up on the server: make a free account at resend.com with this address, create an API key, and add it in Railway as RESEND_API_KEY. Until then alerts reach only your phone or Telegram.`} />}
                 {sv!.admin_alerts?.email_ready && <button className="btn quiet sm" style={{ alignSelf: "flex-start", marginTop: 8 }} disabled={busy === "mail"} onClick={testEmail}>{busy === "mail" ? "Sending…" : "Send a test email"}</button>}
                 {sv!.option_recorder && (() => {
                   const r = sv!.option_recorder!;

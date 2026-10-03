@@ -68,6 +68,7 @@ class Settings:
     SMTP_USER = _env("SMTP_USER")
     SMTP_PASSWORD = _env("SMTP_PASSWORD")
     ALERT_FROM_EMAIL = _env("ALERT_FROM_EMAIL")
+    RESEND_API_KEY = _env("RESEND_API_KEY")                       # email over HTTPS (hosts that block SMTP, like Railway)
 
     FRONTEND_ORIGIN = _env("FRONTEND_ORIGIN", "http://localhost:5500")
     # comma-separated, e.g. "https://stratlab.studio,http://localhost:5500"
