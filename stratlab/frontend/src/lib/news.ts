@@ -8,7 +8,8 @@ export interface IssueRow {
   id: string; kind: NewsKind; region: Region | null; day: string; weekly: boolean; subject: string; preview: string;
 }
 
-export interface IssueItem { text: string; url?: string | null; symbol?: string | null; region?: Region | null }
+export interface IssueLine { text: string; url?: string | null }
+export interface IssueItem { text: string; url?: string | null; symbol?: string | null; region?: Region | null; lines?: IssueLine[] }
 
 export interface Issue {
   id: string; kind: NewsKind; region: Region | null; day: string; weekly: boolean; subject: string;

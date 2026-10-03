@@ -805,3 +805,5 @@ table.legs input[type=number] { width: 72px !important; }
   .nb-name { min-height: 34px; }
   .legal-links a, a.link.tiny { display: inline-block; padding: 8px 0; }
 }
+
+.news-lines { margin: 4px 0 2px; padding-left: 18px; color: var(--ink-2); font-size: 14px; }

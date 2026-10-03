@@ -12,6 +12,7 @@ import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,10 +51,10 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan, weekly
-from . import mail_tokens, newsletter_prefs
+from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, weekly
+from .newsletter import job as news
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -119,6 +120,7 @@ filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), 
 filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                    can_alert=_filing_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
+newsletter_job = news.Job()
 
 
 @asynccontextmanager
@@ -144,6 +146,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
     threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
     threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
+    newsletter_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     yield
@@ -2504,6 +2507,73 @@ def admin_weekly_test(profile=Depends(admin.admin_profile)):
     throttle(profile, "admin_weekly_test", 5, 3600, "You've sent 5 summaries this hour. Try again later.")
     subject, text = weekly_summary()
     return {"subject": subject, "text": text, "reached": tell_admins(subject, text)}
+
+
+# ---------- newsletters: the Market Brief and My Stocks ----------
+NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "sections", "html", "at")
+
+
+def news_view(issue: dict) -> dict:
+    out = {k: issue.get(k) for k in NEWS_FIELDS}
+    out["html"] = (out["html"] or "").replace(news.write.UNSUBSCRIBE, f"{news.write.origin()}/account")
+    return out
+
+
+@app.get("/news")
+def news_list(kind: str = "market", region: str = "IN", limit: int = 20, profile=Depends(current_profile)):
+    """Recent issues: a region's Market Brief, or the caller's own My Stocks."""
+    if kind not in news.KINDS:
+        err(400, "bad_kind", "Pick the market brief or my stocks.")
+    scope = ("US" if region.upper() == "US" else "IN") if kind == "market" else profile["id"]
+    return {"issues": [{**{k: i.get(k) for k in ("id", "kind", "region", "day", "weekly", "subject")},
+                        "preview": (i.get("summary") or "")[:200]} for i in news.recent(kind, scope, max(1, min(60, limit)))]}
+
+
+@app.get("/news/{iid}")
+def news_issue(iid: str, profile=Depends(current_profile)):
+    """One issue in full. Market issues are for everyone; a My Stocks issue only for its reader."""
+    parts = news.parse_id(iid)
+    issue = news.load(iid) if parts and (parts[0] == "market" or parts[1] == profile["id"]) else None
+    if not issue:
+        err(404, "not_found", "That issue wasn't found.")
+    return news_view(issue)
+
+
+def newsletters_view(profile: dict) -> dict:
+    to = news.address(profile)
+    return {**newsletter_prefs.get(profile["id"]), "email": to, "confirmed": bool(to) and news.confirmed(profile),
+            "allowed": {"market_daily": allows(profile["_plan"], "newsletter"), "my_stocks": allows(profile["_plan"], "newsletter_stocks")}}
+
+
+@app.get("/me/newsletters")
+def my_newsletters(profile=Depends(current_profile)):
+    return newsletters_view(profile)
+
+
+@app.put("/me/newsletters")
+def set_newsletters(req: NewsletterReq, profile=Depends(current_profile)):
+    """Choose daily, weekly or off for each newsletter. The weekly Market Brief is for everyone."""
+    if "daily" in (req.market_in, req.market_us):
+        need(profile, "newsletter", "The daily Market Brief")
+    if req.my_stocks in ("daily", "weekly"):
+        need(profile, "newsletter_stocks", "The My Stocks newsletter")
+    newsletter_prefs.set(profile["id"], **req.model_dump(exclude_none=True))
+    return newsletters_view(profile)
+
+
+@app.post("/admin/news/build")
+def admin_news_build(kind: str = "market", region: str = "IN", weekly: bool = False, profile=Depends(admin.admin_profile)):
+    """Today's issue built now, for a preview: a region's Market Brief, or the admin's own My Stocks. Not stored or
+    sent, so the issue after the close is still built from the closing data."""
+    if kind not in news.KINDS:
+        err(400, "bad_kind", "Pick the market brief or my stocks.")
+    region = "US" if region.upper() == "US" else "IN"
+    day = datetime.now(ZoneInfo(news.SEND_AT[region][0])).date()
+    issue = (news.build_market(region, day, weekly, store=False) if kind == "market"
+             else news.build_stocks(profile["id"], day, weekly, store=False))
+    if not issue:
+        err(404, "empty", "Nothing to put in this issue right now: the sources are down, or nothing changed for your stocks.")
+    return {**news_view(issue), "text": issue["text"]}
 
 
 @app.post("/admin/ai/test")

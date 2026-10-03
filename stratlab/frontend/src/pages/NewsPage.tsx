@@ -124,13 +124,12 @@ function IssueView({ id }: { id: string }) {
           <h3 className="h2" style={{ fontSize: 18 }}>{s.title}</h3>
           <ul className="news-items">
             {s.items.map((it, j) => {
-              const href = safeHref(it.url);
               const region = it.region ?? issue.region ?? "IN";
               return (
                 <li key={j}>
-                  {it.text}
+                  <ItemText text={it.text} url={it.url} />
                   {it.symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(it.symbol)}`}>{it.symbol}</Link></>}
-                  {href && <> <a className="link" href={href} target="_blank" rel="noopener noreferrer">Source ↗</a></>}
+                  {!!it.lines?.length && <ul className="news-lines">{it.lines.map((l, k) => <li key={k}><ItemText text={l.text} url={l.url} /></li>)}</ul>}
                 </li>
               );
             })}
@@ -140,4 +139,16 @@ function IssueView({ id }: { id: string }) {
       <p className="tiny muted" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>{NEWS_FOOTER}</p>
     </article>
   );
+}
+
+
+/** A line of an issue: links into StratLab open in the app; anything else opens the source in a new tab. */
+function ItemText({ text, url }: { text: string; url?: string | null }) {
+  const href = safeHref(url);
+  if (!href) return <>{text}</>;
+  const u = new URL(href, window.location.origin);
+  if (u.origin === window.location.origin || /^\/(research|paper|news|account)\b/.test(href)) {
+    return <Link className="link" to={u.pathname + u.search}>{text}</Link>;
+  }
+  return <>{text} <a className="link" href={href} target="_blank" rel="noopener noreferrer">Source ↗</a></>;
 }

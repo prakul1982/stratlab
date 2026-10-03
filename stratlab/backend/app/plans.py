@@ -18,7 +18,7 @@ PLANS = {
         "live_limit": 2,
         "live_trial_days": None,
         "group_size": 25,
-        "features": {"group_live", "options", "daily_report"},
+        "features": {"group_live", "options", "daily_report", "newsletter"},
     },
     "pro": {
         "name": "Pro", "price": 2999, "price_year": 29990,
@@ -29,11 +29,12 @@ PLANS = {
         "group_size": 50,
         # pro_features: advanced indicators and Indian F&O
         "features": {"group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features",
-                     "scans", "filings", "deepdive"},
+                     "scans", "filings", "deepdive", "newsletter", "newsletter_stocks"},
     },
 }
+# newsletter: the daily Market Brief (the weekly one is for everyone); newsletter_stocks: the My Stocks newsletter
 FEATURES = ("group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features",
-            "scans", "filings", "deepdive")
+            "scans", "filings", "deepdive", "newsletter", "newsletter_stocks")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
