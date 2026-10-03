@@ -11,6 +11,7 @@ import time
 from datetime import date, datetime
 
 from .coinbase import DataError
+from ..kite_service import ist_date
 
 ROLL_DAYS = 3
 
@@ -52,7 +53,7 @@ class MCXProvider:
         return self.kite.ready()
 
     def _load(self):
-        today = date.today().isoformat()
+        today = ist_date().isoformat()
         if self._day == today and self._by_name:
             return
         rows = self.kite.instruments_of("MCX")
@@ -78,7 +79,7 @@ class MCXProvider:
         if name not in CONTRACTS:
             return None
         self._load()
-        c = front(self._by_name.get(name, []), date.today())
+        c = front(self._by_name.get(name, []), ist_date())
         return self._make(name, c) if c else None
 
     def defaults(self) -> list[dict]:

@@ -10,7 +10,7 @@ import threading
 import traceback
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,7 +49,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, AuditReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, AuditReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -150,9 +150,39 @@ async def unexpected_errors(request: Request, call_next):
         del RECENT_ERRORS[:-25]
         _save_errors()
         report(e, ref=ref, path=f"{request.method} {request.url.path}")
+        if _source_failed(e, tb):
+            return JSONResponse(status_code=503, content={"detail": {"code": "data_unavailable",
+                                "message": "A market data source failed while answering this. Try again in a minute "
+                                           f"(ref {ref})."}})
+        if _database_failed(e, tb):
+            return JSONResponse(status_code=503, content={"detail": {"code": "database_unavailable",
+                                "message": "StratLab's database isn't answering right now. Nothing you saved is lost; "
+                                           f"try again in a minute (ref {ref})."}})
         return JSONResponse(status_code=500, content={"detail": {"code": "server_error",
                             "message": f"Something went wrong on our side ({request.method} {request.url.path}, ref {ref}). "
                                        "Try again in a moment; the admin page lists what failed."}})
+
+
+SOURCE_FILES = ("/app/kite_service.py", "/app/data/", "/app/intel/net.py", "/app/intel/yahoo.py", "/app/intel/screener.py",
+                "/app/intel/finnhub.py", "/app/intel/filings.py", "/app/intel/news.py", "/app/options/data.py", "/app/docs.py")
+
+
+def _source_failed(e: Exception, tb) -> bool:
+    """The crash came from inside a call to a market data source (its library or our client for it), not from
+    StratLab's own logic: the user gets "try again", the admin page still lists it."""
+    deepest = [f for f in tb if "site-packages" not in f.filename]
+    return bool(deepest) and any(x in deepest[-1].filename for x in SOURCE_FILES)
+
+
+def _database_failed(e: Exception, tb) -> bool:
+    """The crash was the database (or the network to it) failing during a database call, not StratLab's code."""
+    import httpx
+    try:
+        from postgrest.exceptions import APIError
+    except ImportError:
+        APIError = ()
+    network = isinstance(e, (httpx.TransportError, ConnectionError, TimeoutError)) or (APIError and isinstance(e, APIError))
+    return bool(network) and any(f.filename.endswith(("/app/db.py", "/app/admin.py")) or "/postgrest/" in f.filename for f in tb)
 
 
 def _save_errors():
@@ -1243,6 +1273,10 @@ def start_session(profile, s, inst):
             upgrade(str(e), "live_limit")
         if isinstance(e, ValueError):
             err(400, "cannot_start", str(e))
+        if not isinstance(e, HTTPException):     # the price feed failed while loading the warm-up candles
+            report(e, where="start paper session")
+            err(503, "prices_unavailable", "Couldn't load the price history this strategy needs to start. Nothing was "
+                                           "started; try again in a minute.")
         raise
     return sess
 
@@ -1556,7 +1590,50 @@ def server_status() -> dict:
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
-            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS))}
+            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)),
+            "calendar": calendar_status()}
+
+
+def calendar_status() -> dict:
+    """How far ahead India's exchange holidays are known: the installed calendar, plus the list the admin pasted."""
+    until = trading_calendar.known_until("IN")
+    added = sorted(trading_calendar.extra_holidays("IN"))
+    last = max([d for d in added] + [until.isoformat() if until else ""]) or None
+    days_left = (date.fromisoformat(last) - datetime.now(IST).date()).days if last else None
+    return {"known_until": until.isoformat() if until else None, "added": added, "covered_until": last, "days_left": days_left}
+
+
+@app.post("/admin/holidays")
+def admin_holidays(req: HolidaysReq, _=Depends(admin.admin_profile)):
+    """Save the exchange's official holiday list (pasted from its circular), for days the built-in calendar lacks."""
+    found = parse_holidays(req.text)
+    if not found:
+        err(400, "no_dates", "No dates found. Paste the exchange's list, with dates like 26-Jan-2027 or 2027-01-26.")
+    trading_calendar.set_extra_holidays("IN", found)
+    return calendar_status()
+
+
+MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), 1)}
+
+
+def parse_holidays(text: str) -> list[str]:
+    """Dates in a pasted holiday list: 2027-01-26, 26-Jan-2027, 26 January 2027 or 26/01/2027."""
+    import re as _re
+    out = set()
+    for y, m, d in _re.findall(r"\b(20\d\d)-(\d\d)-(\d\d)\b", text):
+        out.add((int(y), int(m), int(d)))
+    for d, mon, y in _re.findall(r"\b(\d{1,2})[-\s/]([A-Za-z]{3,9})[-\s/,]*(20\d\d)\b", text):
+        if mon[:3].lower() in MONTHS:
+            out.add((int(y), MONTHS[mon[:3].lower()], int(d)))
+    for d, m, y in _re.findall(r"\b(\d{1,2})/(\d{1,2})/(20\d\d)\b", text):
+        out.add((int(y), int(m), int(d)))
+    valid = []
+    for y, m, d in out:
+        try:
+            valid.append(date(y, m, d).isoformat())
+        except ValueError:
+            continue
+    return sorted(valid)
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
@@ -1686,6 +1763,13 @@ def admin_audit_start(req: AuditReq, _=Depends(admin.admin_profile)):
         return {**audit_runner.start(syms, label, lambda s: audit_one(s, req.docs, exchange), req.docs), "sets": audit.sets()}
     except RuntimeError as e:
         err(409, "audit_running", str(e))
+
+
+@app.delete("/admin/audit")
+def admin_audit_stop(_=Depends(admin.admin_profile)):
+    """Stop a running audit after the current company; the rows so far are kept."""
+    audit_runner.cancel()
+    return audit_runner.status()
 
 
 @app.post("/admin/promo")

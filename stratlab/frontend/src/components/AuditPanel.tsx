@@ -8,7 +8,7 @@ type Level = "mismatch" | "gap" | "error";
 type Issue = { level: Level; area: string; detail: string };
 type Row = { symbol: string; name: string; seconds: number; issues: Issue[] };
 interface AuditState {
-  running: boolean; label?: string; docs?: boolean; total?: number; done?: number; rows?: Row[]; started_at?: string; finished_at?: string | null;
+  running: boolean; cancelled?: boolean; label?: string; docs?: boolean; total?: number; done?: number; rows?: Row[]; started_at?: string; finished_at?: string | null;
   summary?: { companies: number; clean: number; mismatches: number; gaps: number; errors: number; avg_seconds: number | null;
     by_area: Record<string, Record<Level, number>>; slowest: { symbol: string; seconds: number }[] };
   sets: { id: string; name: string; count: number }[];
@@ -33,6 +33,7 @@ export function AuditPanel() {
     return () => window.clearInterval(t);
   }, [s?.running, load]);
 
+  const stop = async () => { try { setS(await api<AuditState>("/admin/audit", { method: "DELETE" })); } catch (e) { fail(e); } };
   const start = async () => {
     const symbols = custom.split(/[\s,]+/).filter(Boolean);
     try { setS(await api<AuditState>("/admin/audit", { method: "POST", body: { set, symbols, docs } })); } catch (e) { fail(e); }
@@ -65,10 +66,11 @@ export function AuditPanel() {
             <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Or symbols, e.g. INFY TITAN" style={{ minWidth: 200 }} disabled={s.running} aria-label="Symbols to check" />
             <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={docs} onChange={(e) => setDocs(e.target.checked)} disabled={s.running} />Also try reading documents (slower)</label>
             <button className="btn sm" disabled={s.running} onClick={start}>{s.running ? `Checking ${s.done ?? 0} of ${s.total}…` : "Run audit"}</button>
+            {s.running && <button className="btn quiet sm" onClick={stop}>Stop</button>}
           </div>
           {sum && s.label && (
             <>
-              <p className="small" style={{ margin: 0 }}><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `finished ${ago(s.finished_at)}` : ""}
+              <p className="small" style={{ margin: 0 }}><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
                 {" · "}{sum.companies} checked, {sum.clean} clean · <span className="neg">{sum.mismatches} mismatches</span> · {sum.gaps} gaps · {sum.errors} errors
                 {sum.avg_seconds != null && ` · ${sum.avg_seconds}s a company`}</p>
               {Object.keys(sum.by_area).length > 0 && (

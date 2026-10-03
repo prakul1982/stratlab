@@ -24,6 +24,25 @@ NAMES = {
 QUOTE_NAMES = {"USD": "US Dollar", "USDT": "Tether", "USDC": "USD Coin", "EUR": "Euro", "GBP": "British Pound"}
 
 
+def _candles(data) -> list:
+    """Coinbase candles are [time, low, high, open, close, volume] rows; anything else is a broken answer."""
+    if not isinstance(data, list):
+        raise DataError("Coinbase sent something that isn't price data. Try again in a minute.")
+    out = []
+    for c in data:
+        try:
+            if len(c) >= 6 and all(math.isfinite(float(x)) for x in c[:6]):
+                out.append(c)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _bar(c) -> dict:
+    ts, low, high, open_, close, vol = c[:6]
+    return {"t": _iso(ts), "o": float(open_), "h": float(high), "l": float(low), "c": float(close), "v": float(vol)}
+
+
 class DataError(Exception):
     pass
 
@@ -63,14 +82,22 @@ class CoinbaseProvider:
             raise DataError("Coinbase doesn't list that pair.")
         if r.status_code >= 400:
             raise DataError(f"Coinbase returned an error ({r.status_code}).")
-        return r.json()
+        try:
+            return r.json()
+        except ValueError:
+            raise DataError("Coinbase sent a page instead of prices (it may be busy). Try again in a minute.") from None
 
     # ---------- instruments ----------
     def _load(self):
         if self._products and time.time() - self._loaded_at < 6 * 3600:
             return
         rows = []
-        for p in self._get("/products"):
+        listed = self._get("/products")
+        if not isinstance(listed, list):
+            raise DataError("Coinbase sent something that isn't its list of coins. Try again in a minute.")
+        for p in listed:
+            if not isinstance(p, dict) or not p.get("id") or not p.get("base_currency"):
+                continue
             if p.get("quote_currency") not in QUOTES or p.get("trading_disabled") or p.get("status") not in (None, "online"):
                 continue
             base, quote = p["base_currency"], p["quote_currency"]
@@ -140,10 +167,8 @@ class CoinbaseProvider:
         rows: dict[int, dict] = {}
         while t < end:
             to = min(t + 300 * g, end)
-            for c in self._get(f"/products/{inst['token']}/candles", granularity=g, start=_iso(t), end=_iso(to)):
-                ts, low, high, open_, close, vol = c[:6]
-                rows[int(ts)] = {"t": _iso(ts), "o": float(open_), "h": float(high), "l": float(low),
-                                 "c": float(close), "v": float(vol)}
+            for c in _candles(self._get(f"/products/{inst['token']}/candles", granularity=g, start=_iso(t), end=_iso(to))):
+                rows[int(c[0])] = _bar(c)
             t = to
         bars = [rows[k] for k in sorted(rows)]
         self._cache[key] = (time.time(), bars)
@@ -157,12 +182,11 @@ class CoinbaseProvider:
         now = time.time()
         start = now - 50 * g
         out = []
-        for c in self._get(f"/products/{inst['token']}/candles", granularity=g, start=_iso(start), end=_iso(now)):
+        for c in _candles(self._get(f"/products/{inst['token']}/candles", granularity=g, start=_iso(start), end=_iso(now))):
             ts = int(c[0])
             if ts + g > now:  # still forming
                 continue
-            t = _iso(ts)
-            if since is None or t > since:
-                out.append({"t": t, "o": float(c[3]), "h": float(c[2]), "l": float(c[1]), "c": float(c[4]),
-                            "v": float(c[5])})
+            b = _bar(c)
+            if since is None or b["t"] > since:
+                out.append(b)
         return sorted(out, key=lambda b: b["t"])

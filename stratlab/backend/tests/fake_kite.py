@@ -26,12 +26,8 @@ def price_of(name: str, t: datetime) -> float:
 
 
 def _expiries(n=3):
-    d, out = date.today(), []
-    while len(out) < n:
-        if d.weekday() == 1:
-            out.append(d)
-        d += timedelta(days=1)
-    return out
+    from tests.fake_options_kite import _expiries as weekly
+    return weekly()[:n]
 
 
 class FakeKiteConnect:

@@ -85,6 +85,8 @@ class Query:
 
     # running
     def execute(self):
+        if self.db.fail:
+            raise self.db.fail
         with self.db.lock:
             rows = self.db.tables.setdefault(self.table, [])
             match = [r for r in rows if all(f(r) for f in self.filters)]
@@ -143,18 +145,25 @@ class Query:
 
 
 class FakeAuth:
+    def __init__(self, db):
+        self.db = db
+
     def get_user(self, token):
+        from supabase_auth.errors import AuthApiError, AuthRetryableError
+        if self.db.fail:
+            raise AuthRetryableError("Connection refused", 0)
         u = USERS.get(token)
         if not u:
-            raise RuntimeError("invalid JWT")
+            raise AuthApiError("invalid JWT: unable to parse or verify signature", 401, "bad_jwt")
         return SimpleNamespace(user=SimpleNamespace(id=u[0], email=u[1], email_confirmed_at="2026-01-01T00:00:00Z"))
 
 
 class FakeSupabase:
     def __init__(self):
         self.tables: dict[str, list[dict]] = {}
+        self.fail = None                     # an exception every query raises: the database is down
         self.lock = threading.RLock()
-        self.auth = FakeAuth()
+        self.auth = FakeAuth(self)
         self.tables["profiles"] = [{"id": uid, "email": email, "plan": plan, "created_at": "2026-09-01T00:00:00+00:00",
                                     "plan_status": "active" if plan != "free" else None,
                                     "current_period_end": "2099-01-01T00:00:00+00:00" if plan != "free" else None}

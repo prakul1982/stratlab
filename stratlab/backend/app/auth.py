@@ -10,6 +10,20 @@ _cache: dict[str, tuple[float, str, str, bool]] = {}
 _lock = threading.Lock()
 
 
+def _unreachable(e: Exception) -> bool:
+    """A sign-in check that failed because the service couldn't be reached, not because the token is bad."""
+    try:
+        from supabase_auth.errors import AuthApiError, AuthRetryableError
+    except ImportError:                              # older client names
+        return False
+    if isinstance(e, AuthRetryableError):
+        return True
+    if isinstance(e, AuthApiError):
+        return False
+    import httpx
+    return isinstance(e, (httpx.TransportError, ConnectionError, TimeoutError))
+
+
 def current_profile(authorization: str | None = Header(None)) -> dict:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, {"code": "login_required", "message": "Sign in to continue."})
@@ -22,7 +36,10 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
     else:
         try:
             user = db.sb().auth.get_user(token).user
-        except Exception:
+        except Exception as e:
+            if _unreachable(e):                     # the sign-in service is down: don't tell people they're signed out
+                raise HTTPException(503, {"code": "auth_unavailable", "message": "Sign-in isn't answering right now. "
+                                          "You're still signed in; try again in a minute."}) from None
             user = None
         if not user:
             raise HTTPException(401, {"code": "login_required", "message": "Your session expired. Sign in again."})

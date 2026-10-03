@@ -60,7 +60,30 @@ class FakeAI:
         return json.dumps(AI_SHAPES[self.i % len(AI_SHAPES)]())
 
 
-def _nse():
+class Switch(httpx.BaseTransport):
+    """A fake source's transport with a fault switch: "down", "timeout", "500", "429", "403", "garbage" (a page
+    instead of data), "empty" (valid but empty data) or None (normal)."""
+
+    def __init__(self, inner: httpx.BaseTransport):
+        self.inner, self.mode = inner, None
+
+    def handle_request(self, request):
+        m = self.mode
+        if m == "down":
+            raise httpx.ConnectError("connection refused", request=request)
+        if m == "timeout":
+            raise httpx.ReadTimeout("timed out", request=request)
+        if m in ("500", "429", "403"):
+            return httpx.Response(int(m), text="error", request=request)
+        if m == "garbage":
+            return httpx.Response(200, text="<html><body>Access denied. Please verify you are human.</body></html>",
+                                  headers={"content-type": "text/html"}, request=request)
+        if m == "empty":
+            return httpx.Response(200, json={}, request=request)
+        return self.inner.handle_request(request)
+
+
+def _nse(sw=None):
     rows = [{"symbol": "RELIANCE", "desc": "Investor Presentation", "attchmntText": "Investor presentation for Q1 FY27",
              "sort_date": "2026-08-01 18:10:05", "seq_id": "1", "attchmntFile": "https://nsearchives.nseindia.com/p.pdf"},
             {"symbol": "RELIANCE", "desc": "Analysts/Institutional Investor Meet/Con. Call Updates",
@@ -78,19 +101,21 @@ def _nse():
             return httpx.Response(200, json={"industryInfo": {"macro": "Energy", "industry": "Refineries"},
                                              "priceInfo": {"lastPrice": 2900.5}})
         return httpx.Response(200, text="<html></html>")
-    return NSEFilings(transport=httpx.MockTransport(handler))
+    t = httpx.MockTransport(handler)
+    return NSEFilings(transport=sw(t) if sw else t)
 
 
-def _docs():
+def _docs(sw=None):
     pdf = make_pdf(["Investor presentation. Revenue grew 12%. We expect EBITDA margin of 24% in FY27."] * 60)
-    return main.Docs(transport=httpx.MockTransport(lambda r: httpx.Response(200, content=pdf)), check_host=lambda h: True)
+    t = httpx.MockTransport(lambda r: httpx.Response(200, content=pdf))
+    return main.Docs(transport=sw(t) if sw else t, check_host=lambda h: True)
 
 
 def _no_network(self, request):
     raise httpx.ConnectError("network disabled in tests", request=request)
 
 
-def build(monkeypatch) -> dict:
+def build(monkeypatch, real_clock: bool = False) -> dict:
     """Wire the app to fakes. Returns handles the tests use: the client, the fake AI, the fake database."""
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _no_network)
     fake_db = FakeSupabase()
@@ -100,21 +125,31 @@ def build(monkeypatch) -> dict:
     auth._cache.clear()
     monkeypatch.setattr(settings, "ADMIN_EMAILS", "owner@example.com")
     monkeypatch.setattr(settings, "FINNHUB_API_KEY", "k")
+    faults: dict[str, Switch] = {}
+
+    def sw(name):
+        def wrap(t):
+            faults[name] = Switch(t)
+            return faults[name]
+        return wrap
     kite = fake_kite.online()
-    markets = Registry(kite, CoinbaseProvider(transport=wavy_coinbase()), yahoo=Yahoo(transport=fake_yahoo()))
+    markets = Registry(kite, CoinbaseProvider(transport=sw("crypto")(wavy_coinbase())),
+                       yahoo=Yahoo(transport=sw("market data")(fake_yahoo())))
     ticks = TickHub(kite)
     monkeypatch.setattr(ticks, "start", lambda: None)
-    options = OptionsData(FakeOptionsKite(live=True, drift={}, clock=lambda: datetime.now(IST).replace(hour=12, minute=0)))
+    clock = (lambda: datetime.now(IST)) if real_clock else (lambda: datetime.now(IST).replace(hour=12, minute=0))
+    options = OptionsData(FakeOptionsKite(live=True, drift={}, clock=clock))
     manager = LiveManager(kite, ticks, markets, options)
     for name, v in (("kite", kite), ("hub", ticks), ("markets", markets), ("options_data", options), ("manager", manager)):
         monkeypatch.setattr(main, name, v)
-    hub = Research(kite, finnhub=Finnhub(transport=fake_finnhub()), yahoo=Yahoo(transport=fake_yahoo()),
-                   screener=Screener(transport=fake_screener()), news=GoogleNews(transport=fake_news()),
-                   wiki=Wikipedia(transport=fake_wiki()))
+    hub = Research(kite, finnhub=Finnhub(transport=sw("us company data")(fake_finnhub())),
+                   yahoo=Yahoo(transport=sw("research market data")(fake_yahoo())),
+                   screener=Screener(transport=sw("fundamentals")(fake_screener())), news=GoogleNews(transport=sw("news")(fake_news())),
+                   wiki=Wikipedia(transport=sw("wikipedia")(fake_wiki())))
     monkeypatch.setattr(main, "research_hub", hub)
     routes.setup(hub, None, None)
-    monkeypatch.setattr(main, "filings_feed", _nse())
-    monkeypatch.setattr(main, "deep_docs", _docs())
+    monkeypatch.setattr(main, "filings_feed", _nse(sw("exchange")))
+    monkeypatch.setattr(main, "deep_docs", _docs(sw("documents")))
     import importlib
     for m in ("app.intel.ai", "app.ask", "app.ideas", "app.deepdive", "app.report_card", "app.ai_writer", "app.importer"):
         importlib.import_module(m)              # load them now, so their copy of `complete` is swapped below
@@ -124,6 +159,18 @@ def build(monkeypatch) -> dict:
             monkeypatch.setattr(mod, "complete", ai)
     from app.intel import ai as intel_ai
     intel_ai._cache.clear()
+    from app import audit
+    runner = audit.Runner()
+    monkeypatch.setattr(main, "audit_runner", runner)
     client = TestClient(main.app, raise_server_exceptions=False)
+
+    def close():
+        """Stop anything a test left running in the background: the audit, paper sessions."""
+        runner.cancel()
+        for sid in list(manager.sessions):
+            try:
+                manager.stop(sid, "test over")
+            except Exception:
+                manager.sessions.pop(sid, None)
     return {"client": client, "ai": ai, "db": fake_db, "rng": random.Random(7), "headers": headers, "kite": kite,
-            "manager": manager}
+            "manager": manager, "faults": faults, "close": close}

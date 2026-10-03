@@ -120,7 +120,11 @@ def gemini_models() -> list[str]:
         raise AIError("Couldn't list Gemini models for this key. Check GEMINI_API_KEY in Railway.")
     skip = ("image", "tts", "audio", "live", "embedding", "vision", "thinking", "robotics", "computer", "native")
     names = []
-    for m in r.json().get("models", []):
+    try:
+        listed = r.json().get("models", [])
+    except (ValueError, AttributeError):
+        raise AIError("Gemini sent something that isn't a model list. Try again in a minute.") from None
+    for m in listed if isinstance(listed, list) else []:
         short = m.get("name", "").split("/")[-1]
         if "generateContent" in (m.get("supportedGenerationMethods") or []) and "flash" in short and not any(k in short for k in skip):
             names.append(short)

@@ -227,6 +227,11 @@ class Runner:
     def __init__(self):
         self.lock = threading.Lock()
         self.state: dict = {"running": False}
+        self._stop = threading.Event()
+
+    def cancel(self):
+        """Stop after the company being checked now; what's done so far is kept and saved."""
+        self._stop.set()
 
     def status(self) -> dict:
         with self.lock:
@@ -249,13 +254,18 @@ class Runner:
             if self.state.get("running"):
                 raise RuntimeError("An audit is already running.")
             self.state = {"running": True, "label": label, "docs": docs, "total": len(symbols), "done": 0, "rows": [],
-                          "started_at": datetime.now(timezone.utc).isoformat(), "finished_at": None}
+                          "started_at": datetime.now(timezone.utc).isoformat(), "finished_at": None, "cancelled": False}
+            self._stop.clear()
         threading.Thread(target=self._run, args=(symbols, check), daemon=True).start()
         return self.status()
 
     def _run(self, symbols: list[str], check):
         import json
         for sym in symbols:
+            if self._stop.is_set():
+                with self.lock:
+                    self.state["cancelled"] = True
+                break
             row = check(sym)
             with self.lock:
                 self.state["rows"].append(row)

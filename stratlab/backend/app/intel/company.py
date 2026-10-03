@@ -6,7 +6,7 @@ carries a `sources` list saying which ones answered, so the page can show what's
 missing instead of breaking."""
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from ..kite_service import KiteService
 from .finnhub import Finnhub
@@ -14,6 +14,7 @@ from .net import SourceError, num
 from .news import GoogleNews, Wikipedia
 from .screener import Screener, summary as scr_summary
 from .yahoo import Yahoo
+from ..kite_service import ist_date
 
 RANGES = {"1m": 31, "6m": 186, "1y": 366, "3y": 1100, "5y": 1830, "max": 3650}
 US_EXCHANGES = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "NASDAQ", "NYSE", "NYSEArca"}
@@ -210,7 +211,7 @@ class Research:
         trend = self._us_trend(r["fin"])
         earn = [e for e in (r["earn"] or []) if e.get("actual") is not None and e.get("estimate") is not None][:4][::-1]
         ins = (r["ins"] or {}).get("data") or []
-        today = date.today().isoformat()
+        today = ist_date().isoformat()
         nxt = sorted([e for e in (r["cal"] or []) if e.get("date", "") >= today], key=lambda e: e["date"])
         rec = (r["rec"] or [None])[0]
         return {

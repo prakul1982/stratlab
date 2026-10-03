@@ -130,6 +130,7 @@ class NSEFilings:
         self.cache = TTLCache(max_items=2000)
         self._primed = 0.0
         self._lock = threading.Lock()
+        self._fails, self._down_until = 0, 0.0
 
     def _prime(self, force: bool = False):
         with self._lock:
@@ -142,6 +143,22 @@ class NSEFilings:
             self._primed = time.time()
 
     def _get(self, path: str, params: dict, referer: str | None = None):
+        """One API call, with the same circuit breaker as the other sources: after three outages in a row the
+        exchange is treated as down for a minute, so pages answer at once instead of queueing behind it."""
+        if time.time() < self._down_until:
+            raise SourceError(self.name, "The exchange feed isn't answering right now. Try again in a minute.", busy=True)
+        try:
+            out = self._get_once(path, params, referer)
+        except SourceError as e:
+            if e.busy:
+                self._fails += 1
+                if self._fails >= 3:
+                    self._down_until, self._fails = time.time() + 60, 0
+            raise
+        self._fails = 0
+        return out
+
+    def _get_once(self, path: str, params: dict, referer: str | None = None):
         self._prime()
         headers = {"Referer": referer} if referer else None
         for attempt in (0, 1):
@@ -166,7 +183,7 @@ class NSEFilings:
             try:
                 return r.json()
             except ValueError:
-                raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).") from None
+                raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).", busy=True) from None
         raise SourceError(self.name, "The exchange feed refused the request after a fresh session.")
 
     def announcements(self, symbol: str, days: int = LOOKBACK_DAYS) -> list[dict]:

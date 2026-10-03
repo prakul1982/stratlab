@@ -13,6 +13,7 @@ from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
 from .deepdive import KEEP, RULES, readable
 from .docs import quote_found, ranked_windows
+from .kite_service import ist_date
 
 MAX_CALLS = 6                  # earnings calls read, spread over the last two years
 
@@ -220,7 +221,7 @@ def _actual(metric: str, per: dict, nums: dict) -> float | None:
 
 def check(g: dict, nums: dict, today: date | None = None) -> dict:
     """One promise against the numbers: met, missed, pending (not reported yet) or unchecked (not a number we have)."""
-    today = today or date.today()
+    today = today or ist_date()
     per = parse_period(g.get("period"))
     res = {**g, "actual": None, "result": "unchecked", "unit": "crore" if g["metric"] == "capex" else "%"}
     if g["metric"] == "other" or not per:

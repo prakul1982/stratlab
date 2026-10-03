@@ -196,7 +196,11 @@ class OpenAIStyle:
             raise AIConfig(f"{LABELS[self.name]} rejected the API key.")
         if r.status_code >= 400:
             raise AIBusy(f"{LABELS[self.name]} couldn't list its models ({r.status_code}).")
-        ids = [m.get("id", "") for m in r.json().get("data", []) if m.get("id")]
+        try:
+            listed = r.json().get("data", [])
+        except (ValueError, AttributeError):
+            raise AIBusy(f"{LABELS[self.name]} sent something that isn't a model list.") from None
+        ids = [m.get("id", "") for m in listed if isinstance(m, dict) and m.get("id")]
         st.models, st.models_at = pick_models(self.name, ids), time.time()
         if not st.models:
             raise AIConfig(f"{LABELS[self.name]} has no suitable free chat model for this key.")
