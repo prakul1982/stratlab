@@ -1567,7 +1567,7 @@ def options_underlyings(profile=Depends(current_profile)):
 @app.get("/options/chain")
 def options_chain(exchange: str = "NFO", underlying: str = "NIFTY", expiry: str = "current", profile=Depends(current_profile)):
     options_ready()
-    if exchange not in ("NFO", "BFO", "MCX") or not re.fullmatch(r"[A-Z0-9&-]{1,30}", underlying) or \
+    if exchange not in ("NFO", "BFO", "MCX", "CDS") or not re.fullmatch(r"[A-Z0-9&-]{1,30}", underlying) or \
             not re.fullmatch(r"current|next|month|\d{4}-\d{2}-\d{2}", expiry):
         err(400, "bad_request", "Pick an exchange, an underlying and an expiry.")
     return options_data.chain(exchange, underlying, expiry)

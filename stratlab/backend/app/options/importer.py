@@ -22,7 +22,7 @@ Schema:
 {
  "name": str,
  "structure": one of "short_straddle","short_strangle","iron_fly","iron_condor","long_straddle","long_strangle","bull_call_spread","bear_put_spread","sell_call","sell_put","buy_call","buy_put","custom",
- "exchange": "NFO" (NSE options: NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, stock options) | "BFO" (BSE: SENSEX, BANKEX) | "MCX" (CRUDEOIL, NATURALGAS, GOLDM, SILVERM...),
+ "exchange": "NFO" (NSE options: NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, stock options) | "BFO" (BSE: SENSEX, BANKEX) | "MCX" (CRUDEOIL, NATURALGAS, GOLDM, SILVERM...) | "CDS" (NSE currency options: USDINR, EURINR, GBPINR, JPYINR),
  "underlying": the option's underlying name as the exchange lists it, e.g. "NIFTY", "BANKNIFTY", "SENSEX", "CRUDEOIL", "RELIANCE",
  "expiry": "current" (nearest), "next", or "month",
  "offsetUnit": "strikes" or "points",

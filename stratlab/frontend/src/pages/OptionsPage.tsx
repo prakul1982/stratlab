@@ -123,7 +123,7 @@ function Chain({ s }: { s: OptionStrategy }) {
       {busy && <Loading label="Loading the chain" />}
       {chain && (
         <div className="stack" style={{ gap: 8, marginTop: 12 }}>
-          <div className="spread small"><span>{s.underlying} {chain.spot != null ? price(chain.spot, "INR") : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
+          <div className="spread small"><span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
             <button className="btn quiet sm" onClick={load}>Refresh</button></div>
           <div className="table-wrap" style={{ margin: 0 }}>
             <table className="chain-t">
@@ -171,7 +171,7 @@ export function OptionsPage() {
 
   const patch = useCallback((p: Partial<OptionStrategy>) => { setS((x) => ({ ...x, ...p })); setPreview(null); }, []);
   const und = unds?.find((u) => u.exchange === s.exchange && u.name === s.underlying);
-  const popular = unds?.length ? unds.filter((u) => u.popular) : POPULAR_FALLBACK.map((u) => ({ ...u, venue: u.exchange === "BFO" ? "BSE" : u.exchange === "MCX" ? "MCX" : "NSE" }));
+  const popular = unds?.length ? unds.filter((u) => u.popular) : POPULAR_FALLBACK.map((u) => ({ ...u, venue: u.exchange === "BFO" ? "BSE" : u.exchange === "MCX" ? "MCX" : u.exchange === "CDS" ? "NSE currency" : "NSE" }));
   const pickUnderlying = (exchange: OptionStrategy["exchange"], name: string) => {
     const t = s.exchange !== exchange ? sessionFor(exchange) : null;
     const st = STRUCTURES.find((x) => x.id === s.structure);

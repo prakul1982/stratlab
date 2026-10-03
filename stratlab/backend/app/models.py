@@ -359,7 +359,7 @@ class OptSignal(BaseModel):
 class OptionStrategy(BaseModel):
     name: str = Field("Options strategy", max_length=80)
     structure: str = Field("custom", max_length=40)
-    exchange: Literal["NFO", "BFO", "MCX"] = "NFO"
+    exchange: Literal["NFO", "BFO", "MCX", "CDS"] = "NFO"
     underlying: str = Field(..., min_length=1, max_length=40)
     expiry: str = Field("current", pattern=r"^(current|next|month|\d{4}-\d{2}-\d{2})$")
     offsetUnit: Literal["strikes", "points"] = "strikes"

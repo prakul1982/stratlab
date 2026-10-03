@@ -76,7 +76,7 @@ class OptionsEngine:
         self.s = s
         self.margin_fn = margin_fn            # legs -> margin needed, or None when it can't be had
         self.freeze = s.costs.freeze or freeze_default
-        self.kind = "in_mcx_opt" if s.exchange == "MCX" else "in_opt"
+        self.kind = {"MCX": "in_mcx_opt", "CDS": "in_cds_opt"}.get(s.exchange, "in_opt")
         st = state or {}
         self.cash = st.get("cash", s.sizing.capital)
         self.pos = st.get("pos")
