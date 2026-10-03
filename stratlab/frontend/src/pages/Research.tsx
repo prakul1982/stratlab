@@ -39,8 +39,8 @@ function Header({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?:
   return (
     <div className="stack" style={{ gap: 8 }}>
       <span className="eyebrow">{eyebrow}</span>
-      <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{title}</h1>
-      {sub && <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>{sub}</p>}
+      <h1 className="page-title">{title}</h1>
+      {sub && <p className="page-sub">{sub}</p>}
     </div>
   );
 }
@@ -54,8 +54,8 @@ function IndexStrip({ indices }: { indices: IndexLevel[] | null }) {
         <div key={i.name} className="stack" style={{ gap: 2 }}>
           <span className="eyebrow" style={{ fontSize: 11 }}>{i.name}</span>
           <span className="serif num" style={{ fontSize: 26, lineHeight: 1.1 }}>{Math.round(i.price).toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US")}</span>
-          <span className={`small num ${signClass(i.change_pct)}`}>{pct(i.change_pct, 2)} today
-            {i.from_high_pct != null && <span className="muted"> · {i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its high`}</span>}</span>
+          <span className="small"><span className={`num ${signClass(i.change_pct)}`}>{pct(i.change_pct, 2)}</span> today
+            {i.from_high_pct != null && <span className="muted"> · {i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}</span>}</span>
         </div>
       ))}
     </div>
@@ -254,8 +254,8 @@ export function ThemesPage() {
   return (
     <div className="stack" style={{ gap: 24 }}>
       <ResearchNav region={region} setRegion={setRegion} />
-      <Header eyebrow={`Themes · ${REGION_NAME[region]}`} title="Map a theme, find the shovels"
-        sub="Type a sector or trend. The AI maps who's involved, where the money flows, and which listed companies sit along the chain." />
+      <Header eyebrow={`Themes · ${REGION_NAME[region]}`} title="Map a theme, find the companies in it"
+        sub="Type a sector or trend. The AI maps who's involved along the chain, from raw materials to the end customer, and lists the listed companies linked to each step." />
       <form className="row" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); go(text); }}>
         <input className="input" style={{ flex: 1 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} aria-label="Theme" />
         <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
@@ -363,26 +363,27 @@ export function PulsePage() {
         </div>
         {aiErr ? <p className="small" style={{ color: "var(--orange-ink)" }}>{aiErr}</p>
           : !ai ? <div className="row muted" style={{ gap: 10 }}><span className="spinner" />Reading the tape…</div>
-            : <p className="serif" style={{ fontSize: 20, lineHeight: 1.5 }}>{ai.tone}</p>}
+            : ai.tone ? <p className="serif" style={{ fontSize: 20, lineHeight: 1.5 }}>{ai.tone}</p>
+              : <p className="small muted">No AI read of today's mood yet. Press Refresh to write one.</p>}
       </section>
-      {ai && (
+      {ai && (ai.hot.length > 0 || ai.flows.length > 0) && (
         <div className="grid2">
-          <Panel title="In today's headlines">
+          {ai.hot.length > 0 && <Panel title="In today's headlines">
             {ai.hot.map((h) => (
               <div key={h.ticker + h.name} className="stack" style={{ gap: 4, paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
                 <span><b>{h.name}</b> {h.ticker && <Link className="num small" to={`/research/${region}/${encodeURIComponent(h.ticker)}`}>{h.ticker} →</Link>}</span>
                 <span className="small muted">{h.why}</span>
               </div>
             ))}
-          </Panel>
-          <Panel title="Where money is flowing">
+          </Panel>}
+          {ai.flows.length > 0 && <Panel title="Where money is flowing">
             {ai.flows.map((f) => (
               <div key={f.title} className="stack" style={{ gap: 4, paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
                 <span className="row" style={{ gap: 8 }}><b>{f.title}</b><span className={`badge ${f.direction === "INFLOW" ? "next" : f.direction === "OUTFLOW" ? "fail" : "skip"}`}>{f.direction.toLowerCase()}</span></span>
                 <span className="small muted">{f.detail}</span>
               </div>
             ))}
-          </Panel>
+          </Panel>}
         </div>
       )}
       {ai && ai.themes.length > 0 && (
@@ -427,7 +428,7 @@ export function ComparePage() {
   return (
     <div className="stack" style={{ gap: 24 }}>
       <ResearchNav region={region} setRegion={setRegion} />
-      <Header eyebrow={`Compare · ${REGION_NAME[region]}`} title="Two companies, side by side" sub="Pick two companies to line up their numbers, with an AI verdict on which looks stronger and for whom." />
+      <Header eyebrow={`Compare · ${REGION_NAME[region]}`} title="Two companies, side by side" sub="Pick two companies to line up their numbers, with an AI summary of where they differ." />
       <div className="row wrap" style={{ gap: 16 }}><Pick k="a" v={a} /><Pick k="b" v={b} /></div>
       {error && <div className="banner">{error}</div>}
       {a && b && !res && !error && <Loading label={`Comparing ${a} and ${b}`} />}
@@ -561,7 +562,7 @@ export function ScanPage() {
     <div className="stack" style={{ gap: 24 }}>
       <ResearchNav region={region} setRegion={setRegion} />
       <Header eyebrow={`Scan · ${REGION_NAME[region]}`} title="Stage 2 + Supertrend"
-        sub="Which stocks are in Stage 2 (a rising 150-day average with the price above it) and have the Supertrend pointing up. Facts from the charts, not advice: your own rules decide." />
+        sub="Which stocks are in Stage 2 (the price above a rising 150-day average) and have the Supertrend pointing up (a line that follows the price and flips when the trend turns). Both together are called ST S2 here. Facts from the charts, not advice." />
       {!pro && <div className="banner"><span>Scans and ST S2 alerts are on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       <div className="row wrap" style={{ gap: 10, alignItems: "center" }}>
         <span className="chip-select"><select aria-label="Group to scan" value={setId} onChange={(e) => { setSetId(e.target.value); setOut(null); }}>
@@ -570,11 +571,12 @@ export function ScanPage() {
         <button className="btn" disabled={busy || !pro || !cur?.count} onClick={runScan}>{busy ? "Scanning…" : "Scan"}</button>
         {sets && <label className="row small" style={{ gap: 8, marginLeft: "auto" }}>
           <input type="checkbox" checked={sets.alerts} disabled={!pro} onChange={toggleAlerts} />
-          Alert me after each close when a watchlist stock gives an ST S2 signal
+          Alert me after each close when a watchlist stock newly meets both (ST S2)
           <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up on the Account page."}</Info>
         </label>}
       </div>
       {cur && cur.id === "watchlist" && !cur.count && <p className="small muted">Your {REGION_NAME[region]} watchlist is empty. Press Watch on company pages to add stocks, or scan a ready-made group.</p>}
+      {!out && !busy && pro && !!cur?.count && <p className="small muted">Pick a group and press Scan to see each stock's stage and Supertrend direction.</p>}
       {busy && <Loading label="Reading each stock's daily chart" />}
       {out && !busy && (
         <section className="card stack" style={{ gap: 12 }}>
@@ -605,7 +607,7 @@ export function ScanPage() {
           {(out.missing.length > 0 || out.problems.length > 0) && <p className="tiny muted">Skipped: {[...out.missing, ...out.problems].join(" · ")}</p>}
         </section>
       )}
-      <p className="small muted" style={{ maxWidth: "80ch" }}>Stage uses the 150-day average and its 20-day slope; Supertrend uses 10 days and 3× ATR. Past signals don't predict future returns, and nothing here is investment advice.</p>
+      <p className="small muted" style={{ maxWidth: "80ch" }}>Stage uses the 150-day average and its 20-day slope; Supertrend uses 10 days and 3× the average daily range (ATR). Past signals don't predict future returns, and nothing here is investment advice.</p>
     </div>
   );
 }
@@ -670,6 +672,7 @@ export function RotationPage() {
   const names = (q: Quadrant, extra?: (r: RotationRow) => boolean) => all.filter((r) => r.quadrant === q && (!extra || extra(r))).map((r) => r.name);
   const entered = all.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
   const unit = interval === "weekly" ? "week" : "day";
+  const few = (xs: string[], n = 5) => !xs.length ? "none" : xs.length <= n + 1 ? xs.join(", ") : `${xs.slice(0, n).join(", ")} and ${xs.length - n} more`;
   return (
     <div className="stack" style={{ gap: 24 }}>
       <ResearchNav region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} />
@@ -713,9 +716,9 @@ export function RotationPage() {
               {([["leading", `Leading: stronger than ${drilled && out.parent ? out.parent.name : "the market"} and still gaining`], ["improving", "Improving: weaker, but picking up"],
                  ["weakening", "Weakening: stronger, but losing pace"], ["lagging", "Lagging: weaker and still slipping"]] as [Quadrant, string][]).map(([q, says]) => (
                 <div key={q}><QuadrantTag q={q} /><span className="muted small">{says.split(": ")[1]}</span>
-                  <span className="small">{names(q).join(", ") || "none"}</span></div>
+                  <span className="small">{few(names(q))}</span></div>
               ))}
-              {entered.length > 0 && <p className="small" style={{ margin: 0 }}>Moved into Leading over the last {out.tail} {unit}s: <b>{entered.join(", ")}</b></p>}
+              {entered.length > 0 && <p className="small" style={{ margin: 0 }}>Moved into Leading over the last {out.tail} {unit}s: <b>{few(entered)}</b></p>}
             </div>
           )}
           {rows.length === 0 ? <p className="small muted">{all.length ? "Tick a few below to draw them." : "Not enough price history to draw this yet."}</p>
@@ -916,7 +919,7 @@ export function FilingsPage() {
       )}
       {busy && <Loading label="Reading each company's filings" />}
       {data && !busy && (data.rows.length === 0 && data.problems.length === 0
-        ? <p className="small muted">Your watchlist has no India stocks yet. Press Watch on a company page to add some.</p>
+        ? <div className="card dashed stack" style={{ gap: 10, alignItems: "flex-start" }}><p className="muted">Your watchlist has no India stocks yet. Open a company and press <b>Watch</b>: its filings show up here.</p><Link to="/research?region=IN" className="btn sm">Find a company</Link></div>
         : (
           <div className="stack" style={{ gap: 14 }}>
             {data.rows.map((r) => (

@@ -155,7 +155,7 @@ export function MarketPage() {
     <div className="stack" style={{ gap: 26 }}>
       <div className="stack" style={{ gap: 8 }}>
         <Link to={`/n/${nb.id}`} className="link" style={{ textDecoration: "none", alignSelf: "flex-start" }}>← {nb.name}</Link>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Where do you want to test it?</h1>
+        <h1 className="page-title">Where do you want to test it?</h1>
         <p className="muted row" style={{ fontSize: 17, gap: 0 }}>The same rules run on any market. Prices, trading hours, currency and costs switch to match it.<Info>{HELP.markets}</Info></p>
       </div>
 

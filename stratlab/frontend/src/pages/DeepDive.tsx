@@ -205,7 +205,7 @@ export function DeepDivePage() {
       <div className="stack" style={{ gap: 8 }}>
         <Link className="link small" to={`/research/${region}/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
         <span className="eyebrow">Deep dive · {us ? "United States" : "India"} · {sym}</span>
-        <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{v?.name ?? sym}: business, capex and growth</h1>
+        <h1 className="page-title">{v?.name ?? sym}: business, capex and growth</h1>
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>{us
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
@@ -215,7 +215,7 @@ export function DeepDivePage() {
             <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pdf")} title="The same slides as a PDF, to read or share anywhere">{decking === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
           </>}
           <AlertButton region={region} symbol={sym} />
-          {v && <Link className="btn quiet sm" to="/research/investor">Investor home →</Link>}
+          {v && <Link className="btn quiet sm" to="/research/investor">Watchlist at a glance →</Link>}
         </div>
       </div>
       {!pro && <div className="banner"><span>The deep dive is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
@@ -236,7 +236,7 @@ export function DeepDivePage() {
               <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.profit as number) / profitS.k }))} label="Net profit" unit={profitS.unit} tone="blue" />
             </div>
             {n.quarters.length > 0 && (
-              <div className="table-wrap"><table>
+              <div className="table-wrap"><table className="nums">
                 <thead><tr><th>Quarter <span className="tiny muted">({qS.unit})</span></th><th className="num">Sales</th><th className="num">vs a year ago</th><th className="num">{n.bank ? "Financing margin" : "Operating margin"}</th><th className="num">Net profit</th></tr></thead>
                 <tbody>{n.quarters.slice(-8).map((q) => (
                   <tr key={q.quarter}><td>{q.quarter}</td><td className="num">{qS.fmt(q.sales)}</td><td className={`num ${signClass(q.sales_yoy)}`}>{q.sales_yoy == null ? "–" : pct(q.sales_yoy)}</td>
@@ -266,7 +266,7 @@ export function DeepDivePage() {
             ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${capS.unit}.`
             : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
             {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total) : inrAmount(n.capex_3y_total)}</b> spent on capex over the last three years. Figures in {capS.unit}.</p>}
-            <div className="table-wrap"><table>
+            <div className="table-wrap"><table className="nums">
               <thead><tr><th>Year <span className="tiny muted">({capS.unit})</span></th><th className="num">Sales</th><th className="num">Capex</th><th className="num">Capex / sales</th><th className="num">Cash from operations</th><th className="num">Free cash flow</th><th className="num">Debt</th></tr></thead>
               <tbody>{[...years].reverse().slice(0, 8).map((y) => (
                 <tr key={y.year}><td>{y.year}</td><td className="num">{capS.fmt(y.sales)}</td><td className="num">{capS.fmt(y.capex)}</td><td className="num">{pc(y.capex_pct_sales)}</td>
@@ -282,7 +282,7 @@ export function DeepDivePage() {
                 <span className="small muted">{v.reads ? `Read ${day(v.reads.at)}: ${v.reads.read.map((d) => `${KIND[d.kind] ?? "Filing"}, ${day(d.at)}`).join(" · ") || "the company profile"}` : us ? `${v.documents.filter((d) => d.kind === "annual_report").length} annual report${v.documents.filter((d) => d.kind === "annual_report").length === 1 ? "" : "s"} and ${v.documents.filter((d) => d.kind === "earnings_release").length} earnings releases filed in the last two years.`
                   : `${v.documents.length} presentations and call transcripts found in the last two years.`}</span>
               </div>
-              <div className="row" style={{ gap: 8 }}>
+              <div className="row wrap" style={{ gap: 8 }}>
                 <select className="input sm" style={{ width: "auto" }} value={span} onChange={(e) => setSpan(Number(e.target.value))} aria-label="Years to look back" title="How far back to read: more years read more calls (a longer read, same one AI read)">
                   {[1, 2, 3, 4, 5].map((y) => <option key={y} value={y}>{y === 1 ? "Last year" : `Last ${y} years`}</option>)}</select>
               <button className="btn sm" disabled={reading || (!v.documents.length && !v.about)} onClick={() => readDocs(!!v.reads || span !== 2)}>
@@ -374,7 +374,7 @@ export function DeepDivePage() {
                   : v.card ? `What they said on ${v.card.read.length} earnings call${v.card.read.length === 1 ? "" : "s"} over ${v.card.years ?? 2} year${(v.card.years ?? 2) === 1 ? "" : "s"}, and what happened. Checked ${day(v.card.at)}.`
                   : `What management promised on past earnings calls, against what happened. ${v.calls} call transcript${v.calls === 1 ? "" : "s"} found.`}</span>
               </div>
-              <div className="row" style={{ gap: 8 }}>
+              <div className="row wrap" style={{ gap: 8 }}>
                 <select className="input sm" style={{ width: "auto" }} value={span} onChange={(e) => setSpan(Number(e.target.value))} aria-label="Years to look back" title="How far back to read: more years read more calls (a longer read, same one AI read)">
                   {[1, 2, 3, 4, 5].map((y) => <option key={y} value={y}>{y === 1 ? "Last year" : `Last ${y} years`}</option>)}</select>
               <button className="btn sm" disabled={carding || !v.calls} onClick={() => checkCalls(!!v.card || span !== 2)}>

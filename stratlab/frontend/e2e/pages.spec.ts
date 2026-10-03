@@ -352,3 +352,13 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   await row.getByRole("button", { name: /Delete/ }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
 });
+
+test("the tools grid shows one group until asked, and the menu reaches Account without scrolling", async ({ page }, info) => {
+  const errors = await open(page, "/new", "What trading idea do you want to test?");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 4000 }).catch(() => undefined);   // the experience question
+  await expect(page.getByRole("button", { name: "Paper trade options" })).toHaveCount(0);
+  await page.getByRole("button", { name: /Show \d+ more tools/ }).click();
+  await expect(page.getByRole("button", { name: "Paper trade options" })).toBeVisible();
+  if (info.project.name === "desktop") await expect(page.getByRole("link", { name: /^Account/ })).toBeInViewport();
+  await sane(page, errors);
+});

@@ -87,7 +87,7 @@ export function CompareExperiments() {
       <Link to={`/n/${nb.id}`} className="link" style={{ textDecoration: "none" }}>← {nb.name}</Link>
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Compare experiments</span>
-        <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em" }}>v{a.v} against v{b.v}</h1>
+        <h1 className="page-title">v{a.v} against v{b.v}</h1>
         <div className="row wrap" style={{ gap: 12 }}>
           {(["a", "b"] as const).map((k) => (
             <label key={k} className="field" style={{ minWidth: 220 }}>{k === "a" ? "Before" : "After"}

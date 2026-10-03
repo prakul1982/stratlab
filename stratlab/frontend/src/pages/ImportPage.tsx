@@ -13,7 +13,7 @@ export function ImportPage() {
     <div className="stack page-narrow" style={{ gap: 22 }}>
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Any market · any format</span>
-        <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 42px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Import a strategy</h1>
+        <h1 className="page-title">Import a strategy</h1>
         <p className="muted" style={{ maxWidth: "64ch" }}>
           Drop in a strategy you already run: a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export, or plain words.
           StratLab works out what it is and sets it up in the right place.

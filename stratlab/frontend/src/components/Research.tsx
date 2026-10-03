@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { ago, pct, price, priceAxis, safeHref, signClass } from "../lib/format";
@@ -15,10 +15,16 @@ export { CompanySearch } from "./CompanySearch";
 /* ---------- navigation ---------- */
 export function ResearchNav({ region, setRegion }: { region: Region; setRegion?: (r: Region) => void }) {
   const tabs: [string, string][] = [["/research", "Companies"], ["/research/themes", "Themes"], ["/research/pulse", "Market pulse"],
-    ["/research/compare", "Compare"], ["/research/watchlist", "Watchlist"], ["/research/investor", "Investor home"], ["/research/scan", "Scan"], ["/research/rotation", "Rotation"], ["/research/results", "Results"], ["/research/filings", "Red flags"]];
+    ["/research/compare", "Compare"], ["/research/watchlist", "Watchlist"], ["/research/investor", "At a glance"], ["/research/scan", "Scan"], ["/research/rotation", "Rotation"], ["/research/results", "Results"], ["/research/filings", "Red flags"]];
+  // on a phone the tabs scroll sideways in one row: bring the open one into view
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = bar.current, on = el?.querySelector<HTMLElement>(".seg-link.on");
+    if (el && on && el.scrollWidth > el.clientWidth) el.scrollLeft = on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
+  }, []);
   return (
     <div className="spread research-nav" style={{ flexWrap: "wrap", gap: 12 }}>
-      <nav className="seg" aria-label="Research sections">
+      <nav className="seg" aria-label="Research sections" ref={bar}>
         {tabs.map(([to, label]) => (
           <NavLink key={to} to={to} end={to === "/research"} className={({ isActive }) => `seg-link${isActive ? " on" : ""}`}>{label}</NavLink>
         ))}
@@ -162,8 +168,26 @@ export function MarginCascade({ gross, operating, net }: { gross: number | null;
 }
 
 /* ---------- metrics with context rails ---------- */
+/** The short names in Key numbers, in plain words, for anyone who doesn't read balance sheets for a living. */
+const TERMS: Record<string, string> = {
+  "P/E": "Price to earnings: the share price divided by a year's profit per share.",
+  "P/B": "Price to book: the share price divided by the company's net assets per share.",
+  "Div yield": "The last year's dividends as a share of today's price.",
+  "Book value": "The company's net assets (what it owns minus what it owes) per share.",
+  "Face value": "The nominal value printed on each share; it doesn't change with the price.",
+  "ROCE": "Return on capital employed: operating profit as a share of all the money in the business, borrowed or not.",
+  "ROE": "Return on equity: profit as a share of the shareholders' money in the business.",
+  "OPM": "Operating profit margin: the share of sales left after running costs, before interest and tax.",
+  "Net margin": "Profit after everything, as a share of sales.",
+  "Debt / equity": "Borrowings divided by the shareholders' money in the business.",
+  "Latest YoY": "The latest year against the year before.",
+  "3Y CAGR": "Compound annual growth rate: the steady yearly growth that gets from the start to the end of the period.",
+};
+
 export function MetricsGrid({ groups, currency, industry }: { groups: MetricGroup[]; currency: string; industry?: string | null }) {
+  const used = Object.entries(TERMS).filter(([k]) => groups.some((g) => g.items.some((m) => m.label === k)));
   return (
+    <>
     <div className="metric-groups">
       {groups.map((g) => (
         <div key={g.title} className="stack" style={{ gap: 2 }}>
@@ -187,6 +211,13 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
         </div>
       ))}
     </div>
+    {used.length > 0 && (
+      <details className="ref-more">
+        <summary>What these terms mean</summary>
+        <dl className="terms">{used.map(([k, v]) => <div key={k}><dt>{k === "3Y CAGR" ? "CAGR" : k}</dt><dd>{v}</dd></div>)}</dl>
+      </details>
+    )}
+    </>
   );
 }
 
@@ -366,8 +397,8 @@ export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> })
 export function QuarterTable({ q }: { q: NonNullable<Company["quarters"]> }) {
   const f = (v: number | null) => (v == null ? "–" : Math.round(v).toLocaleString("en-IN"));
   return (
-    <div className="table-wrap" style={{ margin: "0 -24px -24px" }}>
-      <table>
+    <div className="table-wrap">
+      <table className="nums">
         <thead><tr><th>₹ Cr</th>{q.cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
         <tbody>
           <tr><td>Sales</td>{q.sales.map((v, i) => <td key={i} className="num">{f(v)}</td>)}</tr>
