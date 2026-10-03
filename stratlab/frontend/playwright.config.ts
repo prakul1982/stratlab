@@ -12,7 +12,7 @@ export default defineConfig({
   testDir: "e2e",
   timeout: 60_000,
   retries: 0,
-  reporter: [["list"]],
+  reporter: process.env.GITHUB_ACTIONS ? [["list"], ["github"]] : [["list"]],     // on GitHub, failures also show as annotations
   use: { baseURL: `http://127.0.0.1:${webPort}`, launchOptions: chromium ? { executablePath: chromium } : {}, screenshot: "only-on-failure" },
   projects: [
     { name: "desktop", use: { viewport: { width: 1440, height: 1000 } } },
