@@ -157,7 +157,7 @@ export function Login() {
             <h2 className="serif lp-h2">Start with any company, Indian or US.</h2>
             <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, analyst ratings, insider trades and news. An AI read scores it, lays out the bull and bear case, and ends with three ideas you can test in one click.</p>
             <ul className="bullets lp-p" style={{ fontSize: 16 }}>
-              <li><b>Themes:</b> map a sector and get a ranked shortlist.</li>
+              <li><b>Themes:</b> map a sector and see the listed companies linked to it.</li>
               <li><b>Market pulse:</b> index levels, headlines and today's mood.</li>
               <li><b>Compare</b> two companies, and keep a <b>watchlist</b>.</li>
             </ul>

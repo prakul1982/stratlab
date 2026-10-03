@@ -223,7 +223,7 @@ export function AdminPage() {
       <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
         <div className="stack" style={{ gap: 6 }}>
           <span className="eyebrow">Only you can see this page</span>
-          <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Admin</h1>
+          <h1 className="page-title">Admin</h1>
         </div>
         <button className="btn outline" onClick={() => { loadOverview(); loadUsers(q); }}>Refresh</button>
       </div>

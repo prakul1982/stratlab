@@ -45,18 +45,20 @@ export function InvestorHomePage() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} />
+      <ResearchNav region={region} setRegion={pick} />
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Investor home · {REGION_NAME[region]}</span>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your watchlist, all in one place</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>For each {place} watchlist company: the price trend, where its sector sits in the rotation, {us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. A place to see what needs a closer look, not advice.</p>
-        <div className="seg" role="radiogroup" aria-label="Market" style={{ alignSelf: "flex-start" }}>
-          {(["IN", "US"] as Region[]).map((r) => <button key={r} role="radio" aria-checked={region === r} aria-pressed={region === r} onClick={() => pick(r)}>{REGION_NAME[r]}</button>)}
-        </div>
+        <h1 className="page-title">Your watchlist, all in one place</h1>
+        <p className="page-sub">For each {place} watchlist company: the price trend, where its sector sits in the rotation, {us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. A place to see what needs a closer look, not advice.</p>
       </div>
       {!pro && <div className="banner"><span>The investor home is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       {pro && !rows && <Loading label="Checking each watchlist company" />}
-      {rows && rows.length === 0 && <p className="small muted">Your watchlist has no {place} stocks yet. Press Watch on a company page to add some.</p>}
+      {rows && rows.length === 0 && (
+        <div className="card dashed stack" style={{ gap: 10, alignItems: "flex-start" }}>
+          <p className="muted">Your watchlist has no {place} stocks yet. Open a company and press <b>Watch</b>: it shows up here with its trend, sector and checklist.</p>
+          <Link to={`/research?region=${region}`} className="btn sm">Find a company</Link>
+        </div>
+      )}
       {rows && rows.length > 0 && (
         <>
           <div className="stat-row">

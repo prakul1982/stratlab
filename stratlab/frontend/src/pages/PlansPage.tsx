@@ -74,15 +74,15 @@ export function PlansPage() {
     <div className="stack" style={{ gap: 26 }}>
       <div className="stack" style={{ gap: 8 }}>
         <Link to="/account" className="link small" style={{ alignSelf: "flex-start" }}>← Account</Link>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Plans</h1>
+        <h1 className="page-title">Plans</h1>
         <p className="muted" style={{ fontSize: 17 }}>
           {billing ? "Billed through Razorpay. Cancel any time; your plan stays active until the paid period ends." : "Paid plans are coming soon. During early access every feature is unlocked for everyone; the Free plan's monthly limits still apply."}
         </p>
         {pricing && (
-          <label className="row small" style={{ gap: 8, alignSelf: "flex-start" }}>Prices in
-            <select value={currency} onChange={(e) => pick(e.target.value)} aria-label="Currency">
+          <label className="row small" style={{ gap: 10, alignSelf: "flex-start" }}>Prices in
+            <span className="chip-select"><select value={currency} onChange={(e) => pick(e.target.value)} aria-label="Currency">
               {Object.entries(pricing.currencies).map(([c, r]) => <option key={c} value={c}>{c} · {r.name}</option>)}
-            </select>
+            </select></span>
           </label>
         )}
         {anyRupees && billing && <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Paid in rupees for now: your card is charged the rupee price shown under each plan and your bank converts it, so the amount in {currency} can differ slightly.</p>}

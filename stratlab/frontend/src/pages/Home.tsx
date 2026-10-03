@@ -188,7 +188,6 @@ export function NewNotebook() {
           <p className="small muted">Not sure what to test? <Link to="/research" className="link">Research a company first</Link>: its AI read suggests ideas you can test in one click.</p>
         )}
       </div>
-      <AskBar />
       <ol className="how" aria-label="How StratLab works">
         <li><b>1. Describe it</b><span>In plain words. We turn it into rules you can read and edit.</span></li>
         <li><b>2. Test it honestly</b><span>On years of real prices, after real costs, with four checks for luck.</span></li>

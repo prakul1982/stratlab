@@ -48,8 +48,8 @@ export function NewsPage() {
     <div className="stack" style={{ gap: 24 }}>
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Newsletters</span>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>News</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>A short brief after each market close, for India, the US and the companies you follow. Turn on the email version in your account.</p>
+        <h1 className="page-title">News</h1>
+        <p className="page-sub">A short brief after each market close, for India, the US and the companies you follow. Want it by email? Turn it on in <Link className="link" to="/account#newsletters">Account → Newsletters</Link>.</p>
         <div className="seg" role="radiogroup" aria-label="Which brief" style={{ alignSelf: "flex-start", maxWidth: "100%" }}>
           {TABS.map(([t, title]) => <button key={t} role="radio" aria-checked={tab === t} aria-pressed={tab === t} onClick={() => choose(t)}>{title}</button>)}
         </div>
@@ -58,7 +58,7 @@ export function NewsPage() {
       {listError ? (
         <div className="card dashed stack" style={{ alignItems: "center", textAlign: "center", padding: 32, gap: 12 }}>
           <h2 className="h2">Couldn't load the news</h2>
-          <p className="muted">{listError}</p>
+          <p className="muted">{listError} Check your connection and try again; your newsletter settings are safe.</p>
           <button className="btn outline" onClick={() => setTries((n) => n + 1)}>Try again</button>
         </div>
       ) : !rows ? <Loading label="Loading the issues" />
