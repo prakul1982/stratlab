@@ -68,6 +68,8 @@ export const FEATURES: Feature[] = [
     words: "deep dive business model segments capex capacity expansion growth margins cash flow free cash flow presentation concall transcript management guidance report card promises checklist deck slides powerpoint pptx", home: true, goal: "understand" },
   { id: "investor", title: "Investor home", what: "Every watchlist company, India or US, on one page: trend, sector, red flags, checklist and management's track record.", to: "/research/investor",
     words: "investor home dashboard watchlist checklist report card management track record long term", home: true, goal: "find" },
+  { id: "holdings", title: "My Holdings", what: "Upload your holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities: value, P&L, sectors and each stock's filings.", to: "/holdings",
+    words: "holdings portfolio my stocks import upload broker zerodha console kite groww upstox angel one icici direct hdfc securities csv excel xlsx pnl p&l profit loss value sector allocation", home: true, goal: "find" },
   { id: "news", title: "News and newsletters", what: "A short brief after each market close, for India, the US and the companies you follow. On the page or by email.", to: "/news",
     words: "news newsletter brief digest email daily weekly market close my stocks watchlist headlines", goal: "find" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },

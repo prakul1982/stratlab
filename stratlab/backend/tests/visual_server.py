@@ -3,9 +3,11 @@ loss years (TCS stands in for one, as only listed symbols open) so the charts' h
 
     python -m tests.visual_server            # serves on 127.0.0.1:8765
 """
+import base64
 import copy
 import os
 import sys
+from pathlib import Path
 
 import pytest
 import uvicorn
@@ -40,6 +42,10 @@ def build():
     from app import db
     for uid in ("u-free", "u-basic"):       # brand-new accounts, for the first-steps checklist on Home
         db.update_profile(uid, created_at=datetime.now(timezone.utc).isoformat())
+    # the owner's holdings, imported from a Zerodha Console file, for the My Holdings page
+    sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
+    w["client"].post("/holdings/import", headers=world.headers("admin-token"),
+                     json={"filename": sample.name, "data": base64.b64encode(sample.read_bytes()).decode()})
     return w
 
 

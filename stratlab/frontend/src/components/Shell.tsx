@@ -49,6 +49,7 @@ export function Shell({ children }: { children: ReactNode }) {
     <nav className="side-nav stack side-group" style={{ gap: 2 }} aria-label="Investing">
       <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Investing</div>
       <NavLink to="/research" className={() => (/^\/research(\/(IN|US)\/.*)?$/.test(loc.pathname) ? "active" : "")}><Lens />Companies</NavLink>
+      <NavLink to="/holdings"><Book />My Holdings</NavLink>
       <NavLink to="/research/investor" className={onResearch("/research/investor")}><Compass />Investor home</NavLink>
       <NavLink to="/news"><News />News</NavLink>
       <NavLink to="/research/scan" className={onResearch("/research/scan")}><Search />Stage 2 scan</NavLink>
