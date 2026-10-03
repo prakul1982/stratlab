@@ -50,7 +50,7 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan
+from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan, weekly
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -142,6 +142,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
     threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
     threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
+    threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     yield
@@ -2258,6 +2259,58 @@ def daily_platform_check(retry_after: float = 120) -> dict:
     return out
 
 
+def weekly_facts(now: datetime) -> dict:
+    """What the Monday summary reports, gathered from the last seven days."""
+    since = now - timedelta(days=7)
+
+    def after(at) -> bool:
+        try:
+            return datetime.fromisoformat(str(at).replace("Z", "+00:00")) >= since
+        except ValueError:
+            return False
+    try:
+        hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")
+    except (ValueError, TypeError):
+        hist = []
+    audits = {}
+    for market, m in (("India", market_audit), ("US", market_audit_us)):
+        rows = m.checked_since(since.astimezone(timezone.utc).isoformat())
+        issues = []
+        for r in rows:
+            levels = [i.get("level") for i in r.get("issues") or []]
+            if "mismatch" in levels or "error" in levels:
+                issues.append({"symbol": r.get("symbol"), "mismatches": levels.count("mismatch"), "errors": levels.count("error")})
+        audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
+    origin = (settings.FRONTEND_ORIGINS or [""])[0].rstrip("/")
+    return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
+            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), "admin_url": f"{origin}/admin" if origin else None}
+
+
+def weekly_summary(now: datetime | None = None) -> tuple[str, str]:
+    now = now or datetime.now(IST)
+    return weekly.summary(now, weekly_facts(now))
+
+
+def send_weekly_summary(now: datetime) -> bool:
+    """Send this week's summary if it's due and hasn't gone yet; the week is remembered so a restart never resends."""
+    if not weekly.due(now) or db.get_setting(weekly.WEEK_KEY) == weekly.week_of(now):
+        return False
+    db.set_setting(weekly.WEEK_KEY, weekly.week_of(now))
+    tell_admins(*weekly_summary(now))
+    return True
+
+
+def weekly_job():
+    """Every Monday at 9:00 IST: the owner's summary of the week. Wakes at least hourly, so a restart catches up."""
+    while True:
+        try:
+            send_weekly_summary(datetime.now(IST))
+        except Exception as e:
+            print("weekly summary failed:", e)
+        now = datetime.now(IST)
+        time.sleep(min(3600, max(1, (weekly.next_send(now) - now).total_seconds())))
+
+
 @app.delete("/admin/audit")
 def admin_audit_stop(_=Depends(admin.admin_profile)):
     """Stop a running audit after the current company; the rows so far are kept."""
@@ -2332,6 +2385,14 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
             why += ". The host blocks outgoing mail ports: add RESEND_API_KEY in Railway to send over HTTPS instead"
         err(502, "email_failed", f"The email couldn't be sent: {why}")
     return {"sent_to": to}
+
+
+@app.post("/admin/weekly/test")
+def admin_weekly_test(profile=Depends(admin.admin_profile)):
+    """This week's summary, built and sent to the admins now. Monday's automatic one still goes out."""
+    throttle(profile, "admin_weekly_test", 5, 3600, "You've sent 5 summaries this hour. Try again later.")
+    subject, text = weekly_summary()
+    return {"subject": subject, "text": text, "reached": tell_admins(subject, text)}
 
 
 @app.post("/admin/ai/test")

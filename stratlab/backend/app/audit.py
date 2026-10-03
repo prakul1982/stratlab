@@ -476,6 +476,12 @@ class MarketAudit:
                 did = None
             time.sleep(self.pause if did else 60)
 
+    def checked_since(self, since_iso: str) -> list[dict]:
+        """Every company checked since a time, with or without problems."""
+        with self.lock:
+            self._load()
+            return [r for r in self.rows.values() if (r.get("at") or "") >= since_iso]
+
     def status(self) -> dict:
         with self.lock:
             self._load()
