@@ -1,0 +1,68 @@
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
+import { useApp } from "../lib/app";
+import { download, shareLink, siteUrl } from "../lib/share";
+import { renderCompanyCard, type CompanyCard } from "./companyCard";
+import { Share } from "./Icons";
+
+const asDataUrl = (blob: Blob) => new Promise<string>((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.readAsDataURL(blob); });
+
+/** Share a company: draws its fact card, makes a public link that previews as the card (and opens the company's
+ *  public page), then the phone's share sheet or, on a computer, the link copied with the image a click away. */
+export function ShareCompanyButton({ region, symbol }: { region: "IN" | "US"; symbol: string }) {
+  const { notify, fail } = useApp();
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      const path = `/cards/company/${region}/${encodeURIComponent(symbol)}`;
+      const card = await api<CompanyCard>(path);
+      const blob = await renderCompanyCard(card, "light");
+      const out = await api<{ token: string }>(path, { method: "POST", body: { image: await asDataUrl(blob) } });
+      const url = `${siteUrl()}/c/${out.token}`;
+      const file = new File([blob], `stratlab-${card.symbol.toLowerCase()}-facts.png`, { type: "image/png" });
+      const save = { label: "Save the image", run: () => download(blob, file.name) };
+      const r = await shareLink({ url, title: `${card.name} on StratLab`, text: `${card.name} (${card.symbol}): price, 1-year range and key facts.`, file });
+      if (r === "copied") notify("Link copied. It shows as this company's fact card on WhatsApp, X and LinkedIn.", save);
+      else if (r === "shown") notify(`Your link: ${url}`, save);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  return (
+    <button className="btn quiet sm" onClick={run} disabled={busy} title="A card with this company's facts, and a link that previews as it">
+      <Share size={16} /> {busy ? "Making the card…" : "Share"}
+    </button>
+  );
+}
+
+type Invites = { code: string; link: string; joined: number };
+
+/** Account → Invite friends: the user's own link, and how many friends joined through it. */
+export function InviteCard() {
+  const { notify } = useApp();
+  const [v, setV] = useState<Invites | null>(null);
+  useEffect(() => {
+    let live = true;
+    api<Invites>("/me/referrals").then((x) => { if (live && x?.code) setV(x); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  if (!v) return null;
+  const link = `${siteUrl()}/?ref=${v.code}`;
+  const share = async () => {
+    const r = await shareLink({ url: link, title: "StratLab", text: "I use StratLab to test trading ideas and read company facts. Try it free:" });
+    if (r === "copied") notify("Invite link copied.");
+    else if (r === "shown") notify(`Your invite link: ${link}`);
+  };
+  return (
+    <section className="card stack" style={{ gap: 12 }} id="invite">
+      <div className="spread" style={{ gap: 12, flexWrap: "wrap" }}>
+        <h2 className="h2">Invite friends</h2>
+        <span className="pill" data-testid="friends-joined">{v.joined} {v.joined === 1 ? "friend" : "friends"} joined</span>
+      </div>
+      <p className="small muted" style={{ margin: 0 }}>Your own link to StratLab. When someone signs up through it, they're counted here.</p>
+      <div className="row wrap" style={{ gap: 10 }}>
+        <input className="input" readOnly value={link} aria-label="Your invite link" style={{ flex: "1 1 260px", minWidth: 0 }} onFocus={(e) => e.target.select()} />
+        <button className="btn outline" onClick={share}><Share size={16} /> Share your link</button>
+      </div>
+    </section>
+  );
+}

@@ -238,6 +238,26 @@ class StockAlertReq(BaseModel):
     note: Optional[str] = Field(None, max_length=120)
 
 
+class ScreenRunReq(BaseModel):
+    """A stock screen to run; screens.clean checks the filters themselves."""
+    region: Literal["IN", "US"] = "IN"
+    filters: Optional[dict] = None
+    sort: str = Field("name", max_length=20)
+    desc: bool = False
+    limit: int = Field(100, ge=1, le=500)
+    offset: int = Field(0, ge=0, le=100000)
+
+
+class ScreenSaveReq(BaseModel):
+    """A screen to save, with or without the weekly note of companies that newly match it."""
+    name: str = Field(..., min_length=1, max_length=60)
+    region: Literal["IN", "US"] = "IN"
+    filters: Optional[dict] = None
+    sort: str = Field("name", max_length=20)
+    desc: bool = False
+    notify: bool = False
+
+
 class MarketAuditReq(BaseModel):
     region: Literal["IN", "US"] = "IN"
     on: bool | None = None
@@ -441,3 +461,7 @@ class GroupLiveReq(BaseModel):
 
 class ShareReq(BaseModel):
     image: Optional[str] = Field(None, max_length=3_000_000)   # the share card as a base64 PNG (data URL or bare)
+
+
+class ReferralReq(BaseModel):
+    code: Optional[str] = Field(None, max_length=64)            # the invite code from the link the newcomer arrived by

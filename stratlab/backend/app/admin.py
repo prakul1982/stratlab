@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException
 
-from . import db
+from . import db, referrals
 from .auth import current_profile
 from .config import settings
 from .plans import PLANS, effective_plan
@@ -43,11 +43,16 @@ def users(q: str, month_start: str, limit: int = 200) -> list[dict]:
         query = query.ilike("email", f"%{q.strip()}%")
     rows = query.order("created_at", desc=True).limit(limit).execute().data
     usage = _usage_since(month_start)
+    try:
+        invited = referrals.counts()
+    except Exception as e:           # invite counts are extra: the list still shows without them
+        print("admin users: invite counts failed:", str(e)[:160])
+        invited = {}
     return [{
         "id": r["id"], "email": r.get("email"), "created_at": r.get("created_at"),
         "plan": effective_plan(r), "plan_set": r.get("plan"), "plan_status": r.get("plan_status"),
         "plan_until": r.get("current_period_end"), "paying": bool(r.get("razorpay_subscription_id")),
-        "experiments": usage[r["id"]]["backtest"], "ai_builds": usage[r["id"]]["ai"],
+        "experiments": usage[r["id"]]["backtest"], "ai_builds": usage[r["id"]]["ai"], "referrals": invited.get(r["id"], 0),
     } for r in rows]
 
 

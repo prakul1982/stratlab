@@ -23,7 +23,7 @@ def test_trial_window():
     assert trial_state({})["available"] is True
     assert trial_state({"live_trial_started_at": (NOW - timedelta(hours=1)).isoformat()})["active"] is True
     assert trial_state({"live_trial_started_at": (NOW - timedelta(hours=25)).isoformat()})["active"] is True
-    assert trial_state({"live_trial_started_at": (NOW - timedelta(days=8)).isoformat()})["active"] is False
+    assert trial_state({"live_trial_started_at": (NOW - timedelta(days=20)).isoformat()})["active"] is False   # 5 market days, whatever weekends and holidays fall between
 
 
 def test_trial_counts_market_days():

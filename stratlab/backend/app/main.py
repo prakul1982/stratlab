@@ -54,15 +54,16 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_alerts, stock_pages, weekly
+from . import ask, company_cards, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
-from .models import (ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
-from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
+from .plans import access_plan, screens as screens_limit
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -183,6 +184,8 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
+    threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start()
+    screen_job.start()
     yield
 
 
@@ -575,7 +578,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
     uid, what = got
     if act and what in ("tips", "all"):
         lifecycle.set_tips(uid, False)
-    if act and what != "tips":
+    if act and what in ("screens", "all"):
+        screens.mute(uid)
+    if act and what not in ("tips", "screens"):
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
@@ -1420,7 +1425,8 @@ def deep_view(sym: str, base: dict) -> dict:
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
             "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym),
-            "ai": True, "report_card": True,
+            "ai": True, "report_card": True, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
+            "numbers_at": p.get("fetched_at"), "price_at": (base["trend"] or {}).get("t"),
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
 
 
@@ -1612,6 +1618,7 @@ def holdings_view(profile) -> dict:
         except Exception:
             live = False
     return {**holdings.view(h["items"], quotes), "source": h["source"], "updated_at": h["updated_at"], "prices": live,
+            "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if live else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
 
 
@@ -1880,6 +1887,51 @@ def public_verdict_page(token: str):
     return HTMLResponse(public.preview_html(token, snap, public.image(token) is not None))
 
 
+# ---------- company fact cards: an image and a public link that previews as it ----------
+def company_card(market: str, symbol: str) -> dict:
+    hit = company_cards.find(market, symbol)
+    if not hit:
+        err(404, "not_found", "There's no public page for that company to share.")
+    region, sym, co = hit
+    try:
+        f = stock_page_store.get(region, sym, co)
+    except stock_pages.Busy:
+        err(503, "busy", "The company's facts are being prepared. Try again in a few minutes.")
+    if not f:
+        err(404, "no_facts", "There aren't enough facts on this company to make a card yet.")
+    return company_cards.card(f, region, sym)
+
+
+@app.get("/cards/company/{market}/{symbol}")
+def company_card_data(market: str, symbol: str, profile=Depends(current_profile)):
+    """What a company's share card shows, for the browser to draw: facts from its public page, never AI."""
+    return company_card(market, symbol)
+
+
+@app.post("/cards/company/{market}/{symbol}")
+def share_company_card(market: str, symbol: str, req: ShareReq, profile=Depends(current_profile)):
+    """Make (or refresh) the user's public link to a company card, with the image the browser drew."""
+    c = company_card(market, symbol)
+    token = company_cards.publish(profile["id"], c, req.image, referrals.code_for(profile["id"]))
+    return {"token": token, "url": company_cards.url(token), "card": c}
+
+
+@app.get("/c/{card}.png")
+def company_card_image(card: str):
+    png = company_cards.image(card)
+    if not png:
+        err(404, "not_found", "No image for this link.")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/c/{card}")
+def company_card_page(card: str):
+    c = company_cards.load(card)
+    if not c:
+        return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
+    return HTMLResponse(company_cards.preview_html(card, c, company_cards.image(card) is not None))
+
+
 # ---------- public company pages, for search engines ----------
 def stock_page_facts(region: str, co: dict) -> dict | None:
     """One company's public page from the deep dive's cheap sources: reported numbers, the filings list and daily
@@ -1894,14 +1946,15 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
                 m = {}
             p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
             items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
-            exchange = "Listed in the US"
+            exchange, red = "Listed in the US", None
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
             try:
-                items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"]}
-                         for i in filings_feed.announcements(sym)]
+                found = filings_feed.announcements(sym)
+                items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"]} for i in found]
+                red = filings.summarise(found)["red"]
             except Exception:
-                items = []
+                items, red = [], None
             exchange = "BSE" if co["bse"] else "NSE"
     except SourceError as e:
         if e.busy:
@@ -1916,7 +1969,7 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     except Exception:                     # no prices: the page goes without the price facts
         pass
     nums = deepdive.numbers(p)
-    return stock_pages.facts(region, sym, p, nums, screener_summary(p), trend, prices, items, exchange)
+    return stock_pages.facts(region, sym, p, nums, screener_summary(p), trend, prices, items, exchange, red)
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
@@ -1936,21 +1989,23 @@ def stock_list_job():
 
 
 @app.get("/stocks/{region}/{symbol}", response_class=HTMLResponse)
-def stock_page(region: str, symbol: str):
-    """A listed company's public page: facts only, built from stored or cheap data, never AI."""
+def stock_page(region: str, symbol: str, ref: str | None = None):
+    """A listed company's public page: facts only, built from stored or cheap data, never AI. Opened from a shared
+    card, `ref` is the sharer's invite code, and the page's links into the app carry it."""
     r = stock_pages.REGIONS.get(region.lower())
     hit = stock_pages.find(r, symbol) if r else None
     if not hit:
         return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
     sym, co = hit
+    ref = ref if ref and referrals.CODE.match(ref) else None
     if region != region.lower() or symbol != sym:          # one address per company
-        return RedirectResponse(stock_pages.path(r, sym), status_code=301)
+        return RedirectResponse(stock_pages.path(r, sym) + (f"?ref={ref}" if ref else ""), status_code=301)
     try:
         page = stock_page_store.html(r, sym, co)
     except stock_pages.Busy:
         return JSONResponse(status_code=503, headers={"Retry-After": "600"},
                             content={"detail": {"code": "busy", "message": "This page is being prepared. Try again in a few minutes."}})
-    return HTMLResponse(page, headers=SEO_HEADERS)
+    return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=SEO_HEADERS)
 
 
 @app.get("/robots.txt")
@@ -1969,6 +2024,79 @@ def sitemap_file(name: str):
     if xml is None:
         err(404, "not_found", "No such sitemap.")
     return Response(xml, media_type="application/xml", headers=SEO_HEADERS)
+
+
+# ---------- stock screens: companies filtered by plain facts, from the stored company pages ----------
+def screen_warm(region: str, sym: str, co: dict):
+    """Build (or refresh) one stored company page for the screens' index, within the pages' per-minute ration."""
+    stock_page_store.get(region, sym, co)
+
+
+screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c))
+screen_job = screens.Job(lambda uid: db.get_profile(uid), lambda p: screens_limit(access_plan(p)))
+
+
+def screens_page(profile) -> dict:
+    mine = sorted(screens.items(profile["id"]), key=lambda s: s.get("created_at") or "")
+    to = alerts.newsletter_email(profile)
+    return {"items": [screens.view(s) for s in mine], "limit": screens_limit(profile["_plan"]), "count": len(mine),
+            "email": to, "email_confirmed": bool(to) and alerts.email_confirmed(profile)}
+
+
+@app.get("/research/screens/meta")
+def screens_meta(region: str = "IN", profile=Depends(current_profile)):
+    """The filters a screen offers in a market, with each one's plain-English help, and how fresh the numbers are."""
+    return ok(screens.meta(region))
+
+
+@app.post("/research/screens/run")
+def screens_run(req: ScreenRunReq, profile=Depends(current_profile)):
+    """The companies that meet the filters, from the stored index (never a data source or AI per request)."""
+    try:
+        return ok(screens.run(req.region, req.filters or {}, req.sort, req.desc, req.limit, req.offset))
+    except screens.ScreenError as e:
+        err(400, "bad_screen", str(e))
+
+
+@app.get("/research/screens/saved")
+def screens_saved(profile=Depends(current_profile)):
+    return ok(screens_page(profile))
+
+
+def save_screen(profile, req: ScreenSaveReq, sid: str | None = None) -> dict:
+    limit = screens_limit(profile["_plan"])
+    try:
+        s = screens.save(profile["id"], req.model_dump(), limit, sid)
+    except screens.ScreenError as e:
+        err(400, "bad_screen", str(e))
+    except screens.LimitReached as e:
+        nxt = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["screens"] > e.limit), None)
+        upgrade(f"Your plan keeps {e.limit} saved screen{'s' if e.limit != 1 else ''}. Delete one"
+                + (f", or move to {nxt} for more." if nxt else " to save another."), "screen_limit")
+    if s is None:
+        err(404, "not_found", "That screen is gone. Reload the page.")
+    return {"screen": screens.view(s), **screens_page(profile)}
+
+
+@app.post("/research/screens/saved")
+def create_screen(req: ScreenSaveReq, profile=Depends(current_profile)):
+    throttle(profile, "screen_save", 60, 3600, "That's a lot of saved screens in an hour. Try again later.")
+    return ok(save_screen(profile, req))
+
+
+@app.put("/research/screens/saved/{sid}")
+def edit_screen(sid: str, req: ScreenSaveReq, profile=Depends(current_profile)):
+    if not screens.valid_id(sid):
+        err(404, "not_found", "That screen is gone. Reload the page.")
+    throttle(profile, "screen_save", 60, 3600, "That's a lot of screen changes in an hour. Try again later.")
+    return ok(save_screen(profile, req, sid))
+
+
+@app.delete("/research/screens/saved/{sid}")
+def delete_screen(sid: str, profile=Depends(current_profile)):
+    if not screens.valid_id(sid) or not screens.delete(profile["id"], sid):
+        err(404, "not_found", "That screen is gone. Reload the page.")
+    return ok(screens_page(profile))
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}")
@@ -3066,6 +3194,21 @@ def my_first_steps(profile=Depends(current_profile)):
 def set_first_steps(req: FirstStepsReq, profile=Depends(current_profile)):
     first_steps.dismiss(profile["id"], req.dismissed)
     return first_steps.view(profile)
+
+
+# ---------- invite links ----------
+@app.get("/me/referrals")
+def my_referrals(profile=Depends(current_profile)):
+    """The user's personal invite link and how many friends joined through it."""
+    code = referrals.code_for(profile["id"])
+    return {"code": code, "link": referrals.link(code), "joined": len(referrals.joined(profile["id"]))}
+
+
+@app.post("/me/referral")
+def record_referral(req: ReferralReq, profile=Depends(current_profile)):
+    """A new account says which invite link it arrived by (the app sends it once, right after the first sign-in).
+    Counted once, for a new account only, and never for the user's own link. No reward is given."""
+    return {"recorded": referrals.record(profile, req.code) == "recorded"}
 
 
 @app.post("/admin/news/build")

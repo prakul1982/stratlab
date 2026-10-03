@@ -29,6 +29,7 @@ export interface Company {
   about: { wiki: { title: string; description?: string; extract: string; url: string } | null; profile: string | null };
   sources: SourceStatus[]; links: { label: string; url: string }[];
   testable: boolean; instrument_id: string | null;
+  as_of?: string | null; numbers_at?: string | null;     // when the prices were read; when the reported numbers were
 }
 
 export interface Idea { title: string; text: string; why: string }

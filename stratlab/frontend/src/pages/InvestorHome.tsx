@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { pct, signClass } from "../lib/format";
 import { ResearchNav } from "../components/Research";
 import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/research";
-import { Loading } from "../components/ui";
+import { AsOf, Loading } from "../components/ui";
 
 type Row = {
   symbol: string; name: string; problem: string | null; price: number | null; chg: number | null; stage: number | null;
@@ -26,6 +26,7 @@ export function InvestorHomePage() {
   const { me, fail } = useApp();
   const pro = !!me?.plan_info?.features?.deepdive;
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [at, setAt] = useState<string | null>(null);
   const [order, setOrder] = useState<"list" | "attention">("attention");
   const [region, setRegion] = useState<Region>(savedRegion);
   const us = region === "US";
@@ -34,7 +35,7 @@ export function InvestorHomePage() {
   useEffect(() => {
     if (!pro) return;
     setRows(null);
-    api<{ rows: Row[] }>(`/research/investor?region=${region}`).then((x) => setRows(x.rows)).catch(fail);
+    api<{ rows: Row[]; as_of?: string | null }>(`/research/investor?region=${region}`).then((x) => { setRows(x.rows); setAt(x.as_of ?? null); }).catch(fail);
   }, [pro, fail, region]);
   const pick = (r: Region) => { saveRegion(r); setRegion(r); };
 
@@ -50,6 +51,7 @@ export function InvestorHomePage() {
         <span className="eyebrow">Investor home · {REGION_NAME[region]}</span>
         <h1 className="page-title">Your watchlist, all in one place</h1>
         <p className="page-sub">For each {place} watchlist company: the price trend, where its sector sits in the rotation, {us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. A place to see what needs a closer look, not advice.</p>
+        {rows && <AsOf parts={[["Checked", at]]} />}
       </div>
       {!pro && <div className="banner"><span>The investor home is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       {pro && !rows && <Loading label="Checking each watchlist company" />}

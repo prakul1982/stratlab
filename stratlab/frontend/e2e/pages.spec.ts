@@ -73,7 +73,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -360,5 +360,158 @@ test("the tools grid shows one group until asked, and the menu reaches Account w
   await page.getByRole("button", { name: /Show \d+ more tools/ }).click();
   await expect(page.getByRole("button", { name: "Paper trade options" })).toBeVisible();
   if (info.project.name === "desktop") await expect(page.getByRole("link", { name: /^Account/ })).toBeInViewport();
+  await sane(page, errors);
+});
+
+// ---------- sharing: company fact cards and invite links ----------
+/** Watch what the page shares: the phone's share sheet (stubbed, as headless browsers have none) and the clipboard. */
+async function watchSharing(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __shared: unknown[]; __copied: string[] };
+    w.__shared = []; w.__copied = [];
+    Object.defineProperty(navigator, "share", { configurable: true, value: async (d: { url?: string; text?: string; files?: File[] }) => {
+      w.__shared.push({ url: d.url, text: d.text, files: (d.files ?? []).map((f) => ({ name: f.name, type: f.type, size: f.size })) });
+    } });
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t: string) => { w.__copied.push(t); }, write: async () => undefined } });
+  });
+}
+
+type SharedCall = { url: string; files: { type: string; size: number }[] };
+const shared = (page: Page) => page.evaluate(() => (window as unknown as { __shared: SharedCall[] }).__shared);
+const copied = (page: Page) => page.evaluate(() => (window as unknown as { __copied: string[] }).__copied);
+
+/** Phone: the share sheet got the card's link and image. Desktop: the link was copied. Returns the link. */
+async function sharedLink(page: Page, phone: boolean): Promise<string> {
+  if (phone) {
+    await expect.poll(async () => (await shared(page)).length, { timeout: 30_000 }).toBeGreaterThan(0);
+    const s = (await shared(page))[0];
+    expect(s.files[0]?.type, "the card image goes with the link").toBe("image/png");
+    expect(s.files[0].size).toBeGreaterThan(5000);
+    expect(await copied(page), "a phone uses its share sheet, not the clipboard").toEqual([]);
+    return s.url;
+  }
+  await expect.poll(async () => (await copied(page)).length, { timeout: 30_000 }).toBeGreaterThan(0);
+  await expect(page.getByRole("status")).toContainText("Link copied");
+  await expect(page.getByRole("status").getByRole("button", { name: "Save the image" })).toBeVisible();
+  expect(await shared(page), "a computer copies the link instead of a share sheet").toEqual([]);
+  return (await copied(page))[0];
+}
+
+for (const [path, ready] of [["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL/deep", "Growth and margins"]]) {
+  test(`share a company's fact card from ${path}`, async ({ page, request }, info) => {
+    const phone = info.project.name === "phone";
+    await watchSharing(page);
+    const errors = await open(page, path, ready);
+    await answerLevel(page);
+    const button = page.getByRole("button", { name: "Share", exact: true });
+    await expect(button).toBeVisible();
+    if (phone) await touchable(page);
+    await button.click();
+    const link = await sharedLink(page, phone);
+    const token = link.match(/\/c\/([A-Za-z0-9_-]+)$/)?.[1];
+    expect(token, `a card link: ${link}`).toBeTruthy();
+    // the public link previews as the card the browser drew, and opens the company's public page
+    const preview = await (await request.get(`${API}/c/${token}`)).text();
+    expect(preview).toContain('property="og:image"');
+    expect(preview).toContain(`/c/${token}.png`);
+    expect(preview).toMatch(/\/stocks\/(in\/RELIANCE|us\/AAPL)\?ref=[A-Za-z0-9_-]{12}/);
+    expect(preview).toContain("Facts, not advice");
+    expect(preview).not.toMatch(/kite|zerodha|yahoo|screener|finnhub/i);
+    const png = await request.get(`${API}/c/${token}.png`);
+    expect(png.status()).toBe(200);
+    expect((await png.body()).subarray(0, 4).toString("latin1")).toBe("\x89PNG");
+    await sane(page, errors);
+  });
+}
+
+test("account: your invite link, how many friends joined, and sharing it", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  await watchSharing(page);
+  const errors = await open(page, "/account", "Invite friends");
+  await expect(page.getByTestId("friends-joined")).toHaveText(/^\d+ friends? joined$/);
+  await expect(page.getByLabel("Your invite link")).toHaveValue(/\/\?ref=[A-Za-z0-9_-]{12}$/);
+  if (phone) await touchable(page);
+  await page.getByRole("button", { name: "Share your link" }).click();
+  const link = await page.getByLabel("Your invite link").inputValue();
+  if (phone) await expect.poll(async () => (await shared(page)).map((s) => s.url)).toEqual([link]);
+  else {
+    await expect.poll(() => copied(page)).toEqual([link]);
+    await expect(page.getByRole("status")).toContainText("Invite link copied");
+  }
+  await sane(page, errors);
+});
+
+test("an invite link is remembered through sign-in, sent once, and taken out of the address", async ({ page }) => {
+  const sent: unknown[] = [];
+  await page.route("**/me/referral", async (r) => { sent.push(r.request().postDataJSON()); await r.fulfill({ status: 200, contentType: "application/json", body: '{"recorded":false}' }); });
+  const errors = await open(page, "/?ref=AbCdEf123_-x", "notebook");
+  await expect.poll(() => sent).toEqual([{ code: "AbCdEf123_-x" }]);
+  expect(new URL(page.url()).search).toBe("");
+  await page.reload();
+  await expect(page.getByText("notebook").first()).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(sent, "sent only once").toHaveLength(1);
+  await sane(page, errors);
+});
+
+test("admin: invite counts in the Users tab", async ({ page }, info) => {
+  const errors = await open(page, "/admin?tab=users", "Paper trading now");
+  await expect(page.locator("th", { hasText: "Invited" })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});
+
+test("screens: filter by plain facts, sort by a column, save one; no provider names", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const tag = `e2e screen ${info.project.name} ${Date.now()}`;          // both projects share the fake database
+  const errors = await open(page, "/research/screens?region=IN", "Filter companies by plain facts");
+  await answerLevel(page);
+  await expect(page.getByText(/20 of 20 companies match/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Prices as of 1 Oct 2026/)).toBeVisible();
+  const table = page.locator(".screens-table");
+  await expect(table.locator("tbody tr").first()).toContainText("Axisbank Ltd");          // alphabetical by default
+  if (phone) await page.getByRole("button", { name: /Show filters/ }).click();
+  await page.getByRole("button", { name: "Energy", exact: true }).click();
+  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await page.getByRole("button", { name: "What is Debt to equity?" }).click();
+  await expect(page.getByRole("note")).toContainText("Borrowings divided by shareholders' equity");
+  await page.getByLabel("P/E (price to earnings): at most").fill("abc");
+  await expect(page.getByText("Enter a plain number, like 15 or -10.")).toBeVisible();
+  await page.getByLabel("P/E (price to earnings): at most").fill("1");
+  await expect(page.getByText("No company meets every condition.", { exact: false })).toBeVisible();
+  await page.getByLabel("P/E (price to earnings): at most").fill("");
+  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await table.getByRole("button", { name: "P/E" }).click();                             // sort by a column the user picks
+  await expect(table.locator("th[aria-sort=ascending]")).toContainText("P/E");
+  await page.getByRole("button", { name: /Low to high/ }).click();
+  await expect(table.locator("th[aria-sort=descending]")).toContainText("P/E");
+  if (phone) await touchable(page);
+  await page.getByLabel("Name").fill(tag);
+  await page.getByLabel("Weekly email of new matches").check();
+  await page.getByRole("button", { name: "Save screen" }).click();
+  const saved = page.getByRole("button", { name: `${tag} · weekly` });
+  await expect(saved).toBeVisible();
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByText(/20 of 20 companies match/)).toBeVisible();
+  await saved.click();                                                                  // a saved screen opens its conditions
+  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await page.getByRole("button", { name: `Delete ${tag}` }).click();
+  await expect(page.getByRole("button", { name: `${tag} · weekly` })).toHaveCount(0);
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub/i);
+  expect(text).not.toMatch(/\b(buy|sell|undervalued|best stocks?|score)\b/i);
+  await sane(page, errors);
+});
+
+test("as-of lines: the company page, deep dive and holdings say how fresh their numbers are", async ({ page }) => {
+  let errors = await open(page, "/research/IN/RELIANCE", "Reliance");
+  await expect(page.getByText(/Prices as of \d+ \w+ \d{4}, \d\d:\d\d/).first()).toBeVisible();
+  await sane(page, errors);
+  errors = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");
+  await expect(page.getByText(/Reported numbers as of \d+ \w+ \d{4}/).first()).toBeVisible();
+  await sane(page, errors);
+  errors = await open(page, "/holdings", "By sector");
+  await expect(page.getByText(/Prices as of \d+ \w+ \d{4}/).first()).toBeVisible();
   await sane(page, errors);
 });

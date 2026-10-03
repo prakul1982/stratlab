@@ -6,7 +6,7 @@ only restate the facts, and a word filter drops it if it slips, in favour of a p
 import hashlib
 import json
 import re
-from datetime import date
+from datetime import date, datetime, timedelta
 from html import escape
 
 from ..ai_providers import AIError, complete, extract_json
@@ -255,6 +255,16 @@ def frame(title: str, body: list[str], footer: str) -> str:
             "</div></body></html>")
 
 
+def as_of(iso: str | None) -> str | None:
+    """When an issue's numbers were gathered, in words: "3 Oct 2026, 16:15 IST"."""
+    try:
+        d = datetime.fromisoformat(str(iso))
+    except (TypeError, ValueError):
+        return None
+    zone = "IST" if d.utcoffset() == timedelta(hours=5, minutes=30) else "UTC" if d.utcoffset() == timedelta(0) else ""
+    return f"{d.day} {d:%b %Y}, {d:%H:%M}" + (f" {zone}" if zone else "")
+
+
 def render(issue: dict) -> tuple[str, str]:
     """(html, text) for one issue. The footer carries the {unsubscribe_url} placeholder for the sender."""
     view = f"{origin()}/news/{issue['id']}" if issue.get("id") else None
@@ -263,6 +273,10 @@ def render(issue: dict) -> tuple[str, str]:
     if issue.get("summary"):
         html.append(f'<p style="margin:0 0 16px">{escape(issue["summary"])}</p>')
         text += [issue["summary"], ""]
+    when = as_of(issue.get("at"))
+    if when:
+        html.append(f'<p style="margin:0 0 12px;font-size:13px;color:#6b7280">Prices and numbers as of {escape(when)}</p>')
+        text += [f"Prices and numbers as of {when}", ""]
     for sec in issue.get("sections") or []:
         html.append(f'<h2 style="font-size:16px;margin:20px 0 8px;padding-top:12px;border-top:1px solid #e5e7eb">{escape(sec["title"])}</h2>'
                     '<ul style="margin:0;padding-left:18px">')

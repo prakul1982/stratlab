@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly, money, pct, price, qty as qtyText, safeHref, signClass } from "../lib/format";
-import { Empty, Loading, Modal } from "../components/ui";
+import { AsOf, Empty, Loading, Modal } from "../components/ui";
 import { Trash, Upload } from "../components/Icons";
 
 type Row = {
@@ -14,7 +14,7 @@ type Row = {
 type View = {
   rows: Row[]; allocation: { sector: string; value: number; pct: number | null; count: number }[];
   totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number };
-  source: string | null; updated_at: string | null; prices: boolean; limit: number; facts_max: number;
+  source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; limit: number; facts_max: number;
 };
 type Facts = {
   stage: number | null; st_up: boolean | null; signal: string | null; red: number | null; amber: number | null; flags: string[];
@@ -185,6 +185,7 @@ export function HoldingsPage() {
             {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${view.source === "Manual" ? "your own entries" : view.source === "CSV" ? "a CSV file" : `your ${view.source} file`}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
             {!view.prices && " · Live prices are offline right now, so values are shown at cost."}
           </p>
+          <AsOf parts={[["Prices", view.prices_at]]} />
 
           <section className="card stack" style={{ gap: 12 }}>
             <h2 className="h2">By sector</h2>

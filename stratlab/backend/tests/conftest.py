@@ -21,3 +21,12 @@ def fresh_rate_limit():
         if isinstance(node, Guard):
             node.window._d.clear()
         node = getattr(node, "app", None)
+
+
+def pytest_runtest_logreport(report):
+    """On GitHub, each failing test also becomes an annotation on the pull request, readable without the job log."""
+    if not (report.failed and os.environ.get("GITHUB_ACTIONS")):
+        return
+    path, line, _ = report.location
+    text = str(report.longrepr)[-1500:].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+    print(f"\n::error file=stratlab/backend/{path},line={(line or 0) + 1},title={report.nodeid}::{text}")
