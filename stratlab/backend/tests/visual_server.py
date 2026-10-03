@@ -48,6 +48,8 @@ def build():
     w["client"].post("/holdings/import", headers=world.headers("admin-token"),
                      json={"filename": sample.name, "data": base64.b64encode(sample.read_bytes()).decode()})
     screen_index()
+    # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
+    mp.setattr(main.screen_indexer, "loop", lambda: None)
     return w
 
 
