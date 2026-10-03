@@ -68,6 +68,8 @@ export const FEATURES: Feature[] = [
     words: "deep dive business model segments capex capacity expansion growth margins cash flow free cash flow presentation concall transcript management guidance report card promises checklist deck slides powerpoint pptx", home: true, goal: "understand" },
   { id: "investor", title: "Investor home", what: "Every watchlist company, India or US, on one page: trend, sector, red flags, checklist and management's track record.", to: "/research/investor",
     words: "investor home dashboard watchlist checklist report card management track record long term", home: true, goal: "find" },
+  { id: "news", title: "News and newsletters", what: "A short brief after each market close, for India, the US and the companies you follow. On the page or by email.", to: "/news",
+    words: "news newsletter brief digest email daily weekly market close my stocks watchlist headlines", goal: "find" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },
   { id: "account", title: "Account and connection check", what: "Your plan, usage and a check of every data and AI service.", to: "/account",
     words: "account settings usage connection check theme" },

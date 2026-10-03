@@ -170,3 +170,17 @@ def settings_with_prefix(prefix: str, limit: int = 1000) -> list[str]:
     r = (sb().table("app_settings").select("value").like("key", prefix + "%")
          .order("updated_at", desc=True).limit(limit).execute())
     return [x["value"] for x in r.data]
+
+
+def all_settings_with_prefix(prefix: str, page: int = 1000) -> list[tuple[str, str]]:
+    """(key, value) for every setting under a prefix, read a page at a time by key (the server caps one read)."""
+    out, after = [], ""
+    while True:
+        q = sb().table("app_settings").select("key,value").like("key", prefix + "%")
+        if after:
+            q = q.gt("key", after)
+        rows = q.order("key").limit(page).execute().data
+        out += [(r["key"], r["value"]) for r in rows]
+        if len(rows) < page:
+            return out
+        after = rows[-1]["key"]

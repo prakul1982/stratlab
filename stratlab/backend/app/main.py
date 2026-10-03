@@ -12,6 +12,7 @@ import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,9 +51,10 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan, weekly
+from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, weekly
+from .newsletter import job as news
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -118,6 +120,7 @@ filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), 
 filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                    can_alert=_filing_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
+newsletter_job = news.Job()
 
 
 @asynccontextmanager
@@ -143,6 +146,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
     threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
     threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
+    newsletter_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     yield
@@ -512,6 +516,92 @@ def test_alert(profile=Depends(current_profile)):
     if not sent:
         err(502, "alert_failed", "The test couldn't be sent: " + "; ".join(f"{k}: {v}" for k, v in failed.items()))
     return {"sent": sent, "failed": failed}
+
+
+# ---------- newsletter email: confirming the address, unsubscribing from a link ----------
+def mail_page(title: str, text: str, status: int = 200) -> HTMLResponse:
+    """A tiny page for links opened from an email."""
+    e = html_escape
+    return HTMLResponse(status_code=status, content=(
+        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>{e(title)}</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
+        f"<h1 style='font-size:1.3rem'>{e(title)}</h1><p>{e(text)}</p>"
+        f"<p><a href='{e(settings.PUBLIC_SITE_URL)}/account'>Open StratLab</a></p></body>"))
+
+
+def _unsubscribe(t: str, act: bool = True) -> str | None:
+    """The newsletter a link names (turned off when `act`); None for a bad link."""
+    got = mail_tokens.read(t, "unsubscribe")
+    if not got or got[1] not in alerts.NEWSLETTER_NAMES:
+        return None
+    uid, what = got
+    if act:
+        newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
+    return alerts.NEWSLETTER_NAMES[what]
+
+
+@app.get("/unsubscribe", response_class=HTMLResponse)
+def unsubscribe_page(t: str = ""):
+    """Asks before unsubscribing: mail scanners open every link in an email, and shouldn't unsubscribe anyone."""
+    name = _unsubscribe(t, act=False)
+    if not name:
+        return mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400)
+    e = html_escape
+    return HTMLResponse(content=(
+        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>Unsubscribe</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
+        f"<h1 style='font-size:1.3rem'>Unsubscribe from {e(name)}?</h1>"
+        f"<form method=post action='/unsubscribe?t={e(t)}&amp;page=1'>"
+        f"<button style='font:inherit;padding:.6rem 1.2rem;border-radius:8px;border:1px solid #111;background:#111;color:#fff;cursor:pointer'>"
+        f"Unsubscribe</button></form>"
+        f"<p><a href='{e(settings.PUBLIC_SITE_URL)}/account'>Or change your emails in Account</a></p></body>"))
+
+
+@app.post("/unsubscribe")
+def unsubscribe_one_click(t: str = "", page: int = 0):
+    """Mail apps' own unsubscribe button (RFC 8058 one-click), and the button on the page above."""
+    name = _unsubscribe(t)
+    if page:
+        return (mail_page("Unsubscribed", f"You're unsubscribed from {name}. Change this any time in Account.") if name
+                else mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400))
+    if not name:
+        return Response("This unsubscribe link isn't valid.", status_code=400, media_type="text/plain")
+    return Response("Unsubscribed.", media_type="text/plain")
+
+
+@app.post("/me/email/confirm")
+def send_email_confirmation(profile=Depends(current_profile)):
+    """Email a link that confirms the address newsletters would go to."""
+    to = alerts.newsletter_email(profile)
+    if not to:
+        err(400, "no_email", "Add an email address in Account first.")
+    if alerts.email_confirmed(profile):
+        return {"confirmed": True, "sent_to": None}
+    if not alerts.email_ready():
+        err(503, "email_off", "Email isn't set up on the server yet.")
+    throttle(profile, "email_confirm", 5, 3600, "You've asked for 5 confirmation emails this hour. Try again later.")
+    link = alerts.confirm_url(profile["id"], to)
+    text = (f"Confirm that StratLab may send newsletters to {to}:\n\n{link}\n\n"
+            "The link works for 3 days. If you didn't ask for this, ignore this email.")
+    html = (f"<p>Confirm that StratLab may send newsletters to {html_escape(to)}:</p>"
+            f"<p><a href=\"{html_escape(link)}\">Confirm my email</a></p>"
+            "<p>The link works for 3 days. If you didn't ask for this, ignore this email.</p>")
+    try:
+        alerts.send_email(to, "Confirm your StratLab email", text, html=html)
+    except Exception as e:
+        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+    return {"confirmed": False, "sent_to": to}
+
+
+@app.get("/email/confirm", response_class=HTMLResponse)
+def confirm_email(t: str = ""):
+    got = mail_tokens.read(t, "confirm")
+    if not got or not got[1]:
+        return mail_page("This link doesn't work", "It may have expired (links work for 3 days). "
+                         "Ask for a new one in Account.", 400)
+    uid, address = got
+    db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())
+    return mail_page("Email confirmed", f"Newsletters you choose in Account will go to {address}.")
 
 
 # ---------- markets and instruments ----------
@@ -2400,13 +2490,13 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
     throttle(profile, "admin_mail_test", 5, 3600, "You've sent 5 test emails this hour. Try again later.")
     to = alerts.email_for(profile)
     if not alerts.email_ready():
-        err(400, "email_not_set", "Email isn't set up on the server yet: add RESEND_API_KEY in Railway.")
+        err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
     try:
         alerts.send_email(to, "StratLab test email", "Your StratLab alert emails are working. Problems found by the daily check will arrive like this.")
     except Exception as e:
         why = public_text(str(e))[:200]
         if "unreachable" in why.lower() or "timed out" in why.lower():
-            why += ". The host blocks outgoing mail ports: add RESEND_API_KEY in Railway to send over HTTPS instead"
+            why += ". The host blocks outgoing mail ports: add BREVO_API_KEY or RESEND_API_KEY in Railway to send over HTTPS instead"
         err(502, "email_failed", f"The email couldn't be sent: {why}")
     return {"sent_to": to}
 
@@ -2417,6 +2507,73 @@ def admin_weekly_test(profile=Depends(admin.admin_profile)):
     throttle(profile, "admin_weekly_test", 5, 3600, "You've sent 5 summaries this hour. Try again later.")
     subject, text = weekly_summary()
     return {"subject": subject, "text": text, "reached": tell_admins(subject, text)}
+
+
+# ---------- newsletters: the Market Brief and My Stocks ----------
+NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "sections", "html", "at")
+
+
+def news_view(issue: dict) -> dict:
+    out = {k: issue.get(k) for k in NEWS_FIELDS}
+    out["html"] = (out["html"] or "").replace(news.write.UNSUBSCRIBE, f"{news.write.origin()}/account")
+    return out
+
+
+@app.get("/news")
+def news_list(kind: str = "market", region: str = "IN", limit: int = 20, profile=Depends(current_profile)):
+    """Recent issues: a region's Market Brief, or the caller's own My Stocks."""
+    if kind not in news.KINDS:
+        err(400, "bad_kind", "Pick the market brief or my stocks.")
+    scope = ("US" if region.upper() == "US" else "IN") if kind == "market" else profile["id"]
+    return {"issues": [{**{k: i.get(k) for k in ("id", "kind", "region", "day", "weekly", "subject")},
+                        "preview": (i.get("summary") or "")[:200]} for i in news.recent(kind, scope, max(1, min(60, limit)))]}
+
+
+@app.get("/news/{iid}")
+def news_issue(iid: str, profile=Depends(current_profile)):
+    """One issue in full. Market issues are for everyone; a My Stocks issue only for its reader."""
+    parts = news.parse_id(iid)
+    issue = news.load(iid) if parts and (parts[0] == "market" or parts[1] == profile["id"]) else None
+    if not issue:
+        err(404, "not_found", "That issue wasn't found.")
+    return news_view(issue)
+
+
+def newsletters_view(profile: dict) -> dict:
+    to = news.address(profile)
+    return {**newsletter_prefs.get(profile["id"]), "email": to, "confirmed": bool(to) and news.confirmed(profile),
+            "allowed": {"market_daily": allows(profile["_plan"], "newsletter"), "my_stocks": allows(profile["_plan"], "newsletter_stocks")}}
+
+
+@app.get("/me/newsletters")
+def my_newsletters(profile=Depends(current_profile)):
+    return newsletters_view(profile)
+
+
+@app.put("/me/newsletters")
+def set_newsletters(req: NewsletterReq, profile=Depends(current_profile)):
+    """Choose daily, weekly or off for each newsletter. The weekly Market Brief is for everyone."""
+    if "daily" in (req.market_in, req.market_us):
+        need(profile, "newsletter", "The daily Market Brief")
+    if req.my_stocks in ("daily", "weekly"):
+        need(profile, "newsletter_stocks", "The My Stocks newsletter")
+    newsletter_prefs.set(profile["id"], **req.model_dump(exclude_none=True))
+    return newsletters_view(profile)
+
+
+@app.post("/admin/news/build")
+def admin_news_build(kind: str = "market", region: str = "IN", weekly: bool = False, profile=Depends(admin.admin_profile)):
+    """Today's issue built now, for a preview: a region's Market Brief, or the admin's own My Stocks. Not stored or
+    sent, so the issue after the close is still built from the closing data."""
+    if kind not in news.KINDS:
+        err(400, "bad_kind", "Pick the market brief or my stocks.")
+    region = "US" if region.upper() == "US" else "IN"
+    day = datetime.now(ZoneInfo(news.SEND_AT[region][0])).date()
+    issue = (news.build_market(region, day, weekly, store=False) if kind == "market"
+             else news.build_stocks(profile["id"], day, weekly, store=False))
+    if not issue:
+        err(404, "empty", "Nothing to put in this issue right now: the sources are down, or nothing changed for your stocks.")
+    return {**news_view(issue), "text": issue["text"]}
 
 
 @app.post("/admin/ai/test")
