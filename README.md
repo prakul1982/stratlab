@@ -352,7 +352,7 @@ Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on t
 - **Merged when green.** Claude's pull requests merge themselves once the backend, frontend and browser tests have passed and the preview has built; Railway and Vercel then deploy. A draft, one marked "hold", one behind main, or one that changes the workflows themselves is merged by hand.
 - **Under load.** One server process answers about 150 requests a second, with no errors at 300 very active users. Heavy work (backtests, scans, document reads) takes turns, so ordinary pages stay quick.
 - **Every day on live data.** At 4:50 pm IST, **Check every feature** runs each part of StratLab once on the live server: prices in every market, a backtest per market, the scans, sector rotation, the option chain, filings, company pages, news and the database. Anything that fails is tried again; whatever still fails is emailed to the admins.
-- **The whole market.** The data audit runs every company in India (NSE and BSE-only) and every company filing with the SEC through the deep dive's checks. The list of listed companies is read daily and new listings are checked as they appear.
+- **The whole market.** The data audit watches every company listed in India (NSE and BSE-only) and every company filing with the SEC: the lists are read daily, and each new listing is put through the deep dive's checks as it appears.
 - **One admin page.** Admin is split into Overview (with **Needs your attention**, worst first), Services, Data checks, Users and Billing.
 
 ## What's new
