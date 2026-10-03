@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import razorpay
 from razorpay.errors import BadRequestError, SignatureVerificationError
 
-from . import db, pricing
+from . import db, invoices, pricing
 from .config import settings
 
 _client = None
@@ -181,6 +181,18 @@ def activate(profile: dict, sub: dict):
             print("could not cancel old subscription:", e)
 
 
+def invoice_for(profile: dict, sub: dict, payment: dict | None):
+    """The payment's invoice; a failure here never stops the plan switching on (the webhook tries again)."""
+    if not payment or not payment.get("id") or payment.get("status") not in (None, "captured", "authorized"):
+        return None
+    try:
+        notes = sub.get("notes") or {}
+        return invoices.make(payment, profile, plan_for(sub) or "pro", notes.get("period") or "month")
+    except Exception as e:
+        print("invoice failed:", e)
+        return None
+
+
 def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str):
     client().utility.verify_subscription_payment_signature({
         "razorpay_subscription_id": sub_id, "razorpay_payment_id": payment_id, "razorpay_signature": signature,
@@ -189,6 +201,10 @@ def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str)
     if (sub.get("notes") or {}).get("user_id") != profile["id"]:
         raise SignatureVerificationError("Subscription belongs to another user.")
     activate(profile, sub)
+    try:
+        invoice_for(profile, sub, client().payment.fetch(payment_id))
+    except Exception as e:
+        print("could not fetch the payment for its invoice:", e)
 
 
 def handle_webhook(body: bytes, signature: str):
@@ -209,6 +225,8 @@ def handle_webhook(body: bytes, signature: str):
         return
     if name in ("subscription.activated", "subscription.charged", "subscription.resumed"):
         activate(profile, sub)
+        if name == "subscription.charged":
+            invoice_for(profile, sub, (event.get("payload", {}).get("payment") or {}).get("entity"))
     elif name in ("subscription.cancelled", "subscription.completed", "subscription.halted", "subscription.paused"):
         if profile.get("razorpay_subscription_id") == sub["id"]:
             db.update_profile(profile["id"], plan="free", plan_status=sub.get("status", "cancelled"),

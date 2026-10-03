@@ -9,6 +9,7 @@ import { HELP } from "../lib/help";
 import { FOCUSES, LEVELS } from "../components/LevelPrompt";
 import { PhoneCard } from "../components/PhoneCard";
 import { Block } from "../components/More";
+import { InvoicesCard } from "../components/InvoicesCard";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
@@ -119,6 +120,8 @@ export function AccountPage() {
                 : <><Link to="/plans" className="btn outline">Change plan</Link><button className="btn quiet danger" onClick={cancel}>Cancel subscription</button></>}
           </div>
         </section>
+
+        <InvoicesCard />
 
         <section className="card stack" style={{ gap: 16 }}>
           <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>Alerts<Info>{HELP.alerts}</Info></h2>{!canReport && <span className="badge next">Basic</span>}</div>

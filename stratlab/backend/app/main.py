@@ -11,7 +11,7 @@ import time
 import traceback
 import uuid
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +20,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, audit, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
+from . import admin, audit, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -51,7 +51,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, PricesReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -1671,6 +1671,51 @@ def verify(req: VerifyReq, profile=Depends(current_profile)):
         print("razorpay verify fetch failed:", e)
         err(502, "payment_pending", "Payment received. Your plan will switch on within a few minutes; refresh this page shortly.")
     return {"activated": True}
+
+
+@app.get("/billing/invoices")
+def my_invoices(profile=Depends(current_profile)):
+    """Your invoices, newest first, and the billing details printed on future ones."""
+    return {"invoices": [{k: i[k] for k in ("number", "date", "total", "currency", "supply")} for i in invoices.of_user(profile["id"])],
+            "billing": invoices.billing_of(profile["id"]), "states": invoices.STATES}
+
+
+@app.put("/billing/details")
+def my_billing_details(req: BillingDetailsReq, profile=Depends(current_profile)):
+    """Name, address, state and (for a business) GSTIN for your future invoices."""
+    try:
+        return {"billing": invoices.save_billing(profile["id"], req.model_dump())}
+    except ValueError as e:
+        err(400, "bad_billing", str(e))
+
+
+@app.get("/billing/invoices/{year}/{n}")
+def invoice_page(year: str, n: str, profile=Depends(current_profile)):
+    """One invoice as a printable page: its owner or the site owner only."""
+    inv = next((i for i in invoices.of_user(profile["id"]) if i["number"].endswith(f"/{year}/{n}")), None)
+    if inv is None and admin.is_admin(profile):
+        inv = next((i for i in invoices.of_year(year) if i["number"].endswith(f"/{year}/{n}")), None)
+    if inv is None:
+        err(404, "not_found", "No such invoice.")
+    return Response(invoices.html(inv), media_type="text/html; charset=utf-8")
+
+
+@app.get("/admin/invoices")
+def admin_invoices(year: str = "", _=Depends(admin.admin_profile)):
+    """Seller details and every invoice of a financial year (this one by default), for the accounts."""
+    fy = year or invoices.fy(datetime.now(timezone.utc))
+    rows = invoices.of_year(fy)
+    return {"seller": invoices.seller(), "states": invoices.STATES, "year": fy,
+            "invoices": [{k: i[k] for k in ("number", "date", "total", "currency", "supply")} | {"email": i["buyer"].get("email"),
+                         "tax": round(sum(t["amount"] for t in i["taxes"]), 2)} for i in rows]}
+
+
+@app.put("/admin/invoices/seller")
+def admin_invoice_seller(req: SellerReq, _=Depends(admin.admin_profile)):
+    try:
+        return {"seller": invoices.save_seller(req.model_dump())}
+    except ValueError as e:
+        err(400, "bad_seller", str(e))
 
 
 @app.post("/billing/cancel")
