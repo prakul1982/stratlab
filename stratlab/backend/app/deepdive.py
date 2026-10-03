@@ -110,8 +110,14 @@ def numbers(p: dict) -> dict:
                    "profit_cagr_3y": _cagr(profit, 3), "profit_cagr_5y": _cagr(profit, 5),
                    "eps_cagr_3y": _cagr(eps, 3), "eps_cagr_5y": _cagr(eps, 5)},
         "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None,
-        "unit": p.get("unit") or "₹ crore", "capex_reported": any(v is not None for v in reported), "bank": bank, "basis": p.get("basis"), "notes": notes,
+        "unit": p.get("unit") or "₹ crore", "fye": _fye(p), "capex_reported": any(v is not None for v in reported), "bank": bank, "basis": p.get("basis"), "notes": notes,
     }
+
+
+def _fye(p: dict) -> int:
+    """The month the company's financial year ends: March in India; a US company's from its SEC filings ("0927")."""
+    raw = str(p.get("fiscal_year_end") or "")
+    return int(raw[:2]) if raw[:2].isdigit() and 1 <= int(raw[:2]) <= 12 else 3
 
 
 def profit_note(p: dict) -> str | None:
@@ -464,10 +470,11 @@ def read_us(symbol: str, name: str, about: str, docs_list: list[dict], sec_api, 
     out = {"business": None, "plans": None, "problems": [], "read": []}
     pairs: list[tuple[dict, str]] = []
     annual = next((d for d in docs_list if d["kind"] == "annual_report"), None)
-    for d, fn in ([(annual, sec_api.annual)] if annual else []) + \
-                 [(d, sec_api.release) for d in [x for x in docs_list if x["kind"] == "earnings_release"][:2]]:
+    for d, fn in ([(annual, lambda x: (x["url"], sec_api.annual(x)))] if annual else []) + \
+                 [(d, sec_api.release_doc) for d in [x for x in docs_list if x["kind"] == "earnings_release"][:2]]:
         try:
-            text = fn(d)
+            url, text = fn(d)
+            d = {**d, "url": url}                    # the release itself, not the 8-K's cover page
         except Exception as e:
             out["problems"].append(f"{d['title'][:60]}: {str(e)[:80]}")
             continue

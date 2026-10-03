@@ -1055,6 +1055,11 @@ def deep_base_us(sym: str) -> dict:
         p["about"] = wiki.get("extract") or ""
     except Exception:
         p["about"] = ""
+    try:                                  # insiders' own buying and selling (Form 4), for the checklist
+        fh = research_hub.finnhub
+        p["insider"] = (fh.insider(sym).get("data") or []) if fh and fh.ready() else None
+    except Exception:
+        p["insider"] = None
     return {"p": p, "docs": p.get("documents") or [], "doc_note": None, "filings": None, "trend": price_trend(sym, "US")}
 
 
@@ -1094,10 +1099,10 @@ def deep_view(sym: str, base: dict) -> dict:
             "industry_measures": industry.measures(p, sym),
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
-            "calls": sum(d["kind"] == "transcript" for d in base["docs"]),
             "card": card_view, "card_stale": not report_card.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym),
-            "ai": True, "report_card": not us}
+            "ai": True, "report_card": True,
+            "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
 
 
 def company_hosts(p: dict) -> tuple[str, ...]:
@@ -1115,12 +1120,6 @@ def deep_ai_allowed(profile) -> None:
 
 def deep_symbol(symbol: str, region: str) -> str:
     return research_routes.symbol_of(symbol) if region == "IN" else re.sub(r"[^A-Z0-9.\-]", "", symbol.upper())[:12]
-
-
-def no_us_ai(region: str):
-    if region == "US":
-        err(400, "us_no_calls", "US companies don't file earnings-call transcripts with the SEC, so the management report card "
-                                "isn't available for them yet.")
 
 
 @app.get("/research/deep/{symbol}")
@@ -1218,28 +1217,37 @@ def deep_dive_deck(symbol: str, region: str = "IN", profile=Depends(current_prof
 
 @app.post("/research/deep/{symbol}/card")
 def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", profile=Depends(current_profile)):
-    """The management report card: targets given on past earnings calls, checked against the reported numbers."""
+    """The management report card: targets management gave (India: on earnings calls; US: in earnings releases),
+    checked against the reported numbers."""
     need(profile, "deepdive", "The company deep dive")
-    no_us_ai(deep_region(region))
-    sym = research_routes.symbol_of(symbol)
-    base = deep_base(sym)
-    if report_card.fresh(report_card.stored(sym)) and not refresh:
+    region = deep_region(region)
+    us = region == "US"
+    sym = deep_symbol(symbol, region)
+    key = f"US:{sym}" if us else sym
+    base = deep_base(sym, region)
+    if report_card.fresh(report_card.stored(key)) and not refresh:
         return ok(deep_view(sym, base))
-    if not any(d["kind"] == "transcript" for d in base["docs"]):
-        err(404, "no_calls", "No earnings-call transcript was found for this company in the last two years.")
+    kind = "earnings_release" if us else "transcript"
+    if not any(d["kind"] == kind for d in base["docs"]):
+        err(404, "no_calls", "No earnings release was found for this company in the last two years." if us
+            else "No earnings-call transcript was found for this company in the last two years.")
     deep_ai_allowed(profile)
     p = base["p"]
     try:
-        card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic), company_hosts(p))
+        if us:
+            card = report_card.read_us(sym, p.get("name") or sym, base["docs"], sec_feed, (_gemini, _anthropic), deepdive._fye(p))
+        else:
+            card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic), company_hosts(p))
     except report_card.NoCalls as e:          # nothing read, nothing charged
         detail = "; ".join(public_text(x) for x in e.problems[:3])
-        err(422, "no_readable_calls", "None of the earnings-call transcripts could be read. " + (detail or "")[:400])
+        err(422, "no_readable_calls", ("None of the earnings releases could be read. " if us
+                                       else "None of the earnings-call transcripts could be read. ") + (detail or "")[:400])
     except AIBusy as e:
         err(503, "ai_busy", str(e))
     except AIError as e:
         err(422, "ai_failed", str(e))
     card["problems"] = [public_text(x) for x in card["problems"]]
-    report_card.store(sym, card)
+    report_card.store(key, card)
     db.add_usage(profile["id"], "research_ai")
     return ok(deep_view(sym, base))
 

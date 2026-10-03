@@ -6,7 +6,34 @@ from . import industry
 from .deepdive import money
 from .intel.screener import summary
 
-GROUPS = ["Trend", "Growth", "Quality", "Balance sheet", "Cash", "Promoters", "Filings", "Management"]
+GROUPS = ["Trend", "Growth", "Quality", "Balance sheet", "Cash", "Promoters", "Insiders", "Filings", "Management"]
+
+
+def insider_flow(rows: list[dict], today=None, days: int = 180) -> dict | None:
+    """Shares US insiders bought and sold on the open market in the last `days` (Form 4 codes P and S; option
+    exercises, awards and gifts aren't decisions to buy or sell, so they're left out when codes are given)."""
+    from datetime import date, timedelta
+    today = today or date.today()
+    cut = (today - timedelta(days=days)).isoformat()
+    coded = any(r.get("transactionCode") for r in rows)
+    bought = sold = 0.0
+    buyers, sellers = set(), set()
+    for r in rows:
+        when = str(r.get("transactionDate") or r.get("filingDate") or "")[:10]
+        if not when or when < cut:
+            continue
+        if coded and r.get("transactionCode") not in ("P", "S"):
+            continue
+        ch = float(r.get("change") or 0)
+        if ch > 0:
+            bought += ch
+            buyers.add(r.get("name"))
+        elif ch < 0:
+            sold += -ch
+            sellers.add(r.get("name"))
+    if not bought and not sold:
+        return None
+    return {"bought": bought, "sold": sold, "buyers": len(buyers), "sellers": len(sellers)}
 
 
 def _state(v, good, bad, higher_better=True) -> str:
@@ -115,6 +142,19 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
             ch = prom[-1] - prom[-5]
             add("Promoters", "Promoter holding over a year", _state(ch, -0.5, -2), f"{ch:+.2f} points",
                 "Pass if steady or rising; fail if down more than 2 points in four quarters.")
+
+    # insiders (US): their own buying and selling, where Indian companies have the promoter holding
+    flow = insider_flow(p["insider"]) if p.get("insider") is not None else None
+    if p.get("insider") is not None:
+        if flow is None:
+            add("Insiders", "Insider buying and selling, 6 months", "na", "None",
+                "Open-market buys and sells by directors and officers (Form 4). None in the last six months.")
+        else:
+            net = flow["bought"] - flow["sold"]
+            add("Insiders", "Insider buying and selling, 6 months", "pass" if net > 0 else "watch",
+                f"{flow['buyers']} bought {flow['bought']:,.0f} · {flow['sellers']} sold {flow['sold']:,.0f} shares",
+                "Pass when insiders bought more than they sold on the open market. Selling shows as watch, not fail: it is "
+                "often a planned sale or tax on stock awards.")
 
     # filings
     if filings_summary is not None:
