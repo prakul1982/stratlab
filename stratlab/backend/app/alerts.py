@@ -211,7 +211,7 @@ def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper") -> lis
     if profile.get("telegram_chat_id") and telegram_ready():
         jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
     to = email_for(profile)
-    if to and email_ready():
+    if to and email_ready() and email_confirmed(profile):      # only an address its owner confirmed from a link
         jobs.append(("email", lambda: send_email(to, subject, text)))
     return jobs
 

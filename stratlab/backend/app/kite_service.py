@@ -107,6 +107,8 @@ class KiteService:
         self._inst: list[dict] = []
         self._by_token: dict[int, dict] = {}
         self._inst_day: str | None = None
+        self._idx: dict = {}
+        self._idx_of: list | None = None
         self._cache: dict = {}
         self.login_state: str | None = None
 
@@ -306,32 +308,38 @@ class KiteService:
             hit = self.by_symbol(f"{symbol}-{series}")
             if hit and hit["type"] == "EQ":
                 return hit
-        for r in self._inst:
-            if r["exchange"] == "BSE" and (r["symbol"] == symbol or r.get("bse_code") == symbol):
-                return r
-        return None
+        idx = self._index()
+        return idx["sym"].get(("BSE", symbol)) or idx["bse"].get(symbol)
 
     def equity_by_name(self, name: str) -> dict | None:
         """A listed company's stock by its name as a broker writes it ("Reliance Industries Ltd"): NSE first, then
         listed only on BSE. Only an exact match after dropping Ltd, Limited, India and the like."""
-        self._load_instruments()
         want = norm_name(name)
         if not want:
             return None
-        for exch in ("NSE", "BSE"):
-            for r in self._inst:
-                if r["exchange"] == exch and r["type"] == "EQ" and norm_name(r["name"]) == want:
-                    return r
-        return None
+        idx = self._index()
+        return idx["name"].get(("NSE", want)) or idx["name"].get(("BSE", want))
 
     def by_symbol(self, symbol: str, exchange: str = "NSE") -> dict | None:
         """The cash stock or index with this trading symbol."""
+        return self._index()["sym"].get((exchange, symbol.strip().upper()))
+
+    def _index(self) -> dict:
+        """The day's instrument list by (exchange, symbol), BSE code and (exchange, company name) for equities, the
+        first in the list winning as before. Built once per list: walking ~100,000 instruments (F&O included) for every
+        lookup let a file of made-up holdings lines tie up the server for minutes."""
         self._load_instruments()
-        symbol = symbol.strip().upper()
-        for r in self._inst:
-            if r["exchange"] == exchange and r["symbol"] == symbol:
-                return r
-        return None
+        inst = self._inst
+        if self._idx_of is not inst:
+            sym, bse, name = {}, {}, {}
+            for r in inst:
+                sym.setdefault((r["exchange"], r["symbol"]), r)
+                if r.get("bse_code"):
+                    bse.setdefault(r["bse_code"], r)
+                if r["type"] == "EQ" and r["exchange"] in ("NSE", "BSE"):
+                    name.setdefault((r["exchange"], norm_name(r["name"])), r)
+            self._idx, self._idx_of = {"sym": sym, "bse": bse, "name": name}, inst
+        return self._idx
 
     def quote(self, symbols: list[str]) -> dict[str, dict]:
         """Last price, day range and previous close for stocks (NSE symbols, or BSE-only symbols or codes), in one

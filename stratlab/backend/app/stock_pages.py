@@ -483,7 +483,7 @@ def sitemap(name: str) -> str | None:
     if name == "pages":
         return _urlset([site + p for p in ("/", "/terms", "/privacy", "/refunds", "/contact")])
     bits = name.split("-")
-    if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit():
+    if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit() or len(bits[2]) > 6:
         return None
     syms = sorted(companies(REGIONS[bits[1]]))
     i = int(bits[2]) - 1

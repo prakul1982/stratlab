@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from app import billing, live, main
+from app import alerts, billing, live, main
 from app.config import settings
 from app.plans import PLANS, allows, group_size, plan_info
 
@@ -81,6 +81,8 @@ def test_alerts_and_report_follow_the_plan(paid, monkeypatch):
     for k, v in (("SMTP_HOST", "smtp.x"), ("SMTP_USER", "u"), ("SMTP_PASSWORD", "p")):
         monkeypatch.setattr(settings, k, v)                      # email counts as a channel only when the server can send it
     p = lambda plan, **kw: {"plan": plan, "plan_status": "active", **kw}
+    assert not live.report_on(p("basic", alert_email="a@b.c"))       # an address nobody confirmed isn't a channel
+    monkeypatch.setattr(alerts, "email_confirmed", lambda profile: True)
     assert live.report_on(p("basic", alert_email="a@b.c")) and not live.alerts_on(p("basic", alerts_enabled=True, alert_email="a@b.c"))
     assert live.alerts_on(p("pro", alerts_enabled=True)) and not live.report_on(p("pro"))       # no channel set
     assert not live.report_on({"plan": "free", "alert_email": "a@b.c"})
