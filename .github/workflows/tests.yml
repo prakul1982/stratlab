@@ -35,3 +35,33 @@ jobs:
           cache-dependency-path: stratlab/frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  browser:
+    # every main page on desktop and phone against the fake world, checking what is drawn (e2e/pages.spec.ts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: stratlab/backend/requirements.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: stratlab/frontend/package-lock.json
+      - run: pip install -r requirements.txt pytest
+        working-directory: stratlab/backend
+      - run: npm ci && npm run build && npx playwright install --with-deps chromium
+        working-directory: stratlab/frontend
+      - run: npm run e2e
+        working-directory: stratlab/frontend
+        env:
+          CI: "1"
+          PYTHON: python
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-screenshots
+          path: stratlab/frontend/test-results/
