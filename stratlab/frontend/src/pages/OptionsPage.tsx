@@ -9,6 +9,7 @@ import type { LiveRow, Notebook, OptChain, OptionStrategy, OptLeg, OptPreview, U
 import { LineChart } from "../components/Charts";
 import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
+import { track } from "../lib/analytics";
 
 const DRAFT = "stratlab.options.draft.v1";
 
@@ -195,6 +196,7 @@ export function OptionsPage() {
     setStarting(true);
     try {
       const snap = await api<{ id: string }>("/options/sessions", { method: "POST", body: { strategy: s } });
+      track("paper trading started", { kind: "options" });
       refreshMe();
       nav(`/options/s/${snap.id}`);
     } catch (e) {

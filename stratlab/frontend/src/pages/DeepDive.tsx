@@ -5,9 +5,11 @@ import { useApp } from "../lib/app";
 import { pct, safeHref, signClass } from "../lib/format";
 import { scaleFor } from "../lib/research";
 import { Panel, ResearchNav, TrendBars } from "../components/Research";
+import { DealsPanel } from "../components/Deals";
 import { AsOf, Loading } from "../components/ui";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
+import { track } from "../lib/analytics";
 
 type Year = { year: string; sales: number | null; profit: number | null; opm: number | null; capex: number | null;
   capex_pct_sales: number | null; cfo: number | null; cfi: number | null; fcf: number | null; debt: number | null };
@@ -168,6 +170,8 @@ export function DeepDivePage() {
     } catch (e) { fail(e); } finally { setDecking(null); }
   };
 
+  useEffect(() => { track("deep dive opened", { region }); }, [sym, region]);
+
   useEffect(() => {
     if (!pro) return;
     let live = true;
@@ -260,6 +264,10 @@ export function DeepDivePage() {
           )}
 
           {v.checklist && <ChecklistPanel c={v.checklist} />}
+
+          {!us && <Panel title="Deals and insider trades" span="full" info="Who bought or sold, from exchange disclosures: promoters' and insiders' own trades and pledges, substantial acquisitions, and bulk and block deals.">
+            <DealsPanel symbol={v.symbol} />
+          </Panel>}
 
           {n.bank ? (
             <Panel title="Capex and cash" span="full">

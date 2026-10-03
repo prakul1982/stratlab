@@ -16,7 +16,7 @@ from html import escape
 
 from . import alerts, db
 from .newsletter import write
-from .plans import IST, PLANS, _dt, effective_plan, promo_until, trial_end
+from .plans import IST, PLANS, _dt, effective_plan, free_basic_until, promo_until, trial_end
 
 SENT = "lifecycle:"              # lifecycle:<uid>: {"welcome": "2026-10-03T10:00:00+00:00", "receipt:pay_1": ...}
 PREFS = "emailprefs:"            # emailprefs:<uid>: {"tips": false} once turned off
@@ -42,6 +42,7 @@ EMAILS = {
     "inactive": ("What's new, after 14 quiet days", False),
     "receipt": ("Payment receipt", True),
     "plan_ended": ("Plan changed to Free", True),
+    "invite_reward": ("Invite reward: a free month of Basic", True),
 }
 ORDER = ("trial_end", "promo_end", "trial_before", "promo_before", "welcome", "day2", "inactive")   # most urgent first
 
@@ -223,6 +224,26 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             f"Your {plan} subscription has stopped, so your account is on the Free plan now.",
             "Your notebooks, backtests and watchlist stay. You can choose a plan again any time."],
             ("See plans", "/plans"), transactional=tx)
+    if kind == "invite_reward":
+        if ctx.get("role") == "newcomer":
+            first = ("You joined StratLab through a friend's invite and have been using it, so you and your friend "
+                     "each get a free month of the Basic plan.")
+        else:
+            first = ("A friend you invited is now using StratLab, so you and your friend each get a free month of the "
+                     "Basic plan.")
+        until = ctx.get("until")
+        if ctx.get("banked") and not until:
+            when = ("You're on a paid plan, so the free time is kept for you: it starts if your account moves to the "
+                    "Free plan.")
+        elif isinstance(until, datetime):
+            when = f"Your free Basic runs until {_day(_last_day(until))} (India time)."
+            if ctx.get("banked"):
+                when += " More free time is kept for you in case your paid plan stops."
+        else:
+            when = "Your free Basic has started."
+        return _compose("You've got a free month of StratLab Basic", [first, when,
+                        "Nothing to pay and nothing to set up. Invite more friends from Account."],
+                        ("See your account", "/account#invite"), transactional=tx)
     raise ValueError(f"Unknown email: {kind}")
 
 
@@ -240,6 +261,8 @@ def sample(kind: str, now: datetime | None = None) -> dict:
                                                                "payment_id": "pay_sample"}}
     if kind == "plan_ended":
         return {"plan": "pro"}
+    if kind == "invite_reward":
+        return {"role": "referrer", "until": now + timedelta(days=30), "banked": 0}
     return {}
 
 
@@ -351,7 +374,7 @@ def due(profile: dict, now: datetime, record: dict, seen_day: str | None, promo_
         return []
     today = now.astimezone(IST).date()
     out: dict[str, tuple[str, str, dict]] = {}
-    free = effective_plan(profile) == "free"
+    free = effective_plan(profile) == "free" and not free_basic_until(profile, now)   # free Basic from invites counts
     started = profile.get("live_trial_started_at")
     if started and free:
         try:

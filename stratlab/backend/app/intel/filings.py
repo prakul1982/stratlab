@@ -151,6 +151,195 @@ def upcoming_results(items: list[dict], today=None) -> dict | None:
     return None
 
 
+# ---------- insider trades, substantial acquisitions, bulk and block deals ----------
+DEALS_DAYS = 365                     # how far back a company's deals list goes
+DEAL_KINDS = {"insider": "Insider trade", "sast": "Substantial acquisition", "bulk": "Bulk deal", "block": "Block deal"}
+DEAL_PAGES = {                       # where the exchange lists each kind, for rows that carry no document of their own
+    "insider": "https://www.nseindia.com/companies-listing/corporate-filings-insider-trading",
+    "sast": "https://www.nseindia.com/companies-listing/corporate-filings-regulation-29",
+    "bulk": "https://www.nseindia.com/report-detail/display-bulk-and-block-deals",
+    "block": "https://www.nseindia.com/report-detail/display-bulk-and-block-deals",
+}
+RELATIONS = {"promoter": "Promoter", "director": "Director", "kmp": "Key officer", "employee": "Employee", "other": "Other"}
+
+
+def _field(r: dict, *names: str):
+    """The first of `names` the row has a value for, matched without regard to case (the feeds change it)."""
+    low = {str(k).lower(): v for k, v in r.items()}
+    for n in names:
+        v = low.get(n.lower())
+        if v is not None and str(v).strip() not in ("", "-", "NA", "Nil", "nil"):
+            return v
+    return None
+
+
+def _amount(v) -> float | None:
+    """A number as the exchange writes it ("1,23,456", "12.5"), or None."""
+    if v is None or isinstance(v, (bool, dict, list)):
+        return None
+    try:
+        f = float(str(v).replace(",", "").strip())
+    except ValueError:
+        return None
+    return f if f == f and abs(f) < 1e15 else None
+
+
+def _iso_day(v) -> str | None:
+    """"02-Oct-2026 19:30", "2026-10-02 18:00:00" or "02-10-2026" as 2026-10-02."""
+    s = str(v or "").strip()
+    for cand in (s, s[:11], s[:10]):
+        for fmt in ("%d-%b-%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d %b %Y"):
+            try:
+                return datetime.strptime(cand.strip(), fmt).date().isoformat()
+            except ValueError:
+                continue
+    return None
+
+
+def _relation(text) -> str | None:
+    """Who the person is to the company, in five plain groups."""
+    t = str(text or "").lower()
+    if not t:
+        return None
+    if "promoter" in t:
+        return "promoter"
+    if "director" in t:
+        return "director"
+    if "key managerial" in t or "kmp" in t:
+        return "kmp"
+    if "employee" in t or "designated" in t:
+        return "employee"
+    return "other"
+
+
+def _side(text) -> str | None:
+    """Which way the shares went: bought, sold, or a pledge made, released or invoked."""
+    t = str(text or "").strip().lower()
+    if "invo" in t:
+        return "invoked"
+    if "revo" in t or "release" in t:
+        return "released"
+    if "pledge" in t or "encumb" in t:
+        return "pledged"
+    if t in ("b", "buy", "p") or t.startswith(("acq", "purchase", "buy")):
+        return "bought"
+    if t in ("s", "sell") or t.startswith(("sale", "sell", "sold", "dispos")):
+        return "sold"
+    return None
+
+
+def _mode(text, side) -> str:
+    """How: on the open market, off market, a pledge, an employee stock option, or something else."""
+    t = str(text or "").lower()
+    if side in ("pledged", "released", "invoked") or "pledge" in t or "encumb" in t:
+        return "pledge"
+    if any(w in t for w in ("off market", "off-market", "inter-se", "inter se", "gift", "transmission")):
+        return "off_market"
+    if "esop" in t or "esos" in t or "stock option" in t:
+        return "esop"
+    if "market" in t:
+        return "market"
+    return "other"
+
+
+def _deal(kind, symbol, day, filed, who, relation, side, mode, mode_text, qty, price, value, pct_after, url) -> dict | None:
+    """One deal in the shape every page reads; None when it lacks what makes it a deal (a date, who, which way)."""
+    import hashlib
+    symbol = str(symbol or "").strip().upper()[:20]
+    who = re.sub(r"\s+", " ", str(who or "")).strip()[:120]
+    if not day or not who or not side or not symbol:
+        return None
+    qty = abs(qty) if qty is not None else None
+    if value is None and qty and price:
+        value = round(qty * price, 2)
+    if price is None and qty and value:
+        price = round(value / qty, 2)
+    link = str(url or "")
+    key = "|".join(str(p) for p in (kind, symbol, day, who, side, qty))
+    return {"id": hashlib.sha1(key.encode()).hexdigest()[:16], "kind": kind, "label": DEAL_KINDS[kind], "symbol": symbol,
+            "date": day, "filed": filed or day, "who": who, "relation": relation, "side": side, "mode": mode,
+            "mode_text": str(mode_text or "").strip()[:60] or None, "qty": qty, "price": price, "value": value,
+            "pct_after": pct_after, "url": link if link.startswith("https://") else DEAL_PAGES[kind]}
+
+
+def _rows(raw) -> list[dict]:
+    return [r for r in raw if isinstance(r, dict)] if isinstance(raw, list) else []
+
+
+def insider_rows(raw) -> list[dict]:
+    """The exchange's insider-trading (PIT) disclosures as deals. Only trades in the company's shares are kept:
+    warrants and derivatives count differently."""
+    out = []
+    for r in _rows(raw):
+        sec = str(_field(r, "secType", "securityType") or "equity").lower()
+        if "equity" not in sec and "share" not in sec:
+            continue
+        side = _side(_field(r, "tdpTransactionType", "transactionType", "acqSaleType"))
+        how = _field(r, "acqMode", "modeOfAcquisition", "mode")
+        d = _deal("insider", _field(r, "symbol"), _iso_day(_field(r, "acqtoDt", "acqfromDt", "date", "intimDt")),
+                  _iso_day(_field(r, "date", "intimDt", "broadcastDate")), _field(r, "acqName", "personName", "name"),
+                  _relation(_field(r, "personCategory", "category")), side, _mode(how, side), how,
+                  _amount(_field(r, "secAcq", "noOfSecurities", "quantity")), None, _amount(_field(r, "secVal", "value")),
+                  _amount(_field(r, "afterAcqSharesPer", "afterAcqPer")), _field(r, "xbrl", "attachment"))
+        if d:
+            out.append(d)
+    return out
+
+
+def sast_rows(raw) -> list[dict]:
+    """Substantial acquisitions and sales (the takeover code's regulation 29 disclosures) as deals."""
+    out = []
+    for r in _rows(raw):
+        side = _side(_field(r, "acqSaleType", "transactionType", "type"))
+        qty = _amount(_field(r, "noOfShareAcq", "noOfSharesAcquired") if side == "bought"
+                      else _field(r, "noOfShareSale", "noOfSharesSold"))
+        qty = qty if qty is not None else _amount(_field(r, "quantity", "noOfShare", "secAcq"))
+        how = _field(r, "acquisitionMode", "acqMode", "modeOfAcquisition")
+        d = _deal("sast", _field(r, "symbol"),
+                  _iso_day(_field(r, "acqToDate", "acquisitionDate", "dateOfAcq", "acqFromDate", "timestamp", "date")),
+                  _iso_day(_field(r, "timestamp", "date", "broadcastDate")), _field(r, "acquirerName", "acqName", "name"),
+                  _relation(_field(r, "promoterType", "personCategory")), side, _mode(how, side), how, qty, None, None,
+                  _amount(_field(r, "totAftShareAcqPer", "totAftAcqSharePer", "afterAcqSharesPer")),
+                  _field(r, "attachement", "attachment", "xbrl"))
+        if d:
+            out.append(d)
+    return out
+
+
+def block_rows(raw, kind: str) -> list[dict]:
+    """Bulk or block deals (`kind`) as the exchange lists them: who, which way, how many and at what price."""
+    out = []
+    for r in _rows(raw):
+        d = _deal(kind, _field(r, "BD_SYMBOL", "symbol"), _iso_day(_field(r, "BD_DT_DATE", "date", "mTIMESTAMP")), None,
+                  _field(r, "BD_CLIENT_NAME", "clientName", "client"), None, _side(_field(r, "BD_BUY_SELL", "buySell", "side")),
+                  "market", None, _amount(_field(r, "BD_QTY_TRD", "qty", "quantity")),
+                  _amount(_field(r, "BD_TP_WATP", "watp", "price")), None, None, None)
+        if d:
+            out.append(d)
+    return out
+
+
+def sort_deals(rows: list[dict]) -> list[dict]:
+    """Newest first, each deal once."""
+    seen, out = set(), []
+    for d in sorted(rows, key=lambda d: (d["date"], d["filed"], d["who"]), reverse=True):
+        if d["id"] not in seen:
+            seen.add(d["id"])
+            out.append(d)
+    return out
+
+
+# (path, referer, extra params, row reader) for each kind of deal; symbol and dates are added per call
+DEAL_FEEDS = {
+    "insider": ("/api/corporates-pit", DEAL_PAGES["insider"], {"index": "equities"}, insider_rows),
+    "sast": ("/api/corporate-sast-reg29", DEAL_PAGES["sast"], {"index": "equities"}, sast_rows),
+    "bulk": ("/api/historicalOR/bulk-block-short-deals", DEAL_PAGES["bulk"], {"optionType": "bulk_deals"},
+             lambda raw: block_rows(raw, "bulk")),
+    "block": ("/api/historicalOR/bulk-block-short-deals", DEAL_PAGES["block"], {"optionType": "block_deals"},
+              lambda raw: block_rows(raw, "block")),
+}
+
+
 class NSEFilings:
     """NSE's public corporate-announcements feed. The site hands out session cookies on its home page and refuses
     API calls without them, so we visit the home page first and again whenever the cookies expire."""
@@ -166,6 +355,7 @@ class NSEFilings:
         self._primed = 0.0
         self._lock = threading.Lock()
         self._fails, self._down_until = 0, 0.0
+        self._circuits: dict[str, tuple[int, float]] = {}       # the deal feeds' own breakers: (fails, down until)
 
     def _prime(self, force: bool = False):
         with self._lock:
@@ -177,9 +367,12 @@ class NSEFilings:
                 raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
             self._primed = time.time()
 
-    def _get(self, path: str, params: dict, referer: str | None = None):
+    def _get(self, path: str, params: dict, referer: str | None = None, circuit: str = "main"):
         """One API call, with the same circuit breaker as the other sources: after three outages in a row the
-        exchange is treated as down for a minute, so pages answer at once instead of queueing behind it."""
+        exchange is treated as down for a minute, so pages answer at once instead of queueing behind it. The deal
+        feeds have a breaker of their own (`circuit`), so one of them breaking can't take the filings down with it."""
+        if circuit != "main":
+            return self._get_on(circuit, path, params, referer)
         if time.time() < self._down_until:
             raise SourceError(self.name, "The exchange feed isn't answering right now. Try again in a minute.", busy=True)
         try:
@@ -191,6 +384,20 @@ class NSEFilings:
                     self._down_until, self._fails = time.time() + 60, 0
             raise
         self._fails = 0
+        return out
+
+    def _get_on(self, circuit: str, path: str, params: dict, referer: str | None):
+        fails, down = self._circuits.get(circuit, (0, 0.0))
+        if time.time() < down:
+            raise SourceError(self.name, "The exchange feed isn't answering right now. Try again in a minute.", busy=True)
+        try:
+            out = self._get_once(path, params, referer)
+        except SourceError as e:
+            if e.busy:
+                fails += 1
+                self._circuits[circuit] = (0, time.time() + 60) if fails >= 3 else (fails, 0.0)
+            raise
+        self._circuits[circuit] = (0, 0.0)
         return out
 
     def _get_once(self, path: str, params: dict, referer: str | None = None):
@@ -349,6 +556,47 @@ class NSEFilings:
         except (TypeError, ValueError):
             return None
 
+    def _deals(self, kind: str, symbol: str | None, days: int, to: datetime | None) -> list[dict]:
+        """One kind of deal from the exchange, for one company (`symbol`) or the whole market (None), over the `days`
+        up to `to` (today). A feed that answers in a shape we can't read is an error, not an empty list."""
+        to = to or ist_now()
+        frm = to - timedelta(days=days)
+        key = ("deals", kind, symbol, frm.date().isoformat(), to.date().isoformat())
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        path, referer, extra, read = DEAL_FEEDS[kind]
+        dates = ({"from": frm.strftime("%d-%m-%Y"), "to": to.strftime("%d-%m-%Y")} if kind in ("bulk", "block")
+                 else {"from_date": frm.strftime("%d-%m-%Y"), "to_date": to.strftime("%d-%m-%Y")})
+        data = self._get(path, {**extra, **({"symbol": symbol} if symbol else {}), **dates}, referer=referer, circuit=kind)
+        rows = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(rows, list):
+            raise SourceError(self.name, f"The exchange's {DEAL_KINDS[kind].lower()} list wasn't in the expected shape.")
+        if symbol:                          # a company's own list may leave its symbol out of each row
+            rows = [r if _field(r, "symbol", "BD_SYMBOL") else {**r, "symbol": symbol} for r in _rows(rows)]
+        out = sort_deals(read(rows))
+        if symbol:
+            out = [d for d in out if d["symbol"] == symbol.upper()]
+        self.cache.set(key, out, 3600 if symbol else 1800)
+        return out
+
+    def insider_trades(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        """Trades by promoters, directors and key staff in the company's own shares (insider-trading disclosures),
+        pledges made and released among them."""
+        return self._deals("insider", symbol, days, to)
+
+    def sast(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        """Substantial acquisitions and sales: holders crossing 5% and moving 2% at a time (the takeover code)."""
+        return self._deals("sast", symbol, days, to)
+
+    def bulk_deals(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        """Bulk deals: one client trading more than half a percent of the company's shares in a day."""
+        return self._deals("bulk", symbol, days, to)
+
+    def block_deals(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        """Block deals: large trades matched in the exchange's separate block-deal window."""
+        return self._deals("block", symbol, days, to)
+
 
 BSE_ATTACH = "https://www.bseindia.com/xml-data/corpfiling/"
 
@@ -455,6 +703,26 @@ class IndiaFilings:
 
     def last_price(self, symbol: str) -> float | None:
         return None if self.code_of(symbol) else self.nse.last_price(symbol)
+
+    def _nse_only(self, symbol: str | None):
+        if symbol and self.code_of(symbol):
+            raise SourceError(self.nse.name, "Deals and insider trades cover companies listed on NSE; this one is listed only on BSE.")
+
+    def insider_trades(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        self._nse_only(symbol)
+        return self.nse.insider_trades(symbol, days, to)
+
+    def sast(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        self._nse_only(symbol)
+        return self.nse.sast(symbol, days, to)
+
+    def bulk_deals(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        self._nse_only(symbol)
+        return self.nse.bulk_deals(symbol, days, to)
+
+    def block_deals(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        self._nse_only(symbol)
+        return self.nse.block_deals(symbol, days, to)
 
     def __getattr__(self, name):
         return getattr(self.nse, name)

@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { HELP } from "../lib/help";
 import type { Cadence, NewsletterPrefs } from "../lib/news";
 import { Info } from "./ui";
+import { track } from "../lib/analytics";
 
 type Key = "market_in" | "market_us" | "my_stocks";
 const ROWS: [Key, string][] = [["market_in", "Market brief: India"], ["market_us", "Market brief: US"], ["my_stocks", "My stocks"]];
@@ -47,6 +48,7 @@ export function NewslettersCard() {
     try {
       const p = await api<NewsletterPrefs>("/me/newsletters", { method: "PUT", body: { [key]: c } });
       if (p && p.market_in) setPrefs(p);
+      if (before[key] === "off" && c !== "off") track("newsletter subscribed", { kind: key, period: c });
       notify("Newsletter settings saved.");
     } catch (e) { setPrefs(before); fail(e); } finally { setBusy(null); }
   };

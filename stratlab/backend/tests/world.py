@@ -104,6 +104,43 @@ ISINS = [("TCS", "Tata Consultancy Services Limited", "INE467B01029"), ("INFY", 
          ("LT", "Larsen & Toubro Limited", "INE018A01030"), ("ASIANPAINT", "Asian Paints Limited", "INE021A01026")]
 
 
+def deal_rows(today=None) -> dict:
+    """The exchange's disclosures for RELIANCE, relative to today: a promoter's open-market purchase, a director's sale,
+    a pledge, stock options (not a decision to buy), a substantial acquisition, and a bulk and a block deal."""
+    t = today or date.today()
+    f = lambda d, fmt="%d-%b-%Y": (t - timedelta(days=d)).strftime(fmt)        # noqa: E731
+    pit = [{"symbol": "RELIANCE", "acqName": "Mukesh Shah Family Trust", "personCategory": "Promoter Group", "secType": "Equity Shares",
+            "secAcq": "25,000", "secVal": "72500000", "tdpTransactionType": "Buy", "acqMode": "Market Purchase",
+            "acqfromDt": f(20), "acqtoDt": f(20), "date": f(18, "%d-%b-%Y 19:30"), "afterAcqSharesPer": "50.12",
+            "xbrl": "https://nsearchives.nseindia.com/corporate/xbrl/PIT_1.xml"},
+           {"symbol": "RELIANCE", "acqName": "Asha Rao", "personCategory": "Director", "secType": "Equity Shares", "secAcq": "4000",
+            "secVal": "11600000", "tdpTransactionType": "Sell", "acqMode": "Market Sale", "acqtoDt": f(40), "date": f(38, "%d-%b-%Y 18:00")},
+           {"symbol": "RELIANCE", "acqName": "Mukesh Shah Family Trust", "personCategory": "Promoter Group", "secType": "Equity Shares",
+            "secAcq": "100000", "tdpTransactionType": "Pledge Creation", "acqMode": "Pledge Creation", "acqtoDt": f(60), "date": f(58)},
+           {"symbol": "RELIANCE", "acqName": "Ravi Kumar", "personCategory": "Employees/Designated Employees", "secType": "Equity Shares",
+            "secAcq": "500", "secVal": "-", "tdpTransactionType": "Buy", "acqMode": "ESOP", "acqtoDt": f(10), "date": f(9)},
+           {"symbol": "RELIANCE", "acqName": "Someone", "personCategory": "Director", "secType": "Warrants", "secAcq": "10",
+            "tdpTransactionType": "Buy", "acqMode": "Market Purchase", "acqtoDt": f(5)}]
+    sast = [{"symbol": "RELIANCE", "acquirerName": "Long Horizon Fund", "acqSaleType": "Acquisition", "noOfShareAcq": "1500000",
+             "acquisitionMode": "Market Purchase", "acqToDate": f(30), "timestamp": f(29, "%d-%b-%Y %H:%M"), "totAftShareAcqPer": "5.02"}]
+    bulk = [{"BD_DT_DATE": f(15), "BD_SYMBOL": "RELIANCE", "BD_SCRIP_NAME": "Reliance Industries Ltd", "BD_CLIENT_NAME": "Index Fund One",
+             "BD_BUY_SELL": "BUY", "BD_QTY_TRD": 800000, "BD_TP_WATP": 2901.5, "BD_REMARKS": "-"}]
+    block = [{"BD_DT_DATE": f(3), "BD_SYMBOL": "RELIANCE", "BD_CLIENT_NAME": "Pension Plan Two", "BD_BUY_SELL": "SELL",
+              "BD_QTY_TRD": 120000, "BD_TP_WATP": 2895}]
+    return {"pit": pit, "sast": sast, "bulk_deals": bulk, "block_deals": block}
+
+
+def _deals_answer(r: httpx.Request):
+    """The exchange's deal feeds: one company's rows when a symbol is asked for, else the whole market's."""
+    rows = deal_rows()
+    key = {"/api/corporates-pit": "pit", "/api/corporate-sast-reg29": "sast"}.get(r.url.path) or r.url.params.get("optionType", "")
+    got = rows.get(key, [])
+    sym = r.url.params.get("symbol")
+    if sym:
+        got = [x for x in got if (x.get("symbol") or x.get("BD_SYMBOL")) == sym]
+    return httpx.Response(200, json={"data": got})
+
+
 def _nse(sw=None):
     rows = [{"symbol": "RELIANCE", "desc": "Investor Presentation", "attchmntText": "Investor presentation for Q1 FY27",
              "sort_date": "2026-08-01 18:10:05", "seq_id": "1", "attchmntFile": "https://nsearchives.nseindia.com/p.pdf"},
@@ -119,6 +156,8 @@ def _nse(sw=None):
             return httpx.Response(200, text="<html></html>", headers={"set-cookie": "nsit=abc; Path=/"})
         if r.url.path == "/api/corporate-announcements":
             return httpx.Response(200, json=rows)
+        if r.url.path in ("/api/corporates-pit", "/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
+            return _deals_answer(r)
         if r.url.path == "/api/corporate-board-meetings":
             return httpx.Response(200, json=board_meetings())
         if r.url.path == "/api/equity-stockIndices":
@@ -160,6 +199,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     fake_db = FakeSupabase()
     monkeypatch.setattr(db, "_client", fake_db)
     db._profiles.clear()
+    from app import invite_rewards, plans
+    plans.forget_free_basic()                   # free Basic time another test gave
+    invite_rewards._touched.clear()
     main._results.clear()                       # shared scan and rotation answers from an earlier test
     main._bse_map.clear()                       # the BSE-only list another test loaded
     from app import stock_pages

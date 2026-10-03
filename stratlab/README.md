@@ -176,6 +176,12 @@ Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and red
 - Frontend: add `SENTRY_DSN: "…"` to `public/config.js` for errors in people's browsers. You can use a second Sentry project (platform: Browser JavaScript). The Sentry code only downloads when a DSN is set.
 - Nothing personal is sent: no emails, IP addresses or request bodies.
 
+**Usage analytics by PostHog (optional, free tier):** sign up at posthog.com and pick the **EU** cloud. In the project's settings, copy the **Project API key** (starts `phc_`, public by design; not a personal API key), and turn on "Discard client IP data".
+- Frontend: set `POSTHOG_KEY: "phc_…"` in `public/config.js`, or `VITE_POSTHOG_KEY` in Vercel's environment variables and redeploy. With no key nothing downloads and nothing is sent. `POSTHOG_HOST` defaults to `https://eu.i.posthog.com`; for a US project set it to `https://us.i.posthog.com` and change that host in the CSP in `vercel.json` and `netlify.toml`.
+- Backend: set `POSTHOG_KEY` (the same key) in Railway, so "payment completed" is counted from the server. `POSTHOG_HOST` likewise.
+- What's sent: page views (addresses without queries or ids) and funnel events (signed up, onboarding answered, first backtest run, backtest run, paper trading started, watchlist add, deep dive opened, alert created, holdings imported, screen run, screen saved, newsletter subscribed, card shared, invite link shared, upgrade clicked, checkout started, payment completed), tied to the internal user id. No recordings, no autocapture, no emails, names, symbols held or amounts. Browsers sending Do Not Track are skipped. All events go through `track()` in `frontend/src/lib/analytics.ts`.
+- Admin → Overview links to the PostHog dashboard once a key is set.
+
 Everyone else gets a 403 from the `/admin` API and never sees the link. The email must be verified, which Google sign-in always is.
 
 ### 10. Logo and icons

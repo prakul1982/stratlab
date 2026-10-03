@@ -66,7 +66,8 @@ def _row(table: dict | None, prefix: str) -> list:
 
 
 def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: dict | None = None, card: dict | None = None,
-             symbol: str | None = None) -> dict:
+             symbol: str | None = None, trades: list[dict] | None = None) -> dict:
+    """The checks for one company. `trades`: an Indian company's insider-trading disclosures (None when not read)."""
     s = summary(p)
     ind = industry.classify(p, nums, symbol)
     grp = ind["group"]
@@ -164,6 +165,20 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
                 insider_text(flow),
                 "Pass when insiders bought more than they sold on the open market. Selling shows as watch, not fail: it is "
                 "often a planned sale or tax on stock awards.")
+
+    # insiders (India): promoters', directors' and key staff's open-market trades, from their exchange disclosures
+    if trades is not None:
+        from .deals import FLOW_DAYS, flow as deal_flow, flow_text
+        f = deal_flow(trades)
+        if f is None:
+            add("Insiders", "Promoter and insider buying and selling, 6 months", "na", "None",
+                "Open-market buys and sells by promoters, directors and key staff (insider-trading disclosures to the "
+                f"exchange). None in the last {FLOW_DAYS} days.")
+        else:
+            add("Insiders", "Promoter and insider buying and selling, 6 months", "pass" if f["bought"] > f["sold"] else "watch",
+                flow_text(f),
+                "Pass when promoters and insiders bought more shares than they sold on the open market. Selling shows as "
+                "watch, not fail: it can be a planned sale. Off-market transfers, stock options and pledges are left out.")
 
     # filings
     if filings_summary is not None:

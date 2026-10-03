@@ -48,11 +48,18 @@ def users(q: str, month_start: str, limit: int = 200) -> list[dict]:
     except Exception as e:           # invite counts are extra: the list still shows without them
         print("admin users: invite counts failed:", str(e)[:160])
         invited = {}
+    try:
+        from . import invite_rewards
+        months = invite_rewards.months_by_user()
+    except Exception as e:           # the same: extra
+        print("admin users: invite rewards failed:", str(e)[:160])
+        months = {}
     return [{
         "id": r["id"], "email": r.get("email"), "created_at": r.get("created_at"),
         "plan": effective_plan(r), "plan_set": r.get("plan"), "plan_status": r.get("plan_status"),
         "plan_until": r.get("current_period_end"), "paying": bool(r.get("razorpay_subscription_id")),
         "experiments": usage[r["id"]]["backtest"], "ai_builds": usage[r["id"]]["ai"], "referrals": invited.get(r["id"], 0),
+        "free_months": months.get(r["id"], 0),
     } for r in rows]
 
 

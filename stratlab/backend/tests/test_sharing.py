@@ -1,5 +1,5 @@
 """Growth through sharing: company fact cards with a public link that previews as the card and opens the company's
-public page, and invite links that remember who brought whom (once, never yourself, no rewards)."""
+public page, and invite links that remember who brought whom (once, never yourself; the reward itself is in test_invite_rewards.py)."""
 import base64
 import json
 import re
@@ -157,8 +157,11 @@ def test_a_new_account_is_counted_once_and_nothing_is_granted(w, monkeypatch):
     assert c.get("/me/referrals", headers=_h("basic-token")).json()["joined"] == 0
 
 
-def test_the_hook_does_nothing_yet():
-    assert referrals.on_referral_joined({"id": "a"}, {"id": "b"}) is None
+def test_the_hook_starts_the_invite_reward_and_gives_nothing_yet(w):
+    db.get_profile("b", "b@example.com")
+    assert referrals.on_referral_joined({"id": "a", "email": "a@example.com"}, {"id": "b", "email": "b@example.com"}) is None
+    from app import invite_rewards
+    assert invite_rewards.row("b")["status"] == "waiting" and invite_rewards.months_earned("a")["total"] == 0
 
 
 def test_no_self_referral_no_old_accounts_no_made_up_codes(w):

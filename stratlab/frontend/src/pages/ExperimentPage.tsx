@@ -10,6 +10,7 @@ import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
 import { MoreMenu } from "../components/MoreMenu";
+import { track } from "../lib/analytics";
 import { Book, Globe, Layers, Pencil, Pulse, Share, Trash } from "../components/Icons";
 
 const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
@@ -415,6 +416,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
   const image = async () => {
     try {
       const r = await shareVerdict(nb, e, dark ? "dark" : "light", link);
+      if (r !== "cancelled") track("card shared", { kind: "verdict", channel: r });
       if (r === "saved") notify("Share card saved (and copied, where your browser allows). Post it anywhere.");
     } catch (x) { fail(x); }
   };
@@ -424,6 +426,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
       const b64 = await new Promise<string>((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.readAsDataURL(blob); });
       const out = await api<{ token: string }>(`/notebooks/${nb.id}/experiments/${e.v}/share`, { method: "POST", body: { image: b64 } });
       setToken(out.token);
+      track("card shared", { kind: "verdict", channel: "link" });
       const url = `${siteUrl()}/v/${out.token}`;
       try { await navigator.clipboard.writeText(url); notify(`Public link copied: ${url}`); } catch { notify(`Public link: ${url}`); }
     } catch (x) { fail(x); }

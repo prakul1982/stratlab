@@ -36,6 +36,9 @@ def loss_company(p: dict) -> dict:
 def build():
     mp = pytest.MonkeyPatch()
     w = world.build(mp)
+    from app import guard
+    for limit in ("PER_MINUTE_USER", "PER_MINUTE_ANON", "PER_MINUTE_ADDRESS"):   # the sweep opens hundreds of pages a minute as one user
+        mp.setattr(guard, limit, 100_000)
     scr = main.research_hub.screener
     real = scr.company
     mp.setattr(scr, "company", lambda sym: loss_company(real("RELIANCE")) if sym.upper() == LOSS else real(sym))
@@ -47,10 +50,28 @@ def build():
     sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
     w["client"].post("/holdings/import", headers=world.headers("admin-token"),
                      json={"filename": sample.name, "data": base64.b64encode(sample.read_bytes()).decode()})
+    invite_rewards()
     screen_index()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     return w
+
+
+def invite_rewards():
+    """The owner invited friends: one became active (a free month each), and a link with too many sign-ups in a day
+    left two rewards waiting for review in Admin (one for the desktop run to reject, one for the phone run to
+    approve)."""
+    import json
+    from app import db, plans
+    joined = [{"id": f"u-load-{i}", "at": "2026-10-01T10:00:00+00:00"} for i in range(1, 4)]
+    db.set_setting("ref:joined:u-admin", json.dumps(joined))
+    given = {"by": "u-admin", "at": "2026-10-01T10:00:00+00:00", "status": "given", "signups_that_day": 3,
+             "referrer_months": 1, "newcomer_months": 1, "given_at": "2026-10-03T10:00:00+00:00"}
+    db.set_setting("reward:u-load-3", json.dumps(given))
+    for i in (1, 2):
+        db.set_setting(f"reward:u-load-{i}", json.dumps({**given, "status": "review", "signups_that_day": 6,
+                                                        "referrer_months": 0, "newcomer_months": 0, "given_at": None}))
+    plans.add_free_basic(db.get_profile("u-load-3"), 30)
 
 
 def screen_index():
@@ -58,6 +79,7 @@ def screen_index():
     the index, so the public company pages still build from the fake sources)."""
     import json
     import random
+    from datetime import date, timedelta
     from app import db, screens
     rng = random.Random(5)
     sectors = ["Energy", "Information Technology", "Financials", "Consumer Staples", "Materials"]
@@ -76,7 +98,10 @@ def screen_index():
                  "opm": round(rng.uniform(5, 40), 1), "debt_equity": round(rng.uniform(0, 2), 2), "bank": False,
                  "growth": {"sales_cagr_3y": round(rng.uniform(-10, 30), 1)}, "stage": 1 + i % 4,
                  "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [], "built_at": "2026-10-01T12:00:00+00:00"}
-            rows.append(screens.row(region, sym, f))
+            r = screens.row(region, sym, f)
+            if region == "IN":          # a promoter or insider bought on the open market: 10 days ago for every fourth
+                r["insider_buy_at"] = (date.today() - timedelta(days=10 if i % 4 == 1 else 200)).isoformat() if i % 2 else None
+            rows.append(r)
         rows.sort(key=lambda r: r["name"].lower())
         db.set_setting(screens.INDEX_KEY + region, json.dumps({"region": region, "at": "2026-10-01T18:00:00+00:00", "rows": rows}))
 

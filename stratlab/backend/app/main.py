@@ -54,7 +54,7 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, company_cards, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
+from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
@@ -63,7 +63,7 @@ from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, Newslett
 from .plans import holdings_limit
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
-from .plans import access_plan, screens as screens_limit
+from .plans import access_plan, free_basic_until, screens as screens_limit
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -151,8 +151,10 @@ filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text,
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 newsletter_job = news.Job()
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
+deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit))
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
 lifecycle_job = lifecycle.Job()
+invite_job = invite_rewards.Job()
 
 
 @asynccontextmanager
@@ -172,6 +174,7 @@ async def lifespan(app: FastAPI):
     recorder.start()
     scan_alerts_job.start()
     filing_alerts_job.start()
+    deals_job.start()
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
@@ -181,6 +184,7 @@ async def lifespan(app: FastAPI):
     newsletter_job.start()
     results_job.start()
     lifecycle_job.start()
+    invite_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
@@ -457,6 +461,7 @@ def me(profile=Depends(current_profile)):
         "id": profile["id"], "email": profile.get("email"),
         "plan": plan, "plan_info": info, "paid_plan": profile.get("_paid_plan", plan),
         "promo": {"until": until.isoformat()} if (until := promo_until()) and promo_active() else None,
+        "free_basic_until": fb.isoformat() if profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
         "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                     "renews_or_ends": profile.get("current_period_end"),
                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
@@ -824,6 +829,7 @@ def run_test(profile, strategy: Strategy, req) -> dict:
     check_features(profile, strategy, data["inst"])
     out = compute.run(strategy, data)                   # in a worker process: other pages stay quick meanwhile
     db.add_usage(profile["id"], "backtest")
+    invite_rewards.safe_touch(profile, "backtest")
     used = backtests_used(profile)
     out["usage"] = {"backtests_used": used, "backtests_limit": limit}
     return out
@@ -850,6 +856,7 @@ def run_group_test(profile, strategy: Strategy, group: dict, req, version: int) 
     max_days = min(d["max_days"] for d in datasets)
     result = research.run_group(datasets, strategy, group, min(req.days, max_days), max_days)
     db.add_usage(profile["id"], "backtest")
+    invite_rewards.safe_touch(profile, "backtest")
     rec = research.record_group(result, strategy, req.label, version, db.now_iso(), group, datasets, problems)
     return rec, {"backtests_used": backtests_used(profile), "backtests_limit": limit}
 
@@ -1279,6 +1286,15 @@ def filings_company(symbol: str, profile=Depends(current_profile)):
     return ok(filing_call(lambda: filings.report(filings_feed, sym)))
 
 
+@app.get("/research/deals/{symbol}")
+def deals_company(symbol: str, profile=Depends(current_profile)):
+    """One Indian company's deals and insider trades over the last year, from exchange disclosures: promoters' and
+    insiders' trades and pledges, substantial acquisitions, bulk and block deals. Facts as filed."""
+    sym = research_routes.symbol_of(symbol)
+    out = filing_call(lambda: deals.report(filings_feed, sym))
+    return ok({**out, "flow_text": deals.flow_text(out["flow"]) if out["flow"] else None})
+
+
 @app.put("/research/filings/alerts")
 def filings_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
     if req.on:
@@ -1382,8 +1398,9 @@ def deep_years(years: int) -> int:
     return max(lo, min(hi, int(years or 2)))
 
 
-def deep_base(sym: str, region: str = "IN", years: int = 2) -> dict:
-    """Numbers and the list of readable documents for one company (no AI), documents from the last `years` years."""
+def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True) -> dict:
+    """Numbers and the list of readable documents for one company (no AI), documents from the last `years` years.
+    `trades`: also read its insider-trading disclosures, for the checklist (the market audit leaves them out)."""
     if region == "US":
         return deep_base_us(sym, years)
     code = bse_code(sym)                                  # listed only on BSE: its numbers are under the BSE code
@@ -1397,7 +1414,9 @@ def deep_base(sym: str, region: str = "IN", years: int = 2) -> dict:
         doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:
         items, doc_note, fsum = [], public_text(str(e)), None
-    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": price_trend(sym)}
+    insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
+    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": price_trend(sym),
+            "trades": insider}
 
 
 def price_trend(sym: str, market: str = "IN") -> dict | None:
@@ -1424,7 +1443,7 @@ def deep_view(sym: str, base: dict) -> dict:
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
             "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
-            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym),
+            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym, base.get("trades")),
             "ai": True, "report_card": True, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
             "numbers_at": p.get("fetched_at"), "price_at": (base["trend"] or {}).get("t"),
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
@@ -1463,6 +1482,7 @@ def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile))
         first_steps.mark(profile["id"], "deepdive")
     except Exception as e:
         print("first steps:", str(e)[:120])
+    invite_rewards.safe_touch(profile, "deepdive")
     return out
 
 
@@ -1536,7 +1556,8 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
         trend = price_trend(sym, region)
         nums = deepdive.numbers(p) if p else None
         card = report_card.view(report_card.stored(key), nums) if nums else None
-        checks = checklist.evaluate(p, nums, fsum, trend, card, None if us else sym) if p else None
+        trades = None if us else _quiet(lambda: filings_feed.insider_trades(sym))
+        checks = checklist.evaluate(p, nums, fsum, trend, card, None if us else sym, trades) if p else None
         sec = investor.sector_of(region, sym)
         sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label(region, sec, None), "quadrant": None} if sec else None)
         return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem)
@@ -1672,6 +1693,7 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
     if found:                             # nothing matched: the saved holdings stay as they were
         known = {i["symbol"]: i.get("sector") for i in before["items"]}
         holdings.save(profile["id"], with_sectors(found, known), parsed["broker"])
+        invite_rewards.safe_touch(profile, "holdings")
     return ok({"broker": parsed["broker"], "imported": len(found), "saved": bool(found), "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
@@ -2149,6 +2171,7 @@ def start_session(profile, s, inst):
             err(503, "prices_unavailable", "Couldn't load the price history this strategy needs to start. Nothing was "
                                            "started; try again in a minute.")
         raise
+    invite_rewards.safe_touch(profile, "paper")
     return sess
 
 
@@ -2425,7 +2448,7 @@ def invoice_page(year: str, n: str, profile=Depends(current_profile)):
         inv = next((i for i in invoices.of_year(year) if i["number"].endswith(f"/{year}/{n}")), None)
     if inv is None:
         err(404, "not_found", "No such invoice.")
-    return Response(invoices.html(inv), media_type="text/html; charset=utf-8")
+    return Response(invoices.html(inv), media_type="text/html; charset=utf-8", headers={"Content-Security-Policy": invoices.CSP})
 
 
 @app.get("/admin/invoices")
@@ -2585,6 +2608,24 @@ def admin_users(q: str = "", _=Depends(admin.admin_profile)):
     return admin.users(q, month_start_iso())
 
 
+@app.get("/admin/invite-rewards")
+def admin_invite_rewards(_=Depends(admin.admin_profile)):
+    """Invite rewards: those waiting for review (a link with more than 5 sign-ups in a day), and the newest given."""
+    return {**invite_rewards.admin_view(), "job": invite_job.status}
+
+
+@app.post("/admin/invite-rewards/{user_id}/{decision}")
+def admin_review_invite_reward(user_id: str, decision: str, who=Depends(admin.admin_profile)):
+    """Approve or reject a reward waiting for review. Approved, it's given once the friend is active."""
+    if decision not in ("approve", "reject") or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", user_id):
+        err(404, "not_found", "That reward isn't waiting for review.")
+    status = invite_rewards.review(user_id, decision == "approve")
+    if status is None:
+        err(404, "not_found", "That reward isn't waiting for review.")
+    log.info("admin %s: invite reward for %s, %s -> %s", who.get("email"), user_id, decision, status)
+    return {"status": status, **invite_rewards.admin_view()}
+
+
 @app.post("/admin/users/{user_id}/plan")
 def admin_set_plan(user_id: str, req: AdminPlanReq, who=Depends(admin.admin_profile)):
     row = admin.set_plan(user_id, req.plan, req.days)
@@ -2675,7 +2716,7 @@ def live_price(sym: str) -> float | None:
 def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN") -> dict:
     us = region == "US"
     read = (lambda cands, probs, p: deepdive.readable(deep_docs, cands, 1, probs, company_hosts(p))) if docs and not us else None
-    row = audit.audit_company(sym, lambda s: deep_base(s, region), deep_view, None if us else exchange, read)
+    row = audit.audit_company(sym, lambda s: deep_base(s, region, trades=False), deep_view, None if us else exchange, read)
     for i in row["issues"]:
         i["detail"] = public_text(i["detail"])
     return row
@@ -2887,6 +2928,7 @@ def platform_checks() -> list:
                ("Option chain: NIFTY", "Options", lambda: pc.check_options(options_data, today)),
                ("Exchange filings", "Filings", lambda: pc.check_filings(filings_feed)),
                ("BSE filings", "Filings", lambda: pc.check_bse_filings(filings_feed.bse)),
+               ("Insider trades", "Filings", lambda: pc.check_insider_trades(filings_feed)),
                ("Company page: RELIANCE", "Research", lambda: pc.check_company(research_hub, "IN", "RELIANCE")),
                ("Company page: AAPL", "Research", lambda: pc.check_company(research_hub, "US", "AAPL")),
                ("News", "Research", lambda: pc.check_news(research_hub)),
@@ -3200,16 +3242,22 @@ def set_first_steps(req: FirstStepsReq, profile=Depends(current_profile)):
 # ---------- invite links ----------
 @app.get("/me/referrals")
 def my_referrals(profile=Depends(current_profile)):
-    """The user's personal invite link and how many friends joined through it."""
+    """The user's personal invite link, how many friends joined through it and the free months it earned."""
     code = referrals.code_for(profile["id"])
-    return {"code": code, "link": referrals.link(code), "joined": len(referrals.joined(profile["id"]))}
+    try:
+        mine = invite_rewards.mine(profile)
+    except Exception as e:         # the link still shows without the counts
+        print("invite rewards:", str(e)[:160])
+        mine = {"joined": len(referrals.joined(profile["id"])), "months": 0, "cap": invite_rewards.REFERRER_CAP,
+                "free_basic_until": None, "banked_days": 0}
+    return {"code": code, "link": referrals.link(code), **mine}
 
 
 @app.post("/me/referral")
 def record_referral(req: ReferralReq, profile=Depends(current_profile)):
     """A new account says which invite link it arrived by (the app sends it once, right after the first sign-in).
-    Counted once, for a new account only, and never for the user's own link. No reward is given. A few tries an
-    hour, so nobody can run through codes looking for real ones."""
+    Counted once, for a new account only, and never for the user's own link; the free-month reward waits for the
+    newcomer to become active. A few tries an hour, so nobody can run through codes looking for real ones."""
     throttle(profile, "referral", 10, 3600, "Too many invite codes tried. Try again later.")
     return {"recorded": referrals.record(profile, req.code) == "recorded"}
 

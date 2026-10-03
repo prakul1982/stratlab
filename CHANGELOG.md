@@ -2,6 +2,13 @@
 
 ## October 2026
 
+### Invite rewards: a free month of Basic for both
+- **When a friend joins through your invite link and becomes active, you both get a free month of Basic.** Active means they used the app on 3 different days in their first 14: a backtest, a watchlist add, a deep dive, starting paper trading or importing holdings.
+- **Caps:** up to 12 free months for the one inviting, ever; once for the friend; nothing when both addresses reach the same mailbox. Free months stack onto free time already running.
+- **Paying users keep it for later:** someone on Basic or Pro banks the month, and it starts if their paid plan stops. Paying again later changes nothing.
+- **Told by email and phone note** (an account email, so it goes even with tips turned off). Account shows "N friends joined · M free months earned" and the plan card shows free Basic's end date.
+- **Admin → Users** shows each user's free months, and an Invite rewards panel: more than 5 sign-ups through one link in a day wait there for review (the sign-ups themselves go through). A daily check from 6 am India time gives rewards and closes invites whose 14 days ran out.
+
 ### Security review of screens, cards and invite links
 - **Share images must be real card pictures:** a whole PNG, no bigger than the card's own size each way, with nothing hidden after it, so a tiny file can't unpack into a huge picture for whoever previews the link. Verdict share cards follow the same rule.
 - **Shared company cards don't pile up:** each person keeps links to the 50 companies they shared most recently (sharing one more takes down the oldest), and sharing is limited to 30 cards an hour. Trying invite codes is limited to 10 an hour.

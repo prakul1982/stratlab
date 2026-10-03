@@ -10,6 +10,7 @@ import { InvoiceAdminPanel } from "../components/InvoiceAdminPanel";
 import { PlatformPanel } from "../components/PlatformPanel";
 import { LifecycleEmails } from "../components/LifecycleEmails";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
+import { analyticsDashboard } from "../lib/analytics";
 
 type Plan = "free" | "basic" | "pro";
 type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quick_rank?: number | null; research_rank?: number | null };
@@ -26,7 +27,7 @@ interface Overview {
 }
 interface UserRow {
   id: string; email: string | null; created_at: string | null; plan: Plan; plan_set: string; plan_status: string | null;
-  plan_until: string | null; paying: boolean; experiments: number; ai_builds: number; referrals?: number;
+  plan_until: string | null; paying: boolean; experiments: number; ai_builds: number; referrals?: number; free_months?: number;
 }
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null }
 type AITest = { label: string; ok: boolean; error: string | null; model: string | null; ms: number };
@@ -97,7 +98,69 @@ interface ReportedRow {
 }
 
 type Tab = "overview" | "services" | "checks" | "users" | "billing";
-const TABS: [Tab, string][] = [["overview", "Overview"], ["services", "Services"], ["checks", "Data checks"], ["users", "Users"], ["billing", "Billing"]];
+type RewardRow = { newcomer: string; newcomer_email: string | null; referrer: string; referrer_email: string | null; at: string | null;
+  status: string; given_at: string | null; signups_that_day: number; months: number; capped: boolean };
+type RewardsView = { review: RewardRow[]; given: RewardRow[]; months_given: number; waiting: number };
+
+/** Users → Invite rewards: rewards waiting for review (a link that brought more than 5 sign-ups in a day), and the
+ *  newest given. Approved, a reward is given once the friend is active; rejected, nothing is given. */
+function InviteRewardsPanel({ onChanged }: { onChanged: () => void }) {
+  const { notify, fail } = useApp();
+  const [v, setV] = useState<RewardsView | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => { api<RewardsView>("/admin/invite-rewards").then(setV).catch(fail); }, [fail]);
+  const decide = async (r: RewardRow, decision: "approve" | "reject") => {
+    setBusy(r.newcomer);
+    try {
+      const out = await api<RewardsView & { status: string }>(`/admin/invite-rewards/${encodeURIComponent(r.newcomer)}/${decision}`, { method: "POST" });
+      setV(out);
+      notify(decision === "reject" ? "Rejected: no free months for this invite."
+        : out.status === "given" ? "Approved and given: both have a free month of Basic."
+          : out.status === "expired" ? "Approved, but the friend's first 14 days ended without 3 active days, so there's nothing to give."
+            : "Approved: given once the friend is active.");
+      onChanged();
+    } catch (e) { fail(e); } finally { setBusy(null); }
+  };
+  if (!v) return null;
+  return (
+    <section className="card stack" style={{ gap: 12 }} data-testid="invite-rewards">
+      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
+        <h2 className="h2">Invite rewards</h2>
+        <span className="small muted">{v.months_given} free {v.months_given === 1 ? "month" : "months"} given · {v.waiting} waiting for the friend to be active</span>
+      </div>
+      <h3 className="h3" style={{ margin: 0 }}>Waiting for your review ({v.review.length})</h3>
+      {v.review.length === 0 ? <p className="small muted" style={{ margin: 0 }}>Nothing to review.</p> : (
+        <div className="table-wrap"><table>
+          <thead><tr><th>Friend</th><th>Invited by</th><th>Joined</th><th title="Sign-ups through this link that day">That day</th><th></th></tr></thead>
+          <tbody>{v.review.map((r) => (
+            <tr key={r.newcomer}>
+              <td>{r.newcomer_email ?? r.newcomer}</td><td>{r.referrer_email ?? r.referrer}</td><td>{dateOnly(r.at)}</td><td className="num">{r.signups_that_day}</td>
+              <td><div className="row" style={{ gap: 6 }}>
+                <button className="btn quiet sm" disabled={busy === r.newcomer} onClick={() => decide(r, "approve")}>Approve</button>
+                <button className="btn quiet sm danger" disabled={busy === r.newcomer} onClick={() => decide(r, "reject")}>Reject</button>
+              </div></td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
+      <h3 className="h3" style={{ margin: 0 }}>Given</h3>
+      {v.given.length === 0 ? <p className="small muted" style={{ margin: 0 }}>None yet.</p> : (
+        <div className="table-wrap"><table>
+          <thead><tr><th>Friend</th><th>Invited by</th><th>Given</th><th>Months</th></tr></thead>
+          <tbody>{v.given.slice(0, 50).map((r) => (
+            <tr key={r.newcomer}>
+              <td>{r.newcomer_email ?? r.newcomer}</td><td>{r.referrer_email ?? r.referrer}{r.capped ? <span className="small muted"> (at the 12-month cap)</span> : null}</td>
+              <td>{dateOnly(r.given_at)}</td><td className="num">{r.months}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
+      <p className="hint">A friend who joins through someone's link and uses the app on 3 different days in their first 14 gets a free month of Basic, and so does the person who invited them (up to 12 months each, ever). More than 5 sign-ups through one link in a day wait here; the sign-ups themselves go through.</p>
+    </section>
+  );
+}
+
+const TABS: [Tab, string][] =[["overview", "Overview"], ["services", "Services"], ["checks", "Data checks"], ["users", "Users"], ["billing", "Billing"]];
 
 export function AdminPage() {
   const { me, notify, fail } = useApp();
@@ -250,6 +313,13 @@ export function AdminPage() {
                 ))}
               </div>
 
+              {analyticsDashboard() && (
+                <section className="card spread" style={{ gap: 12, flexWrap: "wrap" }}>
+                  <span className="small muted" style={{ flex: "1 1 260px" }}>Usage analytics are on: page views and the sign-up to payment funnel, by user id only.</span>
+                  <a className="btn outline sm" href={analyticsDashboard()!} target="_blank" rel="noopener noreferrer" data-testid="posthog-dashboard">Open the PostHog dashboard</a>
+                </section>
+              )}
+
               <section className="card stack" style={{ gap: 6 }}>
                 <h2 className="h2">Needs your attention</h2>
                 {!attention.length ? <p className="small muted" style={{ margin: 0 }}>Nothing. The broker is logged in, AI is answering, and there are no new errors or reports. Problems found by the daily check at 4:50 PM IST are emailed to you.</p>
@@ -355,21 +425,23 @@ export function AdminPage() {
                 </div>
                 {!users ? <Loading label="Loading users" /> : users.length === 0 ? <p className="small muted">No users match.</p> : (
                   <div className="table-wrap"><table>
-                    <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th><th title="Accounts that signed up through this user's invite link">Invited</th><th></th></tr></thead>
+                    <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th><th title="Accounts that signed up through this user's invite link">Invited</th><th title="Free months of Basic this user earned from invites">Free months</th><th></th></tr></thead>
                     <tbody>{users.slice(0, shownUsers).map((u) => (
                       <tr key={u.id}>
                         <td>{u.email ?? "–"}</td>
                         <td><span className={`badge ${u.plan === "free" ? "skip" : "next"}`}>{PLAN_NAME[u.plan]}</span>
                           {u.plan !== "free" && <span className="small muted" style={{ marginLeft: 8 }}>{u.plan_until ? `until ${dateOnly(u.plan_until)}` : u.paying ? "Razorpay" : "no end"}</span>}</td>
-                        <td>{dateOnly(u.created_at)}</td><td className="num">{u.experiments}</td><td className="num">{u.ai_builds}</td><td className="num">{u.referrals ?? 0}</td>
+                        <td>{dateOnly(u.created_at)}</td><td className="num">{u.experiments}</td><td className="num">{u.ai_builds}</td><td className="num">{u.referrals ?? 0}</td><td className="num">{u.free_months ?? 0}</td>
                         <td><button className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button></td>
                       </tr>
                     ))}</tbody>
                   </table></div>
                 )}
                 {users && users.length > shownUsers && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setShownUsers((n) => n + 50)}>Show more ({users.length - shownUsers} more)</button>}
-                <p className="hint">Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever. The newest 200 users are loaded; search by email to find others.</p>
+                <p className="hint">Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever; Free months are the months of Basic they earned from invites. The newest 200 users are loaded; search by email to find others.</p>
               </section>
+
+              <InviteRewardsPanel onChanged={() => loadUsers(q)} />
 
               <section className="card stack" style={{ gap: 12 }}>
                 <h2 className="h2">Paper trading now <span className="muted" style={{ fontSize: 18 }}>({sessions?.length ?? 0})</span></h2>

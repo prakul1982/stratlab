@@ -1,8 +1,10 @@
 import { api } from "./api";
 import type { Region } from "./research";
+import { track } from "./analytics";
 
-/** Stock alerts the user sets: a price level, a day's move, a moving average, RSI, Stage, a 52-week high or low. */
-export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52";
+/** Stock alerts the user sets: a price level, a day's move, a moving average, RSI, Stage, a 52-week high or low, and
+ * (Indian stocks) an insider trade or a bulk or block deal disclosed to the exchange. */
+export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal";
 export type AlertOp = "above" | "below" | "up" | "down" | "either" | null;
 
 export interface StockAlert {
@@ -19,7 +21,7 @@ export interface AlertBody {
 }
 
 /** The choices in the form: each is one kind with its direction. */
-export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: AlertOp }[] = [
+export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: AlertOp; india?: boolean }[] = [
   { key: "price_above", label: "Price crosses above", kind: "price", op: "above" },
   { key: "price_below", label: "Price crosses below", kind: "price", op: "below" },
   { key: "move_up", label: "Rises in a day by", kind: "move", op: "up" },
@@ -32,7 +34,11 @@ export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: Aler
   { key: "stage", label: "Stage changes", kind: "stage", op: null },
   { key: "high52", label: "Makes a new 52-week high", kind: "high52", op: null },
   { key: "low52", label: "Makes a new 52-week low", kind: "low52", op: null },
+  { key: "insider", label: "A promoter or insider trade is disclosed", kind: "insider", op: null, india: true },
+  { key: "deal", label: "A bulk or block deal is reported", kind: "deal", op: null, india: true },
 ];
+/** Alerts on exchange disclosures, checked once each evening rather than against the live price. */
+export const EVENT_KINDS: AlertKind[] = ["insider", "deal"];
 export const MA_PERIODS = [20, 50, 100, 150, 200];
 
 export const conditionKey = (a: { kind: AlertKind; op: AlertOp }) =>
@@ -42,7 +48,8 @@ export const CHANNEL_NAME: Record<string, string> = { push: "phone", telegram: "
 
 export const alertsApi = {
   list: () => api<AlertsPage>("/alerts"),
-  create: (b: AlertBody) => api<AlertsPage & { alert: StockAlert; note: string | null }>("/alerts", { method: "POST", body: b }),
+  create: (b: AlertBody) => api<AlertsPage & { alert: StockAlert; note: string | null }>("/alerts", { method: "POST", body: b })
+    .then((r) => { track("alert created", { region: b.region, kind: b.kind }); return r; }),
   update: (id: string, b: AlertBody) => api<AlertsPage & { alert: StockAlert; note: string | null }>(`/alerts/${id}`, { method: "PUT", body: b }),
   remove: (id: string) => api<AlertsPage>(`/alerts/${id}`, { method: "DELETE" }),
   clearTriggered: () => api<AlertsPage>("/alerts", { method: "DELETE" }),

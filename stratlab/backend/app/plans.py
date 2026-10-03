@@ -158,9 +158,106 @@ def set_promo(days: int | None) -> datetime | None:
     return until
 
 
+# ---------- free Basic time: earned by inviting friends (invite_rewards.py) ----------
+FREE_KEY = "freebasic:"          # freebasic:<uid>: {"until": when free Basic ends, "banked": days kept for later}
+FREE_TTL = 30.0
+_free: dict = {"read_at": -1e9, "rows": {}}
+
+
+def _free_rows() -> dict:
+    """{uid: free Basic record} for everyone who has one. Read from the database every 30 s (only people who earned
+    time are stored, so it's a short list)."""
+    import json
+    import time
+    from . import db
+    if time.monotonic() - _free["read_at"] > FREE_TTL:
+        try:
+            rows = {}
+            for k, v in db.all_settings_with_prefix(FREE_KEY):
+                try:
+                    val = json.loads(v)
+                except (ValueError, TypeError):
+                    continue
+                if isinstance(val, dict):
+                    rows[k[len(FREE_KEY):]] = val
+            _free["rows"] = rows
+        except Exception:
+            pass   # keep the last known rows if the database blips
+        _free["read_at"] = time.monotonic()
+    return _free["rows"]
+
+
+def forget_free_basic():
+    """Drop the copy so the next check reads the database (after a change, and between tests)."""
+    _free.update(read_at=-1e9, rows={})
+
+
+def free_basic(uid: str | None) -> dict:
+    """{"until": datetime or None, "banked": days} for one user."""
+    row = _free_rows().get(uid or "") or {}
+    try:
+        until = _dt(row["until"]) if row.get("until") else None
+        if until and not until.tzinfo:
+            until = until.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        until = None
+    banked = row.get("banked")
+    return {"until": until, "banked": banked if isinstance(banked, int) and 0 < banked < 100000 else 0}
+
+
+def _save_free(uid: str, until: datetime | None, banked: int):
+    import json
+    from . import db
+    db.set_setting(FREE_KEY + uid, json.dumps({"until": until.isoformat() if until else None, "banked": banked}))
+    forget_free_basic()
+
+
+def add_free_basic(profile: dict, days: int, now: datetime | None = None) -> dict:
+    """Give `days` of free Basic. On Free it starts now, stacked after any free time still left; someone paying for
+    Basic or Pro banks it instead, and it starts the first time they're seen on Free."""
+    now = now or datetime.now(timezone.utc)
+    uid = profile["id"]
+    have = free_basic(uid)
+    until, banked = have["until"], have["banked"]
+    if effective_plan(profile) == "free":
+        until = max(until or now, now) + timedelta(days=days)
+    else:
+        banked += days
+    _save_free(uid, until, banked)
+    return {"until": until, "banked": banked}
+
+
+def free_basic_until(profile: dict, now: datetime | None = None) -> datetime | None:
+    """When the user's free Basic ends, or None when they have none running. Banked days start here, the first time
+    the user is on Free (their paid plan ended)."""
+    now = now or datetime.now(timezone.utc)
+    uid = profile.get("id")
+    if not uid:
+        return None
+    have = free_basic(uid)
+    until = have["until"]
+    if have["banked"] and effective_plan(profile) == "free":
+        until = max(until or now, now) + timedelta(days=have["banked"])
+        try:
+            _save_free(uid, until, 0)
+        except Exception as e:      # still free Basic now; the bank is spent on the next check instead
+            print("free basic: couldn't start banked days:", str(e)[:160])
+    return until if until and now < until else None
+
+
 def access_plan(profile: dict) -> str:
-    """What the user can use right now: Pro for everyone during the launch offer, else what they pay for."""
-    return "pro" if promo_active() else effective_plan(profile)
+    """What the user can use right now: Pro for everyone during the launch offer, else what they pay for, or Basic
+    while they have free Basic time (from inviting friends) and pay for less."""
+    if promo_active():
+        return "pro"
+    plan = effective_plan(profile)
+    if plan == "free":
+        try:
+            if free_basic_until(profile):
+                return "basic"
+        except Exception as e:      # free time is a bonus: a fault here never takes away anything else
+            print("free basic check failed:", str(e)[:160])
+    return plan
 
 
 def trial_end(started: datetime, days: int) -> datetime:

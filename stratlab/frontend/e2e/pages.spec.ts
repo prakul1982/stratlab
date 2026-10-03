@@ -429,7 +429,8 @@ test("account: your invite link, how many friends joined, and sharing it", async
   const phone = info.project.name === "phone";
   await watchSharing(page);
   const errors = await open(page, "/account", "Invite friends");
-  await expect(page.getByTestId("friends-joined")).toHaveText(/^\d+ friends? joined$/);
+  await expect(page.getByTestId("friends-joined")).toHaveText(/^3 friends joined · 1 free month earned$/);
+  await expect(page.getByTestId("invite-reward-line")).toHaveText(/you both get a month of Basic free \(up to 12 months for you\)/);
   await expect(page.getByLabel("Your invite link")).toHaveValue(/\/\?ref=[A-Za-z0-9_-]{12}$/);
   if (phone) await touchable(page);
   await page.getByRole("button", { name: "Share your link" }).click();
@@ -457,7 +458,32 @@ test("an invite link is remembered through sign-in, sent once, and taken out of 
 
 test("admin: invite counts in the Users tab", async ({ page }, info) => {
   const errors = await open(page, "/admin?tab=users", "Paper trading now");
-  await expect(page.locator("th", { hasText: "Invited" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Invited", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Free months", exact: true })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});
+
+test("admin: invite rewards waiting for review are approved or rejected", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/admin?tab=users", "Invite rewards");
+  const panel = page.getByTestId("invite-rewards");
+  await expect(panel.getByText("Waiting for your review")).toBeVisible();
+  await expect(panel.locator("tr", { hasText: "load3@example.com" })).toBeVisible();          // given
+  if (phone) await touchable(page);
+  // each run decides its own row: desktop rejects one, phone approves the other
+  const row = panel.locator("tr", { hasText: phone ? "load2@example.com" : "load1@example.com" }).filter({ has: page.getByRole("button") });
+  await row.getByRole("button", { name: phone ? "Approve" : "Reject" }).click();
+  await expect(page.getByRole("status")).toContainText(phone ? "Approved" : "Rejected");
+  await expect(row).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("account: free Basic from invites shows on the plan", async ({ page }, info) => {
+  const errors = await open(page, "/account", "Invite friends", sessionAs("load-3", "u-load-3", "load3@example.com"));
+  await expect(page.getByText("Free Basic from invites")).toBeVisible();
+  await expect(page.getByText("Basic (free from invites)")).toBeVisible();
+  await expect(page.getByTestId("friends-joined")).toHaveText("0 friends joined · 1 free month earned");
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });
@@ -513,5 +539,74 @@ test("as-of lines: the company page, deep dive and holdings say how fresh their 
   await sane(page, errors);
   errors = await open(page, "/holdings", "By sector");
   await expect(page.getByText(/Prices as of \d+ \w+ \d{4}/).first()).toBeVisible();
+  await sane(page, errors);
+});
+
+test("deals and insider trades: a dated table on the company page and the deep dive, facts only", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  let errors = await open(page, "/research/IN/RELIANCE", "Deals and insider trades");
+  const panel = page.locator("#deals");
+  const table = panel.locator(".deals-table");
+  await expect(table).toContainText("Mukesh Shah Family Trust", { timeout: 30_000 });
+  await expect(table).toContainText("Promoter");
+  await expect(table).toContainText("25,000");
+  await expect(table).toContainText("₹7.3 cr");
+  await expect(panel).toContainText("1 person bought 25,000 shares");
+  await expect(table.getByRole("link", { name: /Disclosure/ }).first()).toHaveAttribute("href", /^https:\/\//);
+  await panel.getByRole("radio", { name: "Bulk and block deals" }).click();
+  await expect(table).toContainText("Index Fund One");
+  await expect(table).not.toContainText("Mukesh Shah Family Trust");
+  const text = await panel.innerText();
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener|finnhub|nseindia/i);
+  expect(text).not.toMatch(/\b(signal|smart money|buy|sell|accumulate|avoid)\b/i);
+  if (phone) await touchable(page);
+  await sane(page, errors);
+
+  errors = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");
+  await expect(page.getByText("Promoter and insider buying and selling, 6 months").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".deals-table").first()).toContainText("Pension Plan Two");
+  if (phone) await touchable(page);
+  await sane(page, errors);
+});
+
+test("alerts: one on bulk or block deals, India only", async ({ page }, info) => {
+  const tag = `e2e-deal ${info.project.name} ${Date.now()}`;
+  const errors = await open(page, "/alerts", "Your stock alerts");
+  await answerLevel(page);
+  await page.getByRole("button", { name: "New alert" }).click();
+  await page.getByLabel("Stock").fill("RELIANCE");
+  await page.getByLabel("Alert me when").selectOption("deal");
+  await expect(page.getByText("Checked once each evening against that day's exchange disclosures.", { exact: false })).toBeVisible();
+  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  if (info.project.name === "phone") await touchable(page);
+  await page.getByRole("button", { name: "Set alert" }).click();
+  const row = page.locator(".alert-row", { hasText: tag });
+  await expect(row).toContainText("A bulk or block deal is reported");
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
+  await page.getByRole("button", { name: "New alert" }).click();
+  await page.getByLabel("Market").selectOption("US");
+  await expect(page.getByLabel("Alert me when").locator("option", { hasText: "bulk or block deal" })).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("screens: promoter or insider bought in the last N days", async ({ page }, info) => {
+  const errors = await open(page, "/research/screens?region=IN", "Filter companies by plain facts");
+  await answerLevel(page);
+  await expect(page.getByText(/20 of 20 companies match/)).toBeVisible({ timeout: 30_000 });
+  if (info.project.name === "phone") await page.getByRole("button", { name: /Show filters/ }).click();
+  const group = page.getByRole("radiogroup", { name: "Promoter or insider bought" });
+  await group.getByRole("radio", { name: "Yes" }).click();
+  await expect(page.getByText(/5 of 20 companies match/)).toBeVisible();
+  await page.getByLabel("Promoter or insider bought: in the last").selectOption("365");
+  await expect(page.getByText(/10 of 20 companies match/)).toBeVisible();
+  await group.getByRole("radio", { name: "No" }).click();
+  await expect(page.getByText(/10 of 20 companies match/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await page.getByRole("button", { name: "What is Promoter or insider bought?" }).click();
+  await expect(page.getByRole("note")).toContainText("insider-trading disclosures");
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub/i);
+  expect(text).not.toMatch(/\b(buy|sell|signal|score)\b/i);
   await sane(page, errors);
 });

@@ -1,13 +1,14 @@
 """Stress: every API route called with valid, odd and hostile input, signed out and as each kind of user, and with
 the AI answering well, badly or not at all. Nothing may crash (a 500), hang, or answer with something that isn't
 JSON. A clear 4xx, or a 503 saying a source is busy, is the right answer to bad input or a missing source."""
+import json
 import math
 import time
 from urllib.parse import quote
 
 import pytest
 
-from app import main
+from app import db, main
 from tests import stress_requests, world
 
 HOSTILE_STR = ["", " ", "a" * 5000, "../../etc/passwd", "%00", "\x00", "😀📈", "' OR 1=1 --", "<script>alert(1)</script>",
@@ -124,7 +125,10 @@ def seed(w):
     ctx.update(card=str(card.get("token") or "x"), market="IN", code=c.get("/me/referrals", headers=h).json().get("code", "x"))
     ctx.update(nid=nid, version="1", symbol="RELIANCE", region="IN", inst_id="CRYPTO:BTC-USD", user_id="u-free",
                token=(share.get("token") or share.get("url", "x").rsplit("/", 1)[-1]), eid=str(lib.get("id") or "x"),
-               sid=str(sess.get("id") or "x"))
+               sid=str(sess.get("id") or "x"), decision="approve")
+    # an invite reward waiting for the admin's review, for the review route
+    db.set_setting("reward:u-free", json.dumps({"by": "u-pro", "at": "2026-10-03T10:00:00+00:00", "status": "review",
+                                                "signups_that_day": 6, "referrer_months": 0, "newcomer_months": 0}))
     return ctx
 
 
