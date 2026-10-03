@@ -137,6 +137,10 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     db._profiles.clear()
     main._results.clear()                       # shared scan and rotation answers from an earlier test
     main._bse_map.clear()                       # the BSE-only list another test loaded
+    from app import stock_pages
+    stock_pages._companies.clear()              # public company pages: the list and built pages another test made
+    main.stock_page_store.mem.clear()
+    main.stock_page_store.recent.clear()
     from app import scan as _scan
     _scan._cache.clear()                        # daily bars another test cached under the same instrument id
     main.trading_calendar._holiday_cache.clear()

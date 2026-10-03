@@ -123,10 +123,14 @@ const LAST_MARKET = "stratlab.lastMarket";
 
 type Prefill = { market: string; symbol?: string; instrumentId?: string | null; text?: string };
 
-/** When Research hands over a company (and maybe an idea), pick its market and instrument up front. */
+/** When Research hands over a company (and maybe an idea), pick its market and instrument up front. A public company
+ * page links here as /new?market=IN&symbol=RELIANCE. */
 function usePrefill(setWhere: (w: Where) => void): Prefill | null {
   const loc = useLocation();
-  const prefill = (loc.state as { prefill?: Prefill } | null)?.prefill ?? null;
+  const q = new URLSearchParams(loc.search);
+  const market = (q.get("market") || "").toUpperCase(), symbol = q.get("symbol") || "";
+  const prefill = (loc.state as { prefill?: Prefill } | null)?.prefill
+    ?? (/^(IN|US)$/.test(market) && /^[A-Za-z0-9&.-]{1,20}$/.test(symbol) ? { market, symbol } : null);
   useEffect(() => {
     if (!prefill) return;
     let live = true;

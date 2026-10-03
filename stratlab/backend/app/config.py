@@ -77,6 +77,8 @@ class Settings:
     # comma-separated, e.g. "https://stratlab.studio,http://localhost:5500"
     FRONTEND_ORIGINS = origins(FRONTEND_ORIGIN)
     PUBLIC_SITE_URL = (_env("PUBLIC_SITE_URL", "https://stratlab.studio") or "").rstrip("/")   # where public verdict links point
+    # public company pages: fresh builds a minute from the data sources (the rest are served from storage)
+    STOCK_PAGE_BUILDS_PER_MINUTE = int(_env("STOCK_PAGE_BUILDS_PER_MINUTE", "6") or 6)
     # the backend's own public address, for links in emails that the server answers itself (unsubscribe, confirm);
     # on Railway it defaults to the service's public domain
     PUBLIC_API_URL = (_env("PUBLIC_API_URL") or (f"https://{_env('RAILWAY_PUBLIC_DOMAIN')}" if _env("RAILWAY_PUBLIC_DOMAIN")
