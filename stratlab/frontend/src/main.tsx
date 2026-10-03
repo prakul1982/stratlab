@@ -65,6 +65,7 @@ const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
 const FilingsPage = page(research, "FilingsPage");
 const ResultsPage = page(research, "ResultsPage");
+const CorpActionsPage = page(() => import("./pages/CorpActionsPage"), "CorpActionsPage");
 const CompanyPage = page(research, "CompanyPage");
 const AlertsPage = page(() => import("./pages/AlertsPage"), "AlertsPage");
 const screensPage = () => import("./pages/Screens");
@@ -177,6 +178,7 @@ function Routed() {
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
+        <Route path="/research/corporate-actions" element={<CorpActionsPage />} />
         <Route path="/research/IN/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/US/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/investor" element={<InvestorHomePage />} />

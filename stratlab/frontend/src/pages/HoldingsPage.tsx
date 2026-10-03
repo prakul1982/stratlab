@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, dateOnly, money, pct, price, qty as qtyText, safeHref, signClass } from "../lib/format";
 import { AsOf, Empty, Loading, Modal } from "../components/ui";
 import { Trash, Upload } from "../components/Icons";
+import { HoldingsActionsPanel } from "../components/CorpActions";
 
 type Row = {
   symbol: string; exchange: string; name: string; sector: string; qty: number; avg: number | null; price: number | null;
@@ -65,7 +66,8 @@ export function HoldingsPage() {
     setFacts(null);
     if (v.rows.length) api<FactsReply>("/holdings/facts").then(setFacts).catch(() => setFacts({ rows: {}, filings: true, filings_plan: "Pro", checked: 0, count: 0 }));
   }, []);
-  const show = useCallback((v: View) => { setView(v); loadFacts(v); }, [loadFacts]);
+  const [actionsAt, setActionsAt] = useState(0);         // reload the corporate actions whenever the holdings change
+  const show = useCallback((v: View) => { setView(v); loadFacts(v); setActionsAt((n) => n + 1); }, [loadFacts]);
   useEffect(() => { api<View>("/holdings").then(show).catch(fail); }, [show, fail]);
 
   const pick = async (f: File | undefined) => {
@@ -186,6 +188,7 @@ export function HoldingsPage() {
             {!view.prices && " · Live prices are offline right now, so values are shown at cost."}
           </p>
           <AsOf parts={[["Prices", view.prices_at]]} />
+          <HoldingsActionsPanel<View> version={actionsAt} onHoldings={setView} />
 
           <section className="card stack" style={{ gap: 12 }}>
             <h2 className="h2">By sector</h2>

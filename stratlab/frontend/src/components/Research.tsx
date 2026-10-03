@@ -15,7 +15,7 @@ export { CompanySearch } from "./CompanySearch";
 /* ---------- navigation ---------- */
 export function ResearchNav({ region, setRegion }: { region: Region; setRegion?: (r: Region) => void }) {
   const tabs: [string, string][] = [["/research", "Companies"], ["/research/themes", "Themes"], ["/research/pulse", "Market pulse"],
-    ["/research/compare", "Compare"], ["/research/watchlist", "Watchlist"], ["/research/investor", "At a glance"], ["/research/scan", "Scan"], ["/research/screens", "Screens"], ["/research/rotation", "Rotation"], ["/research/results", "Results"], ["/research/filings", "Red flags"]];
+    ["/research/compare", "Compare"], ["/research/watchlist", "Watchlist"], ["/research/investor", "At a glance"], ["/research/scan", "Scan"], ["/research/screens", "Screens"], ["/research/rotation", "Rotation"], ["/research/results", "Results"], ["/research/corporate-actions", "Corporate actions"], ["/research/filings", "Red flags"]];
   // on a phone the tabs scroll sideways in one row: bring the open one into view
   const bar = useRef<HTMLElement>(null);
   useEffect(() => {

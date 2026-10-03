@@ -57,7 +57,9 @@ from .options.recorder import Recorder, parse_targets
 from . import ask, company_cards, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
+from . import corp_actions
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
+from .models import CorpActionReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
@@ -152,6 +154,8 @@ kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 newsletter_job = news.Job()
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
+# corporate actions: the exchange's list for India, the price history's dividends and splits for the US
+corp_job = corp_actions.Job(lambda: {"in": filings_feed, "us": research_hub.yahoo})
 lifecycle_job = lifecycle.Job()
 
 
@@ -180,6 +184,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
     newsletter_job.start()
     results_job.start()
+    corp_job.start()
     lifecycle_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
@@ -1329,6 +1334,50 @@ def admin_results_refresh(_=Depends(admin.admin_profile)):
     return {region: results_job.refresh(region, who) for region in results_calendar.REGIONS} | {"job": results_job.status}
 
 
+# ---------- corporate actions (India and US) ----------
+_corp_tried: dict[str, float] = {}
+
+
+def corp_ready(region: str):
+    """Build a region's corporate-actions calendar now when none is stored yet: tried again a minute after a feed
+    that was busy, so one bad moment doesn't leave the page empty until the next scheduled refresh."""
+    if corp_actions.load(region)["at"] or time.time() - _corp_tried.get(region, 0) < 60:
+        return
+    _corp_tried[region] = time.time()
+    try:
+        corp_job.refresh(region)
+    except Exception as e:
+        print("corporate actions build:", str(e)[:160])
+
+
+@app.get("/research/corp-actions")
+def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind: str = "", profile=Depends(current_profile)):
+    """Dividends, bonus issues, splits, buybacks and rights issues by ex-date: the user's stocks or every company."""
+    r = research_routes.region_of(region)
+    corp_ready(r)
+    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20]))
+
+
+@app.get("/research/corp-actions/{region}/{symbol}")
+def corp_actions_company(region: str, symbol: str, profile=Depends(current_profile)):
+    """One company's corporate actions: those ahead and the last three years'."""
+    r, s = research_routes.region_of(region), research_routes.symbol_of(symbol)
+    return research_routes.ok(corp_actions.company(r, s, corp_job.sources()))
+
+
+@app.put("/research/corp-actions/alerts")
+def corp_actions_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
+    corp_actions.set_alerts(profile["id"], req.on)
+    return {"alerts": req.on}
+
+
+@app.post("/admin/corp-actions/refresh")
+def admin_corp_actions_refresh(_=Depends(admin.admin_profile)):
+    """Refresh both regions' corporate-actions calendars now, and say what each feed answered."""
+    who = results_calendar.trackers()
+    return {region: corp_job.refresh(region, who) for region in corp_actions.REGIONS} | {"job": corp_job.status}
+
+
 # ---------- company deep dive: business, capex and growth (Pro, India) ----------
 deep_docs = Docs()
 
@@ -1701,6 +1750,75 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     elif not missed:
         holdings.delete(profile["id"])    # every row removed
     return ok({"unmatched": missed, "holdings": holdings_view(profile)})
+
+
+HOLDINGS_CA_NOW = 8                # held stocks without a stored history fetched while the page waits; the rest after
+_corp_fetching: set[str] = set()
+
+
+def _corp_histories(uid: str, symbols: list[str], today) -> int:
+    """Fetch the histories of held stocks that have none (a few now) or an old one (in the background). Returns
+    how many are still being fetched."""
+    missing = [s for s in symbols if not corp_actions.hist_load("IN", s)["at"]]
+    sources = corp_job.sources()
+    now = missing[:HOLDINGS_CA_NOW]
+    if now:
+        wait_all([_holdings_pool.submit(corp_actions.history, "IN", s, sources, today) for s in now], timeout=12)
+    rest = [s for s in symbols if s not in now]
+    if rest and uid not in _corp_fetching:
+        _corp_fetching.add(uid)
+
+        def later():
+            try:
+                corp_actions.refresh_histories("IN", sources, set(rest), today)
+            finally:
+                _corp_fetching.discard(uid)
+        threading.Thread(target=later, daemon=True, name="holdings-corp-actions").start()
+    return len(missing) - len(now)
+
+
+def holdings_corp_view(profile, fetch: bool = True) -> dict:
+    h = holdings.load(profile["id"])
+    today = datetime.now(IST).date()
+    syms = [i["symbol"] for i in h["items"]]
+    checking = _corp_histories(profile["id"], syms, today) if fetch and syms else 0
+    cal = corp_actions.load("IN")["rows"]
+    acts = {s: corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) for s in syms}
+    return {**corp_actions.holdings_view(h["items"], acts, today, h["updated_at"]), "checking": checking}
+
+
+@app.get("/holdings/corp-actions")
+def holdings_corp_actions(profile=Depends(current_profile)):
+    """Dividends ahead and of the last twelve months for the user's holdings, and bonuses or splits since the
+    holdings were saved, offered as a one-click adjustment (never made without the user)."""
+    return ok(holdings_corp_view(profile))
+
+
+@app.post("/holdings/corp-actions")
+def holdings_corp_action(req: CorpActionReq, profile=Depends(current_profile)):
+    """Apply a bonus or split to one holding's quantity and average price, set it aside, or undo the last one."""
+    throttle(profile, "holdings_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
+    h = holdings.load(profile["id"])
+    sym = req.symbol.strip().upper()
+    item = next((i for i in h["items"] if i["symbol"] == sym), None)
+    if not item:
+        err(404, "not_held", f"{sym} isn't in your holdings.")
+    today = datetime.now(IST).date()
+    saved = (h["updated_at"] or today.isoformat())[:10]
+    if req.action == "undo":
+        if not item.get("adjusted"):
+            err(409, "nothing_to_undo", f"{sym} has no adjustment to undo.")
+        new = corp_actions.undo(item)
+    else:
+        acts = corp_actions.actions_for("IN", sym, None, today, fetch=False)
+        wait = corp_actions.pending(item, acts, str(item.get("since") or saved)[:10], today)
+        a = next((a for a in wait if a["id"] == req.id), None)
+        if not a or (req.action == "apply" and a is not wait[0]):
+            err(409, "nothing_to_apply", f"There's no bonus or split waiting to be applied to {sym}. Reload the page.")
+        new = corp_actions.apply(item, a) if req.action == "apply" else corp_actions.dismiss(item, a)
+    items = [{**(new if i is item else i), "since": (new if i is item else i).get("since") or saved} for i in h["items"]]
+    holdings.save(profile["id"], items, h["source"] or "Manual", stamped=True)
+    return ok({"holdings": holdings_view(profile), "actions": holdings_corp_view(profile, fetch=False)})
 
 
 @app.delete("/holdings")

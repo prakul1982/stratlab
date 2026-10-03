@@ -47,6 +47,7 @@ def build():
     sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
     w["client"].post("/holdings/import", headers=world.headers("admin-token"),
                      json={"filename": sample.name, "data": base64.b64encode(sample.read_bytes()).decode()})
+    main.corp_job.refresh("IN")             # the corporate-actions calendar, as the morning job would have built it
     screen_index()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)

@@ -37,7 +37,28 @@ def load(uid: str) -> dict:
             "updated_at": got.get("updated_at") if isinstance(got, dict) else None}
 
 
-def save(uid: str, items: list[dict], source: str) -> dict:
+ADJUST_KEYS = ("since", "applied", "dismissed", "adjusted")      # what corporate actions keep on a holding
+
+
+def stamp(items: list[dict], before: list[dict], day: str) -> list[dict]:
+    """Each holding with the day its quantity was saved (`since`): kept from before while the quantity is the same,
+    today's date when it is new or changed. A bonus or split from that day on is offered as an adjustment."""
+    old = {i["symbol"]: i for i in before}
+    out = []
+    for i in items:
+        o = old.get(i["symbol"])
+        if o and o.get("since") and abs(float(o["qty"]) - float(i["qty"])) < 1e-9:
+            out.append({**i, **{k: o[k] for k in ADJUST_KEYS if k in o}})
+        else:
+            out.append({**{k: v for k, v in i.items() if k not in ADJUST_KEYS}, "since": day})
+    return out
+
+
+def save(uid: str, items: list[dict], source: str, stamped: bool = False) -> dict:
+    """Save the holdings. Unless they're `stamped` already, each one's `since` is set (see stamp)."""
+    if not stamped:
+        from zoneinfo import ZoneInfo
+        items = stamp(items, load(uid)["items"], datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat())
     data = {"items": items, "source": source if source in SOURCES else "CSV",
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     db.set_setting(_key(uid), json.dumps(data))

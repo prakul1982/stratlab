@@ -868,3 +868,9 @@ label.btn.disabled { opacity: .5; }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
 .th-sort { display: block; width: 100%; min-height: 40px; padding: 8px 16px; border: 0; background: none; font: inherit; color: inherit; text-align: inherit; cursor: pointer; white-space: nowrap; }
 .th-sort:hover { color: var(--ink); }
+
+/* corporate actions: a quiet tag for each kind, and the bonus/split notice on My Holdings */
+.badge[class*="ca-"] { background: var(--chip); color: var(--ink-2); font-size: 12px; padding: 2px 8px; }
+.badge.ca-dividend { background: var(--blue-soft); color: var(--blue-ink); }
+.banner.ca-notice { margin-bottom: 0; align-items: flex-start; }
+.banner.ca-notice .muted { color: inherit; opacity: 0.85; }

@@ -108,6 +108,32 @@ class Yahoo(Source):
             dedup[b["t"]] = b
         return {"meta": meta, "candles": list(dedup.values())}
 
+    def events(self, symbol: str, days: int = 1100) -> dict:
+        """The dividends and splits in a stock's daily price history, by ex-date in the exchange's zone:
+        {"dividends": [{"date", "amount"}], "splits": [{"date", "numerator", "denominator"}]}. Past ex-dates only."""
+        now = int(time.time())
+        end = now - now % 3600 + 3600
+        data = self.fetch(f"/v8/finance/chart/{symbol}", {"interval": "1d", "period1": end - days * 86400, "period2": end,
+                                                          "includePrePost": "false", "events": "div,splits"}, ttl=12 * 3600)
+        res = ((data or {}).get("chart") or {}).get("result") or []
+        if not res:
+            raise SourceError(self.name, f"No price history for {symbol}.")
+        tz = ZoneInfo((res[0].get("meta") or {}).get("exchangeTimezoneName") or "UTC")
+        ev = res[0].get("events") or {}
+        day = lambda ts: datetime.fromtimestamp(int(ts), timezone.utc).astimezone(tz).date().isoformat()
+        out = {"dividends": [], "splits": []}
+        for d in (ev.get("dividends") or {}).values():
+            try:
+                out["dividends"].append({"date": day(d["date"]), "amount": float(d["amount"])})
+            except (KeyError, TypeError, ValueError, OverflowError, OSError):
+                continue
+        for s in (ev.get("splits") or {}).values():
+            try:
+                out["splits"].append({"date": day(s["date"]), "numerator": float(s["numerator"]), "denominator": float(s["denominator"])})
+            except (KeyError, TypeError, ValueError, OverflowError, OSError):
+                continue
+        return out
+
     def meta(self, symbol: str) -> dict:
         """Price, previous close, day range and 52-week range for one symbol."""
         # exact: the previous close in a chart's meta is the close before its window, so it must be this short window
