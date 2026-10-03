@@ -14,6 +14,24 @@ from .net import BROWSER_UA, Source, SourceError
 INTERVAL = {"1d": ("1d", 3650 * 3), "1h": ("60m", 729), "15m": ("15m", 59), "5m": ("5m", 59)}
 
 
+def _from_quote(meta: dict, tz, day: datetime, ohl: tuple, prev_close: float | None) -> tuple:
+    """For London and Frankfurt, Yahoo often sends the latest session's daily candle with a blank close, while the
+    same answer's quote has that session's last price and day range. Rebuild that one candle from the quote; any
+    other blank day stays blank. The open, if also blank, is the previous close kept inside the day's range."""
+    o, h, l = ohl
+    at, price = meta.get("regularMarketTime"), meta.get("regularMarketPrice")
+    if not at or price is None or datetime.fromtimestamp(at, timezone.utc).astimezone(tz).date() != day.date():
+        return o, h, l, None
+    h = h if h is not None else meta.get("regularMarketDayHigh")
+    l = l if l is not None else meta.get("regularMarketDayLow")
+    if h is None or l is None:
+        return o, h, l, None
+    if o is None:
+        o = min(max(prev_close if prev_close is not None else price, l), h)
+    c = float(price)
+    return o, max(h, o, c), min(l, o, c), c
+
+
 class Yahoo(Source):
     name = "Yahoo Finance"
 
@@ -71,12 +89,17 @@ class Yahoo(Source):
                 o, h, l, c = q["open"][i], q["high"][i], q["low"][i], q["close"][i]
             except (KeyError, IndexError):
                 continue
+            t = datetime.fromtimestamp(ts, timezone.utc).astimezone(tz)
+            filled = c is None and tf == "1d"
+            if filled:
+                o, h, l, c = _from_quote(meta, tz, t, (o, h, l), candles[-1]["c"] if candles else None)
             if None in (o, h, l, c):
                 continue
-            t = datetime.fromtimestamp(ts, timezone.utc).astimezone(tz)
             if tf == "1d":   # daily candles are stamped at the session open; keep the date only
                 t = t.replace(hour=0, minute=0, second=0, microsecond=0)
             v = (q.get("volume") or [None] * (i + 1))[i]
+            if filled and not v:
+                v = meta.get("regularMarketVolume")
             candles.append({"t": t.isoformat(), "o": float(o), "h": float(h), "l": float(l), "c": float(c),
                             "v": float(v or 0)})
         # Yahoo sometimes repeats the live bar; keep the last copy of each time
