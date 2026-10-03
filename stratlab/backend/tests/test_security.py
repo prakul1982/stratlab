@@ -180,3 +180,22 @@ def test_kite_callback_with_an_odd_state_is_refused_not_a_crash(client, monkeypa
     monkeypatch.setattr(main.kite, "login_state", "expected-state")
     r = client.get("/admin/kite/callback", params={"status": "success", "request_token": "t", "state": "é"})
     assert r.status_code == 403
+
+
+def test_the_apis_html_pages_run_no_script_and_json_is_left_alone(client):
+    from app import guard
+    page = client.get("/stocks/in/RELIANCE")
+    csp = page.headers["content-security-policy"]
+    assert page.status_code == 200 and csp == guard.HTML_CSP[1].decode()
+    assert "script-src" not in csp and "default-src 'none'" in csp and "frame-ancestors 'none'" in csp
+    assert "content-security-policy" not in client.get("/plans").headers                     # JSON needs none
+    gone = client.get("/unsubscribe", params={"t": "bad"})
+    assert "form-action 'self'" in gone.headers.get("content-security-policy", "")           # its button still posts
+
+
+def test_an_invoice_keeps_its_own_policy_so_its_print_button_works():
+    from app import invoices
+    page = invoices.html({"number": "SL/2026-27/0001", "date": "2026-10-03", "payment_id": "p", "seller": {},
+                          "buyer": {"name": "B", "email": "a@b.c"}, "item": {"description": "StratLab Pro", "sac": "998431", "taxable": 1.0},
+                          "taxes": [], "total": 1.0, "currency": "INR", "place_of_supply": "Delhi", "note": "", "supply": "Intra-state"})
+    assert invoices.PRINT_HASH in invoices.CSP and invoices.CSP in page

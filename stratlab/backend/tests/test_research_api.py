@@ -136,3 +136,9 @@ def test_watchlist_round_trip(api):
     assert len(api.put("/research/watchlist", json={"items": items}).json()["items"]) == 2
     assert api.get("/research/watchlist").json()["items"][0]["symbol"] == "RELIANCE"
     assert api.put("/research/watchlist", json={"items": [{"region": "XX", "symbol": "A"}]}).status_code == 422
+
+
+def test_an_unreadable_ai_reply_asks_for_a_refresh_not_a_rephrase(api, monkeypatch):
+    monkeypatch.setattr(A, "complete", lambda system, text, **kw: "not json at all")
+    r = api.get("/research/company/US/NVDA/ai")
+    assert r.status_code == 422 and r.json()["detail"]["message"] == "The AI reply couldn't be read. Press Refresh to try again."

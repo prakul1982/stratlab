@@ -36,6 +36,9 @@ def loss_company(p: dict) -> dict:
 def build():
     mp = pytest.MonkeyPatch()
     w = world.build(mp)
+    from app import guard
+    for limit in ("PER_MINUTE_USER", "PER_MINUTE_ANON", "PER_MINUTE_ADDRESS"):   # the sweep opens hundreds of pages a minute as one user
+        mp.setattr(guard, limit, 100_000)
     scr = main.research_hub.screener
     real = scr.company
     mp.setattr(scr, "company", lambda sym: loss_company(real("RELIANCE")) if sym.upper() == LOSS else real(sym))

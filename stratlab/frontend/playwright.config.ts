@@ -15,8 +15,10 @@ export default defineConfig({
   reporter: process.env.GITHUB_ACTIONS ? [["list"], ["github"]] : [["list"]],     // on GitHub, failures also show as annotations
   use: { baseURL: `http://127.0.0.1:${webPort}`, launchOptions: chromium ? { executablePath: chromium } : {}, screenshot: "only-on-failure" },
   projects: [
-    { name: "desktop", use: { viewport: { width: 1440, height: 1000 } } },
-    { name: "phone", use: { ...devices["Pixel 7"], browserName: "chromium" } },
+    { name: "desktop", testIgnore: /screens\.spec/, use: { viewport: { width: 1440, height: 1000 } } },
+    { name: "phone", testIgnore: /screens\.spec/, use: { ...devices["Pixel 7"], browserName: "chromium" } },
+    // every route at five screen sizes (each test makes its own browser windows at its size)
+    { name: "screens", testMatch: /screens\.spec/ },
   ],
   webServer: [
     { command: `${process.env.PYTHON ?? "python"} -m tests.visual_server`, cwd: "../backend", port: apiPort, timeout: 120_000, reuseExistingServer: !process.env.CI },

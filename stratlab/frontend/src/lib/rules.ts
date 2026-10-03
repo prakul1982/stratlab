@@ -153,8 +153,10 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
     out.risk.maxBars = +m[1];
     t = t.replace(m[0], " ");
   }
-  if ((m = t.match(new RegExp("(?:stop[ -]?loss|\\bsl\\b|\\bstop\\b)(?: of| at| =|:)? ?" + N + " ?%")))) out.risk.sl = +m[1];
-  if ((m = t.match(new RegExp("(?:target|take[ -]?profit|\\btp\\b)(?: of| at| =|:)? ?" + N + " ?%")))) out.risk.tgt = +m[1];
+  // "stop loss 5%" or "5% stop loss", either way round
+  const STOP = "(?:stop[ -]?loss|\\bsl\\b|\\bstop\\b)", TARGET = "(?:target|take[ -]?profit|\\btp\\b)";
+  if ((m = t.match(new RegExp(STOP + "(?: of| at| =|:)? ?" + N + " ?%"))) || (m = t.match(new RegExp(N + " ?% ?" + STOP)))) out.risk.sl = +m[1];
+  if ((m = t.match(new RegExp(TARGET + "(?: of| at| =|:)? ?" + N + " ?%"))) || (m = t.match(new RegExp(N + " ?% ?" + TARGET)))) out.risk.tgt = +m[1];
   if ((m = t.match(new RegExp("\\brisk(?:ing)?(?: of| =|:)? ?" + N + " ?%")))) out.risk.riskPct = +m[1];
   if ((m = t.match(/(?:capital|₹|\$|\brs\.?|\binr|\busd)(?: of| =|:)? ?(\d[\d,]*(?:\.\d+)?) ?(lakhs?|lacs?|crores?|cr|k)?\b/))) {
     let v = +m[1].replace(/,/g, "");
@@ -162,11 +164,13 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
     if (u === "k") v *= 1e3; else if (u.startsWith("la")) v *= 1e5; else if (u.startsWith("cr")) v *= 1e7;
     if (v > 0) out.risk.capital = v;
   }
+  t = t.replace(new RegExp(`(?:with |and |, )?(?:an? )?${N} ?% ?(?:${STOP}|${TARGET})`, "g"), " ");
   t = t.replace(/(?:with |and |, )?(?:an? )?(?:stop[ -]?loss|\bsl\b|\bstop\b|target|take[ -]?profit|\btp\b|\brisk(?:ing)?|capital)[^.;,]*?\d[\d,.]*\s*%?(?:\s*(?:lakhs?|lacs?|crores?|cr|k)\b)?(?: of (?:my |the )?capital)?/g, " ");
   const clauses = t.split(/[.;\n]| then |,(?= ?(?:and )?(?:sell|exit|close|square|buy|enter|go long)\b)| and (?=(?:sell|exit|close|square off|buy|enter|go long)\b)/);
-  const opRe = /(cross(?:es|ing)? (?:above|over)\b|crossover\b|cross(?:es|ing)? (?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<)/;
+  const opRe = /(cross(?:es|ing)? (?:back )?(?:above|over)\b|crossover\b|cross(?:es|ing)? (?:back )?(?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<)/;
   let side: "entry" | "exit" = "entry";
   let lastRef: Ref | null = null;
+  let lastCross: Cond | null = null;
   for (const cl of clauses) {
     if (short) {
       // a short opens with a sell and closes with a buy
@@ -184,15 +188,20 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
       if (!L) continue;
       lastRef = L;
       const right = p.slice(om.index + om[0].length);
+      const w = om[0];
       let R = parseRef(right);
+      if (!R && /cross/.test(w) && lastCross && !/\d/.test(right)) {
+        // "sell when it crosses back below": the same two lines as the last crossing, the other way
+        L = lastCross.l; R = lastCross.r;
+      }
       if (!R) {
         const nm = right.match(/-?\d+(?:\.\d+)?/);
         if (!nm) continue;
         R = { t: "num", v: +nm[0] };
       }
-      const w = om[0];
       const op: Op = /cross/.test(w) ? (/under|below/.test(w) ? "xb" : "xa") : /above|greater|more|over|>/.test(w) ? "gt" : "lt";
       out[side].push({ l: L, op, r: R });
+      if (op === "xa" || op === "xb") lastCross = { l: L, op, r: R };
     }
   }
   return out;

@@ -80,8 +80,8 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build):
         out, fresh = A.cached(kind, key, ttl, refresh, build)
     except AIBusy as e:
         err(503, "ai_busy", str(e))
-    except AIError as e:
-        err(422, "ai_failed", str(e))
+    except AIError as e:          # there's no idea to rephrase on a research page: the reader can only try again
+        err(422, "ai_failed", str(e).replace("Try rephrasing the idea.", "Press Refresh to try again."))
     if fresh:
         db.add_usage(profile["id"], "research_ai")
     return out
