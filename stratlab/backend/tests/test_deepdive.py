@@ -439,3 +439,13 @@ def test_a_chart_switches_unit_only_when_every_number_stays_exact():
     assert deepdive.scale_for([900000, 650000, None], False) == (100000, "₹ lakh crore", 2)
     assert deepdive.scale_for([240000, -133], False) == (1, "₹ crore", 0)                # never "-0.00 lakh crore"
     assert deepdive.money(4500, "$ million") == "$4.50 bn" and deepdive.in_billions("$4,500 million") == "$4.50 billion"
+
+
+def test_a_read_saved_before_the_unit_fix_shows_billions(monkeypatch):
+    saved = json.dumps({"at": "2026-10-01T00:00:00", "ts": 1,
+        "business": {"measures": [{"name": "Revenue", "value": "$215,938 million"}]},
+        "plans": {"capex": [{"what": "Data centres", "amount": "Rs 1,25,000 crore", "size": None}], "outlook": []}})
+    monkeypatch.setattr(deepdive.db, "get_setting", lambda key: saved)
+    got = deepdive.stored("US:NVDA")
+    assert got["business"]["measures"][0]["value"] == "$215.9 billion"
+    assert got["plans"]["capex"][0]["amount"] == "₹1.25 lakh crore" and got["plans"]["capex"][0]["size"] is None
