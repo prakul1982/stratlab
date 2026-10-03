@@ -314,6 +314,8 @@ LIST_EVERY = 86400             # re-read the exchange's list of companies once a
 
 
 def _shard(sym: str, key: str = MARKET) -> str:
+    if sym.startswith("BSE:"):                  # thousands of BSE-only companies: ten shards of their own
+        return f"{key}:rows:bse{sym[-1]}"
     c = sym[:1].upper()
     return f"{key}:rows:{c if c.isalpha() else '0'}"
 
@@ -347,7 +349,7 @@ class MarketAudit:
         try:
             self.state.update(json.loads(db.get_setting(self.key) or "{}"))
             self.listing = json.loads(db.get_setting(f"{self.key}:list") or "{}")
-            for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0":
+            for c in [*"ABCDEFGHIJKLMNOPQRSTUVWXYZ0", *(f"bse{d}" for d in "0123456789")]:
                 self.rows.update(json.loads(db.get_setting(f"{self.key}:rows:{c}") or "{}"))
         except Exception as e:
             print("could not load the market audit:", e)
@@ -400,7 +402,7 @@ class MarketAudit:
         with self.lock:
             first = not self.listing         # the first read: nothing in it is new, it's just the start
             fresh = {c["symbol"]: {"name": c.get("name") or c["symbol"], "listed": c.get("listed"),
-                                   "seen": (self.listing.get(c["symbol"]) or {}).get("seen") or (None if first else today)}
+                                   "seen": (self.listing.get(c["symbol"]) or {}).get("seen") or (None if first or c.get("old") else today)}
                      for c in got}
             gone = [s for s in self.rows if s not in fresh]
             for s in gone:

@@ -522,6 +522,15 @@ def _from_site(docs_api, d: dict, hosts: tuple[str, ...], seen: set, site: dict)
     return None
 
 
+def _spread(docs: list[dict], n: int) -> list[dict]:
+    """The newest document first, then the rest spread back over the period (a read over five years sees each part)."""
+    docs = sorted(docs, key=lambda d: d["at"], reverse=True)
+    if len(docs) <= n * 2:
+        return docs
+    picked = [docs[round(i * (len(docs) - 1) / (n - 1))] for i in range(n)] if n > 1 else docs[:1]
+    return picked + [d for d in docs if d not in picked]          # the others stand by in case one can't be read
+
+
 def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int, start: int = 1) -> tuple[str, dict, dict]:
     """Labelled excerpts S1, S2… for the AI, the label → document map, and label → full text (to check quotes).
     Transcripts are long and repetitive, so their richest passages are picked; presentations are read in order."""
@@ -548,12 +557,13 @@ def _parse(raw: str, keys: tuple[str, ...]) -> dict:
 
 
 def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai, kpis: dict | None = None,
-         hosts: tuple[str, ...] = ()) -> dict:
+         hosts: tuple[str, ...] = (), years: int = 2) -> dict:
     """Both document reads for one company. `ai` is (gemini, anthropic) for the provider chain; `hosts` the company's
     own website, where filings often point for the full document."""
     out = {"business": None, "plans": None, "problems": [], "read": []}
     pres = readable(docs_api, [d for d in docs_list if d["kind"] == "presentation"], 1, out["problems"], hosts)
-    trans = readable(docs_api, [d for d in docs_list if d["kind"] == "transcript"], 2, out["problems"], hosts)
+    calls = {1: 1, 2: 2, 3: 3}.get(years, 4)          # more years back: more calls read for the plans and outlook
+    trans = readable(docs_api, _spread([d for d in docs_list if d["kind"] == "transcript"], calls), calls, out["problems"], hosts)
     kpis = kpis or {}
     want = kpis.get("measures") or []
     head = (f"COMPANY: {name} ({symbol}, NSE)\nPROFILE: {about[:1200]}\n"
@@ -571,7 +581,7 @@ def read(symbol: str, name: str, about: str, docs_list: list[dict], docs_api, ai
         out["business"]["measures"] = clean_measures(parsed, labels, texts)
         out["business"]["industry"] = kpis.get("label")
         out["business"]["sources"] = list(labels.values())
-    text, labels, texts = _excerpts(pres + trans, PLAN_WORDS, 11000)
+    text, labels, texts = _excerpts(pres + trans, PLAN_WORDS, 11000 if calls <= 2 else 8000)
     if text:
         raw = complete(PLANS, head + text, gemini=ai[0], anthropic=ai[1], max_tokens=2500, kind="long")
         out["plans"] = clean_plans(_parse(raw, ("capex", "outlook")), labels, texts)
@@ -627,14 +637,16 @@ PLAN_WORDS_US = [r"capital expenditures?", r"capex", r"capital investments?", r"
                  r"liquidity and capital resources", r"growth"]
 
 
-def read_us(symbol: str, name: str, about: str, docs_list: list[dict], sec_api, ai, kpis: dict | None = None) -> dict:
+def read_us(symbol: str, name: str, about: str, docs_list: list[dict], sec_api, ai, kpis: dict | None = None,
+            years: int = 2) -> dict:
     """Both reads for a US company: the business, risks and measures from the latest 10-K; plans and outlook from the
     10-K's discussion and the latest earnings releases (US call transcripts aren't filed with the SEC)."""
     out = {"business": None, "plans": None, "problems": [], "read": []}
     pairs: list[tuple[dict, str]] = []
     annual = next((d for d in docs_list if d["kind"] == "annual_report"), None)
     for d, fn in ([(annual, lambda x: (x["url"], sec_api.annual(x)))] if annual else []) + \
-                 [(d, sec_api.release_doc) for d in [x for x in docs_list if x["kind"] == "earnings_release"][:2]]:
+                 [(d, sec_api.release_doc) for d in _spread([x for x in docs_list if x["kind"] == "earnings_release"],
+                                                            {1: 1, 2: 2, 3: 3}.get(years, 4))[:{1: 1, 2: 2, 3: 3}.get(years, 4)]]:
         try:
             url, text = fn(d)
             d = {**d, "url": url}                    # the release itself, not the 8-K's cover page

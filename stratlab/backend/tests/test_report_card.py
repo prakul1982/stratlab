@@ -143,3 +143,42 @@ def test_each_call_is_read_on_its_own_and_a_cut_off_reply_keeps_what_is_complete
     import pytest
     with pytest.raises(rc.AIError):
         rc.read("ACME", "Acme", calls, FakeDocs(texts), (None, None))
+
+
+def test_targets_are_settled_from_what_the_company_said_later(monkeypatch):
+    from datetime import date
+    g0 = {"metric": "other", "low": 85, "high": 90, "period": "FY26", "what": "Loan-to-deposit ratio 85-90%", "unit": "%",
+          "quote": "", "said_at": "2025-01-20", "source": {}}
+    out = {"problems": [], "guidance": [
+        dict(g0),
+        {"metric": "other", "low": 60, "high": None, "period": "FY26", "what": "Retail mix about 60%", "unit": "%",
+         "quote": "", "said_at": "2025-01-20", "source": {}},
+        {"metric": "other", "low": 40, "high": None, "period": "Q3 FY26", "what": "CASA ratio 40%", "unit": "%",
+         "quote": "", "said_at": "2025-01-20", "source": {}},
+        {"metric": "other", "low": 40, "high": None, "period": "FY28", "what": "CASA ratio 40%", "unit": "%",
+         "quote": "", "said_at": "2025-01-20", "source": {}}]}
+    feb = {"title": "Q3 FY26 call", "at": "2026-02-10T10:00", "url": "https://x/q3.pdf", "kind": "transcript"}
+    may = {"title": "Q4 FY26 call", "at": "2026-05-20T10:00", "url": "https://x/q4.pdf", "kind": "transcript"}
+    pairs = [(feb, "Our loan to deposit ratio is at 95% this quarter and we will bring it down. CASA ratio was 38% in the quarter. " * 30),
+             (may, "For the full year FY26 the loan to deposit ratio came in at 88% as we guided. Retail mix ended the year at 55%. " * 30)]
+    seen = {}
+
+    def fake(system, text, **k):
+        seen["text"] = text
+        return json.dumps({"results": [
+            {"id": "T1", "actual": 95, "met": False, "quote": "Our loan to deposit ratio is at 95% this quarter", "source": "S1"},  # before FY26 ended
+            {"id": "T1", "actual": 88, "met": True, "quote": "the loan to deposit ratio came in at 88% as we guided", "source": "S2"},
+            {"id": "T2", "actual": 61, "met": True, "quote": "Retail mix ended the year at 55%", "source": "S2"},     # number not in the quote
+            {"id": "T3", "actual": 38, "met": False, "quote": "CASA ratio was 38% in the quarter", "source": "S1"},
+            {"id": "T3", "actual": 41, "met": True, "quote": "CASA ratio of 41% achieved", "source": "S2"}]})          # not in the document
+    monkeypatch.setattr(rc, "complete", fake)
+    rc.settle(out, pairs, (None, None), "Bank", 3, today=date(2026, 10, 3))
+    g = out["guidance"]
+    assert g[0]["doc_check"]["actual"] == 88 and g[0]["doc_check"]["met"] and g[0]["doc_check"]["source"]["title"] == "Q4 FY26 call"
+    assert "doc_check" not in g[1]                     # the quoted number isn't the one claimed
+    assert g[2]["doc_check"]["actual"] == 38 and g[2]["doc_check"]["met"] is False
+    assert "doc_check" not in g[3] and "FY28" not in seen["text"]          # FY28 hasn't ended: not even asked
+    row = rc.check(g[0], {"years": [], "quarters": []}, date(2026, 10, 3))
+    assert row["result"] == "met" and row["actual"] == 88 and row["settled_by"]["quote"].startswith("the loan")
+    assert rc.check(g[2], {"years": [], "quarters": []}, date(2026, 10, 3))["result"] == "missed"
+    assert rc.calls_for(1) == 4 and rc.calls_for(2) == 6 and rc.calls_for(5) == 12

@@ -1063,7 +1063,7 @@ def deep_region(region: str) -> str:
     return r
 
 
-def deep_base_us(sym: str) -> dict:
+def deep_base_us(sym: str, years: int = 2) -> dict:
     """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
     p = dict(research_routes.source_call(lambda: sec_feed.company(sym)))
     try:
@@ -1081,24 +1081,31 @@ def deep_base_us(sym: str) -> dict:
         p["insider"] = (fh.insider(sym).get("data") or []) if fh and fh.ready() else None
     except Exception:
         p["insider"] = None
-    return {"p": p, "docs": p.get("documents") or [], "doc_note": None, "filings": None, "trend": price_trend(sym, "US")}
+    cut = (datetime.now(IST).date() - timedelta(days=366 * years)).isoformat()
+    docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
+    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": price_trend(sym, "US")}
 
 
-def deep_base(sym: str, region: str = "IN") -> dict:
-    """Numbers and the list of readable documents for one company (no AI)."""
+def deep_years(years: int) -> int:
+    lo, hi = report_card.YEARS
+    return max(lo, min(hi, int(years or 2)))
+
+
+def deep_base(sym: str, region: str = "IN", years: int = 2) -> dict:
+    """Numbers and the list of readable documents for one company (no AI), documents from the last `years` years."""
     if region == "US":
-        return deep_base_us(sym)
+        return deep_base_us(sym, years)
     p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(sym)))
     try:
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
     except Exception:
         pass
     try:
-        items = filings_feed.announcements(sym, deepdive.DOC_DAYS)
+        items = filings_feed.announcements(sym, max(deepdive.DOC_DAYS, 366 * years))
         doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:
         items, doc_note, fsum = [], public_text(str(e)), None
-    return {"p": p, "docs": deepdive.documents(items)[:20], "doc_note": doc_note, "filings": fsum, "trend": price_trend(sym)}
+    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": price_trend(sym)}
 
 
 def price_trend(sym: str, market: str = "IN") -> dict | None:
@@ -1158,34 +1165,36 @@ def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile))
 
 
 @app.post("/research/deep/{symbol}/read")
-def deep_dive_read(symbol: str, refresh: bool = False, region: str = "IN", profile=Depends(current_profile)):
+def deep_dive_read(symbol: str, refresh: bool = False, region: str = "IN", years: int = 2, profile=Depends(current_profile)):
     """Read the company's own documents with AI: business model, capex and growth plans. India: the latest investor
     presentation and call transcripts. US: the latest 10-K and earnings releases."""
     need(profile, "deepdive", "The company deep dive")
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
     key = f"US:{sym}" if region == "US" else sym
-    base = deep_base(sym, region)
+    years = deep_years(years)
+    base = deep_base(sym, region, years)
     have = deepdive.stored(key)
     if deepdive.fresh(have) and not refresh:
         return ok(deep_view(sym, base))
     if not base["docs"] and not base["p"].get("about"):
-        err(404, "no_documents", "No annual report or earnings release was found for this company in the last two years." if region == "US"
-            else "No investor presentation or call transcript was found for this company in the last two years.")
+        err(404, "no_documents", f"No annual report or earnings release was found for this company in the last {years} years." if region == "US"
+            else f"No investor presentation or call transcript was found for this company in the last {years} years.")
     deep_ai_allowed(profile)
     p = base["p"]
     try:
         if region == "US":
             reads = deepdive.read_us(sym, p.get("name") or sym, p.get("about") or "", base["docs"], sec_feed, (_gemini, _anthropic),
-                                     industry.measures(p, sym))
+                                     industry.measures(p, sym), years=years)
         else:
             reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic),
-                                  industry.measures(p, sym), company_hosts(p))
+                                  industry.measures(p, sym), company_hosts(p), years=years)
     except AIBusy as e:
         err(503, "ai_busy", str(e))
     except AIError as e:
         err(422, "ai_failed", str(e))
     reads["problems"] = [public_text(x) for x in reads["problems"]]
+    reads["years"] = years
     deepdive.store(key, reads)
     db.add_usage(profile["id"], "research_ai")
     return ok(deep_view(sym, base))
@@ -1250,7 +1259,7 @@ def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profil
 
 
 @app.post("/research/deep/{symbol}/card")
-def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", profile=Depends(current_profile)):
+def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", years: int = 2, profile=Depends(current_profile)):
     """The management report card: targets management gave (India: on earnings calls; US: in earnings releases),
     checked against the reported numbers."""
     need(profile, "deepdive", "The company deep dive")
@@ -1258,20 +1267,21 @@ def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", profi
     us = region == "US"
     sym = deep_symbol(symbol, region)
     key = f"US:{sym}" if us else sym
-    base = deep_base(sym, region)
+    years = deep_years(years)
+    base = deep_base(sym, region, years)
     if report_card.fresh(report_card.stored(key)) and not refresh:
         return ok(deep_view(sym, base))
     kind = "earnings_release" if us else "transcript"
     if not any(d["kind"] == kind for d in base["docs"]):
-        err(404, "no_calls", "No earnings release was found for this company in the last two years." if us
-            else "No earnings-call transcript was found for this company in the last two years.")
+        err(404, "no_calls", f"No earnings release was found for this company in the last {years} years." if us
+            else f"No earnings-call transcript was found for this company in the last {years} years.")
     deep_ai_allowed(profile)
     p = base["p"]
     try:
         if us:
-            card = report_card.read_us(sym, p.get("name") or sym, base["docs"], sec_feed, (_gemini, _anthropic), deepdive._fye(p))
+            card = report_card.read_us(sym, p.get("name") or sym, base["docs"], sec_feed, (_gemini, _anthropic), deepdive._fye(p), years)
         else:
-            card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic), company_hosts(p))
+            card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic), company_hosts(p), years)
     except report_card.NoCalls as e:          # nothing read, nothing charged
         detail = "; ".join(public_text(x) for x in e.problems[:3])
         err(422, "no_readable_calls", ("None of the earnings releases could be read. " if us
@@ -1999,7 +2009,7 @@ def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN") -> dict:
 _market_breaker: list = [None, 0.0]
 
 
-def _market_check(sym: str) -> dict:
+def _nse_check(sym: str) -> dict:
     """One company for the whole-market audit; the exchange-price breaker is renewed every six hours, so a refusal
     in the morning doesn't leave the rest of the day unchecked."""
     if time.time() - _market_breaker[1] > 6 * 3600:
@@ -2007,8 +2017,89 @@ def _market_check(sym: str) -> dict:
     return audit_one(research_routes.symbol_of(sym), False, _market_breaker[0])
 
 
-market_audit = audit.MarketAudit(lambda: filings_feed.all_equities(), _market_check,
-                                 busy_fn=lambda: bool(audit_runner.state.get("running")))
+BSE_ONLY = "audit:bse-only"                # the last good list of BSE-only companies: {code: {ts, token, name}}
+
+
+def _norm_name(n: str | None) -> str:
+    n = re.sub(r"[^a-z0-9 ]", " ", (n or "").lower())
+    return " ".join(w for w in n.split() if w not in ("ltd", "limited", "the", "co", "company", "india", "inds", "industries"))
+
+
+def bse_only(nse: list[dict]) -> list[dict]:
+    """Companies listed on BSE but not on NSE: the broker's BSE equity list less every NSE symbol and company name.
+    Kept as the last good list, so a broker outage never looks like thousands of delistings. The first time, none
+    of them counts as a new listing."""
+    try:
+        saved = json.loads(db.get_setting(BSE_ONLY) or "{}")
+    except (ValueError, TypeError):
+        saved = {}
+    if not kite.ready():
+        got = saved
+    else:
+        syms, names = {r["symbol"] for r in nse}, {_norm_name(r.get("name")) for r in nse}
+        got = {}
+        for x in kite.instruments_of("BSE"):
+            ts, code = str(x.get("tradingsymbol") or ""), str(x.get("exchange_token") or "")
+            if x.get("instrument_type") != "EQ" or x.get("segment") != "BSE" or not ts or not code.isdigit():
+                continue
+            if ts.upper() in syms or _norm_name(x.get("name")) in names:
+                continue                               # listed on NSE too: already in the audit
+            got[code] = {"ts": ts, "token": int(x["instrument_token"]), "name": x.get("name") or ts}
+        if len(got) < 100 and saved:                   # a broken answer: keep the last good list
+            got = saved
+        elif got:
+            db.set_setting(BSE_ONLY, json.dumps(got))
+    _bse_map.clear()
+    _bse_map.update(got)
+    first = not saved                         # the first list: these are the market, not new listings
+    return [{"symbol": f"BSE:{c}", "name": v["name"], "listed": None, "old": first} for c, v in got.items()]
+
+
+_bse_map: dict[str, dict] = {}
+
+
+def india_listing() -> list[dict]:
+    nse = filings_feed.all_equities()
+    try:
+        return nse + bse_only(nse)
+    except Exception as e:                    # the NSE list alone, rather than nothing
+        print("BSE-only list unavailable:", e)
+        return nse
+
+
+def bse_base(code: str) -> dict:
+    """A BSE-only company: its numbers by BSE code, and its trend from BSE's own daily prices. Exchange filings and
+    documents come from NSE's feed, so they aren't read for these."""
+    p = with_industry(code, research_routes.source_call(lambda: research_hub.screener.company(code)))
+    info = _bse_map.get(code) or {}
+    trend = None
+    if info.get("token") and kite.ready():
+        try:
+            trend = scan.analyse(kite.history(int(info["token"]), "1d", 400))
+        except Exception:
+            trend = None
+    return {"p": p, "docs": [], "doc_note": "Listed only on BSE: its filings and documents aren't read yet.", "filings": None,
+            "trend": trend}
+
+
+def _market_check(sym: str) -> dict:
+    if sym.startswith("BSE:"):
+        code = sym.split(":", 1)[1]
+        if not _bse_map:
+            try:
+                _bse_map.update(json.loads(db.get_setting(BSE_ONLY) or "{}"))
+            except (ValueError, TypeError):
+                pass
+        ts = (_bse_map.get(code) or {}).get("ts")
+        price = (lambda _s: kite.ltp_key(f"BSE:{ts}")) if ts and kite.ready() else None
+        row = audit.audit_company(code, bse_base, deep_view, price, None)
+        for i in row["issues"]:
+            i["detail"] = public_text(i["detail"])
+        return {**row, "symbol": sym, "name": row.get("name") or (_bse_map.get(code) or {}).get("name") or sym}
+    return _nse_check(sym)
+
+
+market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: bool(audit_runner.state.get("running")))
 
 
 def _sec_companies() -> list[dict]:
@@ -2026,7 +2117,7 @@ def market_for(region: str):
 
 @app.get("/admin/audit/market")
 def admin_market_audit(region: str = "IN", _=Depends(admin.admin_profile)):
-    """The whole-market audit: every NSE-listed company (or every company filing with the SEC), checked in the
+    """The whole-market audit: every company listed in India, NSE and BSE-only (or every company filing with the SEC), checked in the
     background while switched on."""
     return market_for(deep_region(region)).status()
 

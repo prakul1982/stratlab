@@ -565,7 +565,10 @@ class PptxRenderer:
 def card_boxes(b: dict) -> list[tuple]:
     """(x, y, w, h) of each card: rows only as tall as their fullest card needs, within the block's box."""
     x, y, w, h = b["box"]
-    items, cols, gap = b["items"], b.get("cols", 3), 0.25
+    items, gap = b["items"], 0.25
+    if not items:
+        return []
+    cols = max(1, min(b.get("cols", 3), len(items)))
     rows = (len(items) + cols - 1) // cols
     cw, room = (w - gap * (cols - 1)) / cols, (h - gap * (rows - 1)) / rows
     iw = cw - 0.5

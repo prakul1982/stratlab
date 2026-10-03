@@ -120,3 +120,18 @@ def test_pdf_deck_has_the_same_slides_as_the_powerpoint():
     text = " ".join(p.extract_text() for p in pdf.pages)
     assert "At a glance" in text and "Investor checklist" in text and "₹" in text and "Not investment advice" in text
     assert deck.sentences("Pumps for utilities. Exports grew. It is", 400) == "Pumps for utilities. Exports grew."
+
+
+def test_deck_survives_sparse_and_odd_data():
+    from pypdf import PdfReader
+    v = view_for_deck()
+    v["reads"]["business"].update(customers="", drivers=[], risks=[], segments=[], measures=[], summary="")
+    v["reads"]["plans"] = {"capex": [], "outlook": [], "sources": []}
+    v["about"] = ""
+    v["numbers"]["years"] = [{**y, "profit": None if i % 2 else -5, "capex": None, "fcf": -3} for i, y in enumerate(v["numbers"]["years"])]
+    v["numbers"]["quarters"] = []
+    v["documents"] = []
+    v["checklist"] = {"checks": [], "counts": {"pass": 0, "watch": 0, "fail": 0, "na": 0}}
+    for build in (deck.build, deck.build_pdf):
+        assert build(v)
+    assert len(PdfReader(io.BytesIO(deck.build_pdf(v))).pages) == len(Presentation(io.BytesIO(deck.build(v))).slides)

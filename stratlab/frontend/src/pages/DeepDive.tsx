@@ -14,13 +14,14 @@ type Doc = { kind: string; at: string; title: string; url: string };
 type Source = { title: string; at: string; url: string; kind: string } | null;
 type Target = { metric: string; low: number | null; high: number | null; period: string | null; what: string; quote: string; said_at: string;
   source: { title: string; at: string; url: string }; actual: number | null; unit: string; result: "met" | "missed" | "pending" | "unchecked";
-  revised?: { low: number | null; high: number | null; at: string; quote: string } | null };
+  revised?: { low: number | null; high: number | null; at: string; quote: string } | null;
+  settled_by?: { actual: number; met: boolean; quote: string; source: { title: string; at: string; url: string } } };
 export type CheckState = "pass" | "watch" | "fail" | "na";
 type Checklist = { checks: { group: string; label: string; state: CheckState; value: string; rule: string }[];
   counts: Record<CheckState, number>; scored: number; industry?: { group: string; label: string; path: string[]; note: string } };
 type Measure = { name: string; value: string; period: string | null; change: string | null; quote: string; source: Source };
 type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; score: number | null;
-  read: { kind: string; at: string; title: string }[]; problems: string[]; at: string };
+  read: { kind: string; at: string; title: string }[]; problems: string[]; at: string; years?: number };
 export interface DeepView {
   symbol: string; region?: "IN" | "US"; ai?: boolean; source_url?: string | null; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
@@ -80,11 +81,11 @@ function ReportCard({ c }: { c: Card }) {
         <div className="stat"><span className="tiny muted">Targets met</span><b className="num">{checked ? `${c.met} of ${checked}` : "–"}</b></div>
         <div className="stat"><span className="tiny muted">Missed</span><b className="num">{c.missed}</b></div>
         <div className="stat"><span className="tiny muted">Not due yet</span><b className="num">{c.pending}</b></div>
-        <div className="stat"><span className="tiny muted">Can't check from the numbers</span><b className="num">{c.unchecked}</b></div>
+        <div className="stat"><span className="tiny muted">Can't check yet</span><b className="num">{c.unchecked}</b></div>
       </div>
       <p className="small" style={{ margin: 0 }}>{checked
-        ? <>Of the {checked} targets from past calls that the reported numbers can settle, <b>{c.met} {c.met === 1 ? "was" : "were"} met</b> and {c.missed} missed ({c.score}% met).</>
-        : "None of the targets found can be settled by the reported numbers yet."}</p>
+        ? <>Of the {checked} targets from past calls that can be settled, by the reported numbers or by what the company itself said later, <b>{c.met} {c.met === 1 ? "was" : "were"} met</b> and {c.missed} missed ({c.score}% met).</>
+        : "None of the targets found can be settled yet: their period hasn't ended, or no later number or statement gives the result."}</p>
       {c.rows.length > 0 ? (
         <div className="promises">{c.rows.map((r, i) => {
           const [label, tone] = RESULT[r.result];
@@ -101,11 +102,13 @@ function ReportCard({ c }: { c: Card }) {
                 <a className="link" href={safeHref(r.source.url)} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
               </div>
               {r.quote && <span className="tiny muted">"{r.quote}"</span>}
+              {r.settled_by && <span className="tiny">
+                <span className="muted">Result from the company's own words:</span> "{r.settled_by.quote}" <a className="link" href={safeHref(r.settled_by.source.url)} target="_blank" rel="noopener noreferrer">{r.settled_by.source.title}, {day(r.settled_by.source.at)} ↗</a></span>}
               {r.revised && <span className="tiny muted">Later changed to {target(r.revised.low, r.revised.high, r.unit)} ({day(r.revised.at)}).</span>}
             </div>);
         })}</div>
       ) : <p className="small muted" style={{ margin: 0 }}>No specific targets were found in these calls.</p>}
-      <p className="tiny muted" style={{ margin: 0 }}>Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), and estimated capex (within 10%). A target repeated on later calls counts once, from the first time it was said.</p>
+      <p className="tiny muted" style={{ margin: 0 }}>Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p>
     </>
   );
 }
@@ -150,6 +153,7 @@ export function DeepDivePage() {
   const [reading, setReading] = useState(false);
   const [carding, setCarding] = useState(false);
   const [decking, setDecking] = useState<"pptx" | "pdf" | null>(null);
+  const [span, setSpan] = useState(2);            // years of documents a read looks back over
 
   const downloadDeck = async (format: "pptx" | "pdf") => {
     setDecking(format);
@@ -172,7 +176,7 @@ export function DeepDivePage() {
   const readDocs = async (refresh = false) => {
     setReading(true);
     try {
-      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/read${q(refresh ? "refresh=true" : "")}`, { method: "POST" });
+      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/read${q(`years=${span}${refresh ? "&refresh=true" : ""}`)}`, { method: "POST" });
       setV(x);
       if (x.reads?.problems?.length) notify(`Read with ${x.reads.problems.length} document${x.reads.problems.length === 1 ? "" : "s"} skipped.`);
     } catch (e) { fail(e); } finally { setReading(false); }
@@ -181,7 +185,7 @@ export function DeepDivePage() {
   const checkCalls = async (refresh = false) => {
     setCarding(true);
     try {
-      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/card${q(refresh ? "refresh=true" : "")}`, { method: "POST" });
+      const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/card${q(`years=${span}${refresh ? "&refresh=true" : ""}`)}`, { method: "POST" });
       setV(x);
       if (x.card?.problems?.length) notify(`Checked with ${x.card.problems.length} call${x.card.problems.length === 1 ? "" : "s"} skipped.`);
     } catch (e) { fail(e); } finally { setCarding(false); }
@@ -274,8 +278,12 @@ export function DeepDivePage() {
                 <span className="small muted">{v.reads ? `Read ${day(v.reads.at)}: ${v.reads.read.map((d) => `${KIND[d.kind] ?? "Filing"}, ${day(d.at)}`).join(" · ") || "the company profile"}` : us ? `${v.documents.filter((d) => d.kind === "annual_report").length} annual report${v.documents.filter((d) => d.kind === "annual_report").length === 1 ? "" : "s"} and ${v.documents.filter((d) => d.kind === "earnings_release").length} earnings releases filed in the last two years.`
                   : `${v.documents.length} presentations and call transcripts found in the last two years.`}</span>
               </div>
-              <button className="btn sm" disabled={reading || (!v.documents.length && !v.about)} onClick={() => readDocs(!!v.reads)}>
+              <div className="row" style={{ gap: 8 }}>
+                <select className="input sm" style={{ width: "auto" }} value={span} onChange={(e) => setSpan(Number(e.target.value))} aria-label="Years to look back" title="How far back to read: more years read more calls (a longer read, same one AI read)">
+                  {[1, 2, 3, 4, 5].map((y) => <option key={y} value={y}>{y === 1 ? "Last year" : `Last ${y} years`}</option>)}</select>
+              <button className="btn sm" disabled={reading || (!v.documents.length && !v.about)} onClick={() => readDocs(!!v.reads || span !== 2)}>
                 {reading ? "Reading… about a minute" : v.reads ? (v.reads_stale ? "Read the newest documents" : "Read again") : us ? "Read the annual report and releases" : "Read the latest presentation and calls"}</button>
+              </div>
             </div>
             {v.doc_note && <p className="tiny muted" style={{ margin: 0 }}>Filings: {v.doc_note}</p>}
             {reading && <Loading label={us ? "Reading the annual report (10-K) and earnings releases" : "Reading the latest investor presentation and earnings calls"} />}
@@ -359,14 +367,18 @@ export function DeepDivePage() {
                 <span className="small muted">{us
                   ? (v.card ? `What they said in ${v.card.read.length} earnings release${v.card.read.length === 1 ? "" : "s"}, and what the numbers showed. Checked ${day(v.card.at)}.`
                     : `What management forecast in its earnings releases, against what happened. ${v.calls} release${v.calls === 1 ? "" : "s"} found.`)
-                  : v.card ? `What they said on ${v.card.read.length} earnings call${v.card.read.length === 1 ? "" : "s"}, and what the numbers showed. Checked ${day(v.card.at)}.`
+                  : v.card ? `What they said on ${v.card.read.length} earnings call${v.card.read.length === 1 ? "" : "s"} over ${v.card.years ?? 2} year${(v.card.years ?? 2) === 1 ? "" : "s"}, and what happened. Checked ${day(v.card.at)}.`
                   : `What management promised on past earnings calls, against what happened. ${v.calls} call transcript${v.calls === 1 ? "" : "s"} found.`}</span>
               </div>
-              <button className="btn sm" disabled={carding || !v.calls} onClick={() => checkCalls(!!v.card)}>
+              <div className="row" style={{ gap: 8 }}>
+                <select className="input sm" style={{ width: "auto" }} value={span} onChange={(e) => setSpan(Number(e.target.value))} aria-label="Years to look back" title="How far back to read: more years read more calls (a longer read, same one AI read)">
+                  {[1, 2, 3, 4, 5].map((y) => <option key={y} value={y}>{y === 1 ? "Last year" : `Last ${y} years`}</option>)}</select>
+              <button className="btn sm" disabled={carding || !v.calls} onClick={() => checkCalls(!!v.card || span !== 2)}>
                 {carding ? (us ? "Reading the releases… about a minute" : "Reading the calls… about a minute") : v.card ? (v.card_stale ? (us ? "Check the newest releases" : "Check the newest calls") : "Check again") : us ? "Check past releases" : "Check past calls"}</button>
+              </div>
             </div>
             {carding && <Loading label={us ? "Reading past earnings releases" : "Reading past earnings calls"} />}
-            {!v.card && !carding && <p className="small muted" style={{ margin: 0 }}>{v.calls ? `Reads up to six ${us ? "earnings releases" : "calls"} over the last two years for the targets management gave (growth, margins, capex), then checks each against the reported results. Counts as one of your daily AI reads; kept for a week and shared.`
+            {!v.card && !carding && <p className="small muted" style={{ margin: 0 }}>{v.calls ? `Reads up to ${({ 1: 4, 2: 6, 3: 9 } as Record<number, number>)[span] ?? 12} ${us ? "earnings releases" : "calls"} over the last ${span === 1 ? "year" : `${span} years`} (pick how far back) for the targets management gave (growth, margins, capex), then checks each against the reported results. Counts as one of your daily AI reads; kept for a week and shared.`
               : us ? "No earnings releases were found in the company's filings for the last two years." : "No earnings-call transcripts were found in the company's filings for the last two years."}</p>}
             {v.card && <ReportCard c={v.card} />}
             {v.card?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.card.problems.join(" · ")}</p> : null}

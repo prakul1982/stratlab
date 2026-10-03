@@ -15,7 +15,14 @@ from .deepdive import KEEP, RULES, readable
 from .docs import quote_found, ranked_windows
 from .kite_service import ist_date
 
-MAX_CALLS = 6                  # earnings calls read, spread over the last two years
+MAX_CALLS = 6                  # earnings calls read, spread over the last two years (the default)
+YEARS = (1, 5)                 # how far back a read may go, in years
+
+
+def calls_for(years: int) -> int:
+    """Earnings calls read for a look-back of `years`: about four a year at first, fewer per year further back, up
+    to twelve (each is one AI request on the free quota)."""
+    return {1: 4, 2: 6, 3: 9}.get(years, 12)
 
 GUIDANCE = """You pull out the targets an Indian listed company's management gave on its earnings calls: what they said a
 number WOULD be for a future year or quarter. Examples: "revenue growth of 15-18% in FY26", "EBITDA margin of about 20%
@@ -144,7 +151,7 @@ def clean(d: dict, labels: dict, texts: dict | None = None, fye: int = 3) -> lis
 
 
 def pick_calls(docs_list: list[dict], n: int = MAX_CALLS) -> list[dict]:
-    """Up to n call transcripts spread over the two years, so older promises (now checkable) are included."""
+    """Up to n call transcripts spread over the look-back, so older promises (now checkable) are included."""
     calls = sorted([d for d in docs_list if d["kind"] == "transcript"], key=lambda d: d["at"], reverse=True)
     if len(calls) <= n:
         return calls
@@ -175,8 +182,8 @@ def read_call(symbol: str, name: str, d: dict, text: str, ai) -> list[dict]:
     return clean(parsed, labels, texts)
 
 
-def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai, hosts: tuple[str, ...] = ()) -> dict:
-    picked = pick_calls(docs_list)
+def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai, hosts: tuple[str, ...] = (), years: int = 2) -> dict:
+    picked = pick_calls(docs_list, calls_for(years))
     rest = [d for d in docs_list if d["kind"] == "transcript" and d not in picked]
     out = {"guidance": [], "problems": [], "read": []}
     pairs = readable(docs_api, picked + rest, len(picked), out["problems"], hosts)
@@ -193,7 +200,84 @@ def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai, hosts: tup
             out["problems"].append(f"{d['title'][:60]}: {str(e)[:80]}")
     if pairs and failed == len(pairs):
         raise last                               # none read: the endpoint reports busy (try later) or failed
+    settle(out, pairs, ai, name, 3)
+    out["years"] = years
     return out
+
+
+# ---------- settling targets from what the company said later ----------
+SETTLE = """You check whether a company's management delivered on targets it gave, using ONLY what the company itself
+said LATER in the excerpts (later earnings calls, releases or presentations).
+For each TARGET (id, what was promised, the target, the period), look for a later statement of the ACTUAL result for
+that same measure and that same period. Return ONLY JSON:
+{"results": [{"id": "T1", "actual": number, "met": true or false, "quote": "the exact words giving the actual result",
+  "source": "S2"}]}
+- Leave a target out when no excerpt states its actual result for that period. Never estimate or work one out.
+- "quote" is copied word for word from the excerpt and contains the actual number.
+- "actual" is that number, in the target's unit (a percentage as 14.5 for 14.5%; crore or million as written).
+- "met" compares the actual with the target as it was promised: within a range, at least, at most, or about.
+- A statement made BEFORE the period ended is not an actual result."""
+
+
+def _numbers(text: str) -> list[float]:
+    return [float(x.replace(",", "")) for x in re.findall(r"-?\d[\d,]*(?:\.\d+)?", text or "")]
+
+
+def settle(out: dict, pairs: list[tuple[dict, str]], ai, name: str, fye: int, today: date | None = None) -> None:
+    """Targets whose period has ended, looked up in the documents filed after it: one AI request; a result counts
+    only when its quote is really in that document, contains the number, and was said after the period ended."""
+    today = today or ist_date()
+    docs = sorted(pairs, key=lambda p: p[0]["at"])
+    due = []
+    for i, g in enumerate(out["guidance"]):
+        per = parse_period(g.get("period"), None, fye)
+        if not per or g.get("low") is None:
+            continue
+        end = period_end(per, fye)
+        if end < today and any(d["at"][:10] > end.isoformat() for d, _ in docs):
+            due.append((f"T{len(due) + 1}", i, end))
+    if not due:
+        return
+    due = due[:15]
+    labels, texts, parts = {}, {}, []
+    words = sorted({w for _, i, _ in due for w in re.findall(r"[A-Za-z][A-Za-z\-]{3,}", out["guidance"][i]["what"])}
+                   | {"actual", "achieved", "delivered", "reported", "grew", "came in", "year ended", "full year"})
+    first_end = min(e for _, _, e in due)
+    later = [(d, t) for d, t in docs if d["at"][:10] > first_end.isoformat()][-6:]
+    for n, (d, text) in enumerate(later, 1):
+        lab = f"S{n}"
+        labels[lab], texts[lab] = d, text
+        parts.append(f"[{lab}] {d['kind']} filed {d['at'][:10]}: {d['title']}\n{ranked_windows(text, words, limit=6000)}")
+    lines = []
+    for tid, i, end in due:
+        g = out["guidance"][i]
+        tgt = f"{g['low']}" + (f" to {g['high']}" if g.get("high") is not None else "") + (" %" if g.get("unit") == "%" else f" {g.get('unit') or ''}")
+        lines.append(f"{tid}: {g['what']} | target {tgt} | period {g['period']} (ended {end.isoformat()})")
+    try:
+        raw = complete(SETTLE, f"COMPANY: {name}\n\nTARGETS:\n" + "\n".join(lines) + "\n\nEXCERPTS:\n" + "\n\n".join(parts),
+                       gemini=ai[0], anthropic=ai[1], max_tokens=2500, kind="long")
+        try:
+            got = extract_json(raw).get("results") or []
+        except AIError:
+            got = salvage_items(raw, "results")
+    except AIError as e:
+        out["problems"].append(f"Checking targets against later documents: {str(e)[:80]}")
+        return
+    ends = {tid: (i, end) for tid, i, end in due}
+    for r in got:
+        if not isinstance(r, dict) or r.get("id") not in ends or r.get("source") not in labels:
+            continue
+        i, end = ends[r["id"]]
+        d, quote = labels[r["source"]], str(r.get("quote") or "")[:300]
+        try:
+            actual = float(r.get("actual"))
+        except (TypeError, ValueError):
+            continue
+        if (d["at"][:10] <= end.isoformat() or not quote_found(quote, texts[r["source"]])
+                or not any(abs(x - actual) < 0.051 for x in _numbers(quote)) or not isinstance(r.get("met"), bool)):
+            continue                             # not after the period, not really said, or not the number quoted
+        out["guidance"][i]["doc_check"] = {"actual": actual, "met": r["met"], "quote": quote,
+                                           "source": {"title": d["title"], "at": d["at"], "url": d["url"]}}
 
 
 # ---------- checking against the numbers ----------
@@ -230,11 +314,17 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
     per = parse_period(g.get("period"))
     us = (nums.get("unit") or "").startswith("$")
     res = {**g, "actual": None, "result": "unchecked", "unit": ("million" if us else "crore") if g["metric"] == "capex" else "%"}
+    dc = g.get("doc_check")
+
+    def from_documents(r):            # the company's own later statement of the result, quote checked
+        return {**r, "actual": dc["actual"], "result": "met" if dc["met"] else "missed", "settled_by": dc} if dc else r
     if g["metric"] == "other" or not per:
-        return res
+        return from_documents(res)
     if nums.get("bank") and g["metric"] in ("margin", "capex"):
-        return res                      # a lender's margin (NIM) and capex aren't in the reported tables
+        return from_documents(res)      # a lender's margin (NIM) and capex aren't in the reported tables
     a = _actual(g["metric"], per, nums)
+    if a is None and dc:
+        return from_documents(res)
     if a is None:
         # quarterly results come out within ~45 days of the quarter, annual ones within ~60
         res["result"] = "pending" if (today - period_end(per, nums.get("fye") or 3)).days < 75 else "unchecked"
@@ -275,7 +365,7 @@ def view(stored_card: dict | None, nums: dict, today: date | None = None) -> dic
     return {"rows": rows, "met": met, "missed": missed, "pending": sum(r["result"] == "pending" for r in rows),
             "unchecked": sum(r["result"] == "unchecked" for r in rows),
             "score": round(met / checked * 100) if checked else None, "read": stored_card.get("read") or [],
-            "problems": stored_card.get("problems") or [], "at": stored_card.get("at")}
+            "problems": stored_card.get("problems") or [], "at": stored_card.get("at"), "years": stored_card.get("years") or 2}
 
 
 # ---------- stored reads ----------
@@ -323,12 +413,13 @@ GUIDANCE_WORDS_US = [r"outlook", r"guidance", r"expects?", r"anticipates?", r"fo
                      r"(?:first|second|third|fourth) quarter", r"full[- ]year", r"capital expenditures", r"margin", r"growth"]
 
 
-def read_us(symbol: str, name: str, docs_list: list[dict], sec_api, ai, fye: int) -> dict:
+def read_us(symbol: str, name: str, docs_list: list[dict], sec_api, ai, fye: int, years: int = 2) -> dict:
     """The report card's reads for a US company: up to six earnings releases (exhibit 99 of the 8-K) over two years,
     one AI request each, with periods in the company's own fiscal year."""
     releases = sorted([d for d in docs_list if d["kind"] == "earnings_release"], key=lambda d: d["at"], reverse=True)
-    if len(releases) > MAX_CALLS:
-        releases = [releases[round(i * (len(releases) - 1) / (MAX_CALLS - 1))] for i in range(MAX_CALLS)]
+    n = calls_for(years)
+    if len(releases) > n:
+        releases = [releases[round(i * (len(releases) - 1) / (n - 1))] for i in range(n)]
     out = {"guidance": [], "problems": [], "read": []}
     pairs = []
     for d in releases:
@@ -361,4 +452,6 @@ def read_us(symbol: str, name: str, docs_list: list[dict], sec_api, ai, fye: int
             out["problems"].append(f"{d['title'][:60]}: {str(e)[:80]}")
     if failed == len(pairs):
         raise last
+    settle(out, pairs, ai, name, fye)
+    out["years"] = years
     return out
