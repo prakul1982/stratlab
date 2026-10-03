@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import razorpay
 from razorpay.errors import BadRequestError, SignatureVerificationError
 
-from . import db
+from . import db, pricing
 from .config import settings
 
 _client = None
@@ -37,7 +37,10 @@ def plan_for(sub: dict) -> str | None:
     if isinstance(notes, dict) and notes.get("plan") in ("basic", "pro"):
         return notes["plan"]
     ids = {v: k for period in ("month", "year") for k, v in plan_ids(period).items() if v}
-    return ids.get(sub.get("plan_id"))
+    if sub.get("plan_id") in ids:
+        return ids[sub["plan_id"]]
+    other = pricing.all_plan_ids().get(sub.get("plan_id"))       # a plan in another currency
+    return other[1] if other else None
 
 
 def _ts(v) -> str:
@@ -120,25 +123,42 @@ def check_setup() -> dict:
             except Exception as e:
                 row["detail"] = f"Razorpay can't find this plan with these keys ({(str(e) or 'error')[:120]})"
         out["plans"].append(row)
+    for pid, (cur, plan, period) in sorted(pricing.all_plan_ids().items(), key=lambda kv: kv[1]):
+        row = {"label": f"{plan.title()} {'yearly' if period == 'year' else 'monthly'} in {cur}", "id": pid, "ok": False, "detail": None}
+        try:
+            p = probe.plan.fetch(pid)
+            item = p.get("item") or {}
+            got = item.get("currency") or "INR"
+            currencies.add(got)
+            row.update(ok=got == cur, detail=f"{item.get('name', '')}: {got} {(item.get('amount') or 0) / 100:,.2f} every "
+                                             f"{p.get('interval', 1)} {p.get('period', '')}".strip()
+                       + ("" if got == cur else f". This plan is in {got}, not {cur}: fix it in Admin → Prices."))
+        except Exception as e:
+            row["detail"] = f"Razorpay can't find this plan with these keys ({(str(e) or 'error')[:120]})"
+        out["plans"].append(row)
     out["currencies"] = sorted(currencies)
     return out
 
 
-def create_subscription(profile: dict, plan: str, period: str = "month") -> dict:
+def create_subscription(profile: dict, plan: str, period: str = "month", currency: str = "INR") -> dict:
+    """Subscribe in the visitor's currency when that currency's Razorpay plan is set up, otherwise in rupees
+    (international cards are charged the rupee price and converted by the card)."""
     if not enabled():
         raise ValueError("Payments aren't set up on the server yet.")
-    if period == "year" and not yearly_enabled():
+    own = pricing.plan_id(currency, plan, period)
+    if period == "year" and not yearly_enabled() and not own:
         raise ValueError("Yearly billing isn't set up yet; pick monthly.")
+    charged = currency if own else "INR"
     sub = client().subscription.create({
-        "plan_id": plan_ids(period)[plan],
+        "plan_id": own or plan_ids(period)[plan],
         "total_count": 10 if period == "year" else 120,   # up to 10 years of renewals; users can cancel any time
         "quantity": 1,
         "customer_notify": 1,
-        "notes": {"user_id": profile["id"], "plan": plan, "period": period},
+        "notes": {"user_id": profile["id"], "plan": plan, "period": period, "currency": charged},
     })
     db.update_profile(profile["id"], pending_subscription_id=sub["id"])
     return {"subscription_id": sub["id"], "key_id": settings.RAZORPAY_KEY_ID,
-            "email": profile.get("email"), "plan": plan}
+            "email": profile.get("email"), "plan": plan, "currency": charged}
 
 
 def activate(profile: dict, sub: dict):

@@ -48,7 +48,7 @@ def test_admin_controls_and_me(store, monkeypatch):
 
 def test_can_still_subscribe_during_the_offer(monkeypatch):
     main.app.dependency_overrides[main.current_profile] = lambda: {"id": "u", "plan": "free", "_plan": "pro", "_paid_plan": "free"}
-    monkeypatch.setattr(main.billing, "create_subscription", lambda p, plan, period: {"subscription_id": "sub_1"})
+    monkeypatch.setattr(main.billing, "create_subscription", lambda p, plan, period, currency="INR": {"subscription_id": "sub_1"})
     try:
         assert TestClient(main.app).post("/billing/subscribe", json={"plan": "pro"}).json() == {"subscription_id": "sub_1"}
     finally:

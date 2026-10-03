@@ -263,6 +263,11 @@ class IdeasReq(BaseModel):
 class SubscribeReq(BaseModel):
     plan: Literal["basic", "pro"]
     period: Literal["month", "year"] = "month"
+    currency: str = Field("INR", pattern=r"^[A-Z]{3}$")
+
+
+class PricesReq(BaseModel):
+    currencies: dict[str, dict] = Field(default_factory=dict, max_length=40)
 
 
 class VerifyReq(BaseModel):
