@@ -52,7 +52,11 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
                     "fiftyTwoWeekLow": min(c) * 0.98, "regularMarketDayHigh": h[-1], "regularMarketDayLow": l[-1],
                     "regularMarketVolume": 123456, "longName": next((x.get("longname") or x["shortname"] for x in CATALOGUE if x["symbol"] == sym), sym),
                     "instrumentType": "ETF" if sym == "SPY" else "EQUITY", "fullExchangeName": "Test"}
-            return httpx.Response(200, json={"chart": {"result": [{"meta": meta, "timestamp": ts, "indicators": {
-                "quote": [{"open": o, "high": h, "low": l, "close": c, "volume": v}]}}], "error": None}})
+            res = {"meta": meta, "timestamp": ts, "indicators": {"quote": [{"open": o, "high": h, "low": l, "close": c, "volume": v}]}}
+            if "div" in req.url.params.get("events", "") and sym == "AAPL" and g == 86400:     # a dividend and a split in its history
+                div, split = ts[-30] if len(ts) > 30 else ts[0], ts[-300] if len(ts) > 300 else ts[0]
+                res["events"] = {"dividends": {str(div): {"amount": 0.26, "date": div}},
+                                 "splits": {str(split): {"date": split, "numerator": 4, "denominator": 1, "splitRatio": "4:1"}}}
+            return httpx.Response(200, json={"chart": {"result": [res], "error": None}})
         return httpx.Response(404)
     return httpx.MockTransport(handler)

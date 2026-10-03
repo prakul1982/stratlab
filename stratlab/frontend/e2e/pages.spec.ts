@@ -73,7 +73,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -608,5 +608,52 @@ test("screens: promoter or insider bought in the last N days", async ({ page }, 
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub/i);
   expect(text).not.toMatch(/\b(buy|sell|signal|score)\b/i);
+  await sane(page, errors);
+});
+
+test("corporate actions: the calendar, a company's actions, and a bonus applied (and undone) in My Holdings", async ({ page, request }, info) => {
+  // each project signs in as its own user, so the two runs don't adjust the same holdings at once
+  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
+  const csv = Buffer.from("Symbol,Quantity,Average price\nTCS,12,3520\nRELIANCE,50,2400\n").toString("base64");
+  expect((await request.post(`${API}/holdings/import`, { headers: { Authorization: `Bearer ${token}` },
+    data: { filename: "holdings.csv", data: csv, mode: "replace" } })).ok()).toBeTruthy();
+  const who = sessionAs(token, id, email);
+
+  let errors = await open(page, "/research/corporate-actions?region=IN&scope=all", "Dividends, bonuses and splits", who);
+  await settle(page);
+  await expect(page.getByRole("link", { name: "TCS" }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
+  await expect(page.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible();
+  await expect(page.getByText("Annual General Meeting")).toHaveCount(0);           // a meeting isn't an action
+  await page.getByRole("combobox", { name: "Kind of action" }).selectOption("bonus");
+  await expect(page.getByText(/Dividend - Rs|₹5.50 a share/)).toHaveCount(0);
+  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
+  await page.getByRole("radio", { name: "My stocks" }).click();
+  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();      // TCS is in the holdings
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+  expect(await page.locator("main").innerText()).not.toMatch(/yahoo|finnhub|kite|screener/i);
+
+  await page.goto("/research/IN/TCS");
+  const panel = page.locator("#corporate-actions");
+  await expect(panel.getByText(/Interim dividend ₹11 a share/)).toBeVisible({ timeout: 30_000 });
+  await expect(panel.getByText(/Final dividend ₹30 a share/)).toBeVisible();
+  await expect(panel.getByText(/Dividends with an ex-date in the last 12 months/)).toBeVisible();
+
+  errors = await open(page, "/holdings", "By sector", who);
+  await settle(page);
+  const notice = page.getByText(/TCS had a 1:1 bonus on .*: your quantity is now 24, average price ₹1,760/);
+  await expect(notice).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Dividends" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Dividends ahead" }).getByText("TCS")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByText("TCS: quantity 24, average price ₹1,760.00.")).toBeVisible();
+  const positions = page.getByRole("table", { name: "Positions" });
+  await expect(positions.getByRole("row").filter({ hasText: "TCS" }).getByText("24", { exact: true })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText("TCS is back to 12 shares.")).toBeVisible();
+  await expect(notice).toBeVisible();
   await sane(page, errors);
 });

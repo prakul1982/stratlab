@@ -459,6 +459,27 @@ class NSEFilings:
         self.cache.set(key, rows, 3600)
         return rows
 
+    def corporate_actions(self, frm: datetime | None = None, to: datetime | None = None, symbol: str | None = None) -> list[dict]:
+        """The exchange's corporate actions (dividends, bonus issues, splits, buybacks, rights), as it lists them:
+        every company's with an ex-date between two dates, or one company's whole history. Cached for an hour."""
+        params = {"index": "equities"}
+        if symbol:
+            params["symbol"] = symbol
+        if frm and to:
+            params.update(from_date=frm.strftime("%d-%m-%Y"), to_date=to.strftime("%d-%m-%Y"))
+        key = ("actions",) + tuple(sorted(params.items()))
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        data = self._get("/api/corporates-corporateActions", params,
+                         referer="https://www.nseindia.com/companies-listing/corporate-filings-actions")
+        rows = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(rows, list):
+            raise SourceError(self.name, "The exchange's corporate-actions list wasn't in the expected shape.")
+        rows = [r for r in rows if isinstance(r, dict)]
+        self.cache.set(key, rows, 3600)
+        return rows
+
     def _quote(self, symbol: str) -> dict:
         """The exchange's quote for one stock, asked the way its own quote page asks (it refuses bare requests)."""
         from urllib.parse import quote as q
@@ -687,6 +708,40 @@ class BSEFilings:
         return items
 
 
+    def corporate_actions(self, code: str) -> list[dict]:
+        """One BSE company's corporate actions (dividends, bonus issues, splits...), as BSE lists them. Cached for an hour."""
+        code = str(code).strip()
+        if not code.isdigit():
+            raise SourceError(self.name, "That isn't a BSE scrip code.")
+        hit = self.cache.get(("actions", code))
+        if hit is not None:
+            return hit
+        if time.time() < self._down_until:
+            raise SourceError(self.name, "The exchange feed isn't answering right now. Try again in a minute.", busy=True)
+        if not self.limit.take():
+            raise SourceError(self.name, "The exchange feed is busy (our rate limit). Try again in a minute.", busy=True)
+        try:
+            r = self.http.get("/DefaultData/w", params={"Fdate": "", "Purposecode": "", "TDate": "", "ddlcategorys": "E",
+                                                        "ddlindustrys": "", "scripcode": code, "segmentid": "0", "strSearch": "S"})
+        except httpx.HTTPError as e:
+            self._failed()
+            raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
+        if r.status_code == 429 or r.status_code >= 500:
+            self._failed()
+            raise SourceError(self.name, f"The exchange feed is busy ({r.status_code}). Try again in a minute.", busy=True)
+        if r.status_code >= 400:
+            raise SourceError(self.name, f"The exchange feed refused the request ({r.status_code}).")
+        try:
+            data = r.json()
+        except ValueError:
+            self._failed()
+            raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).", busy=True) from None
+        rows = data.get("Table") if isinstance(data, dict) else data
+        rows = [x for x in rows if isinstance(x, dict)] if isinstance(rows, list) else []
+        self.cache.set(("actions", code), rows, 3600)
+        return rows
+
+
 class IndiaFilings:
     """Filings for any Indian company: NSE's feed by symbol, or BSE's by scrip code for companies listed only on
     BSE (`code_of` says which: a BSE code, or None for an NSE company). Everything else is NSE's."""
@@ -723,6 +778,11 @@ class IndiaFilings:
     def block_deals(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
         self._nse_only(symbol)
         return self.nse.block_deals(symbol, days, to)
+
+    def actions_of(self, symbol: str) -> tuple[str, list[dict]]:
+        """("nse" or "bse", the company's corporate actions as that exchange lists them)."""
+        code = self.code_of(symbol)
+        return ("bse", self.bse.corporate_actions(code)) if code else ("nse", self.nse.corporate_actions(symbol=symbol))
 
     def __getattr__(self, name):
         return getattr(self.nse, name)
