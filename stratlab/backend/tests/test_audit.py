@@ -372,3 +372,31 @@ def test_india_whole_market_adds_bse_only_companies(monkeypatch):
         assert audit._shard("BSE:543210") == "audit:market:rows:bse0" or audit._shard("BSE:543210").endswith("rows:bse0")
     finally:
         w["close"]()
+
+
+def test_one_full_check_of_every_company_then_new_listings_only(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        listing = [{"symbol": s, "name": s, "listed": "2001-01-01"} for s in ("AAA", "BBB")] + _recent("NEWCO")
+        a = audit.MarketAudit(lambda: listing, _clean, pause=0)
+        a.set_enabled(True)
+        assert a.queue() == []                                                           # nothing started yet
+        a.full_once()                                                                    # the first start: check them all
+        assert a.status()["full"]["running"]
+        a.refresh_list(force=True)
+        assert a.queue() == ["NEWCO", "AAA", "BBB"]                                      # new listings still go first
+        assert [a.step(), a.step(), a.step()] == ["NEWCO", "AAA", "BBB"]
+        assert a.step() is None
+        st = a.status()
+        assert not st["full"]["running"] and st["full"]["done_at"] and st["checked"] == 3
+        a.full_once()                                                                    # once only: never again by itself
+        assert a.queue() == []
+        a.start_full()                                                                   # by hand: everything once more
+        assert sorted(a.queue()) == ["AAA", "BBB", "NEWCO"]
+        assert audit.MarketAudit(lambda: listing, _clean).status()["full"]["running"]   # survives a restart
+        h = W.headers("admin-token")
+        r = w["client"].post("/admin/audit/market", headers=h, json={"full": True}).json()
+        assert r["full"]["running"]
+    finally:
+        w["close"]()

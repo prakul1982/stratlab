@@ -2140,10 +2140,12 @@ def admin_market_audit(region: str = "IN", _=Depends(admin.admin_profile)):
 
 @app.post("/admin/audit/market")
 def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
-    """Switch the whole-market audit on or off, or re-read the exchange's list now."""
+    """Switch the whole-market audit on or off, re-read the exchange's list now, or check every company once."""
     m = market_for(req.region)
     if req.on is not None:
         m.set_enabled(req.on)
+    if req.full:
+        m.start_full()
     if req.read_list:
         threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()
     return m.status()

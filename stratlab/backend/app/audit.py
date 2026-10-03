@@ -378,6 +378,27 @@ class MarketAudit:
             print("could not save the market audit:", e)
 
     # control
+    def start_full(self):
+        """Check every listed company once (results stay until each is replaced), then go back to new listings."""
+        with self.lock:
+            self._load()
+            self.state.update(full_since=datetime.now(timezone.utc).isoformat(), full_done=None)
+            self._save("state")
+
+    def full_once(self):
+        """The first time this runs: one full check of every company, so the whole market starts out checked."""
+        with self.lock:
+            self._load()
+            started = self.state.get("full_since") or self.state.get("full_done")
+        if not started:
+            self.start_full()
+
+    def _full_left(self) -> list[str]:
+        since = self.state.get("full_since")
+        if not since:
+            return []
+        return sorted(s for s in self.listing if ((self.rows.get(s) or {}).get("at") or "") < since)
+
     def set_enabled(self, on: bool):
         with self.lock:
             self._load()
@@ -422,7 +443,8 @@ class MarketAudit:
             return False
 
     def queue(self) -> list[str]:
-        """Companies due a check, in order: new listings not yet checked (newest first), then failed checks to retry."""
+        """Companies due a check, in order: new listings not yet checked (newest first), failed checks to retry, then
+        (during a full check) every company not yet checked since it started."""
         now = datetime.now(timezone.utc)
         today = now.date()
         retry_cut = (now - timedelta(hours=RETRY_HOURS)).isoformat()
@@ -435,7 +457,9 @@ class MarketAudit:
                     new.append((info.get("listed") or info.get("seen") or "", sym))
             elif _transient(row) and (row.get("tries") or 1) < MAX_TRIES and at < retry_cut:
                 retry.append((at, sym))           # a source was down or busy: try again later
-        return [s for _, s in sorted(new, reverse=True)] + [s for _, s in sorted(retry)]
+        first = [s for _, s in sorted(new, reverse=True)] + [s for _, s in sorted(retry)]
+        taken = set(first)
+        return first + [s for s in self._full_left() if s not in taken]
 
     # work
     def step(self) -> str | None:
@@ -449,6 +473,9 @@ class MarketAudit:
         self.refresh_list()
         with self.lock:
             due = self.queue()
+            if self.state.get("full_since") and not self._full_left():     # the full check is through
+                self.state.update(full_since=None, full_done=datetime.now(timezone.utc).isoformat())
+                self._save("state")
             if not due:
                 return None
             sym = self.current = due[0]
@@ -468,6 +495,10 @@ class MarketAudit:
         return sym
 
     def loop(self):
+        try:
+            self.full_once()
+        except Exception as e:
+            print("market audit: couldn't start the first full check:", e)
         while True:
             try:
                 did = self.step()
@@ -492,7 +523,11 @@ class MarketAudit:
                            "checked": bool((self.rows.get(s) or {}).get("at"))}
                           for s, i in self.listing.items() if self._is_new(s, today)), key=lambda x: x["listed"] or "", reverse=True)
             avg = (sum(self.secs) / len(self.secs) + self.pause) if self.secs else None
+            left = len(self._full_left())
             return {**{k: self.state.get(k) for k in ("enabled", "list_at", "list_tried_at", "list_error")},
+                    "full": {"running": bool(self.state.get("full_since")), "since": self.state.get("full_since"),
+                             "done_at": self.state.get("full_done"), "left": left,
+                             "checked": len(self.listing) - left if self.state.get("full_since") else None},
                     "listed": len(self.listing), "checked": len(self.rows), "due": len(due), "current": self.current,
                     "eta_hours": round(len(due) * avg / 3600, 1) if avg else None, "new_listings": new[:30],
                     "summary": summarise(rows), "rows": [r for r in rows if r.get("issues")]}
