@@ -6,7 +6,6 @@ from . import db
 KEYS = ("market_in", "market_us", "my_stocks")
 VALUES = ("daily", "weekly", "off")
 PREFIX = KEY = "newsletters:"
-CHOICES = KEYS
 
 
 def get(uid: str) -> dict:

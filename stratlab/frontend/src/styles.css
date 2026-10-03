@@ -429,9 +429,6 @@ td.num, .num { font-family: var(--mono); }
 .score-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 64px; gap: 12px; align-items: center; }
 .score-track { height: 8px; border-radius: 999px; background: var(--chip); overflow: hidden; }
 .score-track > div { height: 100%; border-radius: 999px; }
-.val-track { position: relative; height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--blue-soft), var(--chip) 50%, var(--orange-soft)); }
-.val-mark { position: absolute; top: -4px; width: 12px; height: 16px; border-radius: 4px; }
-.stackbar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--chip); }
 /* lists */
 .news-row { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--ink); text-decoration: none; }
 .news-row:hover span:first-child { text-decoration: underline; }

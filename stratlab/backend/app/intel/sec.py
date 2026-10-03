@@ -27,7 +27,6 @@ TOP_LINE = ("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "
 # ...and when none of those is filed: narrower lines that are the revenue for some kinds of company
 REVENUE_ELSE = ("SalesRevenueGoodsNet", "SalesRevenueServicesNet", "OperatingLeaseLeaseIncome", "RevenuesNetOfInterestExpense",
                 "InterestAndDividendIncomeOperating")
-REVENUE = TOP_LINE + REVENUE_ELSE
 NET_INCOME = ("NetIncomeLoss", "NetIncomeLossAvailableToCommonStockholdersBasic", "ProfitLoss")
 OPERATING = ("OperatingIncomeLoss",)
 DEPRECIATION = ("DepreciationDepletionAndAmortization", "DepreciationAmortizationAndAccretionNet",

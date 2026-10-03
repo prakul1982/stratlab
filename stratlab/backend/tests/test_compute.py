@@ -2,7 +2,6 @@
 import math
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from app import compute, research
 from app.models import Strategy

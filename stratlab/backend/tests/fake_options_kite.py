@@ -1,6 +1,6 @@
 """A stand-in for Kite's option instruments, quotes and margins, for tests and the local demo server only."""
 import math
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")

@@ -53,7 +53,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, weekly
 from .newsletter import job as news
-from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
+from .models import (ShareReq, GroupLiveReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
@@ -1224,7 +1224,7 @@ def deep_view(sym: str, base: dict) -> dict:
             "industry_measures": industry.measures(p, sym),
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
-            "card": card_view, "card_stale": not report_card.fresh(card), "trend": base["trend"], "filings": base["filings"],
+            "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym),
             "ai": True, "report_card": True,
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
@@ -1366,7 +1366,7 @@ def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", years
     key = f"US:{sym}" if us else sym
     years = deep_years(years)
     base = deep_base(sym, region, years)
-    if report_card.fresh(report_card.stored(key)) and not refresh:
+    if deepdive.fresh(report_card.stored(key)) and not refresh:
         return ok(deep_view(sym, base))
     kind = "earnings_release" if us else "transcript"
     if not any(d["kind"] == kind for d in base["docs"]):
@@ -1783,12 +1783,6 @@ def import_options(text: str, profile) -> dict:
     db.add_usage(profile["id"], "ai")
     return {"kind": "options", "strategy": strategy.model_dump(), "notes": notes, "used_ai": True,
             "usage": {"ai_used": used + 1, "ai_limit": limit}}
-
-
-@app.post("/options/import")
-def options_import(req: OptionImportReq, profile=Depends(current_profile)):
-    fmt = importer.detect(req.text, "")
-    return {"source": fmt, "source_name": importer.FORMATS[fmt], **import_options(req.text, profile)}
 
 
 # ---------- billing ----------

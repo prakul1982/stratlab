@@ -390,10 +390,6 @@ class OptionStartReq(BaseModel):
     strategy: OptionStrategy
 
 
-class OptionImportReq(BaseModel):
-    text: str = Field(..., min_length=10, max_length=60000)
-
-
 class FastEntry(BaseModel):
     """Live group options: enter on the price as it moves instead of at candle close, and skip poor fills."""
     ticks: bool = False                                  # check entry rules on the forming candle (India, live ticks)

@@ -160,7 +160,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | You want to… | Where it is |
 | --- | --- |
 | Find an idea | **Investing → Companies** in the menu: a company's AI read ends with ideas to test in one click |
-| Explore a sector | **Research → Themes**: a map of who's involved, where the margin sits, and a ranked shortlist |
+| Explore a sector | **Research → Themes**: a map of who's involved, where the margin sits, and the listed companies along the chain |
 | See the market's mood | **Research → Market pulse**: index levels, headlines and an AI read of what's moving |
 | Keep an eye on companies | **Watch** on a company page; they're listed under **Investing → Watchlist** |
 | Find Stage 2 stocks with the Supertrend up | **Investing → Stage 2 scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
@@ -205,6 +205,7 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Get a GST invoice for a payment | **Account → Invoices**: every payment's invoice, ready to print or save as PDF, and the name, address and GSTIN to put on future ones |
 | Put it on your phone | **Account → On your phone**: install StratLab to the home screen (its own icon, full screen) and **Turn on notifications** to get trade alerts and the daily report on that device, no Telegram needed. On an iPhone, first Share → Add to Home Screen |
 | Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
+| Get the market and your stocks by email | **Account → Newsletters**: the Market Brief (India or US) daily or weekly, and My Stocks for the stocks in your watchlist, notebooks and paper trading (Pro); past issues are on **News** |
 | Read at night | **Night mode** at the bottom of the sidebar |
 
 <picture>
@@ -236,7 +237,7 @@ flowchart LR
     API -- "subscriptions" --> RZP["Razorpay"]
     RZP -- "webhooks" --> API
     API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini, Mistral,<br/>SambaNova, OpenRouter, Claude"]
-    API --> ALERT["Phone, Telegram and email alerts<br/>(email through Resend)"]
+    API --> ALERT["Phone, Telegram and email alerts, newsletters<br/>(email through Brevo, Resend or SMTP)"]
 ```
 
 The browser only talks to the backend. The backend owns every secret: the Supabase service key, broker and Razorpay credentials, and the AI keys. Backtests, verdict checks and live paper trading all use the same engine, so a strategy behaves the same everywhere.
@@ -288,6 +289,7 @@ stratlab/
 │   │   ├── ai_writer.py      plain English → strategy rules
 │   │   ├── ai_providers.py   the AI provider chain and its order for quick jobs and research reads
 │   │   ├── push.py           phone and browser notifications (Web Push)
+│   │   ├── newsletter/       the Market Brief and My Stocks newsletters: facts, writing, the send schedule
 │   │   └── alerts.py         phone, Telegram and email alerts
 │   ├── tests/                pytest suite, including fuzz, failure, calendar, security and load tests
 │   └── .env.example          every setting the server reads
@@ -336,6 +338,7 @@ Paid plans switch on once Razorpay's keys and plan IDs are set; until then every
 | Group paper trading | – | ✓ | ✓ with faster entries and a spread limit |
 | Options paper trading | – | At set times | At set times or on a notebook's signal |
 | Daily report after the close | – | ✓ | ✓ |
+| Newsletters | Weekly Market Brief | + the daily Market Brief | + My Stocks |
 | Phone, Telegram and email alerts for every trade | – | – | ✓ |
 | Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
 | Markets | All, except Indian F&O | same | + Indian F&O |

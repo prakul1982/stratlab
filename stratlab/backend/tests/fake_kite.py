@@ -3,7 +3,7 @@ deterministic wavy candles at every interval, last prices and quotes. `online()`
 logged in and serves all of it, so every Indian feature runs in tests."""
 import math
 import zlib
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app import rotation, sector_members, universes

@@ -245,7 +245,7 @@ export function ThemesPage() {
     <div className="stack" style={{ gap: 24 }}>
       <ResearchNav region={region} setRegion={setRegion} />
       <Header eyebrow={`Themes · ${REGION_NAME[region]}`} title="Map a theme, find the shovels"
-        sub="Type a sector or trend. The AI maps who's involved, where the money flows, and ranks the companies worth a closer look." />
+        sub="Type a sector or trend. The AI maps who's involved, where the money flows, and which listed companies sit along the chain." />
       <form className="row" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); go(text); }}>
         <input className="input" style={{ flex: 1 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} aria-label="Theme" />
         <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
