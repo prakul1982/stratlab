@@ -142,6 +142,18 @@ def fix_rupee(text: str) -> str:
 
 
 def pdf_text(data: bytes, max_pages: int = MAX_PAGES) -> str:
+    return pdf_text_pages(data, max_pages)[0]
+
+
+SCANNED_CHARS = 150          # fewer text characters than this per page: the pages are pictures (a scan)
+
+
+def scanned(text: str, pages: int) -> bool:
+    return pages >= 1 and len(text.strip()) < SCANNED_CHARS * min(pages, 4)
+
+
+def pdf_text_pages(data: bytes, max_pages: int = MAX_PAGES) -> tuple[str, int]:
+    """The PDF's text and its page count."""
     from pypdf import PdfReader               # imported here: only these reads need it
     reader = PdfReader(io.BytesIO(data))
     parts = []
@@ -150,16 +162,22 @@ def pdf_text(data: bytes, max_pages: int = MAX_PAGES) -> str:
             parts.append(page.extract_text() or "")
         except Exception:                     # one bad page mustn't lose the document
             continue
-    text = "\n".join(parts)
+    return _tidy("\n".join(parts)), len(reader.pages)
+
+
+def _tidy(text: str) -> str:
     return fix_rupee(re.sub(r"[ \t]+", " ", re.sub(r"\n{3,}", "\n\n", text)).strip())
 
 
 class Docs:
-    def __init__(self, http: httpx.Client | None = None, transport: httpx.BaseTransport | None = None, check_host=public_host):
+    def __init__(self, http: httpx.Client | None = None, transport: httpx.BaseTransport | None = None, check_host=public_host,
+                 ocr=None):
         self.http = http or httpx.Client(timeout=30, transport=transport, follow_redirects=False,
                                          headers={"User-Agent": BROWSER_UA, "Accept": "application/pdf,*/*",
                                                   "Referer": "https://www.nseindia.com/"})
         self.check_host = check_host
+        self.ocr = ocr                          # reads scanned PDFs; None: the AI services' OCR when a key is set
+        self.scans = 0                          # scanned PDFs read this way
 
     def _download(self, url: str, extra_hosts: tuple[str, ...], limit: int) -> bytes:
         """The body at `url`, following up to three redirects that stay on the allowed hosts, every host checked to be
@@ -201,6 +219,21 @@ class Docs:
         _cache.set(("page", url), html, 86400)
         return html
 
+    def _ocr(self, data: bytes) -> str:
+        """A scanned PDF's text, read from the page images; '' when no OCR service is set up."""
+        from . import ocr
+        fn = self.ocr or (ocr.read_pdf if ocr.available() else None)
+        if fn is None:
+            return ""
+        try:
+            got = fn(data)
+        except Exception as e:
+            raise SourceError("the exchange", f"The PDF is a scan and couldn't be read ({str(e)[:80]}).", busy=True) from None
+        if got and got.strip():
+            self.scans += 1
+            return _tidy(got)
+        return ""
+
     def text(self, url: str, extra_hosts: tuple[str, ...] = ()) -> str:
         """The text of a PDF on the exchange's site, or on the company's own website (`extra_hosts`). Up to three
         redirects are followed, each one checked the same way."""
@@ -213,9 +246,11 @@ class Docs:
         if not bytes(buf[:5]).startswith(b"%PDF"):
             raise SourceError("the exchange", "The link didn't return a PDF.")
         try:
-            text = pdf_text(bytes(buf))
+            text, pages = pdf_text_pages(bytes(buf))
         except Exception as e:
             raise SourceError("the exchange", f"The PDF couldn't be read ({e.__class__.__name__}).") from None
+        if scanned(text, pages):
+            text = self._ocr(bytes(buf)) or text
         _cache.set(url, text, 7 * 86400)
         return text
 

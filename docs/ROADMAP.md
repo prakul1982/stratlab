@@ -24,11 +24,12 @@ Still to do:
 *Done:* USDINR, EURINR, GBPINR and JPYINR futures as a market of their own (front month, rolled three days before
 expiry, whole lots of 1,000 units or 100,000 yen): daily backtests on years of stitched history, intraday on the
 current contract, paper trading, costs without STT (exchange fees, stamp duty, GST), 09:00 to 17:00 IST, and the
-segment's own holiday list read from the exchange each day.
+segment's own holiday list read from the exchange each day. USDINR options in the Options tab. The cross pairs
+EURUSD, GBPUSD and USDJPY as futures, priced and counted in dollars or yen (the exchange settles them in rupees at the
+RBI rate); brokerage, set in rupees, is converted at the day's rate.
 
 Still to do:
-- The cross pairs (EURUSD, GBPUSD, USDJPY): their profit is in dollars, not rupees.
-- USDINR options in the Options tab.
+- Options on the cross pairs (rarely traded).
 
 ### International payments
 *Done:* international cards are on in Razorpay, so anyone abroad can subscribe. The Plans page shows prices in the
@@ -68,12 +69,15 @@ by feature, against what people would otherwise use:
 ## Precision: known gaps (India)
 Found while checking live companies. Each shows a note on the page today instead of a wrong number.
 
-- **Letters with no link at all** ("available on the website of the Company"): about a fifth of large companies in
-  the first audit. Could look up the company's investor page from its website, but that's guesswork per site.
-- **Scanned (image-only) PDFs**: no text without OCR.
+- *Done:* **letters with no link** (or a dead link): the company's investor pages are searched (home page → investor
+  page → its results or calls page) for a PDF of the same kind naming the same quarter (Q2 FY26, Sep 2025…); only the
+  company's own site is read, and nothing is taken when no file names that quarter. Sites built entirely in
+  JavaScript still show nothing to read.
+- *Done:* **scanned (image-only) PDFs** are read by OCR: Mistral's OCR model first, then Gemini (first 30 pages), with
+  the keys already set for the AI reads.
 - **Audio- or video-only calls**: no transcript to read.
-- **EV/EBITDA without cash**: EV is market value plus borrowings; cash isn't subtracted because the fundamentals
-  source doesn't give it, so cash-rich companies read slightly high.
+- *Done:* **EV/EBITDA cash**: cash and equivalents come from the balance sheet's Other Assets breakdown and are
+  subtracted; when that breakdown can't be read, the note still says cash isn't subtracted.
 - **Hospital and other industry measures** depend on the company stating them in its presentation or calls.
 - **Wider live testing**: so far checked on Reliance, HDFC Bank and Apollo Hospitals. Next: an IT company (Infosys),
   consumer (Titan), cement, a small cap, an insurer and a holding company.

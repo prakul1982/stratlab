@@ -30,7 +30,7 @@ MARKETS = [
      "costs": "CTT 0.01% on sells, MCX fees, stamp duty, GST", "provider": "kite", "brokerage": 20},
     {"id": "CDS", "name": "Indian currency futures", "venues": "NSE currency derivatives", "currency": "INR", "symbol": "₹$",
      "tz": "Asia/Kolkata", "hours": {"open": "09:00", "close": "17:00", "days": "Mon–Fri"},
-     "what": "USD/INR, EUR/INR, GBP/INR and JPY/INR futures (front month, in whole lots)",
+     "what": "USD/INR, EUR/INR, GBP/INR and JPY/INR futures, and EUR/USD, GBP/USD and USD/JPY (profit in dollars or yen); front month, whole lots",
      "costs": "No STT; exchange fees, stamp duty, GST", "provider": "kite", "brokerage": 20},
     {"id": "CMDTY", "name": "Global commodities", "venues": "CME, NYMEX, COMEX, ICE futures", "currency": "USD", "symbol": "$Au",
      "tz": "America/New_York", "hours": {"open": None, "close": None, "days": "Nearly 24 hours, Sun–Fri"},

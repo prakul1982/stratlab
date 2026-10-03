@@ -33,6 +33,7 @@ def test_security_headers_and_size_cap():
 
 
 def test_rate_limit_is_per_caller_and_skips_health(monkeypatch):
+    monkeypatch.setattr(guard.time, "time", lambda: 1_800_000_030.0)   # mid-minute: the window can't roll over mid-test
     monkeypatch.setattr(guard, "PER_MINUTE_ANON", 3)
     monkeypatch.setattr(guard, "PER_MINUTE_USER", 5)
     c = TestClient(small_app())
@@ -45,6 +46,7 @@ def test_rate_limit_is_per_caller_and_skips_health(monkeypatch):
 
 
 def test_made_up_tokens_still_hit_the_address_limit(monkeypatch):
+    monkeypatch.setattr(guard.time, "time", lambda: 1_800_000_030.0)   # mid-minute: the window can't roll over mid-test
     monkeypatch.setattr(guard, "PER_MINUTE_ADDRESS", 4)
     c = TestClient(small_app())
     codes = [c.get("/x", headers={"Authorization": f"Bearer fake{i}", "X-Real-IP": "9.9.9.9"}).status_code for i in range(6)]

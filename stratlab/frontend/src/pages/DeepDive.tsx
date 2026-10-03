@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct, signClass } from "../lib/format";
+import { scaleFor } from "../lib/research";
 import { Panel, ResearchNav, TrendBars } from "../components/Research";
 import { Loading } from "../components/ui";
 
@@ -39,6 +40,13 @@ export interface DeepView {
 
 const cr = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-IN", { maximumFractionDigits: 2 }));
 const usd = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
+/** An amount in $ million as people say it: "$950 million", "$215.9 billion". */
+const usdAmount = (v: number | null | undefined) => (v == null ? "–" : Math.abs(v) >= 1000
+  ? `$${(v / 1000).toLocaleString("en-US", Math.abs(v) >= 10000 ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billion`
+  : `$${usd(v)} million`);
+/** An amount in ₹ crore as people say it: "₹945 crore", "₹1.25 lakh crore". */
+const inrAmount = (v: number | null | undefined) => (v == null ? "–" : Math.abs(v) >= 100000   // within 0.5%
+  ? `₹${(v / 100000).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lakh crore` : `₹${cr(v)} crore`);
 const pc = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);
 const day = (s: string) => new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report",
@@ -61,8 +69,8 @@ function lossNote(values: (number | null | undefined)[], years: number): string 
 const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", other: "" };
 const RESULT: Record<string, [string, string]> = { met: ["Met", "pass"], missed: ["Missed", "fail"], pending: ["Not due yet", "next"], unchecked: ["Can't check", "skip"] };
 const target = (lo: number | null, hi: number | null, unit: string) =>
-  lo == null ? "–" : unit === "crore" ? `₹${cr(lo)}${hi != null ? `–${cr(hi)}` : ""} cr`
-    : unit === "million" ? `$${usd(lo)}${hi != null ? `–${usd(hi)}` : ""} m` : `${lo}${hi != null ? `–${hi}` : ""}%`;
+  lo == null ? "–" : unit === "crore" ? (hi != null ? `${inrAmount(lo)} – ${inrAmount(hi)}` : inrAmount(lo))
+    : unit === "million" ? (hi != null ? `${usdAmount(lo)} – ${usdAmount(hi)}` : usdAmount(lo)) : `${lo}${hi != null ? `–${hi}` : ""}%`;
 
 function ReportCard({ c }: { c: Card }) {
   const checked = c.met + c.missed;
@@ -89,7 +97,7 @@ function ReportCard({ c }: { c: Card }) {
               <div className="promise-facts tiny">
                 {r.period && <span><span className="muted">For</span> {r.period}</span>}
                 {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit)}</b></span>}
-                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? `₹${cr(r.actual)} cr` : r.unit === "million" ? `$${usd(r.actual)} m` : `${r.actual.toFixed(1)}%`}</b></span>}
+                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? inrAmount(r.actual) : r.unit === "million" ? usdAmount(r.actual) : `${r.actual.toFixed(1)}%`}</b></span>}
                 <a className="link" href={r.source.url} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
               </div>
               {r.quote && <span className="tiny muted">"{r.quote}"</span>}
@@ -135,8 +143,6 @@ export function DeepDivePage() {
   const sym = symbol.toUpperCase();
   const us = region === "US";
   const q = (extra = "") => (us ? `?region=US${extra ? `&${extra}` : ""}` : extra ? `?${extra}` : "");
-  const num = us ? usd : cr;                                   // amounts in the company's own unit: $ million or ₹ crore
-  const unitWord = us ? "$ million" : "₹ crore";
   const { me, fail, notify } = useApp();
   const pro = !!me?.plan_info?.features?.deepdive;
   const [v, setV] = useState<DeepView | null>(null);
@@ -183,6 +189,10 @@ export function DeepDivePage() {
 
   const n = v?.numbers;
   const years = (n?.years ?? []).filter((y) => y.sales != null);
+  // each chart and table picks its own unit (see scaleFor): large and exact enough → $ billion / ₹ lakh crore
+  const salesS = scaleFor(years.map((y) => y.sales), us), profitS = scaleFor(years.map((y) => y.profit), us);
+  const qS = scaleFor((n?.quarters ?? []).slice(-8).flatMap((q) => [q.sales, q.profit]), us);
+  const capS = scaleFor([...years].reverse().slice(0, 8).flatMap((y) => [y.sales, y.capex, y.cfo, y.fcf, y.debt]), us);
   const b = v?.reads?.business, p = v?.reads?.plans;
   return (
     <div className="stack" style={{ gap: 22 }}>
@@ -192,7 +202,7 @@ export function DeepDivePage() {
         <span className="eyebrow">Deep dive · {us ? "United States" : "India"} · {sym}</span>
         <h1 className="serif" style={{ fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{v?.name ?? sym}: business, capex and growth</h1>
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>{us
-          ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in $ million{v?.source_url ? <> (<a className="link" href={v.source_url} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
+          ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={v.source_url} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
         {v && <div className="row wrap" style={{ gap: 10 }}>
           <button className="btn quiet sm" disabled={decking} onClick={downloadDeck} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking ? "Making the deck…" : "Download as slides (PowerPoint)"}</button>
@@ -213,15 +223,15 @@ export function DeepDivePage() {
             </div>
             {(n.notes ?? []).map((t) => <p key={t} className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>{t}</p>)}
             <div className="rs-grid">
-              <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.sales as number }))} label={us ? "Revenue" : "Sales"} unit={n.unit} />
-              <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: y.profit as number }))} label="Net profit" unit={n.unit} tone="blue" />
+              <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.sales as number) / salesS.k }))} label={us ? "Revenue" : "Sales"} unit={salesS.unit} />
+              <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.profit as number) / profitS.k }))} label="Net profit" unit={profitS.unit} tone="blue" />
             </div>
             {n.quarters.length > 0 && (
               <div className="table-wrap"><table>
-                <thead><tr><th>Quarter</th><th className="num">Sales</th><th className="num">vs a year ago</th><th className="num">{n.bank ? "Financing margin" : "Operating margin"}</th><th className="num">Net profit</th></tr></thead>
+                <thead><tr><th>Quarter <span className="tiny muted">({qS.unit})</span></th><th className="num">Sales</th><th className="num">vs a year ago</th><th className="num">{n.bank ? "Financing margin" : "Operating margin"}</th><th className="num">Net profit</th></tr></thead>
                 <tbody>{n.quarters.slice(-8).map((q) => (
-                  <tr key={q.quarter}><td>{q.quarter}</td><td className="num">{num(q.sales)}</td><td className={`num ${signClass(q.sales_yoy)}`}>{q.sales_yoy == null ? "–" : pct(q.sales_yoy)}</td>
-                    <td className="num">{pc(q.opm)}</td><td className="num">{num(q.profit)}</td></tr>))}</tbody>
+                  <tr key={q.quarter}><td>{q.quarter}</td><td className="num">{qS.fmt(q.sales)}</td><td className={`num ${signClass(q.sales_yoy)}`}>{q.sales_yoy == null ? "–" : pct(q.sales_yoy)}</td>
+                    <td className="num">{pc(q.opm)}</td><td className="num">{qS.fmt(q.profit)}</td></tr>))}</tbody>
               </table></div>
             )}
           </Panel>
@@ -244,14 +254,14 @@ export function DeepDivePage() {
             </Panel>
           ) : (
           <Panel title="Capex and cash" span="full" info={n.capex_reported
-            ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${unitWord}.`
-            : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${unitWord}.`}>
-            {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>{n.capex_reported ? "" : "About "}<b>{us ? `$${usd(n.capex_3y_total)} million` : `₹${cr(n.capex_3y_total)} crore`}</b> spent on capex over the last three years. Figures in {unitWord}.</p>}
+            ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${capS.unit}.`
+            : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
+            {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total) : inrAmount(n.capex_3y_total)}</b> spent on capex over the last three years. Figures in {capS.unit}.</p>}
             <div className="table-wrap"><table>
               <thead><tr><th>Year</th><th className="num">Sales</th><th className="num">Capex</th><th className="num">Capex / sales</th><th className="num">Cash from operations</th><th className="num">Free cash flow</th><th className="num">Debt</th></tr></thead>
               <tbody>{[...years].reverse().slice(0, 8).map((y) => (
-                <tr key={y.year}><td>{y.year}</td><td className="num">{num(y.sales)}</td><td className="num">{num(y.capex)}</td><td className="num">{pc(y.capex_pct_sales)}</td>
-                  <td className="num">{num(y.cfo)}</td><td className={`num ${signClass(y.fcf)}`}>{num(y.fcf)}</td><td className="num">{num(y.debt)}</td></tr>))}</tbody>
+                <tr key={y.year}><td>{y.year}</td><td className="num">{capS.fmt(y.sales)}</td><td className="num">{capS.fmt(y.capex)}</td><td className="num">{pc(y.capex_pct_sales)}</td>
+                  <td className="num">{capS.fmt(y.cfo)}</td><td className={`num ${signClass(y.fcf)}`}>{capS.fmt(y.fcf)}</td><td className="num">{capS.fmt(y.debt)}</td></tr>))}</tbody>
             </table></div>
           </Panel>
           )}

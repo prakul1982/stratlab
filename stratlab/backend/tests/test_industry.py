@@ -172,3 +172,29 @@ def test_low_promoter_stake_fails_only_when_falling():
     assert state([34, 33, 31, 29, 27.5])["state"] == "fail"                # low and falling
     assert state([25])["state"] == "watch"                                 # no history to judge
     assert state([55, 55, 55, 55, 55])["state"] == "pass"
+
+
+def test_indian_cash_comes_from_the_other_assets_breakdown():
+    import httpx
+    from app.intel.screener import Screener, parse
+    asked = []
+
+    def handler(r):
+        asked.append((r.url.path, dict(r.url.params)))
+        if r.url.path == "/api/company/2726/schedules/":
+            return httpx.Response(200, json={"Inventories": {"Mar 2024": "100", "Mar 2025": "120"},
+                                             "Cash Equivalents": {"Mar 2024": "1,500", "Mar 2025": "2,000"}})
+        return httpx.Response(404)
+    s = Screener(transport=httpx.MockTransport(handler))
+    p = {"company_id": "2726", "basis": "consolidated", "pl": {"cols": ["Mar 2024", "Mar 2025", "TTM"], "rows": {"Operating Profit": [800, 900, 1000], "Net Profit": [400, 450, 500]}},
+         "balance": {"cols": ["Mar 2024", "Mar 2025"], "rows": {"Borrowings": [3000, 3500]}}}
+    got = s.with_cash(p)
+    assert got["balance"]["rows"]["Cash Equivalents"] == [1500, 2000] and asked[0][1]["consolidated"] == "true"
+    v = industry.valuation(got, {"market_cap_cr": 10000}, "general", "hospital")
+    assert v["short"] == "EV/EBITDA" and v["value"] == round((10000 + 3500 - 2000) / 1000, 1) and "less cash" in v["why"]
+    assert s.with_cash(p) == got and len(asked) == 1                      # cached
+    # no breakdown (blocked, or not shown to visitors): unchanged, and the note says cash isn't subtracted
+    bare = Screener(transport=httpx.MockTransport(lambda r: httpx.Response(403, text="login")))
+    assert bare.with_cash(p) is p
+    assert "cash isn't subtracted" in industry.valuation(p, {"market_cap_cr": 10000}, "general", "hospital")["why"]
+    assert parse('<h1>X</h1><div data-company-id="77" id="company-info"></div>')["company_id"] == "77"

@@ -78,7 +78,8 @@ test("losses hang below the zero line (deep dive)", async ({ page }) => {
 
 test("a US deep dive is in dollars, from the SEC's filings", async ({ page }) => {
   const errors = await open(page, "/research/US/AAPL/deep", "Growth and margins");
-  await expect(page.getByText("$ million").first()).toBeVisible();
+  await expect(page.getByText("$ billion").first()).toBeVisible();          // a company this size reads in billions
+  expect(await page.locator("main").innerText()).not.toMatch(/\d{3},\d{3} million/);
   await expect(page.getByText("Read the annual report and releases")).toBeVisible();
   await expect(page.getByText("Check past releases")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/₹|crore/);

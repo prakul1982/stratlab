@@ -1069,6 +1069,10 @@ def deep_base(sym: str, region: str = "IN") -> dict:
         return deep_base_us(sym)
     p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(sym)))
     try:
+        p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
+    except Exception:
+        pass
+    try:
         items = filings_feed.announcements(sym, deepdive.DOC_DAYS)
         doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:

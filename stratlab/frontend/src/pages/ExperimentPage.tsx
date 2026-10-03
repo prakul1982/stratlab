@@ -94,7 +94,7 @@ function WalkForwardInner({ nb, e }: { nb: Notebook; e: Experiment }) {
   );
 }
 
-const PEERS: Record<string, string> = { CRYPTO: "coins", FX: "currency pairs", MCX: "MCX commodities", CDS: "rupee currency pairs", CMDTY: "global commodities" };
+const PEERS: Record<string, string> = { CRYPTO: "coins", FX: "currency pairs", MCX: "MCX commodities", CDS: "currency pairs", CMDTY: "global commodities" };
 
 /** Same rules, same period, ~10 similar instruments: does the edge travel, or is it one lucky chart? */
 function BasketCheck({ nb, e }: { nb: Notebook; e: Experiment }) {

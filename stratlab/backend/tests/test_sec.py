@@ -104,7 +104,7 @@ def test_us_deep_dive_through_the_api(monkeypatch):
         assert v["checklist"]["industry"]["path"] == ["Manufacturing", "Electronic Computers"]
         assert v["ai"] and v["report_card"] and any(d["kind"] == "annual_report" for d in v["documents"])
         fcf = next(x for x in v["checklist"]["checks"] if x["label"] == "Free cash flow, 3 years")
-        assert fcf["value"].startswith("$") and fcf["value"].endswith(" m")
+        assert fcf["value"].startswith("$") and fcf["value"].endswith(" bn")             # a large company: billions
         deck = c.get("/research/deep/AAPL/deck?region=US", headers=h)
         assert deck.status_code == 200 and deck.content[:2] == b"PK"
         assert c.get("/research/deep/AAPL?region=JP", headers=h).status_code == 400

@@ -341,3 +341,101 @@ def test_a_letter_linking_the_annual_report_first_reads_the_transcript():
     cands = [{"kind": "transcript", "at": "2026-08-03", "title": "Con. Call Updates", "url": "https://nsearchives.nseindia.com/lt-letter.pdf"}]
     got = deepdive.readable(d, cands, 1, [], ())
     assert got and got[0][0]["url"].endswith("Transcript.pdf") and "/ar/AnnualReport2026.pdf" not in seen
+
+
+def test_the_quarter_a_filing_reports():
+    assert deepdive.period_tokens("2025-11-14")[:2] == ["q2fy26", "q2fy2026"]
+    assert "q4fy25" in deepdive.period_tokens("2025-05-28") and "q3fy26" in deepdive.period_tokens("2026-02-10")
+    assert "sep2025" in deepdive.period_tokens("2025-11-14") and "november2025" in deepdive.period_tokens("2025-11-14")
+
+
+def test_a_letter_with_no_link_is_found_on_the_company_investor_pages():
+    pdf = make_pdf(["Transcript of the Q2 FY26 earnings call."] + ["CFO: We expect EBITDA margin of 24% in FY27."] * 80)
+    old = make_pdf(["Transcript of the Q1 FY26 earnings call."] + ["CFO: an older quarter."] * 80)
+    letter = make_pdf(["Dear Sir, please find the transcript of the earnings call held on November 10, 2025."])
+    home = '<a href="/about">About</a><a href="https://www.acme.co.in/investor-relations">Investors</a><a href="/careers">Careers</a>'
+    ir = '<a href="/investor-relations/annual-reports">Annual reports</a><a href="/investor-relations/earnings-calls">Earnings calls</a>'
+    calls = ('<a href="/files/Q1FY26-Earnings-Call-Transcript.pdf">Q1 FY26 transcript</a>'
+             '<a href="/files/Q2-FY26-Investor-Presentation.pdf">Q2 FY26 presentation</a>'
+             '<a href="/files/Q2-FY26-Earnings-Call-Transcript.pdf">Q2 FY26 transcript</a>'
+             '<a href="https://evil.example.com/Q2FY26-transcript.pdf">mirror</a>')
+    seen = []
+
+    def handler(r):
+        u = str(r.url)
+        seen.append(u)
+        pages = {"https://www.acme.co.in/": home, "https://www.acme.co.in/investor-relations": ir,
+                 "https://www.acme.co.in/investor-relations/earnings-calls": calls}
+        if u in pages:
+            return httpx.Response(200, text=pages[u])
+        if u.endswith("Q2-FY26-Earnings-Call-Transcript.pdf"):
+            return httpx.Response(200, content=pdf)
+        if u.endswith("Q1FY26-Earnings-Call-Transcript.pdf"):
+            return httpx.Response(200, content=old)
+        if "nseindia" in u:
+            return httpx.Response(200, content=letter)
+        return httpx.Response(404)
+    d = docs.Docs(transport=httpx.MockTransport(handler), check_host=lambda h: True)
+    cands = [{"kind": "transcript", "at": "2025-11-14", "title": "Transcript", "url": "https://nsearchives.nseindia.com/t2.pdf"}]
+    problems = []
+    got = deepdive.readable(d, cands, 1, problems, ("acme.co.in",))
+    assert got and got[0][0]["url"] == "https://www.acme.co.in/files/Q2-FY26-Earnings-Call-Transcript.pdf"
+    assert got[0][0]["via"].endswith("t2.pdf") and "margin of 24%" in got[0][1] and problems == []
+    assert not any("evil" in u or "Q1FY26" in u or "Presentation" in u for u in seen)     # other quarters, kinds and sites
+    # nothing for this quarter on the site: the letter is reported, saying where we looked
+    probs = []
+    docs._cache.clear()
+    late = [{**cands[0], "at": "2026-02-12", "url": "https://nsearchives.nseindia.com/t3.pdf"}]
+    assert deepdive.readable(docs.Docs(transport=httpx.MockTransport(handler), check_host=lambda h: True), late, 1, probs, ("acme.co.in",)) == []
+    assert "no matching document was found on the company's investor pages" in " ".join(probs)
+
+
+def test_a_scanned_pdf_is_read_with_ocr():
+    scan = make_pdf([])                           # a page with no text layer: a picture of the page
+    calls = []
+
+    def ocr(data):
+        calls.append(data[:5])
+        return "Transcript of the Q2 FY26 earnings call. " + "CFO: we expect 20% growth next year. " * 100
+    d = docs.Docs(transport=httpx.MockTransport(lambda r: httpx.Response(200, content=scan)), ocr=ocr)
+    docs._cache.clear()
+    text = d.text("https://nsearchives.nseindia.com/scan.pdf")
+    assert "20% growth" in text and calls == [b"%PDF-"] and d.scans == 1
+    got = deepdive.readable(d, [{"kind": "transcript", "at": "2025-11-14", "title": "T", "url": "https://nsearchives.nseindia.com/scan.pdf"}], 1, [])
+    assert got and "20% growth" in got[0][1]
+    # a PDF with real text isn't sent to OCR
+    text_pdf = make_pdf(["A real text page. " * 30])
+    d2 = docs.Docs(transport=httpx.MockTransport(lambda r: httpx.Response(200, content=text_pdf)), ocr=lambda b: 1 / 0)
+    assert "A real text page" in d2.text("https://nsearchives.nseindia.com/text.pdf")
+    # no OCR service: the scan is reported as a scan, not as a letter
+    docs._cache.clear()
+    plain = docs.Docs(transport=httpx.MockTransport(lambda r: httpx.Response(200, content=scan)), ocr=lambda b: "")
+    probs = []
+    assert deepdive.readable(plain, [{"kind": "transcript", "at": "2025-11-14", "title": "T", "url": "https://nsearchives.nseindia.com/s2.pdf"}], 1, probs) == []
+    assert "a scanned page with no readable text" in " ".join(probs)
+    # the OCR service fails: said plainly
+    failing = docs.Docs(transport=httpx.MockTransport(lambda r: httpx.Response(200, content=scan)), ocr=lambda b: (_ for _ in ()).throw(RuntimeError("quota")))
+    with pytest.raises(SourceError, match="is a scan"):
+        failing.text("https://nsearchives.nseindia.com/s3.pdf")
+
+
+def test_large_dollar_amounts_read_in_billions():
+    assert deepdive.in_billions("$215,938 million") == "$215.9 billion"
+    assert deepdive.in_billions("Revenue of US$ 4,000 mn") == "Revenue of $4.00 billion"
+    assert deepdive.in_billions("$950 million") == "$950 million" and deepdive.in_billions("Rs 945 crore") == "Rs 945 crore"
+    assert deepdive.money(215938, "$ million") == "$215.9 bn" and deepdive.money(-950, "$ million") == "-$950 m"
+    assert deepdive.money(1234, "₹ crore") == "₹1,234 cr" and deepdive.money(910000, "₹ crore") == "₹9.10 lakh cr"
+    assert deepdive.in_billions("capex of Rs 1,25,000 crore") == "capex of ₹1.25 lakh crore"
+    assert deepdive.in_billions("capex of Rs 945 crore") == "capex of Rs 945 crore"
+    got = deepdive.clean_measures({"measures": [{"name": "Revenue", "value": "$215,938 million", "quote": "Revenue was $215.9 billion",
+                                                 "source": "S1"}]}, {"S1": {"title": "10-K"}}, {"S1": "Revenue was $215.9 billion, up 65%."})
+    assert got[0]["value"] == "$215.9 billion"
+
+
+def test_a_chart_switches_unit_only_when_every_number_stays_exact():
+    assert deepdive.scale_for([130497, 215938, 60922], True) == (1000, "$ billion", 1)
+    assert deepdive.scale_for([30000, 900], True) == (1000, "$ billion", 2)              # $0.90 billion: within 1%
+    assert deepdive.scale_for([215938, -20], True) == (1, "$ million", 0)                # a $20m loss would read 0.0
+    assert deepdive.scale_for([900000, 650000, None], False) == (100000, "₹ lakh crore", 2)
+    assert deepdive.scale_for([240000, -133], False) == (1, "₹ crore", 0)                # never "-0.00 lakh crore"
+    assert deepdive.money(4500, "$ million") == "$4.50 bn" and deepdive.in_billions("$4,500 million") == "$4.50 billion"

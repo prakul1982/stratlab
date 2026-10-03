@@ -52,6 +52,9 @@ def _row(table: dict | None, *prefixes: str) -> list:
 def parse(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     out: dict = {"name": _text(soup.find("h1")), "ratios": {}, "growth": {}, "pros": [], "cons": []}
+    cid = re.search(r'data-company-id="(\d+)"', html)
+    if cid:
+        out["company_id"] = cid.group(1)       # for the balance-sheet breakdown (cash), fetched separately
 
     ratios = soup.find(id="top-ratios")
     for li in ratios.find_all("li") if ratios else []:
@@ -170,6 +173,35 @@ class Screener(Source):
             return None
         p["url"] = f"https://www.screener.in{path}"
         return p
+
+    def with_cash(self, p: dict) -> dict:
+        """`p` with a "Cash Equivalents" row in its balance sheet, from the site's breakdown of Other Assets (the
+        page itself folds cash into that line). Unchanged when the breakdown can't be read; never counts as an outage."""
+        bal = p.get("balance") or {}
+        cols, rows = bal.get("cols") or [], bal.get("rows") or {}
+        if not p.get("company_id") or not cols or any(k.lower().startswith("cash") for k in rows):
+            return p
+        key = ("cash", p["company_id"], p.get("basis"))
+        got = self.cache.get(key)
+        if got is None:
+            if not self.limit.take():
+                return p                          # busy: no cash this time, asked again next time
+            got = {}
+            try:
+                r = self.http.get(f"/api/company/{p['company_id']}/schedules/",
+                                  params={"parent": "Other Assets", "section": "balance-sheet",
+                                          "consolidated": "true" if p.get("basis") == "consolidated" else ""})
+                data = r.json() if r.status_code == 200 else {}
+                row = next((v for k, v in (data.items() if isinstance(data, dict) else ())
+                            if isinstance(v, dict) and re.match(r"cash", k, re.I)), None)
+                got = {str(k).strip(): num(str(v)) for k, v in (row or {}).items()}
+            except (httpx.HTTPError, ValueError):
+                got = {}
+            self.cache.set(key, got, 6 * 3600 if got else 1800)
+        vals = [got.get(str(c).strip()) for c in cols]
+        if not any(v is not None for v in vals):
+            return p
+        return {**p, "balance": {**bal, "rows": {**rows, "Cash Equivalents": vals}}}
 
     RENAMED = {"TATAMOTORS": "TMPV"}   # known symbol changes only: a fuzzy site search can land on another company
 

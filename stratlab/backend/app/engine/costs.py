@@ -39,7 +39,8 @@ def kind_of(inst: dict | None) -> str:
     if market == "MCX":
         return "in_mcx_fut"
     if market == "CDS":
-        return "in_cds_fut"
+        cur = inst.get("currency") or "INR"
+        return f"in_cds_fut_{cur.lower()}" if cur in ("USD", "JPY") else "in_cds_fut"
     if market == "IN":
         t = inst.get("type")
         return "in_fut" if t == "FUT" else "in_opt" if t in ("CE", "PE") else "in_eq"
@@ -48,8 +49,25 @@ def kind_of(inst: dict | None) -> str:
     return {"US": "us", "CRYPTO": "crypto", "FX": "fx", "CMDTY": "cmdty"}.get(market, "flat")
 
 
+FALLBACK_RUPEES = {"USD": 88.0, "JPY": 0.6}      # until the day's rates have been read
+
+
+def rupees_per(currency: str) -> float:
+    """Rupees per unit of a currency, from the daily rates (a recent typical value until they're read)."""
+    try:
+        from ..pricing import rates
+        v = float(rates().get(currency) or 0)
+    except Exception:
+        v = 0.0
+    return v if v > 0 else FALLBACK_RUPEES[currency]
+
+
 def order_costs(kind: str, side: str, qty: float, price: float, brokerage: float) -> dict[str, float]:
-    """Itemised costs of one order, in the market's currency."""
+    """Itemised costs of one order, in the market's currency. Currency cross pairs (EURUSD, USDJPY) are priced in
+    dollars or yen while brokerage is set in rupees, so it's converted at the day's rate."""
+    if kind in ("in_cds_fut_usd", "in_cds_fut_jpy"):
+        brokerage = brokerage / rupees_per(kind[-3:].upper())
+        kind = "in_cds_fut"
     value = qty * price
     c = {"brokerage": brokerage}
     if kind.startswith("in_"):
