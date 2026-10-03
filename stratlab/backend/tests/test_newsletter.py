@@ -1,7 +1,7 @@
 """The newsletters: facts from the fake world, the advice-word filter and template fallback, the email, the
 once-a-day schedule, privacy of My Stocks issues, the API and plan gates."""
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -90,9 +90,10 @@ def test_stock_facts_cover_watchlist_notebooks_and_cache_per_symbol(w, monkeypat
 
 
 def test_a_stock_row_reports_new_red_filings_as_a_change(w):
-    r = content.stock_row("IN", "RELIANCE", date.today(), False, "2026-09-01")
+    since = lambda days: (date.today() - timedelta(days=days)).isoformat()      # noqa: E731  (the QIP was 13 days ago)
+    r = content.stock_row("IN", "RELIANCE", date.today(), False, since(30))
     assert r and r["changed"] and r["filings"][0]["label"] == "QIP (fund raise)" and r["filings"][0]["severity"] == "red"
-    later = content.stock_row("IN", "RELIANCE", date.today(), False, "2026-09-30")
+    later = content.stock_row("IN", "RELIANCE", date.today(), False, since(3))
     assert later["filings"] == []
 
 

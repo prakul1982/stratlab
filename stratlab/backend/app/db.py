@@ -1,4 +1,5 @@
 """Supabase access with the service-role key (bypasses RLS, server only)."""
+import json
 import threading
 import time
 from datetime import datetime, timezone
@@ -158,6 +159,15 @@ def add_order(row: dict) -> None:
 
 
 # ---------- app settings (Kite token) ----------
+def json_value(raw, default):
+    """A stored JSON value, or `default` when it's missing, damaged or not the same kind (a dict, a list…)."""
+    try:
+        v = json.loads(raw or "null")
+    except (ValueError, TypeError):
+        return default
+    return v if isinstance(v, type(default)) else default
+
+
 def get_setting(key: str) -> str | None:
     r = sb().table("app_settings").select("value").eq("key", key).limit(1).execute()
     return r.data[0]["value"] if r.data else None

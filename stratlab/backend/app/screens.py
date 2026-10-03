@@ -26,6 +26,7 @@ from .newsletter import job as news_job
 
 INDEX_KEY = "screens:index:"          # screens:index:IN = {"at", "rows": [...]}
 KEY = "screens:user:"                 # screens:user:<uid> = {"uid", "items": [...], "sent": [...]}
+KNOWN_KEY = "screens:known:"          # screens:known:IN = the symbols in the index at the last weekly run
 REGIONS = ("IN", "US")
 RED_DAYS = 90                         # "recent" red-flag filings: the last three months
 MEMORY = 600                          # the index is read from storage at most every ten minutes
@@ -94,14 +95,6 @@ def _num(v):
     return f if math.isfinite(f) else None
 
 
-def _json(raw, default):
-    try:
-        v = json.loads(raw or "null")
-    except (ValueError, TypeError):
-        return default
-    return v if isinstance(v, type(default)) else default
-
-
 # ---------- the index ----------
 def _red_count(f: dict) -> int | None:
     """Red-flag filings in the last three months: stored with the page, or worked out from its filings list for a
@@ -153,7 +146,7 @@ def build_index(region: str, store: bool = True) -> dict:
     prefix = f"stocks:page:{region}:"
     rows, ages = [], {}
     for key, raw in db.all_settings_with_prefix(prefix):
-        stored = _json(raw, {})
+        stored = db.json_value(raw, {})
         sym = key[len(prefix):]
         ages[sym] = stored.get("ts") or 0
         r = row(region, sym, stored.get("facts") or {})
@@ -179,7 +172,7 @@ def load_index(region: str) -> dict:
         if hit and time.time() - hit[0] < MEMORY:
             return hit[1]
     try:
-        index = _json(db.get_setting(INDEX_KEY + region), {})
+        index = db.json_value(db.get_setting(INDEX_KEY + region), {})
     except Exception:            # storage down: an empty index, tried again next time
         return {"region": region, "at": None, "rows": []}
     index = {"region": region, "at": index.get("at"), "rows": [r for r in index.get("rows") or [] if isinstance(r, dict) and r.get("symbol")]}
@@ -336,12 +329,12 @@ def describe(region: str, f: dict) -> list[str]:
 
 # ---------- saved screens ----------
 _lock = threading.Lock()
-_ID = re.compile(r"^[0-9a-f]{6,24}$")
+_ID = re.compile(r"^[0-9a-f]{6,24}\Z")
 
 
 def _read(uid: str) -> dict:
     try:
-        row_ = _json(db.get_setting(KEY + uid), {})
+        row_ = db.json_value(db.get_setting(KEY + uid), {})
     except Exception:
         row_ = {}
     items = row_.get("items")
@@ -501,53 +494,74 @@ def deliver(profile: dict, subject: str, text: str, html: str) -> list[str]:
 def weekly(now: datetime, profile_fn, limit_fn, send=deliver) -> int:
     """For each user with a weekly note on: the companies that match their screens now and didn't last week, in one
     message, within the stock alerts' per-user message limits. A note held back by the limits leaves the screens as
-    they were, so those companies are still new next week. Returns notes sent."""
-    from .stock_alerts import may_send
+    they were, so those companies are still new next week. Returns notes sent.
+
+    A company counts as new only if it was already in the index at the last run: one the background job has only
+    just gathered didn't start matching, it just wasn't known before. One user's trouble never stops the others'."""
+    known = {r: _known(r) for r in REGIONS}
     sent = 0
     for key, raw in db.all_settings_with_prefix(KEY):
         uid = key[len(KEY):]
-        if not any(isinstance(s, dict) and s.get("notify") for s in _json(raw, {}).get("items") or []):
+        if not any(isinstance(s, dict) and s.get("notify") for s in db.json_value(raw, {}).get("items") or []):
             continue
         try:
-            profile = profile_fn(uid)
-        except Exception:
-            continue
-        allowed = limit_fn(profile)
-        with _lock:
-            row_ = _read(uid)
-            if not may_send(row_["sent"], now):
-                continue
-            parts, matched, at = [], {}, None
-            for s in sorted(row_["items"], key=lambda x: x.get("created_at") or "")[:allowed]:   # over the plan: the oldest
-                try:
-                    f = clean(s["region"], s.get("filters"))
-                except (ScreenError, KeyError):
-                    continue
-                index = load_index(s["region"])
-                if not index["rows"]:
-                    continue
-                now_match = [r for r in index["rows"] if matches(s["region"], r, f)]
-                before = set(s.get("matched") or [])
-                matched[s["id"]] = sorted(r["symbol"] for r in now_match)
-                new = [r for r in now_match if r["symbol"] not in before]
-                if s.get("notify") and new:
-                    parts.append((s, new))
-                    at = max(filter(None, (at, as_of(index))), default=None)
-            msg = note(parts, at) if parts else None
-        if msg and not send(profile, *msg):
-            continue                                # nowhere to send it: the matches stay new for next week
-        with _lock:
-            row_ = _read(uid)
-            for s in row_["items"]:
-                if s["id"] in matched:
-                    s["matched"] = matched[s["id"]]
-                    if msg and any(p["id"] == s["id"] for p, _ in parts):
-                        s["last_sent_at"] = now.isoformat()
-            if msg:
-                row_["sent"] = [t for t in row_["sent"] if _recent(t, now)] + [now.isoformat()]
-                sent += 1
-            _write(uid, row_)
+            sent += _weekly_one(uid, now, profile_fn, limit_fn, send, known)
+        except Exception as e:
+            print("screen note failed:", uid, str(e)[:160])
+    for region in REGIONS:
+        rows = load_index(region)["rows"]
+        if rows:
+            db.set_setting(KNOWN_KEY + region, json.dumps(sorted(r["symbol"] for r in rows)))
     return sent
+
+
+def _known(region: str) -> set[str] | None:
+    """The companies in a market's index at the last weekly run; None before the first one."""
+    try:
+        return {s for s in db.json_value(db.get_setting(KNOWN_KEY + region), []) if isinstance(s, str)} or None
+    except Exception:            # storage down: every match counts, as before the first run
+        return None
+
+
+def _weekly_one(uid: str, now: datetime, profile_fn, limit_fn, send, known: dict) -> int:
+    """One user's weekly note (see weekly); 1 when it went out."""
+    from .stock_alerts import may_send
+    profile = profile_fn(uid)
+    allowed = limit_fn(profile)
+    with _lock:
+        row_ = _read(uid)
+        if not may_send(row_["sent"], now):
+            return 0
+        parts, matched, at = [], {}, None
+        for s in sorted(row_["items"], key=lambda x: x.get("created_at") or "")[:allowed]:   # over the plan: the oldest
+            try:
+                f = clean(s["region"], s.get("filters"))
+            except (ScreenError, KeyError):
+                continue
+            index = load_index(s["region"])
+            if not index["rows"]:
+                continue
+            now_match = [r for r in index["rows"] if matches(s["region"], r, f)]
+            before, seen = set(s.get("matched") or []), known.get(s["region"])
+            matched[s["id"]] = sorted(r["symbol"] for r in now_match)
+            new = [r for r in now_match if r["symbol"] not in before and (seen is None or r["symbol"] in seen)]
+            if s.get("notify") and new:
+                parts.append((s, new))
+                at = max(filter(None, (at, as_of(index))), default=None)
+        msg = note(parts, at) if parts else None
+    if msg and not send(profile, *msg):
+        return 0                                    # nowhere to send it: the matches stay new for next week
+    with _lock:
+        row_ = _read(uid)
+        for s in row_["items"]:
+            if s["id"] in matched:
+                s["matched"] = matched[s["id"]]
+                if msg and any(p["id"] == s["id"] for p, _ in parts):
+                    s["last_sent_at"] = now.isoformat()
+        if msg:
+            row_["sent"] = [t for t in row_["sent"] if _recent(t, now)] + [now.isoformat()]
+        _write(uid, row_)
+    return 1 if msg else 0
 
 
 def _recent(t: str, now: datetime) -> bool:

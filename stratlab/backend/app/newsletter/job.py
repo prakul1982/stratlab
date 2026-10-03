@@ -45,23 +45,15 @@ def _index_key(kind: str, scope: str) -> str:
     return f"news-index:{kind}:{scope}"
 
 
-def _json(raw, default):
-    try:
-        v = json.loads(raw or "null")
-    except (ValueError, TypeError):
-        return default
-    return v if isinstance(v, type(default)) else default
-
-
 def load(iid: str) -> dict | None:
     parts = parse_id(iid)
     if not parts:
         return None
-    return _json(db.get_setting(_key(*parts)), {}) or None
+    return db.json_value(db.get_setting(_key(*parts)), {}) or None
 
 
 def ids(kind: str, scope: str) -> list[str]:
-    return [i for i in _json(db.get_setting(_index_key(kind, scope)), []) if isinstance(i, str)]
+    return [i for i in db.json_value(db.get_setting(_index_key(kind, scope)), []) if isinstance(i, str)]
 
 
 def save(issue: dict) -> dict:
@@ -149,7 +141,7 @@ def subscribers() -> list[dict]:
     """Each reader's choices, with their uid."""
     out = []
     for _, raw in db.all_settings_with_prefix(newsletter_prefs.KEY):
-        sub = _json(raw, {})
+        sub = db.json_value(raw, {})
         if sub.get("uid"):
             out.append({"uid": sub["uid"], **newsletter_prefs.get(sub["uid"])})
     return out

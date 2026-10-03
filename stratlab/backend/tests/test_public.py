@@ -4,9 +4,10 @@ import base64
 import pytest
 
 from app import db
+from tests.pngmaker import png_b64
 from tests.test_notebooks import EMA, api  # noqa: F401  (fixture)
 
-PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
+PNG = png_b64(data_url=False)
 
 
 @pytest.fixture

@@ -169,10 +169,6 @@ def items(uid: str) -> list[dict]:
     return _read(uid)["items"]
 
 
-def active_count(uid: str) -> int:
-    return sum(1 for a in items(uid) if a.get("status") == "active")
-
-
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 

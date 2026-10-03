@@ -63,14 +63,6 @@ BACKGROUND = True                # tests turn this off to send in the calling th
 _lock = threading.Lock()
 
 
-def _json(raw, default):
-    try:
-        v = json.loads(raw or "null")
-    except (ValueError, TypeError):
-        return default
-    return v if isinstance(v, type(default)) else default
-
-
 def _now(now: datetime | None) -> datetime:
     return now or datetime.now(timezone.utc)
 
@@ -92,7 +84,7 @@ def later(fn, *args):
 def tips_on(uid: str) -> bool:
     """Tips and reminders are on unless the user turned them off."""
     try:
-        return _json(db.get_setting(PREFS + uid), {}).get("tips") is not False
+        return db.json_value(db.get_setting(PREFS + uid), {}).get("tips") is not False
     except Exception:
         return True
 
@@ -104,7 +96,7 @@ def set_tips(uid: str, on: bool) -> dict:
 
 def sent(uid: str) -> dict:
     """{email key: when it was sent} for one user."""
-    return _json(db.get_setting(SENT + uid), {})
+    return db.json_value(db.get_setting(SENT + uid), {})
 
 
 def _claim(uid: str, key: str, now: datetime) -> bool:
@@ -402,8 +394,8 @@ def sweep(now: datetime | None = None) -> int:
     now = _now(now)
     if not alerts.email_ready():
         return 0
-    records = {k[len(SENT):]: _json(v, {}) for k, v in db.all_settings_with_prefix(SENT)}
-    off = {k[len(PREFS):] for k, v in db.all_settings_with_prefix(PREFS) if _json(v, {}).get("tips") is False}
+    records = {k[len(SENT):]: db.json_value(v, {}) for k, v in db.all_settings_with_prefix(SENT)}
+    off = {k[len(PREFS):] for k, v in db.all_settings_with_prefix(PREFS) if db.json_value(v, {}).get("tips") is False}
     seen_days = {k[len(SEEN):]: v for k, v in db.all_settings_with_prefix(SEEN)}
     end = promo_until()
     end = end if end and now < end else None

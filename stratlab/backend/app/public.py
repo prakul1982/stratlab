@@ -9,12 +9,16 @@ import html
 import json
 import re
 import secrets
+import struct
 
 from . import db
 from .config import settings
 
 TOKEN = re.compile(r"^[A-Za-z0-9_-]{6,24}$")
 MAX_IMAGE = 2_000_000
+MAX_SIDE = 2400                      # share cards are drawn at 2400x1260; anything wider or taller isn't one
+PNG_START = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+PNG_END = b"\x00\x00\x00\x00IEND\xaeB`\x82"
 
 
 def snapshot(nb: dict, exp: dict) -> dict:
@@ -45,9 +49,18 @@ def decode_image(data: str | None) -> str | None:
         png = base64.b64decode(raw, validate=True)
     except (binascii.Error, ValueError):
         return None
-    if not png.startswith(b"\x89PNG") or len(png) > MAX_IMAGE:
+    if not is_card_png(png):
         return None
     return base64.b64encode(png).decode()
+
+
+def is_card_png(png: bytes) -> bool:
+    """A whole PNG of a share card's size: the PNG header, a picture no bigger than MAX_SIDE each way (so a small file
+    can't unpack into a huge picture for whoever previews it), and nothing after its end."""
+    if len(png) > MAX_IMAGE or len(png) < 45 or not png.startswith(PNG_START) or not png.endswith(PNG_END):
+        return False
+    width, height = struct.unpack(">II", png[16:24])
+    return 0 < width <= MAX_SIDE and 0 < height <= MAX_SIDE
 
 
 def publish(nb: dict, exp: dict, image: str | None) -> str:

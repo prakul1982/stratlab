@@ -163,11 +163,20 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | Explore a sector | **Research → Themes**: a map of who's involved, where the margin sits, and the listed companies along the chain |
 | See the market's mood | **Research → Market pulse**: index levels, headlines and an AI read of what's moving |
 | Keep an eye on companies | **Watch** on a company page; they're listed under **Investing → Watchlist** |
-| Find Stage 2 stocks with the Supertrend up | **Investing → Stage 2 scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
+| Find Stage 2 stocks with the Supertrend up | **Investing → Stage 2 trend scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
 | See which sectors are leading | **Investing → Sector rotation**: sectors, size and style indices or US industries, weekly or daily, with a trail and **Animate**; **Stocks →** on a sector shows its biggest stocks against it (Pro) |
 | Check a company's filings for red flags | **Investing → Red flags** for your India watchlist, or **Filings and red flags** on any Indian company page; tick the box for an evening alert (Pro) |
 | Understand a company's business and its capex plans | On any Indian or US company page, **Deep dive**. Pick how far back to read (**Last year** to **Last 5 years**); **Read the latest presentation and calls** (US: **Read the annual report and releases**) has the AI read the company's own documents; **Check past calls** (US: **Check past releases**) builds the management report card; **Slides (PowerPoint)** and **Slides (PDF)** download the whole deep dive (Pro) |
-| See the whole watchlist the investor way | **Investing → Investor home**: trend, sector rotation, red flags, checklist and report card for each watchlist company, with an India / US switch (Pro) |
+| See the whole watchlist the investor way | **Investing → Watchlist at a glance**: trend, sector rotation, red flags, checklist and report card for each watchlist company, with an India / US switch (Pro) |
+| Filter companies by plain facts | **Research → Screens**: sector, size, 3-year revenue growth, margins, debt to equity, ROE and ROCE, dividend yield, P/E, Stage, price against the 52-week high and recent red-flag filings. Sort by any column; **Save this screen** keeps it, and its weekly email on Saturday morning lists the companies that newly meet it (Free 1 saved screen, Basic 5, Pro 25) |
+| Know when companies report results | **Research → Results**: India's board meetings for results and US results dates, from a week back to four weeks ahead, with a message on results day and when the numbers are out for the companies you follow |
+| Get told when a stock does something | **Set alert** on a company page, the deep dive or the watchlist: a price level, a day's move, crossing a moving average, RSI, a Stage change or a 52-week high or low. All of them are on **Investing → Alerts** (Free 3, Basic 20, Pro 100) |
+| See your own portfolio | **Investing → My Holdings**: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (or any CSV with symbol, quantity and price) for value, P&L, sectors and each stock's trend, filings and results date |
+| Share a company's facts | **Share** on a company page or the deep dive: a card with its price, 1-year range and key numbers, and a public link that previews as the card and opens the company's public page |
+| Invite a friend | **Account → Invite friends**: your own link, and how many friends joined through it |
+| Read a company's facts without signing in | The public company pages at `stratlab.studio/stocks/in/SYMBOL` and `/stocks/us/SYMBOL`, made for search engines |
+| Choose which emails you get | **Account → Newsletters** for the market and My Stocks emails, and **Account → Emails from StratLab** for tips and reminders (a welcome, trial and offer reminders, what's new). Every email has a one-click unsubscribe |
+| Know how fresh the numbers are | Every page with company numbers (company page, deep dive, holdings, screens, at a glance, newsletters) says when its prices and numbers are from |
 | Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
 | Bring a strategy you already have | **Import a strategy** in the sidebar (or on New notebook): it sets up a notebook, a group notebook or an Options structure depending on what you bring; a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
 | Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
@@ -290,6 +299,15 @@ stratlab/
 │   │   ├── ai_providers.py   the AI provider chain and its order for quick jobs and research reads
 │   │   ├── push.py           phone and browser notifications (Web Push)
 │   │   ├── newsletter/       the Market Brief and My Stocks newsletters: facts, writing, the send schedule
+│   │   ├── screens.py        stock screens: the index of company facts, filters, saved screens and their weekly email
+│   │   ├── stock_pages.py    public company pages for search engines (/stocks/in|us/SYMBOL), robots and sitemaps
+│   │   ├── company_cards.py  shareable company fact cards and their public /c/ links
+│   │   ├── referrals.py      invite links: who invited whom (tracked, no reward)
+│   │   ├── stock_alerts.py   price, move, moving average, RSI, Stage and 52-week alerts on single stocks
+│   │   ├── holdings.py       My Holdings: positions, value, P&L and sectors (holdings_file.py reads the brokers' files)
+│   │   ├── results.py        the results calendar and its results-day messages
+│   │   ├── lifecycle.py      welcome, trial, offer and what's-new emails (first_steps.py: the Home checklist)
+│   │   ├── mail_tokens.py    signed links in emails: confirm an address, unsubscribe
 │   │   └── alerts.py         phone, Telegram and email alerts
 │   ├── tests/                pytest suite, including fuzz, failure, calendar, security and load tests
 │   └── .env.example          every setting the server reads

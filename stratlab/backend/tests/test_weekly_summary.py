@@ -21,7 +21,7 @@ def _smtp(monkeypatch):
 def _week(w, monkeypatch, now):
     """Three users (two new this week, one on Pro), usage, a week of checks, an audited new listing and an error."""
     utc = lambda d: (now - timedelta(days=d)).astimezone(timezone.utc).isoformat()
-    until = (now + timedelta(days=20)).astimezone(timezone.utc).isoformat()
+    until = (max(now, datetime.now(timezone.utc)) + timedelta(days=20)).astimezone(timezone.utc).isoformat()   # paid whenever the test runs
     w["db"].tables["profiles"] = [
         {"id": "a", "email": "a@x.com", "plan": "free", "created_at": utc(40)},
         {"id": "b", "email": "b@x.com", "plan": "pro", "plan_status": "active", "current_period_end": until, "created_at": utc(2)},

@@ -7,10 +7,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import company_cards, db, referrals, stock_pages
+from app import company_cards, db, referrals, screens, stock_pages
 from tests import world
+from tests.pngmaker import png_b64
 
-PNG = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
+PNG = png_b64()
 PROVIDERS = re.compile(r"kite|zerodha|yahoo|screener|finnhub|edgar|sec\.gov|nseindia|bseindia", re.I)
 ADVICE = re.compile(r"\b(buy|sell|hold|accumulate|avoid|target|cheap|expensive|undervalued|overvalued)\b", re.I)
 
@@ -209,3 +210,48 @@ def test_with_ref_only_touches_app_links():
     out = stock_pages.with_ref(page, "abcdefghijkl")
     assert f'href="{site}/?ref=abcdefghijkl"' in out and "symbol=X&amp;ref=abcdefghijkl" in out
     assert f'href="{site}/stocks/in/Y"' in out and f'href="{site}/stocks/in/X"' in out and 'href="/stocks/in/Z"' in out
+
+
+# ---------- abuse: images, storage, guessing ----------
+def test_only_whole_card_sized_pngs_are_kept():
+    from app import public
+    from tests.pngmaker import make_png
+    good = make_png()
+    assert public.decode_image(png_b64()) and public.decode_image(png_b64(1200, 630, data_url=False))
+    bomb = bytearray(make_png(10, 10))
+    bomb[16:24] = (60000).to_bytes(4, "big") + (60000).to_bytes(4, "big")        # a tiny file claiming 60000x60000
+    for bad in (bytes(bomb), make_png(4000, 10), good + b"<html>hi</html>", b"\x89PNG" + good[4:20],
+                b"GIF89a" + good[6:], good[:-12]):
+        assert public.decode_image(base64.b64encode(bad).decode()) is None
+
+
+def test_a_user_keeps_their_newest_cards_and_older_ones_are_taken_down(w, monkeypatch):
+    monkeypatch.setattr(company_cards, "MAX_PER_USER", 2)
+    card = lambda s: {"region": "IN", "symbol": s, "name": s}                   # noqa: E731
+    a = company_cards.publish("u-pro", card("AAA"), PNG, None)
+    b = company_cards.publish("u-pro", card("BBB"), PNG, None)
+    assert company_cards.publish("u-pro", card("AAA"), PNG, None) == a           # sharing again: newest, same link
+    c = company_cards.publish("u-pro", card("CCC"), PNG, None)
+    assert company_cards.load(b) is None and company_cards.image(b) is None      # the oldest is gone
+    assert db.get_setting("cardtok:u-pro:IN:BBB") is None
+    assert company_cards.load(a) and company_cards.image(a) and company_cards.load(c) and company_cards.image(c)
+    assert company_cards.publish("u-free", card("DDD"), None, None)              # someone else's count is their own
+    assert company_cards.load(a) and company_cards.load(c)
+    assert company_cards.publish("u-pro", card("BBB"), None, None) != b          # shared again later: a new link
+
+
+def test_a_code_with_a_line_break_after_it_isnt_a_code(w):
+    c = w["client"]
+    code = c.get("/me/referrals", headers=_h("pro-token")).json()["code"]
+    t = c.get("/stocks/in/RELIANCE", params={"ref": code + "\n"}).text
+    assert "?ref=" not in t and "&amp;ref=" not in t
+    assert referrals.owner(code + "\n") is None and referrals.owner(code) == "u-pro"
+    assert company_cards.load("abcdefgh\n") is None and not screens.valid_id("abcdef\n")
+
+
+def test_sharing_cards_and_trying_invite_codes_are_limited(w):
+    c = w["client"]
+    codes = [c.post("/me/referral", headers=_h("pro-token"), json={"code": "A" * 12}).status_code for _ in range(11)]
+    assert codes == [200] * 10 + [429]
+    shares = [c.post("/cards/company/IN/RELIANCE", headers=_h("free-token"), json={}).status_code for _ in range(31)]
+    assert shares == [200] * 30 + [429]

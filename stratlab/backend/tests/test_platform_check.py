@@ -80,3 +80,34 @@ def test_daily_check_retries_and_only_tells_admins_about_what_still_fails(monkey
         assert told == []                                                    # all well: nobody is bothered
     finally:
         w["close"]()
+
+
+def test_prices_are_judged_by_the_markets_own_date(monkeypatch):
+    """At 03:30 in India New York is still in the day before, whose candle isn't finished: not a stale feed."""
+    from datetime import date, datetime, timezone
+
+    from app import platform_check as pc
+    late = datetime(2026, 10, 14, 22, 0, tzinfo=timezone.utc)           # Wednesday 18:00 New York, Thursday 03:30 IST
+
+    class Fixed(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return late.astimezone(tz) if tz else late.replace(tzinfo=None)
+    monkeypatch.setattr(pc, "datetime", Fixed)
+    assert pc.market_today("US") == date(2026, 10, 14) and pc.market_today("IN") == date(2026, 10, 15)
+
+    class Prov:
+        def ready(self):
+            return True
+
+        def defaults(self):
+            return [{"symbol": "SPY"}]
+
+        def history(self, inst, tf, days):
+            return [{"t": "2026-10-13T00:00:00", "o": 1, "h": 2, "l": 0.5, "c": 1.5}]
+
+    class Reg:
+        def provider(self, market):
+            return Prov()
+    assert pc.check_market(Reg(), "US")["state"] == "pass"
+    assert pc.check_market(Reg(), "US", date(2026, 10, 15))["state"] == "fail"       # judged by India's date, as before

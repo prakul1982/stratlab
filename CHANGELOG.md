@@ -2,6 +2,37 @@
 
 ## October 2026
 
+### Security review of screens, cards and invite links
+- **Share images must be real card pictures:** a whole PNG, no bigger than the card's own size each way, with nothing hidden after it, so a tiny file can't unpack into a huge picture for whoever previews the link. Verdict share cards follow the same rule.
+- **Shared company cards don't pile up:** each person keeps links to the 50 companies they shared most recently (sharing one more takes down the oldest), and sharing is limited to 30 cards an hour. Trying invite codes is limited to 10 an hour.
+- **The weekly screen email lists only companies that started meeting a screen,** not ones the background job had only just gathered, and one person's trouble no longer stops the others' emails.
+- **Check every feature judges each market's prices by that market's own date,** so a check run after midnight in India no longer reports the US feed as stale while New York's day is still running.
+- Tests that depended on the day or time they ran no longer do (checked by running the whole suite as if on other dates and times).
+
+### Stock screens, and "as of" everywhere
+- **Research → Screens:** filter India or US companies by sector, size band, 3-year revenue growth, margins, debt to equity, ROE and ROCE, dividend yield, P/E, Stage, price against the 52-week high and recent red-flag filings. Alphabetical by default and sortable by any column; nothing is scored or ranked. Screens read an index gathered in the background from the public company pages, never a data source or AI per request.
+- **Saved screens** (Free 1, Basic 5, Pro 25) can send a weekly email on Saturday morning with the companies that newly meet them, to a confirmed address, with one-click unsubscribe.
+- **"As of" lines** on the company page, deep dive, holdings, at a glance, screens, newsletters and the News page say when the prices and numbers are from.
+
+### Share company cards, and invite links
+- **Share** on a company page or the deep dive draws a card with the company's price, 1-year range and four key numbers, and makes a public link (`/c/…`) that previews as the card on WhatsApp, X and LinkedIn and opens the company's public page. Facts from that page only, never AI.
+- **Invite friends** in Account: your own link, and how many friends joined through it. An account counts once, only when it's new, never for your own link or mailbox. No reward is given yet.
+
+### Stock alerts
+- **Set alert** on a company page, the deep dive or the watchlist: a price level, a day's move, crossing a moving average, RSI, a Stage change, or a 52-week high or low, for India and US stocks. Each fires once (or at most once a day), in plain words; all of them are on **Investing → Alerts**.
+- At most 5 messages an hour and 20 a day per person; extra alerts wait and go together. Email only to a confirmed address. Free 3 alerts, Basic 20, Pro 100.
+
+### My Holdings
+- **Import your holdings** from Zerodha (Console or Kite), Groww, Upstox, Angel One, ICICI Direct or HDFC Securities, or any CSV with symbol (or ISIN), quantity and average price: value, P&L, today's change, sectors, and each stock's trend, red flags, filings and results date. Add, edit or remove lines by hand; **Delete my holdings** removes everything.
+- Free keeps 30 stocks, Basic 100, Pro 300. Holdings count in the My Stocks newsletter.
+
+### Results calendar
+- **Research → Results:** India's board meetings for results and US results dates, from a week back to four weeks ahead. Once results are filed it links the filing and the numbers it states.
+- A message on results day and when the results are out, for the companies you follow, and a section in My Stocks.
+
+### Public company pages
+- **`/stocks/in/SYMBOL` and `/stocks/us/SYMBOL`:** a page per listed company for search engines, with the price, 1-year range, key numbers, five years of results, the trend and recent filings. Facts only, never AI; links to test a strategy on it or open the deep dive. Sitemaps and robots.txt list them.
+
 ### Lifecycle emails, first steps and the offer countdown
 - **Emails that follow an account:** a welcome right after signing up, a nudge on day 2 to test a first strategy (only if they haven't), a reminder the day before and on the last day of the free paper-trading trial and of the launch offer, and what's new after 14 quiet days. Each goes once per person, at most one a day, from 8 am to 9 pm India time. **Tips and reminders** can be turned off in Account or from the link in each email; payment receipts and a note when a paid plan stops always go.
 - **Admin → Services** previews each of these emails, or sends one to you as a test.

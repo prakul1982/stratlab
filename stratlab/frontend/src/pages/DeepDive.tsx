@@ -211,7 +211,7 @@ export function DeepDivePage() {
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>{us
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
-        {v && <AsOf parts={[["Reported numbers", v.numbers_at ?? v.as_of], ["Last close", v.price_at]]} />}
+        {v && <AsOf parts={[["Reported numbers", v.numbers_at], ["Last close", v.price_at]]} />}
         <div className="row wrap" style={{ gap: 10 }}>
           {v && <>
             <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>

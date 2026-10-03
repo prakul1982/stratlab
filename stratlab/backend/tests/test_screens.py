@@ -267,7 +267,7 @@ def reader(uid, email, plan="pro", confirmed=True):
 
 
 def test_the_weekly_note_lists_only_new_matches_once(w, outbox):
-    store_pages(rows=ROWS[:2])
+    store_pages(rows=ROWS[:2] + [facts("NEWCO", "New Co", stage=4)])
     screens.build_index("IN")
     reader("u-pro", "pro@example.com")
     s = screens.save("u-pro", {"name": "Stage 2 or 3", "region": "IN", "filters": {"stage": [2, 3]}, "notify": True}, 25)
@@ -288,7 +288,7 @@ def test_the_weekly_note_lists_only_new_matches_once(w, outbox):
 
 
 def test_the_weekly_note_goes_only_to_a_confirmed_address_in_one_message(w, outbox):
-    store_pages(rows=ROWS[:1])
+    store_pages(rows=ROWS[:1] + [facts("NEWCO", "New Co", stage=4)])
     screens.build_index("IN")
     reader("u-pro", "pro@example.com", confirmed=False)
     for i in range(3):
@@ -307,7 +307,7 @@ def test_the_weekly_note_goes_only_to_a_confirmed_address_in_one_message(w, outb
 
 
 def test_the_weekly_note_keeps_to_the_message_limits_and_the_plan(w, outbox):
-    store_pages(rows=ROWS[:1])
+    store_pages(rows=ROWS[:1] + [facts("NEWCO", "New Co", stage=4)])
     screens.build_index("IN")
     reader("u-pro", "pro@example.com")
     screens.save("u-pro", {"name": "Old", "region": "IN", "filters": {"stage": [1]}, "notify": True}, 25)
@@ -322,6 +322,36 @@ def test_the_weekly_note_keeps_to_the_message_limits_and_the_plan(w, outbox):
     later = SATURDAY + timedelta(days=1, minutes=1)
     assert screens.weekly(later, db.get_profile, lambda p: 1) == 1                            # over the plan: the oldest only
     assert "\u201cOld\u201d" in outbox[0]["subject"]
+
+
+def test_a_company_only_just_gathered_into_the_index_is_not_new(w, outbox):
+    store_pages(rows=ROWS[:1] + [facts("OLDCO", "Old Co", stage=4)])
+    screens.build_index("IN")
+    reader("u-pro", "pro@example.com")
+    screens.save("u-pro", {"name": "Stage 2", "region": "IN", "filters": {"stage": [2]}, "notify": True}, 25)
+    assert screens.weekly(SATURDAY, db.get_profile, lambda p: 25) == 0
+    store_pages(rows=[facts("JUSTIN", "Just Indexed", stage=2), facts("OLDCO", "Old Co", stage=2)])
+    screens.build_index("IN")
+    assert screens.weekly(SATURDAY + timedelta(days=7), db.get_profile, lambda p: 25) == 1
+    assert "Old Co (OLDCO)" in outbox[0]["text"] and "JUSTIN" not in outbox[0]["text"]       # it was only gathered
+    assert "JUSTIN" in screens.items("u-pro")[0]["matched"]                                   # and never reported later
+    assert screens.weekly(SATURDAY + timedelta(days=14), db.get_profile, lambda p: 25) == 0
+
+
+def test_one_users_trouble_doesnt_stop_the_others_notes(w, outbox):
+    store_pages(rows=ROWS[:1] + [facts("NEWCO", "New Co", stage=4)])
+    screens.build_index("IN")
+    for uid in ("u-basic", "u-pro"):
+        reader(uid, f"{uid}@example.com")
+        screens.save(uid, {"name": "Stage 1", "region": "IN", "filters": {"stage": [1]}, "notify": True}, 25)
+    store_pages(rows=[facts("NEWCO", "New Co", stage=1)])
+    screens.build_index("IN")
+
+    def limit(p):
+        if p["id"] == "u-basic":
+            raise RuntimeError("plan lookup failed")
+        return 25
+    assert screens.weekly(SATURDAY, db.get_profile, limit) == 1 and [m["to"] for m in outbox] == ["u-pro@example.com"]
 
 
 def test_the_unsubscribe_link_turns_screen_notes_off(w):
