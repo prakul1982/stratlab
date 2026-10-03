@@ -3,7 +3,7 @@ with each number compared against its source and every gap written down. Run fro
 AI, so a full run costs no AI allowance. The aim is that nothing StratLab shows needs checking anywhere else."""
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import db, sector_members, universes
 
@@ -289,3 +289,174 @@ class Runner:
             db.set_setting(KEY, json.dumps(result))
         except Exception as e:
             print("could not save the audit:", e)
+
+
+MARKET = "audit:market"        # settings keys: the switch and list state, the list itself, and results in shards
+REFRESH_DAYS = 30              # a company is checked again once its last check is this old
+NEW_DAYS = 30                  # listed within this many days: checked before anything else
+LIST_EVERY = 86400             # re-read the exchange's list of companies once a day
+
+
+def _shard(sym: str) -> str:
+    c = sym[:1].upper()
+    return f"{MARKET}:rows:{c if c.isalpha() else '0'}"
+
+
+class MarketAudit:
+    """Every company listed on NSE, checked one at a time in the background at an easy pace, for as long as it is
+    switched on. Each result is saved as it finishes, so a restart carries on where it stopped. The exchange's list
+    is read daily: a new listing is checked first, a delisted company is dropped, and each company is checked again
+    once its last check is a month old. Gives way while a hand-started audit runs."""
+
+    def __init__(self, list_fn, check_fn, busy_fn=lambda: False, pause: float = 3.0):
+        self.list_fn, self.check_fn, self.busy_fn, self.pause = list_fn, check_fn, busy_fn, pause
+        self.lock = threading.Lock()
+        self.loaded = False
+        self.state: dict = {"enabled": False, "list_at": None, "list_tried_at": None, "list_error": None, "since": None}
+        self.listing: dict[str, dict] = {}
+        self.rows: dict[str, dict] = {}
+        self.current: str | None = None
+        self.secs: list[float] = []
+
+    # storage
+    def _load(self):
+        if self.loaded:
+            return
+        import json
+        try:
+            self.state.update(json.loads(db.get_setting(MARKET) or "{}"))
+            self.listing = json.loads(db.get_setting(f"{MARKET}:list") or "{}")
+            for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0":
+                self.rows.update(json.loads(db.get_setting(f"{MARKET}:rows:{c}") or "{}"))
+        except Exception as e:
+            print("could not load the market audit:", e)
+        self.loaded = True
+
+    def _save(self, *what: str):
+        import json
+        try:
+            for w in what:
+                if w == "state":
+                    db.set_setting(MARKET, json.dumps(self.state))
+                elif w == "list":
+                    db.set_setting(f"{MARKET}:list", json.dumps(self.listing))
+                else:                                   # a symbol: save its shard
+                    key = _shard(w)
+                    db.set_setting(key, json.dumps({s: r for s, r in self.rows.items() if _shard(s) == key}))
+        except Exception as e:
+            print("could not save the market audit:", e)
+
+    # control
+    def set_enabled(self, on: bool):
+        with self.lock:
+            self._load()
+            self.state["enabled"] = bool(on)
+            self._save("state")
+
+    def restart(self):
+        """Check every company again, from the start (results stay until each is replaced)."""
+        with self.lock:
+            self._load()
+            self.state["since"] = datetime.now(timezone.utc).isoformat()
+            self._save("state")
+
+    def refresh_list(self, force: bool = False) -> bool:
+        """Read the exchange's list when it is a day old (or now, when forced). Keeps the last good list on failure."""
+        with self.lock:
+            self._load()
+            last = self.state.get("list_tried_at")
+            if not force and last and time.time() - datetime.fromisoformat(last).timestamp() < LIST_EVERY:
+                return False
+            self.state["list_tried_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            got = self.list_fn()
+        except Exception as e:
+            with self.lock:
+                self.state["list_error"] = str(e)[:200]
+                self._save("state")
+            return False
+        today = datetime.now(timezone.utc).date().isoformat()
+        with self.lock:
+            fresh = {c["symbol"]: {"name": c.get("name") or c["symbol"], "listed": c.get("listed"),
+                                   "seen": (self.listing.get(c["symbol"]) or {}).get("seen") or today} for c in got}
+            gone = [s for s in self.rows if s not in fresh]
+            for s in gone:
+                self.rows.pop(s)
+            self.listing = fresh
+            self.state.update(list_at=self.state["list_tried_at"], list_error=None)
+            self._save("state", "list", *{_shard(s): s for s in gone}.values())
+        return True
+
+    def _is_new(self, sym: str, today) -> bool:
+        info = self.listing.get(sym) or {}
+        d = info.get("listed") or info.get("seen")
+        try:
+            return d is not None and (today - datetime.fromisoformat(d).date()).days <= NEW_DAYS
+        except ValueError:
+            return False
+
+    def queue(self) -> list[str]:
+        """Companies due a check, in order: new listings not yet checked, never checked, then the oldest checks."""
+        now = datetime.now(timezone.utc)
+        today = now.date()
+        cutoff = max(self.state.get("since") or "", (now - timedelta(days=REFRESH_DAYS)).isoformat())
+        new, never, stale = [], [], []
+        for sym in sorted(self.listing):
+            at = (self.rows.get(sym) or {}).get("at")
+            if not at:
+                (new if self._is_new(sym, today) else never).append(sym)
+            elif at < cutoff:
+                stale.append((at, sym))
+        return new + never + [s for _, s in sorted(stale)]
+
+    # work
+    def step(self) -> str | None:
+        """Check one due company; returns its symbol, or None when there's nothing to do right now."""
+        with self.lock:
+            self._load()
+            if not self.state.get("enabled"):
+                return None
+        if self.busy_fn():
+            return None
+        self.refresh_list()
+        with self.lock:
+            due = self.queue()
+            if not due:
+                return None
+            sym = self.current = due[0]
+        try:
+            row = self.check_fn(sym)
+        finally:
+            with self.lock:
+                self.current = None
+        row["at"] = datetime.now(timezone.utc).isoformat()
+        with self.lock:
+            if sym in self.listing:
+                self.rows[sym] = row
+                self.secs = (self.secs + [row.get("seconds") or 0])[-50:]
+                self._save(sym)
+        return sym
+
+    def loop(self):
+        while True:
+            try:
+                did = self.step()
+            except Exception as e:
+                print("market audit step failed:", e)
+                did = None
+            time.sleep(self.pause if did else 60)
+
+    def status(self) -> dict:
+        with self.lock:
+            self._load()
+            due = self.queue()
+            today = datetime.now(timezone.utc).date()
+            rows = list(self.rows.values())
+            new = sorted(({"symbol": s, "name": i.get("name"), "listed": i.get("listed"),
+                           "checked": bool((self.rows.get(s) or {}).get("at"))}
+                          for s, i in self.listing.items() if self._is_new(s, today)), key=lambda x: x["listed"] or "", reverse=True)
+            avg = (sum(self.secs) / len(self.secs) + self.pause) if self.secs else None
+            return {**{k: self.state.get(k) for k in ("enabled", "list_at", "list_tried_at", "list_error", "since")},
+                    "listed": len(self.listing), "checked": len(self.rows), "due": len(due), "current": self.current,
+                    "eta_hours": round(len(due) * avg / 3600, 1) if avg else None, "new_listings": new[:30],
+                    "summary": summarise(rows), "rows": [r for r in rows if r.get("issues")]}

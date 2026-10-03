@@ -185,3 +185,72 @@ def test_a_whole_index_comes_from_the_exchanges_list(monkeypatch):
         assert audit.symbols_for("sectors") and len(audit.symbols_for("x", ["a"] * 700)) == 1
     finally:
         w["close"]()
+
+
+def _clean(sym):
+    return {"symbol": sym, "name": sym, "seconds": 0.1, "issues": []}
+
+
+def test_whole_market_audit_reads_the_exchange_list_and_checks_new_listings_first(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None: {**_clean(s), "issues": [{"level": "gap", "area": "Numbers", "detail": "x"}] if s == "CO10" else []})
+        h = W.headers("admin-token")
+        assert w["client"].get("/admin/audit/market", headers=h).json()["enabled"] is False
+        assert main.market_audit.step() is None                                          # off: does nothing
+        r = w["client"].post("/admin/audit/market", headers=h, json={"on": True}).json()
+        assert r["enabled"] is True
+        assert main.market_audit.step() == "NEWCO"                                       # listed today: first in line
+        for _ in range(6):
+            main.market_audit.step()
+        s = w["client"].get("/admin/audit/market", headers=h).json()
+        assert s["listed"] == 122 and s["checked"] == 7 and s["due"] == 115              # the bond series is left out
+        assert s["new_listings"][0]["symbol"] == "NEWCO" and s["new_listings"][0]["checked"]
+        assert [r["symbol"] for r in s["rows"]] == ["CO10"]                              # only rows with something to show
+        assert w["client"].post("/admin/audit/market", headers=W.headers("pro-token"), json={"on": False}).status_code == 403
+    finally:
+        w["close"]()
+
+
+def test_whole_market_audit_survives_a_restart_and_drops_delisted_companies(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        listing = [{"symbol": s, "name": s, "listed": "2001-01-01"} for s in ("AAA", "BBB", "CCC")]
+        a = audit.MarketAudit(lambda: listing, _clean, pause=0)
+        a.set_enabled(True)
+        assert [a.step(), a.step()] == ["AAA", "BBB"]
+        b = audit.MarketAudit(lambda: listing, _clean, pause=0)                          # the server restarted
+        assert b.status()["checked"] == 2 and b.step() == "CCC" and b.step() is None     # carries on, then nothing due
+        listing.pop(0)                                                                   # AAA delisted
+        b.refresh_list(force=True)
+        assert b.status()["checked"] == 2 and "AAA" not in b.rows
+        assert audit.MarketAudit(lambda: listing, _clean).status()["listed"] == 2       # and that was saved
+        b.restart()                                                                      # check everything again
+        assert b.status()["due"] == 2
+    finally:
+        w["close"]()
+
+
+def test_whole_market_audit_keeps_the_last_list_and_gives_way_to_a_hand_started_audit(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        calls, busy = [0], [True]
+
+        def listing():
+            calls[0] += 1
+            if calls[0] > 1:
+                raise RuntimeError("refused")
+            return [{"symbol": "AAA", "name": "A", "listed": None}]
+        a = audit.MarketAudit(listing, _clean, busy_fn=lambda: busy[0], pause=0)
+        a.set_enabled(True)
+        assert a.step() is None and calls[0] == 0                                        # an audit by hand is running
+        busy[0] = False
+        assert a.step() == "AAA"
+        a.refresh_list(force=True)
+        s = a.status()
+        assert s["listed"] == 1 and "refused" in s["list_error"]                         # the last good list stays
+    finally:
+        w["close"]()

@@ -241,6 +241,34 @@ class NSEFilings:
         self.cache.set(key, out, 86400)
         return out
 
+    EQUITY_LIST = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
+
+    def all_equities(self) -> list[dict]:
+        """Every company listed on NSE's main board (series EQ and BE), from the exchange's own daily file:
+        [{symbol, name, listed}] with the listing date as ISO. New listings appear the day they list."""
+        import csv
+        import io
+        try:
+            r = self.http.get(self.EQUITY_LIST, headers={"Accept": "text/csv,*/*"})
+        except httpx.HTTPError as e:
+            raise SourceError(self.name, f"Couldn't reach the exchange's list of companies ({e.__class__.__name__}).", busy=True) from None
+        if r.status_code >= 400:
+            raise SourceError(self.name, f"The exchange's list of companies was refused ({r.status_code}).")
+        out = []
+        for row in csv.DictReader(io.StringIO(r.text)):
+            row = {str(k or "").strip().upper(): str(v or "").strip() for k, v in row.items()}
+            sym, series = row.get("SYMBOL", "").upper(), row.get("SERIES", "").upper()
+            if not sym or series not in ("EQ", "BE"):
+                continue
+            try:
+                listed = datetime.strptime(row.get("DATE OF LISTING", ""), "%d-%b-%Y").date().isoformat()
+            except ValueError:
+                listed = None
+            out.append({"symbol": sym, "name": row.get("NAME OF COMPANY") or sym, "listed": listed})
+        if len(out) < 100:                      # the real file has about two thousand; fewer means a broken answer
+            raise SourceError(self.name, f"The exchange's list of companies looked wrong ({len(out)} companies).")
+        return list({c["symbol"]: c for c in out}.values())
+
     def holidays(self) -> list[str]:
         """The exchange's published trading holidays for the equity segment, as ISO dates (it lists the current
         year, and the next one once announced, usually in December)."""

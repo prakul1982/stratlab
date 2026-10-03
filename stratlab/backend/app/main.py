@@ -50,7 +50,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, AuditReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -138,6 +138,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
+    threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     yield
 
 
@@ -1788,6 +1789,39 @@ def audit_one(sym: str, docs: bool, exchange=None) -> dict:
     for i in row["issues"]:
         i["detail"] = public_text(i["detail"])
     return row
+
+
+_market_breaker: list = [None, 0.0]
+
+
+def _market_check(sym: str) -> dict:
+    """One company for the whole-market audit; the exchange-price breaker is renewed every six hours, so a refusal
+    in the morning doesn't leave the rest of the day unchecked."""
+    if time.time() - _market_breaker[1] > 6 * 3600:
+        _market_breaker[:] = [audit.Breaker(live_price), time.time()]
+    return audit_one(research_routes.symbol_of(sym), False, _market_breaker[0])
+
+
+market_audit = audit.MarketAudit(lambda: filings_feed.all_equities(), _market_check,
+                                 busy_fn=lambda: bool(audit_runner.state.get("running")))
+
+
+@app.get("/admin/audit/market")
+def admin_market_audit(_=Depends(admin.admin_profile)):
+    """The whole-market audit: every NSE-listed company, checked in the background while switched on."""
+    return market_audit.status()
+
+
+@app.post("/admin/audit/market")
+def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
+    """Switch the whole-market audit on or off, re-read the exchange's list now, or check everything again."""
+    if req.on is not None:
+        market_audit.set_enabled(req.on)
+    if req.restart:
+        market_audit.restart()
+    if req.read_list:
+        threading.Thread(target=market_audit.refresh_list, kwargs={"force": True}, daemon=True).start()
+    return market_audit.status()
 
 
 @app.get("/admin/audit")
