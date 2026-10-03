@@ -396,7 +396,7 @@ class Research:
             "sources": sources + sources2,
             "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
                      + ([{"label": "BSE", "url": f"https://www.bseindia.com/stock-share-price/x/x/{code}/"}] if code else []),
-            "summary": s,
+            "summary": s, "numbers_at": (scr or {}).get("fetched_at"),
             "testable": bool(inst) or not kite_ok,
             "instrument_id": inst["id"] if inst else None,
         }

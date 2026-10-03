@@ -108,7 +108,7 @@ export interface Notebook extends NotebookItem {
 export interface PlanInfo {
   name: string; price: number; backtests_per_month: number | null; ai_builds_per_month: number | null;
   live_limit: number; live_trial_days: number | null; pro_features: boolean;
-  price_year?: number; group_size?: number; stock_alerts?: number; features?: Record<string, boolean>;
+  price_year?: number; group_size?: number; stock_alerts?: number; screens?: number; features?: Record<string, boolean>;
 }
 /** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
 export type Level = "new" | "some" | "pro";

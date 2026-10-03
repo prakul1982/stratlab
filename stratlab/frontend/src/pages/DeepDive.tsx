@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { pct, safeHref, signClass } from "../lib/format";
 import { scaleFor } from "../lib/research";
 import { Panel, ResearchNav, TrendBars } from "../components/Research";
-import { Loading } from "../components/ui";
+import { AsOf, Loading } from "../components/ui";
 import { AlertButton } from "../components/AlertForm";
 
 type Year = { year: string; sales: number | null; profit: number | null; opm: number | null; capex: number | null;
@@ -26,6 +26,7 @@ type Card = { rows: Target[]; met: number; missed: number; pending: number; unch
 export interface DeepView {
   symbol: string; region?: "IN" | "US"; ai?: boolean; source_url?: string | null; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
+  as_of?: string | null; numbers_at?: string | null; price_at?: string | null;
   industry_measures?: { key: string; label: string | null; measures: string[] };
   valuation?: { name: string; short: string; value: number | null; pe: number | null; why: string };
   numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean; notes?: string[]; capex_reported?: boolean;
@@ -209,6 +210,7 @@ export function DeepDivePage() {
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>{us
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
+        {v && <AsOf parts={[["Reported numbers", v.numbers_at ?? v.as_of], ["Last close", v.price_at]]} />}
         <div className="row wrap" style={{ gap: 10 }}>
           {v && <>
             <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>

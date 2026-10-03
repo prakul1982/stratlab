@@ -134,8 +134,9 @@ def price_facts(bars: list[dict]) -> dict:
 
 
 def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict | None, prices: dict | None,
-          filings: list[dict], exchange: str) -> dict:
-    """What a page shows, from what the deep dive already works out. Plain numbers and words; nothing from AI."""
+          filings: list[dict], exchange: str, red_flags: int | None = None) -> dict:
+    """What a page shows, from what the deep dive already works out. Plain numbers and words; nothing from AI.
+    `red_flags` is how many red-flag filings (India) the last three months held, for the stock screens."""
     years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt")} for y in (nums.get("years") or [])[-5:]]
     prices = prices or {}
     return {
@@ -144,14 +145,15 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "currency": "USD" if region == "US" else "INR", "unit": nums.get("unit") or ("$ million" if region == "US" else "₹ crore"),
         "price": prices.get("price") or snap.get("price"), "price_at": prices.get("price_at"),
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
-        "market_cap": snap.get("market_cap_cr"), "pe": snap.get("pe"), "roe": snap.get("roe"), "div_yield": snap.get("div_yield"),
+        "market_cap": snap.get("market_cap_cr"), "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
+        "div_yield": snap.get("div_yield"),
         "net_margin": snap.get("net_margin"), "opm": snap.get("opm"), "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
         "bank": bool(nums.get("bank")), "years": years,
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),
         "st_up": (trend or {}).get("st_up"), "st_days": (trend or {}).get("st_days"),
         "filings": [{"at": str(f.get("at") or "")[:10], "title": public_text(str(f.get("title") or ""))[:200]} for f in filings[:6]],
-        "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "red_flags": red_flags, "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
 

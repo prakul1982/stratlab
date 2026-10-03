@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import type { CheckStatus, VerdictKind } from "../lib/types";
 import { Close } from "./Icons";
+import { asOf } from "../lib/format";
 
 const VERDICT_NAME: Record<VerdictKind, string> = {
   edge: "Likely real edge", mixed: "Mixed evidence", luck: "Probably luck", not_enough: "Not enough evidence", no_edge: "No edge",
@@ -97,4 +98,11 @@ export function Info({ children, label = "What does this mean?" }: { children: R
       {open && <span id={id} role="note" className={`info-pop ${side}`}>{children}</span>}
     </span>
   );
+}
+
+/** A small "as of" line, so people know how fresh the numbers next to it are. Each part shows only when known. */
+export function AsOf({ parts }: { parts: [string, string | null | undefined][] }) {
+  const shown = parts.map(([label, iso]) => [label, asOf(iso)] as const).filter(([, t]) => t);
+  if (!shown.length) return null;
+  return <p className="tiny muted as-of">{shown.map(([label, t]) => `${label} as of ${t}`).join(" · ")}</p>;
 }

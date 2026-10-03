@@ -47,7 +47,36 @@ def build():
     sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
     w["client"].post("/holdings/import", headers=world.headers("admin-token"),
                      json={"filename": sample.name, "data": base64.b64encode(sample.read_bytes()).decode()})
+    screen_index()
     return w
+
+
+def screen_index():
+    """The stock screens' index, as the background job would gather it from stored company pages (written straight to
+    the index, so the public company pages still build from the fake sources)."""
+    import json
+    import random
+    from app import db, screens
+    rng = random.Random(5)
+    sectors = ["Energy", "Information Technology", "Financials", "Consumer Staples", "Materials"]
+    names = {"IN": ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "ONGC", "ITC", "HINDUNILVR", "TATASTEEL", "JSWSTEEL",
+                    "WIPRO", "HCLTECH", "NTPC", "COALINDIA", "SBIN", "AXISBANK", "NESTLEIND", "DABUR", "VEDL", "SAIL"],
+             "US": ["AAPL", "MSFT", "XOM", "JPM", "KO", "NUE"]}
+    for region, syms in names.items():
+        rows = []
+        for i, sym in enumerate(syms):
+            price = round(rng.uniform(50, 3000), 2)
+            f = {"region": region, "symbol": sym, "name": f"{sym.title()} {'Ltd' if region == 'IN' else 'Inc.'}",
+                 "industry": [sectors[i % len(sectors)]], "price": price, "high52": round(price * rng.uniform(1, 1.6), 2),
+                 "low52": round(price * 0.7, 2), "price_at": "2026-10-01", "market_cap": round(rng.uniform(200, 900000)),
+                 "pe": None if i % 7 == 3 else round(rng.uniform(6, 60), 1), "roe": round(rng.uniform(-5, 35), 1),
+                 "roce": round(rng.uniform(0, 40), 1), "div_yield": round(rng.uniform(0, 4), 2), "net_margin": round(rng.uniform(-5, 30), 1),
+                 "opm": round(rng.uniform(5, 40), 1), "debt_equity": round(rng.uniform(0, 2), 2), "bank": False,
+                 "growth": {"sales_cagr_3y": round(rng.uniform(-10, 30), 1)}, "stage": 1 + i % 4,
+                 "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [], "built_at": "2026-10-01T12:00:00+00:00"}
+            rows.append(screens.row(region, sym, f))
+        rows.sort(key=lambda r: r["name"].lower())
+        db.set_setting(screens.INDEX_KEY + region, json.dumps({"region": region, "at": "2026-10-01T18:00:00+00:00", "rows": rows}))
 
 
 if __name__ == "__main__":

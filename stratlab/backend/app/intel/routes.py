@@ -2,7 +2,7 @@
 AI reads and the watchlist. Every third-party call happens here on the server."""
 import json
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -95,7 +95,9 @@ def search(q: str = "", region: str = "IN", profile=Depends(current_profile)):
 
 @router.get("/company/{region}/{symbol}")
 def company(region: str, symbol: str, profile=Depends(current_profile)):
-    return ok(source_call(lambda: hub.company(region_of(region), symbol_of(symbol))))
+    """One company's page. `as_of` is when its prices were read, for the page's "as of" line."""
+    c = source_call(lambda: hub.company(region_of(region), symbol_of(symbol)))
+    return ok({**c, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes")})
 
 
 @router.get("/chart/{region}/{symbol}")
