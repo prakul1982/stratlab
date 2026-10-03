@@ -148,7 +148,10 @@ def test_unsubscribe_get_and_one_click_post_need_a_valid_link(monkeypatch):
         t = mail_tokens.make("u-pro", "unsubscribe", "market_in")
         r = c.get("/unsubscribe", params={"t": t})
         assert r.status_code == 200 and "text/html" in r.headers["content-type"]
-        assert "unsubscribed from the India market email" in r.text and "Account" in r.text
+        assert "Unsubscribe from the India market email?" in r.text and "<form method=post" in r.text
+        assert newsletter_prefs.get("u-pro")["market_in"] == "daily"         # opening the link (a mail scanner) changes nothing
+        r = c.post("/unsubscribe", params={"t": t, "page": 1})                # the button on that page
+        assert "unsubscribed from the India market email" in r.text and "text/html" in r.headers["content-type"]
         assert newsletter_prefs.get("u-pro") == {"market_in": "off", "market_us": "weekly", "my_stocks": "daily"}
 
         r = c.post("/unsubscribe", params={"t": mail_tokens.make("u-pro", "unsubscribe", "my_stocks")})

@@ -526,28 +526,42 @@ def mail_page(title: str, text: str, status: int = 200) -> HTMLResponse:
         f"<p><a href='{e(settings.PUBLIC_SITE_URL)}/account'>Open StratLab</a></p></body>"))
 
 
-def _unsubscribe(t: str) -> str | None:
-    """Turn off the newsletter a link names; returns its name, or None for a bad link."""
+def _unsubscribe(t: str, act: bool = True) -> str | None:
+    """The newsletter a link names (turned off when `act`); None for a bad link."""
     got = mail_tokens.read(t, "unsubscribe")
     if not got or got[1] not in alerts.NEWSLETTER_NAMES:
         return None
     uid, what = got
-    newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
+    if act:
+        newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
 
 @app.get("/unsubscribe", response_class=HTMLResponse)
 def unsubscribe_page(t: str = ""):
-    name = _unsubscribe(t)
+    """Asks before unsubscribing: mail scanners open every link in an email, and shouldn't unsubscribe anyone."""
+    name = _unsubscribe(t, act=False)
     if not name:
         return mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400)
-    return mail_page("Unsubscribed", f"You're unsubscribed from {name}. Change this any time in Account.")
+    e = html_escape
+    return HTMLResponse(content=(
+        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>Unsubscribe</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
+        f"<h1 style='font-size:1.3rem'>Unsubscribe from {e(name)}?</h1>"
+        f"<form method=post action='/unsubscribe?t={e(t)}&amp;page=1'>"
+        f"<button style='font:inherit;padding:.6rem 1.2rem;border-radius:8px;border:1px solid #111;background:#111;color:#fff;cursor:pointer'>"
+        f"Unsubscribe</button></form>"
+        f"<p><a href='{e(settings.PUBLIC_SITE_URL)}/account'>Or change your emails in Account</a></p></body>"))
 
 
 @app.post("/unsubscribe")
-def unsubscribe_one_click(t: str = ""):
-    """Mail apps' own unsubscribe button (RFC 8058 one-click)."""
-    if not _unsubscribe(t):
+def unsubscribe_one_click(t: str = "", page: int = 0):
+    """Mail apps' own unsubscribe button (RFC 8058 one-click), and the button on the page above."""
+    name = _unsubscribe(t)
+    if page:
+        return (mail_page("Unsubscribed", f"You're unsubscribed from {name}. Change this any time in Account.") if name
+                else mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400))
+    if not name:
         return Response("This unsubscribe link isn't valid.", status_code=400, media_type="text/plain")
     return Response("Unsubscribed.", media_type="text/plain")
 
