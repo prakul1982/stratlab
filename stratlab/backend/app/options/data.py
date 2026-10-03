@@ -1,4 +1,4 @@
-"""Option contracts, chains, live quotes and margins from Kite (NSE, BSE and MCX)."""
+"""Option contracts, chains, live quotes and margins from Kite (NSE, BSE, MCX and NSE currency options)."""
 import threading
 import time
 
@@ -13,11 +13,12 @@ INDEX_SPOT = {
     ("BFO", "SENSEX"): "BSE:SENSEX", ("BFO", "BANKEX"): "BSE:BANKEX", ("BFO", "SENSEX50"): "BSE:SENSEX50",
 }
 POPULAR = [("NFO", "NIFTY"), ("NFO", "BANKNIFTY"), ("BFO", "SENSEX"), ("NFO", "FINNIFTY"), ("NFO", "MIDCPNIFTY"),
-           ("BFO", "BANKEX"), ("MCX", "CRUDEOIL"), ("MCX", "NATURALGAS"), ("MCX", "GOLDM"), ("MCX", "SILVERM")]
+           ("BFO", "BANKEX"), ("MCX", "CRUDEOIL"), ("MCX", "NATURALGAS"), ("MCX", "GOLDM"), ("MCX", "SILVERM"), ("CDS", "USDINR")]
 # most units allowed in one order; check your broker, these change
 FREEZE = {"NIFTY": 1800, "BANKNIFTY": 900, "FINNIFTY": 1800, "MIDCPNIFTY": 2800, "NIFTYNXT50": 600,
           "SENSEX": 1000, "BANKEX": 900}
-EXCHANGE_NAME = {"NFO": "NSE", "BFO": "BSE", "MCX": "MCX"}
+EXCHANGE_NAME = {"NFO": "NSE", "BFO": "BSE", "MCX": "MCX", "CDS": "NSE currency"}
+CDS_UNITS = 1000     # currency contracts are 1,000 units (JPYINR: 100,000 yen, quoted per 100); Kite lists the lot as 1
 FRESH_SECONDS = 120
 QUOTE_GAP = 1.05     # Kite allows one quote request a second per account, shared by every session
 REFRESH = 1.0        # a quote older than this is refreshed when someone else's request goes out anyway
@@ -48,16 +49,19 @@ class OptionsData:
                 return
             self.kite._require()
             rows: dict[str, list[dict]] = {}
-            for exch in ("NFO", "BFO", "MCX"):
+            for exch in ("NFO", "BFO", "MCX", "CDS"):
                 self.kite._throttle()
                 out = []
                 for x in self.kite.kite.instruments(exch):
                     t = x.get("instrument_type")
                     if t not in ("CE", "PE", "FUT") or not x.get("expiry"):
                         continue
+                    lot = int(x.get("lot_size") or 1)
+                    if exch == "CDS" and lot < 100:          # a premium of ₹0.25 on USDINR is ₹250 a lot
+                        lot *= CDS_UNITS
                     out.append({"symbol": x["tradingsymbol"], "name": x.get("name") or "", "type": t,
                                 "strike": float(x.get("strike") or 0), "expiry": x["expiry"].isoformat(),
-                                "lot": int(x.get("lot_size") or 1), "exchange": exch})
+                                "lot": lot, "exchange": exch})
                 rows[exch] = out
             self._rows, self._day = rows, today
 
@@ -114,11 +118,11 @@ class OptionsData:
     def spot_key(self, exchange: str, name: str, expiry: str | None = None) -> str | None:
         if (exchange, name) in INDEX_SPOT:
             return INDEX_SPOT[(exchange, name)]
-        if exchange == "MCX":   # commodity options settle into the future; use the nearest one at or after expiry
+        if exchange in ("MCX", "CDS"):   # commodity and currency options follow the nearest future at or after expiry
             self._load()
-            futs = sorted((r for r in self._rows.get("MCX", []) if r["name"] == name and r["type"] == "FUT"
+            futs = sorted((r for r in self._rows.get(exchange, []) if r["name"] == name and r["type"] == "FUT"
                            and r["expiry"] >= (expiry or ist_date().isoformat())), key=lambda r: r["expiry"])
-            return f"MCX:{futs[0]['symbol']}" if futs else None
+            return f"{exchange}:{futs[0]['symbol']}" if futs else None
         return f"NSE:{name}"
 
     # ---------- quotes ----------

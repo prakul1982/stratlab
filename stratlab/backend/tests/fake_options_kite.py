@@ -9,6 +9,7 @@ UNDERLYINGS = {  # (exchange, name): (spot key, spot, strike gap, lot)
     ("NFO", "BANKNIFTY"): ("NSE:NIFTY BANK", 55000.0, 100, 35),
     ("BFO", "SENSEX"): ("BSE:SENSEX", 82000.0, 100, 20),
     ("MCX", "CRUDEOIL"): ("MCX:CRUDEOILFUT", 5600.0, 50, 100),
+    ("CDS", "USDINR"): ("CDS:USDINRFUT", 88.0, 0.25, 1),      # Kite lists currency lots as 1 (1,000 dollars)
 }
 TOKENS = {sk: 900001 + i for i, (sk, *_) in enumerate(UNDERLYINGS.values())}
 
@@ -44,10 +45,10 @@ class _Inner:
                 for i in range(-30, 31):
                     k = round(spot / gap) * gap + i * gap
                     for t in ("CE", "PE"):
-                        rows.append({"tradingsymbol": f"{name}{e:%y%m%d}{int(k)}{t}", "name": name, "instrument_type": t,
+                        rows.append({"tradingsymbol": f"{name}{e:%y%m%d}{k:g}{t}", "name": name, "instrument_type": t,
                                      "strike": float(k), "expiry": e, "lot_size": lot})
-            if exch == "MCX":
-                rows.append({"tradingsymbol": "CRUDEOILFUT", "name": name, "instrument_type": "FUT", "strike": 0,
+            if exch in ("MCX", "CDS"):
+                rows.append({"tradingsymbol": f"{name}FUT", "name": name, "instrument_type": "FUT", "strike": 0,
                              "expiry": _expiries()[-1], "lot_size": lot})
         return rows
 

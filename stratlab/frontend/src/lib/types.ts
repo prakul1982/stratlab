@@ -148,7 +148,7 @@ export interface LiveRow {
 // ---------- options ----------
 export interface OptLeg { side: "sell" | "buy"; opt: "CE" | "PE"; offset: number; lots: number }
 export interface OptionStrategy {
-  name: string; structure: string; exchange: "NFO" | "BFO" | "MCX"; underlying: string; expiry: string;
+  name: string; structure: string; exchange: "NFO" | "BFO" | "MCX" | "CDS"; underlying: string; expiry: string;
   offsetUnit: "strikes" | "points"; legs: OptLeg[];
   timing: { entry: string; lastEntry: string; squareoff: string; maxEntries: number; cooldown: number };
   risk: { stopType: "none" | "amount" | "credit_pct"; stop: number; tgtType: "none" | "amount" | "credit_pct"; tgt: number;
@@ -159,7 +159,7 @@ export interface OptionStrategy {
   notes: string;
   signal?: { rules: Strategy; notebook?: string | null; name: string; short: "mirror" | "none" } | null;
 }
-export interface Underlying { exchange: "NFO" | "BFO" | "MCX"; name: string; lot: number; expiries: string[]; venue: string; popular: boolean; freeze: number; index: boolean }
+export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: string; lot: number; expiries: string[]; venue: string; popular: boolean; freeze: number; index: boolean }
 export interface OptQuote { ltp: number | null; bid: number | null; ask: number | null; oi?: number | null; volume?: number | null; ts?: string | null }
 export interface OptChain { expiry: string | null; expiries?: string[]; lot?: number; spot: number | null; atm?: number; step?: number;
   rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null }[]; freeze?: number }

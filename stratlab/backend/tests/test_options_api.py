@@ -49,7 +49,7 @@ def test_underlyings_chain_and_preview(monkeypatch):
         c = TestClient(app)
         us = c.get("/options/underlyings").json()
         assert [u["name"] for u in us[:3]] == ["NIFTY", "BANKNIFTY", "SENSEX"] and us[0]["freeze"] == 1800
-        assert {u["venue"] for u in us} == {"NSE", "BSE", "MCX"}
+        assert {u["venue"] for u in us} == {"NSE", "BSE", "MCX", "NSE currency"}
         ch = c.get("/options/chain", params={"exchange": "NFO", "underlying": "NIFTY"}).json()
         assert ch["spot"] == 25000 and ch["atm"] == 25000 and ch["step"] == 50 and len(ch["rows"]) == 21
         row = next(r for r in ch["rows"] if r["strike"] == 25000)
@@ -133,6 +133,27 @@ def test_admin_lists_options_sessions(monkeypatch):
         rows = c.get("/admin/sessions").json()
         row = next(r for r in rows if r["id"] == sid)
         assert row["market"] == "IN" and row["kind"] == "options" and row["capital"] == 500000
+    finally:
+        main.manager.sessions.clear()
+        app.dependency_overrides.clear()
+
+
+def test_usdinr_options_trade_in_lots_of_a_thousand_dollars(monkeypatch):
+    data, rows = setup(monkeypatch)
+    try:
+        c = TestClient(app)
+        us = {u["name"]: u for u in c.get("/options/underlyings").json()}
+        assert us["USDINR"]["venue"] == "NSE currency" and us["USDINR"]["lot"] == 1000 and us["USDINR"]["popular"]
+        ch = c.get("/options/chain", params={"exchange": "CDS", "underlying": "USDINR"}).json()
+        assert ch["spot"] == 88.0 and ch["step"] == 0.25 and any(r["strike"] == 88.25 for r in ch["rows"])
+        strat = {**STRAT, "name": "USDINR straddle", "exchange": "CDS", "underlying": "USDINR"}
+        snap = c.post("/options/sessions", json={"strategy": strat}).json()
+        s = main.manager.sessions[snap["id"]]
+        s.on_timer(midday())
+        assert s.engine.kind == "in_cds_opt"
+        assert s.engine.pos["legs"][0]["qty"] == 1000                     # one lot is 1,000 dollars
+        snap = c.get(f"/live/sessions/{snap['id']}").json()
+        assert snap["position"]["credit"] > 0
     finally:
         main.manager.sessions.clear()
         app.dependency_overrides.clear()

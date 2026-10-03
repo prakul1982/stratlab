@@ -51,6 +51,31 @@ class AIConfig(AIError):
     """A setting is wrong (bad key, unknown model): skip this provider until it's fixed."""
 
 
+REASONING = ("gpt-oss", "qwen3", "deepseek-r", "magistral", "-thinking")
+COOL_DEFAULT, COOL_MAX = 30.0, 120.0     # seconds a provider is skipped after a rate limit, unless it says otherwise
+WAIT_FOR_COOLDOWN = 20.0                 # when every provider is briefly busy, wait this long at most for the first
+
+
+def _retry_after(r: httpx.Response) -> float | None:
+    """How long the provider asked us to wait (Retry-After seconds, or the reset headers some send)."""
+    for h in ("retry-after", "x-ratelimit-reset-requests", "x-ratelimit-reset-tokens"):
+        v = r.headers.get(h)
+        if not v:
+            continue
+        m = re.match(r"^\s*(\d+(?:\.\d+)?)(ms|s|m)?", v)
+        if m:
+            n = float(m.group(1))
+            return n / 1000 if m.group(2) == "ms" else n * 60 if m.group(2) == "m" else n
+    return None
+
+
+class RateLimited(AIBusy):
+    """A 429 that says how long to wait."""
+    def __init__(self, msg: str, wait: float | None = None):
+        super().__init__(msg)
+        self.wait = wait
+
+
 @dataclass
 class Status:
     name: str
@@ -97,10 +122,10 @@ def order(kind: str = "quick") -> list[str]:
 def rank(model_id: str) -> int:
     """Lower is tried first: capable-but-fast models, then small ones as a fallback."""
     m = model_id.lower()
-    if any(k in m for k in ("versatile", "70b", "gpt-oss", "llama-3.3", "llama3.3", "mistral-large", "mistral-medium")):
+    if any(k in m for k in ("versatile", "70b", "llama-3.3", "llama3.3", "mistral-large", "mistral-medium")):
         return 0
-    if any(k in m for k in ("scout", "maverick", "qwen", "mistral", "gemma", "deepseek")):
-        return 1
+    if any(k in m for k in ("scout", "maverick", "qwen", "mistral", "gemma", "deepseek", "gpt-oss")):
+        return 1      # gpt-oss and some qwen models reason before answering: good, but slower and can run dry
     if any(k in m for k in ("instant", "8b", "mini", "flash", "lite", "small")):
         return 2
     return 3
@@ -209,12 +234,18 @@ class OpenAIStyle:
     def complete(self, system: str, text: str, max_tokens: int = 1500) -> str:
         last: AIError | None = None
         for model in self.models():
-            body = {"model": model, "temperature": 0.1, "max_tokens": max_tokens,
+            thinks = any(k in model.lower() for k in REASONING)
+            body = {"model": model, "temperature": 0.1, "max_tokens": max(max_tokens, 4000) if thinks else max_tokens,
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
                     "response_format": {"type": "json_object"}}
+            if thinks and self.name in ("groq", "cerebras", "openrouter"):
+                body["reasoning_effort"] = "low"      # keep most of the reply for the answer itself
             try:
                 with self._client() as c:
                     r = c.post("/chat/completions", json=body)
+                    if r.status_code == 400 and "reasoning_effort" in r.text:
+                        body.pop("reasoning_effort", None)
+                        r = c.post("/chat/completions", json=body)
                     if r.status_code == 400 and ("response_format" in r.text or "json" in r.text.lower()):
                         body.pop("response_format")   # JSON mode unsupported, or the model's JSON failed validation
                         r = c.post("/chat/completions", json=body)
@@ -228,12 +259,24 @@ class OpenAIStyle:
             if r.status_code == 429 and self.name == "openrouter":
                 last = AIBusy(f"{LABELS[self.name]} model {model} is rate limited (429).")
                 continue   # free models there have their own limits: try the next one
-            if r.status_code == 429 or r.status_code >= 500:
+            if r.status_code == 429:
+                raise RateLimited(f"{LABELS[self.name]} is busy or out of free quota (429).", _retry_after(r))
+            if r.status_code >= 500:
                 raise AIBusy(f"{LABELS[self.name]} is busy or out of free quota ({r.status_code}).")
             try:
-                out = r.json()["choices"][0]["message"]["content"] or ""
-            except (KeyError, IndexError, ValueError, TypeError):
-                last = AIError(f"{LABELS[self.name]} sent an empty reply.")
+                choice = r.json()["choices"][0]
+                out = (choice.get("message") or {}).get("content") or ""
+            except (KeyError, IndexError, ValueError, TypeError, AttributeError):
+                last = AIError(f"{LABELS[self.name]} sent an empty reply ({model}).")
+                continue
+            if not out.strip():                       # a reasoning model that ran out of room, or a filtered reply
+                why = " (ran out of room while reasoning)" if choice.get("finish_reason") == "length" else ""
+                last = AIError(f"{LABELS[self.name]} sent an empty reply ({model}){why}.")
+                continue
+            try:
+                extract_json(out)                     # an unreadable reply from one model: try the provider's next one
+            except AIError:
+                last = AIError(f"{LABELS[self.name]}'s reply couldn't be read ({model}).")
                 continue
             status(self.name).model = model
             return out
@@ -246,16 +289,32 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
     names = order(kind)
     if not names:
         raise AIConfig("No AI provider is set up on the server. Add a free key such as GROQ_API_KEY or GEMINI_API_KEY.")
-    errors = []
-    for name in names:
-        if status(name).cooldown_until > time.time():
-            errors.append(f"{LABELS[name]}: cooling down after a rate limit")
+    for attempt in (0, 1):
+        errors, cooling = [], []
+        for name in names:
+            left = status(name).cooldown_until - time.time()
+            if left > 0:
+                cooling.append(left)
+                errors.append(f"{LABELS[name]}: cooling down after a rate limit ({left:.0f}s)")
+                continue
+            raw, error = _try(name, system, text, gemini, anthropic, transport, max_tokens)
+            if error is None:
+                return raw
+            errors.append(f"{LABELS[name]}: {error}")
+            left = status(name).cooldown_until - time.time()
+            if left > 0:
+                cooling.append(left)
+        # every provider failed: if one is only briefly rate limited, wait for it once rather than give up
+        soonest = min(cooling) if cooling else None
+        if attempt == 0 and soonest is not None and soonest <= WAIT_FOR_COOLDOWN:
+            _sleep(soonest + 0.5)
             continue
-        raw, error = _try(name, system, text, gemini, anthropic, transport, max_tokens)
-        if error is None:
-            return raw
-        errors.append(f"{LABELS[name]}: {error}")
+        break
     raise AIBusy("None of the AI providers could answer. " + " · ".join(errors))
+
+
+def _sleep(seconds: float):
+    time.sleep(seconds)
 
 
 def _try(name, system, text, gemini, anthropic, transport, max_tokens: int = 1500) -> tuple[str | None, str | None]:
@@ -271,8 +330,9 @@ def _try(name, system, text, gemini, anthropic, transport, max_tokens: int = 150
         extract_json(raw)  # a reply we can't read counts as a failure: try the next provider
     except AIError as e:
         st.last_error = str(e)
-        if isinstance(e, AIBusy):
-            st.cooldown_until = time.time() + 60
+        if isinstance(e, AIBusy):                     # the wait the provider asked for, within sensible bounds
+            wait = getattr(e, "wait", None)
+            st.cooldown_until = time.time() + (min(max(wait, 2.0), COOL_MAX) if wait else COOL_DEFAULT)
         return None, st.last_error
     except Exception as e:  # a provider bug must not break the chain
         st.last_error = f"Unexpected error: {e.__class__.__name__}"

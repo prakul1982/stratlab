@@ -25,7 +25,7 @@ export const STRUCTURES: { id: string; name: string; hint: string; unit: "strike
 
 export const POPULAR_FALLBACK = [
   { exchange: "NFO", name: "NIFTY" }, { exchange: "NFO", name: "BANKNIFTY" }, { exchange: "BFO", name: "SENSEX" },
-  { exchange: "NFO", name: "FINNIFTY" }, { exchange: "MCX", name: "CRUDEOIL" },
+  { exchange: "NFO", name: "FINNIFTY" }, { exchange: "MCX", name: "CRUDEOIL" }, { exchange: "CDS", name: "USDINR" },
 ] as const;
 
 export function blankOptions(): OptionStrategy {
@@ -42,9 +42,11 @@ export function blankOptions(): OptionStrategy {
   };
 }
 
-/** MCX trades into the evening; everything else follows equity hours. */
+/** MCX trades into the evening and currency options until 17:00; everything else follows equity hours. */
 export const sessionFor = (exchange: string) =>
-  exchange === "MCX" ? { entry: "09:15", lastEntry: "22:30", squareoff: "23:15" } : { entry: "09:30", lastEntry: "14:45", squareoff: "15:15" };
+  exchange === "MCX" ? { entry: "09:15", lastEntry: "22:30", squareoff: "23:15" }
+    : exchange === "CDS" ? { entry: "09:15", lastEntry: "16:15", squareoff: "16:45" }
+      : { entry: "09:30", lastEntry: "14:45", squareoff: "15:15" };
 
 /** Profit or loss at expiry across a range of prices, for a priced structure. */
 export function payoff(p: OptPreview) {
