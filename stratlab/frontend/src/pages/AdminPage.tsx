@@ -99,6 +99,7 @@ export function AdminPage() {
   const { me, notify, fail } = useApp();
   const [ov, setOv] = useState<Overview | null>(null);
   const [users, setUsers] = useState<UserRow[] | null>(null);
+  const [shownUsers, setShownUsers] = useState(25);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [reported, setReported] = useState<{ entries: ReportedRow[]; reasons: Record<string, string> } | null>(null);
   const [q, setQ] = useState("");
@@ -355,7 +356,7 @@ export function AdminPage() {
         {!users ? <Loading label="Loading users" /> : users.length === 0 ? <p className="small muted">No users match.</p> : (
           <div className="table-wrap"><table>
             <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th><th></th></tr></thead>
-            <tbody>{users.map((u) => (
+            <tbody>{users.slice(0, shownUsers).map((u) => (
               <tr key={u.id}>
                 <td>{u.email ?? "–"}</td>
                 <td><span className={`badge ${u.plan === "free" ? "skip" : "next"}`}>{PLAN_NAME[u.plan]}</span>
@@ -366,7 +367,8 @@ export function AdminPage() {
             ))}</tbody>
           </table></div>
         )}
-        <p className="hint">Counts are for this month. The newest 200 users are shown; search to find others.</p>
+        {users && users.length > shownUsers && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setShownUsers((n) => n + 50)}>Show more ({users.length - shownUsers} more)</button>}
+        <p className="hint">Counts are for this month. The newest 200 users are loaded; search by email to find others.</p>
       </section>
       {editing && <PlanModal user={editing} onClose={() => setEditing(null)} onSaved={() => { loadUsers(q); loadOverview(); }} />}
     </div>

@@ -59,7 +59,7 @@ const TOOLS: [string, string][] = [
 ];
 
 const BEYOND: [string, string, string][] = [
-  ["Options, live", "Straddles, strangles, iron flies, condors, spreads or any structure up to eight legs, paper traded on live NSE, BSE and MCX option prices. Every fill is the real bid or ask. Enter at a set time or whenever your own rules signal, say a 7 EMA cross buying the NIFTY call. Stops on the whole position or each leg, re-centring, and sizing by the broker's real margin.", "Chains recorded every 5 minutes for backtesting"],
+  ["Options, live", "Straddles, strangles, iron flies, condors, spreads or any structure up to eight legs, paper traded on live NSE, BSE, MCX and NSE currency option prices. Every fill is the real bid or ask. Enter at a set time or whenever your own rules signal, say a 7 EMA cross buying the NIFTY call. Stops on the whole position or each leg, re-centring, and sizing by the broker's real margin.", "Chains recorded every 5 minutes for backtesting"],
   ["Whole groups", "Run one set of rules across NIFTY 50, the liquid F&O stocks, US mega caps, large coins or your own list, with one pot of capital and a limit on positions open at once. See which members carried it, then paper trade the whole group live, entering on the live price and skipping stocks whose spread is too wide.", "Built for scanners and momentum books"],
   ["Bring any strategy", "Drop in a config file, Pine Script, Python, MetaTrader, AmiBroker or plain words. StratLab works out what it is and sets it up in the right place: a notebook, a group, or the Options tab.", "Anything it can't carry over is listed"],
 ];
@@ -88,7 +88,7 @@ const FAQ: [string, string][] = [
   ["Where do the prices come from?", "Indian stocks, F&O and MCX commodities come from a live exchange feed. Crypto, US, UK, European, Japanese, forex and global commodity prices come from established market data sources; some can run a few minutes behind. Company research combines reported financials, recent news and Wikipedia."],
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
   ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a config file from your own bot, TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, sets up a group if it trades a list of stocks, opens option structures in the Options tab, and lists anything it couldn't translate."],
-  ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE and MCX option prices, with fills at the real bid and ask. You can also let a notebook's rules decide when: long signals buy your structure and short signals its mirror. Backtesting options needs real historical prices for every strike, which nobody keeps for expired options, so StratLab is recording the NIFTY, BANKNIFTY and SENSEX chains every 5 minutes to build that history. We won't stand in a pricing model."],
+  ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask. You can also let a notebook's rules decide when: long signals buy your structure and short signals its mirror. Backtesting options needs real historical prices for every strike, which nobody keeps for expired options, so StratLab is recording the NIFTY, BANKNIFTY and SENSEX chains every 5 minutes to build that history. We won't stand in a pricing model."],
   ["What does it cost?", "It's free to start: experiments every month, AI strategy builds, and 5 market days of paper trading. Basic (₹999 a month, or the same in your currency) adds group and options paper trading and a daily report; Pro (₹2,999) adds options on your own signals, faster group entries, alerts for every trade, every indicator and F&O, and the investor tools: the ST S2 scan, sector rotation, and filings and red flags."],
   ["Can I test commodities?", "Yes, as two separate markets. Indian commodities are MCX futures in rupees (gold, silver, crude oil, natural gas, copper, zinc, aluminium, lead, and their mini contracts), sized in whole lots with MCX costs, on years of daily history stitched across expiries. Global commodities are COMEX, NYMEX and ICE futures in dollars (gold, silver, oil, gas, copper, grains, coffee, sugar, cocoa, cotton), sized per ounce or barrel."],
   ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon, and sends paper trades and the daily report as notifications."],
@@ -136,7 +136,7 @@ export function Login() {
               <a className="btn quiet lp-cta-2" href="#how">For traders</a>
             </div>
             {error && <p className="banner" role="alert">{error}</p>}
-            <p className="small muted">Free to start · No code · Indian and US companies · 7 markets to test on · Paper trading only, no real orders</p>
+            <p className="small muted">Free to start · No code · Indian and US companies · 10 markets to test on · Paper trading only, no real orders</p>
           </div>
           <HeroDemo />
         </div>
@@ -144,7 +144,7 @@ export function Login() {
 
       <section className="lp-band">
         <div className="lp-wrap lp-facts">
-          {[["10 yrs", "of numbers on every Indian company"], ["4", "honesty checks on every strategy test"], ["7", "markets to test on, plus your own data"], ["₹0", "to start, no card needed"]].map(([n, t]) => (
+          {[["10 yrs", "of numbers on every Indian and US company"], ["4", "honesty checks on every strategy test"], ["10", "markets to test on, plus your own data"], ["₹0", "to start, no card needed"]].map(([n, t]) => (
             <div key={t}><b className="serif">{n}</b><span>{t}</span></div>
           ))}
         </div>

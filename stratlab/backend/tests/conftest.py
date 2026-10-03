@@ -1,4 +1,7 @@
+import os
 import sys
+
+os.environ.setdefault("BACKTEST_PROCESSES", "0")      # backtests in the test process, where fakes are patched in
 
 import pytest
 

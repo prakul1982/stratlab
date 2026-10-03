@@ -141,10 +141,6 @@ def fix_rupee(text: str) -> str:
     return text
 
 
-def pdf_text(data: bytes, max_pages: int = MAX_PAGES) -> str:
-    return pdf_text_pages(data, max_pages)[0]
-
-
 SCANNED_CHARS = 150          # fewer text characters than this per page: the pages are pictures (a scan)
 
 

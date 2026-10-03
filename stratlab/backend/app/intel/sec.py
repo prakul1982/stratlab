@@ -43,7 +43,6 @@ DEBT_PARTS = (("LongTermDebtNoncurrent",), ("LongTermDebtCurrent", "DebtCurrent"
 DEBT_SHORT = ("ShortTermBorrowings", "CommercialPaper")
 
 ANNUAL = ("10-K", "10-K/A", "20-F", "20-F/A", "40-F")
-QUARTERLY = ("10-Q", "10-Q/A")
 
 
 def _days(a: str, b: str) -> int:

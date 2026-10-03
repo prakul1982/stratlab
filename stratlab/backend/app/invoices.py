@@ -154,6 +154,10 @@ def billing_of(uid: str) -> dict:
     return _get(f"billing:{uid}", {}) or {}
 
 
+PRINT_JS = 'document.getElementById("print").onclick=function(){print()};'
+PRINT_HASH = __import__("base64").b64encode(__import__("hashlib").sha256(PRINT_JS.encode()).digest()).decode()
+
+
 def html(inv: dict) -> str:
     """The invoice as a printable page (the browser's Print → Save as PDF gives the PDF)."""
     from html import escape as e
@@ -162,12 +166,15 @@ def html(inv: dict) -> str:
     money = lambda v: f"{sym}{v:,.2f}"  # noqa: E731
     title = "Tax invoice" if s.get("gstin") else "Invoice"
     rows = "".join(f"<tr><td>{e(t['name'])}</td><td class=n>{money(t['amount'])}</td></tr>" for t in inv["taxes"])
-    return f"""<!doctype html><html><head><meta charset="utf-8"><title>{e(title)} {e(inv['number'])}</title>
+    # opened under the site's own origin: no script may run but the print button's own (a second guard after escaping)
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-{PRINT_HASH}'">
+<title>{e(title)} {e(inv['number'])}</title>
 <style>body{{font:14px/1.5 system-ui,sans-serif;color:#1d1b17;max-width:760px;margin:32px auto;padding:0 16px}}
 h1{{font-size:22px;margin:0 0 4px}}table{{width:100%;border-collapse:collapse;margin:12px 0}}td,th{{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}}
 .n{{text-align:right}}.cols{{display:flex;gap:32px;flex-wrap:wrap}}.cols div{{flex:1;min-width:240px}}small{{color:#666}}
 @media print{{button{{display:none}}}}</style></head><body>
-<button onclick="print()">Print or save as PDF</button>
+<button id="print">Print or save as PDF</button><script>{PRINT_JS}</script>
 <h1>{e(title)}</h1><div>No. <b>{e(inv['number'])}</b> · Date {e(inv['date'])} · Payment {e(inv['payment_id'])}</div>
 <div class=cols><div><h3>From</h3><b>{e(s.get('legal_name') or 'StratLab')}</b><br>{e(s.get('address') or '')}<br>
 {('State: ' + e(STATES.get(s.get('state'), '')) + ' (' + e(s.get('state')) + ')<br>') if s.get('state') else ''}

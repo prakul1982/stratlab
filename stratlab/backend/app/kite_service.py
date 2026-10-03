@@ -119,7 +119,7 @@ class KiteService:
         return self.kite.login_url() + "&redirect_params=" + quote(f"state={self.login_state}")
 
     def complete_login(self, request_token: str, state: str | None):
-        if not self.login_state or state != self.login_state:
+        if not self.login_state or not secrets.compare_digest(str(state or ""), self.login_state):
             raise PermissionError("Login state did not match. Start the login again.")
         self.login_state = None
         return self.accept_request_token(request_token)

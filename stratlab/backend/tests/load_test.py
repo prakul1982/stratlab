@@ -50,7 +50,7 @@ def mix(ctx):
 
 
 def start_server(port: int):
-    config = uvicorn.Config(main.app, host="127.0.0.1", port=port, log_level="warning", workers=1)
+    config = uvicorn.Config(main.app, host="127.0.0.1", port=port, log_level="warning", workers=1, timeout_keep_alive=75)
     server = uvicorn.Server(config)
     threading.Thread(target=server.run, daemon=True).start()
     for _ in range(100):
@@ -131,7 +131,27 @@ def serve(port: int, ready):
         time.sleep(3600)
 
 
-def run(users: int, seconds: int, port: int = 8765) -> dict:
+def _client_proc(first: int, count: int, users: int, port: int, ctx: dict, until_wall: float, think, out):
+    """One load-generating process: `count` of the simulated users. Several of these keep the generator itself from
+    becoming the bottleneck (one Python process tops out well before the server does)."""
+    global THINK
+    THINK = think
+    results, errors = defaultdict(list), defaultdict(list)
+    until = time.monotonic() + (until_wall - time.time())
+
+    async def go():
+        # idle connections are dropped before the server's keep-alive ends: reusing one the server is closing at that
+        # moment gives a ReadError that a browser would retry, which isn't a server failure
+        limits = httpx.Limits(max_connections=count, max_keepalive_connections=count, keepalive_expiry=3)
+        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=120, limits=limits) as c:
+            await asyncio.gather(*(user(n, c, [f"load-{i}" for i in range(users)], mix(ctx), until, results, errors)
+                                   for n in range(first, first + count)))
+    asyncio.run(go())
+    t_off = time.time() - time.monotonic()            # timeline in wall-clock time, comparable across processes
+    out.put((dict(results), dict(errors), [(t + t_off, d, lbl) for t, d, lbl in TIMELINE]))
+
+
+def run(users: int, seconds: int, port: int = 8765, clients: int = 1) -> dict:
     import multiprocessing as mpr
     ctx_mp = mpr.get_context("spawn")      # a fresh process, like a real server: nothing inherited from the caller
     q = ctx_mp.Queue()
@@ -139,19 +159,25 @@ def run(users: int, seconds: int, port: int = 8765) -> dict:
     proc.start()
     ctx = q.get(timeout=120)
     results, errors = defaultdict(list), defaultdict(list)
-    until = time.monotonic() + seconds
-
-    async def go():
-        # one client for every simulated user (as many browsers would be many machines): building 300 clients would
-        # cost the load generator itself seconds of CPU and show up as server time
-        # idle connections are dropped before the server's 5-second keep-alive ends: reusing one the server is closing
-        # at that moment gives a ReadError that a browser would retry, which isn't a server failure
-        limits = httpx.Limits(max_connections=users, max_keepalive_connections=users, keepalive_expiry=3)
-        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=120, limits=limits) as c:
-            await asyncio.gather(*(user(n, c, [f"load-{i}" for i in range(users)], mix(ctx), until, results, errors)
-                                   for n in range(users)))
+    clients = max(1, min(clients, users))
+    out = ctx_mp.Queue()
+    until_wall = time.time() + seconds
+    per = [users // clients + (1 if i < users % clients else 0) for i in range(clients)]
+    starts = [sum(per[:i]) for i in range(clients)]
+    gens = [ctx_mp.Process(target=_client_proc, args=(starts[i], per[i], users, port, ctx, until_wall, THINK, out))
+            for i in range(clients)]
     try:
-        asyncio.run(go())
+        for g in gens:
+            g.start()
+        for _ in gens:
+            r, e, tl = out.get(timeout=seconds + 300)
+            for k, v in r.items():
+                results[k] += v
+            for k, v in e.items():
+                errors[k] += v
+            TIMELINE.extend(tl)
+        for g in gens:
+            g.join(timeout=10)
     finally:
         proc.terminate()
     return report(results, errors, seconds, users), errors
@@ -163,8 +189,9 @@ if __name__ == "__main__":
     ap.add_argument("--seconds", type=int, default=60)
     ap.add_argument("--think", type=float, nargs=2, default=None, help="min and max seconds between clicks")
     ap.add_argument("--cold", action="store_true", help="don't warm the caches first")
+    ap.add_argument("--clients", type=int, default=1, help="load-generating processes (one tops out first)")
     a = ap.parse_args()
     if a.think:
         THINK = tuple(a.think)
     WARM = not a.cold
-    run(a.users, a.seconds)
+    run(a.users, a.seconds, clients=a.clients)

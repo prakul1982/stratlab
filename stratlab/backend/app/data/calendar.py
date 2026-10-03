@@ -99,6 +99,7 @@ def refresh_from_exchange(fetch, market: str = "IN") -> dict:
     state = {"days": days, "at": now, "tried_at": now, "error": None, "latest": max(got)}
     db.set_setting(AUTO + market, json.dumps(state))
     _extra.pop(market, None)
+    _holiday_cache.clear()
     return state
 
 
@@ -108,6 +109,7 @@ def set_extra_holidays(market: str, days: list[str]) -> list[str]:
     clean = sorted({d for d in (str(x).strip()[:10] for x in days) if _iso(d)})
     db.set_setting(SETTING + market, json.dumps(clean))
     _extra.pop(market, None)
+    _holiday_cache.clear()
     return clean
 
 
@@ -154,8 +156,21 @@ def is_holiday(market: str, day: date) -> bool:
     return day.weekday() < 5 and not is_trading_day(market, day)
 
 
+_holiday_cache: dict = {}
+
+
 def holidays(market: str, start: date, days: int = 60) -> list[str]:
-    """Weekday closures from `start` over the next `days` days, as ISO dates in the exchange's own calendar."""
+    """Weekday closures from `start` over the next `days` days, as ISO dates in the exchange's own calendar. Asked on
+    every page (the sidebar's market hours), so kept for ten minutes; a refreshed holiday list shows within that."""
     if market not in CODES:
         return []
-    return [d.isoformat() for d in (start + timedelta(n) for n in range(days)) if is_holiday(market, d)]
+    import time
+    key = (market, start.isoformat(), days)
+    hit = _holiday_cache.get(key)
+    if hit and time.monotonic() - hit[0] < 600:
+        return list(hit[1])
+    out = [d.isoformat() for d in (start + timedelta(n) for n in range(days)) if is_holiday(market, d)]
+    if len(_holiday_cache) > 500:
+        _holiday_cache.clear()
+    _holiday_cache[key] = (time.monotonic(), out)
+    return list(out)

@@ -135,6 +135,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     fake_db = FakeSupabase()
     monkeypatch.setattr(db, "_client", fake_db)
     db._profiles.clear()
+    main._results.clear()                       # shared scan and rotation answers from an earlier test
+    main.trading_calendar._holiday_cache.clear()
     from app import auth
     auth._cache.clear()
     monkeypatch.setattr(settings, "ADMIN_EMAILS", "owner@example.com")

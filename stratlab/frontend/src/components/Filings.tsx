@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
+import { safeHref } from "../lib/format";
 import { Loading } from "./ui";
 
 export type Severity = "red" | "amber" | "info";
@@ -41,7 +42,7 @@ export function FilingRow({ i }: { i: FilingItem }) {
         <div className="row wrap" style={{ gap: 8 }}><SevBadge s={i.severity} label={i.label} /><span className="small">{i.subject}</span></div>
         {i.text && <span className="tiny muted filing-text">{i.text}</span>}
       </div>
-      {i.url ? <a className="link tiny" href={i.url} target="_blank" rel="noopener noreferrer">Filing ↗</a> : <span />}
+      {i.url ? <a className="link tiny" href={safeHref(i.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a> : <span />}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import hashlib
 import json
 import time
 
-from ..ai_providers import complete, extract_json
+from ..ai_providers import AIError, complete, extract_json
 from .net import TTLCache
 from ..kite_service import ist_date
 
@@ -106,6 +106,9 @@ Scores are 0-100. Segment shares are estimates that add up to about 100.
         if isinstance(s, dict) and s.get("label") and _score(s.get("share")) is not None:
             segs.append({"label": str(s["label"])[:50], "share": _score(s["share"])})
     val = str(r.get("valuation", "")).upper()
+    if not str(r.get("summary") or "").strip() and not r.get("bull") and not r.get("bear") and not any(
+            _score(scores.get(k)) is not None for k in ("moat", "growth", "value", "momentum", "health")):
+        raise AIError("The AI's reply was empty. Press Refresh to try again.")     # never cache a blank read
     return {"summary": str(r.get("summary") or "")[:700],
             "scores": {k: _score(scores.get(k)) for k in ("moat", "growth", "value", "momentum", "health")},
             "composite": _score(r.get("composite")),
