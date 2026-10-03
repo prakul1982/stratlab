@@ -9,7 +9,7 @@ from app import main
 from tests import world as W
 
 PUBLIC = {"/health", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/{token}.png", "/v/{token}", "/billing/webhook",
-          "/admin/kite/callback"}
+          "/admin/kite/callback", "/unsubscribe", "/email/confirm"}
 
 
 def _deps(d) -> set:

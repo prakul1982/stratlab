@@ -51,6 +51,7 @@ from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan, weekly
+from . import mail_tokens, newsletter_prefs
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -512,6 +513,78 @@ def test_alert(profile=Depends(current_profile)):
     if not sent:
         err(502, "alert_failed", "The test couldn't be sent: " + "; ".join(f"{k}: {v}" for k, v in failed.items()))
     return {"sent": sent, "failed": failed}
+
+
+# ---------- newsletter email: confirming the address, unsubscribing from a link ----------
+def mail_page(title: str, text: str, status: int = 200) -> HTMLResponse:
+    """A tiny page for links opened from an email."""
+    e = html_escape
+    return HTMLResponse(status_code=status, content=(
+        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>{e(title)}</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
+        f"<h1 style='font-size:1.3rem'>{e(title)}</h1><p>{e(text)}</p>"
+        f"<p><a href='{e(settings.PUBLIC_SITE_URL)}/account'>Open StratLab</a></p></body>"))
+
+
+def _unsubscribe(t: str) -> str | None:
+    """Turn off the newsletter a link names; returns its name, or None for a bad link."""
+    got = mail_tokens.read(t, "unsubscribe")
+    if not got or got[1] not in alerts.NEWSLETTER_NAMES:
+        return None
+    uid, what = got
+    newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
+    return alerts.NEWSLETTER_NAMES[what]
+
+
+@app.get("/unsubscribe", response_class=HTMLResponse)
+def unsubscribe_page(t: str = ""):
+    name = _unsubscribe(t)
+    if not name:
+        return mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400)
+    return mail_page("Unsubscribed", f"You're unsubscribed from {name}. Change this any time in Account.")
+
+
+@app.post("/unsubscribe")
+def unsubscribe_one_click(t: str = ""):
+    """Mail apps' own unsubscribe button (RFC 8058 one-click)."""
+    if not _unsubscribe(t):
+        return Response("This unsubscribe link isn't valid.", status_code=400, media_type="text/plain")
+    return Response("Unsubscribed.", media_type="text/plain")
+
+
+@app.post("/me/email/confirm")
+def send_email_confirmation(profile=Depends(current_profile)):
+    """Email a link that confirms the address newsletters would go to."""
+    to = alerts.newsletter_email(profile)
+    if not to:
+        err(400, "no_email", "Add an email address in Account first.")
+    if alerts.email_confirmed(profile):
+        return {"confirmed": True, "sent_to": None}
+    if not alerts.email_ready():
+        err(503, "email_off", "Email isn't set up on the server yet.")
+    throttle(profile, "email_confirm", 5, 3600, "You've asked for 5 confirmation emails this hour. Try again later.")
+    link = alerts.confirm_url(profile["id"], to)
+    text = (f"Confirm that StratLab may send newsletters to {to}:\n\n{link}\n\n"
+            "The link works for 3 days. If you didn't ask for this, ignore this email.")
+    html = (f"<p>Confirm that StratLab may send newsletters to {html_escape(to)}:</p>"
+            f"<p><a href=\"{html_escape(link)}\">Confirm my email</a></p>"
+            "<p>The link works for 3 days. If you didn't ask for this, ignore this email.</p>")
+    try:
+        alerts.send_email(to, "Confirm your StratLab email", text, html=html)
+    except Exception as e:
+        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+    return {"confirmed": False, "sent_to": to}
+
+
+@app.get("/email/confirm", response_class=HTMLResponse)
+def confirm_email(t: str = ""):
+    got = mail_tokens.read(t, "confirm")
+    if not got or not got[1]:
+        return mail_page("This link doesn't work", "It may have expired (links work for 3 days). "
+                         "Ask for a new one in Account.", 400)
+    uid, address = got
+    db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())
+    return mail_page("Email confirmed", f"Newsletters you choose in Account will go to {address}.")
 
 
 # ---------- markets and instruments ----------
@@ -2400,13 +2473,13 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
     throttle(profile, "admin_mail_test", 5, 3600, "You've sent 5 test emails this hour. Try again later.")
     to = alerts.email_for(profile)
     if not alerts.email_ready():
-        err(400, "email_not_set", "Email isn't set up on the server yet: add RESEND_API_KEY in Railway.")
+        err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
     try:
         alerts.send_email(to, "StratLab test email", "Your StratLab alert emails are working. Problems found by the daily check will arrive like this.")
     except Exception as e:
         why = public_text(str(e))[:200]
         if "unreachable" in why.lower() or "timed out" in why.lower():
-            why += ". The host blocks outgoing mail ports: add RESEND_API_KEY in Railway to send over HTTPS instead"
+            why += ". The host blocks outgoing mail ports: add BREVO_API_KEY or RESEND_API_KEY in Railway to send over HTTPS instead"
         err(502, "email_failed", f"The email couldn't be sent: {why}")
     return {"sent_to": to}
 

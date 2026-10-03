@@ -1,6 +1,6 @@
 """Trade alerts and the daily report: phone notifications, Telegram and email.
 
-A channel the server isn't set up for (no Telegram bot token, no SMTP settings) is skipped rather than failing
+A channel the server isn't set up for (no Telegram bot token, no email settings) is skipped rather than failing
 the others, and the Account page doesn't offer it."""
 import smtplib
 import threading
@@ -14,7 +14,8 @@ def telegram_ready() -> bool:
 
 
 def email_ready() -> bool:
-    return bool(settings.RESEND_API_KEY or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD))
+    return bool(settings.BREVO_API_KEY or settings.RESEND_API_KEY
+                or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD))
 
 
 # Resend's shared sender: it delivers only to the address the Resend account was made with, until a domain of your
@@ -22,17 +23,48 @@ def email_ready() -> bool:
 RESEND_FROM = "StratLab <onboarding@resend.dev>"
 
 
-def _send_resend(to: str, subject: str, body: str) -> None:
-    import httpx
+def _refused(service: str, r) -> RuntimeError:
+    try:
+        why = str((r.json() or {}).get("message") or "")[:160]
+    except ValueError:
+        why = ""
+    return RuntimeError(f"{service} refused the email ({r.status_code}). {why}".strip())
+
+
+def _send_resend(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
+    msg = {"from": settings.ALERT_FROM_EMAIL or RESEND_FROM, "to": [to], "subject": subject, "text": body}
+    if html:
+        msg["html"] = html
+    if headers:
+        msg["headers"] = headers
     r = httpx.post("https://api.resend.com/emails", timeout=15,
-                   headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
-                   json={"from": settings.ALERT_FROM_EMAIL or RESEND_FROM, "to": [to], "subject": subject, "text": body})
+                   headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"}, json=msg)
     if r.status_code >= 400:
-        try:
-            why = str((r.json() or {}).get("message") or "")[:160]
-        except ValueError:
-            why = ""
-        raise RuntimeError(f"Resend refused the email ({r.status_code}). {why}".strip())
+        raise _refused("Resend", r)
+
+
+def _brevo_sender() -> str:
+    """Brevo sends only from an address verified in the Brevo account. ALERT_FROM_EMAIL names it; without it the
+    first admin's address is used, since the owner usually signs up to Brevo with it (verified at sign-up)."""
+    if settings.ALERT_FROM_EMAIL:
+        return settings.ALERT_FROM_EMAIL
+    first = next((e.strip() for e in settings.ADMIN_EMAILS.split(",") if e.strip()), "")
+    if not first:
+        raise RuntimeError("Email has no sender address: set ALERT_FROM_EMAIL to an address verified in Brevo.")
+    return first
+
+
+def _send_brevo(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
+    msg = {"sender": {"name": "StratLab", "email": _brevo_sender()}, "to": [{"email": to}], "subject": subject,
+           "textContent": body}
+    if html:
+        msg["htmlContent"] = html
+    if headers:
+        msg["headers"] = headers
+    r = httpx.post("https://api.brevo.com/v3/smtp/email", timeout=15,
+                   headers={"api-key": settings.BREVO_API_KEY, "accept": "application/json"}, json=msg)
+    if r.status_code >= 400:
+        raise _refused("Brevo", r)
 
 
 def ready_channels() -> dict:
@@ -59,11 +91,16 @@ def send_telegram(chat_id: str, text: str) -> None:
         raise RuntimeError(f"Telegram refused the message ({r.status_code}). {detail}".strip())
 
 
-def send_email(to: str, subject: str, body: str) -> None:
+def send_email(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
+    """Plain text, plus an HTML version and extra headers (like List-Unsubscribe) when given. Over HTTPS when a
+    Brevo or Resend key is set (they work where outgoing mail ports are blocked), otherwise SMTP."""
     if not to:
         return
-    if settings.RESEND_API_KEY:                 # over HTTPS: works where outgoing mail ports are blocked
-        _send_resend(to, subject, body)
+    if settings.BREVO_API_KEY:
+        _send_brevo(to, subject, body, html, headers)
+        return
+    if settings.RESEND_API_KEY:
+        _send_resend(to, subject, body, html, headers)
         return
     if not (settings.SMTP_HOST and settings.SMTP_USER):
         raise RuntimeError("Email isn't set up on the server (SMTP settings are missing).")
@@ -71,7 +108,11 @@ def send_email(to: str, subject: str, body: str) -> None:
     msg["From"] = settings.ALERT_FROM_EMAIL or settings.SMTP_USER
     msg["To"] = to
     msg["Subject"] = subject
+    for k, v in (headers or {}).items():
+        msg[k] = v
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")     # multipart/alternative: mail apps show the HTML, others the text
     ssl_port = settings.SMTP_PORT == 465
     with (smtplib.SMTP_SSL if ssl_port else smtplib.SMTP)(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as s:
         if not ssl_port:  # 587 and others: upgrade the connection with STARTTLS
@@ -87,6 +128,51 @@ def email_for(profile: dict) -> str | None:
     from .admin import admin_emails
     own = (profile.get("email") or "").strip().lower()
     return own if own and own in admin_emails() else None
+
+
+CONFIRMED = "email-confirmed:"          # app_settings key prefix: the address the user confirmed
+NEWSLETTER_NAMES = {"market_in": "the India market email", "market_us": "the US market email",
+                    "my_stocks": "the My stocks email", "all": "all StratLab newsletters"}
+
+
+def newsletter_email(profile: dict) -> str | None:
+    """Where a user's newsletters go: their alert address from Account, or else the address they sign in with."""
+    return email_for(profile) or (profile.get("email") or "").strip().lower() or None
+
+
+def email_confirmed(profile: dict) -> bool:
+    """The newsletter address was confirmed from a link sent to it. An admin's own sign-in address counts as
+    confirmed, since the owner put it in ADMIN_EMAILS."""
+    from . import db
+    from .admin import admin_emails
+    to = (newsletter_email(profile) or "").strip().lower()
+    if not to:
+        return False
+    own = (profile.get("email") or "").strip().lower()
+    # a signed-in request knows whether Google proved the address; a profile read from the database doesn't say
+    if to == own and own in admin_emails() and profile.get("_email_verified", True):
+        return True
+    try:
+        return bool(profile.get("id")) and (db.get_setting(CONFIRMED + profile["id"]) or "").strip().lower() == to
+    except Exception:
+        return False
+
+
+def unsubscribe_url(uid: str, what: str) -> str:
+    """A link that turns off one newsletter (or "all") without signing in."""
+    from . import mail_tokens
+    return f"{settings.PUBLIC_API_URL}/unsubscribe?t={mail_tokens.make(uid, 'unsubscribe', what)}"
+
+
+def list_unsubscribe_headers(uid: str, what: str) -> dict:
+    """The headers that give mail apps their own one-click unsubscribe button."""
+    return {"List-Unsubscribe": f"<{unsubscribe_url(uid, what)}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
+
+
+def confirm_url(uid: str, address: str) -> str:
+    """A link (good for 3 days) that confirms this address for the user's newsletters."""
+    from . import mail_tokens
+    return f"{settings.PUBLIC_API_URL}/email/confirm?t={mail_tokens.make(uid, 'confirm', address)}"
 
 
 def tell_admins(subject: str, text: str) -> int:
