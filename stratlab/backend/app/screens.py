@@ -21,7 +21,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from html import escape
 
-from . import db, sector_members, stock_pages
+from . import db, deals, sector_members, stock_pages
 from .newsletter import job as news_job
 
 INDEX_KEY = "screens:index:"          # screens:index:IN = {"at", "rows": [...]}
@@ -29,6 +29,7 @@ KEY = "screens:user:"                 # screens:user:<uid> = {"uid", "items": [.
 KNOWN_KEY = "screens:known:"          # screens:known:IN = the symbols in the index at the last weekly run
 REGIONS = ("IN", "US")
 RED_DAYS = 90                         # "recent" red-flag filings: the last three months
+INSIDER_DAYS = 90                     # "a promoter or insider bought in the last N days": N unless the user picks
 MEMORY = 600                          # the index is read from storage at most every ten minutes
 MAX_ROWS = 500                        # rows one request can page through at a time
 MAX_NAME = 60
@@ -66,6 +67,9 @@ HELP = {
     "cap": "The company's market value: share price times shares. Bands are fixed amounts, not a ranking.",
     "stage": "Where the price sits against its 150-day average. " + "; ".join(
         f"{v}: {stock_pages.STAGE_WHY[k]}" for k, v in STAGES.items()) + ".",
+    "insider_buy": "Purchases on the open market by the company's promoters, directors or key staff, from the "
+                   "insider-trading disclosures they file with the exchange. Off-market transfers, employee stock "
+                   "options and pledges don't count. India only.",
     "red_flags": "Filings in the last three months that match fixed red-flag rules: fund raises (QIP, preferential, "
                  "rights, warrants), promoter pledges, auditor resignations, defaults, insolvency, regulator action "
                  "and rating downgrades. India only.",
@@ -145,12 +149,15 @@ def build_index(region: str, store: bool = True) -> dict:
     """Every stored company page in a market, gathered into the screens' index (and saved)."""
     prefix = f"stocks:page:{region}:"
     rows, ages = [], {}
+    bought = deals.buys()["buys"] if region == "IN" else {}
     for key, raw in db.all_settings_with_prefix(prefix):
         stored = db.json_value(raw, {})
         sym = key[len(prefix):]
         ages[sym] = stored.get("ts") or 0
         r = row(region, sym, stored.get("facts") or {})
         if r:
+            if region == "IN":
+                r["insider_buy_at"] = bought.get(sym)
             rows.append(r)
     rows.sort(key=lambda r: (r["name"].lower(), r["symbol"]))
     index = {"region": region, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rows": rows}
@@ -197,7 +204,7 @@ def clean(region, filters) -> dict:
         filters = {}
     if not isinstance(filters, dict):
         raise ScreenError("Those filters didn't arrive in a form StratLab can read.")
-    out: dict = {"sector": [], "cap": [], "stage": [], "red_flags": None, "ranges": {}}
+    out: dict = {"sector": [], "cap": [], "stage": [], "red_flags": None, "insider_buy": None, "insider_days": INSIDER_DAYS, "ranges": {}}
     sectors = filters.get("sector") or []
     if not isinstance(sectors, list) or len(sectors) > MAX_SECTORS or not all(isinstance(s, str) and 0 < len(s) <= 80 for s in sectors):
         raise ScreenError("Pick sectors from the list.")
@@ -214,6 +221,13 @@ def clean(region, filters) -> dict:
     if red not in (None, "", "any", "yes", "no"):
         raise ScreenError("Recent red-flag filings: choose yes, no or either.")
     out["red_flags"] = red if red in ("yes", "no") and region == "IN" else None
+    bought, days = filters.get("insider_buy"), filters.get("insider_days")
+    if bought not in (None, "", "any", "yes", "no"):
+        raise ScreenError("Promoter or insider bought: choose yes, no or either.")
+    if days not in (None, "") and (isinstance(days, bool) or days not in deals.SCREEN_DAYS):
+        raise ScreenError(f"Promoter or insider bought: pick the last {', '.join(map(str, deals.SCREEN_DAYS))} days.")
+    out["insider_buy"] = bought if bought in ("yes", "no") and region == "IN" else None
+    out["insider_days"] = int(days) if days not in (None, "") else INSIDER_DAYS
     ranges = filters.get("ranges")
     ranges = {} if ranges is None else ranges
     if not isinstance(ranges, dict):
@@ -262,6 +276,10 @@ def matches(region: str, r: dict, f: dict) -> bool:
         n = r.get("red_flags")
         if n is None or (f["red_flags"] == "yes") != (n > 0):
             return False
+    if f.get("insider_buy"):
+        cut = (deals.ist_now().date() - timedelta(days=f.get("insider_days") or INSIDER_DAYS)).isoformat()
+        if (f["insider_buy"] == "yes") != (str(r.get("insider_buy_at") or "") >= cut):
+            return False
     for k, b in f["ranges"].items():
         v = _num(r.get(k))
         if v is None or (b["min"] is not None and v < b["min"]) or (b["max"] is not None and v > b["max"]):
@@ -300,6 +318,7 @@ def meta(region: str) -> dict:
             "stages": [{"id": k, "label": v} for k, v in STAGES.items()],
             "ranges": [{"id": k, "label": v[0], "unit": v[1], "help": v[2]} for k, v in RANGES.items()],
             "help": HELP, "red_flags": region == "IN", "columns": list(COLUMNS),
+            "insider": {"days": list(deals.SCREEN_DAYS), "default": INSIDER_DAYS, "from": deals.buys().get("from")} if region == "IN" else None,
             "indexed": len(index["rows"]), "as_of": as_of(index), "index_at": index.get("at")}
 
 
@@ -322,6 +341,10 @@ def describe(region: str, f: dict) -> list[str]:
             out.append(f"{label} at most {n(b['max'])}")
     if f["stage"]:
         out.append("Stage " + " or ".join(str(s) for s in f["stage"]))
+    if f.get("insider_buy"):
+        days = f.get("insider_days") or INSIDER_DAYS
+        out.append(f"A promoter or insider bought on the open market in the last {days} days" if f["insider_buy"] == "yes"
+                   else f"No promoter or insider bought on the open market in the last {days} days")
     if f["red_flags"]:
         out.append("Red-flag filings in the last 3 months" if f["red_flags"] == "yes" else "No red-flag filings in the last 3 months")
     return out

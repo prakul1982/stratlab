@@ -148,6 +148,15 @@ def check_filings(feed) -> dict:
     return _result("Exchange filings", "Filings", "pass", f"{len(items)} Reliance filings; newest {newest}.")
 
 
+def check_insider_trades(feed) -> dict:
+    """The exchange's insider-trading disclosures (one call), which the deals table, the checklist, the screens and the
+    deal alerts read. A big company with none in a year would mean the feed changed shape."""
+    items = feed.insider_trades("RELIANCE")
+    if not items:
+        return _result("Insider trades", "Filings", "warn", "Reliance has no insider-trading disclosures in the last year, which is unusual.")
+    return _result("Insider trades", "Filings", "pass", f"{len(items)} Reliance insider-trading disclosures; newest {items[0]['date']}.")
+
+
 def check_bse_filings(bse) -> dict:
     """BSE's feed, which serves the companies listed only on BSE; Reliance (500325) files on both exchanges."""
     items = bse.announcements("500325")

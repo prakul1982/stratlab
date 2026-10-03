@@ -217,6 +217,21 @@ export function ScreensPage() {
                 </div>
               </Group>
             )}
+            {meta.insider && (
+              <Group title="Promoter or insider bought" help={help.insider_buy}>
+                <div className="seg" role="radiogroup" aria-label="Promoter or insider bought">
+                  {([[null, "Either"], ["yes", "Yes"], ["no", "No"]] as const).map(([v, label]) => (
+                    <button key={label} role="radio" aria-checked={(filters.insider_buy ?? null) === v} aria-pressed={(filters.insider_buy ?? null) === v}
+                      onClick={() => setFilters((f) => ({ ...f, insider_buy: v }))}>{label}</button>
+                  ))}
+                </div>
+                <label className="field"><span className="hint">On the open market, in the last</span>
+                  <select aria-label="Promoter or insider bought: in the last" value={filters.insider_days ?? meta.insider.default}
+                    onChange={(e) => setFilters((f) => ({ ...f, insider_days: Number(e.target.value) }))}>
+                    {meta.insider.days.map((d) => <option key={d} value={d}>{d} days</option>)}
+                  </select></label>
+              </Group>
+            )}
           </>}
         </section>
 

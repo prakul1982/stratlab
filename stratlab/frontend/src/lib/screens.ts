@@ -6,13 +6,16 @@ export type RangeId = "sales_cagr_3y" | "net_margin" | "opm" | "debt_equity" | "
 export type Bound = { min: number | null; max: number | null };
 export interface Filters {
   sector: string[]; cap: string[]; stage: number[]; red_flags: "yes" | "no" | null; ranges: Partial<Record<RangeId, Bound>>;
+  /** a promoter or insider bought on the open market in the last `insider_days` days (India) */
+  insider_buy?: "yes" | "no" | null; insider_days?: number;
 }
-export const NO_FILTERS: Filters = { sector: [], cap: [], stage: [], red_flags: null, ranges: {} };
+export const NO_FILTERS: Filters = { sector: [], cap: [], stage: [], red_flags: null, insider_buy: null, insider_days: 90, ranges: {} };
 
 export interface ScreenMeta {
   region: Region; sectors: string[]; cap: { id: string; label: string }[]; stages: { id: number; label: string }[];
   ranges: { id: RangeId; label: string; unit: "%" | "x"; help: string }[]; help: Record<string, string>;
   red_flags: boolean; columns: string[]; indexed: number; as_of: string | null; index_at: string | null;
+  insider: { days: number[]; default: number; from: string | null } | null;
 }
 
 export interface ScreenRow {
@@ -45,6 +48,6 @@ export const screensApi = {
 
 /** How many conditions a screen has, for the filter button's badge. */
 export function conditionCount(f: Filters): number {
-  return (f.sector.length ? 1 : 0) + (f.cap.length ? 1 : 0) + (f.stage.length ? 1 : 0) + (f.red_flags ? 1 : 0)
+  return (f.sector.length ? 1 : 0) + (f.cap.length ? 1 : 0) + (f.stage.length ? 1 : 0) + (f.red_flags ? 1 : 0) + (f.insider_buy ? 1 : 0)
     + Object.values(f.ranges).filter((b) => b && (b.min != null || b.max != null)).length;
 }

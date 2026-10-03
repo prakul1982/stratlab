@@ -3,7 +3,9 @@ moving average, RSI crossing a level, a Stage change, a new 52-week high or low.
 
 Each user's alerts live in one app_settings row (stockalerts:<uid>). The checker runs inside the scan-alert job's
 loop: every minute while India or the US is open, it reads every active alert for that market, fetches each symbol's
-quote once (in batches), and daily candles only for the alerts that need them.
+quote once (in batches), and daily candles only for the alerts that need them. Alerts on Indian companies' insider
+trades and bulk or block deals are checked instead once every evening, against that day's exchange disclosures
+(fire_events, called by the deals job).
 
 An alert fires once and is then marked triggered, unless it repeats (then at most once a day). Messages are
 factual ("RELIANCE crossed above ₹3,000 (now ₹3,012)"), never advice. One user gets at most a few messages an hour:
@@ -23,8 +25,10 @@ from .engine.indicators import rsi, stage
 
 KEY = "stockalerts:"                 # app_settings: stockalerts:<uid> = {"uid", "items": [...], "sent": [...], "pending": [...]}
 REGIONS = ("IN", "US")
-KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52")
+KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal")
 NEEDS_BARS = {"ma", "rsi", "stage", "high52", "low52"}
+EVENTS = {"insider": ("insider", "sast"), "deal": ("bulk", "block")}   # alerts on exchange disclosures, not on the price
+MAX_SEEN = 300                       # disclosure ids an event alert remembers, so none is sent twice
 MA_PERIODS = (20, 50, 100, 150, 200)
 RSI_PERIOD = 14
 YEAR = 252                           # trading days in 52 weeks
@@ -87,6 +91,10 @@ def describe(a: dict) -> str:
         return f"{RSI_PERIOD}-day RSI crosses {op} {_num(v)}"
     if k == "stage":
         return f"Enters Stage {int(v)}" if v else "Stage changes"
+    if k == "insider":
+        return "A promoter or insider trade is disclosed"
+    if k == "deal":
+        return "A bulk or block deal is reported"
     return "Makes a new 52-week high" if k == "high52" else "Makes a new 52-week low"
 
 
@@ -106,6 +114,8 @@ def clean(req: dict) -> dict:
     kind = req.get("kind")
     if kind not in KINDS:
         raise AlertError("Pick what the alert should watch for.")
+    if kind in EVENTS and region != "IN":
+        raise AlertError("Alerts on insider trades and bulk or block deals cover Indian stocks.")
     op, v, period = req.get("op"), req.get("value"), req.get("period")
     out = {"region": region, "symbol": sym, "kind": kind, "op": None, "value": None, "period": None,
            "repeat": bool(req.get("repeat")), "note": str(req.get("note") or "").strip()[:120] or None}
@@ -454,7 +464,7 @@ class Checker:
                 profiles[uid] = self.profile(uid)
             except Exception:
                 continue
-            todo[uid] = [a for a in mine[:self.limit(profiles[uid])] if a.get("region") in days]
+            todo[uid] = [a for a in mine[:self.limit(profiles[uid])] if a.get("region") in days and a.get("kind") not in EVENTS]
         fired: dict[str, dict[str, tuple]] = {}      # uid -> alert id -> (text, new state, rev)
         checked = 0
         for region, today in days.items():
@@ -487,40 +497,99 @@ class Checker:
         n_fired = n_sent = 0
         for uid in users:
             changes = fired.get(uid, {})
-            texts = self._apply(uid, changes, now)
+            texts = apply(uid, changes, now)
             n_fired += sum(1 for t, _, _ in changes.values() if t)
-            if texts and uid in profiles:
-                subject, body = message(texts)
-                if self.send(profiles[uid], subject, body):
-                    n_sent += 1
-                with _lock:
-                    row = _read(uid)
-                    row["sent"] = [t for t in row["sent"] if _recent([t], now, timedelta(days=1))] + [now.isoformat()]
-                    _write(uid, row)
+            if texts and uid in profiles and flush(uid, profiles[uid], texts, now, self.send):
+                n_sent += 1
         self.status.update(last_run=now.isoformat(), checked=checked, fired=n_fired, sent=n_sent)
 
     def _apply(self, uid: str, changes: dict, now: datetime) -> list[str]:
-        """Save each alert's new state, mark the fired ones triggered (or keep repeating ones on), and return the texts
-        to send now: everything waiting, when the user is under the message limits."""
-        with _lock:
-            row = _read(uid)
-            dirty = False
-            for a in row["items"]:
-                hit = changes.get(a["id"])
-                if not hit or hit[2] != a.get("rev") or a.get("status") != "active":
-                    continue                # edited or deleted while this check ran: leave it
-                text, st, _ = hit
-                a["state"] = st
-                dirty = True
-                if text:
-                    a.update(last_text=text, triggered_at=now.isoformat(), fired=int(a.get("fired") or 0) + 1)
-                    if not a.get("repeat"):
-                        a["status"] = "triggered"
-                    row["pending"] = (row["pending"] + [text])[-MAX_PENDING:]
-            texts = []
-            if row["pending"] and may_send(row["sent"], now):
-                texts, row["pending"] = row["pending"], []
-                dirty = True
-            if dirty:
-                _write(uid, row)
-        return texts
+        return apply(uid, changes, now)
+
+
+def flush(uid: str, profile: dict, texts: list[str], now: datetime, send=deliver) -> bool:
+    """Send the texts waiting for one user in one message, and count it against their limits."""
+    subject, body = message(texts)
+    reached = bool(send(profile, subject, body))
+    with _lock:
+        row = _read(uid)
+        row["sent"] = [t for t in row["sent"] if _recent([t], now, timedelta(days=1))] + [now.isoformat()]
+        _write(uid, row)
+    return reached
+
+
+def apply(uid: str, changes: dict, now: datetime) -> list[str]:
+    """Save each alert's new state, mark the fired ones triggered (or keep repeating ones on), and return the texts
+    to send now: everything waiting, when the user is under the message limits."""
+    with _lock:
+        row = _read(uid)
+        dirty = False
+        for a in row["items"]:
+            hit = changes.get(a["id"])
+            if not hit or hit[2] != a.get("rev") or a.get("status") != "active":
+                continue                # edited or deleted while this check ran: leave it
+            text, st, _ = hit
+            a["state"] = st
+            dirty = True
+            if text:
+                a.update(last_text=text, triggered_at=now.isoformat(), fired=int(a.get("fired") or 0) + 1)
+                if not a.get("repeat"):
+                    a["status"] = "triggered"
+                row["pending"] = (row["pending"] + [text])[-MAX_PENDING:]
+        texts = []
+        if row["pending"] and may_send(row["sent"], now):
+            texts, row["pending"] = row["pending"], []
+            dirty = True
+        if dirty:
+            _write(uid, row)
+    return texts
+
+
+# ---------- alerts on exchange disclosures (insider trades, bulk and block deals) ----------
+def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
+    """An alert on disclosures: the deals of its kind on its stock that it hasn't sent yet, filed since it was set.
+    Returns the message (else None) and the alert's new state."""
+    st = dict(a.get("state") or {})
+    seen = [x for x in st.get("seen") or [] if isinstance(x, str)]
+    since = str(a.get("created_at") or "")[:10]
+    new = [d for d in rows if isinstance(d, dict) and d.get("kind") in EVENTS.get(a["kind"], ()) and d.get("symbol") == a["symbol"]
+           and d.get("id") not in seen and str(d.get("filed") or d.get("date") or "") >= since]
+    if not new:
+        return None, st
+    from .deals import describe as say
+    st["seen"] = (seen + [d["id"] for d in new])[-MAX_SEEN:]
+    more = f"; and {len(new) - 1} more" if len(new) > 1 else ""
+    return f"{a['symbol']}: {say(new[0])}{more}. From exchange disclosures", st
+
+
+def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=None) -> int:
+    """Check every active alert on insider trades and deals against the disclosures in `rows` (the evening's read of
+    the whole market) and send what fired, within each user's plan and message limits. Returns messages sent."""
+    profile = profile or db.cached_profile
+    by_sym: dict[str, list[dict]] = {}
+    for d in rows:
+        by_sym.setdefault(d.get("symbol"), []).append(d)
+    sent = 0
+    for key, raw in db.all_settings_with_prefix(KEY):
+        uid = key[len(KEY):]
+        row = db.json_value(raw, {})
+        active = sorted((a for a in row.get("items") or [] if isinstance(a, dict) and a.get("status") == "active"),
+                        key=lambda a: a.get("created_at") or "")
+        if not any(a.get("kind") in EVENTS for a in active):
+            continue
+        try:
+            p = profile(uid)
+            mine = active[:limit(p)]                 # over the plan's limit (after a downgrade): the oldest count
+        except Exception:
+            continue
+        changes = {}
+        for a in mine:
+            if a.get("kind") not in EVENTS or a.get("region") != "IN" or not a.get("id"):
+                continue
+            text, st = evaluate_event(a, by_sym.get(a.get("symbol"), []))
+            if text or st != (a.get("state") or {}):
+                changes[a["id"]] = (text, st, a.get("rev"))
+        texts = apply(uid, changes, now)
+        if texts and flush(uid, p, texts, now, send):
+            sent += 1
+    return sent

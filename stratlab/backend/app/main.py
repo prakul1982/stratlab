@@ -54,7 +54,7 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, company_cards, daily_report, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
+from . import ask, company_cards, daily_report, deals, first_steps, ideas, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
@@ -151,6 +151,7 @@ filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text,
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 newsletter_job = news.Job()
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
+deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit))
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
 lifecycle_job = lifecycle.Job()
 
@@ -172,6 +173,7 @@ async def lifespan(app: FastAPI):
     recorder.start()
     scan_alerts_job.start()
     filing_alerts_job.start()
+    deals_job.start()
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
@@ -1279,6 +1281,15 @@ def filings_company(symbol: str, profile=Depends(current_profile)):
     return ok(filing_call(lambda: filings.report(filings_feed, sym)))
 
 
+@app.get("/research/deals/{symbol}")
+def deals_company(symbol: str, profile=Depends(current_profile)):
+    """One Indian company's deals and insider trades over the last year, from exchange disclosures: promoters' and
+    insiders' trades and pledges, substantial acquisitions, bulk and block deals. Facts as filed."""
+    sym = research_routes.symbol_of(symbol)
+    out = filing_call(lambda: deals.report(filings_feed, sym))
+    return ok({**out, "flow_text": deals.flow_text(out["flow"]) if out["flow"] else None})
+
+
 @app.put("/research/filings/alerts")
 def filings_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
     if req.on:
@@ -1382,8 +1393,9 @@ def deep_years(years: int) -> int:
     return max(lo, min(hi, int(years or 2)))
 
 
-def deep_base(sym: str, region: str = "IN", years: int = 2) -> dict:
-    """Numbers and the list of readable documents for one company (no AI), documents from the last `years` years."""
+def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True) -> dict:
+    """Numbers and the list of readable documents for one company (no AI), documents from the last `years` years.
+    `trades`: also read its insider-trading disclosures, for the checklist (the market audit leaves them out)."""
     if region == "US":
         return deep_base_us(sym, years)
     code = bse_code(sym)                                  # listed only on BSE: its numbers are under the BSE code
@@ -1397,7 +1409,9 @@ def deep_base(sym: str, region: str = "IN", years: int = 2) -> dict:
         doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:
         items, doc_note, fsum = [], public_text(str(e)), None
-    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": price_trend(sym)}
+    insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
+    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": price_trend(sym),
+            "trades": insider}
 
 
 def price_trend(sym: str, market: str = "IN") -> dict | None:
@@ -1424,7 +1438,7 @@ def deep_view(sym: str, base: dict) -> dict:
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
             "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
-            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym),
+            "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym, base.get("trades")),
             "ai": True, "report_card": True, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
             "numbers_at": p.get("fetched_at"), "price_at": (base["trend"] or {}).get("t"),
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
@@ -1536,7 +1550,8 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
         trend = price_trend(sym, region)
         nums = deepdive.numbers(p) if p else None
         card = report_card.view(report_card.stored(key), nums) if nums else None
-        checks = checklist.evaluate(p, nums, fsum, trend, card, None if us else sym) if p else None
+        trades = None if us else _quiet(lambda: filings_feed.insider_trades(sym))
+        checks = checklist.evaluate(p, nums, fsum, trend, card, None if us else sym, trades) if p else None
         sec = investor.sector_of(region, sym)
         sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label(region, sec, None), "quadrant": None} if sec else None)
         return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem)
@@ -2675,7 +2690,7 @@ def live_price(sym: str) -> float | None:
 def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN") -> dict:
     us = region == "US"
     read = (lambda cands, probs, p: deepdive.readable(deep_docs, cands, 1, probs, company_hosts(p))) if docs and not us else None
-    row = audit.audit_company(sym, lambda s: deep_base(s, region), deep_view, None if us else exchange, read)
+    row = audit.audit_company(sym, lambda s: deep_base(s, region, trades=False), deep_view, None if us else exchange, read)
     for i in row["issues"]:
         i["detail"] = public_text(i["detail"])
     return row
@@ -2887,6 +2902,7 @@ def platform_checks() -> list:
                ("Option chain: NIFTY", "Options", lambda: pc.check_options(options_data, today)),
                ("Exchange filings", "Filings", lambda: pc.check_filings(filings_feed)),
                ("BSE filings", "Filings", lambda: pc.check_bse_filings(filings_feed.bse)),
+               ("Insider trades", "Filings", lambda: pc.check_insider_trades(filings_feed)),
                ("Company page: RELIANCE", "Research", lambda: pc.check_company(research_hub, "IN", "RELIANCE")),
                ("Company page: AAPL", "Research", lambda: pc.check_company(research_hub, "US", "AAPL")),
                ("News", "Research", lambda: pc.check_news(research_hub)),

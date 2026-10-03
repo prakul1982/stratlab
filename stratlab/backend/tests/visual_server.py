@@ -58,6 +58,7 @@ def screen_index():
     the index, so the public company pages still build from the fake sources)."""
     import json
     import random
+    from datetime import date, timedelta
     from app import db, screens
     rng = random.Random(5)
     sectors = ["Energy", "Information Technology", "Financials", "Consumer Staples", "Materials"]
@@ -76,7 +77,10 @@ def screen_index():
                  "opm": round(rng.uniform(5, 40), 1), "debt_equity": round(rng.uniform(0, 2), 2), "bank": False,
                  "growth": {"sales_cagr_3y": round(rng.uniform(-10, 30), 1)}, "stage": 1 + i % 4,
                  "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [], "built_at": "2026-10-01T12:00:00+00:00"}
-            rows.append(screens.row(region, sym, f))
+            r = screens.row(region, sym, f)
+            if region == "IN":          # a promoter or insider bought on the open market: 10 days ago for every fourth
+                r["insider_buy_at"] = (date.today() - timedelta(days=10 if i % 4 == 1 else 200)).isoformat() if i % 2 else None
+            rows.append(r)
         rows.sort(key=lambda r: r["name"].lower())
         db.set_setting(screens.INDEX_KEY + region, json.dumps({"region": region, "at": "2026-10-01T18:00:00+00:00", "rows": rows}))
 
