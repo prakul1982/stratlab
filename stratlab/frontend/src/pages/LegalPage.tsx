@@ -60,6 +60,7 @@ function Privacy() {
         <li><b>Usage counts</b>, such as experiments and AI builds this month, to apply plan limits.</li>
         <li><b>Alert contacts you choose to add:</b> an email address, a Telegram chat ID, and each device's notification address if you turn on phone notifications.</li>
         <li><b>Billing records:</b> your plan and Razorpay subscription ID. Card, UPI and bank details go to Razorpay only.</li>
+        <li><b>Usage analytics:</b> which pages you open and which features you use (such as running a backtest or saving a screen), linked to your account's internal ID, never your email or name, and without your holdings, symbols you search or amounts. No screen recordings or typed text. Skipped if your browser sends Do Not Track.</li>
         <li><b>Technical logs:</b> request logs and error reports kept to run and fix the service. Error reports carry no email, IP address or request contents.</li>
       </ul>
       <h2 className="h3">How it's used</h2>
@@ -70,6 +71,7 @@ function Privacy() {
         <li>Razorpay processes payments.</li>
         <li>AI providers (such as Groq, Google Gemini, Cerebras, Mistral, OpenRouter or Anthropic) receive the text you type into AI features, like an idea to turn into rules, but not your email.</li>
         <li>Telegram and our email provider deliver alerts you turn on. Sentry receives error reports without personal details.</li>
+        <li>PostHog (hosted in the EU) receives the usage analytics described above.</li>
       </ul>
       <p>Some of these providers store data outside India, under their own security and privacy commitments.</p>
       <h2 className="h3">Cookies and storage</h2>

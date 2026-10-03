@@ -4,6 +4,7 @@ import { useApp } from "../lib/app";
 import { download, shareLink, siteUrl } from "../lib/share";
 import { renderCompanyCard, type CompanyCard } from "./companyCard";
 import { Share } from "./Icons";
+import { track } from "../lib/analytics";
 
 const asDataUrl = (blob: Blob) => new Promise<string>((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.readAsDataURL(blob); });
 
@@ -23,6 +24,7 @@ export function ShareCompanyButton({ region, symbol }: { region: "IN" | "US"; sy
       const file = new File([blob], `stratlab-${card.symbol.toLowerCase()}-facts.png`, { type: "image/png" });
       const save = { label: "Save the image", run: () => download(blob, file.name) };
       const r = await shareLink({ url, title: `${card.name} on StratLab`, text: `${card.name} (${card.symbol}): price, 1-year range and key facts.`, file });
+      if (r !== "cancelled") track("card shared", { kind: "company", region, channel: r });
       if (r === "copied") notify("Link copied. It shows as this company's fact card on WhatsApp, X and LinkedIn.", save);
       else if (r === "shown") notify(`Your link: ${url}`, save);
     } catch (e) { fail(e); } finally { setBusy(false); }
@@ -51,6 +53,7 @@ export function InviteCard() {
   const link = `${siteUrl()}/?ref=${v.code}`;
   const share = async () => {
     const r = await shareLink({ url: link, title: "StratLab", text: "I use StratLab to test trading ideas and read company facts. Try it free:" });
+    if (r !== "cancelled") track("invite link shared", { channel: r });
     if (r === "copied") notify("Invite link copied.");
     else if (r === "shown") notify(`Your invite link: ${link}`);
   };

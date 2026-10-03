@@ -9,6 +9,7 @@ import { DealsPanel } from "../components/Deals";
 import { AsOf, Loading } from "../components/ui";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
+import { track } from "../lib/analytics";
 
 type Year = { year: string; sales: number | null; profit: number | null; opm: number | null; capex: number | null;
   capex_pct_sales: number | null; cfo: number | null; cfi: number | null; fcf: number | null; debt: number | null };
@@ -168,6 +169,8 @@ export function DeepDivePage() {
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     } catch (e) { fail(e); } finally { setDecking(null); }
   };
+
+  useEffect(() => { track("deep dive opened", { region }); }, [sym, region]);
 
   useEffect(() => {
     if (!pro) return;

@@ -3,6 +3,7 @@ import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
+import { identify, resetAnalytics, track, trackSignup } from "./analytics";
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
@@ -58,7 +59,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   plans.current = goToPlans;
   const fail = useCallback((e: unknown) => {
     const err = e as ApiError;
-    if (err?.status === 402) notify(err.message, { label: "See plans", run: () => plans.current() });
+    if (err?.status === 402) notify(err.message, { label: "See plans", run: () => { track("upgrade clicked", { source: "limit" }); plans.current(); } });
     else notify(err?.message || "Something went wrong. Try again.");
   }, [notify]);
 
@@ -88,13 +89,20 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   }, []);
 
   useEffect(() => {
-    if (!session) { setMe(null); setNotebooks(null); return; }
+    if (!session) { setMe(null); setNotebooks(null); resetAnalytics(); return; }
     const ref = takeRef();          // arrived by a friend's invite link: say so once (the server counts new accounts only)
     if (ref) api("/me/referral", { method: "POST", body: { code: ref } }).catch(() => undefined);
     refreshMe();
     refreshNotebooks();
     api<Market[]>("/markets").then(setMarkets).catch(() => {});
   }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // usage analytics: this account by its id only, with its plan (does nothing without a key)
+  useEffect(() => {
+    if (!me?.id || !session) return;
+    identify(me.id, { plan: me.plan, backtests: me.usage?.backtests_used, createdAt: session.user?.created_at });
+    trackSignup(me.id, session.user?.created_at);
+  }, [me?.id, me?.plan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setTheme = useCallback((t: "light" | "dark" | "system") => {
     setThemeState(t);

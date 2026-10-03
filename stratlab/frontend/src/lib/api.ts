@@ -3,7 +3,7 @@ import { AuthClient } from "@supabase/auth-js";
 declare global {
   interface Window {
     STRATLAB_CONFIG?: { API_BASE: string; SUPABASE_URL: string; SUPABASE_ANON_KEY: string; SENTRY_DSN?: string;
-      BUSINESS_NAME?: string; CONTACT_EMAIL?: string; BUSINESS_ADDRESS?: string };
+      BUSINESS_NAME?: string; CONTACT_EMAIL?: string; BUSINESS_ADDRESS?: string; POSTHOG_KEY?: string; POSTHOG_HOST?: string };
     Razorpay?: any;
   }
 }

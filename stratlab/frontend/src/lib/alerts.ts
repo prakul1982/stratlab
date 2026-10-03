@@ -1,5 +1,6 @@
 import { api } from "./api";
 import type { Region } from "./research";
+import { track } from "./analytics";
 
 /** Stock alerts the user sets: a price level, a day's move, a moving average, RSI, Stage, a 52-week high or low, and
  * (Indian stocks) an insider trade or a bulk or block deal disclosed to the exchange. */
@@ -47,7 +48,8 @@ export const CHANNEL_NAME: Record<string, string> = { push: "phone", telegram: "
 
 export const alertsApi = {
   list: () => api<AlertsPage>("/alerts"),
-  create: (b: AlertBody) => api<AlertsPage & { alert: StockAlert; note: string | null }>("/alerts", { method: "POST", body: b }),
+  create: (b: AlertBody) => api<AlertsPage & { alert: StockAlert; note: string | null }>("/alerts", { method: "POST", body: b })
+    .then((r) => { track("alert created", { region: b.region, kind: b.kind }); return r; }),
   update: (id: string, b: AlertBody) => api<AlertsPage & { alert: StockAlert; note: string | null }>(`/alerts/${id}`, { method: "PUT", body: b }),
   remove: (id: string) => api<AlertsPage>(`/alerts/${id}`, { method: "DELETE" }),
   clearTriggered: () => api<AlertsPage>("/alerts", { method: "DELETE" }),

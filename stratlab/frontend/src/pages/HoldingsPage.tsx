@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, dateOnly, money, pct, price, qty as qtyText, safeHref, signClass } from "../lib/format";
 import { AsOf, Empty, Loading, Modal } from "../components/ui";
 import { Trash, Upload } from "../components/Icons";
+import { track } from "../lib/analytics";
 
 type Row = {
   symbol: string; exchange: string; name: string; sector: string; qty: number; avg: number | null; price: number | null;
@@ -75,6 +76,7 @@ export function HoldingsPage() {
     try {
       const data = await readFile(f);
       const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode } });
+      track("holdings imported", { rows: r.imported, method: mode });
       setResult(r);
       show(r.holdings);
     } catch (e) { fail(e); } finally {

@@ -96,6 +96,9 @@ class Settings:
     VAPID_SUBJECT = _env("VAPID_SUBJECT")
     SENTRY_DSN = _env("SENTRY_DSN")                               # optional: send server errors to Sentry
     SENTRY_ENV = _env("SENTRY_ENV", "production")
+    # optional usage analytics: the PostHog project key (phc_…) sends "payment completed" from the server
+    POSTHOG_KEY = _env("POSTHOG_KEY")
+    POSTHOG_HOST = _env("POSTHOG_HOST", "https://eu.i.posthog.com").rstrip("/")
 
 
 settings = Settings()

@@ -6,6 +6,7 @@ import { dateOnly, pct, periodName, TF_NAME } from "../lib/format";
 import { riskForCurrency, usesPro } from "../lib/rules";
 import type { Experiment, Instrument, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
+import { track, trackBacktest } from "../lib/analytics";
 import { GapsCard, type GapInfo } from "../components/Gaps";
 import { Copy, Download, Pin, Pulse, Sparkle, Trash } from "../components/Icons";
 import { MoreMenu } from "../components/MoreMenu";
@@ -147,6 +148,7 @@ export function NotebookPage() {
     setRunning(true);
     try {
       const out = await api<{ experiment: Experiment }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body });
+      trackBacktest(group ? "group" : "notebook");
       setNb({ ...nb, experiments: [...(nb.experiments || []), out.experiment] });
       setLabel("");
       refreshMe();
@@ -200,6 +202,7 @@ export function NotebookPage() {
     if (!inst || isUpload) { notify(isUpload ? "Paper trading needs live prices, so it doesn't work on uploaded data." : "Pick what to trade first."); return; }
     try {
       const snap = await api<{ id: string }>("/live/sessions", { method: "POST", body: { strategy: { ...s, name: nb.name }, instrument: inst.id } });
+      track("paper trading started", { kind: "single" });
       refreshMe();
       nav(`/paper/${snap.id}`);
     } catch (e) { fail(e); }
@@ -208,6 +211,7 @@ export function NotebookPage() {
   const startGroup = async () => {
     try {
       const snap = await api<{ id: string }>("/live/groups", { method: "POST", body: { strategy: { ...s, name: nb.name }, group, fast } });
+      track("paper trading started", { kind: "group" });
       refreshMe();
       nav(`/paper/${snap.id}`);
     } catch (e) { fail(e); }

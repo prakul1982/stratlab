@@ -17,6 +17,7 @@
     "@fontsource/montserrat": "^5.3.0",
     "@sentry/browser": "^11.0.0",
     "@supabase/auth-js": "^2.117.2",
+    "posthog-js": "^1.435.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApp } from "../lib/app";
 import type { Focus, Level } from "../lib/types";
 import { Modal } from "./ui";
+import { track } from "../lib/analytics";
 
 export const LEVELS: [Level, string, string][] = [
   ["new", "New to this", "Guided start: examples to try, explanations up front, advanced settings folded away."],
@@ -20,8 +21,11 @@ export const FOCUSES: [Focus, string, string][] = [
 export function LevelPrompt({ onDone }: { onDone: () => void }) {
   const { level, focus, setLevel, setFocus } = useApp();
   const [step, setStep] = useState<"focus" | "level">(focus ? "level" : "focus");
-  const pickFocus = async (f: Focus) => { await setFocus(f); if (level) onDone(); else setStep("level"); };
-  const pickLevel = async (l: Level) => { await setLevel(l); onDone(); };
+  const pickFocus = async (f: Focus) => {
+    await setFocus(f);
+    if (level) { track("onboarding answered", { focus: f, level }); onDone(); } else setStep("level");
+  };
+  const pickLevel = async (l: Level) => { await setLevel(l); track("onboarding answered", { focus: focus ?? undefined, level: l }); onDone(); };
   if (step === "focus") return (
     <Modal title="What brings you to StratLab?" onClose={() => pickFocus("both")}>
       <p className="muted" style={{ marginBottom: 16 }}>We'll put what you came for first. Everything else stays one tap away, and you can change this any time on the Account page.</p>

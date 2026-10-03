@@ -1,6 +1,7 @@
 /** Stock screens: companies filtered by plain facts, from StratLab's stored company numbers. */
 import { api } from "./api";
 import type { Region } from "./research";
+import { track } from "./analytics";
 
 export type RangeId = "sales_cagr_3y" | "net_margin" | "opm" | "debt_equity" | "roe" | "roce" | "div_yield" | "pe" | "from_high";
 export type Bound = { min: number | null; max: number | null };
@@ -39,10 +40,12 @@ export interface SavedPage { items: SavedScreen[]; limit: number; count: number;
 export const screensApi = {
   meta: (r: Region) => api<ScreenMeta>(`/research/screens/meta?region=${r}`),
   run: (r: Region, filters: Filters, sort: string, desc: boolean, offset = 0) =>
-    api<ScreenResult>("/research/screens/run", { method: "POST", body: { region: r, filters, sort, desc, offset, limit: 100 } }),
+    api<ScreenResult>("/research/screens/run", { method: "POST", body: { region: r, filters, sort, desc, offset, limit: 100 } })
+      .then((out) => { if (!offset) track("screen run", { region: r, filters: conditionCount(filters) }); return out; }),
   saved: () => api<SavedPage>("/research/screens/saved"),
   save: (body: { name: string; region: Region; filters: Filters; sort: string; desc: boolean; notify: boolean }, id?: string) =>
-    api<SavedPage & { screen: SavedScreen }>(id ? `/research/screens/saved/${id}` : "/research/screens/saved", { method: id ? "PUT" : "POST", body }),
+    api<SavedPage & { screen: SavedScreen }>(id ? `/research/screens/saved/${id}` : "/research/screens/saved", { method: id ? "PUT" : "POST", body })
+      .then((out) => { if (!id) track("screen saved", { region: body.region, filters: conditionCount(body.filters) }); return out; }),
   remove: (id: string) => api<SavedPage>(`/research/screens/saved/${id}`, { method: "DELETE" }),
 };
 
