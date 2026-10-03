@@ -19,7 +19,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, audit, basket, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
+from . import admin, audit, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -28,7 +28,7 @@ from .auth import current_profile
 from .config import settings
 from .branding import public_text
 from .errors import report
-from .guard import Guard
+from .guard import Guard, HeavyGate
 from . import research
 from .engine import walkforward
 from .data import DataError, Registry
@@ -72,7 +72,26 @@ def after_login() -> str:
             return "Kite login saved. The server is restarting to reconnect the live feed; it's back in about a minute."
         return "Kite login saved. The live feed was already running on yesterday's token: restart the server now."
     manager.resume()
+    threading.Thread(target=warm_caches, daemon=True).start()
     return "Kite login saved. Market data and live sessions are online."
+
+
+def warm_caches():
+    """Fill the caches the busiest pages share (instrument lists, the NIFTY 50 and US scans, sector rotation, the
+    option contracts), so the first people after a restart or the morning login don't all wait on them at once.
+    Each step is independent; one failing (a source down, the broker not logged in yet) skips only itself."""
+    steps = [("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
+             ("option contracts", lambda: options_data.ready() and options_data.underlyings()),
+             ("market list", lambda: markets.markets()),
+             ("scan IN", lambda: markets.provider("IN").ready() and scan.run(markets, "IN", [{"symbol": x} for x in universes.PRESETS["IN"][0]["symbols"]])),
+             ("rotation IN", lambda: markets.provider("IN").ready() and rotation.run(markets, "IN", "sectors", None, "weekly", 5)),
+             ("scan US", lambda: scan.run(markets, "US", [{"symbol": x} for x in universes.PRESETS["US"][0]["symbols"]])),
+             ("rotation US", lambda: rotation.run(markets, "US", "sectors", None, "weekly", 5))]
+    for name, fn in steps:
+        try:
+            fn()
+        except Exception as e:
+            print(f"warm-up: {name} skipped:", str(e)[:120])
 
 
 auto_login = AutoLogin(kite, after_login)
@@ -116,6 +135,7 @@ async def lifespan(app: FastAPI):
     scan_alerts_job.start()
     filing_alerts_job.start()
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
+    threading.Thread(target=warm_caches, daemon=True).start()
     yield
 
 
@@ -206,6 +226,7 @@ def _load_errors():
         print("could not load errors:", x)
 
 
+app.add_middleware(HeavyGate)   # inside the guard: heavy work takes turns, ordinary pages don't wait behind it
 app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"])
@@ -1763,6 +1784,30 @@ def admin_audit_start(req: AuditReq, _=Depends(admin.admin_profile)):
         return {**audit_runner.start(syms, label, lambda s: audit_one(s, req.docs, exchange), req.docs), "sets": audit.sets()}
     except RuntimeError as e:
         err(409, "audit_running", str(e))
+
+
+@app.post("/admin/platform/check")
+def admin_platform_check(_=Depends(admin.admin_profile)):
+    """Every feature once on live data: prices and their freshness per market, a backtest per market, the scans,
+    sector rotation, the option chain, filings, company pages, news, the database and the holiday calendar."""
+    pc, today = platform_check, datetime.now(IST).date()
+    checks = [(f"Prices: {m}", "Prices", (lambda m=m: pc.check_market(markets, m, today))) for m in markets.providers]
+    checks += [(f"Backtest: {m}", "Backtests", (lambda m=m: pc.check_backtest(markets, m))) for m in markets.providers]
+    checks += [("Scan: NIFTY 50", "Scans", lambda: pc.check_scan(markets, "IN", "nifty50")),
+               ("Scan: US large caps", "Scans", lambda: pc.check_scan(markets, "US", "us_mega")),
+               ("Sector rotation: IN", "Rotation", lambda: pc.check_rotation(markets, "IN")),
+               ("Sector rotation: US", "Rotation", lambda: pc.check_rotation(markets, "US")),
+               ("Option chain: NIFTY", "Options", lambda: pc.check_options(options_data, today)),
+               ("Exchange filings", "Filings", lambda: pc.check_filings(filings_feed)),
+               ("Company page: RELIANCE", "Research", lambda: pc.check_company(research_hub, "IN", "RELIANCE")),
+               ("Company page: AAPL", "Research", lambda: pc.check_company(research_hub, "US", "AAPL")),
+               ("News", "Research", lambda: pc.check_news(research_hub)),
+               ("Database", "Server", lambda: pc.check_database(db)),
+               ("Holiday calendar", "Server", lambda: pc.check_calendar(today))]
+    out = pc.run_all(checks)
+    for r in out["checks"]:
+        r["detail"] = public_text(r["detail"])
+    return out
 
 
 @app.delete("/admin/audit")

@@ -5,6 +5,7 @@ token) or, for anonymous calls, per address; they're generous enough that normal
 tabs polling paper sessions, never reaches them."""
 import hashlib
 import json
+import re
 import threading
 import time
 
@@ -102,3 +103,55 @@ class Guard:
             await send(msg)
 
         await self.app(scope, receive, send_with_headers)
+
+
+HEAVY = [  # (method, path pattern): work that holds the CPU for a second or more
+    ("POST", re.compile(r"^/notebooks/[^/]+/experiments(/[^/]+/(basket|walkforward))?$")),
+    ("POST", re.compile(r"^/research/scan$")),
+    ("GET", re.compile(r"^/research/rotation$")),
+    ("GET", re.compile(r"^/research/deep/[^/]+/deck$")),
+    ("POST", re.compile(r"^/research/deep/[^/]+/(read|card)$")),
+    ("POST", re.compile(r"^/live/(sessions|groups)$")),
+    ("POST", re.compile(r"^/options/sessions$")),
+    ("POST", re.compile(r"^/admin/platform/check$")),
+]
+
+
+class HeavyGate:
+    """At most `slots` heavy requests (backtests, scans, the sector chart, document reads) run at once; the rest
+    wait their turn without holding a worker thread, so ordinary pages stay quick while the server is busy. A heavy
+    request that waits longer than `max_wait` seconds is told the server is busy instead of hanging."""
+
+    def __init__(self, app, slots: int | None = None, max_wait: float = 90.0):
+        import asyncio
+        import os
+        self.app = app
+        self.slots = slots or int(os.environ.get("HEAVY_SLOTS", "2"))
+        self.max_wait = max_wait
+        self._sem: asyncio.Semaphore | None = None
+        self._loop = None
+        self.waiting = 0
+
+    def _heavy(self, scope) -> bool:
+        m, p = scope.get("method"), scope.get("path", "")
+        return any(m == hm and rx.match(p) for hm, rx in HEAVY)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not self._heavy(scope):
+            return await self.app(scope, receive, send)
+        import asyncio
+        loop = asyncio.get_running_loop()
+        if self._sem is None or self._loop is not loop:     # one server loop in production; tests start new ones
+            self._sem, self._loop = asyncio.Semaphore(self.slots), loop
+        self.waiting += 1
+        try:
+            await asyncio.wait_for(self._sem.acquire(), timeout=self.max_wait)
+        except asyncio.TimeoutError:
+            return await _reply(send, 503, "busy", "StratLab is very busy right now. Try again in a minute.",
+                                [(b"retry-after", b"30")])
+        finally:
+            self.waiting -= 1
+        try:
+            return await self.app(scope, receive, send)
+        finally:
+            self._sem.release()

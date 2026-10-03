@@ -145,13 +145,22 @@ def _trade_dd(pnls, capital: float) -> float:
     return float(np.max((peak - path) / peak) * 100)
 
 
+def _trade_dds(orders: np.ndarray, capital: float) -> np.ndarray:
+    """The worst fall of each row of trade results at once (one array operation instead of a Python loop per
+    reshuffle, so a backtest doesn't hold up other people's pages)."""
+    path = capital + np.cumsum(orders, axis=1)
+    path = np.concatenate([np.full((orders.shape[0], 1), capital), path], axis=1)
+    peak = np.maximum.accumulate(path, axis=1)
+    return np.max((peak - path) / peak, axis=1) * 100
+
+
 def check_shuffle(trades: list[dict], capital: float) -> dict:
     pnls = np.array([t["pnl"] for t in trades], dtype=float)
     if len(pnls) < 5:
         return {"id": "shuffle", "title": "Bad-luck drawdown", "status": "skip",
                 "detail": "Too few trades to reshuffle.", "data": None}
     rng = np.random.default_rng(42)  # same answer every time for the same trades
-    dds = np.array([_trade_dd(rng.permutation(pnls), capital) for _ in range(SHUFFLES)])
+    dds = _trade_dds(np.stack([rng.permutation(pnls) for _ in range(SHUFFLES)]), capital)
     yours, p95, worst = _trade_dd(pnls, capital), float(np.percentile(dds, 95)), float(dds.max())
     if p95 >= 35:
         status = "fail"
