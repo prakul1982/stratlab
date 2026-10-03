@@ -41,8 +41,11 @@ Payments are in rupees through Razorpay today. To let people outside India subsc
 ### Extreme stress test: one stop for everything StratLab offers
 The goal: nobody needs to open another site to check something StratLab already covers. A structured test, feature
 by feature, against what people would otherwise use:
-- *Started:* Admin → Data audit covers the deep dive's numbers, prices, industry, valuation, checklist and documents
-  for up to 300 companies, compared against their sources. Still to cover: the rest below, a Nifty 500 list, and load.
+- *Done:* Admin → Data audit (the deep dive for up to 300 companies, against their sources) and Admin → Check every
+  feature (prices, backtests, scans, rotation, options, filings, company pages, news, database, calendar on live data);
+  tests that call every route with hostile input, break every source in every way, run the app at 16 tricky moments
+  (holidays, expiries, midnight IST, clock changes, past the known calendar), and load the real server with hundreds
+  of users. Still to do: a Nifty 500 list for the audit, and re-running both admin checks after each big change.
 - **Every feature on real data at scale:** the deep dive, report card, checklist and measures on the Nifty 500 (not
   just a few names), every industry; the scan and rotation on every set; backtests and paper trading in every market;
   options on every underlying.

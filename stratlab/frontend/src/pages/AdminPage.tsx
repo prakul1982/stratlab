@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, dateOnly, money } from "../lib/format";
 import { Loading, Modal } from "../components/ui";
 import { AuditPanel } from "../components/AuditPanel";
+import { PlatformPanel } from "../components/PlatformPanel";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
 
 type Plan = "free" | "basic" | "pro";
@@ -278,6 +279,8 @@ export function AdminPage() {
               </div>
             </section>
           </div>
+
+          <PlatformPanel />
 
           <AuditPanel />
 

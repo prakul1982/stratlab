@@ -1,5 +1,6 @@
 """A fake Yahoo Finance: wavy daily/intraday prices and a small search catalogue."""
 import math
+import zlib
 import time
 
 import httpx
@@ -23,7 +24,7 @@ def base_price(sym: str) -> float:
     return {"VOD.L": 7000.0, "7203.T": 2800.0, "EURUSD=X": 1.1, "RELIANCE.NS": 1400.0}.get(sym, 180.0)
 
 
-def fake_yahoo(fail: set | None = None) -> httpx.MockTransport:
+def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTransport:
     def handler(req: httpx.Request):
         path = req.url.path
         if path.startswith("/v1/finance/search"):
@@ -42,7 +43,8 @@ def fake_yahoo(fail: set | None = None) -> httpx.MockTransport:
             b = base_price(sym)
             while t <= p2:
                 d = t / 86400
-                px = b * (1 + 0.0003 * (d - 19000)) + b * 0.08 * math.sin(d / 9) + b * 0.01 * math.sin(t / 7000)
+                phase = (zlib.crc32(sym.encode()) % 628) / 100 if varied else 0   # varied: each symbol its own rhythm
+                px = b * (1 + 0.0003 * (d - 19000)) + b * 0.08 * math.sin(d / 9 + phase) + b * 0.01 * math.sin(t / 7000)
                 ts.append(t); o.append(px * 0.998); h.append(px * 1.01); l.append(px * 0.99); c.append(px); v.append(1000)
                 t += g
             meta = {"symbol": sym, "currency": cur, "exchangeTimezoneName": tz, "regularMarketPrice": c[-1],

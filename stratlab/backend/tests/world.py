@@ -134,7 +134,7 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
         return wrap
     kite = fake_kite.online()
     markets = Registry(kite, CoinbaseProvider(transport=sw("crypto")(wavy_coinbase())),
-                       yahoo=Yahoo(transport=sw("market data")(fake_yahoo())))
+                       yahoo=Yahoo(transport=sw("market data")(fake_yahoo(varied=True))))
     ticks = TickHub(kite)
     monkeypatch.setattr(ticks, "start", lambda: None)
     clock = (lambda: datetime.now(IST)) if real_clock else (lambda: datetime.now(IST).replace(hour=12, minute=0))
@@ -143,7 +143,7 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     for name, v in (("kite", kite), ("hub", ticks), ("markets", markets), ("options_data", options), ("manager", manager)):
         monkeypatch.setattr(main, name, v)
     hub = Research(kite, finnhub=Finnhub(transport=sw("us company data")(fake_finnhub())),
-                   yahoo=Yahoo(transport=sw("research market data")(fake_yahoo())),
+                   yahoo=Yahoo(transport=sw("research market data")(fake_yahoo(varied=True))),
                    screener=Screener(transport=sw("fundamentals")(fake_screener())), news=GoogleNews(transport=sw("news")(fake_news())),
                    wiki=Wikipedia(transport=sw("wikipedia")(fake_wiki())))
     monkeypatch.setattr(main, "research_hub", hub)

@@ -7,6 +7,7 @@ import uuid
 from types import SimpleNamespace
 
 USERS = {
+    **{f"load-{i}": (f"u-load-{i}", f"load{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(300)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),
