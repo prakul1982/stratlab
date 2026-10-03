@@ -40,8 +40,9 @@ page says so. Admin → Check payments setup checks those plans too.
 
 Still to do:
 - Set the final prices per country, and create the Razorpay plans for the currencies that should be charged locally.
-- Taxes and invoices for overseas customers (GST rules for export of services: usually zero-rated with a letter of
-  undertaking), with an accountant.
+- *Done:* a GST invoice for every payment (Account → Invoices; Admin → Invoices with the seller's GSTIN, state, LUT ARN):
+  CGST + SGST within the state, IGST across states, exports zero-rated under the LUT. Owner: fill the seller details,
+  file the yearly LUT on the GST portal, and have the accountant confirm the setup.
 
 ### Extreme stress test: one stop for everything StratLab offers
 The goal: nobody needs to open another site to check something StratLab already covers. A structured test, feature

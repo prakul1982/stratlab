@@ -101,3 +101,12 @@ test.describe("a visitor in India", () => {
     await sane(page, errors);
   });
 });
+
+test("invoices: in Account for the customer, with the GST setup in Admin", async ({ page }) => {
+  let errors = await open(page, "/account", "Invoices");
+  await expect(page.getByText("Details on your invoices")).toBeVisible();
+  await sane(page, errors);
+  errors = await open(page, "/admin", "LUT ARN");
+  await expect(page.getByText(/Financial year \d{4}-\d{2}/)).toBeVisible();
+  await sane(page, errors);
+});

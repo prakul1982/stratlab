@@ -266,6 +266,25 @@ class SubscribeReq(BaseModel):
     currency: str = Field("INR", pattern=r"^[A-Z]{3}$")
 
 
+class SellerReq(BaseModel):
+    legal_name: str = Field("", max_length=200)
+    address: str = Field("", max_length=400)
+    state: str = Field("", max_length=2)
+    gstin: str = Field("", max_length=15)
+    pan: str = Field("", max_length=10)
+    lut_arn: str = Field("", max_length=40)
+    email: str = Field("", max_length=120)
+    prefix: str = Field("SL", max_length=6)
+
+
+class BillingDetailsReq(BaseModel):
+    name: str = Field("", max_length=200)
+    address: str = Field("", max_length=300)
+    state: str = Field("", max_length=2)
+    gstin: str = Field("", max_length=15)
+    country: str = Field("IN", max_length=2)
+
+
 class PricesReq(BaseModel):
     currencies: dict[str, dict] = Field(default_factory=dict, max_length=40)
 
