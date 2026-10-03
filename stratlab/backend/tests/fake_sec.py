@@ -104,6 +104,22 @@ def subs() -> dict:
             "fiscalYearEnd": "0927", "website": "", "tickers": ["AAPL"], "filings": {"recent": recent}}
 
 
+FILLER = "The company continues to invest in research and development across its product lines. " * 40
+TEN_K = f"""<html><body><ix:header><p>hidden xbrl header</p></ix:header>
+<p>TABLE OF CONTENTS</p><p>Item 1. Business 1</p><p>Item 1A. Risk Factors 9</p><p>Item 2. Properties 20</p>
+<p>Item 7. Management's Discussion and Analysis 25</p><p>Item 8. Financial Statements 40</p>
+<p>PART I</p><p>Item 1. Business</p>
+<p>The Company designs, manufactures and markets smartphones, personal computers, tablets, wearables and accessories,
+and sells a variety of related services. iPhone net sales were 51% of total net sales.</p><p>{FILLER}</p>
+<p>Item 1A. Risk Factors</p><p>The Company's business depends on global supply chains concentrated in Asia.</p><p>{FILLER}</p>
+<p>Item 1B. Unresolved Staff Comments</p><p>None.</p><p>Item 2. Properties</p><p>Offices in Cupertino.</p>
+<p>Item 7. Management's Discussion and Analysis</p><p>Liquidity and Capital Resources. The Company expects capital
+expenditures of approximately $14 billion in fiscal 2026, mainly for data centers.</p><p>{FILLER}</p>
+<p>Item 7A. Quantitative and Qualitative Disclosures</p><p>Item 8. Financial Statements</p></body></html>"""
+RELEASE = f"""<html><body><p>Apple reports second quarter results.</p><p>The Company expects revenue to grow in the
+low to mid single digits in the June quarter.</p><p>{FILLER}</p></body></html>"""
+
+
 def transport(calls: list | None = None) -> httpx.MockTransport:
     def handler(r: httpx.Request):
         if calls is not None:
@@ -115,5 +131,12 @@ def transport(calls: list | None = None) -> httpx.MockTransport:
             return httpx.Response(200, json=subs())
         if r.url.path == f"/api/xbrl/companyfacts/CIK{CIK:010d}.json":
             return httpx.Response(200, json=facts())
+        if r.url.path.endswith("/000032019325000079/a10-k.htm"):
+            return httpx.Response(200, text=TEN_K, headers={"content-type": "text/html"})
+        if r.url.path.endswith("/000032019326000011/index.json"):
+            return httpx.Response(200, json={"directory": {"item": [{"name": "a8-k.htm"}, {"name": "a8-kex991q2.htm"},
+                                                                    {"name": "0000320193-26-000011-index.html"}]}})
+        if r.url.path.endswith("/000032019326000011/a8-kex991q2.htm"):
+            return httpx.Response(200, text=RELEASE, headers={"content-type": "text/html"})
         return httpx.Response(404, json={})
     return httpx.MockTransport(handler)

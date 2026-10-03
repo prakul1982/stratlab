@@ -10,13 +10,14 @@ something couldn't be read.
 *Done (first part):* the deep dive, checklist, valuation and deck for US companies, from the SEC's filings
 (XBRL numbers in 10-K and 10-Q reports): ten years of revenue, profit, operating margin, reported capex, cash flow,
 debt and cash; the last twelve quarters; industry from the SIC code; and links to the annual, quarterly and earnings
-filings. Ratios that need a price use the latest share price and the share count on the latest report. Admin → Data
+filings. The AI read covers US companies too: the business, risks and industry measures from the latest 10-K (cut to
+Business, Risk Factors and Management's Discussion), and plans and outlook from it and the latest earnings releases
+(exhibit 99 of the 8-K). Ratios that need a price use the latest share price and the share count on the latest report. Admin → Data
 audit runs on US sets, and Admin → Whole market: US checks every company filing with the SEC.
 
 Still to do:
-- Reading the 10-K (business, risk factors) and the earnings releases (8-K, exhibit 99) with AI, like the Indian
-  presentation read: needs the document reader to take SEC HTML filings, not only PDFs.
-- Report card from guidance in earnings releases (US call transcripts aren't filed with the SEC).
+- Report card from guidance in earnings releases (US call transcripts aren't filed with the SEC): needs the periods
+  handled per company's own fiscal year, not India's April to March.
 - Insider ownership in the checklist instead of promoter holding.
 
 ### Indian currency derivatives (CDS)

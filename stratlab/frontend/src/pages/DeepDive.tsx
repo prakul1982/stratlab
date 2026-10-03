@@ -255,24 +255,18 @@ export function DeepDivePage() {
           </Panel>
           )}
 
-          {us && (
-            <Panel title="Business, plans and management" span="full">
-              <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Reading the company's annual report for its business model, plans and risks is coming for US companies.
-                US companies don't file earnings-call transcripts with the SEC, so the management report card needs another source. The filings are linked below.</p>
-            </Panel>
-          )}
-          {!us && <>
           <section className="card stack" style={{ gap: 12 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
               <div className="stack" style={{ gap: 2 }}>
                 <h2 className="h3">From the company's own documents</h2>
-                <span className="small muted">{v.reads ? `Read ${day(v.reads.at)}: ${v.reads.read.map((d) => `${KIND[d.kind] ?? "Filing"}, ${day(d.at)}`).join(" · ") || "the company profile"}` : `${v.documents.length} presentations and call transcripts found in the last two years.`}</span>
+                <span className="small muted">{v.reads ? `Read ${day(v.reads.at)}: ${v.reads.read.map((d) => `${KIND[d.kind] ?? "Filing"}, ${day(d.at)}`).join(" · ") || "the company profile"}` : us ? `${v.documents.filter((d) => d.kind === "annual_report").length} annual report${v.documents.filter((d) => d.kind === "annual_report").length === 1 ? "" : "s"} and ${v.documents.filter((d) => d.kind === "earnings_release").length} earnings releases filed in the last two years.`
+                  : `${v.documents.length} presentations and call transcripts found in the last two years.`}</span>
               </div>
               <button className="btn sm" disabled={reading || (!v.documents.length && !v.about)} onClick={() => readDocs(!!v.reads)}>
-                {reading ? "Reading… about a minute" : v.reads ? (v.reads_stale ? "Read the newest documents" : "Read again") : "Read the latest presentation and calls"}</button>
+                {reading ? "Reading… about a minute" : v.reads ? (v.reads_stale ? "Read the newest documents" : "Read again") : us ? "Read the annual report and releases" : "Read the latest presentation and calls"}</button>
             </div>
             {v.doc_note && <p className="tiny muted" style={{ margin: 0 }}>Filings: {v.doc_note}</p>}
-            {reading && <Loading label="Reading the latest investor presentation and earnings calls" />}
+            {reading && <Loading label={us ? "Reading the annual report (10-K) and earnings releases" : "Reading the latest investor presentation and earnings calls"} />}
             {!v.reads && !reading && <p className="small muted" style={{ margin: 0 }}>The business model, {v.industry_measures?.label ? `the ${v.industry_measures.label.toLowerCase()} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
             {v.reads?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.reads.problems.join(" · ")}</p> : null}
           </section>
@@ -346,6 +340,12 @@ export function DeepDivePage() {
             </Panel>
           )}
 
+          {us ? (
+            <Panel title="Management report card" span="full">
+              <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Not available for US companies yet: the report card checks targets given on earnings calls,
+                and US companies don't file call transcripts with the SEC. The outlook management gives in its earnings releases is under the plans above.</p>
+            </Panel>
+          ) : (
           <section className="card stack" style={{ gap: 12 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
               <div className="stack" style={{ gap: 2 }}>
@@ -361,8 +361,7 @@ export function DeepDivePage() {
             {v.card && <ReportCard c={v.card} />}
             {v.card?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.card.problems.join(" · ")}</p> : null}
           </section>
-
-          </>}
+          )}
 
           {v.documents.length > 0 && (
             <Panel title="Documents" span="full">
@@ -372,9 +371,8 @@ export function DeepDivePage() {
                   <a className="link tiny" href={d.url} target="_blank" rel="noopener noreferrer">Open ↗</a></div>))}</div>
             </Panel>
           )}
-          <p className="small muted" style={{ maxWidth: "80ch" }}>Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us
-            ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report."
-            : " The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it."} Nothing here is investment advice.</p>
+          <p className="small muted" style={{ maxWidth: "80ch" }}>Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report." : ""}
+            {" "}The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it. Nothing here is investment advice.</p>
         </>
       )}
     </div>

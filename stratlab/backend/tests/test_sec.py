@@ -101,12 +101,12 @@ def test_us_deep_dive_through_the_api(monkeypatch):
         assert v["numbers"]["capex_reported"] and v["numbers"]["years"][-1]["capex"] == 12715
         assert v["snapshot"]["market_cap_cr"] and v["snapshot"]["pe"]                 # from the price and the share count
         assert v["checklist"]["industry"]["path"] == ["Manufacturing", "Electronic Computers"]
-        assert not v["ai"] and any(d["kind"] == "annual_report" for d in v["documents"])
+        assert v["ai"] and not v["report_card"] and any(d["kind"] == "annual_report" for d in v["documents"])
         fcf = next(x for x in v["checklist"]["checks"] if x["label"] == "Free cash flow, 3 years")
         assert fcf["value"].startswith("$") and fcf["value"].endswith(" m")
         deck = c.get("/research/deep/AAPL/deck?region=US", headers=h)
         assert deck.status_code == 200 and deck.content[:2] == b"PK"
-        assert c.post("/research/deep/AAPL/read?region=US", headers=h).json()["detail"]["code"] == "us_ai_not_yet"
+        assert c.post("/research/deep/AAPL/card?region=US", headers=h).json()["detail"]["code"] == "us_no_calls"
         assert c.get("/research/deep/AAPL?region=JP", headers=h).status_code == 400
         missing = c.get("/research/deep/ZZZZ?region=US", headers=h)
         assert missing.status_code in (404, 502, 503) and "SEC" in missing.text
@@ -122,3 +122,37 @@ def test_quarterly_margin_uses_depreciation_from_year_to_date_cash_flow(p):
     q = p["quarters"]
     i = q["cols"].index("Mar 2026")
     assert q["rows"]["OPM %"][i] == round((29600 + 2950) / 95400 * 100, 1)
+
+
+def test_a_10k_is_cut_to_its_business_risks_and_discussion_not_its_contents_page():
+    s = sec.SEC(transport=fake_sec.transport())
+    p = s.company("AAPL")
+    annual = next(d for d in p["documents"] if d["kind"] == "annual_report")
+    text = s.annual(annual)
+    assert "[BUSINESS]" in text and "smartphones" in text and "[RISKS]" in text and "supply chains" in text
+    assert "[MDNA]" in text and "$14 billion" in text and "hidden xbrl header" not in text
+    assert "Offices in Cupertino" not in text                          # the parts in between are left out
+    rel = next(d for d in p["documents"] if d["kind"] == "earnings_release")
+    assert "low to mid single digits" in s.release(rel)                # the exhibit 99 press release, not the cover
+    with pytest.raises(SourceError):
+        s.document("https://evil.example.com/Archives/x.htm")
+
+
+def test_us_documents_are_read_with_ai_and_stored(monkeypatch):
+    from app import deepdive, report_card
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        saved = {}
+        monkeypatch.setattr(deepdive, "stored", lambda k: saved.get(k))
+        monkeypatch.setattr(deepdive, "store", lambda k, v: saved.__setitem__(k, {**v, "at": "2026-10-03", "ts": 9e18}) or v)
+        monkeypatch.setattr(report_card, "stored", lambda s: None)
+        c, h = w["client"], W.headers("pro-token")
+        r = c.post("/research/deep/AAPL/read?region=US", headers=h)
+        assert r.status_code == 200, r.text
+        stored = saved["US:AAPL"]
+        assert [d["kind"] for d in stored["read"]] == ["annual_report", "earnings_release"]
+        assert "AAPL" not in saved                                      # never mixed up with an Indian symbol's read
+        assert w["ai"].calls >= 1
+    finally:
+        w["close"]()
