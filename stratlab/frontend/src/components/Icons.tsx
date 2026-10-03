@@ -39,3 +39,4 @@ export const Copy = ({ size }: P) => <svg {...base(size)}><rect x="8" y="8" widt
 export const Upload = ({ size }: P) => <svg {...base(size)}><path d="M12 16V4M7 9l5-5 5 5" /><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>;
 export const News = ({ size }: P) => <svg {...base(size)}><path d="M5 4h12v15a2 2 0 0 0 2 2H7a2 2 0 0 1-2-2z" /><path d="M17 8h2a1 1 0 0 1 1 1v10a2 2 0 0 1-4 0" /><path d="M8 8h6M8 12h6M8 16h4" /></svg>;
 export const Library = ({ size }: P) => <svg {...base(size)}><path d="M4 4h4v16H4zM10 4h4v16h-4z" /><path d="m15.5 5.3 3.8-1 3.4 14.6-3.8 1z" /></svg>;
+export const Bell = ({ size }: P) => <svg {...base(size)}><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" /><path d="M10 21h4" /></svg>;

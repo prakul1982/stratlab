@@ -6,6 +6,7 @@ import { pct, safeHref, signClass } from "../lib/format";
 import { scaleFor } from "../lib/research";
 import { Panel, ResearchNav, TrendBars } from "../components/Research";
 import { Loading } from "../components/ui";
+import { AlertButton } from "../components/AlertForm";
 
 type Year = { year: string; sales: number | null; profit: number | null; opm: number | null; capex: number | null;
   capex_pct_sales: number | null; cfo: number | null; cfi: number | null; fcf: number | null; debt: number | null };
@@ -208,11 +209,14 @@ export function DeepDivePage() {
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>{us
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
-        {v && <div className="row wrap" style={{ gap: 10 }}>
-          <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
-          <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pdf")} title="The same slides as a PDF, to read or share anywhere">{decking === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
-          <Link className="btn quiet sm" to="/research/investor">Investor home →</Link>
-        </div>}
+        <div className="row wrap" style={{ gap: 10 }}>
+          {v && <>
+            <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
+            <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pdf")} title="The same slides as a PDF, to read or share anywhere">{decking === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
+          </>}
+          <AlertButton region={region} symbol={sym} />
+          {v && <Link className="btn quiet sm" to="/research/investor">Investor home →</Link>}
+        </div>
       </div>
       {!pro && <div className="banner"><span>The deep dive is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       {pro && error && <div className="card"><p className="muted">{error}</p></div>}

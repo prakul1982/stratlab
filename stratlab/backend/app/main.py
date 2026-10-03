@@ -51,12 +51,13 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, weekly
+from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_alerts, weekly
 from .newsletter import job as news
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
+from .plans import stock_alerts as stock_alert_limit
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -107,8 +108,30 @@ def _scan_alert_ok(profile: dict) -> bool:
     return allows(access_plan(profile), "scans") and bool(alerts.jobs_for(profile, "", ""))
 
 
+def alert_quotes(region: str, syms: list[str]) -> dict:
+    """Quotes for a batch of stocks: one broker call for India when the feed is up, else the research quotes."""
+    if region == "IN" and kite.ready():
+        try:
+            return kite.quote(syms)
+        except Exception:
+            pass
+    return research_hub.quotes(region, syms)
+
+
+def alert_bars(region: str, sym: str) -> list[dict]:
+    """Daily candles (shared with the scans' cache) for the alerts on moving averages, RSI, Stage and 52-week levels."""
+    ids, _ = universes.resolve(markets, region, [{"symbol": sym}])
+    return scan._bars(markets, ids[0]) if ids else []
+
+
+def _alert_limit(profile: dict) -> int:
+    from .plans import access_plan
+    return stock_alert_limit(access_plan(profile))
+
+
+stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit)
 scan_alerts_job = scan.Alerts(markets, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
-                              can_alert=_scan_alert_ok)
+                              can_alert=_scan_alert_ok, checks=[lambda now: stock_checker.tick(now)])
 
 
 def _filing_alert_ok(profile: dict) -> bool:
@@ -1093,6 +1116,98 @@ def scan_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
         need(profile, "scans", "ST S2 watchlist alerts")
     scan.set_alert(profile["id"], req.on)
     return {"alerts": req.on}
+
+
+# ---------- stock alerts people set (price, day move, moving average, RSI, Stage, 52-week high or low) ----------
+ALERT_ID = re.compile(r"^[0-9a-f]{6,24}$")
+
+
+def alert_view(a: dict) -> dict:
+    return {**{k: v for k, v in a.items() if k not in ("state", "rev")}, "text": stock_alerts.describe(a)}
+
+
+def alerts_page(profile) -> dict:
+    mine = stock_alerts.items(profile["id"])
+    active = sorted((a for a in mine if a.get("status") == "active"), key=lambda a: a.get("created_at") or "", reverse=True)
+    done = sorted((a for a in mine if a.get("status") != "active"), key=lambda a: a.get("triggered_at") or "", reverse=True)
+    to = alerts.newsletter_email(profile)
+    return {"active": [alert_view(a) for a in active], "triggered": [alert_view(a) for a in done],
+            "limit": stock_alert_limit(profile["_plan"]), "count": len(active), "channels": stock_alerts.channels(profile),
+            "email": to, "email_confirmed": bool(to) and alerts.email_confirmed(profile)}
+
+
+def alert_seed(region: str, sym: str) -> dict | None:
+    """The stock's quote now, to check it exists and to start a price alert on the right side of its level. A source
+    that can't be reached doesn't block saving; a stock with no price does."""
+    try:
+        q = alert_quotes(region, [sym]) or {}
+    except Exception:
+        return None
+    hit = q.get(sym)
+    if not hit or not isinstance(hit.get("price"), (int, float)):
+        err(400, "no_price", f"There's no price for {sym} in {'India' if region == 'IN' else 'the US'}. Check the ticker.")
+    return hit
+
+
+def alert_note(a: dict, q: dict | None) -> str | None:
+    """Say so when the price is already past the level, since the alert waits for the next crossing."""
+    p = (q or {}).get("price")
+    if a["kind"] != "price" or not isinstance(p, (int, float)) or (a.get("state") or {}).get("side") != a["op"]:
+        return None
+    m = stock_alerts.money
+    return (f"{a['symbol']} is already {a['op']} {m(a['value'], a['region'])} (now {m(p, a['region'])}), so the alert "
+            f"fires the next time it crosses {a['op']} it.")
+
+
+def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
+    limit = stock_alert_limit(profile["_plan"])
+    try:
+        body = stock_alerts.clean(req.model_dump())
+    except stock_alerts.AlertError as e:
+        err(400, "bad_alert", str(e))
+    q = alert_seed(body["region"], body["symbol"])
+    try:
+        a = (stock_alerts.update(profile["id"], aid, body, limit, q) if aid else stock_alerts.create(profile["id"], body, limit, q))
+    except stock_alerts.LimitReached as e:
+        nxt = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["stock_alerts"] > e.limit), None)
+        upgrade(f"Your plan has {e.limit} active alert{'s' if e.limit != 1 else ''}. Delete one"
+                + (f", or move to {nxt} for more." if nxt else " to add another."), "alert_limit")
+    if a is None:
+        err(404, "not_found", "That alert is gone. Reload the page.")
+    return {"alert": alert_view(a), "note": alert_note(a, q), **alerts_page(profile)}
+
+
+@app.get("/alerts")
+def list_stock_alerts(profile=Depends(current_profile)):
+    return ok(alerts_page(profile))
+
+
+@app.post("/alerts")
+def create_stock_alert(req: StockAlertReq, profile=Depends(current_profile)):
+    throttle(profile, "stock_alert", 60, 3600, "That's a lot of alerts in an hour. Try again later.")
+    return ok(save_alert(profile, req))
+
+
+@app.put("/alerts/{aid}")
+def edit_stock_alert(aid: str, req: StockAlertReq, profile=Depends(current_profile)):
+    if not ALERT_ID.match(aid):
+        err(404, "not_found", "That alert is gone. Reload the page.")
+    throttle(profile, "stock_alert", 60, 3600, "That's a lot of alert changes in an hour. Try again later.")
+    return ok(save_alert(profile, req, aid))
+
+
+@app.delete("/alerts/{aid}")
+def delete_stock_alert(aid: str, profile=Depends(current_profile)):
+    if not ALERT_ID.match(aid) or not stock_alerts.delete(profile["id"], aid):
+        err(404, "not_found", "That alert is gone. Reload the page.")
+    return ok(alerts_page(profile))
+
+
+@app.delete("/alerts")
+def clear_triggered_alerts(profile=Depends(current_profile)):
+    """Clear the list of alerts that already fired."""
+    stock_alerts.delete(profile["id"], triggered=True)
+    return ok(alerts_page(profile))
 
 
 # ---------- exchange filings and red flags (Pro, India) ----------

@@ -210,6 +210,18 @@ class ScanAlertReq(BaseModel):
     on: bool
 
 
+class StockAlertReq(BaseModel):
+    """One stock alert; stock_alerts.clean checks the combination (a price level, an MA length…)."""
+    region: Literal["IN", "US"] = "IN"
+    symbol: str = Field(..., min_length=1, max_length=20)
+    kind: Literal["price", "move", "ma", "rsi", "stage", "high52", "low52"]
+    op: Optional[Literal["above", "below", "up", "down", "either"]] = None
+    value: Optional[float] = None
+    period: Optional[int] = Field(None, ge=1, le=500)
+    repeat: bool = False
+    note: Optional[str] = Field(None, max_length=120)
+
+
 class MarketAuditReq(BaseModel):
     region: Literal["IN", "US"] = "IN"
     on: bool | None = None

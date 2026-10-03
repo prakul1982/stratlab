@@ -13,6 +13,7 @@ import {
   QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
 import { Info, Loading } from "../components/ui";
+import { AlertButton } from "../components/AlertForm";
 import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 
@@ -143,6 +144,7 @@ export function CompanyPage() {
           {c.testable && <button className={`btn ${focus === "invest" && region === "IN" ? "outline" : "blue"} sm`} onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
           {(region === "IN" || region === "US") && focus !== "invest" && <Link className="btn outline sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
+          <AlertButton region={region} symbol={c.symbol} />
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
           {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
           {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
@@ -479,6 +481,7 @@ export function WatchlistPage() {
         <>
           <QuoteGrid region={region} symbols={mine.map((w) => w.symbol)} names={Object.fromEntries(mine.map((w) => [w.symbol, w.name]))} />
           <div className="row wrap" style={{ gap: 8 }}>
+            <AlertButton region={region} choices={mine.map((w) => ({ region: w.region, symbol: w.symbol }))} />
             {mine.map((w) => <button key={w.symbol} className="btn quiet sm" onClick={() => toggle(w).catch(fail)}>Remove {w.symbol}</button>)}
           </div>
         </>

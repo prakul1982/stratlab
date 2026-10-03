@@ -62,6 +62,7 @@ const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
 const FilingsPage = page(research, "FilingsPage");
 const CompanyPage = page(research, "CompanyPage");
+const AlertsPage = page(() => import("./pages/AlertsPage"), "AlertsPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -149,6 +150,7 @@ function Routed() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/news" element={<NewsPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />
         <Route path="/research/pulse" element={<PulsePage />} />

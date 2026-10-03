@@ -141,10 +141,11 @@ def alert_text(market: str, fresh: list[dict]) -> str:
 
 
 class Alerts:
-    """Once a day after the close, tell each subscriber which watchlist stocks just gave an ST S2 signal."""
+    """Once a day after the close, tell each subscriber which watchlist stocks just gave an ST S2 signal. Each minute
+    it also runs `checks` (each fn(now)): the stock alerts people set, checked while their market is open."""
 
-    def __init__(self, registry, notify, can_alert):
-        self.registry, self.notify, self.can_alert = registry, notify, can_alert
+    def __init__(self, registry, notify, can_alert, checks=()):
+        self.registry, self.notify, self.can_alert, self.checks = registry, notify, can_alert, list(checks)
         self.last: dict[str, str] = {}
         self.status = {"last_run": None, "sent": 0, "last_error": None}
 
@@ -153,12 +154,18 @@ class Alerts:
 
     def _loop(self):
         while True:
+            now = datetime.now(ZoneInfo("UTC"))
+            for check in self.checks:
+                try:
+                    check(now)
+                except Exception as e:      # the stock alerts failing mustn't stop the daily one
+                    print("stock alerts:", e)
             try:
-                self.tick(datetime.now(ZoneInfo("UTC")))
+                self.tick(now)
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("scan alerts:", e)
-            time.sleep(300)
+            time.sleep(60)
 
     def due(self, market: str, now: datetime) -> str | None:
         from .data.calendar import is_trading_day

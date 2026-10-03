@@ -807,3 +807,8 @@ table.legs input[type=number] { width: 72px !important; }
 }
 
 .news-lines { margin: 4px 0 2px; padding-left: 18px; color: var(--ink-2); font-size: 14px; }
+
+/* ---------- stock alerts ---------- */
+.alert-row { display: flex; justify-content: space-between; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 20px; }
+.alert-row > .stack { flex: 1 1 280px; }
+.alert-form .field select, .alert-form .field input { width: 100%; }
