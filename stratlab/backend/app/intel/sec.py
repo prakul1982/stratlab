@@ -386,7 +386,7 @@ class SEC(Source):
         subs = self.submissions(cik)
         p = build(self._json(f"/api/xbrl/companyfacts/CIK{cik:010d}.json"), subs)
         p["symbol"] = symbol.upper()
-        p["documents"] = documents(subs)
+        p["documents"] = documents(subs, days=5 * 366)      # five years: a deep read can look that far back
         with self._build_lock:
             if len(self._built) > 300:
                 self._built.pop(next(iter(self._built)))

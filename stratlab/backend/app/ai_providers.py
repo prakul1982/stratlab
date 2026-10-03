@@ -51,7 +51,13 @@ class AIConfig(AIError):
     """A setting is wrong (bad key, unknown model): skip this provider until it's fixed."""
 
 
-REASONING = ("gpt-oss", "qwen3", "deepseek-r", "magistral", "-thinking")
+REASONING = ("gptoss", "qwen3", "deepseekr", "magistral", "thinking", "gemma4", "glm4", "kimik2")
+
+
+def thinks(model: str) -> bool:
+    """A model that reasons before answering (qwen-3.8, gpt-oss, gemma-4…): it needs room for both."""
+    flat = re.sub(r"[^a-z0-9]", "", model.lower())
+    return any(k in flat for k in REASONING)
 COOL_DEFAULT, COOL_MAX = 30.0, 120.0     # seconds a provider is skipped after a rate limit, unless it says otherwise
 WAIT_FOR_COOLDOWN = 20.0                 # when every provider is briefly busy, wait this long at most for the first
 
@@ -234,11 +240,11 @@ class OpenAIStyle:
     def complete(self, system: str, text: str, max_tokens: int = 1500) -> str:
         last: AIError | None = None
         for model in self.models():
-            thinks = any(k in model.lower() for k in REASONING)
-            body = {"model": model, "temperature": 0.1, "max_tokens": max(max_tokens, 4000) if thinks else max_tokens,
+            reasoning = thinks(model)
+            body = {"model": model, "temperature": 0.1, "max_tokens": max(max_tokens, 4000) if reasoning else max_tokens,
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
                     "response_format": {"type": "json_object"}}
-            if thinks and self.name in ("groq", "cerebras", "openrouter"):
+            if reasoning and self.name in ("groq", "cerebras", "openrouter"):
                 body["reasoning_effort"] = "low"      # keep most of the reply for the answer itself
             try:
                 with self._client() as c:
@@ -269,6 +275,17 @@ class OpenAIStyle:
             except (KeyError, IndexError, ValueError, TypeError, AttributeError):
                 last = AIError(f"{LABELS[self.name]} sent an empty reply ({model}).")
                 continue
+            if not out.strip() and body["max_tokens"] < 8000:
+                # a model that spent its whole reply reasoning: once more with twice the room
+                body["max_tokens"] = min(16000, max(8000, body["max_tokens"] * 2))
+                try:
+                    with self._client() as c:
+                        r2 = c.post("/chat/completions", json=body)
+                    if r2.status_code == 200:
+                        choice = r2.json()["choices"][0]
+                        out = (choice.get("message") or {}).get("content") or ""
+                except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, AttributeError):
+                    pass
             if not out.strip():                       # a reasoning model that ran out of room, or a filtered reply
                 why = " (ran out of room while reasoning)" if choice.get("finish_reason") == "length" else ""
                 last = AIError(f"{LABELS[self.name]} sent an empty reply ({model}){why}.")

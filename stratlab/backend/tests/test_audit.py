@@ -315,3 +315,50 @@ def test_whole_market_audit_retries_a_company_whose_source_was_down(monkeypatch)
         assert audit._transient({"issues": [{"level": "mismatch", "area": "Numbers"}]}) is False   # wrong data isn't retried
     finally:
         w["close"]()
+
+
+def test_india_whole_market_adds_bse_only_companies(monkeypatch):
+    import json
+    from app import db
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        nse = main.filings_feed.all_equities()
+        dual = nse[0]
+        bse = [{"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": dual["symbol"], "exchange_token": 500001,
+                "instrument_token": 9001, "name": dual["name"]},                                   # on NSE too
+               {"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": "TINYCO", "exchange_token": 543210,
+                "instrument_token": 9002, "name": "Tiny Co Ltd"}]
+        bse += [{"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": f"SMALL{i}", "exchange_token": 600000 + i,
+                 "instrument_token": 10000 + i, "name": f"Small {i} Ltd"} for i in range(120)]
+        bse += [{"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": "BOND1", "exchange_token": 700001, "instrument_token": 1,
+                 "name": "x", "segment_x": 1}]
+        bse[-1]["instrument_type"] = "DEBT"
+        monkeypatch.setattr(main.kite, "ready", lambda: True)
+        monkeypatch.setattr(main.kite, "instruments_of", lambda ex: bse if ex == "BSE" else [])
+        listing = main.india_listing()
+        syms = [r["symbol"] for r in listing]
+        assert "BSE:543210" in syms and "BSE:500001" not in syms and "BSE:700001" not in syms
+        assert len([s for s in syms if s.startswith("BSE:")]) == 121
+        assert all(r["old"] for r in listing if r["symbol"].startswith("BSE:"))           # first time: not new listings
+        # the broker offline: the last good BSE list stands in, so nothing looks delisted
+        monkeypatch.setattr(main.kite, "ready", lambda: False)
+        assert len([r for r in main.india_listing() if r["symbol"].startswith("BSE:")]) == 121
+        # a BSE IPO later is a new listing
+        monkeypatch.setattr(main.kite, "ready", lambda: True)
+        bse.append({"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": "NEWIPO", "exchange_token": 543999,
+                    "instrument_token": 9999, "name": "New IPO Ltd"})
+        new = {r["symbol"]: r for r in main.india_listing()}
+        assert new["BSE:543999"]["old"] is False and new["BSE:543210"]["old"] is False
+        assert json.loads(db.get_setting(main.BSE_ONLY))["543999"]["ts"] == "NEWIPO"
+        # one BSE-only company checked: numbers by BSE code, price from BSE's own quote
+        page = main.research_hub.screener.company("RELIANCE")
+        monkeypatch.setattr(main.research_hub.screener, "company", lambda code: page if code == "543210" else (_ for _ in ()).throw(KeyError(code)))
+        monkeypatch.setattr(main.kite, "ltp_key", lambda key: {"BSE:TINYCO": page["ratios"] and 1300.0}.get(key))
+        monkeypatch.setattr(main.kite, "history", lambda token, tf, days, **k: [])
+        row = main._market_check("BSE:543210")
+        assert row["symbol"] == "BSE:543210" and row["name"]
+        assert not [i for i in row["issues"] if i["area"] == "Company page"]
+        assert audit._shard("BSE:543210") == "audit:market:rows:bse0" or audit._shard("BSE:543210").endswith("rows:bse0")
+    finally:
+        w["close"]()

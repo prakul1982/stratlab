@@ -15,3 +15,4 @@ sentry-sdk>=2.70.0,<3          # optional error alerts, used only when SENTRY_DS
 exchange_calendars>=4.13,<5  # exchange holidays; update yearly for the next year's dates
 pypdf>=6.19.0,<7                # reads company presentations and call transcripts (deep dive)
 python-pptx>=1.0,<2       # the company deck download
+reportlab>=4.2,<5           # the deck as a PDF (same slides as the PowerPoint)

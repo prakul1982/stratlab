@@ -7,6 +7,9 @@ import { ago } from "../lib/format";
 type Level = "mismatch" | "gap" | "error";
 type Region = "IN" | "US";
 type Issue = { level: Level; area: string; detail: string };
+/** A company's page: BSE-only companies (BSE:543210) open by their BSE code. */
+const pageSymbol = (s: string) => (s.startsWith("BSE:") ? s.slice(4) : s);
+
 type Row = { symbol: string; name: string; seconds: number; issues: Issue[] };
 type Summary = { companies: number; clean: number; mismatches: number; gaps: number; errors: number; avg_seconds: number | null;
   by_area: Record<string, Record<Level, number>>; slowest: { symbol: string; seconds: number }[] };
@@ -87,7 +90,7 @@ interface MarketState {
   summary: Summary; rows: Row[];
 }
 
-/** Every NSE-listed company, checked in the background while switched on; new listings first. */
+/** Every company listed in India (NSE, plus those only on BSE), checked in the background while switched on; new listings first. */
 export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
   const { fail } = useApp();
   const us = region === "US";
@@ -107,11 +110,11 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
     <section className="card stack" style={{ gap: 12 }}>
       <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
         <h2 className="h2">Whole market: {us ? "US" : "India"}</h2>
-        {m && <button className="btn sm" onClick={() => send({ on: !m.enabled })}>{m.enabled ? "Pause" : us ? "Check every US company" : "Check every NSE company"}</button>}
+        {m && <button className="btn sm" onClick={() => send({ on: !m.enabled })}>{m.enabled ? "Pause" : us ? "Check every US company" : "Check every Indian company"}</button>}
       </div>
       <p className="small muted" style={{ maxWidth: "80ch", margin: 0 }}>{us
         ? "Every company with a ticker that files with the SEC, checked one at a time in the background from its filings, the same way as the audit above. The SEC's list is read every day: new companies are checked first, ones that drop off the list are removed, and each company is checked again once a month."
-        : "Every company listed on NSE, checked one at a time in the background at an easy pace, the same way as the audit above (without documents). The exchange's list of companies is read every day: new listings are checked first, delisted companies drop off, and each company is checked again once a month."}
+        : "Every company listed in India: all of NSE, plus the thousands listed only on BSE (shown as BSE: and their code), checked one at a time in the background at an easy pace, the same way as the audit above (without documents; BSE-only companies' filings aren't read yet). The lists are read every day: new listings are checked first, delisted companies drop off, and each company is checked again once a month."}
         {" "}It pauses while an audit above runs, and carries on after a restart.</p>
       {!m ? <p className="small muted">Loading…</p> : (
         <>
@@ -129,7 +132,7 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
           </p>
           {m.new_listings.length > 0 && (
             <p className="small" style={{ margin: 0 }}>New listings: {m.new_listings.slice(0, 12).map((n, i) => (
-              <span key={n.symbol}>{i ? ", " : ""}<Link className="link" to={`/research/${region}/${encodeURIComponent(n.symbol)}/deep`}>{n.symbol}</Link>
+              <span key={n.symbol}>{i ? ", " : ""}<Link className="link" to={`/research/${region}/${encodeURIComponent(pageSymbol(n.symbol))}/deep`}>{n.symbol}</Link>
                 <span className="muted">{n.listed ? ` (${n.listed})` : ""}{n.checked ? "" : " · queued"}</span></span>))}</p>
           )}
           {sum && sum.companies > 0 && (
@@ -179,7 +182,7 @@ function Findings({ rows: all, sum, running, file, region }: { rows: Row[]; sum:
           {rows.length > SHOWN && <p className="small muted" style={{ margin: 0 }}>Showing {SHOWN} of {rows.length} companies; the CSV has all of them.</p>}
           {rows.slice(0, SHOWN).map((r) => (
             <div key={r.symbol} className="stack small" style={{ gap: 2 }}>
-              <span><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}><b>{r.name}</b></Link> <span className="mono tiny muted">{r.symbol} · {r.seconds}s</span></span>
+              <span><Link className="link" to={`/research/${region}/${encodeURIComponent(pageSymbol(r.symbol))}/deep`}><b>{r.name}</b></Link> <span className="mono tiny muted">{r.symbol} · {r.seconds}s</span></span>
               {r.shown.map((i, n) => <span key={n}><span className={`badge ${LEVEL[i.level][1]}`}>{i.area}</span> {i.detail}</span>)}
             </div>
           ))}
