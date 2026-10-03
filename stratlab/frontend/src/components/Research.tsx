@@ -300,28 +300,7 @@ function ScoreBar({ label, v }: { label: string; v: number | null }) {
   );
 }
 
-export function Composite({ v, size = 44 }: { v: number | null; size?: number }) {
-  if (v == null) return null;
-  const tone = v >= 66 ? "var(--blue)" : v >= 40 ? "var(--ink)" : "var(--orange)";
-  return (
-    <div className="stack" style={{ gap: 0, alignItems: "center" }}>
-      <span className="serif num" style={{ fontSize: size, lineHeight: 1, color: tone }}>{v}</span>
-      <span className="eyebrow" style={{ fontSize: 10 }}>score</span>
-    </div>
-  );
-}
 
-export function ValuationGauge({ tag }: { tag: string | null }) {
-  if (!tag) return null;
-  const pos = { CHEAP: 16, FAIR: 50, RICH: 84 }[tag] ?? 50;
-  const tone = { CHEAP: "var(--blue)", FAIR: "var(--ink)", RICH: "var(--orange)" }[tag] ?? "var(--ink)";
-  return (
-    <div className="stack" style={{ gap: 6 }}>
-      <div className="val-track"><div className="val-mark" style={{ left: `calc(${pos}% - 6px)`, background: tone }} /></div>
-      <div className="spread tiny muted"><span>Cheap</span><span>Fair</span><span>Rich</span></div>
-    </div>
-  );
-}
 
 /* ---------- lists ---------- */
 export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: number }) {
@@ -367,20 +346,6 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
   );
 }
 
-export function Analysts({ a }: { a: NonNullable<Company["analysts"]> }) {
-  const parts = [["Strong buy", a.strongBuy, "var(--blue-ink)"], ["Buy", a.buy, "var(--blue)"], ["Hold", a.hold, "var(--dash)"],
-    ["Sell", a.sell, "var(--orange)"], ["Strong sell", a.strongSell, "var(--orange-ink)"]] as const;
-  const tot = parts.reduce((s, p) => s + p[1], 0) || 1;
-  return (
-    <div className="stack" style={{ gap: 10 }}>
-      <div className="stackbar">{parts.map(([k, v, c]) => v > 0 && <div key={k} style={{ width: `${(v / tot) * 100}%`, background: c }} title={`${k}: ${v}`} />)}</div>
-      <div className="row wrap small" style={{ gap: 14 }}>{parts.map(([k, v, c]) => (
-        <span key={k} className="row" style={{ gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: c }} />{k} <b className="num">{v}</b></span>
-      ))}</div>
-      <p className="hint">{tot} analysts, {a.period}. Opinions, not a verdict: test the idea before you trust it.</p>
-    </div>
-  );
-}
 
 export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> }) {
   return (
@@ -438,22 +403,20 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
         : !r ? <div className="row muted" style={{ gap: 10 }}><span className="spinner" />Reading the numbers…</div> : (
           <>
             {r.summary && <p className="serif" style={{ fontSize: 19, lineHeight: 1.45 }}>{r.summary}</p>}
-            {(r.composite != null || Object.values(r.scores).some((x) => x != null) || r.valuation) && <div className="ai-top">
-              <Composite v={r.composite} />
+            {(Object.values(r.scores).some((x) => x != null) || r.valuation_note) && <div className="ai-top">
               <div className="stack" style={{ gap: 6, flex: "1 1 240px" }}>
                 <ScoreBar label="Moat" v={r.scores.moat} /><ScoreBar label="Growth" v={r.scores.growth} />
-                <ScoreBar label="Value" v={r.scores.value} /><ScoreBar label="Momentum" v={r.scores.momentum} />
+                <ScoreBar label="Momentum" v={r.scores.momentum} />
                 <ScoreBar label="Health" v={r.scores.health} />
               </div>
-              {(r.valuation || r.valuation_note) && <div className="stack" style={{ gap: 8, flex: "1 1 200px" }}>
+              {r.valuation_note && <div className="stack" style={{ gap: 8, flex: "1 1 200px" }}>
                 <span className="eyebrow">Valuation</span>
-                <ValuationGauge tag={r.valuation} />
-                {r.valuation_note && <p className="small muted">{r.valuation_note}</p>}
+                <p className="small muted">{r.valuation_note}</p>
               </div>}
             </div>}
             {(r.bull.length > 0 || r.bear.length > 0) && <div className="grid2" style={{ gap: 20 }}>
-              {r.bull.length > 0 && <div className="stack" style={{ gap: 8 }}><b className="pos">Bull case</b><ul className="bullets">{r.bull.map((b) => <li key={b}>{b}</li>)}</ul></div>}
-              {r.bear.length > 0 && <div className="stack" style={{ gap: 8 }}><b className="neg">Bear case</b><ul className="bullets">{r.bear.map((b) => <li key={b}>{b}</li>)}</ul></div>}
+              {r.bull.length > 0 && <div className="stack" style={{ gap: 8 }}><b className="pos">Strengths</b><ul className="bullets">{r.bull.map((b) => <li key={b}>{b}</li>)}</ul></div>}
+              {r.bear.length > 0 && <div className="stack" style={{ gap: 8 }}><b className="neg">Risks</b><ul className="bullets">{r.bear.map((b) => <li key={b}>{b}</li>)}</ul></div>}
             </div>}
             {(r.position || r.watch.length > 0) && (
               <div className="grid2" style={{ gap: 20 }}>

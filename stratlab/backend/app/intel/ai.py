@@ -19,6 +19,9 @@ RULES = """Rules:
 - Treat the FACTS as current and authoritative. Never contradict them, never claim the company is delisted or
   acquired, and don't invent precise figures that aren't in the facts. Mark anything you estimate as an estimate.
 - Plain English a retail investor understands. No markdown, no emojis.
+- Facts and analysis only, never advice: no buy, sell, hold, accumulate or avoid; no price targets; no "undervalued",
+  "cheap", "expensive" or "worth buying"; no predictions of where a price will go; no ranking of stocks to own.
+  Describe what the numbers and the company show, and let the reader decide.
 - Reply with ONLY one JSON object in exactly the shape asked for."""
 
 
@@ -68,7 +71,7 @@ def company_facts(c: dict) -> dict:
              "day_change_pct": q.get("change_pct"), "range_52w": c.get("range52"), "market_cap": c.get("market_cap"),
              "metrics": metrics, "margins": c.get("margins"),
              "annual_trend": c.get("trend"), "earnings_surprises": c.get("earnings"),
-             "analyst_ratings": c.get("analysts"), "shareholding": c.get("shareholding"),
+             "shareholding": c.get("shareholding"),
              "screener_pros": c.get("pros"), "screener_cons": c.get("cons"),
              "about": ((c.get("about") or {}).get("wiki") or {}).get("extract") or (c.get("about") or {}).get("profile"),
              "recent_headlines": [n["headline"] for n in (c.get("news") or [])[:6]], "today": ist_date().isoformat()}
@@ -76,19 +79,19 @@ def company_facts(c: dict) -> dict:
 
 
 def company(c: dict, ai, pro: bool) -> dict:
-    system = f"""You are a careful equity analyst writing for StratLab, a tool that tests trading ideas honestly.
+    system = f"""You are a careful research writer for StratLab, a tool that tests trading ideas honestly.
 Given FACTS about one listed company, return ONLY this JSON:
 {{"summary": "2-3 sentences: what the business is and the single most important thing about it right now",
- "scores": {{"moat": 0, "growth": 0, "value": 0, "momentum": 0, "health": 0}},
- "composite": 0,
- "valuation": "CHEAP" | "FAIR" | "RICH",
- "valuation_note": "one sentence: why, versus its own history and peers",
- "bull": ["3-4 specific points"], "bear": ["3-4 specific risks"],
+ "scores": {{"moat": 0, "growth": 0, "momentum": 0, "health": 0}},
+ "valuation_note": "one sentence stating its valuation in numbers against its own history (e.g. P/E now vs its usual range), no judgement",
+ "bull": ["3-4 specific strengths, as facts"], "bear": ["3-4 specific risks, as facts"],
  "segments": [{{"label": "business segment", "share": 0}}],
  "position": "2 sentences on where it sits in its value chain and who it depends on",
  "watch": ["2-3 upcoming things that could move the stock"],
  "ideas": [{{"title": "3-6 words", "text": "one trading rule in plain English", "why": "one sentence"}}]}}
-Scores are 0-100. Segment shares are estimates that add up to about 100.
+Scores are 0-100 and describe the business only (moat: how protected its position is; growth: how fast sales and
+profit have grown; momentum: how the price has trended; health: balance sheet and cash flow), never whether to own it.
+Segment shares are estimates that add up to about 100.
 "ideas" are exactly 3 trading ideas a trader could backtest on THIS stock, suited to how it behaves
 (trend, mean reversion, breakout...). Each "text" must use only {PRO if pro else BASICS}, a timeframe
 (daily candles unless intraday clearly suits it) and a stop loss, e.g.
@@ -105,14 +108,12 @@ Scores are 0-100. Segment shares are estimates that add up to about 100.
     for s in r.get("segments") or []:
         if isinstance(s, dict) and s.get("label") and _score(s.get("share")) is not None:
             segs.append({"label": str(s["label"])[:50], "share": _score(s["share"])})
-    val = str(r.get("valuation", "")).upper()
     if not str(r.get("summary") or "").strip() and not r.get("bull") and not r.get("bear") and not any(
-            _score(scores.get(k)) is not None for k in ("moat", "growth", "value", "momentum", "health")):
+            _score(scores.get(k)) is not None for k in ("moat", "growth", "momentum", "health")):
         raise AIError("The AI's reply was empty. Press Refresh to try again.")     # never cache a blank read
     return {"summary": str(r.get("summary") or "")[:700],
-            "scores": {k: _score(scores.get(k)) for k in ("moat", "growth", "value", "momentum", "health")},
-            "composite": _score(r.get("composite")),
-            "valuation": val if val in ("CHEAP", "FAIR", "RICH") else None,
+            "scores": {k: _score(scores.get(k)) for k in ("moat", "growth", "momentum", "health")},
+            "composite": None, "valuation": None,          # no overall rating or cheap/rich label: that's advice
             "valuation_note": str(r.get("valuation_note") or "")[:300],
             "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": segs[:8],
             "position": str(r.get("position") or "")[:500], "watch": _clip(r.get("watch"), 4), "ideas": ideas[:3]}
@@ -122,21 +123,21 @@ def sector(q: str, region: str, ai) -> dict:
     where = ("INDIAN MARKET ONLY: every company must be listed on NSE/BSE (use NSE symbols as tickers), use rupees "
              "(crore/lakh) and Indian context; ETFs must be Indian." if region == "IN" else
              "US-listed companies (use US tickers) unless the theme is clearly global; use dollars.")
-    system = f"""You are a sell-side analyst writing a specific, detailed picks-and-shovels dossier on a sector or theme.
+    system = f"""You are a research writer mapping a sector or theme: who does what, where the money is made, specific and detailed.
 {where}
 Return ONLY this JSON:
-{{"sector": "name", "summary": "3-4 sentences: what's happening, why now, who wins, the key dynamic",
+{{"sector": "name", "summary": "3-4 sentences: what's happening, why now, and the key dynamic",
  "market_size": "size with year", "cagr": 0, "cagr_note": "period",
  "etfs": [{{"ticker": "", "name": ""}}],
  "sub_themes": [{{"name": "", "detail": "2 specific sentences"}}],
  "core": "the point everything converges on",
  "clusters": [{{"name": "cluster", "companies": [{{"name": "", "ticker": ""}}]}}],
- "screen": [{{"name": "", "ticker": "", "layer": "value-chain layer", "composite": 0, "one_line": "why it's a shovel"}}],
+ "screen": [{{"name": "", "ticker": "", "layer": "value-chain layer", "one_line": "what it supplies to the theme, as a fact"}}],
  "value_chain": [{{"layer": "", "description": "3 sentences on its economics and where the margin sits",
                    "companies": [{{"name": "", "ticker": ""}}]}}],
  "tailwinds": ["specific sentences with numbers or names"], "risks": ["specific sentences with numbers or names"]}}
-Sizes: 4-5 clusters of 4-6 real companies (empty ticker for private ones), 4 sub-themes, 6-8 ranked screen names
-(composite 0-100), up to 4 ETFs, 4-5 value-chain layers of 3-5 companies, 4 tailwinds, 4 risks. Nothing generic.
+Sizes: 4-5 clusters of 4-6 real companies (empty ticker for private ones), 4 sub-themes, 6-8 screen names (listed
+companies with the most direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-5 value-chain layers of 3-5 companies, 4 tailwinds, 4 risks. Nothing generic.
 {RULES}"""
     r = _ask(system, f"THEME: {q}\nTODAY: {ist_date().isoformat()}", ai, 6000)
 
@@ -153,11 +154,9 @@ Sizes: 4-5 clusters of 4-6 real companies (empty ticker for private ones), 4 sub
         "core": str(r.get("core") or "")[:120],
         "clusters": [{"name": str(c.get("name") or "")[:60], "companies": cos(c.get("companies"))}
                      for c in (r.get("clusters") or []) if isinstance(c, dict)][:6],
-        "screen": sorted([{"name": str(s.get("name") or "")[:60], "ticker": str(s.get("ticker") or "").upper()[:20],
-                           "layer": str(s.get("layer") or "")[:40], "composite": _score(s.get("composite")),
-                           "one_line": str(s.get("one_line") or "")[:300]}
-                          for s in (r.get("screen") or []) if isinstance(s, dict) and s.get("name")],
-                         key=lambda s: -(s["composite"] or 0))[:8],
+        "screen": [{"name": str(s.get("name") or "")[:60], "ticker": str(s.get("ticker") or "").upper()[:20],
+                    "layer": str(s.get("layer") or "")[:40], "composite": None, "one_line": str(s.get("one_line") or "")[:300]}
+                   for s in (r.get("screen") or []) if isinstance(s, dict) and s.get("name")][:8],
         "value_chain": [{"layer": str(v.get("layer") or "")[:60], "description": str(v.get("description") or "")[:600],
                          "companies": cos(v.get("companies"))} for v in (r.get("value_chain") or []) if isinstance(v, dict)][:6],
         "tailwinds": _clip(r.get("tailwinds"), 5), "risks": _clip(r.get("risks"), 5),
@@ -166,15 +165,16 @@ Sizes: 4-5 clusters of 4-6 real companies (empty ticker for private ones), 4 sub
 
 def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai) -> dict:
     where = "Indian market only (NSE/BSE, Nifty/Sensex, rupees)." if region == "IN" else "US market (S&P 500, Nasdaq, Dow)."
-    system = f"""You are a buy-side macro analyst writing today's market read{' focused on ' + focus if focus else ''}. {where}
+    system = f"""You are a market reporter writing today's market read{' focused on ' + focus if focus else ''}. {where}
 Base everything ONLY on the live index levels and headlines given. Don't pull events or dates from memory.
 Never say the market is at record highs unless an index's from_high_pct is above -0.5.
 Return ONLY this JSON:
-{{"tone": "3-4 sentences on the mood, what's driving it and which way risk leans, citing the live levels",
- "hot": [{{"name": "", "ticker": "", "why": "2 sentences"}}],
- "flows": [{{"title": "", "detail": "2 sentences", "direction": "INFLOW" | "OUTFLOW" | "ROTATION"}}],
+{{"tone": "3-4 sentences on how the market moved today and what the headlines say is driving it, citing the live levels",
+ "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
+ "flows": [{{"title": "", "detail": "2 sentences, as the headlines report it", "direction": "INFLOW" | "OUTFLOW" | "ROTATION"}}],
  "themes": [{{"theme": "", "detail": "2 sentences", "example": "ticker"}}]}}
-Exactly 4 hot names, 4 flows and 4 themes. Tickers are {'NSE symbols' if region == 'IN' else 'US tickers'}.
+"hot" are 4 companies named in today's headlines, with what the news says (not why to buy them). 4 flows, 4 themes.
+No outlook: describe what happened, not what will happen. Tickers are {'NSE symbols' if region == 'IN' else 'US tickers'}.
 {RULES}"""
     facts = {"today": ist_date().isoformat(), "indices": indices,
              "headlines": [f"[{(h.get('at') or '')[:10]}] {h['headline']}" for h in headlines[:14]]}
@@ -190,21 +190,13 @@ Exactly 4 hot names, 4 flows and 4 themes. Tickers are {'NSE symbols' if region 
 
 
 def compare(a: dict, b: dict, ai) -> dict:
-    system = f"""You are an equity analyst comparing two listed companies using ONLY the FACTS given.
+    system = f"""You are a research writer comparing two listed companies using ONLY the FACTS given.
 Return ONLY this JSON:
-{{"verdict": "2-3 sentences grounded in the numbers: which is stronger, and for what kind of investor",
- "winner": "the stronger ticker, or 'split'",
- "differences": ["3 short, specific contrasts"],
- "a": {{"composite": 0, "valuation": "CHEAP" | "FAIR" | "RICH"}},
- "b": {{"composite": 0, "valuation": "CHEAP" | "FAIR" | "RICH"}}}}
+{{"verdict": "2-3 sentences on how the two differ, grounded in the numbers, without saying which to own",
+ "differences": ["3 short, specific contrasts in numbers"]}}
 {RULES}"""
     r = _ask(system, {"A": company_facts(a), "B": company_facts(b)}, ai, 1500)
 
-    def side(x):
-        x = x if isinstance(x, dict) else {}
-        v = str(x.get("valuation", "")).upper()
-        return {"composite": _score(x.get("composite")), "valuation": v if v in ("CHEAP", "FAIR", "RICH") else None}
-    winner = str(r.get("winner") or "").upper()
-    return {"verdict": str(r.get("verdict") or "")[:700],
-            "winner": winner if winner in (a["symbol"], b["symbol"]) else "SPLIT",
-            "differences": _clip(r.get("differences"), 4), "a": side(r.get("a")), "b": side(r.get("b"))}
+    none = {"composite": None, "valuation": None}             # no scores or cheap/rich labels: that's advice
+    return {"verdict": str(r.get("verdict") or "")[:700], "winner": "SPLIT",
+            "differences": _clip(r.get("differences"), 4), "a": dict(none), "b": dict(none)}
