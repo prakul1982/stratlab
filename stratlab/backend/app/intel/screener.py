@@ -3,6 +3,7 @@
 Screener has no API, so this reads the page the way Hindsight did, but from the
 server (no public CORS proxies). If Screener changes its layout, the parser
 degrades to whatever it can still find instead of failing the whole page."""
+import copy
 import re
 
 import httpx
@@ -168,11 +169,17 @@ class Screener(Source):
                 self._failed(True)
                 raise SourceError(self.name, f"{self.name} sent a page that isn't a company page (it may be blocking us).", busy=True)
             return None
-        p = parse(html)
+        # parsing is most of a company page's time: kept while the same cached page is served, and a fresh copy
+        # handed out each time so no caller can change another's numbers
+        seen = self.cache.get(("parsed", path))
+        if seen and seen[0] is html:
+            p = seen[1]
+        else:
+            p = parse(html)
+            self.cache.set(("parsed", path), (html, p), 6 * 3600)
         if not p["ratios"]:
             return None
-        p["url"] = f"https://www.screener.in{path}"
-        return p
+        return {**copy.deepcopy(p), "url": f"https://www.screener.in{path}"}
 
     def with_cash(self, p: dict) -> dict:
         """`p` with a "Cash Equivalents" row in its balance sheet, from the site's breakdown of Other Assets (the

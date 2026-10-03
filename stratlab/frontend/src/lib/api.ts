@@ -21,11 +21,13 @@ if (CFG.SENTRY_DSN) {
 // storage, realtime): the same settings the full client would use, down to the storage key, so saved logins carry over.
 const sbBase = new URL((CFG.SUPABASE_URL || "http://localhost").replace(/\/?$/, "/"));
 const sbKey = CFG.SUPABASE_ANON_KEY || "missing";
+/** Where the saved login lives in localStorage. */
+export const SESSION_KEY = `sb-${sbBase.hostname.split(".")[0]}-auth-token`;
 export const supabase = {
   auth: new AuthClient({
     url: new URL("auth/v1", sbBase).href,
     headers: { Authorization: `Bearer ${sbKey}`, apikey: sbKey },
-    storageKey: `sb-${sbBase.hostname.split(".")[0]}-auth-token`,
+    storageKey: SESSION_KEY,
     autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: "implicit",
   }),
 };

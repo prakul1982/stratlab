@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, CFG, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { LegalLinks } from "./LegalPage";
+import { LegalLinks } from "../components/LegalLinks";
 import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { FOCUSES, LEVELS } from "../components/LevelPrompt";

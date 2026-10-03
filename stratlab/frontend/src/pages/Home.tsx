@@ -12,7 +12,7 @@ import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
 import { Pin, Search, Sparkle, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
-import { CompanySearch } from "../components/Research";
+import { CompanySearch } from "../components/CompanySearch";
 import { askExamples, useRotating } from "../lib/rotating";
 
 export type Where = { market: string; instrument: Instrument | null };

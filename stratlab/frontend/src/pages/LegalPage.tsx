@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CFG } from "../lib/api";
 import { Logo } from "../components/Logo";
+import { LEGAL_PAGES } from "../components/LegalLinks";
 
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
 const BUSINESS = {
@@ -10,13 +11,6 @@ const BUSINESS = {
   address: CFG.BUSINESS_ADDRESS || "",
   updated: "26 September 2026",
 };
-
-export const LEGAL_PAGES: { path: string; title: string }[] = [
-  { path: "/terms", title: "Terms of service" },
-  { path: "/privacy", title: "Privacy policy" },
-  { path: "/refunds", title: "Cancellation and refunds" },
-  { path: "/contact", title: "Contact us" },
-];
 
 const mail = <a className="link" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>;
 
@@ -148,14 +142,5 @@ export function LegalPage() {
         <Body />
       </article>
     </div>
-  );
-}
-
-/** The row of policy links for footers. */
-export function LegalLinks() {
-  return (
-    <nav className="row wrap small" style={{ gap: 14 }} aria-label="Policies">
-      {LEGAL_PAGES.map((p) => <Link key={p.path} className="muted" to={p.path}>{p.title}</Link>)}
-    </nav>
   );
 }

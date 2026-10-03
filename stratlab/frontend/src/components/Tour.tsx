@@ -2,8 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Compass, Globe, Layers, Lens, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
 import { Modal } from "./ui";
 import { LogoMark } from "./Logo";
-
-const SEEN = "stratlab.tour.v1";
+import { TOUR_SEEN as SEEN } from "./Shell";
 
 type Step = { icon: ReactNode; title: string; body: string; where: string };
 
@@ -45,10 +44,6 @@ const STEPS: Step[] = [
     body: "Switch to night mode, see your plan and usage, and run the connection check if prices or the idea builder ever look stuck.",
     where: "Account and Night mode in the sidebar. You can reopen this tour any time from \"Tour\" at the bottom of the sidebar." },
 ];
-
-export function tourSeen(): boolean {
-  try { return localStorage.getItem(SEEN) === "1"; } catch { return true; }
-}
 
 export function Tour({ onClose }: { onClose: () => void }) {
   const [i, setI] = useState(0);

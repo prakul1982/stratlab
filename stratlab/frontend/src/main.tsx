@@ -13,22 +13,32 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import { AppProvider, useApp } from "./lib/app";
+import { SESSION_KEY } from "./lib/api";
 import { registerPwa } from "./lib/pwa";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
-import { Login } from "./pages/Login";
-import { LEGAL_PAGES, LegalPage } from "./pages/LegalPage";
-import { Home, NewNotebook, NotebooksHome } from "./pages/Home";
+import { LEGAL_PAGES } from "./components/LegalLinks";
 
-// every page but the first ones loads when it's opened, so the app starts fast
+// every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
   lazy(() => load().then((m) => ({ default: m[name] })));
-const NotebookPage = page(() => import("./pages/NotebookPage"), "NotebookPage");
-const ExperimentPage = page(() => import("./pages/ExperimentPage"), "ExperimentPage");
+const home = () => import("./pages/Home");
+const Home = page(home, "Home");
+const NotebooksHome = page(home, "NotebooksHome");
+const NewNotebook = page(home, "NewNotebook");
+const login = () => import("./pages/Login");
+const Login = page(login, "Login");
+const legal = () => import("./pages/LegalPage");
+const LegalPage = page(legal, "LegalPage");
+const notebook = () => import("./pages/NotebookPage");
+const NotebookPage = page(notebook, "NotebookPage");
+const experiment = () => import("./pages/ExperimentPage");
+const ExperimentPage = page(experiment, "ExperimentPage");
 const MarketPage = page(() => import("./pages/MarketPage"), "MarketPage");
 const OptionsPage = page(() => import("./pages/OptionsPage"), "OptionsPage");
 const ImportPage = page(() => import("./pages/ImportPage"), "ImportPage");
-const PublicVerdict = page(() => import("./pages/PublicVerdict"), "PublicVerdict");
+const verdict = () => import("./pages/PublicVerdict");
+const PublicVerdict = page(verdict, "PublicVerdict");
 const OptionsSession = page(() => import("./pages/OptionsSession"), "OptionsSession");
 const PaperPage = page(() => import("./pages/PaperPage"), "PaperPage");
 const PlansPage = page(() => import("./pages/PlansPage"), "PlansPage");
@@ -43,11 +53,31 @@ const PulsePage = page(research, "PulsePage");
 const ComparePage = page(research, "ComparePage");
 const WatchlistPage = page(research, "WatchlistPage");
 const ScanPage = page(research, "ScanPage");
-const DeepDivePage = page(() => import("./pages/DeepDive"), "DeepDivePage");
-const InvestorHomePage = page(() => import("./pages/InvestorHome"), "InvestorHomePage");
+const deep = () => import("./pages/DeepDive");
+const DeepDivePage = page(deep, "DeepDivePage");
+const investor = () => import("./pages/InvestorHome");
+const InvestorHomePage = page(investor, "InvestorHomePage");
 const RotationPage = page(research, "RotationPage");
 const FilingsPage = page(research, "FilingsPage");
 const CompanyPage = page(research, "CompanyPage");
+
+/** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
+function warmFirstPage(path: string) {
+  let saved = false;
+  try { saved = !!localStorage.getItem(SESSION_KEY); } catch { /* storage off */ }
+  const load = LEGAL_PAGES.some((p) => p.path === path) ? legal
+    : path.startsWith("/verdict/") ? verdict
+    : !saved ? login
+    : /^\/(notebooks|new)?$/.test(path) ? home
+    : /^\/n\/[^/]+$/.test(path) ? notebook
+    : /^\/n\/[^/]+\/e\//.test(path) ? experiment
+    : /^\/research\/(IN|US)\/[^/]+\/deep$/.test(path) ? deep
+    : path === "/research/investor" ? investor
+    : path.startsWith("/research") ? research
+    : null;
+  load?.().catch(() => undefined);    // only a head start: the page itself reports a failed download
+}
+warmFirstPage(location.pathname);
 
 /** Indian data is offline: say why in plain words. On a weekend or holiday that's expected, not a fault. */
 function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; back_at: string | null } | null }) {
@@ -88,10 +118,10 @@ function Routed() {
   const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
   // shared verdicts are public: no sign-in needed
-  if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) return <LegalPage />;   // policies are public: no sign-in needed
+  if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) return <Suspense fallback={<Loading label="Opening" />}><LegalPage /></Suspense>;   // policies are public: no sign-in needed
   if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;
   if (!ready) return <Loading label="Opening StratLab" />;
-  if (!session) return <Login />;
+  if (!session) return <Suspense fallback={<Loading label="Opening StratLab" />}><Login /></Suspense>;
   return (
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
