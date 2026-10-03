@@ -143,7 +143,7 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
     if measure_key in EV_EBITDA or group == "utility":
         ebitda = _last(p.get("pl"), "Operating Profit")          # the latest column is the trailing twelve months
         mcap, debt = snap.get("market_cap_cr"), _last(p.get("balance"), "Borrowings") or 0
-        cash = _last(p.get("balance"), "Cash")             # reported in US filings; the Indian pages don't give it
+        cash = _last(p.get("balance"), "Cash")             # US filings report it; for India, the Other Assets breakdown
         v = (mcap + debt - (cash or 0)) / ebitda if mcap and ebitda and ebitda > 0 else None
         return {"name": "EV / EBITDA", "short": "EV/EBITDA", "value": round(v, 1) if v is not None else None, "pe": pe,
                 "why": "Asset-heavy businesses (hospitals, hotels, telecom, cement, metals, power, airlines) are usually valued on "

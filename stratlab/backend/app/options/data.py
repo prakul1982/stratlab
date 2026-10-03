@@ -56,6 +56,8 @@ class OptionsData:
                     t = x.get("instrument_type")
                     if t not in ("CE", "PE", "FUT") or not x.get("expiry"):
                         continue
+                    if exch == "CDS" and not str(x.get("name") or "").upper().endswith("INR"):
+                        continue                             # cross pairs (EURUSD…) are priced in dollars or yen: futures only
                     lot = int(x.get("lot_size") or 1)
                     if exch == "CDS" and lot < 100:          # a premium of ₹0.25 on USDINR is ₹250 a lot
                         lot *= CDS_UNITS

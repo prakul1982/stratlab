@@ -70,10 +70,11 @@ class MCXProvider:
         self._by_name, self._day = by, today
 
     def _make(self, name: str, c: dict) -> dict:
-        label, units, per = self.contracts[name]
+        label, units, per = self.contracts[name][:3]
+        currency = self.contracts[name][3] if len(self.contracts[name]) > 3 else "INR"
         return {"id": f"{self.market}:{name}", "token": c["token"], "symbol": name, "contract": c["symbol"],
                 "name": f"{label} futures ({c['expiry'].strftime('%b %Y')} contract, price per {per})",
-                "exchange": self.exchange, "type": "FUT", "market": self.market, "currency": "INR", "tz": "Asia/Kolkata",
+                "exchange": self.exchange, "type": "FUT", "market": self.market, "currency": currency, "tz": "Asia/Kolkata",
                 "lot": 1, "step": units, "lot_units": units, "unit": per,
                 "fno": False, "expiry": c["expiry"].isoformat(), "strike": None}
 
@@ -93,7 +94,7 @@ class MCXProvider:
         if not q:
             return []
         q = self.aliases.get(q, q)
-        hits = [n for n, (label, _, _) in self.contracts.items() if n.startswith(q) or q in label.upper()]
+        hits = [n for n, c in self.contracts.items() if n.startswith(q) or q in c[0].upper()]
         hits.sort(key=lambda n: (n != q, len(n)))
         return [i for i in (self.instrument(n) for n in hits[:limit]) if i]
 

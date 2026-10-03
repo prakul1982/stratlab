@@ -122,9 +122,29 @@ export function bigMoney(v: number | null | undefined, currency: string): string
   return `${s}${Math.round(v).toLocaleString()}`;
 }
 
+/** The unit a group of amounts (one chart, one table) reads best in. US filings are in $ million and Indian figures in
+ * ₹ crore; a group switches to $ billion or ₹ lakh crore only when it's large AND every number in it still shows to
+ * within 1% (so a small loss is never printed as 0.00). Only the display unit changes, never the amount. */
+export type Scale = { k: number; unit: string; fmt: (x: number | null | undefined) => string };
+export function scaleFor(values: (number | null | undefined)[], us: boolean): Scale {
+  const nz = values.filter((x): x is number => x != null && Number.isFinite(x) && x !== 0).map(Math.abs);
+  const max = nz.length ? Math.max(...nz) : 0, min = nz.length ? Math.min(...nz) : 0;
+  const make = (k: number, unit: string, dp: number, locale: string): Scale =>
+    ({ k, unit, fmt: (x) => (x == null ? "–" : (x / k).toLocaleString(locale, { minimumFractionDigits: dp, maximumFractionDigits: dp })) });
+  if (us) {
+    if (max >= 10000 && min >= 5000) return make(1000, "$ billion", 1, "en-US");
+    if (max >= 10000 && min >= 500) return make(1000, "$ billion", 2, "en-US");
+    return { k: 1, unit: "$ million", fmt: (x) => (x == null ? "–" : x.toLocaleString("en-US", { maximumFractionDigits: 2 })) };
+  }
+  if (max >= 100000 && min >= 50000) return make(100000, "₹ lakh crore", 2, "en-IN");
+  return { k: 1, unit: "₹ crore", fmt: (x) => (x == null ? "–" : x.toLocaleString("en-IN", { maximumFractionDigits: 2 })) };
+}
+
 /** A trend value in its unit: "₹ Cr" values are already crores, "USD" values are dollars. */
 export function trendValue(v: number, unit: string): string {
   // Indian figures are in crore: show them whole (₹2,812 Cr), with a decimal only for small ones (₹4.6 Cr)
+  if (/billion/i.test(unit)) return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: Math.abs(v) < 10 ? 2 : 1 });
+  if (/lakh/i.test(unit)) return v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (/cr/i.test(unit)) {
     const a = Math.abs(v);
     return a < 10 ? v.toFixed(1) : Math.round(v).toLocaleString("en-IN");
@@ -138,7 +158,9 @@ export function metricText(m: MetricItem, currency: string): string {
   if (m.unit === "%") return `${v.toFixed(1)}%`;
   if (m.unit === "%±") return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%`;
   if (m.unit === "money") return `${currencySymbol(currency)}${v.toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: 2 })}`;
-  if (m.unit === "cr") return `₹${Math.round(v).toLocaleString("en-IN")} Cr`;
+  if (m.unit === "cr") return Math.abs(v) >= 100000   // a lakh crore and up, as it's usually said
+    ? `₹${(v / 100000).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lakh Cr`
+    : `₹${Math.round(v).toLocaleString("en-IN")} Cr`;
   return v.toFixed(Math.abs(v) >= 100 ? 0 : 2);
 }
 

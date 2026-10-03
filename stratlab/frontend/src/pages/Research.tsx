@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, pct, price, safeHref, signClass } from "../lib/format";
 import { HELP } from "../lib/help";
 import {
-  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, researchApi, saveRegion, savedRegion, useWatchlist,
+  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, researchApi, saveRegion, savedRegion, scaleFor, useWatchlist,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -175,8 +175,18 @@ export function CompanyPage() {
       <div className="rs-grid">
         {c.trend && (
           <Panel title="Sales and profit, by year">
-            <TrendBars points={c.trend.revenue} label={c.trend.revenue_label} unit={c.trend.unit} />
-            <TrendBars points={c.trend.profit} label={c.trend.profit_label} unit={c.trend.unit} tone="blue" />
+            {(() => {   // Indian figures are in crore; large, exact-enough charts read in lakh crore (see scaleFor)
+              const t = c.trend!, inr = /cr/i.test(t.unit);
+              const pick = (ps: typeof t.revenue) => {
+                const s = inr ? scaleFor(ps.map((p) => p.v), false) : null;
+                return s && s.k > 1 ? { points: ps.map((p) => ({ ...p, v: p.v / s.k })), unit: s.unit } : { points: ps, unit: t.unit };
+              };
+              const r = pick(t.revenue), pr = pick(t.profit);
+              return <>
+                <TrendBars points={r.points} label={t.revenue_label} unit={r.unit} />
+                <TrendBars points={pr.points} label={t.profit_label} unit={pr.unit} tone="blue" />
+              </>;
+            })()}
           </Panel>
         )}
         {c.earnings.length > 1 && <Panel title="Results versus expectations" info={HELP.researchEarnings}><EarningsBars rows={c.earnings} /></Panel>}

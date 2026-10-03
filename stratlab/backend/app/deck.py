@@ -1,7 +1,7 @@
 """A company deck (PowerPoint) from the deep dive: numbers, business model, plans, the management report card and the
 investor checklist, each slide citing where it came from. Built from what the page already has; no extra AI call."""
 import io
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
@@ -9,6 +9,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Emu, Inches, Pt
+from .deepdive import money, scale_for
 
 INK, MUTED, PAPER, CARD = RGBColor(0x1D, 0x1B, 0x17), RGBColor(0x6B, 0x66, 0x5C), RGBColor(0xF5, 0xF1, 0xE8), RGBColor(0xFF, 0xFD, 0xF8)
 BLUE, ORANGE, LINE = RGBColor(0x1F, 0x4F, 0xB5), RGBColor(0xB4, 0x50, 0x0F), RGBColor(0xE2, 0xDC, 0xCF)
@@ -108,8 +109,13 @@ def build(v: dict) -> bytes:
     years = [y for y in n["years"] if y.get("sales") is not None]
     d = Deck(f"{name} ({sym})", datetime.now(timezone.utc).strftime("%d %b %Y"))
     us = (n.get("unit") or "").startswith("$")
-    word = "$ million" if us else "₹ crore"
-    amt = (lambda x: "–" if x is None else f"${_cr(x)} m") if us else (lambda x: "–" if x is None else f"₹{_cr(x)} cr")  # noqa: E731
+    def fig_for(values):                     # each chart and table picks its unit, exact to within 1% (see scale_for)
+        k, unit, dp = scale_for(values, us)
+        if k == 1 and not us:
+            return k, unit, _cr
+        return k, unit, (lambda x: "–" if x is None else f"{x / k:,.{dp}f}")
+    month = date(2000, int(n.get("fye") or 3), 1).strftime("%B")
+    amt = lambda x: "–" if x is None else money(x, "$ million" if us else "₹ crore")  # noqa: E731
 
     # 1. title
     s = d.slide(f"{name}", f"{'US' if us else 'NSE'}: {sym} · Company deep dive")
@@ -144,11 +150,12 @@ def build(v: dict) -> bytes:
 
     # 2. sales and profit
     if years:
-        s = d.slide("Revenue and net profit" if n.get("bank") else "Sales and net profit", f"{n['unit']}, financial years ending March")
+        k, word, _ = fig_for([y["sales"] for y in years] + [y["profit"] for y in years])
+        s = d.slide("Revenue and net profit" if n.get("bank") else "Sales and net profit", f"{word}, financial years ending {month}")
         cd = CategoryChartData()
         cd.categories = [y["year"].replace("Mar ", "FY") for y in years]
-        cd.add_series("Revenue" if n.get("bank") else "Sales", [y["sales"] for y in years])
-        cd.add_series("Net profit", [y["profit"] or 0 for y in years])
+        cd.add_series("Revenue" if n.get("bank") else "Sales", [y["sales"] / k for y in years])
+        cd.add_series("Net profit", [(y["profit"] or 0) / k for y in years])
         ch = s.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(0.6), Inches(1.6), Inches(12), Inches(5.2), cd).chart
         ch.has_legend, ch.legend.position, ch.legend.include_in_layout = True, XL_LEGEND_POSITION.TOP, False
         for series, color in zip(ch.series, (BLUE, ORANGE)):
@@ -161,16 +168,18 @@ def build(v: dict) -> bytes:
     # 3. margins and quarters
     q = n.get("quarters") or []
     if q:
+        _, word, fig = fig_for([v for x in q[-8:] for v in (x["sales"], x["profit"])])
         s = d.slide("The last eight quarters", f"Sales and profit in {word}; growth on the same quarter a year before")
-        rows = [[x["quarter"], _cr(x["sales"]), _pc(x["sales_yoy"], True), _pc(x["opm"]), _cr(x["profit"])] for x in q[-8:]]
+        rows = [[x["quarter"], fig(x["sales"]), _pc(x["sales_yoy"], True), _pc(x["opm"]), fig(x["profit"])] for x in q[-8:]]
         d.table(s, ["Quarter", "Revenue" if n.get("bank") else "Sales", "vs a year ago", "Financing margin" if n.get("bank") else "Operating margin",
                     "Net profit"], rows, Inches(0.6), Inches(1.7), Inches(12))
 
     # 4. capex and cash (not for lenders: capex and free cash flow don't describe a bank)
     if years and not n.get("bank"):
+        _, word, fig = fig_for([v for y in list(reversed(years))[:8] for v in (y["sales"], y["capex"], y["cfo"], y["fcf"], y["debt"])])
         s = d.slide("Capex and cash", f"Capex as reported in the cash flow statement. {word}." if n.get("capex_reported") else
                     f"Capex estimated from the balance sheet: rise in fixed assets and work in progress, plus depreciation. {word}.")
-        rows = [[y["year"], _cr(y["sales"]), _cr(y["capex"]), _pc(y["capex_pct_sales"]), _cr(y["cfo"]), _cr(y["fcf"]), _cr(y["debt"])]
+        rows = [[y["year"], fig(y["sales"]), fig(y["capex"]), _pc(y["capex_pct_sales"]), fig(y["cfo"]), fig(y["fcf"]), fig(y["debt"])]
                 for y in list(reversed(years))[:8]]
         d.table(s, ["Year", "Sales", "Capex", "Capex / sales", "Cash from operations", "Free cash flow", "Debt"], rows,
                 Inches(0.6), Inches(1.7), Inches(12))

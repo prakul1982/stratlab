@@ -26,7 +26,7 @@ const PLACEHOLDER: Record<string, string> = {
   EU: "Search European stocks: SAP, ASML, LVMH…", JP: "Search Tokyo listings: Toyota, Sony, 7203…",
   FX: "Search a currency pair: EURUSD, USDJPY, GBPUSD…",
   MCX: "Search MCX commodities: gold mini, crude oil, natural gas, copper…",
-  CDS: "Search currency futures: USDINR, EURINR, GBPINR, JPYINR",
+  CDS: "Search currency futures: USDINR, EURINR, GBPINR, JPYINR, EURUSD, GBPUSD, USDJPY",
   CMDTY: "Search global commodities: gold, WTI crude, Brent, corn, coffee…",
 };
 

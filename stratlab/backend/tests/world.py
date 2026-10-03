@@ -122,7 +122,7 @@ def _nse(sw=None):
 def _docs(sw=None):
     pdf = make_pdf(["Investor presentation. Revenue grew 12%. We expect EBITDA margin of 24% in FY27."] * 60)
     t = httpx.MockTransport(lambda r: httpx.Response(200, content=pdf))
-    return main.Docs(transport=sw(t) if sw else t, check_host=lambda h: True)
+    return main.Docs(transport=sw(t) if sw else t, check_host=lambda h: True, ocr=lambda data: "")
 
 
 def _no_network(self, request):

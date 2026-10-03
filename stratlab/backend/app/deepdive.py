@@ -19,11 +19,51 @@ DOC_DAYS = 730                # filings searched for documents: two years
 
 # ---------- numbers ----------
 def money(v: float, unit: str | None = None, digits: int = 0) -> str:
-    """An amount in the company's reporting unit: "₹1,234 cr" (Indian pages) or "$1,234 m" (US filings)."""
+    """An amount in the company's reporting unit, in the size people say it: Indian pages are in ₹ crore ("₹1,234 cr",
+    from a lakh crore up "₹9.10 lakh cr"); US filings are in $ million ("$950 m", from a billion up "$215.9 bn")."""
     sign = "-" if v < 0 else ""
     if unit and unit.startswith("$"):
+        if abs(v) >= 1000:                    # to within 1%: one decimal from $10 billion, two below
+            return f"{sign}${abs(v) / 1000:,.{1 if abs(v) >= 10000 else 2}f} bn"
         return f"{sign}${abs(v):,.{digits}f} m"
+    if abs(v) >= 100000:
+        return f"{sign}₹{abs(v) / 100000:,.2f} lakh cr"
     return f"{sign}₹{abs(v):,.{digits}f} cr"
+
+
+_CRORES = re.compile(r"(?:₹|Rs\.?|INR)\s?(\d[\d,]*(?:\.\d+)?)\s*(?:crore|cr)\b", re.I)
+_MILLIONS = re.compile(r"(\$|US\$|USD\s?)\s?(\d[\d,]*(?:\.\d+)?)\s*(?:million|mn|mm|m)\b", re.I)
+
+
+def in_billions(text: str | None) -> str | None:
+    """"$215,938 million" → "$215.9 billion", "Rs 9,10,000 crore" → "₹9.10 lakh crore": large amounts read in the
+    unit companies use for them. The amount itself never changes."""
+    if not text:
+        return text
+
+    def lakh(m):
+        v = float(m.group(1).replace(",", ""))
+        return f"₹{v / 100000:,.2f} lakh crore" if v >= 100000 else m.group(0)
+    text = _CRORES.sub(lakh, text)
+
+    def big(m):
+        v = float(m.group(2).replace(",", ""))
+        if v < 1000:
+            return m.group(0)
+        return f"${v / 1000:,.{1 if v >= 10000 else 2}f} billion"
+    return _MILLIONS.sub(big, text)
+
+
+def scale_for(values, us: bool) -> tuple[int, str, int]:
+    """(divide by, unit, decimals) for one chart or table: $ billion or ₹ lakh crore only when the numbers are large and
+    every one of them still shows to within 1% (a small loss never prints as 0.00). The same rule as the page."""
+    nz = [abs(x) for x in values if x]
+    hi, lo = (max(nz), min(nz)) if nz else (0, 0)
+    if us and hi >= 10000 and lo >= 500:
+        return 1000, "$ billion", 1 if lo >= 5000 else 2
+    if not us and hi >= 100000 and lo >= 50000:
+        return 100000, "₹ lakh crore", 2
+    return 1, "$ million" if us else "₹ crore", 0
 
 
 def _series(table: dict | None, *prefixes: str) -> list:
@@ -237,7 +277,7 @@ def clean_measures(d: dict, labels: dict, texts: dict | None = None) -> list[dic
     out = []
     for m in (d.get("measures") or [])[:8]:
         if isinstance(m, dict) and str(m.get("name") or "").strip() and str(m.get("value") or "").strip() and _real(m, texts):
-            out.append({"name": str(m["name"])[:80], "value": str(m["value"])[:60], "period": (str(m["period"])[:30] if m.get("period") else None),
+            out.append({"name": str(m["name"])[:80], "value": in_billions(str(m["value"])[:60]), "period": (str(m["period"])[:30] if m.get("period") else None),
                         "change": (str(m["change"])[:60] if m.get("change") else None), "quote": str(m.get("quote") or "")[:240],
                         "source": labels.get(str(m.get("source") or "").strip().upper())})
     return out
@@ -255,7 +295,7 @@ def clean_business(d: dict) -> dict:
 def _with_unit(v) -> str | None:
     """An amount or size only if it says what it is ("Rs 945 crore", "400 beds"); a bare "945" or "%70" is dropped."""
     t = str(v or "").strip()[:80]
-    return t if re.search(r"[A-Za-z₹]{2,}|₹", t) and re.search(r"\d", t) else None
+    return in_billions(t) if re.search(r"[A-Za-z₹]{2,}|₹", t) and re.search(r"\d", t) else None
 
 
 PAST = re.compile(r"\b(?:grew|rose|increased|declined|fell|was|were|reported|recorded|stood at|achieved)\b", re.I)
@@ -292,8 +332,9 @@ def readable(docs_api, candidates: list[dict], need: int, problems: list[str], h
     """The first `need` candidates whose PDF holds real text. Exchange filings often attach only a one-page letter
     under a "presentation" or "transcript" subject, saying the document is on the company's website. A PDF link in
     the letter is followed (on whatever site the company's own filing names, still only public addresses); a link to
-    an investor web page is opened and its matching PDF tried. Other letters are skipped."""
-    out, short, notes, seen = [], 0, [], set()
+    an investor web page is opened and its matching PDF tried. A letter with no link (or a dead one) sends us to the
+    company's own investor pages, for a PDF of that kind naming the same quarter. Other letters are skipped."""
+    out, short, notes, seen, site = [], 0, [], set(), {}
     for d in candidates[:max(MAX_TRIES, need * 2)]:
         if len(out) >= need:
             break
@@ -306,12 +347,17 @@ def readable(docs_api, candidates: list[dict], need: int, problems: list[str], h
             out.append((d, text))
             continue
         got, tried = _follow(docs_api, d, text, hosts, seen, notes)
+        if not got and hosts:                # no link, or the link failed: look on the company's investor pages
+            got = _from_site(docs_api, d, hosts, seen, site)
         if got:
             out.append(got)
         else:
             short += 1
             if not tried:
-                notes.append(f"{d['at'][:10]}: a {len(text):,}-character letter with no link to the document")
+                what = ("a scanned page with no readable text" if not text.strip()
+                        else f"a {len(text):,}-character letter with no link to the document")
+                where = ", and no matching document was found on the company's investor pages" if hosts else ""
+                notes.append(f"{d['at'][:10]}: {what}{where}")
     if short and len(out) < need:
         problems.append(f"{short} filing{'s' if short > 1 else ''} held only a short letter, not the document itself")
         problems += notes[:4]
@@ -365,6 +411,115 @@ def _follow(docs_api, d: dict, letter: str, hosts: tuple[str, ...], seen: set, n
             if got:
                 return got, True
     return None, bool(pdfs or pages)
+
+
+QUARTER_ENDS = ((3, 31), (6, 30), (9, 30), (12, 31))
+MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+MONTH_NAMES = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+               "november", "december")
+SITE_PAGES = 6                # web pages opened per read, looking for the company's investor pages
+SECTION_WORDS = re.compile(r"investor|financial|result|earning|quarter|analyst|presentation|transcript|con-?call|"
+                           r"disclosure|shareholder", re.I)
+
+
+def period_tokens(at: str) -> list[str]:
+    """Words a file name or link label uses for the quarter a filing on `at` reports (Indian financial year), squeezed
+    to letters and digits: a filing in Nov 2025 → q2fy26, q2fy2026, sep2025, november2025, 202511…"""
+    from datetime import date, timedelta
+    filed = date.fromisoformat(at[:10])
+    ref = filed - timedelta(days=20)                  # calls come 2 to 8 weeks after the quarter; the filing soon after
+    end = max(date(y, m, d) for y in (ref.year - 1, ref.year) for m, d in QUARTER_ENDS if date(y, m, d) <= ref)
+    q = {6: 1, 9: 2, 12: 3, 3: 4}[end.month]
+    fy = end.year + (1 if end.month >= 4 else 0)
+    yy, yyyy = f"{fy % 100:02d}", str(fy)
+    out = [f"q{q}fy{yy}", f"q{q}fy{yyyy}", f"fy{yy}q{q}", f"fy{yyyy}q{q}", f"{q}qfy{yy}"]
+    for d in (end, filed):
+        out += [f"{MONTHS[d.month - 1]}{d.year}", f"{MONTH_NAMES[d.month - 1]}{d.year}", f"{d.year}{d.month:02d}",
+                f"{MONTHS[d.month - 1]}{d.year % 100:02d}"]
+    return list(dict.fromkeys(out))
+
+
+def _squeeze(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _from_site(docs_api, d: dict, hosts: tuple[str, ...], seen: set, site: dict):
+    """The document on the company's own investor pages: a PDF of the filing's kind that names the same quarter.
+    `site` carries what this read has already fetched, so several letters share the page budget."""
+    from .docs import HREF, KIND_WORDS, host_of
+    if not hasattr(docs_api, "page") or not d.get("at"):
+        return None
+    tokens = period_tokens(d["at"])
+    words = KIND_WORDS.get(d.get("kind") or "")
+
+    def ours(url):
+        h = host_of(url) or ""
+        return url.startswith("https://") and any(h == x or h.endswith("." + x) for x in hosts)
+
+    def fetch(url):
+        if url in site:
+            return site[url]
+        if site.setdefault("_opened", 0) >= SITE_PAGES:
+            return None
+        site["_opened"] += 1
+        try:
+            html = docs_api.page(url, extra_hosts=hosts)
+        except Exception:
+            html = None
+        site[url] = html
+        return html
+
+    def links(html, base):
+        import httpx
+        for href, label in HREF.findall(html or ""):
+            try:
+                url = str(httpx.URL(base).join(href.strip())).split("#")[0]
+            except Exception:
+                continue
+            yield url, f"{url} {re.sub(r'<[^>]+>', ' ', label)}"
+
+    def matching(html, base):
+        found = []
+        for url, text in links(html, base):
+            if not url.lower().endswith(".pdf") or not ours(url) or url in seen:
+                continue
+            flat = _squeeze(text)
+            if any(t in flat for t in tokens) and (not words or words.search(text)):
+                found.append(url)
+        return list(dict.fromkeys(found))
+
+    if "_investor" not in site:                       # the investor pages: from the home page's links, else the usual paths
+        pages = []
+        for host in hosts:
+            for root in (f"https://www.{host}/", f"https://{host}/"):
+                html = fetch(root)
+                if html is None:
+                    continue
+                pages += [u for u, t in links(html, root) if ours(u) and re.search(r"investor", t, re.I)
+                          and not u.lower().endswith(".pdf")]
+                if not pages:
+                    pages += [root + "investors", root + "investor-relations"]
+                break
+        site["_investor"] = list(dict.fromkeys(pages))[:3]
+    for page in site["_investor"]:
+        html = fetch(page)
+        if html is None:
+            continue
+        found = matching(html, page)
+        if not found:                                 # one level down: the results, presentations or transcripts page
+            subs = [u for u, t in links(html, page) if ours(u) and u != page and not u.lower().endswith(".pdf")
+                    and (words.search(t) if words else SECTION_WORDS.search(t))][:2]
+            for sub in subs:
+                found += matching(fetch(sub) or "", sub)
+        for link in found[:2]:
+            seen.add(link)
+            try:
+                text = docs_api.text(link, extra_hosts=hosts)
+            except Exception:
+                continue
+            if len(text) >= MIN_CHARS:
+                return ({**d, "url": link, "via": d["url"], "found_on": page}, text)
+    return None
 
 
 def _excerpts(pairs: list[tuple[dict, str]], words: list[str], per_doc: int, start: int = 1) -> tuple[str, dict, dict]:
