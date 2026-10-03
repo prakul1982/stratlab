@@ -590,7 +590,19 @@ def stored(symbol: str) -> dict | None:
         v = json.loads(db.get_setting(_key(symbol)) or "null")
     except (ValueError, TypeError):
         return None
-    return v if isinstance(v, dict) and v.get("at") else None
+    return tidy(v) if isinstance(v, dict) and v.get("at") else None
+
+
+def tidy(reads: dict) -> dict:
+    """Stored reads as they'd be cleaned today: a read saved before a formatting fix (e.g. "$215,938 million") still
+    shows the amount in the unit people use ("$215.9 billion"). The amounts themselves never change."""
+    b, p = reads.get("business"), reads.get("plans")
+    if isinstance(b, dict) and isinstance(b.get("measures"), list):
+        b["measures"] = [{**m, "value": in_billions(m.get("value"))} if isinstance(m, dict) else m for m in b["measures"]]
+    if isinstance(p, dict) and isinstance(p.get("capex"), list):
+        p["capex"] = [{**c, "amount": in_billions(c.get("amount")), "size": in_billions(c.get("size"))}
+                      if isinstance(c, dict) else c for c in p["capex"]]
+    return reads
 
 
 def store(symbol: str, reads: dict) -> dict:
