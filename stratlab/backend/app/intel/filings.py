@@ -200,6 +200,23 @@ class NSEFilings:
         self.cache.set(key, items, 1800)
         return items
 
+    def board_meetings(self, frm: datetime, to: datetime) -> list[dict]:
+        """Every board meeting companies told the exchange about between two dates, as the exchange lists them
+        (symbol, company, meeting date, purpose). One call for the whole market, cached for an hour."""
+        key = ("meetings", frm.date().isoformat(), to.date().isoformat())
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        data = self._get("/api/corporate-board-meetings", {"index": "equities", "from_date": frm.strftime("%d-%m-%Y"),
+                                                           "to_date": to.strftime("%d-%m-%Y")},
+                         referer="https://www.nseindia.com/companies-listing/corporate-filings-board-meetings")
+        rows = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(rows, list):
+            raise SourceError(self.name, "The exchange's board-meeting list wasn't in the expected shape.")
+        rows = [r for r in rows if isinstance(r, dict)]
+        self.cache.set(key, rows, 3600)
+        return rows
+
     def _quote(self, symbol: str) -> dict:
         """The exchange's quote for one stock, asked the way its own quote page asks (it refuses bare requests)."""
         from urllib.parse import quote as q

@@ -66,7 +66,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/investor", "Investor"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -77,6 +77,16 @@ for (const [path, ready] of PAGES) {
     if (info.project.name === "phone") await touchable(page);
   });
 }
+
+test("results calendar: every company's dates, and the company page links to it", async ({ page }, info) => {
+  await sane(page, await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called"));
+  await expect(page.getByRole("link", { name: "RELIANCE" }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Financial Results").first()).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await expect(page.getByRole("link", { name: "RELIANCE" }).first()).toHaveAttribute("href", "/research/IN/RELIANCE");
+  await page.goto("/research/IN/RELIANCE");
+  await expect(page.getByRole("link", { name: /^Results on / })).toBeVisible({ timeout: 30_000 });
+});
 
 test("losses hang below the zero line, with exact labels (company page)", async ({ page }) => {
   const errors = await open(page, "/research/IN/TCS", "Sales and profit, by year");

@@ -212,6 +212,24 @@ def paper_lines(uid: str, day: date) -> list[dict]:
     return out
 
 
+def results_week(uid: str, day: date, weekly: bool, since: str) -> list[dict]:
+    """The user's stocks with results in the seven days from the issue's day (the week ahead, for Saturday's issue),
+    from the stored results calendar, and ones whose results were filed since `since`."""
+    from .. import results
+    start = day + timedelta(days=1) if weekly else day
+    end = start + timedelta(days=6)
+    out = []
+    for region in REGIONS:
+        syms = {s for r, s in my_stocks(uid) if r == region}
+        if not syms:
+            continue
+        for r in _safe(lambda: results.between(region, day - timedelta(days=results.OUT_DAYS + (5 if weekly else 0)), end, syms), []) or []:
+            filed = (r.get("out") or {}).get("at")
+            if r["date"] >= start.isoformat() or (filed and str(filed) > since):
+                out.append({k: r.get(k) for k in ("symbol", "region", "date", "purpose", "when", "out")})
+    return sorted(out, key=lambda r: (r["date"], r["symbol"]))
+
+
 def stock_facts(uid: str, day: date, weekly: bool = False, since: str | None = None) -> dict:
     """Everything My Stocks reports for one user. `since` is when their last issue went out (ISO); filings are
     counted from then, or from the reference day if that is later. `changed` is False when there is nothing to send."""
@@ -219,6 +237,10 @@ def stock_facts(uid: str, day: date, weekly: bool = False, since: str | None = N
     since = max(since or floor, floor)
     rows = [r for r in (_safe(lambda: stock_row(region, sym, day, weekly, since)) for region, sym in my_stocks(uid)) if r]
     moved = [r for r in rows if r["changed"]]
+    due = results_week(uid, day, weekly, since)
+    # results count as news on their own when they're today or tomorrow (any day of the week ahead, weekly), or filed
+    soon = (day + timedelta(days=7 if weekly else 1)).isoformat()
+    news = [r for r in due if r.get("out") or r["date"] <= soon]
     return {"kind": "my_stocks", "uid": uid, "day": day.isoformat(), "weekly": weekly, "since": since,
             "stocks": moved, "unchanged": [r["symbol"] for r in rows if not r["changed"]],
-            "paper": paper_lines(uid, day), "changed": bool(moved)}
+            "results": due, "paper": paper_lines(uid, day), "changed": bool(moved or news)}

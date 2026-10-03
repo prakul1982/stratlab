@@ -53,6 +53,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, weekly
 from .newsletter import job as news
+from . import results as results_calendar
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -121,6 +122,8 @@ filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text,
                                    can_alert=_filing_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 newsletter_job = news.Job()
+# the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
+results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
 
 
 @asynccontextmanager
@@ -147,6 +150,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
     threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
     newsletter_job.start()
+    results_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     yield
@@ -1128,6 +1132,48 @@ def filings_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
         need(profile, "filings", "Filing alerts")
     filings.set_alert(profile["id"], req.on)
     return {"alerts": req.on}
+
+
+# ---------- results calendar (India and US) ----------
+_results_built: set[str] = set()
+
+
+def results_ready(region: str):
+    """Build a region's calendar now when none is stored yet (the first visit after it ships), once per process."""
+    if results_calendar.load(region)["at"] or region in _results_built:
+        return
+    _results_built.add(region)
+    try:
+        results_job.refresh(region)
+    except Exception as e:
+        print("results calendar build:", str(e)[:160])
+
+
+@app.get("/research/results")
+def results_page(region: str = "IN", scope: str = "mine", q: str = "", profile=Depends(current_profile)):
+    """Results dates this week and next: the user's stocks (watchlist, notebooks, paper sessions) or every company."""
+    r = research_routes.region_of(region)
+    results_ready(r)
+    return research_routes.ok(results_calendar.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30]))
+
+
+@app.get("/research/results/{region}/{symbol}")
+def results_company(region: str, symbol: str, profile=Depends(current_profile)):
+    """One company's next results date and its latest one (with the filing, once it's out)."""
+    return research_routes.ok(results_calendar.lookup(research_routes.region_of(region), research_routes.symbol_of(symbol)))
+
+
+@app.put("/research/results/alerts")
+def results_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
+    results_calendar.set_alerts(profile["id"], req.on)
+    return {"alerts": req.on}
+
+
+@app.post("/admin/results/refresh")
+def admin_results_refresh(_=Depends(admin.admin_profile)):
+    """Refresh both regions' results calendars now, and say what each feed answered."""
+    who = results_calendar.trackers()
+    return {region: results_job.refresh(region, who) for region in results_calendar.REGIONS} | {"job": results_job.status}
 
 
 # ---------- company deep dive: business, capex and growth (Pro, India) ----------

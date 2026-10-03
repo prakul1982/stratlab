@@ -47,10 +47,24 @@ def fake_finnhub(reject: bool = False) -> httpx.MockTransport:
                   "/api/v1/search": {"result": [{"symbol": "NVDA", "description": "NVIDIA CORP", "type": "Common Stock"},
                                                 {"symbol": "NVDA.SW", "description": "NVIDIA CORP", "type": "Common Stock"}]},
                   "/api/v1/news": NEWS}
+        if p == "/api/v1/calendar/earnings" and not sym:
+            return httpx.Response(200, json={"earningsCalendar": us_calendar()})
         if p in routes:
             return httpx.Response(200, json=routes[p])
         return httpx.Response(404, json={})
     return httpx.MockTransport(handler)
+
+
+def us_calendar(today=None) -> list[dict]:
+    """The whole US results calendar, relative to today: AAPL tomorrow after the close, NVDA next week, and MSFT,
+    which reported two days ago (its row carries the reported numbers and, like the real feed, the estimates)."""
+    from datetime import date, timedelta
+    t = today or date.today()
+    return [{"symbol": "AAPL", "date": (t + timedelta(days=1)).isoformat(), "hour": "amc", "quarter": 4, "year": 2026, "epsEstimate": 1.6},
+            {"symbol": "NVDA", "date": (t + timedelta(days=8)).isoformat(), "hour": "amc", "quarter": 3, "year": 2026},
+            {"symbol": "MSFT", "date": (t - timedelta(days=2)).isoformat(), "hour": "amc", "quarter": 1, "year": 2027,
+             "epsActual": 3.21, "epsEstimate": 3.1, "revenueActual": 69_400_000_000, "revenueEstimate": 68e9},
+            {"symbol": "bad symbol!", "date": t.isoformat()}, {"symbol": "XYZ", "date": "someday"}]
 
 
 def fake_screener() -> httpx.MockTransport:
