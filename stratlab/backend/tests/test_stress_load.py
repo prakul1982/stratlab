@@ -3,7 +3,6 @@ run on every change; `python -m tests.load_test --users 300 --think 3 10` for th
 import asyncio
 import socket
 
-import pytest
 
 from app.guard import HeavyGate
 

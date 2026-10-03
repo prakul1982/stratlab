@@ -117,7 +117,7 @@ def test_import_routes_option_structures(monkeypatch):
         assert r["kind"] == "options" and r["strategy"]["structure"] == "iron_fly" and r["strategy"]["recenter"]["enabled"]
         assert r["notes"] and r["used_ai"]
         exact = '{"stratlab": "options", "strategy": %s}' % __import__("json").dumps(STRAT)
-        r = c.post("/options/import", json={"text": exact}).json()
+        r = c.post("/import/strategy", json={"text": exact}).json()
         assert r["strategy"]["underlying"] == "NIFTY" and not r["used_ai"]
     finally:
         app.dependency_overrides.clear()

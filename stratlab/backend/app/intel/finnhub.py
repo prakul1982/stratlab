@@ -65,6 +65,12 @@ class Finnhub(Source):
                      **{"from": today.isoformat(), "to": (today + timedelta(days=120)).isoformat()}) or {}
         return r.get("earningsCalendar") or []
 
+    def earnings_between(self, frm: date, to: date, ttl: float = 3600) -> list:
+        """Every US company's results dates between two days (one call for the whole market); once a company has
+        reported, its row also carries the reported EPS and revenue."""
+        r = self.get("/calendar/earnings", ttl=ttl, **{"from": frm.isoformat(), "to": to.isoformat()}) or {}
+        return r.get("earningsCalendar") or []
+
     def search(self, q: str) -> list:
         return (self.get("/search", ttl=24 * 3600, q=q) or {}).get("result") or []
 

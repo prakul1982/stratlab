@@ -23,7 +23,7 @@ from app.kite_service import TickHub
 from app.live import LiveManager
 from app.options.data import OptionsData
 from app.options.session import IST
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from tests import fake_kite
 from tests.fake_options_kite import FakeOptionsKite
 from tests.fake_db import FakeSupabase, headers
@@ -83,6 +83,19 @@ class Switch(httpx.BaseTransport):
         return self.inner.handle_request(request)
 
 
+def board_meetings(today=None) -> list[dict]:
+    """The exchange's board-meeting list, relative to today: RELIANCE's results in two days, TCS's next week, and an
+    INFY meeting about a dividend (not results)."""
+    t = today or date.today()
+    f = lambda d: (t + timedelta(days=d)).strftime("%d-%b-%Y")
+    return [{"bm_symbol": "RELIANCE", "sm_name": "Reliance Industries Limited", "bm_date": f(2), "bm_purpose": "Financial Results",
+             "bm_desc": "To consider and approve the financial results for the quarter ended September 30, 2026",
+             "attachment": "https://nsearchives.nseindia.com/bm.pdf"},
+            {"bm_symbol": "TCS", "sm_name": "Tata Consultancy Services Limited", "bm_date": f(9), "bm_purpose": "Financial Results/Dividend",
+             "bm_desc": "Financial results and interim dividend"},
+            {"bm_symbol": "INFY", "sm_name": "Infosys Limited", "bm_date": f(3), "bm_purpose": "Dividend", "bm_desc": "Interim dividend"}]
+
+
 def _nse(sw=None):
     rows = [{"symbol": "RELIANCE", "desc": "Investor Presentation", "attchmntText": "Investor presentation for Q1 FY27",
              "sort_date": "2026-08-01 18:10:05", "seq_id": "1", "attchmntFile": "https://nsearchives.nseindia.com/p.pdf"},
@@ -97,6 +110,8 @@ def _nse(sw=None):
             return httpx.Response(200, text="<html></html>", headers={"set-cookie": "nsit=abc; Path=/"})
         if r.url.path == "/api/corporate-announcements":
             return httpx.Response(200, json=rows)
+        if r.url.path == "/api/corporate-board-meetings":
+            return httpx.Response(200, json=board_meetings())
         if r.url.path == "/api/equity-stockIndices":
             idx = r.url.params.get("index", "")
             names = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC"] if idx == "NIFTY 500" else []
@@ -137,6 +152,10 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     db._profiles.clear()
     main._results.clear()                       # shared scan and rotation answers from an earlier test
     main._bse_map.clear()                       # the BSE-only list another test loaded
+    from app import stock_pages
+    stock_pages._companies.clear()              # public company pages: the list and built pages another test made
+    main.stock_page_store.mem.clear()
+    main.stock_page_store.recent.clear()
     from app import scan as _scan
     _scan._cache.clear()                        # daily bars another test cached under the same instrument id
     main.trading_calendar._holiday_cache.clear()

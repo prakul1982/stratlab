@@ -4,7 +4,6 @@ every page and action of the app is used. Each must answer with a clear message 
 never a crash, never broken data, never a provider's name, never a number that isn't a number.
 
 STRESS_FULL=1 runs every failure mode; by default each source is tried down and sending junk."""
-import json
 import math
 import os
 import re
@@ -30,7 +29,7 @@ PAGES = [("GET", "/me", {}), ("GET", "/markets", {}), ("GET", "/notebooks", {}),
          ("GET", "/research/chart/IN/RELIANCE", {}), ("GET", "/research/chart/US/AAPL", {}),
          ("GET", "/research/deep/RELIANCE", {}), ("GET", "/research/deep/RELIANCE/deck", {}),
          ("GET", "/research/filings/RELIANCE", {}), ("GET", "/research/filings", {}), ("GET", "/research/investor", {}),
-         ("GET", "/research/watchlist", {}), ("GET", "/research/scan/sets", {"region": "IN"}), ("GET", "/research/sources", {}),
+         ("GET", "/research/watchlist", {}), ("GET", "/research/scan/sets", {"region": "IN"}),
          ("GET", "/notebooks/{nid}", {}), ("GET", "/library", {}), ("GET", "/groups", {}), ("GET", "/plans", {})]
 
 

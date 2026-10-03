@@ -54,7 +54,7 @@ export const FEATURES: Feature[] = [
     words: "share link card image whatsapp twitter public verdict" },
   { id: "alerts", title: "Alerts and the daily report", what: "Telegram or email for each trade, and a report after the market closes.", to: "/account",
     words: "alerts telegram email notifications daily report close", home: true, goal: "trade" },
-  { id: "themes", title: "Themes", what: "Map a sector and get a ranked shortlist.", to: "/research/themes", words: "themes sector industry shortlist ev defence banks", goal: "understand" },
+  { id: "themes", title: "Themes", what: "Map a sector: who's involved and where the margin sits.", to: "/research/themes", words: "themes sector industry shortlist ev defence banks", goal: "understand" },
   { id: "pulse", title: "Market pulse", what: "Index levels, headlines and today's mood.", to: "/research/pulse", words: "market pulse today news mood indices" },
   { id: "rcompare", title: "Compare two companies", what: "Side by side, with an AI read.", to: "/research/compare", words: "compare companies versus vs", home: true, goal: "understand" },
   { id: "watchlist", title: "Watchlist", what: "Companies you're keeping an eye on.", to: "/research/watchlist", words: "watchlist saved favourites" },

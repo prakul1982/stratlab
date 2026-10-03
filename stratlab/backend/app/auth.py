@@ -64,5 +64,7 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
     profile = db.cached_profile(uid, email)
     profile["_paid_plan"] = effective_plan(profile)
     profile["_plan"] = access_plan(profile)       # Pro for everyone during the launch offer
-    profile["_email_verified"] = verified
+    # the profile keeps the address from sign-up; trust it only while it's still the one Google just proved
+    same = (profile.get("email") or "").strip().lower() == (email or "").strip().lower()
+    profile["_email_verified"] = verified and same
     return profile

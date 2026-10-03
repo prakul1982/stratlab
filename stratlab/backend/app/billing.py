@@ -215,12 +215,22 @@ def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str)
         print("could not fetch the payment for its invoice:", e)
 
 
-def handle_webhook(body: bytes, signature: str):
+def handle_webhook(body: bytes, signature: str, event_id: str = ""):
+    """Act on a signed Razorpay event. Each event id is handled once, so a captured event replayed later does nothing."""
     if not settings.RAZORPAY_WEBHOOK_SECRET or not signature:
         # an empty secret would let anyone forge a valid signature
         raise SignatureVerificationError("Webhook secret is not configured.")
     client().utility.verify_webhook_signature(body.decode(errors="replace"), _sig(signature), settings.RAZORPAY_WEBHOOK_SECRET)
     event = json.loads(body)
+    seen = f"rzp-event:{event_id[:80]}" if event_id else ""
+    if seen and db.get_setting(seen):
+        return
+    _act(event)
+    if seen:                                   # marked only once handled, so Razorpay's retry of a failed one still runs
+        db.set_setting(seen, "1")
+
+
+def _act(event: dict):
     name = event.get("event", "")
     sub = (event.get("payload", {}).get("subscription") or {}).get("entity")
     if not sub:

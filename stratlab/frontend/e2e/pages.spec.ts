@@ -66,7 +66,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/investor", "Investor"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -77,6 +77,16 @@ for (const [path, ready] of PAGES) {
     if (info.project.name === "phone") await touchable(page);
   });
 }
+
+test("results calendar: every company's dates, and the company page links to it", async ({ page }, info) => {
+  await sane(page, await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called"));
+  await expect(page.getByRole("link", { name: "RELIANCE" }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Financial Results").first()).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await expect(page.getByRole("link", { name: "RELIANCE" }).first()).toHaveAttribute("href", "/research/IN/RELIANCE");
+  await page.goto("/research/IN/RELIANCE");
+  await expect(page.getByRole("link", { name: /^Results on / })).toBeVisible({ timeout: 30_000 });
+});
 
 test("losses hang below the zero line, with exact labels (company page)", async ({ page }) => {
   const errors = await open(page, "/research/IN/TCS", "Sales and profit, by year");
@@ -100,6 +110,29 @@ test("a US deep dive is in dollars, from the SEC's filings", async ({ page }) =>
   await expect(page.getByText("Read the annual report and releases")).toBeVisible();
   await expect(page.getByText("Check past releases")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/₹|crore/);
+  await sane(page, errors);
+});
+
+// Public company pages are plain HTML from the API (the site's host forwards /stocks/* there), for search engines.
+for (const [path, name, symbol] of [["/stocks/in/RELIANCE", "Reliance Industries", "RELIANCE"], ["/stocks/us/AAPL", "Apple Inc.", "AAPL"]]) {
+  test(`public company page ${path}`, async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://127.0.0.1:8765" + path);
+    await expect(page.locator("h1")).toContainText(name);
+    await expect(page.getByRole("link", { name: `Test a strategy on ${symbol}` })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open the full deep dive" })).toBeVisible();
+    await expect(page.getByText(/As of \d+ \w+ \d{4}/).first()).toBeVisible();
+    expect(errors).toEqual([]);
+    const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));
+    expect(scroll, "the page scrolls sideways").toBeLessThanOrEqual(width + 1);
+    expect(await page.locator("main").innerText()).not.toMatch(/\bNaN\b|\bundefined\b|\bnull\b|Infinity/);
+    if (info.project.name === "phone") await touchable(page);
+  });
+}
+
+test("a company page's test link opens a new test on that company", async ({ page }) => {
+  const errors = await open(page, "/new?market=IN&symbol=RELIANCE", "testing a strategy on RELIANCE");
   await sane(page, errors);
 });
 

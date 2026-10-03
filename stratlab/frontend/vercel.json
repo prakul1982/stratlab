@@ -20,7 +20,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io; frame-src https://*.razorpay.com; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://stratlab-production-ca25.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io; frame-src https://*.razorpay.com; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
         },
         {
           "key": "Permissions-Policy",
@@ -46,6 +46,18 @@
     {
       "source": "/v/:token",
       "destination": "https://stratlab-production-ca25.up.railway.app/v/:token"
+    },
+    {
+      "source": "/stocks/:path*",
+      "destination": "https://stratlab-production-ca25.up.railway.app/stocks/:path*"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://stratlab-production-ca25.up.railway.app/sitemap.xml"
+    },
+    {
+      "source": "/sitemaps/:path*",
+      "destination": "https://stratlab-production-ca25.up.railway.app/sitemaps/:path*"
     },
     {
       "source": "/(.*)",

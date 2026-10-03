@@ -96,6 +96,9 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
     Brevo or Resend key is set (they work where outgoing mail ports are blocked), otherwise SMTP."""
     if not to:
         return
+    one_line = lambda v: " ".join(str(v).split())         # a line break in a header would start a new header
+    subject = one_line(subject)
+    headers = {k: one_line(v) for k, v in (headers or {}).items()} or None
     if settings.BREVO_API_KEY:
         _send_brevo(to, subject, body, html, headers)
         return

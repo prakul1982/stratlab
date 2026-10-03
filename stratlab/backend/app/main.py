@@ -51,9 +51,10 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, weekly
+from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_pages, weekly
 from .newsletter import job as news
-from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
+from . import results as results_calendar
+from .models import (ShareReq, GroupLiveReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
@@ -121,6 +122,8 @@ filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text,
                                    can_alert=_filing_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
 newsletter_job = news.Job()
+# the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
+results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
 
 
 @asynccontextmanager
@@ -147,8 +150,10 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
     threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
     newsletter_job.start()
+    results_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
+    threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
     yield
 
 
@@ -593,12 +598,32 @@ def send_email_confirmation(profile=Depends(current_profile)):
     return {"confirmed": False, "sent_to": to}
 
 
+def _confirm_link_bad() -> HTMLResponse:
+    return mail_page("This link doesn't work", "It may have expired (links work for 3 days). Ask for a new one in Account.", 400)
+
+
 @app.get("/email/confirm", response_class=HTMLResponse)
+def confirm_email_page(t: str = ""):
+    """Asks before confirming: mail scanners open every link, and shouldn't sign anyone up for newsletters."""
+    got = mail_tokens.read(t, "confirm")
+    if not got or not got[1]:
+        return _confirm_link_bad()
+    e = html_escape
+    return HTMLResponse(content=(
+        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>Confirm your email</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
+        f"<h1 style='font-size:1.3rem'>Send StratLab newsletters to {e(got[1])}?</h1>"
+        f"<form method=post action='/email/confirm?t={e(t)}'>"
+        f"<button style='font:inherit;padding:.6rem 1.2rem;border-radius:8px;border:1px solid #111;background:#111;color:#fff;cursor:pointer'>"
+        f"Confirm my email</button></form>"
+        f"<p>If you didn't ask for this, close this page.</p></body>"))
+
+
+@app.post("/email/confirm", response_class=HTMLResponse)
 def confirm_email(t: str = ""):
     got = mail_tokens.read(t, "confirm")
     if not got or not got[1]:
-        return mail_page("This link doesn't work", "It may have expired (links work for 3 days). "
-                         "Ask for a new one in Account.", 400)
+        return _confirm_link_bad()
     uid, address = got
     db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())
     return mail_page("Email confirmed", f"Newsletters you choose in Account will go to {address}.")
@@ -1130,6 +1155,48 @@ def filings_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
     return {"alerts": req.on}
 
 
+# ---------- results calendar (India and US) ----------
+_results_built: set[str] = set()
+
+
+def results_ready(region: str):
+    """Build a region's calendar now when none is stored yet (the first visit after it ships), once per process."""
+    if results_calendar.load(region)["at"] or region in _results_built:
+        return
+    _results_built.add(region)
+    try:
+        results_job.refresh(region)
+    except Exception as e:
+        print("results calendar build:", str(e)[:160])
+
+
+@app.get("/research/results")
+def results_page(region: str = "IN", scope: str = "mine", q: str = "", profile=Depends(current_profile)):
+    """Results dates this week and next: the user's stocks (watchlist, notebooks, paper sessions) or every company."""
+    r = research_routes.region_of(region)
+    results_ready(r)
+    return research_routes.ok(results_calendar.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30]))
+
+
+@app.get("/research/results/{region}/{symbol}")
+def results_company(region: str, symbol: str, profile=Depends(current_profile)):
+    """One company's next results date and its latest one (with the filing, once it's out)."""
+    return research_routes.ok(results_calendar.lookup(research_routes.region_of(region), research_routes.symbol_of(symbol)))
+
+
+@app.put("/research/results/alerts")
+def results_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
+    results_calendar.set_alerts(profile["id"], req.on)
+    return {"alerts": req.on}
+
+
+@app.post("/admin/results/refresh")
+def admin_results_refresh(_=Depends(admin.admin_profile)):
+    """Refresh both regions' results calendars now, and say what each feed answered."""
+    who = results_calendar.trackers()
+    return {region: results_job.refresh(region, who) for region in results_calendar.REGIONS} | {"job": results_job.status}
+
+
 # ---------- company deep dive: business, capex and growth (Pro, India) ----------
 deep_docs = Docs()
 
@@ -1224,7 +1291,7 @@ def deep_view(sym: str, base: dict) -> dict:
             "industry_measures": industry.measures(p, sym),
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
-            "card": card_view, "card_stale": not report_card.fresh(card), "trend": base["trend"], "filings": base["filings"],
+            "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym),
             "ai": True, "report_card": True,
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
@@ -1366,7 +1433,7 @@ def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", years
     key = f"US:{sym}" if us else sym
     years = deep_years(years)
     base = deep_base(sym, region, years)
-    if report_card.fresh(report_card.stored(key)) and not refresh:
+    if deepdive.fresh(report_card.stored(key)) and not refresh:
         return ok(deep_view(sym, base))
     kind = "earnings_release" if us else "transcript"
     if not any(d["kind"] == kind for d in base["docs"]):
@@ -1515,6 +1582,97 @@ def public_verdict_page(token: str):
     if not snap:
         return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
     return HTMLResponse(public.preview_html(token, snap, public.image(token) is not None))
+
+
+# ---------- public company pages, for search engines ----------
+def stock_page_facts(region: str, co: dict) -> dict | None:
+    """One company's public page from the deep dive's cheap sources: reported numbers, the filings list and daily
+    prices. Never AI. None when the sources have no page for it; a source that is down or busy raises."""
+    sym = co["sym"]
+    try:
+        if region == "US":
+            p = dict(sec_feed.company(sym))
+            try:
+                m = research_hub.yahoo.meta(sym)
+            except Exception:             # no price: the reported numbers still stand
+                m = {}
+            p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+            items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
+            exchange = "Listed in the US"
+        else:
+            p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
+            try:
+                items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"]}
+                         for i in filings_feed.announcements(sym)]
+            except Exception:
+                items = []
+            exchange = "BSE" if co["bse"] else "NSE"
+    except SourceError as e:
+        if e.busy:
+            raise
+        return None                       # no company page at the source
+    trend = prices = None
+    try:
+        ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or sym}])
+        bars = scan._bars(markets, ids[0]) if ids else []
+        if bars:
+            trend, prices = scan.analyse(bars), stock_pages.price_facts(bars)
+    except Exception:                     # no prices: the page goes without the price facts
+        pass
+    nums = deepdive.numbers(p)
+    return stock_pages.facts(region, sym, p, nums, screener_summary(p), trend, prices, items, exchange)
+
+
+stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
+SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
+
+
+def stock_list_job():
+    """Once a day: the lists of listed companies (India, NSE and BSE-only; the US), for the sitemaps and pages."""
+    time.sleep(240)                         # after startup traffic
+    while True:
+        for region, fn in (("IN", india_listing), ("US", _sec_companies)):
+            try:
+                stock_pages.save_list(region, [{"symbol": r["symbol"], "name": r.get("name")} for r in fn()])
+            except Exception as e:
+                print(f"stock list {region} failed:", str(e)[:160])
+        time.sleep(24 * 3600)
+
+
+@app.get("/stocks/{region}/{symbol}", response_class=HTMLResponse)
+def stock_page(region: str, symbol: str):
+    """A listed company's public page: facts only, built from stored or cheap data, never AI."""
+    r = stock_pages.REGIONS.get(region.lower())
+    hit = stock_pages.find(r, symbol) if r else None
+    if not hit:
+        return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
+    sym, co = hit
+    if region != region.lower() or symbol != sym:          # one address per company
+        return RedirectResponse(stock_pages.path(r, sym), status_code=301)
+    try:
+        page = stock_page_store.html(r, sym, co)
+    except stock_pages.Busy:
+        return JSONResponse(status_code=503, headers={"Retry-After": "600"},
+                            content={"detail": {"code": "busy", "message": "This page is being prepared. Try again in a few minutes."}})
+    return HTMLResponse(page, headers=SEO_HEADERS)
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    return Response(stock_pages.robots(), media_type="text/plain", headers=SEO_HEADERS)
+
+
+@app.get("/sitemap.xml")
+def sitemap_index():
+    return Response(stock_pages.sitemap_index(), media_type="application/xml", headers=SEO_HEADERS)
+
+
+@app.get("/sitemaps/{name}.xml")
+def sitemap_file(name: str):
+    xml = stock_pages.sitemap(name)
+    if xml is None:
+        err(404, "not_found", "No such sitemap.")
+    return Response(xml, media_type="application/xml", headers=SEO_HEADERS)
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}")
@@ -1785,12 +1943,6 @@ def import_options(text: str, profile) -> dict:
             "usage": {"ai_used": used + 1, "ai_limit": limit}}
 
 
-@app.post("/options/import")
-def options_import(req: OptionImportReq, profile=Depends(current_profile)):
-    fmt = importer.detect(req.text, "")
-    return {"source": fmt, "source_name": importer.FORMATS[fmt], **import_options(req.text, profile)}
-
-
 # ---------- billing ----------
 @app.post("/billing/subscribe")
 def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
@@ -1892,7 +2044,7 @@ async def webhook(request: Request):
         print("razorpay webhook refused: RAZORPAY_WEBHOOK_SECRET isn't set on the server")
         err(503, "webhook_not_set", "Webhook secret isn't set on the server: add RAZORPAY_WEBHOOK_SECRET and redeploy.")
     try:
-        billing.handle_webhook(body, request.headers.get("X-Razorpay-Signature", ""))
+        billing.handle_webhook(body, request.headers.get("X-Razorpay-Signature", ""), request.headers.get("X-Razorpay-Event-Id", ""))
     except SignatureVerificationError:
         print("razorpay webhook refused: signature doesn't match RAZORPAY_WEBHOOK_SECRET")
         err(400, "bad_signature", "Signature doesn't match: RAZORPAY_WEBHOOK_SECRET on the server must be exactly the "

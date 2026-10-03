@@ -24,7 +24,6 @@ export interface Company {
   pros?: string[]; cons?: string[];
   earnings: { period: string; actual: number; estimate: number; surprise_pct: number }[];
   next_earnings: { date: string; eps_estimate: number | null } | null;
-  analysts: { strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; period: string } | null;
   insider: { net: number; rows: { name: string; change: number; date: string }[] } | null;
   peers: string[]; news: NewsItem[];
   about: { wiki: { title: string; description?: string; extract: string; url: string } | null; profile: string | null };
@@ -35,7 +34,7 @@ export interface Company {
 export interface Idea { title: string; text: string; why: string }
 export interface CompanyAI {
   summary: string; scores: Record<"moat" | "growth" | "value" | "momentum" | "health", number | null>;
-  composite: number | null; valuation: "CHEAP" | "FAIR" | "RICH" | null; valuation_note: string;
+  valuation_note: string;
   bull: string[]; bear: string[]; segments: { label: string; share: number }[]; position: string; watch: string[];
   ideas: Idea[]; generated_at: number;
 }
@@ -44,7 +43,7 @@ export interface SectorAI {
   sector: string; summary: string; market_size: string; cagr: number | null; cagr_note: string;
   etfs: { ticker: string; name: string }[]; sub_themes: { name: string; detail: string }[]; core: string;
   clusters: { name: string; companies: Co[] }[];
-  screen: { name: string; ticker: string; layer: string; composite: number | null; one_line: string }[];
+  screen: { name: string; ticker: string; layer: string; one_line: string }[];
   value_chain: { layer: string; description: string; companies: Co[] }[];
   tailwinds: string[]; risks: string[]; generated_at: number;
 }
@@ -55,8 +54,7 @@ export interface PulseAI {
   themes: { theme: string; detail: string; example: string }[]; generated_at: number;
 }
 export interface CompareAI {
-  verdict: string; winner: string; differences: string[];
-  a: { composite: number | null; valuation: string | null }; b: { composite: number | null; valuation: string | null };
+  verdict: string; differences: string[];
   generated_at?: number; error?: string;
 }
 export interface WatchItem { region: Region; symbol: string; name: string | null }

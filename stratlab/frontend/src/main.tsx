@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useCallback, useState, type ComponentType } from "react";
+import { lazy, StrictMode, Suspense, useCallback, useEffect, useState, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "@fontsource/montserrat/300.css";
@@ -13,7 +13,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import { AppProvider, useApp } from "./lib/app";
-import { SESSION_KEY } from "./lib/api";
+import { NEXT_PAGE, SESSION_KEY } from "./lib/api";
 import { registerPwa } from "./lib/pwa";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
@@ -61,6 +61,7 @@ const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
 const FilingsPage = page(research, "FilingsPage");
+const ResultsPage = page(research, "ResultsPage");
 const CompanyPage = page(research, "CompanyPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
@@ -120,6 +121,13 @@ function PromoBanner({ until }: { until: string }) {
 function Routed() {
   const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
+  const nav = useNavigate();
+  useEffect(() => {
+    if (!session) return;
+    let next: string | null = null;
+    try { next = sessionStorage.getItem(NEXT_PAGE); sessionStorage.removeItem(NEXT_PAGE); } catch { /* storage off */ }
+    if (next && next.startsWith("/") && !next.startsWith("//")) nav(next, { replace: true });   // own pages only
+  }, [session, nav]);
   // shared verdicts are public: no sign-in needed
   if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) return <Suspense fallback={<Loading label="Opening" />}><LegalPage /></Suspense>;   // policies are public: no sign-in needed
   if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;
@@ -157,6 +165,7 @@ function Routed() {
         <Route path="/research/scan" element={<ScanPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
+        <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/IN/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/US/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/investor" element={<InvestorHomePage />} />

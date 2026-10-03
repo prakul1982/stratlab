@@ -2,6 +2,12 @@
 
 ## October 2026
 
+### Newsletters, and research reads that stay factual
+- **Newsletters:** the Market Brief for India and the US after each close (or a weekly digest on Saturday morning), and My Stocks with what changed for the stocks in your watchlist, notebooks and paper trading. Choose daily, weekly or off in **Account → Newsletters**; past issues are on the **News** page. The weekly Market Brief is free, the daily one is on Basic and My Stocks on Pro.
+- **Email you can trust:** newsletters go only to an address confirmed from a link, every email has a one-click unsubscribe (the page asks first, so mail scanners opening links don't unsubscribe anyone), and email can go through Brevo as well as Resend or SMTP.
+- **Research reads state facts, not advice:** no buy or sell calls, price targets, cheap or expensive labels, overall ratings or ranked stock lists; themes list the companies along the chain in value-chain order.
+- **A weekly summary email for the owner** every Monday at 9:00 IST.
+
 ### BSE-only companies, and a phone pass
 - **Companies listed only on BSE work like NSE ones:** search, the company page, charts, quotes, backtests, groups and paper trading take them by BSE symbol or code. Their filings and red flags come from BSE's own announcements feed, and the deep dive reads their presentations and call transcripts from BSE, so the document read, report card and slides work too. A daily check of BSE's feed joins **Check every feature**.
 - **Phones:** wide tables keep their first column in place and show an edge when there's more to the side; menus, checkboxes and buttons are bigger to tap. The browser tests now fail if any control on any page is too small to tap on a phone.

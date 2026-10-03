@@ -103,11 +103,24 @@ def stock_lines(r: dict, since: str) -> list[dict]:
     return lines
 
 
+def result_item(r: dict) -> dict:
+    """One results date, or once filed, the filing and the numbers it states."""
+    o = r.get("out")
+    if o:
+        lines = [{"text": f"{n['label']}: {n['value']} (as stated in the filing)", "url": None} for n in o.get("numbers") or []]
+        return _item(f"{r['symbol']}: results filed {_day(str(o.get('at') or r['date']))}. {o.get('title') or ''}".strip(),
+                     o.get("url") or stock_url(r["region"], r["symbol"]), lines)
+    when = f", {r['when']}" if r.get("when") else ""
+    return _item(f"{r['symbol']}: {r['purpose']} on {_day(r['date'])}{when}", stock_url(r["region"], r["symbol"]))
+
+
 def stock_sections(f: dict) -> list[dict]:
     out = []
     if f.get("stocks"):
         out.append({"title": "What changed for your stocks", "items": [
             _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])) for r in f["stocks"]]})
+    if f.get("results"):
+        out.append({"title": "Results this week", "items": [result_item(r) for r in f["results"]]})
     if f.get("unchanged"):
         out.append({"title": "No change", "items": [_item(", ".join(f["unchanged"]))]})
     if f.get("paper"):
@@ -130,6 +143,9 @@ def subject(f: dict) -> str:
         tail = f": {lead['name']} {_pct(lead['change_pct'])}" if lead and lead.get("change_pct") is not None else ""
         return f"Market Brief {REGION_NAME[f['region']]}, {when}{tail}"
     n = len(f.get("stocks") or [])
+    k = len({r["symbol"] for r in f.get("results") or []})
+    if not n and k:
+        return f"My Stocks, {when}: results this week for {k} of your stocks"
     return f"My Stocks, {when}: {n} of your stocks {'has' if n == 1 else 'have'} news"
 
 
@@ -152,9 +168,15 @@ def template(f: dict) -> str:
         return " ".join(parts) or f"Here is the {REGION_NAME[f['region']]} market {span}."
     n = len(f.get("stocks") or [])
     flags = sum(len(r.get("filings") or []) for r in f.get("stocks") or [])
-    parts = [f"{n} of your stocks had something new {span}."]
+    parts = [f"{n} of your stocks had something new {span}."] if n or not f.get("results") else []
     if flags:
         parts.append(f"{flags} new filing{'s' if flags != 1 else ''} to look at.")
+    due = len({r["symbol"] for r in f.get("results") or [] if not r.get("out")})
+    filed = len({r["symbol"] for r in f.get("results") or [] if r.get("out")})
+    if due:
+        parts.append(f"{due} of your stocks {'has' if due == 1 else 'have'} a results date this week.")
+    if filed:
+        parts.append(f"{filed} filed {'its' if filed == 1 else 'their'} results.")
     return " ".join(parts)
 
 
@@ -208,8 +230,10 @@ def summary(f: dict) -> dict:
 
 # ---------- the email ----------
 def _a(url: str | None, text: str) -> str:
+    """A link, or plain text when the url isn't a web address (a feed's javascript: or data: link never gets in)."""
     t = escape(text)
-    return f'<a href="{escape(url)}" style="color:#1a56db;text-decoration:none">{t}</a>' if url else t
+    ok = isinstance(url, str) and url.lower().startswith(("https://", "http://"))
+    return f'<a href="{escape(url)}" style="color:#1a56db;text-decoration:none">{t}</a>' if ok else t
 
 
 def render(issue: dict) -> tuple[str, str]:

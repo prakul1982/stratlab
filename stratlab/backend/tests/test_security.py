@@ -1,6 +1,5 @@
 """Security sweep: every route refuses callers it shouldn't serve, users can't reach each other's things, and hostile
 input can't escape into HTML, links or other hosts."""
-import json
 
 import pytest
 from fastapi.routing import APIRoute
@@ -9,7 +8,8 @@ from app import main
 from tests import world as W
 
 PUBLIC = {"/health", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/{token}.png", "/v/{token}", "/billing/webhook",
-          "/admin/kite/callback", "/unsubscribe", "/email/confirm"}
+          "/admin/kite/callback", "/unsubscribe", "/email/confirm",
+          "/stocks/{region}/{symbol}", "/robots.txt", "/sitemap.xml", "/sitemaps/{name}.xml"}   # public company pages, for search engines
 
 
 def _deps(d) -> set:
@@ -122,3 +122,61 @@ def test_a_made_up_token_costs_one_sign_in_lookup_not_one_per_request(client, mo
         assert client.get("/me", headers={"Authorization": "Bearer made-up-123"}).status_code == 401
     assert calls == ["made-up-123"]
     auth._rejected.clear()
+
+
+def test_a_profile_still_holding_the_admins_signup_address_is_not_admin(client):
+    """The profile keeps the address from sign-up. If the account now signs in with another address (changed after
+    signing up), the old one in the profile proves nothing."""
+    from app import db
+    row = next(r for r in db.sb().tables["profiles"] if r["id"] == "u-pro")
+    row["email"] = "owner@example.com"
+    db.forget_profile("u-pro")
+    try:
+        r = client.get("/admin/overview", headers=W.headers("pro-token"))
+        assert r.status_code == 403 and r.json()["detail"]["code"] == "not_admin"
+    finally:
+        row["email"] = "pro@example.com"
+        db.forget_profile("u-pro")
+
+
+def test_newsletter_links_are_only_web_addresses():
+    from app.newsletter import write
+    issue = {"id": "market.IN.2026-10-02", "subject": "S", "summary": "", "sections": [{"title": "Headlines", "items": [
+        {"text": "<b>x</b>", "url": "javascript:alert(document.cookie)", "lines": [
+            {"text": "y", "url": "data:text/html,<script>alert(1)</script>"}, {"text": "ok", "url": "https://example.com/a?b=1&c=2"}]}]}]}
+    html, _ = write.render(issue)
+    assert "javascript:" not in html and "data:text" not in html and "&lt;b&gt;x&lt;/b&gt;" in html
+    assert 'href="https://example.com/a?b=1&amp;c=2"' in html
+
+
+def test_email_subjects_and_headers_cannot_carry_line_breaks(monkeypatch):
+    from app import alerts
+    from app.config import settings
+    sent = []
+
+    class SMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def starttls(self): pass
+        def login(self, *a): pass
+        def send_message(self, msg): sent.append(msg)
+    for k in ("BREVO_API_KEY", "RESEND_API_KEY"):
+        monkeypatch.setattr(settings, k, "")
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(settings, "SMTP_USER", "bot@example.com")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "pw")
+    monkeypatch.setattr(settings, "SMTP_PORT", 587)
+    monkeypatch.setattr(alerts.smtplib, "SMTP", SMTP)
+    alerts.send_email("a@example.com", "Market Brief\r\nBcc: victim@example.com", "body",
+                      headers={"List-Unsubscribe": "<https://x/u>\r\nBcc: v@example.com"})
+    msg = sent[0]
+    assert msg["Bcc"] is None and msg["Subject"] == "Market Brief Bcc: victim@example.com"
+    assert "\n" not in msg["List-Unsubscribe"]
+
+
+def test_kite_callback_with_an_odd_state_is_refused_not_a_crash(client, monkeypatch):
+    from app import main
+    monkeypatch.setattr(main.kite, "login_state", "expected-state")
+    r = client.get("/admin/kite/callback", params={"status": "success", "request_token": "t", "state": "é"})
+    assert r.status_code == 403

@@ -204,10 +204,3 @@ def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
             items.append({"region": i.region, "symbol": symbol_of(i.symbol), "name": i.name})
     db.set_setting(_watch_key(profile), json.dumps({"items": items}))
     return {"items": items}
-
-
-@router.get("/sources")
-def sources(profile=Depends(current_profile)):
-    """Which research sources are set up, for the connection check."""
-    return {"finnhub": bool(settings.FINNHUB_API_KEY), "kite": hub.kite.ready() if hub and hub.kite else False,
-            "ai_per_day": settings.RESEARCH_AI_PER_DAY}

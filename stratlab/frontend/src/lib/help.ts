@@ -66,7 +66,7 @@ export const HELP = {
   groupPick: "Pick a ready-made group (index members as of 2025) or build your own, up to 50. Every experiment then runs the rules on all of them together: one pot of capital, a limit on how many positions are open at once, and a daily loss cap that counts the whole group. Anything the market no longer lists is skipped and named in the results. Paper trading runs the whole group live too (on 5-minute, 15-minute or 1-hour candles).",
   basket: "Runs these exact rules, over the same period and with the same costs, on about 10 well-known instruments from the same market. If most of them make money too, the idea is more likely a real pattern; if only your pick does, it was probably that chart.",
   researchPulse: "Live levels of the main indices, how far each is from its 52-week high, and an AI read of today's mood built only from those numbers and the latest headlines.",
-  researchThemes: "Type a sector or trend and the AI maps the companies involved, where the margin sits, and ranks the ones worth a closer look.",
+  researchThemes: "Type a sector or trend and the AI maps the companies involved, where the margin sits, and lists the companies along the chain, in value-chain order (not ranked).",
   research52: "Where today's price sits between the lowest and highest price of the past year. Near the top means it has been strong lately; near the bottom, weak.",
   researchMargins: "How much of each sale is left after each layer of costs: making the product, running the business, then tax and interest.",
   researchMetrics: "The main numbers, grouped. The dot on each line shows where this company sits in a typical range for its industry: blue is strong, orange is weak. The two ticks mark the edges of normal.",
