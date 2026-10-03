@@ -35,7 +35,8 @@ def _ids(registry, market: str, exclude: str | None) -> list[str]:
             break
         if market == "IN":
             # Kite ids are tokens: look the cash stock up by symbol
-            hit = next((r for r in prov.search(sym, allow_fno=False, limit=5) if r["symbol"] == sym and r.get("type") == "EQ" and r.get("exchange") == "NSE"), None)
+            hit = next((r for r in prov.search(sym, allow_fno=False, limit=5) if (r["symbol"] == sym or r.get("bse_code") == sym)
+                        and r.get("type") == "EQ" and r.get("exchange") in ("NSE", "BSE")), None)
             iid = hit["id"] if hit else None
         else:
             iid = f"{market}:{sym}"

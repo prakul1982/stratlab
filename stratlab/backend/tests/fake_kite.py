@@ -32,7 +32,7 @@ def _expiries(n=3):
 
 class FakeKiteConnect:
     def __init__(self):
-        self.rows = {"NSE": [], "NFO": [], "MCX": [], "BFO": [], "CDS": []}
+        self.rows = {"NSE": [], "NFO": [], "MCX": [], "BFO": [], "CDS": [], "BSE": []}
         token = 1000
         stocks = set()
         for p in universes.PRESETS["IN"]:
@@ -52,6 +52,12 @@ class FakeKiteConnect:
             token += 1
             self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": s.title(), "segment": "NSE",
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
+        # BSE: one company listed only there, Reliance (on NSE too, so it stays NSE's) and a bond (not a stock)
+        for ts, code, name, itype in (("TINYCO", 543210, "TINY CO", "EQ"), ("RELIANCE", 500325, "RELIANCE", "EQ"),
+                                      ("GSEC2030", 700001, "GOVT BOND", "GS")):
+            token += 1
+            self.rows["BSE"].append({"instrument_token": token, "exchange_token": code, "tradingsymbol": ts, "name": name,
+                                     "segment": "BSE", "instrument_type": itype, "lot_size": 1, "expiry": None, "strike": 0})
         for name, (_, gap, lot) in OPTIONS.items():
             for e in _expiries():
                 token += 1

@@ -58,6 +58,11 @@ def _groups(*groups) -> list[dict]:
     return out
 
 
+def _yahoo_in(sym: str) -> str:
+    """Yahoo's ticker for an Indian stock: NSE symbol.NS, or a BSE code.BO."""
+    return f"{sym}.BO" if sym.isdigit() else f"{sym}.NS"
+
+
 class Research:
     def __init__(self, kite: KiteService | None, finnhub=None, yahoo=None, screener=None, news=None, wiki=None):
         self.kite = kite
@@ -96,7 +101,7 @@ class Research:
         if region == "IN":
             if self._kite():
                 rows = [r for r in self.kite.search(q, allow_fno=False, limit=15) if r["type"] == "EQ"]
-                return [{"symbol": r["symbol"], "name": r["name"], "exchange": "NSE", "region": "IN"} for r in rows[:10]]
+                return [{"symbol": r["symbol"], "name": r["name"], "exchange": r["exchange"], "region": "IN"} for r in rows[:10]]
             rows = [x for x in self.yahoo.search(q) if str(x["symbol"]).endswith((".NS", ".BO"))
                     and x.get("quoteType") == "EQUITY"]
             return [{"symbol": x["symbol"].rsplit(".", 1)[0], "name": x.get("longname") or x.get("shortname"),
@@ -130,7 +135,7 @@ class Research:
         def one(sym):
             # Yahoo first: peers and watchlists would use up Finnhub's 60 calls a minute
             try:
-                return self.yahoo.meta(sym + ".NS" if region == "IN" else sym)
+                return self.yahoo.meta(_yahoo_in(sym) if region == "IN" else sym)
             except SourceError:
                 if region == "US" and self.finnhub.ready():
                     q = self.finnhub.quote(sym)
@@ -151,13 +156,13 @@ class Research:
         days = RANGES.get(rng, 366)
         symbol = symbol.strip().upper()
         if region == "IN" and self._kite():
-            inst = self.kite.by_symbol(symbol)
+            inst = self.kite.equity(symbol) or self.kite.by_symbol(symbol)
             if inst:
                 try:
                     return {"currency": "INR", "source": "Kite", "candles": self.kite.history(inst["token"], "1d", days)}
                 except Exception:
                     pass
-        ysym = symbol + ".NS" if region == "IN" and not symbol.startswith("^") else symbol
+        ysym = _yahoo_in(symbol) if region == "IN" and not symbol.startswith("^") else symbol
         c = self.yahoo.chart(ysym, "1d", days)
         return {"currency": c["meta"].get("currency") or ("INR" if region == "IN" else "USD"),
                 "source": "Yahoo Finance", "candles": c["candles"]}
@@ -291,25 +296,30 @@ class Research:
 
     def _company_in(self, sym: str) -> dict:
         kite_ok = self._kite()
-        inst = self.kite.by_symbol(sym) if kite_ok else None
+        inst = (self.kite.equity(sym) or self.kite.by_symbol(sym)) if kite_ok else None
         if kite_ok and not inst:
-            # the exchange's own list has every NSE stock: a symbol that isn't there (bar a known rename) is a typo,
+            # the exchanges' own lists have every listed stock: a symbol that isn't there (bar a known rename) is a typo,
             # answered now instead of spending the company-data source's per-minute allowance on it
             renamed = [h for h in self.kite.search(sym, False, 3) if not h.get("fno") and h.get("type") == "EQ"
                        and sym in getattr(self.kite, "ALIASES", {})]
             if not renamed:
-                raise SourceError("Research", f"Couldn't find {sym} on the NSE. Use the NSE symbol, like RELIANCE, TCS or HDFCBANK.")
+                raise SourceError("Research", f"Couldn't find {sym}. Use the NSE symbol (like RELIANCE or TCS), or the BSE code for a company listed only on BSE.")
             sym, inst = renamed[0]["symbol"], renamed[0]
-        tasks = {"scr": ("Screener.in", lambda: self.screener.company(sym))}
+        # listed only on BSE: the company page is under its six-digit BSE code
+        code = inst.get("bse_code") if inst and inst["exchange"] == "BSE" else (sym if sym.isdigit() and len(sym) == 6 else None)
+        if inst and code:
+            sym = inst["symbol"]
+        exchange = "BSE" if code else "NSE"
+        tasks = {"scr": ("Screener.in", lambda: self.screener.company(code or sym))}
         if inst:
             tasks["kq"] = ("Kite", lambda: self.kite.quote([sym]).get(sym))
             tasks["k1y"] = ("Kite", lambda: self.kite.history(inst["token"], "1d", 370))
         else:
-            tasks["y"] = ("Yahoo Finance", lambda: self.yahoo.meta(sym + ".NS"))
+            tasks["y"] = ("Yahoo Finance", lambda: self.yahoo.meta(_yahoo_in(code or sym)))
         r, sources = self._run(tasks)
         scr = r.get("scr")
         if not scr and not r.get("kq") and not r.get("y"):
-            raise SourceError("Research", f"Couldn't find {sym}. Use the NSE symbol, like RELIANCE, TCS or HDFCBANK.")
+            raise SourceError("Research", f"Couldn't find {sym}. Use the NSE symbol (like RELIANCE or TCS), or the BSE code for a company listed only on BSE.")
         s = scr_summary(scr) if scr else {}
         name = (scr or {}).get("name") or (inst or {}).get("name") or (r.get("y") or {}).get("name") or sym
         clean = re.sub(r"\s+(Ltd|Limited)\.?$", "", name, flags=re.I).strip()
@@ -358,9 +368,9 @@ class Research:
                     holding["rows"].append({"label": k, "value": vals[-1],
                                             "change": (vals[-1] - prev) if prev is not None else None})
         return {
-            "region": "IN", "symbol": sym, "name": name, "exchange": "NSE", "currency": "INR", "logo": None,
-            "website": (scr or {}).get("website"), "industry": None,
-            "facts": [{"label": "Listed", "value": f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr") else []),
+            "region": "IN", "symbol": sym, "name": name, "exchange": exchange, "currency": "INR", "logo": None,
+            "website": (scr or {}).get("website"), "industry": None, "bse_code": code,
+            "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr") else []),
             "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
             "quote": quote, "range52": {"low": lo52, "high": hi52},
             "margins": None,
@@ -384,7 +394,8 @@ class Research:
             "news": r2.get("news") or [],
             "about": {"wiki": r2.get("wiki"), "profile": (scr or {}).get("about")},
             "sources": sources + sources2,
-            "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{sym}/"}],
+            "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
+                     + ([{"label": "BSE", "url": f"https://www.bseindia.com/stock-share-price/x/x/{code}/"}] if code else []),
             "summary": s,
             "testable": bool(inst) or not kite_ok,
             "instrument_id": inst["id"] if inst else None,

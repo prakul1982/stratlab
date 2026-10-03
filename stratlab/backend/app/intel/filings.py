@@ -297,8 +297,118 @@ class NSEFilings:
             return None
 
 
+BSE_ATTACH = "https://www.bseindia.com/xml-data/corpfiling/"
+
+
+def bse_rows(table: list[dict]) -> list[dict]:
+    """BSE's announcement rows in the shape NSE's take, so one set of rules reads both."""
+    out = []
+    for r in table if isinstance(table, list) else []:
+        if not isinstance(r, dict):
+            continue
+        when = str(r.get("DissemDT") or r.get("NEWS_DT") or r.get("DT_TM") or "")[:19].replace("T", " ")
+        name = str(r.get("ATTACHMENTNAME") or "").strip()
+        folder = "AttachHis" if str(r.get("PDFFLAG") or "0").strip() not in ("0", "") else "AttachLive"
+        subject = str(r.get("SUBCATNAME") or r.get("CATEGORYNAME") or "").strip()
+        headline = str(r.get("NEWSSUB") or "").strip()
+        # NEWSSUB reads "Company Ltd - 500325 - Investor Presentation": the part after the code says what it is
+        tail = headline.split(" - ", 2)[-1] if headline.count(" - ") >= 2 else headline
+        out.append({"seq_id": str(r.get("NEWSID") or ""), "sort_date": when,
+                    "desc": subject if subject and subject != "-" else tail,
+                    "attchmntText": f"{tail}. {r.get('HEADLINE') or ''}".strip(),
+                    "attchmntFile": f"{BSE_ATTACH}{folder}/{name}" if name.lower().endswith(".pdf") and "/" not in name else ""})
+    return out
+
+
+class BSEFilings:
+    """BSE's public corporate-announcements feed, for companies listed only on BSE (by six-digit scrip code)."""
+    name = "the exchange"
+    BASE = "https://api.bseindia.com/BseIndiaAPI/api"
+    PAGES = 6                       # 50 a page: about a year's filings for a busy small company
+
+    def __init__(self, transport: httpx.BaseTransport | None = None):
+        self.http = httpx.Client(base_url=self.BASE, timeout=15, transport=transport, follow_redirects=True,
+                                 headers={"User-Agent": BROWSER_UA, "Accept": "application/json, text/plain, */*",
+                                          "Accept-Language": "en-US,en;q=0.9", "Referer": "https://www.bseindia.com/",
+                                          "Origin": "https://www.bseindia.com"})
+        self.limit = RateLimit(30, 5)
+        self.cache = TTLCache(max_items=2000)
+        self._fails, self._down_until = 0, 0.0
+
+    def _page(self, code: str, frm: datetime, to: datetime, page: int) -> dict:
+        if time.time() < self._down_until:
+            raise SourceError(self.name, "The exchange feed isn't answering right now. Try again in a minute.", busy=True)
+        if not self.limit.take():
+            raise SourceError(self.name, "The exchange feed is busy (our rate limit). Try again in a minute.", busy=True)
+        try:
+            r = self.http.get("/AnnSubCategoryGetData/w", params={
+                "pageno": page, "strCat": "-1", "strPrevDate": frm.strftime("%Y%m%d"), "strScrip": code,
+                "strSearch": "P", "strToDate": to.strftime("%Y%m%d"), "strType": "C", "subcategory": "-1"})
+        except httpx.HTTPError as e:
+            self._failed()
+            raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
+        if r.status_code == 429 or r.status_code >= 500:
+            self._failed()
+            raise SourceError(self.name, f"The exchange feed is busy ({r.status_code}). Try again in a minute.", busy=True)
+        if r.status_code >= 400:
+            raise SourceError(self.name, f"The exchange feed refused the request ({r.status_code}).")
+        try:
+            data = r.json()
+        except ValueError:
+            self._failed()
+            raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).", busy=True) from None
+        self._fails = 0
+        return data if isinstance(data, dict) else {}
+
+    def _failed(self):
+        self._fails += 1
+        if self._fails >= 3:
+            self._down_until, self._fails = time.time() + 60, 0
+
+    def announcements(self, code: str, days: int = LOOKBACK_DAYS) -> list[dict]:
+        code = str(code).strip()
+        if not code.isdigit():
+            raise SourceError(self.name, "That isn't a BSE scrip code.")
+        key = (code, days)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        to = ist_now()
+        frm = to - timedelta(days=days)
+        rows: list[dict] = []
+        for page in range(1, self.PAGES + 1):
+            table = self._page(code, frm, to, page).get("Table") or []
+            rows += bse_rows(table)
+            if len(table) < 50:
+                break
+        items = normalise(rows)
+        self.cache.set(key, items, 1800)
+        return items
+
+
+class IndiaFilings:
+    """Filings for any Indian company: NSE's feed by symbol, or BSE's by scrip code for companies listed only on
+    BSE (`code_of` says which: a BSE code, or None for an NSE company). Everything else is NSE's."""
+
+    def __init__(self, nse, bse, code_of):
+        self.nse, self.bse, self.code_of = nse, bse, code_of
+
+    def announcements(self, symbol: str, days: int = LOOKBACK_DAYS) -> list[dict]:
+        code = self.code_of(symbol)
+        return self.bse.announcements(code, days) if code else self.nse.announcements(symbol, days)
+
+    def industry(self, symbol: str) -> list[str]:
+        return [] if self.code_of(symbol) else self.nse.industry(symbol)
+
+    def last_price(self, symbol: str) -> float | None:
+        return None if self.code_of(symbol) else self.nse.last_price(symbol)
+
+    def __getattr__(self, name):
+        return getattr(self.nse, name)
+
+
 def report(feed, symbol: str) -> dict:
-    """Timeline plus the 3-month summary for one NSE symbol."""
+    """Timeline plus the 3-month summary for one company (NSE symbol, or a BSE-only one)."""
     items = feed.announcements(symbol)
     return {"symbol": symbol, "items": items[:200], "summary": summarise(items), "window_days": WINDOW_DAYS,
             "lookback_days": LOOKBACK_DAYS}

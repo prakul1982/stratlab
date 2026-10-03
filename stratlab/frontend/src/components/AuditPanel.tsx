@@ -8,7 +8,7 @@ type Level = "mismatch" | "gap" | "error";
 type Region = "IN" | "US";
 type Issue = { level: Level; area: string; detail: string };
 /** A company's page: BSE-only companies (BSE:543210) open by their BSE code. */
-const pageSymbol = (s: string) => (s.startsWith("BSE:") ? s.slice(4) : s);
+const pageSymbol = (s: string) => (s.startsWith("BSE:") ? s.slice(4) : s);   // a BSE code opens the same page as its symbol
 
 type Row = { symbol: string; name: string; seconds: number; issues: Issue[] };
 type Summary = { companies: number; clean: number; mismatches: number; gaps: number; errors: number; avg_seconds: number | null;
@@ -64,7 +64,7 @@ export function AuditPanel() {
             <select value={set} onChange={(e) => setSet(e.target.value)} disabled={s.running || !!custom.trim()} aria-label="Companies to check">
               {s.sets.map((x) => <option key={x.id} value={x.id}>{x.name} ({x.count})</option>)}
             </select>
-            <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Or symbols, e.g. INFY TITAN" style={{ minWidth: 200 }} disabled={s.running} aria-label="Symbols to check" />
+            <input className="input" value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Or symbols, e.g. INFY TITAN" style={{ minWidth: 200 }} disabled={s.running} aria-label="Symbols to check" />
             {region === "IN" && <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={docs} onChange={(e) => setDocs(e.target.checked)} disabled={s.running} />Also try reading documents (slower)</label>}
             <button className="btn sm" disabled={s.running} onClick={start}>{s.running ? `Checking ${s.done ?? 0} of ${s.total}…` : "Run audit"}</button>
             {s.running && <button className="btn quiet sm" onClick={stop}>Stop</button>}

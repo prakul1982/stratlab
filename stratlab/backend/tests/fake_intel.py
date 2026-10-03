@@ -57,6 +57,8 @@ def fake_screener() -> httpx.MockTransport:
     def handler(req: httpx.Request):
         if "/company/RELIANCE/" in req.url.path:
             return httpx.Response(200, text=SCREENER_HTML)
+        if "/company/543210/" in req.url.path:          # a company listed only on BSE: Screener files it by BSE code
+            return httpx.Response(200, text=SCREENER_HTML.replace("Reliance Industries Ltd", "Tiny Co Ltd"))
         return httpx.Response(404, text="<html>Not found</html>")
     return httpx.MockTransport(handler)
 
@@ -73,5 +75,38 @@ def fake_wiki() -> httpx.MockTransport:
             return httpx.Response(200, json={"title": "Reliance Industries", "description": "Indian multinational conglomerate",
                                              "extract": "Reliance Industries Limited is an Indian multinational conglomerate headquartered in Mumbai.",
                                              "type": "standard", "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Reliance_Industries"}}})
+        return httpx.Response(404)
+    return httpx.MockTransport(handler)
+
+
+BSE_FILINGS = [
+    {"NEWSID": "n1", "SCRIP_CD": 543210, "NEWSSUB": "Tiny Co Ltd - 543210 - Announcement under Regulation 30 (LODR)-Investor Presentation",
+     "DissemDT": "{d1}T18:05:11.53", "SUBCATNAME": "Investor Presentation", "CATEGORYNAME": "Company Update",
+     "HEADLINE": "Investor presentation for the quarter.", "ATTACHMENTNAME": "abc-123.pdf", "PDFFLAG": 0},
+    {"NEWSID": "n2", "SCRIP_CD": 543210, "NEWSSUB": "Tiny Co Ltd - 543210 - Transcript of Earnings Call",
+     "DissemDT": "{d2}T10:00:00", "SUBCATNAME": "Earnings Call Transcript", "CATEGORYNAME": "Company Update",
+     "HEADLINE": "Transcript of the earnings conference call.", "ATTACHMENTNAME": "def-456.pdf", "PDFFLAG": 1},
+    {"NEWSID": "n3", "SCRIP_CD": 543210, "NEWSSUB": "Tiny Co Ltd - 543210 - Disclosure of creation of pledge by promoter",
+     "DissemDT": "{d3}T12:00:00", "SUBCATNAME": "-", "CATEGORYNAME": "Insider Trading / SAST",
+     "HEADLINE": "Disclosure under Regulation 31 of creation of pledge.", "ATTACHMENTNAME": "", "PDFFLAG": 0},
+]
+
+
+def fake_bse():
+    """BSE's announcements API: three filings for the BSE-only company, nothing for anyone else."""
+    import json
+    from datetime import date, timedelta
+    days = {"d1": date.today() - timedelta(days=5), "d2": date.today() - timedelta(days=12), "d3": date.today() - timedelta(days=20)}
+
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("/AnnSubCategoryGetData/w"):
+            scrip = req.url.params.get("strScrip")
+            rows = []
+            if scrip in ("543210", "500325") and req.url.params.get("pageno") == "1":
+                text = json.dumps(BSE_FILINGS)
+                for k, v in days.items():
+                    text = text.replace("{" + k + "}", v.isoformat())
+                rows = json.loads(text)
+            return httpx.Response(200, json={"Table": rows, "Table1": [{"ROWCNT": len(rows)}]})
         return httpx.Response(404)
     return httpx.MockTransport(handler)

@@ -31,6 +31,19 @@ async function sane(page: Page, errors: string[]) {
   for (const bad of [/\bNaN\b/, /\bundefined\b/, /\[object Object\]/, /\b0k\b/, /\bInfinity\b/]) expect(text, `"${bad}" on the page`).not.toMatch(bad);
 }
 
+/** On a phone: every button, menu and stand-alone link is big enough for a finger (small icons that carry a larger
+ * invisible touch area are left out). */
+async function touchable(page: Page) {
+  const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main select, main a, main [role=button], main input:not([type=range]):not([type=checkbox]):not([type=radio])"))
+    .filter((el) => {
+      const b = el.getBoundingClientRect();
+      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name")) return false;
+      if (el.matches(".info-btn, .chip-x") || getComputedStyle(el).display === "inline") return false;
+      return b.height < 32;
+    }).map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || (el as HTMLInputElement).placeholder || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`));
+  expect(small, "controls too small to tap").toEqual([]);
+}
+
 /** Bars for gains end at the zero line from above; bars for losses start at it and hang below. */
 async function barsAroundZero(page: Page) {
   const charts = page.locator(".tbars");
@@ -59,7 +72,10 @@ const PAGES: [string, string][] = [
 ];
 
 for (const [path, ready] of PAGES) {
-  test(`page ${path}`, async ({ page }) => sane(page, await open(page, path, ready)));
+  test(`page ${path}`, async ({ page }, info) => {
+    await sane(page, await open(page, path, ready));
+    if (info.project.name === "phone") await touchable(page);
+  });
 }
 
 test("losses hang below the zero line, with exact labels (company page)", async ({ page }) => {

@@ -361,14 +361,14 @@ export function OptionsPage() {
         <div className="opt-grid two">
           <div className="stack" style={{ gap: 6 }}>
             <span className="opt-lbl">Stop loss<Info>{HELP.optRisk}</Info></span>
-            <div className="row" style={{ gap: 8 }}>
+            <div className="row wrap" style={{ gap: 8 }}>
               <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => setRisk({ stopType: v })} />
               {r.stopType !== "none" && <input className="input" style={{ width: 110 }} type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
             </div>
           </div>
           <div className="stack" style={{ gap: 6 }}>
             <span className="opt-lbl">Target</span>
-            <div className="row" style={{ gap: 8 }}>
+            <div className="row wrap" style={{ gap: 8 }}>
               <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => setRisk({ tgtType: v })} />
               {r.tgtType !== "none" && <input className="input" style={{ width: 110 }} type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}
             </div>
