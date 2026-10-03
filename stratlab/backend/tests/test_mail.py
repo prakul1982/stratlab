@@ -189,7 +189,11 @@ def test_confirming_the_newsletter_address(monkeypatch):
         assert to == "pro@example.com" and "/email/confirm?t=" in link and link in html.replace("&amp;", "&")
 
         assert c.get("/email/confirm", params={"t": "forged"}).status_code == 400
+        assert c.post("/email/confirm", params={"t": "forged"}).status_code == 400
         r = c.get(link[link.index("/email/confirm"):])
+        assert r.status_code == 200 and "pro@example.com" in r.text and "<form method=post" in r.text
+        assert not alerts.email_confirmed(db.get_profile("u-pro"))     # opening the link (a mail scanner) confirms nothing
+        r = c.post(link[link.index("/email/confirm"):])                  # the button on that page
         assert r.status_code == 200 and "pro@example.com" in r.text
         assert alerts.email_confirmed(db.get_profile("u-pro"))
         assert c.post("/me/email/confirm", headers=W.headers("pro-token")).json() == {"confirmed": True, "sent_to": None}

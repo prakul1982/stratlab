@@ -208,8 +208,10 @@ def summary(f: dict) -> dict:
 
 # ---------- the email ----------
 def _a(url: str | None, text: str) -> str:
+    """A link, or plain text when the url isn't a web address (a feed's javascript: or data: link never gets in)."""
     t = escape(text)
-    return f'<a href="{escape(url)}" style="color:#1a56db;text-decoration:none">{t}</a>' if url else t
+    ok = isinstance(url, str) and url.lower().startswith(("https://", "http://"))
+    return f'<a href="{escape(url)}" style="color:#1a56db;text-decoration:none">{t}</a>' if ok else t
 
 
 def render(issue: dict) -> tuple[str, str]:

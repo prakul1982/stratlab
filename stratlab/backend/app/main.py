@@ -593,12 +593,32 @@ def send_email_confirmation(profile=Depends(current_profile)):
     return {"confirmed": False, "sent_to": to}
 
 
+def _confirm_link_bad() -> HTMLResponse:
+    return mail_page("This link doesn't work", "It may have expired (links work for 3 days). Ask for a new one in Account.", 400)
+
+
 @app.get("/email/confirm", response_class=HTMLResponse)
+def confirm_email_page(t: str = ""):
+    """Asks before confirming: mail scanners open every link, and shouldn't sign anyone up for newsletters."""
+    got = mail_tokens.read(t, "confirm")
+    if not got or not got[1]:
+        return _confirm_link_bad()
+    e = html_escape
+    return HTMLResponse(content=(
+        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>Confirm your email</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
+        f"<h1 style='font-size:1.3rem'>Send StratLab newsletters to {e(got[1])}?</h1>"
+        f"<form method=post action='/email/confirm?t={e(t)}'>"
+        f"<button style='font:inherit;padding:.6rem 1.2rem;border-radius:8px;border:1px solid #111;background:#111;color:#fff;cursor:pointer'>"
+        f"Confirm my email</button></form>"
+        f"<p>If you didn't ask for this, close this page.</p></body>"))
+
+
+@app.post("/email/confirm", response_class=HTMLResponse)
 def confirm_email(t: str = ""):
     got = mail_tokens.read(t, "confirm")
     if not got or not got[1]:
-        return mail_page("This link doesn't work", "It may have expired (links work for 3 days). "
-                         "Ask for a new one in Account.", 400)
+        return _confirm_link_bad()
     uid, address = got
     db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())
     return mail_page("Email confirmed", f"Newsletters you choose in Account will go to {address}.")
