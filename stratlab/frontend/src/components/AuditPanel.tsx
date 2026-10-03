@@ -85,7 +85,7 @@ export function AuditPanel() {
 
 interface MarketState {
   enabled: boolean; listed: number; checked: number; due: number; current: string | null; eta_hours: number | null;
-  list_at: string | null; list_error: string | null; since: string | null;
+  list_at: string | null; list_error: string | null;
   new_listings: { symbol: string; name: string; listed: string | null; checked: boolean }[];
   summary: Summary; rows: Row[];
 }
@@ -104,31 +104,29 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
   }, [m?.enabled, load]);
   const send = async (body: object) => { try { setM(await api<MarketState>("/admin/audit/market", { method: "POST", body: { region, ...body } })); } catch (e) { fail(e); } };
   const sum = m?.summary;
-  const pct = m && m.listed ? Math.round((100 * (m.listed - m.due)) / m.listed) : 0;
 
   return (
     <section className="card stack" style={{ gap: 12 }}>
       <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
         <h2 className="h2">Whole market: {us ? "US" : "India"}</h2>
-        {m && <button className="btn sm" onClick={() => send({ on: !m.enabled })}>{m.enabled ? "Pause" : us ? "Check every US company" : "Check every Indian company"}</button>}
+        {m && <button className="btn sm" onClick={() => send({ on: !m.enabled })}>{m.enabled ? "Pause" : "Check new listings"}</button>}
       </div>
       <p className="small muted" style={{ maxWidth: "80ch", margin: 0 }}>{us
-        ? "Every company with a ticker that files with the SEC, checked one at a time in the background from its filings, the same way as the audit above. The SEC's list is read every day: new companies are checked first, ones that drop off the list are removed, and each company is checked again once a month."
-        : "Every company listed in India: all of NSE, plus the thousands listed only on BSE (shown as BSE: and their code), checked one at a time in the background at an easy pace, the same way as the audit above (without documents; BSE-only companies' filings aren't read yet). The lists are read every day: new listings are checked first, delisted companies drop off, and each company is checked again once a month."}
-        {" "}It pauses while an audit above runs, and carries on after a restart.</p>
+        ? "The SEC's list of companies is read once a day. Each company that newly appears on it is checked once from its filings, the same way as the audit above; ones that drop off the list are removed."
+        : "The lists of every company in India (all of NSE, plus those listed only on BSE, shown as BSE: and their code) are read once a day. Each new listing is checked once, the same way as the audit above; delisted companies drop off."}
+        {" "}Companies already listed aren't re-run: a whole market takes more than a day. A check that failed because a source was down is tried again. It pauses while an audit above runs.</p>
       {!m ? <p className="small muted">Loading…</p> : (
         <>
           <p className="small" style={{ margin: 0 }}>
-            <b>{m.enabled ? (m.due ? `Running · ${pct}% of the cycle done` : "Running · everything is up to date") : m.checked ? "Paused" : "Not started"}</b>
-            {" · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked, {m.due.toLocaleString("en-IN")} due
+            <b>{m.enabled ? (m.due ? `Running · ${m.due.toLocaleString("en-IN")} to check` : "Running · up to date") : m.checked ? "Paused" : "Not started"}</b>
+            {" · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked so far
             {m.enabled && m.eta_hours != null && m.due > 0 && ` · about ${m.eta_hours < 1 ? "under an hour" : `${Math.round(m.eta_hours)} hours`} left`}
             {m.current && <> · now <span className="mono">{m.current}</span></>}
           </p>
           <p className="small muted" style={{ margin: 0 }}>
             {m.list_error ? <span className="neg">Couldn't read the exchange's list: {m.list_error}{m.list_at ? ` (using the one from ${ago(m.list_at)})` : ""}. </span>
               : m.list_at ? `List read ${ago(m.list_at)}. ` : ""}
-            <button className="btn quiet sm" onClick={() => send({ read_list: true })}>Read the list now</button>{" "}
-            {m.checked > 0 && <button className="btn quiet sm" onClick={() => { if (confirm("Check every company again from the start?")) send({ restart: true }); }}>Check all again</button>}
+            <button className="btn quiet sm" onClick={() => send({ read_list: true })}>Read the list now</button>
           </p>
           {m.new_listings.length > 0 && (
             <p className="small" style={{ margin: 0 }}>New listings: {m.new_listings.slice(0, 12).map((n, i) => (

@@ -192,8 +192,13 @@ class AutoLogin:
             print("could not load the auto-login result:", e)
 
     def _alert(self, text: str):
+        from .alerts import tell_admins
         from .errors import note
         note(text)
+        try:
+            tell_admins(text.split(". ")[0][:120], text)
+        except Exception as e:
+            print("admin alert failed:", e)
         if settings.ADMIN_TELEGRAM_CHAT_ID:
             from .alerts import send_telegram
             try:

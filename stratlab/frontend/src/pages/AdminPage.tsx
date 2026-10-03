@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly, money } from "../lib/format";
@@ -18,7 +18,7 @@ interface Overview {
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     recent_errors?: { ref: string; at: string; method: string; path: string; error: string; where: string }[];
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
-    calendar?: CalendarStatus;
+    calendar?: CalendarStatus; admin_alerts?: { email_ready: boolean; to: string[] };
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number };
@@ -95,8 +95,13 @@ interface ReportedRow {
   reasons: Record<string, number>; hidden: boolean; hidden_by: string | null; published_at: string;
 }
 
+type Tab = "overview" | "services" | "checks" | "users" | "billing";
+const TABS: [Tab, string][] = [["overview", "Overview"], ["services", "Services"], ["checks", "Data checks"], ["users", "Users"], ["billing", "Billing"]];
+
 export function AdminPage() {
   const { me, notify, fail } = useApp();
+  const [params, setParams] = useSearchParams();
+  const tab: Tab = TABS.some(([t]) => t === params.get("tab")) ? params.get("tab") as Tab : "overview";
   const [ov, setOv] = useState<Overview | null>(null);
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [shownUsers, setShownUsers] = useState(25);
@@ -184,8 +189,29 @@ export function AdminPage() {
   const sv = ov?.server;
   const st = ov?.stats;
   const aiKeys = sv?.ai.filter((a) => a.configured) ?? [];
+  const open = (t: Tab) => setParams(t === "overview" ? {} : { tab: t }, { replace: true });
+
+  // what needs a look, worst first; each item opens the tab where it is fixed
+  const attention: { text: string; tab: Tab; bad: boolean }[] = [];
+  if (sv) {
+    if (!sv.kite_ready) attention.push({ text: sv.kite_invalid || "The broker isn't logged in today, so Indian prices and paper trading are offline.", tab: "services", bad: true });
+    if (sv.auto_login_configured && sv.auto_login.ok === false) attention.push({ text: `The automatic broker login failed: ${sv.auto_login.message}`, tab: "services", bad: true });
+    const aiDown = (aiTest ?? []).filter((a) => !a.ok).map((a) => a.label);
+    if (!aiTest) aiKeys.filter((a) => a.last_error).forEach((a) => aiDown.push(a.label));
+    if (!aiKeys.length) attention.push({ text: "No AI keys are set, so the idea builder and research reads are off.", tab: "services", bad: true });
+    else if (aiDown.length) attention.push({ text: `AI: ${aiDown.join(", ")} ${aiDown.length > 1 ? "aren't" : "isn't"} answering. The others take over by themselves.`, tab: "services", bad: false });
+    if (sv.admin_alerts && !sv.admin_alerts.email_ready) attention.push({ text: "Alert emails can't be sent yet: the server's email (SMTP) settings are missing.", tab: "services", bad: true });
+    if (sv.recent_errors?.length) attention.push({ text: `${sv.recent_errors.length} server error${sv.recent_errors.length > 1 ? "s" : ""} since the last restart (listed below).`, tab: "overview", bad: false });
+    const pending = (reported?.entries ?? []).filter((r) => r.hidden_by !== "admin").length;
+    if (pending) attention.push({ text: `${pending} library entr${pending > 1 ? "ies were" : "y was"} reported by users.`, tab: "users", bad: false });
+    if (sv.option_recorder?.last_error) attention.push({ text: `Option chain recording: ${sv.option_recorder.last_error}`, tab: "services", bad: false });
+    if (sv.calendar?.days_left != null && sv.calendar.days_left < 60) attention.push({ text: `Exchange holidays are only known for ${sv.calendar.days_left} more days.`, tab: "checks", bad: false });
+    if (!sv.billing_enabled) attention.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", tab: "billing", bad: false });
+    attention.sort((x, y) => Number(y.bad) - Number(x.bad));
+  }
+
   return (
-    <div className="stack" style={{ gap: 26 }}>
+    <div className="stack" style={{ gap: 22 }}>
       <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
         <div className="stack" style={{ gap: 6 }}>
           <span className="eyebrow">Only you can see this page</span>
@@ -194,182 +220,225 @@ export function AdminPage() {
         <button className="btn outline" onClick={() => { loadOverview(); loadUsers(q); }}>Refresh</button>
       </div>
 
+      <nav className="seg" aria-label="Admin sections" style={{ alignSelf: "flex-start", maxWidth: "100%" }}>
+        {TABS.map(([t, label]) => (
+          <button key={t} aria-pressed={tab === t} onClick={() => open(t)}>
+            {label}{t === "overview" && attention.length > 0 ? ` (${attention.length})` : ""}
+          </button>
+        ))}
+      </nav>
+
       {!ov ? <Loading label="Loading server status" /> : (
         <>
-          <div className="stats-grid">
-            {([["Users", st!.users, `${st!.new_7d} new this week`], ["Paid", st!.plans.basic + st!.plans.pro, `${st!.plans.basic} Basic · ${st!.plans.pro} Pro`],
-              ["Experiments", st!.experiments_month, "this month, all users"], ["AI builds", st!.ai_month, "this month, all users"]] as const).map(([k, v, d]) => (
-              <div key={k} className="card stack" style={{ gap: 4 }}>
-                <span className="small muted">{k}</span><span className="serif" style={{ fontSize: 38, lineHeight: 1.1 }}>{v}</span><span className="small muted">{d}</span>
-              </div>
-            ))}
-          </div>
-
-          <section className="card stack" style={{ gap: 10 }}>
-            <h2 className="h2">Launch offer</h2>
-            {sv!.promo_until ? (
-              <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-                <span><span className="badge pass">On</span> Every user has every Pro feature free until <b>{new Date(sv!.promo_until).toLocaleString()}</b>. Then plans apply again by themselves.</span>
-                <button className="btn quiet sm danger" disabled={busy === "promo"} onClick={endPromo}>End now</button>
-              </div>
-            ) : (
-              <div className="row wrap" style={{ gap: 10 }}>
-                <span className="small muted">Off. Start it to give everyone every Pro feature free for a while, e.g. at launch. Payments keep working, so people can still subscribe.</span>
-                <label className="row" style={{ gap: 8 }}><span className="small">Days</span>
-                  <input className="input" type="number" min={1} max={90} value={promoDays} onChange={(e) => setPromoDays(Math.max(1, Math.min(90, +e.target.value || 1)))} style={{ width: 80 }} /></label>
-                <button className="btn sm" disabled={busy === "promo"} onClick={startPromo}>Start now</button>
-              </div>
-            )}
-          </section>
-
-          <div className="grid2">
-            <section className="card stack" style={{ gap: 4 }}>
-              <h2 className="h2" style={{ marginBottom: 6 }}>Market data</h2>
-              <Status ok={sv!.kite_ready} label="Broker data (India)" detail={sv!.kite_invalid ? sv!.kite_invalid : sv!.kite_ready ? `Logged in${sv!.kite_token_day ? ` for ${dateOnly(sv!.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline."} />
-              <Status ok={sv!.feed_connected || sv!.live_sessions === 0} warn label="Live price feed" detail={sv!.feed_connected ? "Connected" : sv!.live_sessions ? "Not connected" : "Idle (no India sessions running)"} />
-              <Status ok={sv!.auto_login_configured && sv!.auto_login.ok === true} warn={!sv!.auto_login_configured || sv!.auto_login.ok === null} label="Automatic daily login"
-                detail={!sv!.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : `${sv!.auto_login.message}${sv!.auto_login.at ? ` (${ago(sv!.auto_login.at)})` : ""}`} />
-              <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
-                <button className="btn sm" disabled={busy === "kite"} onClick={kiteLogin}>Log in to the broker</button>
-                {sv!.auto_login_configured && <button className="btn quiet sm" disabled={busy === "auto"} onClick={autoLogin}>{busy === "auto" ? "Logging in…" : "Run the automatic login now"}</button>}
-              </div>
-            </section>
-
-            <section className="card stack" style={{ gap: 4 }}>
-              <div className="spread" style={{ marginBottom: 6 }}>
-                <h2 className="h2">AI builder</h2>
-                <button className="btn quiet sm" disabled={busy === "ai" || !aiKeys.length} onClick={testAI}>{busy === "ai" ? "Testing…" : "Test every provider"}</button>
-              </div>
-              {!aiKeys.length && <Status ok={false} label="No AI keys" detail="Add a free GROQ_API_KEY in Railway → Variables, then redeploy." />}
-              {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
-              {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error} label={a.label} detail={a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
-              {aiKeys.length > 0 && <AIOrder rows={sv!.ai} />}
-              <Status ok={!!sv!.research?.finnhub} label="US company data" detail={sv!.research?.finnhub ? "Key is set" : "Add the company-data key in Railway for US company pages (setup guide, step 6). India needs no key."} />
-              {sv!.option_recorder && (() => {
-                const r = sv!.option_recorder!;
-                return <Status ok={r.enabled && !r.last_error} warn={!r.enabled || !!r.last_error} label="Option chain recording"
-                  detail={!r.enabled ? "Off. Set OPTION_SNAPSHOTS (for example NFO:NIFTY,NFO:BANKNIFTY) to record chains for options backtesting."
-                    : `${r.targets.join(", ")} every ${r.every_minutes} min in market hours. ${r.today} saved today${r.last_at ? `, last ${ago(r.last_at)}` : ""}.${r.last_error ? ` Last problem: ${r.last_error}` : ""}`} />;
-              })()}
-              <Status ok={sv!.billing_enabled} warn label="Payments" detail={sv!.billing_enabled ? "Razorpay is connected" : "Razorpay not set up, so paid plans show \"Coming soon\". Grant plans by hand below."} />
-              <div className="stack" style={{ gap: 8, marginTop: 6 }}>
-                <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "billing"} onClick={checkBilling}>{busy === "billing" ? "Asking Razorpay…" : "Check payments setup"}</button>
-                {billingCheck && (
-                  <div className="stack small" style={{ gap: 4 }}>
-                    <Status ok={billingCheck.keys_ok} label={`Keys (${billingCheck.mode} mode)`}
-                      detail={billingCheck.keys_ok ? `Razorpay accepts key ${billingCheck.key_id}` : `Key ${billingCheck.key_id}, secret ${billingCheck.secret_length} characters: ${billingCheck.keys_error}. Regenerate the key in Razorpay and paste BOTH the new Key ID and secret into Railway.`} />
-                    {billingCheck.plans.map((p) => <Status key={p.label} ok={p.ok} warn={!p.id} label={p.label} detail={p.detail ?? ""} />)}
-                    <Status ok={billingCheck.webhook_secret_set} label="Webhook secret" detail={billingCheck.webhook_secret_set ? "Set" : "RAZORPAY_WEBHOOK_SECRET is missing"} />
-                    {billingCheck.international && <Status ok={billingCheck.international.enabled === true} warn={billingCheck.international.enabled !== false}
-                      label="International cards" detail={`${billingCheck.international.detail}${billingCheck.currencies?.length ? ` Plans are priced in ${billingCheck.currencies.join(", ")}.` : ""}`} />}
+          {tab === "overview" && (
+            <>
+              <div className="stats-grid">
+                {([["Users", st!.users, `${st!.new_7d} new this week`], ["Paid", st!.plans.basic + st!.plans.pro, `${st!.plans.basic} Basic · ${st!.plans.pro} Pro`],
+                  ["Experiments", st!.experiments_month, "this month, all users"], ["AI builds", st!.ai_month, "this month, all users"]] as const).map(([k, v, d]) => (
+                  <div key={k} className="card stack" style={{ gap: 4 }}>
+                    <span className="small muted">{k}</span><span className="serif" style={{ fontSize: 38, lineHeight: 1.1 }}>{v}</span><span className="small muted">{d}</span>
                   </div>
-                )}
+                ))}
               </div>
-              <div className="stack" style={{ gap: 8, marginTop: 6 }}>
-                <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "fixture"} onClick={saveFixture}
-                  title="Real daily prices for the test suite, so checks run on real market behaviour. Prices only: no user data.">{busy === "fixture" ? "Collecting prices…" : "Save real prices for testing"}</button>
-                {fixtureNote && <p className="tiny muted" style={{ margin: 0 }}>{fixtureNote}</p>}
-              </div>
-              <div className="stack" style={{ gap: 8, marginTop: 6 }}>
-                <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "filings"} onClick={checkFilings}>{busy === "filings" ? "Asking the exchange…" : "Check filings feed"}</button>
-                {filingCheck && <Status ok={filingCheck.ok} label={`Exchange filings (${filingCheck.symbol})`}
-                  detail={filingCheck.ok ? `${filingCheck.count} filings in the last year. Latest: ${(filingCheck.latest ?? []).map((l) => `${l.at.slice(0, 10)} ${l.label}`).join("; ") || "none"}`
-                    : `${filingCheck.error} The exchange sometimes blocks cloud servers; if this keeps failing, the BSE feed can be added as a fallback.`} />}
-                {filingCheck?.ok && <Status ok={!!filingCheck.document?.ok} warn={!filingCheck.document} label="Company documents (deep dive)"
-                  detail={!filingCheck.document ? `No presentation or call transcript among ${filingCheck.symbol}'s filings to try.`
-                    : filingCheck.document.ok ? `Read "${filingCheck.document.title}" (${filingCheck.document.kind}): ${filingCheck.document.chars?.toLocaleString()} characters of text. ${filingCheck.documents_found} documents found.`
-                    : `Couldn't read "${filingCheck.document.title}": ${filingCheck.document.error}`} />}
-              </div>
-            </section>
-          </div>
 
-          <PricesPanel />
+              <section className="card stack" style={{ gap: 6 }}>
+                <h2 className="h2">Needs your attention</h2>
+                {!attention.length ? <p className="small muted" style={{ margin: 0 }}>Nothing. The broker is logged in, AI is answering, and there are no new errors or reports. Problems found by the daily check at 4:50 PM IST are emailed to you.</p>
+                  : attention.map((x, i) => (
+                    <div key={i} className="spread" style={{ padding: "10px 0", borderTop: i ? "1px solid var(--line)" : "none", gap: 12 }}>
+                      <span className="row" style={{ gap: 10, alignItems: "baseline" }}><span className={`badge ${x.bad ? "fail" : "warn"}`}>{x.bad ? "Fix" : "Look"}</span><span className="small">{x.text}</span></span>
+                      {x.tab !== "overview" && <button className="btn quiet sm" onClick={() => open(x.tab)}>Open {TABS.find(([t]) => t === x.tab)![1]}</button>}
+                    </div>
+                  ))}
+              </section>
 
-          <InvoiceAdminPanel />
-
-          <PlatformPanel />
-
-          <AuditPanel />
-          <MarketAuditPanel />
-          <MarketAuditPanel region="US" />
-
-          {sv?.calendar && <HolidaysPanel status={sv.calendar} onSaved={(c) => setOv((o) => o && { ...o, server: { ...o.server, calendar: c } })} />}
-
-          {!!sv?.recent_errors?.length && (
-            <section className="card stack" style={{ gap: 12 }}>
-              <h2 className="h2">Recent server errors <span className="muted" style={{ fontSize: 18 }}>({sv.recent_errors.length})</span></h2>
-              <p className="small muted">Crashes since the server last started, newest first. Users see the ref code in the error message.</p>
-              <div className="table-wrap"><table>
-                <thead><tr><th>Ref</th><th>When</th><th>Request</th><th>Error</th><th>Where</th></tr></thead>
-                <tbody>{sv.recent_errors.map((x) => (
-                  <tr key={x.ref}><td className="mono">{x.ref}</td><td>{new Date(x.at).toLocaleString()}</td><td className="mono small">{x.method} {x.path}</td>
-                    <td className="small" style={{ maxWidth: 380 }}>{x.error}</td><td className="mono small">{x.where}</td></tr>
-                ))}</tbody>
-              </table></div>
-            </section>
+              {!!sv?.recent_errors?.length && (
+                <section className="card stack" style={{ gap: 12 }}>
+                  <h2 className="h2">Recent server errors <span className="muted" style={{ fontSize: 18 }}>({sv.recent_errors.length})</span></h2>
+                  <p className="small muted">Crashes since the server last started, newest first. Users see the ref code in the error message.</p>
+                  <div className="table-wrap"><table>
+                    <thead><tr><th>Ref</th><th>When</th><th>Request</th><th>Error</th><th>Where</th></tr></thead>
+                    <tbody>{sv.recent_errors.map((x) => (
+                      <tr key={x.ref}><td className="mono">{x.ref}</td><td>{new Date(x.at).toLocaleString()}</td><td className="mono small">{x.method} {x.path}</td>
+                        <td className="small" style={{ maxWidth: 380 }}>{x.error}</td><td className="mono small">{x.where}</td></tr>
+                    ))}</tbody>
+                  </table></div>
+                </section>
+              )}
+            </>
           )}
 
-          <section className="card stack" style={{ gap: 12 }}>
-            <h2 className="h2">Paper trading now <span className="muted" style={{ fontSize: 18 }}>({sessions?.length ?? 0})</span></h2>
-            {!sessions?.length ? <p className="small muted">No sessions running.</p> : (
-              <div className="table-wrap"><table>
-                <thead><tr><th>Session</th><th>User</th><th>Instrument</th><th>Started</th><th>Equity</th><th>Trades</th><th></th></tr></thead>
-                <tbody>{sessions.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.name}</td><td>{s.email}</td><td className="num">{s.symbol}</td><td>{ago(s.started_at)}</td>
-                    <td className="num">{s.equity != null ? money(s.equity) : "–"}</td><td className="num">{s.trades ?? 0}</td>
-                    <td><button className="btn quiet sm" disabled={busy === `stop-${s.id}`} onClick={() => stop(s)}>Stop</button></td>
-                  </tr>
-                ))}</tbody>
-              </table></div>
-            )}
-          </section>
-
-          <section className="card stack" style={{ gap: 12 }}>
-            <h2 className="h2">Reported in the library <span className="muted" style={{ fontSize: 18 }}>({reported?.entries.length ?? 0})</span></h2>
-            {!reported?.entries.length ? <p className="small muted">Nothing reported. An entry is hidden by itself after 3 reports from different people, until you look at it here.</p> : (
-              <div className="stack" style={{ gap: 10 }}>{reported.entries.map((r, i) => (
-                <div key={r.id} className="stack" style={{ gap: 6, paddingBottom: 10, borderBottom: i < reported.entries.length - 1 ? "1px solid var(--line)" : "none" }}>
-                  <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
-                    <b>{r.name} <span className="small muted">by {r.author}{r.email ? ` (${r.email})` : ""}</span></b>
-                    <span className="small">{r.hidden ? <span className="badge fail">Hidden{r.hidden_by === "admin" ? " by you" : " by reports"}</span> : <span className="badge">Showing</span>}</span>
-                  </div>
-                  {r.description && <p className="small muted">{r.description}</p>}
-                  <span className="small">{r.reports} report{r.reports === 1 ? "" : "s"}{r.reports ? ": " + Object.entries(r.reasons).map(([k, n]) => `${reported.reasons[k] ?? k} (${n})`).join(", ") : ""}</span>
-                  <div className="row wrap" style={{ gap: 8 }}>
-                    <button className="btn quiet sm" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "restore")}>{r.hidden ? "Restore" : "Keep, clear reports"}</button>
-                    {!r.hidden && <button className="btn quiet sm" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "hide")}>Hide</button>}
-                    <button className="btn quiet sm danger" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "delete")}>Delete</button>
-                  </div>
+          {tab === "services" && (
+            <div className="grid2">
+              <section className="card stack" style={{ gap: 4 }}>
+                <h2 className="h2" style={{ marginBottom: 6 }}>Market data</h2>
+                <Status ok={sv!.kite_ready} label="Broker data (India)" detail={sv!.kite_invalid ? sv!.kite_invalid : sv!.kite_ready ? `Logged in${sv!.kite_token_day ? ` for ${dateOnly(sv!.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline."} />
+                <Status ok={sv!.feed_connected || sv!.live_sessions === 0} warn label="Live price feed" detail={sv!.feed_connected ? "Connected" : sv!.live_sessions ? "Not connected" : "Idle (no India sessions running)"} />
+                <Status ok={sv!.auto_login_configured && sv!.auto_login.ok === true} warn={!sv!.auto_login_configured || sv!.auto_login.ok === null} label="Automatic daily login"
+                  detail={!sv!.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : `${sv!.auto_login.message}${sv!.auto_login.at ? ` (${ago(sv!.auto_login.at)})` : ""}`} />
+                <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
+                  <button className="btn sm" disabled={busy === "kite"} onClick={kiteLogin}>Log in to the broker</button>
+                  {sv!.auto_login_configured && <button className="btn quiet sm" disabled={busy === "auto"} onClick={autoLogin}>{busy === "auto" ? "Logging in…" : "Run the automatic login now"}</button>}
                 </div>
-              ))}</div>
-            )}
-          </section>
+                <h2 className="h2" style={{ margin: "22px 0 6px" }}>Other services</h2>
+                <Status ok={!!sv!.research?.finnhub} label="US company data" detail={sv!.research?.finnhub ? "Key is set" : "Add the company-data key in Railway for US company pages (setup guide, step 6). India needs no key."} />
+                {sv!.admin_alerts && <Status ok={sv!.admin_alerts.email_ready} label="Alerts to you"
+                  detail={sv!.admin_alerts.email_ready ? `Emailed to ${sv!.admin_alerts.to.join(", ")}, plus your phone or Telegram if set in Account.`
+                    : `Email isn't set up on the server: add SMTP_HOST, SMTP_USER and SMTP_PASSWORD in Railway (for Gmail: smtp.gmail.com and an app password). Until then alerts reach only your phone or Telegram.`} />}
+                {sv!.option_recorder && (() => {
+                  const r = sv!.option_recorder!;
+                  return <Status ok={r.enabled && !r.last_error} warn={!r.enabled || !!r.last_error} label="Option chain recording"
+                    detail={!r.enabled ? "Off. Set OPTION_SNAPSHOTS (for example NFO:NIFTY,NFO:BANKNIFTY) to record chains for options backtesting."
+                      : `${r.targets.join(", ")} every ${r.every_minutes} min in market hours. ${r.today} saved today${r.last_at ? `, last ${ago(r.last_at)}` : ""}.${r.last_error ? ` Last problem: ${r.last_error}` : ""}`} />;
+                })()}
+                <div className="stack" style={{ gap: 8, marginTop: 10 }}>
+                  <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "filings"} onClick={checkFilings}>{busy === "filings" ? "Asking the exchange…" : "Check filings feed"}</button>
+                  {filingCheck && <Status ok={filingCheck.ok} label={`Exchange filings (${filingCheck.symbol})`}
+                    detail={filingCheck.ok ? `${filingCheck.count} filings in the last year. Latest: ${(filingCheck.latest ?? []).map((l) => `${l.at.slice(0, 10)} ${l.label}`).join("; ") || "none"}`
+                      : `${filingCheck.error} The exchange sometimes blocks cloud servers; if this keeps failing, the BSE feed can be added as a fallback.`} />}
+                  {filingCheck?.ok && <Status ok={!!filingCheck.document?.ok} warn={!filingCheck.document} label="Company documents (deep dive)"
+                    detail={!filingCheck.document ? `No presentation or call transcript among ${filingCheck.symbol}'s filings to try.`
+                      : filingCheck.document.ok ? `Read "${filingCheck.document.title}" (${filingCheck.document.kind}): ${filingCheck.document.chars?.toLocaleString()} characters of text. ${filingCheck.documents_found} documents found.`
+                      : `Couldn't read "${filingCheck.document.title}": ${filingCheck.document.error}`} />}
+                </div>
+              </section>
+
+              <section className="card stack" style={{ gap: 4 }}>
+                <div className="spread" style={{ marginBottom: 6 }}>
+                  <h2 className="h2">AI</h2>
+                  <button className="btn quiet sm" disabled={busy === "ai" || !aiKeys.length} onClick={testAI}>{busy === "ai" ? "Testing…" : "Test every provider"}</button>
+                </div>
+                {!aiKeys.length && <Status ok={false} label="No AI keys" detail="Add a free GROQ_API_KEY in Railway → Variables, then redeploy." />}
+                {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
+                {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error} label={a.label} detail={a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
+                {aiKeys.length > 0 && <AIOrder rows={sv!.ai} />}
+              </section>
+            </div>
+          )}
+
+          {tab === "checks" && (
+            <>
+              <PlatformPanel />
+              <AuditPanel />
+              <MarketAuditPanel />
+              <MarketAuditPanel region="US" />
+              {sv?.calendar && <HolidaysPanel status={sv.calendar} onSaved={(c) => setOv((o) => o && { ...o, server: { ...o.server, calendar: c } })} />}
+              <section className="card stack" style={{ gap: 8 }}>
+                <h2 className="h2">Real prices for testing</h2>
+                <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>About two years of daily prices for the indices and a few stocks in each market, so the test suite checks the tools on real market behaviour. Prices only, no user data. Refresh it every few months.</p>
+                <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "fixture"} onClick={saveFixture}>{busy === "fixture" ? "Collecting prices…" : "Save real prices"}</button>
+                {fixtureNote && <p className="tiny muted" style={{ margin: 0 }}>{fixtureNote}</p>}
+              </section>
+            </>
+          )}
+
+          {tab === "users" && (
+            <>
+              <section className="card stack" style={{ gap: 14 }}>
+                <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
+                  <h2 className="h2">Users</h2>
+                  <input className="input" style={{ maxWidth: 320 }} placeholder="Search by email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users by email" />
+                </div>
+                {!users ? <Loading label="Loading users" /> : users.length === 0 ? <p className="small muted">No users match.</p> : (
+                  <div className="table-wrap"><table>
+                    <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th><th></th></tr></thead>
+                    <tbody>{users.slice(0, shownUsers).map((u) => (
+                      <tr key={u.id}>
+                        <td>{u.email ?? "–"}</td>
+                        <td><span className={`badge ${u.plan === "free" ? "skip" : "next"}`}>{PLAN_NAME[u.plan]}</span>
+                          {u.plan !== "free" && <span className="small muted" style={{ marginLeft: 8 }}>{u.plan_until ? `until ${dateOnly(u.plan_until)}` : u.paying ? "Razorpay" : "no end"}</span>}</td>
+                        <td>{dateOnly(u.created_at)}</td><td className="num">{u.experiments}</td><td className="num">{u.ai_builds}</td>
+                        <td><button className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button></td>
+                      </tr>
+                    ))}</tbody>
+                  </table></div>
+                )}
+                {users && users.length > shownUsers && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setShownUsers((n) => n + 50)}>Show more ({users.length - shownUsers} more)</button>}
+                <p className="hint">Counts are for this month. The newest 200 users are loaded; search by email to find others.</p>
+              </section>
+
+              <section className="card stack" style={{ gap: 12 }}>
+                <h2 className="h2">Paper trading now <span className="muted" style={{ fontSize: 18 }}>({sessions?.length ?? 0})</span></h2>
+                {!sessions?.length ? <p className="small muted">No sessions running.</p> : (
+                  <div className="table-wrap"><table>
+                    <thead><tr><th>Session</th><th>User</th><th>Instrument</th><th>Started</th><th>Equity</th><th>Trades</th><th></th></tr></thead>
+                    <tbody>{sessions.map((s) => (
+                      <tr key={s.id}>
+                        <td>{s.name}</td><td>{s.email}</td><td className="num">{s.symbol}</td><td>{ago(s.started_at)}</td>
+                        <td className="num">{s.equity != null ? money(s.equity) : "–"}</td><td className="num">{s.trades ?? 0}</td>
+                        <td><button className="btn quiet sm" disabled={busy === `stop-${s.id}`} onClick={() => stop(s)}>Stop</button></td>
+                      </tr>
+                    ))}</tbody>
+                  </table></div>
+                )}
+              </section>
+
+              <section className="card stack" style={{ gap: 12 }}>
+                <h2 className="h2">Reported in the library <span className="muted" style={{ fontSize: 18 }}>({reported?.entries.length ?? 0})</span></h2>
+                {!reported?.entries.length ? <p className="small muted">Nothing reported. An entry is hidden by itself after 3 reports from different people, until you look at it here.</p> : (
+                  <div className="stack" style={{ gap: 10 }}>{reported.entries.map((r, i) => (
+                    <div key={r.id} className="stack" style={{ gap: 6, paddingBottom: 10, borderBottom: i < reported.entries.length - 1 ? "1px solid var(--line)" : "none" }}>
+                      <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
+                        <b>{r.name} <span className="small muted">by {r.author}{r.email ? ` (${r.email})` : ""}</span></b>
+                        <span className="small">{r.hidden ? <span className="badge fail">Hidden{r.hidden_by === "admin" ? " by you" : " by reports"}</span> : <span className="badge">Showing</span>}</span>
+                      </div>
+                      {r.description && <p className="small muted">{r.description}</p>}
+                      <span className="small">{r.reports} report{r.reports === 1 ? "" : "s"}{r.reports ? ": " + Object.entries(r.reasons).map(([k, n]) => `${reported.reasons[k] ?? k} (${n})`).join(", ") : ""}</span>
+                      <div className="row wrap" style={{ gap: 8 }}>
+                        <button className="btn quiet sm" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "restore")}>{r.hidden ? "Restore" : "Keep, clear reports"}</button>
+                        {!r.hidden && <button className="btn quiet sm" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "hide")}>Hide</button>}
+                        <button className="btn quiet sm danger" disabled={busy === `lib-${r.id}`} onClick={() => moderate(r, "delete")}>Delete</button>
+                      </div>
+                    </div>
+                  ))}</div>
+                )}
+              </section>
+            </>
+          )}
+
+          {tab === "billing" && (
+            <>
+              <section className="card stack" style={{ gap: 10 }}>
+                <h2 className="h2">Launch offer</h2>
+                {sv!.promo_until ? (
+                  <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+                    <span><span className="badge pass">On</span> Every user has every Pro feature free until <b>{new Date(sv!.promo_until).toLocaleString()}</b>. Then plans apply again by themselves.</span>
+                    <button className="btn quiet sm danger" disabled={busy === "promo"} onClick={endPromo}>End now</button>
+                  </div>
+                ) : (
+                  <div className="row wrap" style={{ gap: 10 }}>
+                    <span className="small muted">Off. Start it to give everyone every Pro feature free for a while, e.g. at launch. Payments keep working, so people can still subscribe.</span>
+                    <label className="row" style={{ gap: 8 }}><span className="small">Days</span>
+                      <input className="input" type="number" min={1} max={90} value={promoDays} onChange={(e) => setPromoDays(Math.max(1, Math.min(90, +e.target.value || 1)))} style={{ width: 80 }} /></label>
+                    <button className="btn sm" disabled={busy === "promo"} onClick={startPromo}>Start now</button>
+                  </div>
+                )}
+              </section>
+
+              <section className="card stack" style={{ gap: 4 }}>
+                <h2 className="h2" style={{ marginBottom: 6 }}>Payments</h2>
+                <Status ok={sv!.billing_enabled} warn label="Razorpay" detail={sv!.billing_enabled ? "Connected" : "Not set up, so paid plans show \"Coming soon\". Grant plans by hand in Users."} />
+                <div className="stack" style={{ gap: 8, marginTop: 6 }}>
+                  <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} disabled={busy === "billing"} onClick={checkBilling}>{busy === "billing" ? "Asking Razorpay…" : "Check payments setup"}</button>
+                  {billingCheck && (
+                    <div className="stack small" style={{ gap: 4 }}>
+                      <Status ok={billingCheck.keys_ok} label={`Keys (${billingCheck.mode} mode)`}
+                        detail={billingCheck.keys_ok ? `Razorpay accepts key ${billingCheck.key_id}` : `Key ${billingCheck.key_id}, secret ${billingCheck.secret_length} characters: ${billingCheck.keys_error}. Regenerate the key in Razorpay and paste BOTH the new Key ID and secret into Railway.`} />
+                      {billingCheck.plans.map((p) => <Status key={p.label} ok={p.ok} warn={!p.id} label={p.label} detail={p.detail ?? ""} />)}
+                      <Status ok={billingCheck.webhook_secret_set} label="Webhook secret" detail={billingCheck.webhook_secret_set ? "Set" : "RAZORPAY_WEBHOOK_SECRET is missing"} />
+                      {billingCheck.international && <Status ok={billingCheck.international.enabled === true} warn={billingCheck.international.enabled !== false}
+                        label="International cards" detail={`${billingCheck.international.detail}${billingCheck.currencies?.length ? ` Plans are priced in ${billingCheck.currencies.join(", ")}.` : ""}`} />}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <InvoiceAdminPanel />
+              <PricesPanel />
+            </>
+          )}
         </>
       )}
-
-      <section className="card stack" style={{ gap: 14 }}>
-        <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
-          <h2 className="h2">Users</h2>
-          <input className="input" style={{ maxWidth: 320 }} placeholder="Search by email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users by email" />
-        </div>
-        {!users ? <Loading label="Loading users" /> : users.length === 0 ? <p className="small muted">No users match.</p> : (
-          <div className="table-wrap"><table>
-            <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th><th></th></tr></thead>
-            <tbody>{users.slice(0, shownUsers).map((u) => (
-              <tr key={u.id}>
-                <td>{u.email ?? "–"}</td>
-                <td><span className={`badge ${u.plan === "free" ? "skip" : "next"}`}>{PLAN_NAME[u.plan]}</span>
-                  {u.plan !== "free" && <span className="small muted" style={{ marginLeft: 8 }}>{u.plan_until ? `until ${dateOnly(u.plan_until)}` : u.paying ? "Razorpay" : "no end"}</span>}</td>
-                <td>{dateOnly(u.created_at)}</td><td className="num">{u.experiments}</td><td className="num">{u.ai_builds}</td>
-                <td><button className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button></td>
-              </tr>
-            ))}</tbody>
-          </table></div>
-        )}
-        {users && users.length > shownUsers && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setShownUsers((n) => n + 50)}>Show more ({users.length - shownUsers} more)</button>}
-        <p className="hint">Counts are for this month. The newest 200 users are loaded; search by email to find others.</p>
-      </section>
       {editing && <PlanModal user={editing} onClose={() => setEditing(null)} onSaved={() => { loadUsers(q); loadOverview(); }} />}
     </div>
   );

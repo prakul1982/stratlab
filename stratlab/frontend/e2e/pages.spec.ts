@@ -54,7 +54,8 @@ const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/investor", "Investor"], ["/plans", "Plans"],
-  ["/account", "Account"], ["/admin", "Check every feature"],
+  ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
+  ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
 
 for (const [path, ready] of PAGES) {
@@ -108,7 +109,7 @@ test("invoices: in Account for the customer, with the GST setup in Admin", async
   let errors = await open(page, "/account", "Invoices");
   await expect(page.getByText("Details on your invoices")).toBeVisible();
   await sane(page, errors);
-  errors = await open(page, "/admin", "LUT ARN");
+  errors = await open(page, "/admin?tab=billing", "LUT ARN");
   await expect(page.getByText(/Financial year \d{4}-\d{2}/)).toBeVisible();
   await sane(page, errors);
 });

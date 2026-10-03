@@ -31,7 +31,7 @@ export function PlatformPanel() {
       <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Runs each part of StratLab once on this server with live data: prices in every market and how fresh they are, a two-year
         backtest per market, the NIFTY 50 and US scans, sector rotation, the NIFTY option chain, exchange filings, company pages, news, the database and the
         holiday calendar. No AI is used. It also runs by itself every day at 4:50 PM IST: anything that fails is tried again two minutes later, and
-        if it still fails you get an alert on the channels set in your Account (phone, Telegram or email). Run it by hand after a deploy.</p>
+        if it still fails it is emailed to you (and sent to your phone or Telegram if set in Account). Run it by hand after a deploy.</p>
       {history.length > 1 && <p className="tiny muted" style={{ margin: 0 }}>Last {history.length} runs: {history.map((h) => (h.fail ? "✗" : "✓")).join(" ")}
         {history.some((h) => h.fail) ? ` · last failure ${ago(history.filter((h) => h.fail).slice(-1)[0].at)}` : " · no failures"}</p>}
       {r && (

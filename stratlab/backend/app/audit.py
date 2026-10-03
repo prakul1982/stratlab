@@ -12,6 +12,7 @@ MAX_SYMBOLS = 600
 PE_TOLERANCE = 0.25            # our P/E from market cap and trailing profit vs the page's stated P/E (minority
                                # shares and one-offs beyond this are explained on the page by a note)
 TTM_TOLERANCE = 0.05           # trailing-year revenue vs the last four quarters added up
+TTM_ROUNDING = 2               # ...but tiny companies' quarters are shown in whole crore, so 2 cr apart is rounding
 PRICE_TOLERANCE = 0.03         # prices from different sources, allowing for a day's move
 
 
@@ -90,10 +91,11 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None) -> 
     if missing:
         out.append(_issue("gap", "Numbers", f"Revenue or profit missing for {', '.join(missing[:4])}"))
     if not nums.get("bank") and group not in FINANCIAL:
-        # a margin below -100% (a loss bigger than sales) or profit above sales (other income) happen; above 100% can't
+        # a margin above 100% means costs came out negative (provisions written back): the margin is the company
+        # page's own figure, shown as filed, so it is worth a look but isn't our reading going wrong
         odd = [y["year"] for y in years if y.get("opm") is not None and y["opm"] > 100]
         if odd:
-            out.append(_issue("mismatch", "Numbers", f"Operating margin above 100% in {', '.join(odd[:4])}"))
+            out.append(_issue("gap", "Numbers", f"The company page shows an operating margin above 100% in {', '.join(odd[:4])} (costs written back)"))
         if len(years) >= 3 and all(y.get("capex") is None for y in years[-3:]):
             out.append(_issue("gap", "Capex", "No capex estimate for the last three years"))
     ttm = _last_ttm(p.get("pl"), "Net Profit")
@@ -107,7 +109,7 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None) -> 
     q = [x.get("sales") for x in (nums.get("quarters") or [])[-4:]]
     if ttm_sales and len(q) == 4 and all(v is not None for v in q):
         off = _off(sum(q), ttm_sales)
-        if off is not None and off > TTM_TOLERANCE:
+        if off is not None and off > TTM_TOLERANCE and abs(sum(q) - ttm_sales) > TTM_ROUNDING:
             out.append(_issue("mismatch", "Numbers", f"Trailing revenue {ttm_sales:,.0f} cr vs last four quarters {sum(q):,.0f} cr"))
     return out
 
@@ -174,6 +176,9 @@ def check_documents(docs: list[dict], read) -> list[dict]:
     return out
 
 
+NOT_COVERED = ("has no annual results filed", "isn't a company that files with the SEC")
+
+
 class Skipped(Exception):
     pass
 
@@ -223,7 +228,10 @@ def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None) ->
     except Exception as e:
         d = getattr(e, "detail", None)          # an HTTP error from a data source carries its message here
         msg = d.get("message") if isinstance(d, dict) else d if isinstance(d, str) else str(e)
-        issues.append(_issue("error", "Company page", (msg or e.__class__.__name__)[:200]))
+        msg = (msg or e.__class__.__name__)[:200]
+        # shells, SPACs, trusts and funds file no annual results: nothing for the app to show, not something broken
+        uncovered = any(x in msg for x in NOT_COVERED)
+        issues.append(_issue("gap" if uncovered else "error", "Company page", msg))
     return {"symbol": sym, "name": name, "seconds": round(time.monotonic() - t0, 1), "issues": issues}
 
 
@@ -305,11 +313,10 @@ class Runner:
 
 
 MARKET = "audit:market"        # settings keys: the switch and list state, the list itself, and results in shards
-REFRESH_DAYS = 30              # a company is checked again once its last check is this old
 RETRY_HOURS = 6                # a check that failed because a source was down is tried again after this long
-MAX_TRIES = 3                  # ...this many times in all, then it waits for the monthly refresh like the rest
+MAX_TRIES = 3                  # ...this many times in all, then it is left as it is
 TRANSIENT_AREAS = {"Company page", "Prices", "Audit"}      # errors from a source being unreachable, not from the data
-NEW_DAYS = 30                  # listed within this many days: checked before anything else
+NEW_DAYS = 30                  # listed (or first seen on the list) within this many days: checked
 LIST_EVERY = 86400             # re-read the exchange's list of companies once a day
 
 
@@ -326,16 +333,17 @@ def _transient(row: dict) -> bool:
 
 
 class MarketAudit:
-    """Every company listed on NSE, checked one at a time in the background at an easy pace, for as long as it is
-    switched on. Each result is saved as it finishes, so a restart carries on where it stopped. The exchange's list
-    is read daily: a new listing is checked first, a delisted company is dropped, and each company is checked again
-    once its last check is a month old. Gives way while a hand-started audit runs."""
+    """New listings, checked in the background as they appear. The exchange's list is read once a day; a company that
+    listed (or first showed up on the list) in the last NEW_DAYS days is checked once, a delisted company is dropped,
+    and a check that failed only because a source was down is tried again. The thousands of companies already listed
+    are not re-run: going through a whole market takes more than a day and its storage. Each result is saved as it
+    finishes, so a restart carries on where it stopped. Gives way while a hand-started audit runs."""
 
     def __init__(self, list_fn, check_fn, busy_fn=lambda: False, pause: float = 3.0, key: str = MARKET):
         self.list_fn, self.check_fn, self.busy_fn, self.pause, self.key = list_fn, check_fn, busy_fn, pause, key
         self.lock = threading.Lock()
         self.loaded = False
-        self.state: dict = {"enabled": False, "list_at": None, "list_tried_at": None, "list_error": None, "since": None}
+        self.state: dict = {"enabled": False, "list_at": None, "list_tried_at": None, "list_error": None}
         self.listing: dict[str, dict] = {}
         self.rows: dict[str, dict] = {}
         self.current: str | None = None
@@ -376,13 +384,6 @@ class MarketAudit:
             self.state["enabled"] = bool(on)
             self._save("state")
 
-    def restart(self):
-        """Check every company again, from the start (results stay until each is replaced)."""
-        with self.lock:
-            self._load()
-            self.state["since"] = datetime.now(timezone.utc).isoformat()
-            self._save("state")
-
     def refresh_list(self, force: bool = False) -> bool:
         """Read the exchange's list when it is a day old (or now, when forced). Keeps the last good list on failure."""
         with self.lock:
@@ -421,22 +422,20 @@ class MarketAudit:
             return False
 
     def queue(self) -> list[str]:
-        """Companies due a check, in order: new listings not yet checked, never checked, then the oldest checks."""
+        """Companies due a check, in order: new listings not yet checked (newest first), then failed checks to retry."""
         now = datetime.now(timezone.utc)
         today = now.date()
-        cutoff = max(self.state.get("since") or "", (now - timedelta(days=REFRESH_DAYS)).isoformat())
         retry_cut = (now - timedelta(hours=RETRY_HOURS)).isoformat()
-        new, never, retry, stale = [], [], [], []
-        for sym in sorted(self.listing):
+        new, retry = [], []
+        for sym, info in self.listing.items():
             row = self.rows.get(sym) or {}
             at = row.get("at")
             if not at:
-                (new if self._is_new(sym, today) else never).append(sym)
-            elif at < cutoff:
-                stale.append((at, sym))
+                if self._is_new(sym, today):
+                    new.append((info.get("listed") or info.get("seen") or "", sym))
             elif _transient(row) and (row.get("tries") or 1) < MAX_TRIES and at < retry_cut:
-                retry.append((at, sym))           # a source was down or busy: try again soon, not in a month
-        return new + never + [s for _, s in sorted(retry)] + [s for _, s in sorted(stale)]
+                retry.append((at, sym))           # a source was down or busy: try again later
+        return [s for _, s in sorted(new, reverse=True)] + [s for _, s in sorted(retry)]
 
     # work
     def step(self) -> str | None:
@@ -487,7 +486,7 @@ class MarketAudit:
                            "checked": bool((self.rows.get(s) or {}).get("at"))}
                           for s, i in self.listing.items() if self._is_new(s, today)), key=lambda x: x["listed"] or "", reverse=True)
             avg = (sum(self.secs) / len(self.secs) + self.pause) if self.secs else None
-            return {**{k: self.state.get(k) for k in ("enabled", "list_at", "list_tried_at", "list_error", "since")},
+            return {**{k: self.state.get(k) for k in ("enabled", "list_at", "list_tried_at", "list_error")},
                     "listed": len(self.listing), "checked": len(self.rows), "due": len(due), "current": self.current,
                     "eta_hours": round(len(due) * avg / 3600, 1) if avg else None, "new_listings": new[:30],
                     "summary": summarise(rows), "rows": [r for r in rows if r.get("issues")]}
