@@ -20,7 +20,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import admin, audit, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
+from . import admin, audit, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
@@ -51,7 +51,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import ask, daily_report, ideas, library, public, push, risk, rotation, scan
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
-from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, AuditReq, MarketAuditReq, PricesReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
 
@@ -343,6 +343,26 @@ def health():
 @app.get("/plans")
 def plans():
     return PLANS
+
+
+@app.get("/pricing")
+def prices():
+    """Prices in every currency StratLab shows, which currency each is charged in, and country → currency."""
+    return pricing.public()
+
+
+@app.get("/admin/prices")
+def admin_prices(_=Depends(admin.admin_profile)):
+    """Every currency's prices and Razorpay plan IDs (blank: charged in rupees)."""
+    return {"currencies": pricing.table()}
+
+
+@app.put("/admin/prices")
+def admin_set_prices(req: PricesReq, _=Depends(admin.admin_profile)):
+    try:
+        return {"currencies": pricing.save(req.currencies)}
+    except ValueError as e:
+        err(400, "bad_price", str(e))
 
 
 @app.get("/me")
@@ -1582,7 +1602,7 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
     if profile.get("_paid_plan", profile["_plan"]) == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
     try:
-        return billing.create_subscription(profile, req.plan, req.period)
+        return billing.create_subscription(profile, req.plan, req.period, req.currency)
     except ValueError as e:
         err(503, "billing_offline", str(e))
     except rz_errors.BadRequestError as e:

@@ -29,12 +29,16 @@ USDJPY) traded in India. Today only the USDINR spot rate is available, through t
 - Options on USDINR in the Options tab, priced on live bid and ask like index options.
 
 ### International payments
-Payments are in rupees through Razorpay today. To let people outside India subscribe:
-- Turn on international cards in the Razorpay dashboard (needs Razorpay's approval). *Done:* Admin → Check payments
-  setup reports whether international cards are on, when Razorpay's answer says so.
-- Prices per currency (at least USD, plus GBP and EUR), shown by the visitor's country, with the matching Razorpay plans.
-- Taxes and invoices for overseas customers (GST rules for export of services), and the legal pages updated.
-- A clear note on what works for people outside India: Indian market data, US and other markets, the deep dive.
+*Done:* international cards are on in Razorpay, so anyone abroad can subscribe. The Plans page shows prices in the
+visitor's currency (from their country; they can switch) for 18 currencies, starting at rounded conversions of the
+rupee prices; Admin → Prices outside India changes any of them without a deploy. A currency is charged in that
+currency once its Razorpay plans are created and their IDs pasted there; until then it is charged in rupees and the
+page says so. Admin → Check payments setup checks those plans too.
+
+Still to do:
+- Set the final prices per country, and create the Razorpay plans for the currencies that should be charged locally.
+- Taxes and invoices for overseas customers (GST rules for export of services: usually zero-rated with a letter of
+  undertaking), with an accountant.
 
 ### Extreme stress test: one stop for everything StratLab offers
 The goal: nobody needs to open another site to check something StratLab already covers. A structured test, feature

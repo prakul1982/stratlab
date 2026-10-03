@@ -34,7 +34,7 @@ function Terms() {
       </ul>
       <h2 className="h3">Plans and payment</h2>
       <ul>
-        <li>The Free plan costs nothing. Basic and Pro are subscriptions billed monthly or yearly in Indian rupees at the prices on the Plans page when you subscribe.</li>
+        <li>The Free plan costs nothing. Basic and Pro are subscriptions billed monthly or yearly at the prices on the Plans page when you subscribe: in Indian rupees, or in your own currency where the Plans page says so. When a price is shown in another currency but charged in rupees, your card provider converts it and may add its own fee.</li>
         <li>Payments are processed by Razorpay. {BUSINESS.name} never sees or stores your card or bank details.</li>
         <li>A subscription renews automatically at the end of each period until you cancel it. You can cancel any time from the Account page; see <Link className="link" to="/refunds">Cancellation and refunds</Link>.</li>
         <li>If we change a price, it applies from your next renewal after we've told you, and you can cancel before then.</li>

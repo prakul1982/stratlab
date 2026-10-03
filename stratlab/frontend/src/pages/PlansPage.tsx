@@ -4,6 +4,7 @@ import { LegalLinks } from "./LegalPage";
 import { api, loadRazorpay } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
+import { money, usePricing } from "../lib/currency";
 
 const FEATURES: Record<string, string[]> = {
   free: ["5 experiments a month, each with a full verdict", "10 AI strategy builds a month", "Group tests of up to 10 instruments",
@@ -30,20 +31,32 @@ export function PlansPage() {
   const [yearly, setYearly] = useState(false);
   const period = yearly && yearlyOk ? "year" : "month";
   const paid = me?.paid_plan ?? me?.plan;   // me.plan is Pro for everyone during the launch offer
-  const priceOf = (p: string, per: string) => {
+  const { pricing, currency, pick } = usePricing();
+  const row = pricing?.currencies[currency];
+  const inr = pricing?.currencies.INR;
+  const rupees = (p: string, per: string) => {
     const sp = me?.plans?.[p];
     return sp ? (per === "year" ? sp.price_year : sp.price) : PRICE[p][per === "year" ? 1 : 0];
   };
+  /** The price shown in the visitor's currency, and the one their card is charged (rupees until that currency's plans exist). */
+  const priceOf = (p: string, per: string) => {
+    if (p === "free" && row) return { shown: money(row, 0, currency), charged: null as string | null };
+    if (p === "free" || !row || currency === "INR") return { shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, charged: null as string | null };
+    const local = (row as unknown as Record<string, number>)[per === "year" ? `${p}_year` : p];
+    const chargedIn = per === "year" ? row.yearly_charged_in : row.charged_in;
+    return { shown: money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null };
+  };
+  const anyRupees = currency !== "INR" && !!row && (period === "year" ? row.yearly_charged_in : row.charged_in) === "INR";
 
   const subscribe = async (plan: "basic" | "pro") => {
     if (me && paid !== "free" && !confirm(`Switch to ${plan === "pro" ? "Pro" : "Basic"}? Your current subscription stops billing once the new one is active.`)) return;
     setBusy(plan);
     try {
-      const d = await api<{ subscription_id: string; key_id: string; email: string }>("/billing/subscribe", { method: "POST", body: { plan, period } });
+      const d = await api<{ subscription_id: string; key_id: string; email: string; currency: string }>("/billing/subscribe", { method: "POST", body: { plan, period, currency } });
       await loadRazorpay();
       const rz = new window.Razorpay({
         key: d.key_id, subscription_id: d.subscription_id, name: "StratLab",
-        description: `${plan === "pro" ? "Pro" : "Basic"} plan, ₹${priceOf(plan, period).toLocaleString("en-IN")} / ${period}`,
+        description: `${plan === "pro" ? "Pro" : "Basic"} plan, ${d.currency === "INR" ? `₹${rupees(plan, period).toLocaleString("en-IN")}` : priceOf(plan, period).shown} / ${period}`,
         prefill: { email: d.email || "" }, theme: { color: "#1D1B17" },
         handler: async (resp: unknown) => {
           try { await api("/billing/verify", { method: "POST", body: resp }); await refreshMe(); notify(`You're on ${plan === "pro" ? "Pro" : "Basic"} now.`); }
@@ -65,6 +78,14 @@ export function PlansPage() {
         <p className="muted" style={{ fontSize: 17 }}>
           {billing ? "Billed through Razorpay. Cancel any time; your plan stays active until the paid period ends." : "Paid plans are coming soon. During early access every feature is unlocked for everyone; the Free plan's monthly limits still apply."}
         </p>
+        {pricing && (
+          <label className="row small" style={{ gap: 8, alignSelf: "flex-start" }}>Prices in
+            <select value={currency} onChange={(e) => pick(e.target.value)} aria-label="Currency">
+              {Object.entries(pricing.currencies).map(([c, r]) => <option key={c} value={c}>{c} · {r.name}</option>)}
+            </select>
+          </label>
+        )}
+        {anyRupees && billing && <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Paid in rupees for now: your card is charged the rupee price shown under each plan and your bank converts it, so the amount in {currency} can differ slightly.</p>}
         {billing && yearlyOk && (
           <div className="seg" role="group" aria-label="Billing period" style={{ alignSelf: "flex-start" }}>
             <button className={!yearly ? "on" : ""} aria-pressed={!yearly} onClick={() => setYearly(false)}>Monthly</button>
@@ -82,7 +103,10 @@ export function PlansPage() {
                 <h2 className="h2">{{ free: "Free", basic: "Basic", pro: "Pro" }[p]}</h2>
                 <span className="small muted">{WHO[p]}</span>
               </div>
-              <div className="serif" style={{ fontSize: 44, letterSpacing: "-0.02em" }}>₹{price.toLocaleString("en-IN")}<span className="small muted" style={{ fontFamily: "var(--sans)" }}> / {period}</span></div>
+              <div className="stack" style={{ gap: 2 }}>
+                <div className="serif" style={{ fontSize: 44, letterSpacing: "-0.02em" }}>{price.shown}<span className="small muted" style={{ fontFamily: "var(--sans)" }}> / {period}</span></div>
+                {price.charged && <span className="tiny muted">Charged as {price.charged} / {period}</span>}
+              </div>
               <ul className="stack" style={{ gap: 8, listStyle: "none", padding: 0, margin: 0, flex: 1 }}>
                 {FEATURES[p].map((f) => <li key={f} className="row" style={{ alignItems: "flex-start", gap: 10 }}><span style={{ color: "var(--blue)", fontWeight: 700 }}>✓</span>{f}</li>)}
               </ul>

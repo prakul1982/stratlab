@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, dateOnly, money } from "../lib/format";
 import { Loading, Modal } from "../components/ui";
 import { AuditPanel, MarketAuditPanel } from "../components/AuditPanel";
+import { PricesPanel } from "../components/PricesPanel";
 import { PlatformPanel } from "../components/PlatformPanel";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
 
@@ -279,6 +280,8 @@ export function AdminPage() {
               </div>
             </section>
           </div>
+
+          <PricesPanel />
 
           <PlatformPanel />
 
