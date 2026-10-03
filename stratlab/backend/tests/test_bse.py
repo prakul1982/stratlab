@@ -88,3 +88,20 @@ def test_bse_rows_and_the_daily_check(monkeypatch):
         assert platform_check.check_bse_filings(main.filings_feed.bse)["state"] == "pass"
     finally:
         w["close"]()
+
+
+def test_market_sheet_fixes_india(monkeypatch):
+    """From the whole-market audit sheets: BSE debt codes aren't companies, and NSE stocks in a restricted series
+    (the broker's SYMBOL-BE) are found by their plain symbol."""
+    from app import universes
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        k = main.kite
+        assert k.equity("978260") is None and not [r for r in k._inst if r.get("bse_code") == "978260"]
+        assert k.equity("SLOWCO")["symbol"] == "SLOWCO-BE"
+        ids, missing = universes.resolve(main.markets, "IN", [{"symbol": "SLOWCO"}])
+        assert ids == [k.equity("SLOWCO")["id"]] and missing == []
+        assert main.price_trend("SLOWCO") is not None                                   # its trend and stage now show
+    finally:
+        w["close"]()

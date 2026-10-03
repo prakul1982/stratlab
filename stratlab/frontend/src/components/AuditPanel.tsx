@@ -115,7 +115,7 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
       <p className="small muted" style={{ maxWidth: "80ch", margin: 0 }}>{us
         ? "The SEC's list of companies is read once a day. Each company that newly appears on it is checked once from its filings, the same way as the audit above; ones that drop off the list are removed."
         : "The lists of every company in India (all of NSE, plus those listed only on BSE, shown as BSE: and their code) are read once a day. Each new listing is checked once, the same way as the audit above; delisted companies drop off."}
-        {" "}Every company is checked once to start (a full check takes about a day); after that only new listings are, unless you start another full check. A check that failed because a source was down is tried again. It pauses while an audit above runs.</p>
+        {" "}Every company not checked yet is checked once to start (companies already checked keep their results); after that only new listings are, unless you start another full check. A check that failed because a source was down is tried again. It pauses while an audit above runs.</p>
       {!m ? <p className="small muted">Loading…</p> : (
         <>
           <p className="small" style={{ margin: 0 }}>

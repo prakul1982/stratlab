@@ -258,8 +258,8 @@ class NSEFilings:
         for row in csv.DictReader(io.StringIO(r.text)):
             row = {str(k or "").strip().upper(): str(v or "").strip() for k, v in row.items()}
             sym, series = row.get("SYMBOL", "").upper(), row.get("SERIES", "").upper()
-            if not sym or series not in ("EQ", "BE"):
-                continue
+            if not sym or series not in ("EQ", "BE") or sym.endswith(("-RE", "-PP")):
+                continue                        # rights entitlements and partly paid shares aren't companies
             try:
                 listed = datetime.strptime(row.get("DATE OF LISTING", ""), "%d-%b-%Y").date().isoformat()
             except ValueError:

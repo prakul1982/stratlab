@@ -23,6 +23,9 @@ INTERVALS = {"1d": ("day", 1900, 1), "1h": ("60minute", 380, 7), "15m": ("15minu
 DEFAULT_SYMBOLS = [("NSE", "NIFTY 50"), ("NSE", "NIFTY BANK")]
 
 
+NSE_SERIES = ("BE", "BZ", "SM", "ST", "SZ")     # trade-to-trade, z-group and SME series, on the broker as SYMBOL-BE…
+
+
 def norm_name(n: str | None) -> str:
     """A company name for matching across exchanges: lower case, without Ltd, Limited, India and the like."""
     n = re.sub(r"[^a-z0-9 ]", " ", (n or "").lower())
@@ -40,6 +43,8 @@ def bse_only_rows(raw: list[dict], nse_rows: list[dict]) -> list[dict]:
             continue
         if ts.upper() in syms or norm_name(x.get("name")) in names:
             continue
+        if int(code) >= 600000 or norm_name(x.get("name")) in ("", code):
+            continue                            # 6xxxxx-9xxxxx are bonds, bills and other debt, not companies
         out.append(x)
     return out
 
@@ -291,11 +296,16 @@ class KiteService:
         return v["last_price"] if v else None
 
     def equity(self, symbol: str) -> dict | None:
-        """A listed company's stock: on NSE by symbol, or listed only on BSE, by its BSE symbol or six-digit code."""
+        """A listed company's stock: on NSE by symbol (also when it trades in a restricted or SME series, which the
+        broker lists as SYMBOL-BE, -BZ, -SM…), or listed only on BSE, by its BSE symbol or six-digit code."""
         hit = self.by_symbol(symbol)
         if hit and hit["type"] == "EQ":
             return hit
         symbol = symbol.strip().upper()
+        for series in NSE_SERIES:
+            hit = self.by_symbol(f"{symbol}-{series}")
+            if hit and hit["type"] == "EQ":
+                return hit
         for r in self._inst:
             if r["exchange"] == "BSE" and (r["symbol"] == symbol or r.get("bse_code") == symbol):
                 return r

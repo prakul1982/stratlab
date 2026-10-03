@@ -14,6 +14,7 @@ PE_TOLERANCE = 0.25            # our P/E from market cap and trailing profit vs 
 TTM_TOLERANCE = 0.05           # trailing-year revenue vs the last four quarters added up
 TTM_ROUNDING = 2               # ...but tiny companies' quarters are shown in whole crore, so 2 cr apart is rounding
 PRICE_TOLERANCE = 0.03         # prices from different sources, allowing for a day's move
+PRICE_TICK = 0.02              # ...but a cent or two apart on a penny stock is just its price step
 
 
 # whole NSE indices, read from the exchange's own constituent lists when the audit starts
@@ -95,7 +96,8 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None) -> 
         # page's own figure, shown as filed, so it is worth a look but isn't our reading going wrong
         odd = [y["year"] for y in years if y.get("opm") is not None and y["opm"] > 100]
         if odd:
-            out.append(_issue("gap", "Numbers", f"The company page shows an operating margin above 100% in {', '.join(odd[:4])} (costs written back)"))
+            src = "The filings show" if p.get("region") == "US" else "The company page shows"
+            out.append(_issue("gap", "Numbers", f"{src} an operating margin above 100% in {', '.join(odd[:4])} (costs written back)"))
         if len(years) >= 3 and all(y.get("capex") is None for y in years[-3:]):
             out.append(_issue("gap", "Capex", "No capex estimate for the last three years"))
     ttm = _last_ttm(p.get("pl"), "Net Profit")
@@ -110,7 +112,8 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None) -> 
     if ttm_sales and len(q) == 4 and all(v is not None for v in q):
         off = _off(sum(q), ttm_sales)
         if off is not None and off > TTM_TOLERANCE and abs(sum(q) - ttm_sales) > TTM_ROUNDING:
-            out.append(_issue("mismatch", "Numbers", f"Trailing revenue {ttm_sales:,.0f} cr vs last four quarters {sum(q):,.0f} cr"))
+            unit = ("$m", "") if p.get("region") == "US" else ("", " cr")
+            out.append(_issue("mismatch", "Numbers", f"Trailing revenue {unit[0]}{ttm_sales:,.0f}{unit[1]} vs last four quarters {unit[0]}{sum(q):,.0f}{unit[1]}"))
     return out
 
 
@@ -121,7 +124,7 @@ def check_prices(snap: dict, trend: dict | None, exchange: float | None) -> list
     ours = trend.get("price") if trend else None
     for label, other in (("the exchange's live quote", exchange), ("the company page", snap.get("price"))):
         off = _off(ours, other)
-        if off is not None and off > PRICE_TOLERANCE:
+        if off is not None and off > PRICE_TOLERANCE and abs(ours - other) > PRICE_TICK:
             out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {other:,.2f} on {label}"))
             break
     return out
@@ -144,10 +147,12 @@ def check_view(view: dict) -> list[dict]:
     if view.get("doc_note"):
         out.append(_issue("error", "Documents", view["doc_note"]))
     elif view.get("region") == "US":
-        kinds = [d["kind"] for d in view.get("documents") or []]
+        docs = view.get("documents") or []
+        kinds = [d["kind"] for d in docs]
+        foreign = any(d.get("form") in ("20-F", "40-F") for d in docs)      # foreign companies file no 10-Qs
         if "annual_report" not in kinds:
-            out.append(_issue("gap", "Documents", "No annual report (10-K) filed in the last two years"))
-        if "quarterly_report" not in kinds:
+            out.append(_issue("gap", "Documents", "No annual report (10-K, 20-F or 40-F) filed in the last two years"))
+        if "quarterly_report" not in kinds and not foreign:
             out.append(_issue("gap", "Documents", "No quarterly report (10-Q) filed in the last two years"))
     else:
         kinds = [d["kind"] for d in view.get("documents") or []]
@@ -176,7 +181,7 @@ def check_documents(docs: list[dict], read) -> list[dict]:
     return out
 
 
-NOT_COVERED = ("has no annual results filed", "isn't a company that files with the SEC")
+NOT_COVERED = ("has no annual results filed", "isn't a company that files with the SEC", "has nothing for that")
 
 
 class Skipped(Exception):
@@ -378,25 +383,29 @@ class MarketAudit:
             print("could not save the market audit:", e)
 
     # control
-    def start_full(self):
-        """Check every listed company once (results stay until each is replaced), then go back to new listings."""
+    def start_full(self, everything: bool = True):
+        """Check listed companies once, then go back to new listings: every one of them again (results stay until
+        each is replaced), or with everything=False only those never checked."""
         with self.lock:
             self._load()
-            self.state.update(full_since=datetime.now(timezone.utc).isoformat(), full_done=None)
+            self.state.update(full_since=datetime.now(timezone.utc).isoformat(), full_done=None, full_all=everything)
             self._save("state")
 
     def full_once(self):
-        """The first time this runs: one full check of every company, so the whole market starts out checked."""
+        """The first time this runs: every company not checked yet, once, so the whole market starts out checked.
+        Companies already checked keep their results and aren't repeated."""
         with self.lock:
             self._load()
             started = self.state.get("full_since") or self.state.get("full_done")
         if not started:
-            self.start_full()
+            self.start_full(everything=False)
 
     def _full_left(self) -> list[str]:
         since = self.state.get("full_since")
         if not since:
             return []
+        if not self.state.get("full_all", True):
+            return sorted(s for s in self.listing if not (self.rows.get(s) or {}).get("at"))
         return sorted(s for s in self.listing if ((self.rows.get(s) or {}).get("at") or "") < since)
 
     def set_enabled(self, on: bool):
@@ -527,7 +536,8 @@ class MarketAudit:
             return {**{k: self.state.get(k) for k in ("enabled", "list_at", "list_tried_at", "list_error")},
                     "full": {"running": bool(self.state.get("full_since")), "since": self.state.get("full_since"),
                              "done_at": self.state.get("full_done"), "left": left,
-                             "checked": len(self.listing) - left if self.state.get("full_since") else None},
+                             "checked": len(self.listing) - left if self.state.get("full_since") else None,
+                             "everything": bool(self.state.get("full_all", True))},
                     "listed": len(self.listing), "checked": len(self.rows), "due": len(due), "current": self.current,
                     "eta_hours": round(len(due) * avg / 3600, 1) if avg else None, "new_listings": new[:30],
                     "summary": summarise(rows), "rows": [r for r in rows if r.get("issues")]}

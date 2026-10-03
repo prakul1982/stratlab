@@ -52,9 +52,13 @@ class FakeKiteConnect:
             token += 1
             self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": s.title(), "segment": "NSE",
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
+        # NSE stocks in a restricted series: the broker lists them as SYMBOL-BE
+        token += 1
+        self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": "SLOWCO-BE", "name": "SLOW CO", "segment": "NSE",
+                                 "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         # BSE: one company listed only there, Reliance (on NSE too, so it stays NSE's) and a bond (not a stock)
         for ts, code, name, itype in (("TINYCO", 543210, "TINY CO", "EQ"), ("RELIANCE", 500325, "RELIANCE", "EQ"),
-                                      ("GSEC2030", 700001, "GOVT BOND", "GS")):
+                                      ("GSEC2030", 700001, "GOVT BOND", "GS"), ("TBILL91", 978260, "978260", "EQ")):
             token += 1
             self.rows["BSE"].append({"instrument_token": token, "exchange_token": code, "tradingsymbol": ts, "name": name,
                                      "segment": "BSE", "instrument_type": itype, "lot_size": 1, "expiry": None, "strike": 0})

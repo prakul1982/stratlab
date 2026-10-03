@@ -2119,8 +2119,15 @@ market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: b
 
 
 def _sec_companies() -> list[dict]:
-    """Every company with a ticker that files with the SEC, from the SEC's own list."""
-    return [{"symbol": t, "name": v["name"], "listed": None} for t, v in sec_feed.tickers().items()]
+    """Every company that files with the SEC, once each: its main ticker, not its preferred shares, warrants or units
+    (the SEC lists those too, under the same company). The SEC's list puts a company's main ticker first."""
+    first: dict[int, str] = {}
+    for t, v in sec_feed.tickers().items():
+        cik = v["cik"]
+        if cik not in first or ("-" in first[cik] and "-" not in t):
+            first[cik] = t
+    names = sec_feed.tickers()
+    return [{"symbol": t, "name": names[t]["name"], "listed": None} for t in first.values()]
 
 
 market_audit_us = audit.MarketAudit(lambda: _sec_companies(), lambda s: audit_one(s, False, None, "US"),
