@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 // Signed in as the site owner (the fake database's admin-token), with the tour already seen.
@@ -124,7 +125,7 @@ for (const [path, name, symbol] of [["/stocks/in/RELIANCE", "Reliance Industries
   test(`public company page ${path}`, async ({ page }, info) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.goto("http://127.0.0.1:8765" + path);
+    await page.goto(API + path);
     await expect(page.locator("h1")).toContainText(name);
     await expect(page.getByRole("link", { name: `Test a strategy on ${symbol}` })).toBeVisible();
     await expect(page.getByRole("link", { name: "Open the full deep dive" })).toBeVisible();
@@ -225,7 +226,11 @@ async function settle(page: Page) {
   await expect(level).toHaveCount(0);
 }
 
-test("my holdings: positions, sectors and facts per stock, then a broker file added", async ({ page }, info) => {
+test("my holdings: positions, sectors and facts per stock, then a broker file added", async ({ page, request }, info) => {
+  // start from the owner's Zerodha file again: the other project's run of this test added a Groww file to the shared account
+  const zerodha = "zerodha_console_holdings.xlsx";
+  expect((await request.post(`${API}/holdings/import`, { headers: { Authorization: "Bearer admin-token" },
+    data: { filename: zerodha, data: readFileSync(HOLDINGS_FILES + zerodha).toString("base64"), mode: "replace" } })).ok()).toBeTruthy();
   const errors = await open(page, "/holdings", "By sector");
   await settle(page);
   const table = page.getByRole("table", { name: "Positions" });
@@ -238,7 +243,7 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
   await page.getByRole("radio", { name: "Add to them" }).click();
   await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "groww_holdings_statement.xlsx");
-  await expect(page.getByText("Read as a Groww file")).toBeVisible();
+  await expect(page.getByText("Read as a Groww file")).toBeVisible({ timeout: 30_000 });   // matching a first file reads the stock lists
   const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
   await expect(missed.getByText(/INE000X01000/)).toBeVisible();
   await expect(table.getByText("INFY", { exact: true })).toBeVisible();

@@ -13,11 +13,12 @@ import pytest
 import uvicorn
 
 sys.path.insert(0, ".")
-os.environ.setdefault("FRONTEND_ORIGIN", "http://127.0.0.1:5599,http://localhost:5599")   # the browser tests' page
+_web = os.environ.get("E2E_WEB_PORT", "5599")
+os.environ.setdefault("FRONTEND_ORIGIN", f"http://127.0.0.1:{_web},http://localhost:{_web}")   # the browser tests' page
 from app import main  # noqa: E402
 from tests import world  # noqa: E402
 
-PORT = 8765
+PORT = int(os.environ.get("E2E_API_PORT", "8765"))     # another port lets two test runs share a machine
 LOSS = "TCS"
 
 
