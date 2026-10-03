@@ -116,6 +116,12 @@ def result_item(r: dict) -> dict:
     return _item(f"{r['symbol']}: {r['purpose']} on {_day(r['date'])}{when}", stock_url(r["region"], r["symbol"]))
 
 
+def action_item(r: dict) -> dict:
+    """One corporate action: what it is, its ex-date and record date, as announced."""
+    rec = f", record date {_day(r['record_date'])}" if r.get("record_date") else ""
+    return _item(f"{r['symbol']}: {r['text']}, ex-date {_day(r['ex_date'])}{rec}", stock_url(r["region"], r["symbol"]))
+
+
 def stock_sections(f: dict) -> list[dict]:
     out = []
     if f.get("stocks"):
@@ -123,6 +129,8 @@ def stock_sections(f: dict) -> list[dict]:
             _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])) for r in f["stocks"]]})
     if f.get("results"):
         out.append({"title": "Results this week", "items": [result_item(r) for r in f["results"]]})
+    if f.get("actions"):
+        out.append({"title": "Corporate actions", "items": [action_item(r) for r in f["actions"]]})
     if f.get("unchanged"):
         out.append({"title": "No change", "items": [_item(", ".join(f["unchanged"]))]})
     if f.get("paper"):
@@ -148,6 +156,9 @@ def subject(f: dict) -> str:
     k = len({r["symbol"] for r in f.get("results") or []})
     if not n and k:
         return f"My Stocks, {when}: results this week for {k} of your stocks"
+    m = len({r["symbol"] for r in f.get("actions") or []})
+    if not n and m:
+        return f"My Stocks, {when}: ex-dates this week for {m} of your stocks"
     return f"My Stocks, {when}: {n} of your stocks {'has' if n == 1 else 'have'} news"
 
 
@@ -170,7 +181,7 @@ def template(f: dict) -> str:
         return " ".join(parts) or f"Here is the {REGION_NAME[f['region']]} market {span}."
     n = len(f.get("stocks") or [])
     flags = sum(len(r.get("filings") or []) for r in f.get("stocks") or [])
-    parts = [f"{n} of your stocks had something new {span}."] if n or not f.get("results") else []
+    parts = [f"{n} of your stocks had something new {span}."] if n or not (f.get("results") or f.get("actions")) else []
     if flags:
         parts.append(f"{flags} new filing{'s' if flags != 1 else ''} to look at.")
     trades = sum(len(r.get("deals") or []) for r in f.get("stocks") or [])
@@ -182,6 +193,9 @@ def template(f: dict) -> str:
         parts.append(f"{due} of your stocks {'has' if due == 1 else 'have'} a results date this week.")
     if filed:
         parts.append(f"{filed} filed {'its' if filed == 1 else 'their'} results.")
+    ex = len({r["symbol"] for r in f.get("actions") or []})
+    if ex:
+        parts.append(f"{ex} of your stocks {'has' if ex == 1 else 'have'} an ex-date this week (a dividend, bonus, split or other corporate action).")
     return " ".join(parts)
 
 

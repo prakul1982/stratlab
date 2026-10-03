@@ -182,6 +182,13 @@ class HoldingsReq(BaseModel):
     items: list[HoldingItem] = Field(default_factory=list, max_length=500)
 
 
+class CorpActionReq(BaseModel):
+    """Apply a bonus or split to one holding, set it aside (the saved quantity already shows it), or undo the last."""
+    symbol: str = Field(min_length=1, max_length=20)
+    id: str = Field("", max_length=80)
+    action: Literal["apply", "dismiss", "undo"] = "apply"
+
+
 class ExperimentReq(DataReq):
     label: str = Field("", max_length=120)
 

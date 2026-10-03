@@ -17,6 +17,7 @@ import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { DealsPanel } from "../components/Deals";
 import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
+import { CompanyActions } from "../components/CorpActions";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 
 function useRegion(): [Region, (r: Region) => void] {
@@ -229,6 +230,9 @@ export function CompanyPage() {
         info="Who bought or sold, from exchange disclosures: promoters', directors' and key staff's own trades and pledges, holders crossing 5% and moving 2% at a time (substantial acquisitions), and bulk and block deals with the named client."><DealsPanel symbol={sym} /></Panel>}
 
       {c.quarters && c.quarters.cols.length > 0 && <Panel title="Last quarters" span="full"><QuarterTable q={c.quarters} /></Panel>}
+
+      <Panel title="Corporate actions" id="corporate-actions" span="full"
+        info="Dividends, bonus issues, splits, buybacks and rights issues, with ex-dates and record dates, as the company announced them."><CompanyActions region={region} symbol={c.symbol} /></Panel>
 
       <AIRead region={region} symbol={c.symbol} onTest={(i) => test(c, i)} />
 

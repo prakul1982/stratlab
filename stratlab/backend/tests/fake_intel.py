@@ -122,5 +122,10 @@ def fake_bse():
                     text = text.replace("{" + k + "}", v.isoformat())
                 rows = json.loads(text)
             return httpx.Response(200, json={"Table": rows, "Table1": [{"ROWCNT": len(rows)}]})
+        if req.url.path.endswith("/DefaultData/w"):           # corporate actions: an interim dividend for the BSE-only company
+            ex = (date.today() + timedelta(days=7)).strftime("%d %b %Y")
+            rows = [{"scrip_code": "543210", "short_name": "TINYCO", "long_name": "Tiny Co Ltd", "Ex_date": ex, "RD_Date": ex,
+                     "Purpose": "Interim Dividend - Rs. - 0.5000"}] if req.url.params.get("scripcode") == "543210" else []
+            return httpx.Response(200, json={"Table": rows})
         return httpx.Response(404)
     return httpx.MockTransport(handler)

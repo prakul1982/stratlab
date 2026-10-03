@@ -96,6 +96,24 @@ def board_meetings(today=None) -> list[dict]:
             {"bm_symbol": "INFY", "sm_name": "Infosys Limited", "bm_date": f(3), "bm_purpose": "Dividend", "bm_desc": "Interim dividend"}]
 
 
+def corporate_actions(today=None) -> list[dict]:
+    """The exchange's corporate-actions list, relative to today: a TCS bonus going ex today and its dividend in three
+    days, a RELIANCE dividend, an INFY split, an ITC buyback just gone, an AGM (not an action), and past dividends."""
+    t = today or datetime.now(IST).date()
+    f = lambda d: (t + timedelta(days=d)).strftime("%d-%b-%Y")
+    rows = [("TCS", "Tata Consultancy Services Limited", "Bonus 1:1", 0), ("TCS", "Tata Consultancy Services Limited", "Interim Dividend - Rs 11 Per Share", 3),
+            ("RELIANCE", "Reliance Industries Limited", "Dividend - Rs 5.50 Per Share", 5),
+            ("INFY", "Infosys Limited", "Face Value Split (Sub-Division) - From Rs 5/- Per Share To Re 1/- Per Share", 12),
+            ("ITC", "ITC Limited", "Buy Back", -3), ("HDFCBANK", "HDFC Bank Limited", "Annual General Meeting", 4),
+            ("TCS", "Tata Consultancy Services Limited", "Final Dividend - Rs - 30.0000", -100),
+            ("TCS", "Tata Consultancy Services Limited", "Interim Dividend - Rs 10 Per Share", -200),
+            ("TCS", "Tata Consultancy Services Limited", "Special Dividend - Rs 66 Per Share", -400),
+            ("RELIANCE", "Reliance Industries Limited", "Dividend - Rs 10 Per Share", -60),
+            ("HDFCBANK", "HDFC Bank Limited", "Dividend - Rs 22 Per Share", -120)]
+    return [{"symbol": s, "series": "EQ", "comp": n, "subject": sub, "exDate": f(d), "recDate": f(d), "faceVal": "1",
+             "bcStartDate": "-", "bcEndDate": "-", "isin": "-"} for s, n, sub, d in rows]
+
+
 # real ISINs for the fake exchange's list, so broker files that carry only an ISIN and a name can be matched
 ISINS = [("TCS", "Tata Consultancy Services Limited", "INE467B01029"), ("INFY", "Infosys Limited", "INE009A01021"),
          ("HDFCBANK", "HDFC Bank Limited", "INE040A01034"), ("ITC", "ITC Limited", "INE154A01025"),
@@ -160,6 +178,14 @@ def _nse(sw=None):
             return _deals_answer(r)
         if r.url.path == "/api/corporate-board-meetings":
             return httpx.Response(200, json=board_meetings())
+        if r.url.path == "/api/corporates-corporateActions":
+            acts, p = corporate_actions(), r.url.params
+            if p.get("symbol"):
+                acts = [x for x in acts if x["symbol"] == p["symbol"]]
+            if p.get("from_date") and p.get("to_date"):
+                frm, to = (datetime.strptime(p[k], "%d-%m-%Y").date() for k in ("from_date", "to_date"))
+                acts = [x for x in acts if frm <= datetime.strptime(x["exDate"], "%d-%b-%Y").date() <= to]
+            return httpx.Response(200, json=acts)
         if r.url.path == "/api/equity-stockIndices":
             idx = r.url.params.get("index", "")
             names = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC"] if idx == "NIFTY 500" else []

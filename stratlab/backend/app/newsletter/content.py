@@ -234,6 +234,20 @@ def results_week(uid: str, day: date, weekly: bool, since: str) -> list[dict]:
     return sorted(out, key=lambda r: (r["date"], r["symbol"]))
 
 
+def actions_week(uid: str, day: date, weekly: bool) -> list[dict]:
+    """The user's stocks with an ex-date (dividend, bonus, split, buyback, rights) in the seven days from the issue's
+    day (the week ahead, for Saturday's issue), from the stored corporate-actions calendar."""
+    from .. import corp_actions
+    start = day + timedelta(days=1) if weekly else day
+    out = []
+    for region in REGIONS:
+        syms = {s for r, s in my_stocks(uid) if r == region}
+        if syms:
+            out += [{k: r.get(k) for k in ("symbol", "region", "kind", "text", "ex_date", "record_date")}
+                    for r in _safe(lambda: corp_actions.between(region, start, start + timedelta(days=6), syms), []) or []]
+    return sorted(out, key=lambda r: (r["ex_date"], r["symbol"]))
+
+
 def stock_facts(uid: str, day: date, weekly: bool = False, since: str | None = None) -> dict:
     """Everything My Stocks reports for one user. `since` is when their last issue went out (ISO); filings are
     counted from then, or from the reference day if that is later. `changed` is False when there is nothing to send."""
@@ -245,6 +259,8 @@ def stock_facts(uid: str, day: date, weekly: bool = False, since: str | None = N
     # results count as news on their own when they're today or tomorrow (any day of the week ahead, weekly), or filed
     soon = (day + timedelta(days=7 if weekly else 1)).isoformat()
     news = [r for r in due if r.get("out") or r["date"] <= soon]
+    acts = actions_week(uid, day, weekly)          # an ex-date counts as news on the same terms as a results date
+    news += [r for r in acts if r["ex_date"] <= soon]
     return {"kind": "my_stocks", "uid": uid, "day": day.isoformat(), "weekly": weekly, "since": since,
             "stocks": moved, "unchanged": [r["symbol"] for r in rows if not r["changed"]],
-            "results": due, "paper": paper_lines(uid, day), "changed": bool(moved or news)}
+            "results": due, "actions": acts, "paper": paper_lines(uid, day), "changed": bool(moved or news)}
