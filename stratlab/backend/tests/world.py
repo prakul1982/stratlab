@@ -97,6 +97,14 @@ def _nse(sw=None):
             return httpx.Response(200, text="<html></html>", headers={"set-cookie": "nsit=abc; Path=/"})
         if r.url.path == "/api/corporate-announcements":
             return httpx.Response(200, json=rows)
+        if r.url.path == "/api/equity-stockIndices":
+            idx = r.url.params.get("index", "")
+            names = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC"] if idx == "NIFTY 500" else []
+            return httpx.Response(200, json={"data": [{"symbol": idx, "priority": 1}] + [{"symbol": n} for n in names]})
+        if r.url.path == "/api/holiday-master":
+            return httpx.Response(200, json={"CM": [{"tradingDate": "26-Jan-2027", "weekDay": "Tuesday", "description": "Republic Day"},
+                                                    {"tradingDate": "22-Mar-2027", "weekDay": "Monday", "description": "Holi"}],
+                                             "FO": []})
         if r.url.path == "/api/quote-equity":
             return httpx.Response(200, json={"industryInfo": {"macro": "Energy", "industry": "Refineries"},
                                              "priceInfo": {"lastPrice": 2900.5}})

@@ -7,6 +7,7 @@ import math
 import re
 import secrets
 import threading
+import time
 import traceback
 import uuid
 from contextlib import asynccontextmanager
@@ -136,6 +137,7 @@ async def lifespan(app: FastAPI):
     filing_alerts_job.start()
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     threading.Thread(target=warm_caches, daemon=True).start()
+    threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
     yield
 
 
@@ -1616,12 +1618,37 @@ def server_status() -> dict:
 
 
 def calendar_status() -> dict:
-    """How far ahead India's exchange holidays are known: the installed calendar, plus the list the admin pasted."""
+    """How far ahead India's exchange holidays are known: the installed calendar, the exchange's own list (fetched
+    daily) and anything the admin pasted."""
     until = trading_calendar.known_until("IN")
     added = sorted(trading_calendar.extra_holidays("IN"))
-    last = max([d for d in added] + [until.isoformat() if until else ""]) or None
+    auto = trading_calendar.auto_status("IN")
+    # the exchange's list covers its whole year: holidays known to the end of the latest year it lists
+    latest_year = max([int(d[:4]) for d in auto.get("days") or []] + [0])
+    ends = [until.isoformat() if until else "", f"{latest_year}-12-31" if latest_year else ""]
+    last = max(ends) or None
     days_left = (date.fromisoformat(last) - datetime.now(IST).date()).days if last else None
-    return {"known_until": until.isoformat() if until else None, "added": added, "covered_until": last, "days_left": days_left}
+    return {"known_until": until.isoformat() if until else None, "added": added, "covered_until": last, "days_left": days_left,
+            "auto": {"at": auto.get("at"), "tried_at": auto.get("tried_at"), "error": public_text(auto.get("error")),
+                     "count": len(auto.get("days") or [])}}
+
+
+def holiday_job():
+    """Once a day: the exchange's holiday list, so next year's holidays arrive by themselves when it publishes them."""
+    time.sleep(90)                          # after startup traffic
+    while True:
+        try:
+            trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
+        except Exception as e:
+            print("holiday refresh failed:", e)
+        time.sleep(24 * 3600)
+
+
+@app.post("/admin/holidays/refresh")
+def admin_holidays_refresh(_=Depends(admin.admin_profile)):
+    """Fetch the exchange's holiday list now instead of waiting for the daily run."""
+    trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
+    return calendar_status()
 
 
 @app.post("/admin/holidays")
@@ -1772,11 +1799,15 @@ def admin_audit_status(_=Depends(admin.admin_profile)):
 @app.post("/admin/audit")
 def admin_audit_start(req: AuditReq, _=Depends(admin.admin_profile)):
     """Run every company in a set through the deep dive's numbers, prices, checks and documents, comparing each
-    against its source. Runs in the background (about 3 to 10 seconds a company); no AI is used."""
+    against its source. Runs in the background (about 3 to 10 seconds a company, so a NIFTY 500 run takes about an
+    hour); no AI is used."""
     try:
-        syms = audit.symbols_for(req.set, req.symbols)
+        syms = audit.symbols_for(req.set, req.symbols, getattr(filings_feed, "index_members", None))
     except ValueError:
         err(400, "bad_set", "Pick one of the listed sets.")
+    except SourceError as e:
+        err(503, "index_unavailable", f"The exchange's index list couldn't be read ({e}). Try again in a minute, "
+                                      "or paste the symbols instead.")
     syms = [research_routes.symbol_of(s) for s in syms]
     label = f"{len(syms)} chosen companies" if req.symbols else next((s["name"] for s in audit.sets() if s["id"] == req.set), req.set)
     try:

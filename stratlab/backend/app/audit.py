@@ -8,18 +8,24 @@ from datetime import datetime, timezone
 from . import db, sector_members, universes
 
 KEY = "audit:last"
-MAX_SYMBOLS = 300
+MAX_SYMBOLS = 600
 PE_TOLERANCE = 0.25            # our P/E from market cap and trailing profit vs the page's stated P/E (minority
                                # shares and one-offs beyond this are explained on the page by a note)
 TTM_TOLERANCE = 0.05           # trailing-year revenue vs the last four quarters added up
 PRICE_TOLERANCE = 0.03         # prices from different sources, allowing for a day's move
 
 
+# whole NSE indices, read from the exchange's own constituent lists when the audit starts
+INDEX_SETS = {"nifty500": ("NIFTY 500", "NIFTY 500", 500), "niftynext50": ("NIFTY NEXT 50", "NIFTY Next 50", 50),
+              "midcap150": ("NIFTY MIDCAP 150", "NIFTY Midcap 150", 150), "smallcap250": ("NIFTY SMALLCAP 250", "NIFTY Smallcap 250", 250)}
+
+
 def sets() -> list[dict]:
-    """The sets an audit can run on: the ready-made groups, and every sector's main stocks together."""
+    """The sets an audit can run on: the ready-made groups, every sector's main stocks, and whole NSE indices."""
     out = [{"id": p["id"], "name": p["name"], "count": len(p["symbols"])} for p in universes.PRESETS["IN"]]
     every = all_sector_stocks()
     out.append({"id": "sectors", "name": "Every sector's main stocks", "count": len(every)})
+    out += [{"id": k, "name": f"{name} (the exchange's list)", "count": n} for k, (_, name, n) in INDEX_SETS.items()]
     return out
 
 
@@ -32,7 +38,12 @@ def all_sector_stocks() -> list[str]:
     return seen
 
 
-def symbols_for(set_id: str, custom: list[str] | None = None) -> list[str]:
+def symbols_for(set_id: str, custom: list[str] | None = None, members=None) -> list[str]:
+    """`members(index)` gives an NSE index's stocks (the exchange feed), for the whole-index sets."""
+    if set_id in INDEX_SETS and not custom:
+        if members is None:
+            raise ValueError("Index lists aren't available here.")
+        return members(INDEX_SETS[set_id][0])[:MAX_SYMBOLS]
     if custom:
         return list(dict.fromkeys(s.strip().upper() for s in custom if s.strip()))[:MAX_SYMBOLS]
     if set_id == "sectors":

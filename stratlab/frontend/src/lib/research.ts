@@ -124,12 +124,13 @@ export function bigMoney(v: number | null | undefined, currency: string): string
 
 /** A trend value in its unit: "₹ Cr" values are already crores, "USD" values are dollars. */
 export function trendValue(v: number, unit: string): string {
-  if (unit === "₹ Cr") {
+  // Indian figures are in crore: show them whole (₹2,812 Cr), with a decimal only for small ones (₹4.6 Cr)
+  if (/cr/i.test(unit)) {
     const a = Math.abs(v);
-    return a >= 1e5 ? `${(v / 1e5).toFixed(1)}L` : a >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : `${Math.round(v)}`;
+    return a < 10 ? v.toFixed(1) : Math.round(v).toLocaleString("en-IN");
   }
-  const a = Math.abs(v);
-  return a >= 1e9 ? `${(v / 1e9).toFixed(1)}B` : a >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : `${Math.round(v / 1e3)}k`;
+  const a = Math.abs(v);      // other markets report in whole currency units
+  return a >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : a >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Math.round(v).toLocaleString("en-US");
 }
 
 export function metricText(m: MetricItem, currency: string): string {

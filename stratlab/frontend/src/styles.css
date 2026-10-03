@@ -396,8 +396,10 @@ td.num, .num { font-family: var(--mono); }
 /* bars */
 .tbars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; align-items: end; }
 .tbar { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
-.tbar-col { height: 116px; width: 100%; max-width: 46px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
-.tbar-col > div { width: 100%; border-radius: 4px 4px 0 0; }
+.tbar-plot { position: relative; width: 100%; }
+.tbar-bar { position: absolute; left: 50%; transform: translateX(-50%); width: 100%; max-width: 46px; }
+.tbar-zero { position: absolute; left: -4px; right: -4px; border-top: 1px solid var(--line); }
+.tbar-num { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 10.5px; }
 .eq { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .eq-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .eq-plot { position: relative; width: 100%; height: 140px; margin-top: 18px; }
