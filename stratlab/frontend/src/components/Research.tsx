@@ -247,24 +247,38 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
 /* ---------- bars ---------- */
 export function TrendBars({ points, label, unit, tone = "ink" }: { points: SeriesPoint[]; label: string; unit: string; tone?: "ink" | "blue" }) {
   if (points.length < 2) return null;
-  const max = Math.max(...points.map((p) => Math.abs(p.v))) || 1;
+  // bars grow up from a zero line for gains and hang down from it for losses, so a loss year reads as a loss
+  const up = Math.max(0, ...points.map((p) => p.v));
+  const down = Math.max(0, ...points.map((p) => -p.v));
+  const span = up + down || 1;
+  const PLOT = 112;                                    // px for bars; the labels sit outside the bars
+  const zero = (up / span) * PLOT;                     // px from the top
   const first = points[0].v, last = points[points.length - 1].v;
-  const growth = first > 0 ? (Math.pow(last / first, 1 / (points.length - 1)) - 1) * 100 : null;
+  const lossYears = points.some((p) => p.v <= 0);
+  const growth = !lossYears && first > 0 ? (Math.pow(last / first, 1 / (points.length - 1)) - 1) * 100 : null;
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div className="spread"><b className="small">{label} <span className="muted" style={{ fontWeight: 400 }}>({unit})</span></b>
-        {growth != null && <span className={`small ${signClass(growth)}`}>{pct(growth)} a year</span>}</div>
+        {growth != null ? <span className={`small ${signClass(growth)}`}>{pct(growth)} a year</span>
+          : lossYears ? <span className="small muted">loss years in between, so no yearly rate</span> : null}</div>
       <div className="tbars">
-        {points.map((p, i) => (
-          <div key={p.y} className="tbar">
-            <div className="tbar-col">
-              <span className="num tiny">{trendValue(p.v, unit)}</span>
-              <div style={{ height: Math.max(3, (Math.abs(p.v) / max) * 92),
-                background: p.v < 0 ? "var(--orange)" : i === points.length - 1 ? (tone === "blue" ? "var(--blue)" : "var(--ink)") : "var(--dash)" }} />
+        {points.map((p, i) => {
+          const h = Math.max(2, (Math.abs(p.v) / span) * PLOT);
+          const neg = p.v < 0;
+          const color = neg ? "var(--orange)" : i === points.length - 1 ? (tone === "blue" ? "var(--blue)" : "var(--ink)") : "var(--dash)";
+          return (
+            <div key={p.y} className="tbar" title={`${p.y}: ${p.v.toLocaleString(/cr/i.test(unit) ? "en-IN" : "en-US", { maximumFractionDigits: 2 })} ${unit}`}>
+              <div className="tbar-plot" style={{ height: PLOT + 36 }}>
+                {down > 0 && <div className="tbar-zero" style={{ top: 18 + zero }} />}
+                <div className="tbar-bar" style={{ background: color, height: h, top: neg ? 18 + zero : 18 + zero - h,
+                  borderRadius: neg ? "0 0 4px 4px" : "4px 4px 0 0" }} />
+                <span className={`num tiny tbar-num ${neg ? "neg" : ""}`} style={neg ? { top: 18 + zero + h + 2 } : { top: 18 + zero - h - 16 }}>
+                  {trendValue(p.v, unit)}</span>
+              </div>
+              <span className="tiny muted">{p.y}</span>
             </div>
-            <span className="tiny muted">{p.y}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

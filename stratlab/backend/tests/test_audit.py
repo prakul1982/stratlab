@@ -162,3 +162,26 @@ def test_exchange_quote_is_asked_like_its_own_page():
             return httpx.Response(200, json={"priceInfo": {"lastPrice": 3120.5}})
         return httpx.Response(200, text="<html></html>")
     assert NSEFilings(transport=httpx.MockTransport(handler)).last_price("M&M") == 3120.5
+
+
+def test_a_whole_index_comes_from_the_exchanges_list(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None: {"symbol": s, "name": s, "seconds": 0, "issues": []})
+        sets = {s["id"]: s for s in w["client"].get("/admin/audit", headers=W.headers("admin-token")).json()["sets"]}
+        assert {"nifty500", "niftynext50", "midcap150", "smallcap250"} <= sets.keys()
+        r = w["client"].post("/admin/audit", headers=W.headers("admin-token"), json={"set": "nifty500"}).json()
+        assert r["total"] == 5 and "NIFTY 500" in r["label"]                         # the index row itself is left out
+        for _ in range(100):
+            if not main.audit_runner.status()["running"]:
+                break
+            time.sleep(0.02)
+        w["faults"]["exchange"].mode = "down"
+        w["filings"] = main.filings_feed
+        main.filings_feed.cache.clear()
+        r = w["client"].post("/admin/audit", headers=W.headers("admin-token"), json={"set": "midcap150"})
+        assert r.status_code == 503 and r.json()["detail"]["code"] == "index_unavailable"
+        assert audit.symbols_for("sectors") and len(audit.symbols_for("x", ["a"] * 700)) == 1
+    finally:
+        w["close"]()

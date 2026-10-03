@@ -222,6 +222,44 @@ class NSEFilings:
         self.cache.set(key, path, 7 * 86400)
         return path
 
+    def index_members(self, index: str) -> list[str]:
+        """The stocks in an NSE index (e.g. "NIFTY 500"), from the exchange's own list, cached for a day."""
+        key = ("index", index)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        data = self._get("/api/equity-stockIndices", {"index": index},
+                         referer="https://www.nseindia.com/market-data/live-equity-market")
+        rows = (data or {}).get("data") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            raise SourceError(self.name, f"The exchange's list for {index} wasn't in the expected shape.")
+        out = [str(r.get("symbol")).strip().upper() for r in rows
+               if isinstance(r, dict) and r.get("symbol") and str(r.get("symbol")).strip().upper() != index.upper()]
+        if not out:
+            raise SourceError(self.name, f"The exchange's list for {index} came back empty.")
+        out = list(dict.fromkeys(out))
+        self.cache.set(key, out, 86400)
+        return out
+
+    def holidays(self) -> list[str]:
+        """The exchange's published trading holidays for the equity segment, as ISO dates (it lists the current
+        year, and the next one once announced, usually in December)."""
+        data = self._get("/api/holiday-master", {"type": "trading"},
+                         referer="https://www.nseindia.com/resources/exchange-communication-holidays")
+        rows = (data or {}).get("CM") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            raise SourceError(self.name, "The exchange's holiday list wasn't in the expected shape.")
+        out = []
+        for r in rows:
+            raw = str((r or {}).get("tradingDate") or "").strip()
+            try:
+                out.append(datetime.strptime(raw, "%d-%b-%Y").date().isoformat())
+            except ValueError:
+                continue
+        if not out:
+            raise SourceError(self.name, "The exchange's holiday list came back empty.")
+        return sorted(set(out))
+
     def last_price(self, symbol: str) -> float | None:
         """The exchange's own last traded price, for checking StratLab's prices against the source."""
         info = self._quote(symbol).get("priceInfo") or {}

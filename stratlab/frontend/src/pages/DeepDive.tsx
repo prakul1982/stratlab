@@ -37,13 +37,23 @@ export interface DeepView {
   };
 }
 
-const cr = (v: number | null | undefined) => (v == null ? "–" : Math.round(v).toLocaleString("en-IN"));
+const cr = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-IN", { maximumFractionDigits: 2 }));
 const pc = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);
 const day = (s: string) => new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report" };
 
-function Stat({ label, v }: { label: string; v: number | null }) {
-  return <div className="stat"><span className="tiny muted">{label}</span><b className={`num ${signClass(v)}`}>{v == null ? "–" : pct(v)}</b></div>;
+function Stat({ label, v, why }: { label: string; v: number | null; why?: string }) {
+  return (
+    <div className="stat"><span className="tiny muted">{label}</span><b className={`num ${signClass(v)}`}>{v == null ? "–" : pct(v)}</b>
+      {v == null && why && <span className="tiny muted">{why}</span>}</div>
+  );
+}
+
+/** Why a growth rate is blank: a loss (or zero) at the start of the period or along the way makes a yearly rate meaningless. */
+function lossNote(values: (number | null | undefined)[], years: number): string | undefined {
+  const span = values.slice(-(years + 1)).filter((x): x is number => x != null);
+  if (span.length < years + 1) return "Not enough years reported";
+  return span.some((x) => x <= 0) ? "A loss year in the period, so no yearly rate" : undefined;
 }
 
 const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", other: "" };
@@ -187,7 +197,8 @@ export function DeepDivePage() {
           <Panel title="Growth and margins" span="full" info="Compound annual growth from the reported annual sales and net profit. OPM is operating profit as a share of sales.">
             <div className="stat-row">
               <Stat label="Sales growth a year, last 3 years" v={n.growth.sales_cagr_3y} /><Stat label="Sales growth a year, last 5 years" v={n.growth.sales_cagr_5y} />
-              <Stat label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} /><Stat label="Profit growth a year, last 5 years" v={n.growth.profit_cagr_5y} />
+              <Stat label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} why={lossNote(years.map((y) => y.profit), 3)} />
+              <Stat label="Profit growth a year, last 5 years" v={n.growth.profit_cagr_5y} why={lossNote(years.map((y) => y.profit), 5)} />
               {n.growth.eps_cagr_5y != null && <Stat label="Earnings per share growth a year, last 5 years" v={n.growth.eps_cagr_5y} />}
             </div>
             {(n.notes ?? []).map((t) => <p key={t} className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>{t}</p>)}

@@ -29,7 +29,8 @@ def warm():
 # India's fixed-date exchange holidays, used for years the installed calendar doesn't cover yet (the moving ones,
 # like Diwali and Holi, come from the list the admin pastes in from the exchange each December)
 FIXED_IN = [(1, 26), (5, 1), (8, 15), (10, 2), (12, 25)]
-SETTING = "holidays:"             # app_settings: holidays:IN = ["2027-03-22", ...], the exchange's official list
+SETTING = "holidays:"             # app_settings: holidays:IN = ["2027-03-22", ...], pasted by the admin
+AUTO = "holidays-auto:"           # app_settings: holidays-auto:IN = {"days": [...], "at": ISO}, fetched from the exchange
 _extra: dict[str, tuple[float, set]] = {}
 
 
@@ -46,10 +47,42 @@ def extra_holidays(market: str) -> set:
         from .. import db
         raw = db.get_setting(SETTING + key)
         days = {str(d)[:10] for d in json.loads(raw)} if raw else set()
+        auto = json.loads(db.get_setting(AUTO + key) or "{}")
+        days |= {str(d)[:10] for d in auto.get("days") or []}
     except Exception:                 # no database (tests, an outage): the built-in calendar alone
         days = hit[1] if hit else set()
     _extra[key] = (time.time(), days)
     return days
+
+
+def auto_status(market: str = "IN") -> dict:
+    import json
+    try:
+        from .. import db
+        return json.loads(db.get_setting(AUTO + market) or "{}")
+    except Exception:
+        return {}
+
+
+def refresh_from_exchange(fetch, market: str = "IN") -> dict:
+    """Fetch the exchange's holiday list and keep it (added to what was fetched before, so past years stay).
+    `fetch()` returns ISO dates. A failure is recorded and the last good list kept."""
+    import json
+    from datetime import datetime, timezone
+    from .. import db
+    prev = auto_status(market)
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        got = [d for d in fetch() if _iso(d)]
+    except Exception as e:
+        state = {**prev, "error": str(e)[:200], "tried_at": now}
+        db.set_setting(AUTO + market, json.dumps(state))
+        return state
+    days = sorted(set(prev.get("days") or []) | set(got))
+    state = {"days": days, "at": now, "tried_at": now, "error": None, "latest": max(got)}
+    db.set_setting(AUTO + market, json.dumps(state))
+    _extra.pop(market, None)
+    return state
 
 
 def set_extra_holidays(market: str, days: list[str]) -> list[str]:

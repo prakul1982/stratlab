@@ -41,6 +41,13 @@ class Yahoo(Source):
             self._recent[(symbol, tf)] = (time.time(), days, out)
         return out
 
+    def _raw_chart(self, symbol: str, tf: str, days: int) -> dict:
+        """The source's answer as sent, uncached: for diagnosing missing candles."""
+        interval, _ = INTERVAL[tf]
+        now = int(time.time())
+        return self.fetch(f"/v8/finance/chart/{symbol}", {"interval": interval, "period1": now - days * 86400,
+                                                          "period2": now, "includePrePost": "false"}, ttl=0)
+
     def _chart(self, symbol: str, tf: str, days: int, interval: str, ttl: float | None) -> dict:
         now = int(time.time())
         # round the window so repeated calls share a cache entry

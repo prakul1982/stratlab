@@ -91,3 +91,22 @@ def test_pasted_exchange_holidays_close_those_days(monkeypatch):
     assert not calendar.is_trading_day("IN", date(2027, 3, 22)) and not calendar.is_trading_day("MCX", date(2027, 3, 26))
     assert calendar.is_trading_day("IN", date(2027, 3, 23))
     calendar._extra.clear()
+
+
+def test_the_exchanges_holiday_list_is_read_by_itself(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        calendar._extra.clear()
+        assert calendar.is_trading_day("IN", date(2027, 3, 22))              # Holi 2027: not known yet
+        r = w["client"].post("/admin/holidays/refresh", headers=W.headers("admin-token")).json()
+        assert r["auto"]["count"] == 2 and r["auto"]["error"] is None and r["covered_until"] >= "2027-12-31"
+        assert not calendar.is_trading_day("IN", date(2027, 3, 22)) and not calendar.is_trading_day("MCX", date(2027, 3, 22))
+        w["faults"]["exchange"].mode = "down"                               # the exchange down: the last good list stays
+        r = w["client"].post("/admin/holidays/refresh", headers=W.headers("admin-token")).json()
+        assert r["auto"]["count"] == 2 and r["auto"]["error"]
+        assert not calendar.is_trading_day("IN", date(2027, 3, 22))
+        assert w["client"].post("/admin/holidays/refresh", headers=W.headers("pro-token")).status_code == 403
+    finally:
+        calendar._extra.clear()
+        w["close"]()

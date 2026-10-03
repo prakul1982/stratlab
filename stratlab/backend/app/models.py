@@ -212,7 +212,7 @@ class ScanAlertReq(BaseModel):
 
 class AuditReq(BaseModel):
     set: str = Field("nifty50", max_length=40)
-    symbols: list[str] = Field(default_factory=list, max_length=300)
+    symbols: list[str] = Field(default_factory=list, max_length=600)
     docs: bool = False
 
 

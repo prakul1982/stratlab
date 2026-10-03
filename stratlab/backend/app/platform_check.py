@@ -45,8 +45,30 @@ def check_market(registry, market: str, today: date) -> dict:
         return _result(f"Prices: {market}", "Prices", "fail", f"{len(bad)} candles of {inst['symbol']} have high/low outside open/close.")
     if last < expected:
         return _result(f"Prices: {market}", "Prices", "fail",
-                       f"{inst['symbol']}: last daily candle {last}, but {expected} was a trading day.")
+                       f"{inst['symbol']}: last daily candle {last}, but {expected} was a trading day." + _why_stale(prov, inst))
     return _result(f"Prices: {market}", "Prices", "pass", f"{inst['symbol']}: {len(bars)} daily candles, latest {last}, close {bars[-1]['c']:,.2f}.")
+
+
+def _why_stale(prov, inst) -> str:
+    """For the global market data source: what the source itself says, to tell a late source from a StratLab bug.
+    Its own last quote time, the latest candle in a fresh short download, and days it sent with blank prices."""
+    y = getattr(prov, "yahoo", None)
+    if y is None:
+        return ""
+    try:
+        from datetime import datetime as dt, timezone as tz
+        raw = y._raw_chart(inst["token"], "1d", 7)
+        res = ((raw or {}).get("chart") or {}).get("result") or [{}]
+        meta, ts = res[0].get("meta") or {}, res[0].get("timestamp") or []
+        q = (((res[0].get("indicators") or {}).get("quote")) or [{}])[0]
+        closes = q.get("close") or []
+        days = [dt.fromtimestamp(t, tz.utc).date().isoformat() for t in ts]
+        blank = [d for d, c in zip(days, closes) if c is None]
+        quote_at = dt.fromtimestamp(meta["regularMarketTime"], tz.utc).strftime("%Y-%m-%d %H:%M UTC") if meta.get("regularMarketTime") else "?"
+        return (f" The source's last quote is from {quote_at}; a fresh download's latest day is {days[-1] if days else 'none'}"
+                + (f"; it sent {', '.join(blank)} with blank prices, which are left out" if blank else "") + ".")
+    except Exception as e:
+        return f" (Couldn't ask the source why: {str(e)[:80]}.)"
 
 
 def check_backtest(registry, market: str) -> dict:
