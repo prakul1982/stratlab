@@ -96,3 +96,13 @@ export function safeHref(url: string | null | undefined): string | undefined {
     return undefined;
   }
 }
+
+/** When numbers are from, in words: "3 Oct 2026, 14:05" (in the reader's time), or "3 Oct 2026" for a date alone. */
+export function asOf(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const d = day ? new Date(`${iso}T12:00:00`) : new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return day ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+}

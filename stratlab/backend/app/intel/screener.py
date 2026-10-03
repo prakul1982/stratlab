@@ -4,6 +4,7 @@ Screener has no API, so this reads the page the way Hindsight did, but from the
 server (no public CORS proxies). If Screener changes its layout, the parser
 degrades to whatever it can still find instead of failing the whole page."""
 import copy
+from datetime import datetime, timezone
 import re
 
 import httpx
@@ -176,6 +177,7 @@ class Screener(Source):
             p = seen[1]
         else:
             p = parse(html)
+            p["fetched_at"] = datetime.now(timezone.utc).isoformat(timespec="minutes")    # for the pages' "as of" line
             self.cache.set(("parsed", path), (html, p), 6 * 3600)
         if not p["ratios"]:
             return None

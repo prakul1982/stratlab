@@ -73,7 +73,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -459,5 +459,59 @@ test("admin: invite counts in the Users tab", async ({ page }, info) => {
   const errors = await open(page, "/admin?tab=users", "Paper trading now");
   await expect(page.locator("th", { hasText: "Invited" })).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});
+
+test("screens: filter by plain facts, sort by a column, save one; no provider names", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const tag = `e2e screen ${info.project.name} ${Date.now()}`;          // both projects share the fake database
+  const errors = await open(page, "/research/screens?region=IN", "Filter companies by plain facts");
+  await answerLevel(page);
+  await expect(page.getByText(/20 of 20 companies match/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Prices as of 1 Oct 2026/)).toBeVisible();
+  const table = page.locator(".screens-table");
+  await expect(table.locator("tbody tr").first()).toContainText("Axisbank Ltd");          // alphabetical by default
+  if (phone) await page.getByRole("button", { name: /Show filters/ }).click();
+  await page.getByRole("button", { name: "Energy", exact: true }).click();
+  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await page.getByRole("button", { name: "What is Debt to equity?" }).click();
+  await expect(page.getByRole("note")).toContainText("Borrowings divided by shareholders' equity");
+  await page.getByLabel("P/E (price to earnings): at most").fill("abc");
+  await expect(page.getByText("Enter a plain number, like 15 or -10.")).toBeVisible();
+  await page.getByLabel("P/E (price to earnings): at most").fill("1");
+  await expect(page.getByText("No company meets every condition.", { exact: false })).toBeVisible();
+  await page.getByLabel("P/E (price to earnings): at most").fill("");
+  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await table.getByRole("button", { name: "P/E" }).click();                             // sort by a column the user picks
+  await expect(table.locator("th[aria-sort=ascending]")).toContainText("P/E");
+  await page.getByRole("button", { name: /Low to high/ }).click();
+  await expect(table.locator("th[aria-sort=descending]")).toContainText("P/E");
+  if (phone) await touchable(page);
+  await page.getByLabel("Name").fill(tag);
+  await page.getByLabel("Weekly email of new matches").check();
+  await page.getByRole("button", { name: "Save screen" }).click();
+  const saved = page.getByRole("button", { name: `${tag} · weekly` });
+  await expect(saved).toBeVisible();
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByText(/20 of 20 companies match/)).toBeVisible();
+  await saved.click();                                                                  // a saved screen opens its conditions
+  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await page.getByRole("button", { name: `Delete ${tag}` }).click();
+  await expect(page.getByRole("button", { name: `${tag} · weekly` })).toHaveCount(0);
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub/i);
+  expect(text).not.toMatch(/\b(buy|sell|undervalued|best stocks?|score)\b/i);
+  await sane(page, errors);
+});
+
+test("as-of lines: the company page, deep dive and holdings say how fresh their numbers are", async ({ page }) => {
+  let errors = await open(page, "/research/IN/RELIANCE", "Reliance");
+  await expect(page.getByText(/Prices as of \d+ \w+ \d{4}, \d\d:\d\d/).first()).toBeVisible();
+  await sane(page, errors);
+  errors = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");
+  await expect(page.getByText(/Reported numbers as of \d+ \w+ \d{4}/).first()).toBeVisible();
+  await sane(page, errors);
+  errors = await open(page, "/holdings", "By sector");
+  await expect(page.getByText(/Prices as of \d+ \w+ \d{4}/).first()).toBeVisible();
   await sane(page, errors);
 });

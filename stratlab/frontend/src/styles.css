@@ -844,3 +844,27 @@ label.btn.disabled { opacity: .5; }
 .alert-row { display: flex; justify-content: space-between; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 20px; }
 .alert-row > .stack { flex: 1 1 280px; }
 .alert-form .field select, .alert-form .field input { width: 100%; }
+/* ---------- "as of" lines and stock screens ---------- */
+.as-of { margin: 0; }
+.screens-grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .screens-grid { grid-template-columns: minmax(0, 1fr); } }
+.screens-filters { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+@media (max-width: 1000px) { .screens-filters { position: static; max-height: none; } }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn { min-height: 36px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink);
+  font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
+.chip-btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.range-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.range-row .field input { width: 100%; min-width: 0; }
+.range-row input[aria-invalid="true"] { border-color: var(--orange-ink); }
+.range-unit { padding-bottom: 12px; }
+.saved-screen { display: inline-flex; gap: 2px; }
+.btn.sm.on { border-color: var(--ink); font-weight: 600; }
+.btn.icon-only { padding: 0 10px; }
+.sort-field select { height: 36px; }
+.screens-table { margin: 0 -24px; max-height: 70vh; overflow: auto; }
+@media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
+.screens-table th { position: sticky; top: 0; z-index: 1; padding: 0; }
+.screens-table td:first-child { white-space: normal; min-width: 180px; }
+.th-sort { display: block; width: 100%; min-height: 40px; padding: 8px 16px; border: 0; background: none; font: inherit; color: inherit; text-align: inherit; cursor: pointer; white-space: nowrap; }
+.th-sort:hover { color: var(--ink); }

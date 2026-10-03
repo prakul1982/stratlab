@@ -67,6 +67,8 @@ const FilingsPage = page(research, "FilingsPage");
 const ResultsPage = page(research, "ResultsPage");
 const CompanyPage = page(research, "CompanyPage");
 const AlertsPage = page(() => import("./pages/AlertsPage"), "AlertsPage");
+const screensPage = () => import("./pages/Screens");
+const ScreensPage = page(screensPage, "ScreensPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -82,6 +84,7 @@ function warmFirstPage(path: string) {
     : path === "/research/investor" ? investor
     : path === "/news" ? news
     : path === "/holdings" ? holdingsPage
+    : path === "/research/screens" ? screensPage
     : path.startsWith("/research") ? research
     : null;
   load?.().catch(() => undefined);    // only a head start: the page itself reports a failed download
@@ -170,6 +173,7 @@ function Routed() {
         <Route path="/research/compare" element={<ComparePage />} />
         <Route path="/research/watchlist" element={<WatchlistPage />} />
         <Route path="/research/scan" element={<ScanPage />} />
+        <Route path="/research/screens" element={<ScreensPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { safeHref } from "../lib/format";
 import { dayName, NEWS_FOOTER, type Issue, type IssueRow } from "../lib/news";
-import { Loading } from "../components/ui";
+import { AsOf, Loading } from "../components/ui";
 
 type Tab = "IN" | "US" | "mine";
 const TABS: [Tab, string][] = [["IN", "Market brief: India"], ["US", "Market brief: US"], ["mine", "My stocks"]];
@@ -117,6 +117,7 @@ function IssueView({ id }: { id: string }) {
           {issue.weekly && <span className="badge next">Weekly</span>}
         </span>
         <h2 className="serif" style={{ fontSize: "clamp(24px, 3vw, 32px)", fontWeight: 400, letterSpacing: "-0.01em", lineHeight: 1.2 }}>{issue.subject}</h2>
+        <AsOf parts={[["Prices and numbers", issue.at]]} />
         {issue.summary && <p style={{ fontSize: 17 }}>{issue.summary}</p>}
       </div>
       {(issue.sections ?? []).filter((s) => s.items?.length).map((s, i) => (
