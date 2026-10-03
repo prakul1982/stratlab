@@ -1,5 +1,5 @@
 """The facts each newsletter reports, built from what the research pages already compute: index moves, sector
-rotation, the Stage 2 and ST S2 scans, exchange filings and headlines.
+rotation, the Stage 2 and ST S2 scans, exchange filings, deals and insider trades, and headlines.
 
 Facts only, never a view. Every source is optional: one that fails or is offline just drops its section. Data a
 stock needs is fetched once per day and shared, so a hundred readers holding the same stock cost one lookup."""
@@ -7,7 +7,7 @@ import json
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from .. import daily_report, db, holdings, rotation, scan, universes
+from .. import daily_report, db, deals, holdings, rotation, scan, universes
 from ..data.calendar import is_trading_day
 from ..intel.company import INDICES
 from ..intel.net import TTLCache
@@ -192,12 +192,14 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
              for i in data["filings"] or [] if i["severity"] in ("red", "amber") and i["at"] > since][:4]
     news = [{"headline": n["headline"], "url": n.get("url"), "at": n.get("at")} for n in data["news"] or []
             if n.get("headline") and (not n.get("at") or str(n["at"])[:10] >= since[:10])][:2]
+    trades = [{"text": deals.describe(d), "url": d.get("url"), "filed": d["filed"]}
+              for d in (_safe(lambda: deals.recent_for(sym, since)) or [] if region == "IN" else [])][:4]
     stage_before = before["stage"] if before else None
     signal = now["signal"] == "fresh" and now["st_days"] <= (5 if weekly else 1)
     stage_moved = now["stage"] is not None and stage_before is not None and now["stage"] != stage_before
-    changed = bool(stage_moved or signal or flags or (change is not None and abs(change) >= MOVE[weekly]))
+    changed = bool(stage_moved or signal or flags or trades or (change is not None and abs(change) >= MOVE[weekly]))
     return {"symbol": sym, "region": region, "price": round(now["price"], 2), "change_pct": change, "stage": now["stage"],
-            "stage_before": stage_before, "stage_changed": stage_moved, "st_s2": signal, "filings": flags, "headlines": news,
+            "stage_before": stage_before, "stage_changed": stage_moved, "st_s2": signal, "filings": flags, "deals": trades, "headlines": news,
             "changed": changed}
 
 

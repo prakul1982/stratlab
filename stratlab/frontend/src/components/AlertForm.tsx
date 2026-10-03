@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { price } from "../lib/format";
 import { researchApi, type Region } from "../lib/research";
-import { CONDITIONS, MA_PERIODS, alertsApi, conditionKey, type AlertBody, type AlertsPage, type StockAlert } from "../lib/alerts";
+import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, type AlertBody, type AlertsPage, type StockAlert } from "../lib/alerts";
 import { Bell } from "./Icons";
 import { Modal } from "./ui";
 
@@ -25,7 +25,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const [note, setNote] = useState(editing?.note ?? "");
   const [now, setNow] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const c = CONDITIONS.find((x) => x.key === cond)!;
+  const c = CONDITIONS.find((x) => x.key === cond && (!x.india || region === "IN")) ?? CONDITIONS[0];
   const sym = symbol.trim().toUpperCase();
   const ccy = region === "IN" ? "INR" : "USD";
 
@@ -79,7 +79,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
       {!fixed && now != null && <span className="hint">{sym} is at {price(now, ccy)} now.</span>}
       <label className="field">Alert me when
         <select aria-label="Alert me when" value={cond} onChange={(e) => setCond(e.target.value)}>
-          {CONDITIONS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+          {CONDITIONS.filter((x) => !x.india || region === "IN").map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
         </select>
       </label>
       {c.kind === "price" && <label className="field">Price level ({region === "IN" ? "₹" : "$"})
@@ -97,14 +97,16 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
           <option value={0}>Any change of stage</option>
           {[1, 2, 3, 4].map((s) => <option key={s} value={s}>Enters Stage {s}</option>)}
         </select></label>}
-      <span className="hint">{c.kind === "move" || c.kind === "high52" || c.kind === "low52"
+      <span className="hint">{EVENT_KINDS.includes(c.kind)
+        ? "Checked once each evening against that day's exchange disclosures. The alert says who, which way, how many and when."
+        : c.kind === "move" || c.kind === "high52" || c.kind === "low52"
         ? "Checked through the trading day with the live price."
         : "Fires when it crosses during market hours: the first check notes which side it's on, then it waits for a cross."}</span>
       <label className="field">Note for yourself (optional)
         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Why you set it" /></label>
       <label className="row small" style={{ gap: 8 }}>
         <input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
-        Repeat: keep it on after it fires (at most once a day)
+        {EVENT_KINDS.includes(c.kind) ? "Repeat: keep it on after it fires (one message a day at most)" : "Repeat: keep it on after it fires (at most once a day)"}
       </label>
       <div className="row wrap" style={{ gap: 10 }}>
         <button className="btn" disabled={busy}>{busy ? "Saving…" : editing ? "Save alert" : "Set alert"}</button>

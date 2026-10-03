@@ -97,6 +97,8 @@ def stock_lines(r: dict, since: str) -> list[dict]:
         lines.append({"text": "Matches the Stage 2 rule with the price above its Supertrend (ST S2)", "url": None})
     for i in r.get("filings") or []:
         lines.append({"text": f"New filing ({'red flag' if i['severity'] == 'red' else 'worth a look'}): {i['label']}. {i['subject']}".strip(), "url": i.get("url")})
+    for d in r.get("deals") or []:
+        lines.append({"text": f"New disclosure. {d['text']}", "url": d.get("url")})
     for h in r.get("headlines") or []:
         if not banned(h["headline"]):
             lines.append({"text": h["headline"], "url": h.get("url")})
@@ -171,6 +173,9 @@ def template(f: dict) -> str:
     parts = [f"{n} of your stocks had something new {span}."] if n or not f.get("results") else []
     if flags:
         parts.append(f"{flags} new filing{'s' if flags != 1 else ''} to look at.")
+    trades = sum(len(r.get("deals") or []) for r in f.get("stocks") or [])
+    if trades:
+        parts.append(f"{trades} new deal{'s' if trades != 1 else ''} or insider trade{'s' if trades != 1 else ''} disclosed.")
     due = len({r["symbol"] for r in f.get("results") or [] if not r.get("out")})
     filed = len({r["symbol"] for r in f.get("results") or [] if r.get("out")})
     if due:
