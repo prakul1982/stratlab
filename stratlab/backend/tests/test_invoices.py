@@ -92,3 +92,16 @@ def test_invoice_routes(monkeypatch):
         assert c.put("/billing/details", headers=W.headers("pro-token"), json={"gstin": "x"}).status_code == 400
     finally:
         w["close"]()
+
+
+def test_a_replayed_webhook_event_does_nothing(store, monkeypatch):
+    monkeypatch.setattr(settings, "RAZORPAY_WEBHOOK_SECRET", "w")
+    monkeypatch.setattr(billing, "_client", SimpleNamespace(utility=SimpleNamespace(verify_webhook_signature=lambda *a: True)))
+    monkeypatch.setattr(billing.db, "profile_by_subscription", lambda sid: {"id": "u9", "razorpay_subscription_id": "sub_new"})
+    acted = []
+    monkeypatch.setattr(billing, "activate", lambda profile, sub: acted.append(sub["id"]))
+    body = json.dumps({"event": "subscription.activated", "payload": {"subscription": {"entity": {"id": "sub_old"}}}}).encode()
+    billing.handle_webhook(body, "sig", "evt_1")
+    billing.handle_webhook(body, "sig", "evt_1")                                  # the same signed event, sent again
+    billing.handle_webhook(body, "sig", "evt_2")
+    assert acted == ["sub_old", "sub_old"]

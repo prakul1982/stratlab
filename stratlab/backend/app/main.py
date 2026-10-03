@@ -1912,7 +1912,7 @@ async def webhook(request: Request):
         print("razorpay webhook refused: RAZORPAY_WEBHOOK_SECRET isn't set on the server")
         err(503, "webhook_not_set", "Webhook secret isn't set on the server: add RAZORPAY_WEBHOOK_SECRET and redeploy.")
     try:
-        billing.handle_webhook(body, request.headers.get("X-Razorpay-Signature", ""))
+        billing.handle_webhook(body, request.headers.get("X-Razorpay-Signature", ""), request.headers.get("X-Razorpay-Event-Id", ""))
     except SignatureVerificationError:
         print("razorpay webhook refused: signature doesn't match RAZORPAY_WEBHOOK_SECRET")
         err(400, "bad_signature", "Signature doesn't match: RAZORPAY_WEBHOOK_SECRET on the server must be exactly the "

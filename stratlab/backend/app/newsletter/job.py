@@ -183,7 +183,7 @@ def deliver(profile: dict, issue: dict, what: str) -> bool:
     if to and confirmed(profile) and alerts.email_ready():
         unsub = unsubscribe_url(profile["id"], what)
         html, text = (x.replace(write.UNSUBSCRIBE, unsub) for x in (issue["html"], issue["text"]))
-        headers = {"List-Unsubscribe": f"<{unsub}>"} if getattr(alerts, "unsubscribe_url", None) else {}
+        headers = alerts.list_unsubscribe_headers(profile["id"], what)
         try:
             send_email(to, issue["subject"], text, html, headers)
             sent = True
