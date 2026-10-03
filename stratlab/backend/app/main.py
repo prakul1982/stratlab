@@ -51,7 +51,7 @@ from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, weekly
+from . import ask, daily_report, ideas, library, mail_tokens, newsletter_prefs, public, push, risk, rotation, scan, stock_pages, weekly
 from .newsletter import job as news
 from .models import (ShareReq, GroupLiveReq, OptionImportReq, OptionStartReq)
 from .models import (AdminPlanReq, AIReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
@@ -149,6 +149,7 @@ async def lifespan(app: FastAPI):
     newsletter_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
+    threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
     yield
 
 
@@ -1535,6 +1536,97 @@ def public_verdict_page(token: str):
     if not snap:
         return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
     return HTMLResponse(public.preview_html(token, snap, public.image(token) is not None))
+
+
+# ---------- public company pages, for search engines ----------
+def stock_page_facts(region: str, co: dict) -> dict | None:
+    """One company's public page from the deep dive's cheap sources: reported numbers, the filings list and daily
+    prices. Never AI. None when the sources have no page for it; a source that is down or busy raises."""
+    sym = co["sym"]
+    try:
+        if region == "US":
+            p = dict(sec_feed.company(sym))
+            try:
+                m = research_hub.yahoo.meta(sym)
+            except Exception:             # no price: the reported numbers still stand
+                m = {}
+            p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+            items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
+            exchange = "Listed in the US"
+        else:
+            p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
+            try:
+                items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"]}
+                         for i in filings_feed.announcements(sym)]
+            except Exception:
+                items = []
+            exchange = "BSE" if co["bse"] else "NSE"
+    except SourceError as e:
+        if e.busy:
+            raise
+        return None                       # no company page at the source
+    trend = prices = None
+    try:
+        ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or sym}])
+        bars = scan._bars(markets, ids[0]) if ids else []
+        if bars:
+            trend, prices = scan.analyse(bars), stock_pages.price_facts(bars)
+    except Exception:                     # no prices: the page goes without the price facts
+        pass
+    nums = deepdive.numbers(p)
+    return stock_pages.facts(region, sym, p, nums, screener_summary(p), trend, prices, items, exchange)
+
+
+stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
+SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
+
+
+def stock_list_job():
+    """Once a day: the lists of listed companies (India, NSE and BSE-only; the US), for the sitemaps and pages."""
+    time.sleep(240)                         # after startup traffic
+    while True:
+        for region, fn in (("IN", india_listing), ("US", _sec_companies)):
+            try:
+                stock_pages.save_list(region, [{"symbol": r["symbol"], "name": r.get("name")} for r in fn()])
+            except Exception as e:
+                print(f"stock list {region} failed:", str(e)[:160])
+        time.sleep(24 * 3600)
+
+
+@app.get("/stocks/{region}/{symbol}", response_class=HTMLResponse)
+def stock_page(region: str, symbol: str):
+    """A listed company's public page: facts only, built from stored or cheap data, never AI."""
+    r = stock_pages.REGIONS.get(region.lower())
+    hit = stock_pages.find(r, symbol) if r else None
+    if not hit:
+        return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
+    sym, co = hit
+    if region != region.lower() or symbol != sym:          # one address per company
+        return RedirectResponse(stock_pages.path(r, sym), status_code=301)
+    try:
+        page = stock_page_store.html(r, sym, co)
+    except stock_pages.Busy:
+        return JSONResponse(status_code=503, headers={"Retry-After": "600"},
+                            content={"detail": {"code": "busy", "message": "This page is being prepared. Try again in a few minutes."}})
+    return HTMLResponse(page, headers=SEO_HEADERS)
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    return Response(stock_pages.robots(), media_type="text/plain", headers=SEO_HEADERS)
+
+
+@app.get("/sitemap.xml")
+def sitemap_index():
+    return Response(stock_pages.sitemap_index(), media_type="application/xml", headers=SEO_HEADERS)
+
+
+@app.get("/sitemaps/{name}.xml")
+def sitemap_file(name: str):
+    xml = stock_pages.sitemap(name)
+    if xml is None:
+        err(404, "not_found", "No such sitemap.")
+    return Response(xml, media_type="application/xml", headers=SEO_HEADERS)
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}")

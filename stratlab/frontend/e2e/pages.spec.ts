@@ -103,6 +103,29 @@ test("a US deep dive is in dollars, from the SEC's filings", async ({ page }) =>
   await sane(page, errors);
 });
 
+// Public company pages are plain HTML from the API (the site's host forwards /stocks/* there), for search engines.
+for (const [path, name, symbol] of [["/stocks/in/RELIANCE", "Reliance Industries", "RELIANCE"], ["/stocks/us/AAPL", "Apple Inc.", "AAPL"]]) {
+  test(`public company page ${path}`, async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://127.0.0.1:8765" + path);
+    await expect(page.locator("h1")).toContainText(name);
+    await expect(page.getByRole("link", { name: `Test a strategy on ${symbol}` })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open the full deep dive" })).toBeVisible();
+    await expect(page.getByText(/As of \d+ \w+ \d{4}/).first()).toBeVisible();
+    expect(errors).toEqual([]);
+    const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));
+    expect(scroll, "the page scrolls sideways").toBeLessThanOrEqual(width + 1);
+    expect(await page.locator("main").innerText()).not.toMatch(/\bNaN\b|\bundefined\b|\bnull\b|Infinity/);
+    if (info.project.name === "phone") await touchable(page);
+  });
+}
+
+test("a company page's test link opens a new test on that company", async ({ page }) => {
+  const errors = await open(page, "/new?market=IN&symbol=RELIANCE", "testing a strategy on RELIANCE");
+  await sane(page, errors);
+});
+
 test.describe("a visitor from the UK", () => {
   test.use({ locale: "en-GB", timezoneId: "Europe/London" });
   test("sees prices in pounds", async ({ page }) => {

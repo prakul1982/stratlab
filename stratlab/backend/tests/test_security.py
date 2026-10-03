@@ -9,7 +9,8 @@ from app import main
 from tests import world as W
 
 PUBLIC = {"/health", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/{token}.png", "/v/{token}", "/billing/webhook",
-          "/admin/kite/callback", "/unsubscribe", "/email/confirm"}
+          "/admin/kite/callback", "/unsubscribe", "/email/confirm",
+          "/stocks/{region}/{symbol}", "/robots.txt", "/sitemap.xml", "/sitemaps/{name}.xml"}   # public company pages, for search engines
 
 
 def _deps(d) -> set:

@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useCallback, useState, type ComponentType } from "react";
+import { lazy, StrictMode, Suspense, useCallback, useEffect, useState, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "@fontsource/montserrat/300.css";
@@ -13,7 +13,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import { AppProvider, useApp } from "./lib/app";
-import { SESSION_KEY } from "./lib/api";
+import { NEXT_PAGE, SESSION_KEY } from "./lib/api";
 import { registerPwa } from "./lib/pwa";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
@@ -120,6 +120,13 @@ function PromoBanner({ until }: { until: string }) {
 function Routed() {
   const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
+  const nav = useNavigate();
+  useEffect(() => {
+    if (!session) return;
+    let next: string | null = null;
+    try { next = sessionStorage.getItem(NEXT_PAGE); sessionStorage.removeItem(NEXT_PAGE); } catch { /* storage off */ }
+    if (next && next.startsWith("/") && !next.startsWith("//")) nav(next, { replace: true });   // own pages only
+  }, [session, nav]);
   // shared verdicts are public: no sign-in needed
   if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) return <Suspense fallback={<Loading label="Opening" />}><LegalPage /></Suspense>;   // policies are public: no sign-in needed
   if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;

@@ -48,6 +48,18 @@
       "destination": "https://stratlab-production-ca25.up.railway.app/v/:token"
     },
     {
+      "source": "/stocks/:path*",
+      "destination": "https://stratlab-production-ca25.up.railway.app/stocks/:path*"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://stratlab-production-ca25.up.railway.app/sitemap.xml"
+    },
+    {
+      "source": "/sitemaps/:path*",
+      "destination": "https://stratlab-production-ca25.up.railway.app/sitemaps/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

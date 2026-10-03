@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from "react";
-import { supabase } from "../lib/api";
+import { NEXT_PAGE, supabase } from "../lib/api";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
@@ -109,7 +109,11 @@ export function Login() {
     history.replaceState(null, "", location.pathname);
   }, []);
 
-  const signIn = () => supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/" } });
+  const signIn = () => {
+    // came from a public company page's link (test a strategy, the deep dive): go there once signed in
+    if (location.pathname !== "/") try { sessionStorage.setItem(NEXT_PAGE, location.pathname + location.search); } catch { /* storage off */ }
+    return supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/" } });
+  };
   const cta = (label = "Start free") => (
     <button className="btn lp-cta" onClick={signIn}><Google />{label}</button>
   );
