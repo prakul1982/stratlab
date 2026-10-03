@@ -20,9 +20,14 @@ M = 1_000_000
 # each line: the row in the company table, then the XBRL concepts that report it, best first. Companies change the
 # concept they use over the years (revenue moved to the ASC 606 names in 2018), so each period takes the first that
 # has a value for it.
-REVENUE = ("RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet",
-           "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueGoodsNet", "SalesRevenueServicesNet",
-           "RevenuesNetOfInterestExpense", "InterestAndDividendIncomeOperating")
+# Total revenue can sit under any of these, and a company may also tag just a part with one of them (contract revenue
+# without the lease income a REIT or tower company earns), so for each period the largest is the top line.
+TOP_LINE = ("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "RevenueFromContractWithCustomerIncludingAssessedTax",
+            "SalesRevenueNet")
+# ...and when none of those is filed: narrower lines that are the revenue for some kinds of company
+REVENUE_ELSE = ("SalesRevenueGoodsNet", "SalesRevenueServicesNet", "OperatingLeaseLeaseIncome", "RevenuesNetOfInterestExpense",
+                "InterestAndDividendIncomeOperating")
+REVENUE = TOP_LINE + REVENUE_ELSE
 NET_INCOME = ("NetIncomeLoss", "NetIncomeLossAvailableToCommonStockholdersBasic", "ProfitLoss")
 OPERATING = ("OperatingIncomeLoss",)
 DEPRECIATION = ("DepreciationDepletionAndAmortization", "DepreciationAmortizationAndAccretionNet",
@@ -134,6 +139,20 @@ def quarterly(facts: dict, concepts: tuple, unit: str = "USD") -> dict[str, floa
     return out
 
 
+def revenue(facts: dict, kind: str) -> dict[str, float]:
+    """{period end: revenue} for "annual" or "quarter": the largest top-line figure filed for each period, else the
+    first narrower one."""
+    get = (lambda c: flows(facts, (c,), "annual")) if kind == "annual" else (lambda c: quarterly(facts, (c,)))
+    out: dict[str, float] = {}
+    for c in TOP_LINE:
+        for end, v in get(c).items():
+            if end not in out or v > out[end]:
+                out[end] = v
+    for end, v in (flows(facts, REVENUE_ELSE, "annual") if kind == "annual" else quarterly(facts, REVENUE_ELSE)).items():
+        out.setdefault(end, v)
+    return out
+
+
 def _debt(facts: dict) -> dict[str, float]:
     total = instants(facts, DEBT_TOTAL)
     parts = [instants(facts, p) for p in DEBT_PARTS]
@@ -164,7 +183,7 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12) -> dict:
     """The company in the deep dive's shape: P&L, balance sheet and cash flow by year, the last twelve quarters,
     and the industry path, in US$ millions."""
     facts = facts_json.get("facts") or {}
-    rev_a, rev_q = flows(facts, REVENUE, "annual"), quarterly(facts, REVENUE)
+    rev_a, rev_q = revenue(facts, "annual"), revenue(facts, "quarter")
     ni_a, ni_q = flows(facts, NET_INCOME, "annual"), quarterly(facts, NET_INCOME)
     op_a, op_q = flows(facts, OPERATING, "annual"), quarterly(facts, OPERATING)
     dep_a, dep_q = flows(facts, DEPRECIATION, "annual"), quarterly(facts, DEPRECIATION)

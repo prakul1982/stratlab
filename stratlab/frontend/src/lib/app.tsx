@@ -51,11 +51,15 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     timer.current = window.setTimeout(() => setToast(null), action ? 9000 : 4500);
   }, []);
 
+  // goToPlans changes with every page change; read it through a ref so `fail` stays the same function and
+  // pages that load data with it don't load again each time the address changes
+  const plans = useRef(goToPlans);
+  plans.current = goToPlans;
   const fail = useCallback((e: unknown) => {
     const err = e as ApiError;
-    if (err?.status === 402) notify(err.message, { label: "See plans", run: goToPlans });
+    if (err?.status === 402) notify(err.message, { label: "See plans", run: () => plans.current() });
     else notify(err?.message || "Something went wrong. Try again.");
-  }, [notify, goToPlans]);
+  }, [notify]);
 
   const refreshMe = useCallback(async () => {
     try {

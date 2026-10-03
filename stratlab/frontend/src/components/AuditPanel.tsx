@@ -86,6 +86,7 @@ export function AuditPanel() {
 interface MarketState {
   enabled: boolean; listed: number; checked: number; due: number; current: string | null; eta_hours: number | null;
   list_at: string | null; list_error: string | null;
+  full?: { running: boolean; since: string | null; done_at: string | null; left: number; checked: number | null };
   new_listings: { symbol: string; name: string; listed: string | null; checked: boolean }[];
   summary: Summary; rows: Row[];
 }
@@ -114,7 +115,7 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
       <p className="small muted" style={{ maxWidth: "80ch", margin: 0 }}>{us
         ? "The SEC's list of companies is read once a day. Each company that newly appears on it is checked once from its filings, the same way as the audit above; ones that drop off the list are removed."
         : "The lists of every company in India (all of NSE, plus those listed only on BSE, shown as BSE: and their code) are read once a day. Each new listing is checked once, the same way as the audit above; delisted companies drop off."}
-        {" "}Companies already listed aren't re-run: a whole market takes more than a day. A check that failed because a source was down is tried again. It pauses while an audit above runs.</p>
+        {" "}Every company not checked yet is checked once to start (companies already checked keep their results); after that only new listings are, unless you start another full check. A check that failed because a source was down is tried again. It pauses while an audit above runs.</p>
       {!m ? <p className="small muted">Loading…</p> : (
         <>
           <p className="small" style={{ margin: 0 }}>
@@ -126,8 +127,14 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
           <p className="small muted" style={{ margin: 0 }}>
             {m.list_error ? <span className="neg">Couldn't read the exchange's list: {m.list_error}{m.list_at ? ` (using the one from ${ago(m.list_at)})` : ""}. </span>
               : m.list_at ? `List read ${ago(m.list_at)}. ` : ""}
-            <button className="btn quiet sm" onClick={() => send({ read_list: true })}>Read the list now</button>
+            <button className="btn quiet sm" onClick={() => send({ read_list: true })}>Read the list now</button>{" "}
+            {m.full && !m.full.running && <button className="btn quiet sm" onClick={() => { if (confirm("Check every listed company once more? It takes about a day, then goes back to new listings only.")) send({ full: true }); }}>Check everything once</button>}
           </p>
+          {m.full?.running && (
+            <p className="small" style={{ margin: 0 }}><b>Full check:</b> {(m.full.checked ?? 0).toLocaleString("en-IN")} of {m.listed.toLocaleString("en-IN")} companies done
+              {m.full.since ? `, started ${ago(m.full.since)}` : ""}. New listings go first; then it goes back to new listings only.{!m.enabled && " Switch it on to run."}</p>
+          )}
+          {m.full && !m.full.running && m.full.done_at && <p className="small muted" style={{ margin: 0 }}>Last full check finished {ago(m.full.done_at)}.</p>}
           {m.new_listings.length > 0 && (
             <p className="small" style={{ margin: 0 }}>New listings: {m.new_listings.slice(0, 12).map((n, i) => (
               <span key={n.symbol}>{i ? ", " : ""}<Link className="link" to={`/research/${region}/${encodeURIComponent(pageSymbol(n.symbol))}/deep`}>{n.symbol}</Link>

@@ -14,6 +14,7 @@ def fresh_rate_limit():
     main = sys.modules.get("app.main")
     if main is None:
         return
+    main._recent.clear()          # per-user "a few times an hour" limits (test emails and the like) too
     from app.guard import Guard
     node = getattr(main.app, "middleware_stack", None)
     while node is not None:

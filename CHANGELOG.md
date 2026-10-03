@@ -2,6 +2,55 @@
 
 ## October 2026
 
+### BSE-only companies, and a phone pass
+- **Companies listed only on BSE work like NSE ones:** search, the company page, charts, quotes, backtests, groups and paper trading take them by BSE symbol or code. Their filings and red flags come from BSE's own announcements feed, and the deep dive reads their presentations and call transcripts from BSE, so the document read, report card and slides work too. A daily check of BSE's feed joins **Check every feature**.
+- **Phones:** wide tables keep their first column in place and show an edge when there's more to the side; menus, checkboxes and buttons are bigger to tap. The browser tests now fail if any control on any page is too small to tap on a phone.
+
+### Admin in tabs, alerts by email
+- **Admin is split into tabs:** Overview (what **Needs your attention**, worst first, each item opening the tab where it's fixed), Services, Data checks, Users and Billing.
+- **Admin alerts are emailed** to the admin's sign-in address. Email goes through Resend over HTTPS when its key is set, since the host blocks outgoing mail ports; **Send a test email** in Admin → Services shows the server's reason when it can't send.
+- **Whole-market audit:** the list of listed companies is read daily and only new listings are checked.
+- **Pull requests from Claude merge themselves** once the backend, frontend and browser tests have passed and the preview has built.
+
+### Slides as PDF, and how far back to read
+- **The deck is redesigned** (a summary slide, styled charts, tables and cards) and comes as a PDF too: **Slides (PowerPoint)** and **Slides (PDF)** on the deep dive show the same slides.
+- **Years of analysis:** the document read and the report card look back over the last 1 to 5 years (default 2); the report card reads 4, 6, 9 or 12 calls.
+- **Targets the numbers can't settle** (a bank's loan-to-deposit ratio, a retail mix) are settled from what the company said after the period ended, kept only when the quote is in that document word for word, contains the number, and came after the period.
+- **Whole-market audit (India)** adds companies listed only on BSE.
+
+### Full check: security, load and a daily check
+- **Check every feature runs by itself** every day at 4:50 pm IST, tries anything that failed once more, and alerts the admins only about what still fails. The whole-market audit retries a company whose source was down.
+- **Security sweep:** only the intended routes answer without sign-in, every admin route refuses ordinary users, and nobody can touch another user's notebooks, sessions or invoices. Admin is only for an address proven by Google sign-in.
+- **Load:** about 150 requests a second on one server process, with no errors at 300 very active users. Backtests run in worker processes so pages stay quick.
+- **Investor home works for US watchlist companies too**, with an India / US switch.
+
+### Amounts in the unit people use; Indian document gaps closed
+- **$ billion and ₹ lakh crore:** a chart or table switches to the larger unit only when the numbers are large and every one still shows within 1%, so a small loss never prints as 0.00. The same rule in the deep dive, company page charts, report card, AI reads, plans and the deck. Reads saved before the change are tidied when shown.
+- **Letters with no link** (or a dead one): the company's own investor pages are searched for a PDF of the same kind naming the same quarter.
+- **Scanned PDFs** are read by OCR.
+- **EV/EBITDA for Indian companies subtracts cash**, from the balance sheet's Other Assets breakdown.
+- **Currency cross pairs:** EURUSD, GBPUSD and USDJPY futures, priced in dollars or yen, with rupee brokerage converted at the day's rate.
+
+### US companies: the full deep dive
+- **US deep dive from the SEC's filings:** ten years of revenue, profit, operating margin, reported capex, cash flow, debt and cash; twelve quarters; industry from the SIC code; ratios from today's price. The checklist, valuation and deck use the company's own currency.
+- **The AI read for US companies:** the business, risks and industry measures from the latest 10-K, and plans and outlook from it and the latest earnings releases, with the same exact-quote checks.
+- **US management report card:** targets from up to six earnings releases over two years, checked against the SEC numbers, with periods in the company's own fiscal year.
+- **Insiders instead of promoters:** the US checklist shows insiders' open-market buying and selling over six months.
+- **Audits:** the data audit runs on US sets, and Admin → Whole market: US checks every company filing with the SEC.
+
+### Indian currency derivatives
+- **Currency futures (NSE CDS):** USDINR, EURINR, GBPINR and JPYINR as a market of their own, front month rolled three days before expiry, in whole lots, with daily backtests on years of stitched history, intraday on the current contract and paper trading. Costs without STT; 9:00 am to 5:00 pm IST; the segment's own holidays read from the exchange daily.
+- **Currency options in the Options tab:** USDINR, EURINR, GBPINR and JPYINR, priced against the nearest currency future.
+
+### Payments from anywhere, with GST invoices
+- **Prices in the visitor's currency:** 18 currencies, following the rupee price at the day's exchange rate, rounded to a tidy amount. Admin can fix any of them.
+- **A GST invoice for every payment:** CGST and SGST within the state, IGST across states, exports zero-rated under the LUT. Account → Invoices lists them, printable, with your name, address and GSTIN for future ones; Admin → Invoices holds the seller's details and a CSV per financial year.
+
+### Whole-market audit and browser tests
+- **Admin → Whole market** checks every listed NSE company in the background, new listings first, with progress, findings by area and a CSV.
+- **Exchange holidays are read automatically** from the exchange's own list; the data audit covers the NIFTY 500, Next 50, Midcap 150 and Smallcap 250.
+- **Browser tests** open every main page on desktop and phone on every pull request: no errors, nothing wider than the screen, no broken numbers, loss bars below the zero line, US deep dives in dollars.
+
 ### Stress test, rounds 4 and 5: every feature live, many people at once
 - **Admin → Check every feature:** runs each part of StratLab once on the live server with live data and says pass, check or fail with the reason: prices in every market and whether they're up to the last trading day, a two-year backtest per market (verdict and costs present), the NIFTY 50 and US scans, sector rotation in both markets, the NIFTY option chain (no expired or closed-day expiry, prices on every strike), exchange filings, company pages, news, the database and how far ahead the holiday calendar runs. No AI is used; about a minute.
 - **Load test:** the real server (one worker, as in production) under hundreds of simulated people doing what people do. With 300 people at a normal pace, pages answer in 0.2 to 0.5 seconds (slowest 2.4 s) and backtests, scans and the sector chart in 5 to 8 seconds, with no errors; with 100 people clicking every half second, pages still answer within 1.5 seconds. A short version runs on every change.

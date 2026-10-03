@@ -339,7 +339,7 @@ def test_india_whole_market_adds_bse_only_companies(monkeypatch):
                 "instrument_token": 9001, "name": dual["name"]},                                   # on NSE too
                {"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": "TINYCO", "exchange_token": 543210,
                 "instrument_token": 9002, "name": "Tiny Co Ltd"}]
-        bse += [{"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": f"SMALL{i}", "exchange_token": 600000 + i,
+        bse += [{"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": f"SMALL{i}", "exchange_token": 530000 + i,
                  "instrument_token": 10000 + i, "name": f"Small {i} Ltd"} for i in range(120)]
         bse += [{"instrument_type": "EQ", "segment": "BSE", "tradingsymbol": "BOND1", "exchange_token": 700001, "instrument_token": 1,
                  "name": "x", "segment_x": 1}]
@@ -370,5 +370,63 @@ def test_india_whole_market_adds_bse_only_companies(monkeypatch):
         assert row["symbol"] == "BSE:543210" and row["name"]
         assert not [i for i in row["issues"] if i["area"] == "Company page"]
         assert audit._shard("BSE:543210") == "audit:market:rows:bse0" or audit._shard("BSE:543210").endswith("rows:bse0")
+    finally:
+        w["close"]()
+
+
+def test_one_full_check_of_every_company_then_new_listings_only(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        listing = [{"symbol": s, "name": s, "listed": "2001-01-01"} for s in ("AAA", "BBB", "DONE")] + _recent("NEWCO")
+        a = audit.MarketAudit(lambda: listing, _clean, pause=0)
+        a.set_enabled(True)
+        a.refresh_list(force=True)
+        a.rows["DONE"] = {**_clean("DONE"), "at": "2026-01-01T00:00:00+00:00"}           # checked before: not repeated
+        assert a.queue() == ["NEWCO"]                                                    # nothing started yet
+        a.full_once()                                                                    # the first start: the rest
+        assert a.status()["full"]["running"] and not a.status()["full"]["everything"]
+        assert a.queue() == ["NEWCO", "AAA", "BBB"]                                      # new listings still go first
+        assert [a.step(), a.step(), a.step()] == ["NEWCO", "AAA", "BBB"]
+        assert a.step() is None
+        st = a.status()
+        assert not st["full"]["running"] and st["full"]["done_at"] and st["checked"] == 4
+        a.full_once()                                                                    # once only: never again by itself
+        assert a.queue() == []
+        a.start_full()                                                                   # by hand: everything once more
+        assert sorted(a.queue()) == ["AAA", "BBB", "DONE", "NEWCO"]
+        assert audit.MarketAudit(lambda: listing, _clean).status()["full"]["running"]   # survives a restart
+        h = W.headers("admin-token")
+        r = w["client"].post("/admin/audit/market", headers=h, json={"full": True}).json()
+        assert r["full"]["running"]
+    finally:
+        w["close"]()
+
+
+def test_market_sheet_fixes_us(monkeypatch):
+    """From the US audit sheet: total revenue includes lease income, foreign filers aren't asked for 10-Qs, US amounts
+    aren't in crore, penny-stock rounding isn't a mismatch, and each company is listed once."""
+    from app.intel import sec
+    def fact(v, start="2024-01-01", end="2024-12-31"):
+        return {"start": start, "end": end, "val": v, "form": "10-K", "filed": "2025-02-01"}
+    facts = {"us-gaap": {
+        "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [fact(300)]}},     # a part only
+        "Revenues": {"units": {"USD": [fact(1000)]}}}}                                              # the total
+    assert sec.revenue(facts, "annual") == {"2024-12-31": 1000.0}
+    docs = [{"kind": "annual_report", "form": "20-F"}]
+    view = {"region": "US", "documents": docs, "checklist": {"checks": []}, "valuation": {"metrics": []}}
+    assert not any("10-Q" in i["detail"] for i in audit.check_view(view))
+    view["documents"] = [{"kind": "annual_report", "form": "10-K"}]
+    assert any("10-Q" in i["detail"] for i in audit.check_view(view))
+    assert audit.check_prices({"price": 0.04}, {"price": 0.05}, None) == []                       # a cent on a penny stock
+    p = {"region": "US", "pl": {"cols": ["Dec 2024", "TTM"], "rows": {"Sales": [100, 300]}}}
+    found = audit.check_numbers(p, {"years": [], "quarters": [{"sales": 50}] * 4}, {})
+    assert any("$m300 vs last four quarters $m200" in i["detail"] for i in found)
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        monkeypatch.setattr(main.sec_feed, "tickers", lambda: {"AHL": {"cik": 1, "name": "Aspen"}, "AHL-PD": {"cik": 1, "name": "Aspen"},
+                                                               "ACONW": {"cik": 2, "name": "Aclarion"}, "ACON": {"cik": 2, "name": "Aclarion"}})
+        assert [c["symbol"] for c in main._sec_companies()] == ["AHL", "ACONW"]
     finally:
         w["close"]()

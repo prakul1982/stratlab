@@ -155,6 +155,10 @@ export function AdminPage() {
     const r = await api<{ sent_to: string }>("/admin/alerts/test", { method: "POST" });
     notify(`Test email sent to ${r.sent_to}. Check your inbox (and spam).`);
   });
+  const sendWeekly = () => run("weekly", async () => {
+    const r = await api<{ subject: string; reached: number }>("/admin/weekly/test", { method: "POST" });
+    notify(r.reached ? `"${r.subject}" sent. Check your inbox (and spam).` : "The summary couldn't reach you: set up email or a phone in Account.");
+  });
   const testAI = () => run("ai", async () => { setAiTest((await api<{ providers: AITest[] }>("/admin/ai/test", { method: "POST" })).providers); });
   const stop = (s: SessionRow) => {
     if (!confirm(`Stop "${s.name}" for ${s.email}?`)) return;
@@ -289,7 +293,10 @@ export function AdminPage() {
                 {sv!.admin_alerts && <Status ok={sv!.admin_alerts.email_ready} label="Alerts to you"
                   detail={sv!.admin_alerts.email_ready ? `Emailed to ${sv!.admin_alerts.to.join(", ")}, plus your phone or Telegram if set in Account.`
                     : `Email isn't set up on the server: make a free account at resend.com with this address, create an API key, and add it in Railway as RESEND_API_KEY. Until then alerts reach only your phone or Telegram.`} />}
-                {sv!.admin_alerts?.email_ready && <button className="btn quiet sm" style={{ alignSelf: "flex-start", marginTop: 8 }} disabled={busy === "mail"} onClick={testEmail}>{busy === "mail" ? "Sending…" : "Send a test email"}</button>}
+                {sv!.admin_alerts && <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                  {sv!.admin_alerts.email_ready && <button className="btn quiet sm" disabled={busy === "mail"} onClick={testEmail}>{busy === "mail" ? "Sending…" : "Send a test email"}</button>}
+                  <button className="btn quiet sm" disabled={busy === "weekly"} onClick={sendWeekly} title="The summary that goes out every Monday at 9:00 IST">{busy === "weekly" ? "Sending…" : "Send this week's summary now"}</button>
+                </div>}
                 {sv!.option_recorder && (() => {
                   const r = sv!.option_recorder!;
                   return <Status ok={r.enabled && !r.last_error} warn={!r.enabled || !!r.last_error} label="Option chain recording"
