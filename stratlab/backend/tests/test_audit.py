@@ -430,3 +430,16 @@ def test_market_sheet_fixes_us(monkeypatch):
         assert [c["symbol"] for c in main._sec_companies()] == ["AHL", "ACONW"]
     finally:
         w["close"]()
+
+
+def test_stored_findings_are_read_with_todays_rules():
+    old = [audit._issue("mismatch", "Numbers", "Operating margin above 100% in Mar 2017"),
+           audit._issue("mismatch", "Numbers", "Trailing revenue 2 cr vs last four quarters 2 cr"),
+           audit._issue("mismatch", "Numbers", "Trailing revenue 260 cr vs last four quarters 204 cr"),
+           audit._issue("mismatch", "Prices", "Last close 0.04 vs 0.04 on the company page"),
+           audit._issue("error", "Company page", "the fundamentals source has nothing for that.")]
+    now = [audit.restate(i) for i in old]
+    assert now[0]["level"] == "gap" and "company page shows" in now[0]["detail"]
+    assert now[1] is None and now[2] == old[2] and now[3] is None and now[4]["level"] == "gap"
+    us = audit.restate(audit._issue("mismatch", "Numbers", "Trailing revenue 900 cr vs last four quarters 700 cr"), us=True)
+    assert us["detail"] == "Trailing revenue $m900 vs last four quarters $m700"

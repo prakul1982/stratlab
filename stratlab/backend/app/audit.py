@@ -2,6 +2,7 @@
 with each number compared against its source and every gap written down. Run from the admin page; nothing here uses
 AI, so a full run costs no AI allowance. The aim is that nothing StratLab shows needs checking anywhere else."""
 import threading
+import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -184,6 +185,28 @@ def check_documents(docs: list[dict], read) -> list[dict]:
 NOT_COVERED = ("has no annual results filed", "isn't a company that files with the SEC", "has nothing for that")
 
 
+def restate(issue: dict, us: bool = False) -> dict | None:
+    """A stored finding read with today's rules, so a company checked under older rules isn't re-run just to drop a
+    false alarm: None when today's rules wouldn't report it."""
+    level, area, detail = issue.get("level"), issue.get("area"), str(issue.get("detail") or "")
+    num = lambda x: float(x.replace(",", ""))   # noqa: E731
+    if level == "mismatch" and detail.startswith("Operating margin above 100% in "):
+        src = "The filings show" if us else "The company page shows"
+        return _issue("gap", area, f"{src} an operating margin above 100% in {detail[31:]} (costs written back)")
+    m = re.match(r"Trailing revenue \$?m?([\d,.]+)(?: cr)? vs last four quarters \$?m?([\d,.]+)", detail)
+    if level == "mismatch" and m:
+        a, b = num(m[1]), num(m[2])
+        if abs(a - b) <= TTM_ROUNDING:
+            return None
+        return _issue(level, area, f"Trailing revenue $m{a:,.0f} vs last four quarters $m{b:,.0f}") if us else issue
+    m = re.match(r"Last close ([\d,.]+) vs ([\d,.]+)", detail)
+    if level == "mismatch" and area == "Prices" and m and abs(num(m[1]) - num(m[2])) <= PRICE_TICK:
+        return None
+    if level == "error" and area == "Company page" and any(x in detail for x in NOT_COVERED):
+        return _issue("gap", area, detail)
+    return issue
+
+
 class Skipped(Exception):
     pass
 
@@ -364,6 +387,9 @@ class MarketAudit:
             self.listing = json.loads(db.get_setting(f"{self.key}:list") or "{}")
             for c in [*"ABCDEFGHIJKLMNOPQRSTUVWXYZ0", *(f"bse{d}" for d in "0123456789")]:
                 self.rows.update(json.loads(db.get_setting(f"{self.key}:rows:{c}") or "{}"))
+            us = self.key.endswith("-us")
+            for row in self.rows.values():          # older checks, read with today's rules
+                row["issues"] = [x for x in (restate(i, us) for i in row.get("issues") or []) if x]
         except Exception as e:
             print("could not load the market audit:", e)
         self.loaded = True
