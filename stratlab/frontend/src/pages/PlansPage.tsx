@@ -8,13 +8,13 @@ import { money, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
 
 const FEATURES: Record<string, string[]> = {
-  free: ["5 experiments a month, each with a full verdict", "10 AI strategy builds a month", "Group tests of up to 10 instruments",
+  free: ["5 experiments a month, each with a full verdict", "10 AI strategy builds a month", "Group tests of up to 10 instruments", "3 stock alerts on at a time",
     "Paper trading free for 5 market days", "Every market: India, crypto, the US, UK, Europe, Japan, forex, Indian commodities and currency futures, global commodities, and your own CSV",
     "SMA, EMA, RSI and price rules", "Share cards and public links", "Import your holdings from your broker: up to 30 stocks"],
-  basic: ["50 experiments a month", "100 AI builds a month", "Group tests of up to 25 instruments", "Paper trade 2 strategies at a time",
+  basic: ["50 experiments a month", "100 AI builds a month", "Group tests of up to 25 instruments", "20 stock alerts on at a time", "Paper trade 2 strategies at a time",
     "Paper trade a whole group", "Options paper trading at set times", "A daily report after each market closes",
     "SMA, EMA, RSI and price rules", "Share cards and public links", "Up to 100 stocks in My Holdings"],
-  pro: ["Unlimited experiments", "Unlimited AI builds", "Group tests of up to 50 instruments", "Paper trade 10 strategies at a time",
+  pro: ["Unlimited experiments", "Unlimited AI builds", "Group tests of up to 50 instruments", "100 stock alerts on at a time", "Paper trade 10 strategies at a time",
     "Options entered on your own rules' signals", "Faster group entries and a spread limit", "Telegram and email alerts for every trade",
     "All 20+ indicators: MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, Donchian and more", "Indian F&O", "Export rules and trades",
     "Stage 2 + Supertrend scan with a daily alert", "Sector rotation, down to each sector's stocks", "Filings and red flags, with an evening alert",

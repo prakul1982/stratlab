@@ -10,6 +10,7 @@ PLANS = {
         "live_trial_days": 5,         # Indian trading days (no weekends or holidays), counted from the first start
         "group_size": 10,             # instruments in one group test
         "holdings": 30,               # stocks in My Holdings
+        "stock_alerts": 3,            # active price and indicator alerts on stocks
         "features": set(),
     },
     "basic": {
@@ -20,6 +21,7 @@ PLANS = {
         "live_trial_days": None,
         "group_size": 25,
         "holdings": 100,
+        "stock_alerts": 20,
         "features": {"group_live", "options", "daily_report", "newsletter"},
     },
     "pro": {
@@ -30,6 +32,7 @@ PLANS = {
         "live_trial_days": None,
         "group_size": 50,
         "holdings": 300,
+        "stock_alerts": 100,
         # pro_features: advanced indicators and Indian F&O
         "features": {"group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features",
                      "scans", "filings", "deepdive", "newsletter", "newsletter_stocks"},
@@ -73,9 +76,14 @@ def holdings_limit(plan: str) -> int:
     return PLANS[plan]["holdings"] if payments_live() else PLANS["pro"]["holdings"]
 
 
+def stock_alerts(plan: str) -> int:
+    """How many stock alerts can be on at once."""
+    return PLANS[plan]["stock_alerts"] if payments_live() else PLANS["pro"]["stock_alerts"]
+
+
 def plan_info(plan: str) -> dict:
     info = {k: v for k, v in PLANS[plan].items() if k != "features"}
-    return {**info, "group_size": group_size(plan), "holdings": holdings_limit(plan), "pro_features": has_pro_features(plan),
+    return {**info, "group_size": group_size(plan), "holdings": holdings_limit(plan), "stock_alerts": stock_alerts(plan), "pro_features": has_pro_features(plan),
             "features": {f: allows(plan, f) for f in FEATURES}}
 
 

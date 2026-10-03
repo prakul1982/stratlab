@@ -825,3 +825,7 @@ table.legs input[type=number] { width: 72px !important; }
 .holdings-add { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; }
 @media (max-width: 640px) { .holdings-add { grid-template-columns: minmax(0, 1fr); } }
 label.btn.disabled { opacity: .5; }
+/* ---------- stock alerts ---------- */
+.alert-row { display: flex; justify-content: space-between; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 20px; }
+.alert-row > .stack { flex: 1 1 280px; }
+.alert-form .field select, .alert-form .field input { width: 100%; }

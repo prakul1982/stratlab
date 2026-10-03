@@ -72,7 +72,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -264,4 +264,86 @@ test("my holdings: edit by hand and delete them all", async ({ page }, info) => 
   await expect(page.getByText("No holdings yet")).toBeVisible();
   await expect(page.getByText("Your holdings are deleted.")).toBeVisible();
   await sane(page, errors);
+});
+
+/** The experience question that follows the first one covers the page; answer it before clicking anything. */
+async function answerLevel(page: Page) {
+  const ask = page.getByText(/How much (trading|investing) have you done\?/);
+  await ask.waitFor({ timeout: 3000 }).then(() => page.getByRole("button", { name: /done a bit/ }).click()).catch(() => undefined);
+  await expect(ask).toHaveCount(0);
+}
+
+test("alerts: set one on a company page, then edit and delete it on the Alerts page", async ({ page }, info) => {
+  const tag = `e2e ${info.project.name} ${Date.now()}`;             // both projects share the fake database
+  let errors = await open(page, "/research/IN/RELIANCE", "Reliance");
+  await answerLevel(page);
+  await page.getByRole("button", { name: "Set alert" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Alert on RELIANCE" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Price level (₹)").fill("1");
+  await dialog.getByLabel("Note for yourself (optional)").fill(tag);
+  if (info.project.name === "phone") await touchable(page);
+  await dialog.getByRole("button", { name: "Set alert" }).click();
+  await expect(page.getByText(/already above ₹1/).first()).toBeVisible();   // the price is far above: it waits for a cross
+  await sane(page, errors);
+
+  errors = await open(page, "/alerts", "Your stock alerts");
+  await answerLevel(page);
+  const row = page.locator(".alert-row", { hasText: tag });
+  await expect(row).toContainText("Price crosses above ₹1");
+  if (info.project.name === "phone") await touchable(page);
+  await row.getByRole("button", { name: /Edit/ }).click();
+  const edit = page.getByRole("dialog", { name: "Edit alert on RELIANCE" });
+  await edit.getByLabel("Alert me when").selectOption("ma_below");
+  await edit.getByLabel("Moving average", { exact: true }).selectOption("200");
+  await edit.getByRole("button", { name: "Save alert" }).click();
+  await expect(row).toContainText("Price crosses below its 200-day average");
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("alerts: a new one from the Alerts page, for any stock", async ({ page }, info) => {
+  const tag = `e2e-new ${info.project.name} ${Date.now()}`;
+  const errors = await open(page, "/alerts", "Your stock alerts");
+  await answerLevel(page);
+  await page.getByRole("button", { name: "New alert" }).click();
+  await page.getByLabel("Stock").fill("TCS");
+  await page.getByLabel("Alert me when").selectOption("move_either");
+  await page.getByLabel("Move in a day (%)").fill("4");
+  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  await page.getByLabel(/Repeat/).check();
+  if (info.project.name === "phone") await touchable(page);
+  await page.getByRole("button", { name: "Set alert" }).click();
+  const row = page.locator(".alert-row", { hasText: tag });
+  await expect(row).toContainText("Moves 4% or more either way in a day");
+  await expect(row).toContainText("Repeats");
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, info) => {
+  const tag = `e2e-watch ${info.project.name} ${Date.now()}`;
+  const errors = await open(page, "/research/watchlist?region=IN", "Companies you're watching");
+  await answerLevel(page);
+  // a watchlist of one, without changing the shared one other tests read
+  await page.route("**/research/watchlist", (r) => r.request().method() === "GET"
+    ? r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [{ region: "IN", symbol: "RELIANCE", name: "Reliance Industries" }] }) })
+    : r.fallback());
+  await page.reload();
+  await page.getByRole("button", { name: "Set alert" }).click();
+  const dialog = page.getByRole("dialog", { name: "Set an alert" });
+  await expect(dialog.getByLabel("Stock")).toHaveValue("IN:RELIANCE");
+  await dialog.getByLabel("Alert me when", { exact: true }).selectOption("high52");
+  await dialog.getByLabel("Note for yourself (optional)").fill(tag);
+  if (info.project.name === "phone") await touchable(page);
+  await dialog.getByRole("button", { name: "Set alert" }).click();
+  await expect(page.getByText("Alert set on RELIANCE.")).toBeVisible();
+  await sane(page, errors);
+  await open(page, "/alerts", "Your stock alerts");
+  const row = page.locator(".alert-row", { hasText: tag });
+  await expect(row).toContainText("Makes a new 52-week high");
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
 });

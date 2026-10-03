@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
+import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
 
@@ -56,6 +56,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <NavLink to="/research/rotation" className={onResearch("/research/rotation")}><Pulse />Sector rotation</NavLink>
       <NavLink to="/research/filings" className={onResearch("/research/filings")}><Shield />Red flags</NavLink>
       <NavLink to="/research/watchlist" className={onResearch("/research/watchlist")}><Pin />Watchlist</NavLink>
+      <NavLink to="/alerts"><Bell />Alerts</NavLink>
     </nav>
   );
   const trading = (
