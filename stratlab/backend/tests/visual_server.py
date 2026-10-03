@@ -36,6 +36,10 @@ def build():
     scr = main.research_hub.screener
     real = scr.company
     mp.setattr(scr, "company", lambda sym: loss_company(real("RELIANCE")) if sym.upper() == LOSS else real(sym))
+    from datetime import datetime, timezone
+    from app import db
+    for uid in ("u-free", "u-basic"):       # brand-new accounts, for the first-steps checklist on Home
+        db.update_profile(uid, created_at=datetime.now(timezone.utc).isoformat())
     return w
 
 

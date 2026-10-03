@@ -11,6 +11,7 @@ import { PhoneCard } from "../components/PhoneCard";
 import { Block } from "../components/More";
 import { InvoicesCard } from "../components/InvoicesCard";
 import { NewslettersCard } from "../components/NewslettersCard";
+import { TipsCard } from "../components/TipsCard";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
@@ -152,6 +153,8 @@ export function AccountPage() {
         </section>
 
         <NewslettersCard />
+
+        <TipsCard />
 
         <PhoneCard />
 

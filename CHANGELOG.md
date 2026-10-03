@@ -2,6 +2,12 @@
 
 ## October 2026
 
+### Lifecycle emails, first steps and the offer countdown
+- **Emails that follow an account:** a welcome right after signing up, a nudge on day 2 to test a first strategy (only if they haven't), a reminder the day before and on the last day of the free paper-trading trial and of the launch offer, and what's new after 14 quiet days. Each goes once per person, at most one a day, from 8 am to 9 pm India time. **Tips and reminders** can be turned off in Account or from the link in each email; payment receipts and a note when a paid plan stops always go.
+- **Admin → Services** previews each of these emails, or sends one to you as a test.
+- **Your first steps** on Home for a new account: run a backtest, add a stock to the watchlist, open a deep dive, start paper trading, set up newsletters or phone alerts. Each ticks itself from what you've done; hide it any time, and it goes by itself when everything's done.
+- **The launch offer counts down** on Home and Plans while it runs.
+
 ### BSE-only companies, and a phone pass
 - **Companies listed only on BSE work like NSE ones:** search, the company page, charts, quotes, backtests, groups and paper trading take them by BSE symbol or code. Their filings and red flags come from BSE's own announcements feed, and the deep dive reads their presentations and call transcripts from BSE, so the document read, report card and slides work too. A daily check of BSE's feed joins **Check every feature**.
 - **Phones:** wide tables keep their first column in place and show an edge when there's more to the side; menus, checkboxes and buttons are bigger to tap. The browser tests now fail if any control on any page is too small to tap on a phone.

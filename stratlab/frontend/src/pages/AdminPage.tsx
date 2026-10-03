@@ -8,6 +8,7 @@ import { AuditPanel, MarketAuditPanel } from "../components/AuditPanel";
 import { PricesPanel } from "../components/PricesPanel";
 import { InvoiceAdminPanel } from "../components/InvoiceAdminPanel";
 import { PlatformPanel } from "../components/PlatformPanel";
+import { LifecycleEmails } from "../components/LifecycleEmails";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
 
 type Plan = "free" | "basic" | "pro";
@@ -297,6 +298,7 @@ export function AdminPage() {
                   {sv!.admin_alerts.email_ready && <button className="btn quiet sm" disabled={busy === "mail"} onClick={testEmail}>{busy === "mail" ? "Sending…" : "Send a test email"}</button>}
                   <button className="btn quiet sm" disabled={busy === "weekly"} onClick={sendWeekly} title="The summary that goes out every Monday at 9:00 IST">{busy === "weekly" ? "Sending…" : "Send this week's summary now"}</button>
                 </div>}
+                <LifecycleEmails />
                 {sv!.option_recorder && (() => {
                   const r = sv!.option_recorder!;
                   return <Status ok={r.enabled && !r.last_error} warn={!r.enabled || !!r.last_error} label="Option chain recording"

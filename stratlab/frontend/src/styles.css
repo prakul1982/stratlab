@@ -807,3 +807,19 @@ table.legs input[type=number] { width: 72px !important; }
 }
 
 .news-lines { margin: 4px 0 2px; padding-left: 18px; color: var(--ink-2); font-size: 14px; }
+
+/* Home: the first-steps checklist for a new account, and the launch offer's countdown */
+.fs-bar { height: 6px; border-radius: 999px; background: var(--chip); overflow: hidden; }
+.fs-bar > span { display: block; height: 100%; background: var(--blue); border-radius: 999px; transition: width .3s; }
+.fs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.fs-list li { display: flex; align-items: center; gap: 10px; min-height: 40px; border-bottom: 1px solid var(--rule); }
+.fs-list li:last-child { border-bottom: 0; }
+.fs-tick { flex: none; width: 22px; height: 22px; border-radius: 999px; border: 2px solid var(--line-2); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+.fs-list li.done .fs-tick { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
+.fs-list li.done .fs-title { color: var(--muted); text-decoration: line-through; }
+.fs-go { display: inline-flex; align-items: center; min-height: 36px; color: var(--ink); font-weight: 600; text-decoration: none; }
+.fs-go::after { content: "→"; margin-left: 8px; color: var(--blue); }
+.fs-go:hover { color: var(--blue); }
+.promo-countdown { color: var(--ink); }
+.promo-countdown .promo-left { white-space: nowrap; }
+.mail-preview { width: 100%; height: 460px; border: 1px solid var(--line); border-radius: 10px; background: #f4f5f7; }
