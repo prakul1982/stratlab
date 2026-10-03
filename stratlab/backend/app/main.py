@@ -2317,6 +2317,20 @@ def admin_moderate_library(eid: str, req: ModerateReq, _=Depends(admin.admin_pro
     return {"ok": True}
 
 
+@app.post("/admin/alerts/test")
+def admin_alert_test(profile=Depends(admin.admin_profile)):
+    """One email to the admin's own address, straight away, so the email settings can be checked."""
+    throttle(profile, "admin_mail_test", 5, 3600, "You've sent 5 test emails this hour. Try again later.")
+    to = alerts.email_for(profile)
+    if not alerts.email_ready():
+        err(400, "email_not_set", "Email isn't set up on the server yet: add SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASSWORD in Railway.")
+    try:
+        alerts.send_email(to, "StratLab test email", "Your StratLab alert emails are working. Problems found by the daily check will arrive like this.")
+    except Exception as e:
+        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+    return {"sent_to": to}
+
+
 @app.post("/admin/ai/test")
 def admin_ai_test(_=Depends(admin.admin_profile)):
     return {"providers": ai_test_all(gemini=_gemini, anthropic=_anthropic)}

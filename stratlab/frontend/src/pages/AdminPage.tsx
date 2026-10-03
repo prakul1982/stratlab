@@ -151,6 +151,10 @@ export function AdminPage() {
     const r = await api<{ ok: boolean; message: string }>("/admin/kite/auto-login-now", { method: "POST" });
     notify(r.message); await loadOverview();
   });
+  const testEmail = () => run("mail", async () => {
+    const r = await api<{ sent_to: string }>("/admin/alerts/test", { method: "POST" });
+    notify(`Test email sent to ${r.sent_to}. Check your inbox (and spam).`);
+  });
   const testAI = () => run("ai", async () => { setAiTest((await api<{ providers: AITest[] }>("/admin/ai/test", { method: "POST" })).providers); });
   const stop = (s: SessionRow) => {
     if (!confirm(`Stop "${s.name}" for ${s.email}?`)) return;
@@ -285,6 +289,7 @@ export function AdminPage() {
                 {sv!.admin_alerts && <Status ok={sv!.admin_alerts.email_ready} label="Alerts to you"
                   detail={sv!.admin_alerts.email_ready ? `Emailed to ${sv!.admin_alerts.to.join(", ")}, plus your phone or Telegram if set in Account.`
                     : `Email isn't set up on the server: add SMTP_HOST, SMTP_USER and SMTP_PASSWORD in Railway (for Gmail: smtp.gmail.com and an app password). Until then alerts reach only your phone or Telegram.`} />}
+                {sv!.admin_alerts?.email_ready && <button className="btn quiet sm" style={{ alignSelf: "flex-start", marginTop: 8 }} disabled={busy === "mail"} onClick={testEmail}>{busy === "mail" ? "Sending…" : "Send a test email"}</button>}
                 {sv!.option_recorder && (() => {
                   const r = sv!.option_recorder!;
                   return <Status ok={r.enabled && !r.last_error} warn={!r.enabled || !!r.last_error} label="Option chain recording"
