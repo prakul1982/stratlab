@@ -15,6 +15,7 @@ SEND_AT = {
     "JP": ("Asia/Tokyo", time(15, 40)),
     "FX": ("America/New_York", time(17, 5)),     # the forex day ends at 17:00 New York
     "MCX": ("Asia/Kolkata", time(23, 45)),       # after MCX's 23:30 close
+    "CDS": ("Asia/Kolkata", time(17, 15)),       # after the currency segment's 17:00 close
     "CMDTY": ("America/New_York", time(17, 10)),  # after CME's 17:00 daily break
     "CRYPTO": ("UTC", time(23, 55)),             # crypto never closes: the report covers the UTC day
 }

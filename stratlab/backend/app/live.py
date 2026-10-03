@@ -234,7 +234,7 @@ class LiveManager:
         for row in db.running_sessions():
             if row["id"] in self.sessions:
                 continue
-            if (row.get("instrument") or {}).get("market", "IN") in ("IN", "MCX") and not self.kite.ready():
+            if (row.get("instrument") or {}).get("market", "IN") in ("IN", "MCX", "CDS") and not self.kite.ready():
                 continue  # resumes after today's Kite login; shown as paused until then
             try:
                 self._attach(row)

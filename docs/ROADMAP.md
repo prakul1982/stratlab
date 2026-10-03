@@ -20,13 +20,14 @@ Still to do:
 - Insider ownership in the checklist instead of promoter holding.
 
 ### Indian currency derivatives (CDS)
-NSE's currency segment: USDINR, EURINR, GBPINR and JPYINR futures and options, plus the cross pairs (EURUSD, GBPUSD,
-USDJPY) traded in India. Today only the USDINR spot rate is available, through the forex market.
-- Backtests on futures (continuous daily series stitched across expiries, as for MCX) and on the current contract
-  intraday; paper trading the front month with a roll before expiry.
-- Lot sizes, tick sizes and costs for the segment (exchange fees, stamp duty, GST; no STT on currency).
-- Market hours 9:00 am to 5:00 pm IST, and the currency segment's own holiday list.
-- Options on USDINR in the Options tab, priced on live bid and ask like index options.
+*Done:* USDINR, EURINR, GBPINR and JPYINR futures as a market of their own (front month, rolled three days before
+expiry, whole lots of 1,000 units or 100,000 yen): daily backtests on years of stitched history, intraday on the
+current contract, paper trading, costs without STT (exchange fees, stamp duty, GST), 09:00 to 17:00 IST, and the
+segment's own holiday list read from the exchange each day.
+
+Still to do:
+- The cross pairs (EURUSD, GBPUSD, USDJPY): their profit is in dollars, not rupees.
+- USDINR options in the Options tab.
 
 ### International payments
 *Done:* international cards are on in Razorpay, so anyone abroad can subscribe. The Plans page shows prices in the

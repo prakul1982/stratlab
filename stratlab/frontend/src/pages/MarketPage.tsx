@@ -50,7 +50,7 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
   }, [presets]);
   const preset = presets.find((p) => p.id === pick);
   const members: GroupMember[] = pick === "custom" ? custom : preset ? preset.symbols.map((symbol) => ({ symbol })) : [];
-  const noun = market.id === "CRYPTO" ? "coins" : market.id === "FX" ? "pairs" : market.id === "MCX" || market.id === "CMDTY" ? "commodities" : "stocks";
+  const noun = market.id === "CRYPTO" ? "coins" : market.id === "FX" || market.id === "CDS" ? "pairs" : market.id === "MCX" || market.id === "CMDTY" ? "commodities" : "stocks";
 
   const save = async () => {
     if (members.length < 2) { notify(`Add at least two ${noun} to the group.`); return; }

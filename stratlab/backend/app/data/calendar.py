@@ -8,7 +8,7 @@ from functools import lru_cache
 
 # MCX follows the NSE/BSE holiday list (on some of those days it reopens for the evening session only,
 # which is treated as closed); global commodity futures follow US exchange holidays.
-CODES = {"IN": "XBOM", "MCX": "XBOM", "US": "XNYS", "CMDTY": "XNYS", "UK": "XLON", "EU": "XETR", "JP": "XTKS"}
+CODES = {"IN": "XBOM", "MCX": "XBOM", "CDS": "XBOM", "US": "XNYS", "CMDTY": "XNYS", "UK": "XLON", "EU": "XETR", "JP": "XTKS"}
 
 
 @lru_cache(maxsize=None)
@@ -38,6 +38,8 @@ def extra_holidays(market: str) -> set:
     """Holidays the admin added (the exchange's published list), cached for ten minutes."""
     import json
     import time
+    if market == "CDS":               # the currency segment: the equity list plus its own extra closures
+        return extra_holidays("IN") | _stored("CDS")
     key = "IN" if market == "MCX" else market
     hit = _extra.get(key)
     if hit and time.time() - hit[0] < 600:
@@ -50,6 +52,21 @@ def extra_holidays(market: str) -> set:
         auto = json.loads(db.get_setting(AUTO + key) or "{}")
         days |= {str(d)[:10] for d in auto.get("days") or []}
     except Exception:                 # no database (tests, an outage): the built-in calendar alone
+        days = hit[1] if hit else set()
+    _extra[key] = (time.time(), days)
+    return days
+
+
+def _stored(key: str) -> set:
+    import json
+    import time
+    hit = _extra.get(key)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    try:
+        from .. import db
+        days = {str(d)[:10] for d in json.loads(db.get_setting(AUTO + key) or "{}").get("days") or []}
+    except Exception:
         days = hit[1] if hit else set()
     _extra[key] = (time.time(), days)
     return days
@@ -118,15 +135,15 @@ def is_trading_day(market: str, day: date) -> bool:
         return False                          # Sunday evening's open counts toward Monday
     if day.weekday() >= 5:
         return False
-    if market in ("IN", "MCX") and day.isoformat() in extra_holidays(market):
+    if market in ("IN", "MCX", "CDS") and day.isoformat() in extra_holidays(market):
         return False
     cal = _calendar(CODES[market]) if market in CODES else None
     if cal is None:
-        return not (market in ("IN", "MCX") and (day.month, day.day) in FIXED_IN)
+        return not (market in ("IN", "MCX", "CDS") and (day.month, day.day) in FIXED_IN)
     try:
         if not (cal.first_session.date() <= day <= cal.last_session.date()):
             # past the published calendar: weekdays count, bar India's fixed national holidays
-            return not (market in ("IN", "MCX") and (day.month, day.day) in FIXED_IN)
+            return not (market in ("IN", "MCX", "CDS") and (day.month, day.day) in FIXED_IN)
         return bool(cal.is_session(day.isoformat()))
     except Exception:
         return True

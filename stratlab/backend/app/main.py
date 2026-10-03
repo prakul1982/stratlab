@@ -1709,6 +1709,7 @@ def holiday_job():
     while True:
         try:
             trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
+            trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD"), "CDS")
         except Exception as e:
             print("holiday refresh failed:", e)
         time.sleep(24 * 3600)
@@ -1718,6 +1719,7 @@ def holiday_job():
 def admin_holidays_refresh(_=Depends(admin.admin_profile)):
     """Fetch the exchange's holiday list now instead of waiting for the daily run."""
     trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
+    trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD"), "CDS")
     return calendar_status()
 
 

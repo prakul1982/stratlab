@@ -9,6 +9,7 @@ from ..kite_service import KiteService
 from .coinbase import CoinbaseProvider, DataError
 from . import calendar
 from .markets import BY_ID, MARKETS
+from .cds import CDSProvider
 from .mcx import MCXProvider
 from .yahoo_markets import YahooProvider
 
@@ -62,7 +63,7 @@ class Registry:
         yahoo = yahoo or Yahoo()
         self.providers = {"IN": KiteProvider(kite), "CRYPTO": crypto or CoinbaseProvider(),
                           **{m: YahooProvider(m, yahoo) for m in ("US", "UK", "EU", "JP", "FX", "CMDTY")},
-                          "MCX": MCXProvider(kite)}
+                          "MCX": MCXProvider(kite), "CDS": CDSProvider(kite)}
 
     def provider(self, market: str):
         return self.providers.get(market)

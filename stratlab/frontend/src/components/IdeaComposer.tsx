@@ -25,7 +25,7 @@ const SAMPLE: Record<string, [string, string, string]> = {
   IN: ["NIFTY 50", "RELIANCE", "HDFCBANK"], CRYPTO: ["Bitcoin", "Ethereum", "Solana"], US: ["SPY", "AAPL", "NVDA"],
   UK: ["SHEL.L", "VOD.L", "HSBA.L"], EU: ["SAP.DE", "ASML.AS", "MC.PA"], JP: ["7203.T", "6758.T", "9984.T"],
   FX: ["EUR/USD", "GBP/USD", "USD/JPY"],
-  MCX: ["GOLDM", "CRUDEOIL", "SILVERM"], CMDTY: ["gold", "WTI crude", "silver"],
+  MCX: ["GOLDM", "CRUDEOIL", "SILVERM"], CDS: ["USDINR", "EURINR", "GBPINR"], CMDTY: ["gold", "WTI crude", "silver"],
 };
 
 /** Example ideas in the market (and on the instrument) you picked, so one click never tests the wrong thing. */
@@ -52,7 +52,7 @@ export async function findInstrument(name: string, market?: string | null): Prom
     const rows = await api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(q.slice(0, 40))}${market ? `&market=${market}` : ""}`);
     const norm = (s: string) => s.replace("/", "-").toUpperCase();
     return rows.find((r) => norm(r.symbol) === norm(q) || String(r.token).toUpperCase() === norm(q))
-      ?? rows.find((r) => ["EQ", "INDEX", "CRYPTO", "ETF", "FX"].includes(r.type || "") || (r.type === "FUT" && (r.market === "MCX" || r.market === "CMDTY"))) ?? null;
+      ?? rows.find((r) => ["EQ", "INDEX", "CRYPTO", "ETF", "FX"].includes(r.type || "") || (r.type === "FUT" && (r.market === "MCX" || r.market === "CDS" || r.market === "CMDTY"))) ?? null;
   } catch {
     return null;
   }

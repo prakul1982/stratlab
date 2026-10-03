@@ -16,7 +16,7 @@ function useDefaults(): Instrument[] {
 }
 
 const instKind = (r: Instrument) =>
-  r.market === "MCX" ? `MCX futures · ${r.contract ?? ""}`.trim() : r.market === "CMDTY" ? "Futures, front month"
+  r.market === "MCX" ? `MCX futures · ${r.contract ?? ""}`.trim() : r.market === "CDS" ? `Currency futures · ${r.contract ?? ""}`.trim() : r.market === "CMDTY" ? "Futures, front month"
     : r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "ETF" ? "ETF" : r.type === "FX" ? "Currency pair"
     : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
 
@@ -26,6 +26,7 @@ const PLACEHOLDER: Record<string, string> = {
   EU: "Search European stocks: SAP, ASML, LVMH…", JP: "Search Tokyo listings: Toyota, Sony, 7203…",
   FX: "Search a currency pair: EURUSD, USDJPY, GBPUSD…",
   MCX: "Search MCX commodities: gold mini, crude oil, natural gas, copper…",
+  CDS: "Search currency futures: USDINR, EURINR, GBPINR, JPYINR",
   CMDTY: "Search global commodities: gold, WTI crude, Brent, corn, coffee…",
 };
 
