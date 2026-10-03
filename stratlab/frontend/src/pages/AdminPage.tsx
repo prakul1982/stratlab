@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly, money } from "../lib/format";
 import { Loading, Modal } from "../components/ui";
-import { AuditPanel } from "../components/AuditPanel";
+import { AuditPanel, MarketAuditPanel } from "../components/AuditPanel";
 import { PlatformPanel } from "../components/PlatformPanel";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
 
@@ -283,6 +283,7 @@ export function AdminPage() {
           <PlatformPanel />
 
           <AuditPanel />
+          <MarketAuditPanel />
 
           {sv?.calendar && <HolidaysPanel status={sv.calendar} onSaved={(c) => setOv((o) => o && { ...o, server: { ...o.server, calendar: c } })} />}
 

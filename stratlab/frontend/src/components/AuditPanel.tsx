@@ -7,13 +7,15 @@ import { ago } from "../lib/format";
 type Level = "mismatch" | "gap" | "error";
 type Issue = { level: Level; area: string; detail: string };
 type Row = { symbol: string; name: string; seconds: number; issues: Issue[] };
+type Summary = { companies: number; clean: number; mismatches: number; gaps: number; errors: number; avg_seconds: number | null;
+  by_area: Record<string, Record<Level, number>>; slowest: { symbol: string; seconds: number }[] };
 interface AuditState {
   running: boolean; cancelled?: boolean; label?: string; docs?: boolean; total?: number; done?: number; rows?: Row[]; started_at?: string; finished_at?: string | null;
-  summary?: { companies: number; clean: number; mismatches: number; gaps: number; errors: number; avg_seconds: number | null;
-    by_area: Record<string, Record<Level, number>>; slowest: { symbol: string; seconds: number }[] };
+  summary?: Summary;
   sets: { id: string; name: string; count: number }[];
 }
 
+const SHOWN = 300;
 const LEVEL: Record<Level, [string, string]> = { mismatch: ["Mismatch", "fail"], error: ["Error", "warn"], gap: ["Gap", "next"] };
 
 /** The data audit: every company in a set checked against its sources, on the live server. */
@@ -23,7 +25,6 @@ export function AuditPanel() {
   const [set, setSet] = useState("nifty50");
   const [custom, setCustom] = useState("");
   const [docs, setDocs] = useState(false);
-  const [show, setShow] = useState<Level | "all">("mismatch");
 
   const load = useCallback(async () => { try { setS(await api<AuditState>("/admin/audit")); } catch (e) { fail(e); } }, [fail]);
   useEffect(() => { load(); }, [load]);
@@ -39,17 +40,7 @@ export function AuditPanel() {
     try { setS(await api<AuditState>("/admin/audit", { method: "POST", body: { set, symbols, docs } })); } catch (e) { fail(e); }
   };
 
-  const rows = useMemo(() => (s?.rows ?? []).map((r) => ({ ...r, shown: r.issues.filter((i) => show === "all" || i.level === show) }))
-    .filter((r) => r.shown.length), [s?.rows, show]);
   const sum = s?.summary;
-
-  const csv = () => {
-    const lines = [["symbol", "name", "level", "area", "detail"].join(",")];
-    for (const r of s?.rows ?? []) for (const i of r.issues) lines.push([r.symbol, r.name, i.level, i.area, i.detail].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = "stratlab-audit.csv"; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  };
 
   return (
     <section className="card stack" style={{ gap: 12 }}>
@@ -73,36 +64,118 @@ export function AuditPanel() {
               <p className="small" style={{ margin: 0 }}><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
                 {" · "}{sum.companies} checked, {sum.clean} clean · <span className="neg">{sum.mismatches} mismatches</span> · {sum.gaps} gaps · {sum.errors} errors
                 {sum.avg_seconds != null && ` · ${sum.avg_seconds}s a company`}</p>
-              {Object.keys(sum.by_area).length > 0 && (
-                <div className="table-wrap"><table>
-                  <thead><tr><th>Area</th><th className="num">Mismatches</th><th className="num">Gaps</th><th className="num">Errors</th></tr></thead>
-                  <tbody>{Object.entries(sum.by_area).sort((a, b) => (b[1].mismatch * 3 + b[1].error * 2 + b[1].gap) - (a[1].mismatch * 3 + a[1].error * 2 + a[1].gap)).map(([area, c]) => (
-                    <tr key={area}><td>{area}</td><td className="num">{c.mismatch}</td><td className="num">{c.gap}</td><td className="num">{c.error}</td></tr>
-                  ))}</tbody>
-                </table></div>
-              )}
-              <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                <div className="seg" role="radiogroup" aria-label="Show">
-                  {(["mismatch", "error", "gap", "all"] as const).map((k) => (
-                    <button key={k} role="radio" aria-checked={show === k} aria-pressed={show === k} onClick={() => setShow(k)}>{k === "all" ? "All" : LEVEL[k][0] + "s"}</button>
-                  ))}
-                </div>
-                {!!s.rows?.length && <button className="btn quiet sm" onClick={csv}>Download CSV</button>}
-              </div>
-              {rows.length === 0 ? <p className="small muted">Nothing of this kind{s.running ? " yet" : ""}.</p> : (
-                <div className="stack" style={{ gap: 8 }}>
-                  {rows.map((r) => (
-                    <div key={r.symbol} className="stack small" style={{ gap: 2 }}>
-                      <span><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}><b>{r.name}</b></Link> <span className="mono tiny muted">{r.symbol} · {r.seconds}s</span></span>
-                      {r.shown.map((i, n) => <span key={n}><span className={`badge ${LEVEL[i.level][1]}`}>{i.area}</span> {i.detail}</span>)}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <Findings rows={s.rows ?? []} sum={sum} running={s.running} file="stratlab-audit.csv" />
             </>
           )}
         </>
       )}
     </section>
+  );
+}
+
+interface MarketState {
+  enabled: boolean; listed: number; checked: number; due: number; current: string | null; eta_hours: number | null;
+  list_at: string | null; list_error: string | null; since: string | null;
+  new_listings: { symbol: string; name: string; listed: string | null; checked: boolean }[];
+  summary: Summary; rows: Row[];
+}
+
+/** Every NSE-listed company, checked in the background while switched on; new listings first. */
+export function MarketAuditPanel() {
+  const { fail } = useApp();
+  const [m, setM] = useState<MarketState | null>(null);
+  const load = useCallback(async () => { try { setM(await api<MarketState>("/admin/audit/market")); } catch (e) { fail(e); } }, [fail]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!m?.enabled) return;
+    const t = window.setInterval(load, 30000);
+    return () => window.clearInterval(t);
+  }, [m?.enabled, load]);
+  const send = async (body: object) => { try { setM(await api<MarketState>("/admin/audit/market", { method: "POST", body })); } catch (e) { fail(e); } };
+  const sum = m?.summary;
+  const pct = m && m.listed ? Math.round((100 * (m.listed - m.due)) / m.listed) : 0;
+
+  return (
+    <section className="card stack" style={{ gap: 12 }}>
+      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+        <h2 className="h2">Whole market</h2>
+        {m && <button className="btn sm" onClick={() => send({ on: !m.enabled })}>{m.enabled ? "Pause" : "Check every NSE company"}</button>}
+      </div>
+      <p className="small muted" style={{ maxWidth: "80ch", margin: 0 }}>Every company listed on NSE, checked one at a time in the background at an easy pace, the same way as the
+        audit above (without documents). The exchange's list of companies is read every day: new listings are checked first, delisted companies drop off, and each
+        company is checked again once a month. It pauses while an audit above runs, and carries on after a restart.</p>
+      {!m ? <p className="small muted">Loading…</p> : (
+        <>
+          <p className="small" style={{ margin: 0 }}>
+            <b>{m.enabled ? (m.due ? `Running · ${pct}% of the cycle done` : "Running · everything is up to date") : m.checked ? "Paused" : "Not started"}</b>
+            {" · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked, {m.due.toLocaleString("en-IN")} due
+            {m.enabled && m.eta_hours != null && m.due > 0 && ` · about ${m.eta_hours < 1 ? "under an hour" : `${Math.round(m.eta_hours)} hours`} left`}
+            {m.current && <> · now <span className="mono">{m.current}</span></>}
+          </p>
+          <p className="small muted" style={{ margin: 0 }}>
+            {m.list_error ? <span className="neg">Couldn't read the exchange's list: {m.list_error}{m.list_at ? ` (using the one from ${ago(m.list_at)})` : ""}. </span>
+              : m.list_at ? `List read ${ago(m.list_at)}. ` : ""}
+            <button className="btn quiet sm" onClick={() => send({ read_list: true })}>Read the list now</button>{" "}
+            {m.checked > 0 && <button className="btn quiet sm" onClick={() => { if (confirm("Check every company again from the start?")) send({ restart: true }); }}>Check all again</button>}
+          </p>
+          {m.new_listings.length > 0 && (
+            <p className="small" style={{ margin: 0 }}>New listings: {m.new_listings.slice(0, 12).map((n, i) => (
+              <span key={n.symbol}>{i ? ", " : ""}<Link className="link" to={`/research/IN/${encodeURIComponent(n.symbol)}/deep`}>{n.symbol}</Link>
+                <span className="muted">{n.listed ? ` (${n.listed})` : ""}{n.checked ? "" : " · queued"}</span></span>))}</p>
+          )}
+          {sum && sum.companies > 0 && (
+            <>
+              <p className="small" style={{ margin: 0 }}>{sum.companies.toLocaleString("en-IN")} checked, {sum.clean.toLocaleString("en-IN")} clean · <span className="neg">{sum.mismatches} mismatches</span> · {sum.gaps} gaps · {sum.errors} errors</p>
+              <Findings rows={m.rows} sum={sum} running={m.enabled} file="stratlab-market-audit.csv" />
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** The area table, the kind filter, each company's findings, and a CSV of every finding. */
+function Findings({ rows: all, sum, running, file }: { rows: Row[]; sum: Summary; running: boolean; file: string }) {
+  const [show, setShow] = useState<Level | "all">("mismatch");
+  const rows = useMemo(() => all.map((r) => ({ ...r, shown: r.issues.filter((i) => show === "all" || i.level === show) }))
+    .filter((r) => r.shown.length), [all, show]);
+  const csv = () => {
+    const lines = [["symbol", "name", "level", "area", "detail"].join(",")];
+    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, i.level, i.area, i.detail].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = file; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  };
+  return (
+    <>
+      {Object.keys(sum.by_area).length > 0 && (
+        <div className="table-wrap"><table>
+          <thead><tr><th>Area</th><th className="num">Mismatches</th><th className="num">Gaps</th><th className="num">Errors</th></tr></thead>
+          <tbody>{Object.entries(sum.by_area).sort((a, b) => (b[1].mismatch * 3 + b[1].error * 2 + b[1].gap) - (a[1].mismatch * 3 + a[1].error * 2 + a[1].gap)).map(([area, c]) => (
+            <tr key={area}><td>{area}</td><td className="num">{c.mismatch}</td><td className="num">{c.gap}</td><td className="num">{c.error}</td></tr>
+          ))}</tbody>
+        </table></div>
+      )}
+      <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+        <div className="seg" role="radiogroup" aria-label="Show">
+          {(["mismatch", "error", "gap", "all"] as const).map((k) => (
+            <button key={k} role="radio" aria-checked={show === k} aria-pressed={show === k} onClick={() => setShow(k)}>{k === "all" ? "All" : k === "mismatch" ? "Mismatches" : LEVEL[k][0] + "s"}</button>
+          ))}
+        </div>
+        {!!all.length && <button className="btn quiet sm" onClick={csv}>Download CSV</button>}
+      </div>
+      {rows.length === 0 ? <p className="small muted">Nothing of this kind{running ? " yet" : ""}.</p> : (
+        <div className="stack" style={{ gap: 8 }}>
+          {rows.length > SHOWN && <p className="small muted" style={{ margin: 0 }}>Showing {SHOWN} of {rows.length} companies; the CSV has all of them.</p>}
+          {rows.slice(0, SHOWN).map((r) => (
+            <div key={r.symbol} className="stack small" style={{ gap: 2 }}>
+              <span><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}><b>{r.name}</b></Link> <span className="mono tiny muted">{r.symbol} · {r.seconds}s</span></span>
+              {r.shown.map((i, n) => <span key={n}><span className={`badge ${LEVEL[i.level][1]}`}>{i.area}</span> {i.detail}</span>)}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

@@ -101,6 +101,12 @@ def _nse(sw=None):
             idx = r.url.params.get("index", "")
             names = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC"] if idx == "NIFTY 500" else []
             return httpx.Response(200, json={"data": [{"symbol": idx, "priority": 1}] + [{"symbol": n} for n in names]})
+        if r.url.path == "/content/equities/EQUITY_L.csv":
+            lines = ["SYMBOL,NAME OF COMPANY, SERIES, DATE OF LISTING, PAID UP VALUE"]
+            lines += [f"CO{i},Company {i} Limited,EQ,01-Jan-2010,10" for i in range(120)]
+            lines += ["RELIANCE,Reliance Industries Limited,EQ,29-Nov-1995,10", "NEWCO,New Company Limited,EQ,"
+                      + datetime.now().strftime("%d-%b-%Y") + ",10", "SOMEBOND,Some Bond,N1,01-Jan-2020,1000"]
+            return httpx.Response(200, text="\n".join(lines))
         if r.url.path == "/api/holiday-master":
             return httpx.Response(200, json={"CM": [{"tradingDate": "26-Jan-2027", "weekDay": "Tuesday", "description": "Republic Day"},
                                                     {"tradingDate": "22-Mar-2027", "weekDay": "Monday", "description": "Holi"}],
@@ -170,6 +176,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     from app import audit
     runner = audit.Runner()
     monkeypatch.setattr(main, "audit_runner", runner)
+    monkeypatch.setattr(main, "market_audit", audit.MarketAudit(lambda: main.filings_feed.all_equities(), main._market_check,
+                                                                busy_fn=lambda: bool(runner.state.get("running")), pause=0))
     client = TestClient(main.app, raise_server_exceptions=False)
 
     def close():
