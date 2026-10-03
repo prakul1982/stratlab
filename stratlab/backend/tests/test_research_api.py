@@ -45,7 +45,7 @@ def api(monkeypatch):
 
     def fake_complete(system, text, **kw):
         calls.append(system)
-        if "picks-and-shovels" in system:
+        if "mapping a sector" in system:
             return json.dumps(SECTOR_AI)
         if "market read" in system:
             return json.dumps(PULSE_AI)
@@ -88,7 +88,8 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
     r = api.get("/research/company/US/NVDA/ai").json()
-    assert r["valuation"] == "RICH" and r["composite"] == 78 and r["segments"][1] == {"label": "Gaming", "share": 9}
+    assert r["segments"][1] == {"label": "Gaming", "share": 9} and r["scores"]["moat"] == 90
+    assert r["valuation"] is None and r["composite"] is None and "value" not in r["scores"]   # no ratings: that's advice
     assert [i["title"] for i in r["ideas"]] == ["Trend rider"]          # blank and malformed ideas dropped
     assert "generated_at" in r and api.usage == ["research_ai"]
     assert "EMA" in api.calls[0] and "MACD" not in api.calls[0]          # free plan: basic indicators only
@@ -116,13 +117,15 @@ def test_daily_ai_allowance(api, monkeypatch):
 
 def test_sector_pulse_compare(api):
     s = api.get("/research/sector?q=AI%20data%20centers&region=US").json()
-    assert s["screen"][0]["ticker"] == "NVDA" and s["clusters"][0]["companies"][0]["ticker"] == "NVDA"
+    assert [x["ticker"] for x in s["screen"]] == ["VRT", "NVDA"] and s["clusters"][0]["companies"][0]["ticker"] == "NVDA"
+    assert all(x["composite"] is None for x in s["screen"])                # listed in chain order, not ranked
     p = api.get("/research/pulse?region=IN").json()
     assert p["indices"][0]["name"] == "NIFTY 50" and p["headlines"]
     pa = api.get("/research/pulse/ai?region=IN").json()
     assert pa["flows"][0]["direction"] == "OUTFLOW" and pa["flows"][1]["direction"] == "ROTATION"
     cmp = api.get("/research/compare?region=US&a=NVDA&b=AAPL").json()
-    assert cmp["a"]["name"] == "NVIDIA Corp" and cmp["ai"]["winner"] == "NVDA" and cmp["ai"]["b"]["valuation"] == "FAIR"
+    assert cmp["a"]["name"] == "NVIDIA Corp" and cmp["ai"]["winner"] == "SPLIT" and cmp["ai"]["b"]["valuation"] is None
+    assert "without saying which to own" in api.calls[-1] and "never advice" in api.calls[-1]
     assert api.get("/research/compare?region=US&a=NVDA&b=nvda").status_code == 400
 
 

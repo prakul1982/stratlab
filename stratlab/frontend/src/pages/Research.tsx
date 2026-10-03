@@ -9,8 +9,8 @@ import {
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Region, type SectorAI,
 } from "../lib/research";
 import {
-  AIRead, Analysts, Change, Composite, CompanySearch, EarningsBars, MarginCascade, MetricsGrid, NewsList, Panel, PriceChart,
-  QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars, ValuationGauge,
+  AIRead, Change, CompanySearch, EarningsBars, MarginCascade, MetricsGrid, NewsList, Panel, PriceChart,
+  QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
 import { Info, Loading } from "../components/ui";
 import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
@@ -163,7 +163,6 @@ export function CompanyPage() {
         )}
         {c.range52.low != null && <Panel title="Where the price sits" info={HELP.research52}><Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} /></Panel>}
         {c.margins && c.margins.gross != null && <Panel title="Where a sale goes" info={HELP.researchMargins}><MarginCascade {...c.margins} /></Panel>}
-        {c.analysts && <Panel title="What analysts say"><Analysts a={c.analysts} /></Panel>}
       </div>
 
       {c.metrics.length > 0 && (
@@ -270,11 +269,9 @@ export function ThemesPage() {
             </div>
           </section>
           {r.screen.length > 0 && (
-            <Panel title="Ranked: the companies to look at" info="The AI's ranking of who benefits most, with a 0-100 score. A shortlist to research and test, not a buy list." span="full">
-              {r.screen.map((s, i) => (
+            <Panel title="Listed companies across the chain" info="Listed companies with the most direct link to this theme, in value-chain order. Not ranked and not a list to buy: open any to see its numbers." span="full">
+              {r.screen.map((s) => (
                 <div key={s.ticker + s.name} className="screen-row">
-                  <span className="serif muted" style={{ fontSize: 22 }}>{i + 1}</span>
-                  <Composite v={s.composite} size={28} />
                   <div className="stack" style={{ gap: 3, minWidth: 0, flex: 1 }}>
                     <span><b>{s.name}</b> <span className="num small" style={{ color: "var(--blue-ink)" }}>{s.ticker}</span> {s.layer && <span className="badge skip">{s.layer}</span>}</span>
                     <span className="small muted">{s.one_line}</span>
@@ -360,7 +357,7 @@ export function PulsePage() {
       </section>
       {ai && (
         <div className="grid2">
-          <Panel title="Moving now">
+          <Panel title="In today's headlines">
             {ai.hot.map((h) => (
               <div key={h.ticker + h.name} className="stack" style={{ gap: 4, paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
                 <span><b>{h.name}</b> {h.ticker && <Link className="num small" to={`/research/${region}/${encodeURIComponent(h.ticker)}`}>{h.ticker} →</Link>}</span>
@@ -428,12 +425,12 @@ export function ComparePage() {
         <>
           {res.ai && !res.ai.error && res.ai.verdict && (
             <section className="card stack" style={{ gap: 10 }}>
-              <span className="eyebrow">AI verdict{res.ai.winner && res.ai.winner !== "SPLIT" ? ` · edge: ${res.ai.winner}` : " · split"}</span>
+              <span className="eyebrow">AI comparison</span>
               <p className="serif" style={{ fontSize: 20, lineHeight: 1.45 }}>{res.ai.verdict}</p>
               {res.ai.differences.length > 0 && <ul className="bullets small">{res.ai.differences.map((d) => <li key={d}>{d}</li>)}</ul>}
             </section>
           )}
-          {res.ai?.error && <p className="small muted">AI verdict unavailable: {res.ai.error}</p>}
+          {res.ai?.error && <p className="small muted">AI comparison unavailable: {res.ai.error}</p>}
           <div className="grid2">
             {([["a", res.a], ["b", res.b]] as const).map(([k, c]) => (
               <section key={k} className="card stack" style={{ gap: 12 }}>
@@ -441,7 +438,6 @@ export function ComparePage() {
                   <div className="stack" style={{ gap: 2, minWidth: 0 }}><b className="serif" style={{ fontSize: 24 }}>{c.name}</b><span className="small muted">{c.symbol} · {bigMoney(c.market_cap, c.currency)}</span></div>
                   <Change q={c.quote} currency={c.currency} />
                 </div>
-                {res.ai && !res.ai.error && <div className="row" style={{ gap: 18 }}><Composite v={res.ai[k].composite} size={34} /><div style={{ flex: 1 }}><ValuationGauge tag={res.ai[k].valuation} /></div></div>}
                 <div className="row wrap" style={{ gap: 8 }}>
                   <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open →</Link>
                   <StarButton region={region} symbol={c.symbol} name={c.name} />
