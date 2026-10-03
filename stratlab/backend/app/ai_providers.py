@@ -54,6 +54,13 @@ class AIConfig(AIError):
 REASONING = ("gptoss", "qwen3", "deepseekr", "magistral", "thinking", "gemma4", "glm4", "kimik2")
 
 
+def _answer(choice: dict) -> str:
+    """The reply text without any reasoning a model wrote inline (<think>…</think>, or one left unclosed)."""
+    out = (choice.get("message") or {}).get("content") or ""
+    out = re.sub(r"<think>.*?</think>", "", out, flags=re.S)
+    return "" if "<think>" in out else out
+
+
 def thinks(model: str) -> bool:
     """A model that reasons before answering (qwen-3.8, gpt-oss, gemma-4…): it needs room for both."""
     flat = re.sub(r"[^a-z0-9]", "", model.lower())
@@ -271,19 +278,22 @@ class OpenAIStyle:
                 raise AIBusy(f"{LABELS[self.name]} is busy or out of free quota ({r.status_code}).")
             try:
                 choice = r.json()["choices"][0]
-                out = (choice.get("message") or {}).get("content") or ""
+                out = _answer(choice)
             except (KeyError, IndexError, ValueError, TypeError, AttributeError):
                 last = AIError(f"{LABELS[self.name]} sent an empty reply ({model}).")
                 continue
-            if not out.strip() and body["max_tokens"] < 8000:
-                # a model that spent its whole reply reasoning: once more with twice the room
+            if not out.strip():
+                # Either the model spent its whole reply reasoning (more room), or JSON mode stopped a reasoning model
+                # before it could start (it finishes at once with nothing): once more without JSON mode, with room.
+                if choice.get("finish_reason") != "length":
+                    body.pop("response_format", None)
                 body["max_tokens"] = min(16000, max(8000, body["max_tokens"] * 2))
                 try:
                     with self._client() as c:
                         r2 = c.post("/chat/completions", json=body)
                     if r2.status_code == 200:
                         choice = r2.json()["choices"][0]
-                        out = (choice.get("message") or {}).get("content") or ""
+                        out = _answer(choice)
                 except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, AttributeError):
                     pass
             if not out.strip():                       # a reasoning model that ran out of room, or a filtered reply

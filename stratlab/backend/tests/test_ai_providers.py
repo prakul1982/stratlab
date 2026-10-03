@@ -205,6 +205,24 @@ def test_empty_or_unreadable_reply_tries_the_providers_next_model(monkeypatch):
     assert thinker["reasoning_effort"] == "low" and thinker["max_tokens"] >= 4000     # room to answer after reasoning
 
 
+def test_a_reasoning_model_that_json_mode_stops_is_asked_again_without_it(monkeypatch):
+    # Cerebras qwen-3.8 and SambaNova gemma-4 finish at once with nothing when JSON mode won't let them reason first
+    monkeypatch.setattr(settings, "SAMBANOVA_API_KEY", "s")
+    seen = []
+
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "gemma-4-31B-it"}]})
+        body = json.loads(req.content)
+        seen.append(body)
+        if "response_format" in body:
+            return httpx.Response(200, json={"choices": [{"message": {"content": ""}, "finish_reason": "stop"}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "<think>{a: 1} hmm</think>\n" + GOOD}, "finish_reason": "stop"}]})
+    out = P.complete("s", "t", transport=httpx.MockTransport(handler))
+    assert "entry" in out and "<think>" not in out and len(seen) == 2 and "response_format" not in seen[1]
+    assert P._answer({"message": {"content": "<think>still going"}}) == ""            # cut off mid-thought: nothing
+
+
 def test_a_short_rate_limit_is_waited_out_instead_of_failing(monkeypatch):
     monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
     calls, slept = [], []

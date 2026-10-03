@@ -59,6 +59,38 @@ def send_email(to: str, subject: str, body: str) -> None:
         s.send_message(msg)
 
 
+def email_for(profile: dict) -> str | None:
+    """Where a user's email alerts go: the address they set in Account, or for an admin, the address they sign in with."""
+    if profile.get("alert_email"):
+        return profile["alert_email"]
+    from .admin import admin_emails
+    own = (profile.get("email") or "").strip().lower()
+    return own if own and own in admin_emails() else None
+
+
+def tell_admins(subject: str, text: str) -> int:
+    """Something an admin should know (a daily check failing, the broker login failing): sent to each admin's email,
+    plus any phone or Telegram they set in Account. Returns how many admins were reached."""
+    from . import db
+    from .admin import admin_emails
+    reached = 0
+    for email in sorted(admin_emails()):
+        try:
+            rows = db.sb().table("profiles").select("*").eq("email", email).limit(1).execute().data
+        except Exception:
+            rows = []
+        try:
+            if rows:
+                if notify(rows[0], subject, text, background=False, url="/admin"):
+                    reached += 1
+            elif email_ready():
+                send_email(email, subject, text)
+                reached += 1
+        except Exception as e:
+            print("admin alert failed:", e)
+    return reached
+
+
 def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper") -> list[tuple[str, object]]:
     """(channel, send) for every channel the user set up that the server can use."""
     from . import push
@@ -67,8 +99,9 @@ def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper") -> lis
         jobs.append(("push", lambda: push.send(profile["id"], subject, text, url)))
     if profile.get("telegram_chat_id") and telegram_ready():
         jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
-    if profile.get("alert_email") and email_ready():
-        jobs.append(("email", lambda: send_email(profile["alert_email"], subject, text)))
+    to = email_for(profile)
+    if to and email_ready():
+        jobs.append(("email", lambda: send_email(to, subject, text)))
     return jobs
 
 

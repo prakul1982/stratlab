@@ -1827,7 +1827,8 @@ def server_status() -> dict:
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)),
-            "calendar": calendar_status()}
+            "calendar": calendar_status(),
+            "admin_alerts": {"email_ready": alerts.email_ready(), "to": sorted(admin.admin_emails())}}
 
 
 def calendar_status() -> dict:
@@ -2117,19 +2118,17 @@ def market_for(region: str):
 
 @app.get("/admin/audit/market")
 def admin_market_audit(region: str = "IN", _=Depends(admin.admin_profile)):
-    """The whole-market audit: every company listed in India, NSE and BSE-only (or every company filing with the SEC), checked in the
-    background while switched on."""
+    """The whole-market audit: new listings in India, NSE and BSE-only (or new SEC filers), checked in the background
+    while switched on."""
     return market_for(deep_region(region)).status()
 
 
 @app.post("/admin/audit/market")
 def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
-    """Switch the whole-market audit on or off, re-read the exchange's list now, or check everything again."""
+    """Switch the whole-market audit on or off, or re-read the exchange's list now."""
     m = market_for(req.region)
     if req.on is not None:
         m.set_enabled(req.on)
-    if req.restart:
-        m.restart()
     if req.read_list:
         threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()
     return m.status()
@@ -2230,17 +2229,7 @@ def run_platform_check(retry_after: float = 120, auto: bool = False) -> dict:
 
 
 def tell_admins(subject: str, text: str) -> int:
-    """Send to each admin's own alert channels (push, Telegram, email, as set in their Account). Returns how many
-    admins could be reached."""
-    reached = 0
-    for email in admin.admin_emails():
-        try:
-            rows = db.sb().table("profiles").select("*").eq("email", email).limit(1).execute().data
-        except Exception:
-            rows = []
-        if rows and alerts.notify(rows[0], subject, text, background=False, url="/admin"):
-            reached += 1
-    return reached
+    return alerts.tell_admins(subject, text)
 
 
 def platform_job():

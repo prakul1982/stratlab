@@ -44,8 +44,11 @@ def test_mismatches_against_the_source_are_caught(monkeypatch):
     assert "Profit above revenue" not in found and "P/E" not in found      # real data, and a P/E gap the page explains
     nums = main.deep_view("ACME", base_for(p)("ACME"))["numbers"]
     assert any("P/E is based on" in n for n in nums["notes"])
-    p["pl"]["rows"]["OPM %"][3] = 140
-    assert "Numbers: Operating margin above 100% in" in " ".join(issues(run(p, monkeypatch), "mismatch"))
+    p["pl"]["rows"]["OPM %"][3] = 140              # the page's own margin: a gap to look at, not our mistake
+    assert "Numbers: The company page shows an operating margin above 100% in" in " ".join(issues(run(p, monkeypatch), "gap"))
+    assert audit.check_numbers({"pl": {"cols": ["Mar 2025", "TTM"], "rows": {"Sales": [1, 2]}}},
+                               {"years": [], "quarters": [{"sales": 1}] * 4}, {}) == [
+        audit._issue("gap", "Numbers", "Only 0 years of annual results")]   # 2 cr vs 4 cr: whole-crore rounding
     assert "Industry: No industry classification" in " ".join(issues(row, "gap"))
 
 
@@ -54,6 +57,9 @@ def test_a_failing_source_is_an_error_row_not_a_crash(monkeypatch):
         raise main.HTTPException(503, {"code": "source_busy", "message": "The company data source is busy."})
     row = audit.audit_company("ACME", boom, main.deep_view)
     assert issues(row) == ["Company page: The company data source is busy."]
+    shell = audit.audit_company("SPAC", lambda s: (_ for _ in ()).throw(main.HTTPException(
+        404, {"code": "x", "message": "The SEC has no annual results filed in XBRL for this company."})), main.deep_view)
+    assert shell["issues"][0]["level"] == "gap"                          # nothing to show, not something broken
     p = company()
     row = run(p, monkeypatch, trend=None, doc_note="The exchange feed is busy.",
               exchange_price=lambda s: (_ for _ in ()).throw(RuntimeError("timeout")))
@@ -191,23 +197,27 @@ def _clean(sym):
     return {"symbol": sym, "name": sym, "seconds": 0.1, "issues": []}
 
 
-def test_whole_market_audit_reads_the_exchange_list_and_checks_new_listings_first(monkeypatch):
+def _recent(*syms, days=0):
+    from datetime import date, timedelta
+    return [{"symbol": s, "name": s, "listed": (date.today() - timedelta(days=days)).isoformat()} for s in syms]
+
+
+def test_whole_market_audit_reads_the_exchange_list_and_checks_only_new_listings(monkeypatch):
     from tests import world as W
     w = W.build(monkeypatch)
     try:
-        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN": {**_clean(s), "issues": [{"level": "gap", "area": "Numbers", "detail": "x"}] if s == "CO10" else []})
+        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN": {**_clean(s), "issues": [{"level": "gap", "area": "Numbers", "detail": "x"}] if s == "NEWCO" else []})
         h = W.headers("admin-token")
         assert w["client"].get("/admin/audit/market", headers=h).json()["enabled"] is False
         assert main.market_audit.step() is None                                          # off: does nothing
         r = w["client"].post("/admin/audit/market", headers=h, json={"on": True}).json()
         assert r["enabled"] is True
-        assert main.market_audit.step() == "NEWCO"                                       # listed today: first in line
-        for _ in range(6):
-            main.market_audit.step()
+        assert main.market_audit.step() == "NEWCO"                                       # listed today
+        assert main.market_audit.step() is None                                          # the rest are long listed: not re-run
         s = w["client"].get("/admin/audit/market", headers=h).json()
-        assert s["listed"] == 122 and s["checked"] == 7 and s["due"] == 115              # the bond series is left out
+        assert s["listed"] == 122 and s["checked"] == 1 and s["due"] == 0                # the bond series is left out
         assert s["new_listings"][0]["symbol"] == "NEWCO" and s["new_listings"][0]["checked"]
-        assert [r["symbol"] for r in s["rows"]] == ["CO10"]                              # only rows with something to show
+        assert [r["symbol"] for r in s["rows"]] == ["NEWCO"]                             # only rows with something to show
         assert w["client"].post("/admin/audit/market", headers=W.headers("pro-token"), json={"on": False}).status_code == 403
     finally:
         w["close"]()
@@ -217,18 +227,22 @@ def test_whole_market_audit_survives_a_restart_and_drops_delisted_companies(monk
     from tests import world as W
     w = W.build(monkeypatch)
     try:
-        listing = [{"symbol": s, "name": s, "listed": "2001-01-01"} for s in ("AAA", "BBB", "CCC")]
+        listing = _recent("AAA", days=1) + _recent("BBB", days=2) + _recent("CCC", days=3)
         a = audit.MarketAudit(lambda: listing, _clean, pause=0)
         a.set_enabled(True)
-        assert [a.step(), a.step()] == ["AAA", "BBB"]
+        assert [a.step(), a.step()] == ["AAA", "BBB"]                                   # newest listing first
         b = audit.MarketAudit(lambda: listing, _clean, pause=0)                          # the server restarted
         assert b.status()["checked"] == 2 and b.step() == "CCC" and b.step() is None     # carries on, then nothing due
         listing.pop(0)                                                                   # AAA delisted
         b.refresh_list(force=True)
         assert b.status()["checked"] == 2 and "AAA" not in b.rows
         assert audit.MarketAudit(lambda: listing, _clean).status()["listed"] == 2       # and that was saved
-        b.restart()                                                                      # check everything again
-        assert b.status()["due"] == 2
+        listing.append({"symbol": "OLD", "name": "OLD", "listed": "2001-01-01"})
+        b.refresh_list(force=True)
+        assert b.status()["due"] == 0 and b.step() is None                               # listed long ago: not checked
+        listing.append({"symbol": "FRESH", "name": "FRESH", "listed": None})
+        b.refresh_list(force=True)
+        assert b.step() == "FRESH"                                                       # no date, but new on the list
     finally:
         w["close"]()
 
@@ -243,7 +257,7 @@ def test_whole_market_audit_keeps_the_last_list_and_gives_way_to_a_hand_started_
             calls[0] += 1
             if calls[0] > 1:
                 raise RuntimeError("refused")
-            return [{"symbol": "AAA", "name": "A", "listed": None}]
+            return _recent("AAA")
         a = audit.MarketAudit(listing, _clean, busy_fn=lambda: busy[0], pause=0)
         a.set_enabled(True)
         assert a.step() is None and calls[0] == 0                                        # an audit by hand is running
@@ -275,12 +289,12 @@ def test_us_companies_are_audited_from_their_sec_filings(monkeypatch):
         apple = [f"{i['area']}: {i['detail']}" for i in rows["AAPL"]["issues"]]
         assert not any(i["level"] == "error" for i in rows["AAPL"]["issues"]), apple
         assert not any("presentation" in x or "transcript" in x for x in apple)        # US filings, not Indian documents
-        assert rows["ZZZZ"]["issues"][0]["level"] == "error" and "SEC" in rows["ZZZZ"]["issues"][0]["detail"]
+        assert rows["ZZZZ"]["issues"][0]["level"] == "gap" and "SEC" in rows["ZZZZ"]["issues"][0]["detail"]    # not a filer: not covered
         # the whole US market: the SEC's own list of companies
         w["client"].post("/admin/audit/market", headers=h, json={"region": "US", "on": True})
-        assert main.market_audit_us.step() == "AAPL"
+        assert main.market_audit_us.step() is None                                       # the first list read isn't "new"
         s = w["client"].get("/admin/audit/market?region=US", headers=h).json()
-        assert s["listed"] == 2 and s["checked"] == 1 and s["new_listings"] == []          # the first list read isn't "new"
+        assert s["listed"] == 2 and s["checked"] == 0 and s["new_listings"] == []
         assert w["client"].get("/admin/audit/market", headers=h).json()["checked"] == 0    # India's is separate
     finally:
         w["close"]()
@@ -291,7 +305,7 @@ def test_whole_market_audit_retries_a_company_whose_source_was_down(monkeypatch)
     from tests import world as W
     w = W.build(monkeypatch)
     try:
-        listing = [{"symbol": s, "name": s, "listed": "2001-01-01"} for s in ("AAA", "BBB")]
+        listing = _recent("AAA", days=1) + _recent("BBB", days=2)
         down = {"AAA": True}
 
         def check(sym):
@@ -307,11 +321,7 @@ def test_whole_market_audit_retries_a_company_whose_source_was_down(monkeypatch)
         a.rows["AAA"]["at"] = old
         assert a.step() == "AAA" and a.rows["AAA"]["tries"] == 3
         a.rows["AAA"]["at"] = old
-        assert a.queue() == []                                                  # three tries: waits for the monthly check
-        down["AAA"] = False
-        a.restart()
-        a.step()
-        assert a.rows["AAA"]["tries"] == 1 and a.rows["AAA"]["issues"] == []
+        assert a.queue() == []                                                  # three tries: left as it is
         assert audit._transient({"issues": [{"level": "mismatch", "area": "Numbers"}]}) is False   # wrong data isn't retried
     finally:
         w["close"]()

@@ -79,6 +79,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      statuses: read          # the Vercel preview's status
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
