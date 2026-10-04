@@ -203,6 +203,16 @@ class TaxFmvReq(BaseModel):
     fmv: Optional[float] = Field(None, gt=0, le=1e7)
 
 
+class TaxInputsReq(BaseModel):
+    """What the total tax estimate needs from the user for one financial year: the regime, their other income (and
+    how much of it is salary, when they say) and, under the old regime, their deductions."""
+    fy: int = Field(ge=2000, le=2100)
+    regime: Literal["new", "old"] = "new"
+    other: float = Field(0, ge=0, le=1e11)
+    salary: Optional[float] = Field(None, ge=0, le=1e11)
+    deductions: float = Field(0, ge=0, le=1e11)
+
+
 class ExperimentReq(DataReq):
     label: str = Field("", max_length=120)
 

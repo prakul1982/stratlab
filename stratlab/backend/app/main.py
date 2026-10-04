@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import holdings, holdings_file, tax_export, tax_lots
+from . import holdings, holdings_file, tax_export, tax_lots, tax_total
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
@@ -65,7 +65,7 @@ from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
-from .models import CorpActionReq, TaxFmvReq, TaxImportReq
+from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
@@ -2121,13 +2121,15 @@ def tax_inputs(profile) -> dict:
         except Exception:
             live = False
     return {"data": data, "trades": trades, "acts": acts, "fmv": fmv, "fmv_src": fmv_src, "pre": pre, "quotes": quotes,
-            "live": live, "items": holdings.indian(holdings.load(uid)["items"]), "today": today.isoformat()}
+            "live": live, "items": holdings.indian(holdings.load(uid)["items"]), "today": today.isoformat(), "business": data["business"],
+            "income": tax_total.load_inputs(uid)}
 
 
 def tax_view(profile) -> dict:
     i = tax_inputs(profile)
-    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"])
+    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"])
     return {**rep, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
+            "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
             "max_trades": tax_lots.MAX_TRADES}
@@ -2151,8 +2153,8 @@ async def tax_import(request: Request, filename: str = Query("", max_length=200)
     """Read a tradebook, a tax P&L file or the ZIP of them from the user's broker (or a plain CSV of trades) and save
     its trades with the ones already uploaded, duplicates dropped. Lines that can't be read are listed with the reason.
 
-    The file comes as the request body itself (10 MB at most; the file name and mode in the query), which the page
-    sends, or as base64 in JSON ({filename, data, mode}), the older way."""
+    The file comes as the request body itself (10 MB at most, 20 MB for an F&O, commodity or currency file; the file
+    name and mode in the query), which the page sends, or as base64 in JSON ({filename, data, mode}), the older way."""
     body = await request.body()             # the guard has already held the body to its size
     if request.headers.get("content-type", "").split(";")[0].strip().lower() == "application/json":
         try:
@@ -2160,12 +2162,18 @@ async def tax_import(request: Request, filename: str = Query("", max_length=200)
         except ValidationError as e:
             raise RequestValidationError(e.errors(include_url=False, include_context=False)) from None
         filename, mode = req.filename, req.mode
-        data = upload_bytes(req.data, TAX_TOO_BIG, holdings_file.TAX_MAX_BYTES)
+        data = upload_bytes(req.data, TAX_TOO_BIG, tax_cap(filename))
     else:
-        if len(body) > holdings_file.TAX_MAX_BYTES:
-            err(413, "file_too_big", f"That file is larger than {holdings_file.TAX_MAX_BYTES // (1024 * 1024)} MB. {TAX_TOO_BIG}")
+        cap = tax_cap(filename)
+        if len(body) > cap:
+            err(413, "file_too_big", f"That file is larger than {cap // (1024 * 1024)} MB. {TAX_TOO_BIG}")
         data = body
     return await run_in_threadpool(tax_import_file, profile, data, filename, mode)
+
+
+def tax_cap(filename: str) -> int:
+    """The biggest file the tax import takes: an F&O, commodity or currency file (by its name) runs larger."""
+    return holdings_file.FNO_MAX_BYTES if holdings_file.business_kind(filename) and not re.search(r"(?i)\.zip$", filename or "") else holdings_file.TAX_MAX_BYTES
 
 
 def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
@@ -2180,13 +2188,19 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     merged, added, dup = tax_lots.merge(old, trades)
     over = max(0, len(merged) - tax_lots.MAX_TRADES)
     files = [] if mode == "replace" else before["files"]
-    if added:
+    business, b_added, b_replaced, b_same = tax_lots.merge_business([] if mode == "replace" else before["business"],
+                                                                   parsed.get("business") or [])
+    lines = sum(f["lines"] for f in parsed.get("files", []) if f["section"] in holdings_file.SEGMENT_NAMES.values()) or \
+        sum(b["trades"] for b in parsed.get("business") or [])
+    if added or b_added or b_replaced:
         files = files + [{"name": (filename or "file")[:80], "broker": parsed["broker"], "kind": parsed["kind"], "trades": added,
-                          "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}]
-        tax_lots.save(profile["id"], merged, files, before["fmv"])
+                          "fno_lines": lines if (b_added or b_replaced) else 0, "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}]
+        tax_lots.save(profile["id"], merged, files, before["fmv"], business)
     elif mode == "replace":
-        tax_lots.save(profile["id"], merged, files, before["fmv"])
+        tax_lots.save(profile["id"], merged, files, before["fmv"], business)
     return ok({"broker": parsed["broker"], "kind": parsed["kind"], "read": len(trades), "added": added, "duplicates": dup,
+               "business": {"lines": lines, "added": b_added, "replaced": b_replaced, "same": b_same,
+                            "years": sorted({b["fy"] for b in parsed.get("business") or []})},
                "over_limit": over, "problems": parsed["problems"][:200], "problem_count": len(parsed["problems"]),
                "not_listed": missed[:50], "skipped": parsed.get("skipped", []), "check": parsed.get("check", []),
                "files": parsed.get("files", []), "report": tax_view(profile)})
@@ -2203,14 +2217,24 @@ def tax_fmv(req: TaxFmvReq, profile=Depends(current_profile)):
     fmv = {k: v for k, v in data["fmv"].items() if k != key}
     if req.fmv:
         fmv[key] = round(float(req.fmv), 4)
-    tax_lots.save(profile["id"], data["trades"], data["files"], fmv)
+    tax_lots.save(profile["id"], data["trades"], data["files"], fmv, data["business"])
+    return ok(tax_view(profile))
+
+
+@app.put("/tax/inputs")
+def tax_income(req: TaxInputsReq, profile=Depends(current_profile)):
+    """Save what the total tax estimate needs for one financial year: the regime, other income (and how much of it
+    is salary) and deductions under the old regime. Kept with the user's tax data and deleted with it."""
+    throttle(profile, "tax_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
+    tax_total.save_inputs(profile["id"], req.fy, req.model_dump(exclude={"fy"}))
     return ok(tax_view(profile))
 
 
 @app.delete("/tax")
 def tax_delete(profile=Depends(current_profile)):
-    """Delete my tax data: every uploaded trade and file, at once."""
+    """Delete my tax data: every uploaded trade and file, and the income entered for the estimate, at once."""
     tax_lots.delete(profile["id"])
+    tax_total.delete_inputs(profile["id"])
     return {"deleted": True}
 
 
@@ -2221,7 +2245,7 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
     c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
-    y = tax_lots.year(fy, c["realised"], c["intraday"], limit=None)
+    y = tax_lots.with_total(tax_lots.year(fy, c["realised"], c["intraday"], limit=None), i["business"], i["income"].get(fy))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":
         below = tax_lots.below_cost(c["open"], i["quotes"], i["today"]) if fy == tax_lots.fy_of(i["today"]) else None

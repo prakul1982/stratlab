@@ -950,3 +950,15 @@ label.btn.disabled { opacity: .5; }
 .research-nav > .sub-seg { flex: 0 0 100%; width: 100%; background: transparent; padding: 0; gap: 4px; flex-wrap: wrap; }
 .sub-seg .seg-link { font-size: 13.5px; border: 1px solid transparent; }
 .sub-seg .seg-link.on { background: var(--chip); box-shadow: none; border-color: var(--line); }
+
+/* tax report: the total tax estimate card, its chips, the inputs and how it was worked out */
+.tax-big { font-size: clamp(30px, 4vw, 40px); font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
+.tax-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.tax-chip { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--paper-2); min-width: 0; }
+.tax-chip b { font-size: 18px; }
+.tax-inputs { padding: 12px; border-radius: 10px; border: 1px solid var(--line); }
+.tax-inputs .field { min-width: 0; max-width: 100%; }
+.tax-how > summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.tax-line-sub td { font-weight: 600; }
+.tax-line-total td { font-weight: 700; border-top: 2px solid var(--line-2); }
+@media (max-width: 560px) { .tax-inputs .field { width: 100% !important; } }

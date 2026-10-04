@@ -1,5 +1,6 @@
 """The tax report for one financial year as files to keep: a CSV of every realised line with the year's summary
-above it, and a short PDF summary. Both carry the same disclaimer as the page."""
+(and the total tax estimate, with how it was worked out) above it, and a short PDF summary. Both carry the same
+disclaimer as the page."""
 import csv
 import io
 from datetime import datetime, timezone
@@ -32,6 +33,39 @@ def summary_lines(y: dict) -> list[tuple[str, str]]:
     out += [("Estimated tax (before cess and surcharge)", money(y["tax"])), ("With 4% cess", money(y["tax_with_cess"])),
             ("Short-term loss to carry forward", money(y["carry_forward"]["st"])), ("Long-term loss to carry forward", money(y["carry_forward"]["lt"])),
             ("Intraday (speculative) profit or loss, not in the above", money(y["intraday"]["pnl"]))]
+    for seg in (y.get("business") or {}).get("segments") or []:
+        out.append((f"{seg['label']}: profit or loss before charges ({seg['trades']} trades)", money(seg["pnl"])))
+        out.append((f"{seg['label']}: charges", money(seg["charges"])))
+        out.append((f"{seg['label']}: turnover, trade by trade (netted per contract)",
+                    f"{money(seg['turnover'])} ({money(seg['turnover_contract'])})"))
+    return out
+
+
+REGIMES = {"new": "New regime", "old": "Old regime"}
+
+
+def total_lines(y: dict) -> list[tuple[str, str]]:
+    """The total tax estimate as (label, value) pairs: the inputs, the breakdown and the total."""
+    t = y.get("total")
+    if not t:
+        return []
+    if not t.get("available"):
+        return [("Total tax estimate", t.get("reason") or "Not available for this year.")]
+    v = t["inputs"]
+    out = [("Regime", REGIMES[t["regime"]]), ("Other income you entered", money(v["other"]))]
+    if v["salary"] is not None:
+        out.append(("Of which salary or pension", money(v["salary"])))
+    if t["regime"] == "old":
+        out.append(("Deductions you entered", money(v["deductions"])))
+    out += [(ln["label"], money(ln["amount"])) for ln in t["lines"]]
+    p = t["parts"]
+    out += [("Share of the total: capital gains", money(p["capital_gains"])), ("Share of the total: intraday", money(p["intraday"])),
+            ("Share of the total: F&O, commodity and currency", money(p["fno"])), ("Share of the total: other income", money(p["other"]))]
+    cf = t["carry_forward"]
+    if cf["speculative"]:
+        out.append(("Speculative loss to carry forward", money(cf["speculative"])))
+    if cf["business"]:
+        out.append(("Business loss to carry forward", money(cf["business"])))
     return out
 
 
@@ -44,6 +78,17 @@ def to_csv(y: dict, rows: list[dict], names: dict) -> str:
     w.writerow([])
     for label, value in summary_lines(y):
         w.writerow([label, value])
+    if y.get("total"):
+        w.writerow([])
+        w.writerow(["Total tax estimate"])
+        for label, value in total_lines(y):
+            w.writerow([_safe(label), value])
+        w.writerow([])
+        w.writerow(["How we got here"])
+        for i, step in enumerate((y["total"].get("steps") or []), 1):
+            w.writerow([i, _safe(step)])
+        for fact in y.get("filing") or []:
+            w.writerow(["Note", _safe(fact)])
     w.writerow([])
     w.writerow(["Stock", "ISIN", "Bought", "Sold", "Quantity", "Cost (with charges)", "Sale (after charges)", "Gain or loss",
                 "Term", "Rate", "Note"])
@@ -76,16 +121,23 @@ def to_pdf(y: dict, names: dict, below: dict | None = None) -> bytes:
                             title=f"Tax report {y['label']}", author="StratLab")
     grid = TableStyle([("FONT", (0, 0), (-1, -1), "Body", 9), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
                        ("LINEBELOW", (0, 0), (-1, -1), 0.4, HexColor("#DDE3EA")), ("VALIGN", (0, 0), (-1, -1), "TOP")])
-    story = [Paragraph(f"Capital gains estimate, {escape(y['label'])}", head),
-             Paragraph(escape(DISCLAIMER), small), Spacer(1, 6),
-             Paragraph("Summary", h2),
-             Table([[escape(a), escape(b)] for a, b in summary_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
+    story = [Paragraph(f"Tax estimate, {escape(y['label'])}", head),
+             Paragraph(escape(DISCLAIMER), small), Spacer(1, 6)]
+    if total_lines(y):
+        story += [Paragraph("Total tax estimate", h2),
+                  Table([[escape(a), escape(b)] for a, b in total_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
+        if y["total"].get("steps"):
+            story += [Paragraph("How we got here", h2)] + [Paragraph(f"{i}. " + escape(s), body) for i, s in enumerate(y["total"]["steps"], 1)]
+    story += [Paragraph("Capital gains and other results", h2),
+              Table([[escape(a), escape(b)] for a, b in summary_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
     if y["steps"]:
         story += [Paragraph("How the losses and exemption were applied", h2)] + [Paragraph("• " + escape(s), body) for s in y["steps"]]
     if y["gf_missing"]:
         story.append(Paragraph(f"{y['gf_missing']} sale(s) of shares bought before 1 Feb 2018 used the actual cost because "
                                "the 31 Jan 2018 price isn't known. Grandfathering could lower that gain.", body))
     story += [Paragraph("Set-off rules", h2)] + [Paragraph("• " + escape(s), body) for s in SETOFF_RULES]
+    if y.get("filing"):
+        story += [Paragraph("Returns and tax audit", h2)] + [Paragraph("• " + escape(s), body) for s in y["filing"]]
     top = sorted(y["rows"], key=lambda r: -abs(r["gain"] or 0))[:25]
     if top:
         story += [Paragraph("Largest realised lines", h2),
