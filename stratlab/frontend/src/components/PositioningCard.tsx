@@ -1,25 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { FAMILIES } from "../lib/navGroups";
 import { signClass } from "../lib/format";
 import { crore, dayName, missingWhy, ratio, sides, signed, type Summary } from "../lib/positioning";
 import { Fig } from "./ui";
 
-/** Options and Positioning switch with tabs, like the Scans: each keeps its own URL. */
-export function TradeTabs() {
-  const { pathname } = useLocation();
-  return (
-    <nav className="seg sub-seg trade-tabs" aria-label={FAMILIES.options.label}>
-      {FAMILIES.options.views.map(([to, label]) => (
-        <Link key={to} to={to} className={`seg-link${pathname === to ? " on" : ""}`} aria-current={pathname === to ? "page" : undefined}>{label}</Link>
-      ))}
-    </nav>
-  );
-}
-
 /** The newest positioning numbers in a few lines (FII index futures, the FII and DII cash flows, NIFTY's PCR), for the
- * Trade home and the Options tab. */
+ * Trade home and the Options page. */
 export function PositioningCard() {
   const [s, setS] = useState<Summary | null | "error">(null);
   useEffect(() => { api<Summary>("/trade/positioning?brief=1").then(setS).catch(() => setS("error")); }, []);
