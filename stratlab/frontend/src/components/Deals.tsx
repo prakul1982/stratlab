@@ -28,7 +28,7 @@ function day(iso: string) {
 }
 
 /** ₹2.4 cr, ₹35.0 lakh or ₹48,000: how amounts this size are usually written in India. */
-export function rupees(v: number | null) {
+function rupees(v: number | null) {
   if (v == null || !Number.isFinite(v)) return "–";
   if (v >= 1e7) return `₹${(v / 1e7).toLocaleString("en-IN", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} cr`;
   if (v >= 1e5) return `₹${(v / 1e5).toLocaleString("en-IN", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} lakh`;

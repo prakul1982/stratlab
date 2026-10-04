@@ -60,7 +60,3 @@ export function savedView(): SpaceView | null {
 export function saveView(v: SpaceView) {
   try { localStorage.setItem(KEY, v); } catch { /* storage off */ }
 }
-
-export function isView(v: unknown): v is SpaceView {
-  return VIEWS.includes(v as SpaceView);
-}

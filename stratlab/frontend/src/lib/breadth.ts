@@ -24,7 +24,7 @@ export type BreadthView = {
 };
 
 export const RANGES: [RangeId, string][] = [["3m", "3M"], ["6m", "6M"], ["1y", "1Y"], ["2y", "2Y"], ["all", "All"]];
-export const DEFAULT_GROUP: GroupId = "nifty500";
+const DEFAULT_GROUP: GroupId = "nifty500";
 
 export type BreadthAlert = { id: string; group: GroupId; level: number; side: "above" | "below" | null; created_at: string; fired_at: string | null };
 export type BreadthAlerts = { items: BreadthAlert[]; limit: number; channels: string[] };

@@ -73,7 +73,7 @@ export function fit(g: CanvasRenderingContext2D, text: string, max: number): str
 }
 
 /** Word-wrap into at most `lines` lines, the last one ending in "…" if the text runs on. */
-export function wrap(g: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
+function wrap(g: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
   const words = text.split(/\s+/).filter(Boolean), out: string[] = [];
   let cur = "";
   for (let i = 0; i < words.length; i++) {

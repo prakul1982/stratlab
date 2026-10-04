@@ -43,8 +43,8 @@ type Invites = { code: string; link: string; joined: number; months?: number; fr
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** The invite rule in one place, for Account and anywhere else it's shown. */
-export const INVITE_LEAD = "Invite friends, both get a month of Basic.";
-export const inviteRule = (pct = 25) => "When a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, "
+const INVITE_LEAD = "Invite friends, both get a month of Basic.";
+const inviteRule = (pct = 25) => "When a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, "
   + "they get a month of Basic free. You get a free month for each of your first 2 friends who do this each year, and for each of "
   + `your first 2 friends who subscribe. After that, every friend who subscribes gives you ${pct}% off a month (about a week extra).`;
 
