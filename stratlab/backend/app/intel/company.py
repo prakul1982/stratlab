@@ -16,7 +16,6 @@ from .screener import Screener, summary as scr_summary
 from .yahoo import Yahoo
 from ..kite_service import ist_date
 
-RANGES = {"1m": 31, "6m": 186, "1y": 366, "3y": 1100, "5y": 1830, "max": 3650}
 US_EXCHANGES = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "NASDAQ", "NYSE", "NYSEArca"}
 INDICES = {
     "IN": [("NIFTY 50", "^NSEI"), ("SENSEX", "^BSESN"), ("NIFTY BANK", "^NSEBANK")],
@@ -152,20 +151,28 @@ class Research:
         return out
 
     # ---------- charts ----------
-    def chart(self, region: str, symbol: str, rng: str = "1y") -> dict:
-        days = RANGES.get(rng, 366)
+    def chart(self, region: str, symbol: str, rng: str = "1y", tf: str = "1d", before: str = "") -> dict:
+        """Candles for the price chart: a range of daily ones, a recent window of intraday ones, or (with
+        `before`) the page of older candles before a time. `more` says whether older candles exist."""
+        from ..chart_data import older, parse_before, window
         symbol = symbol.strip().upper()
+        until = parse_before(before)
         if region == "IN" and self._kite():
             inst = self.kite.equity(symbol) or self.kite.by_symbol(symbol)
             if inst:
+                from ..data import KITE_MAX_DAYS
+                days, more = window(tf, rng, until, KITE_MAX_DAYS.get(tf))
                 try:
-                    return {"currency": "INR", "source": "Kite", "candles": self.kite.history(inst["token"], "1d", days)}
+                    return {"currency": "INR", "source": "Kite", "tf": tf, "more": more,
+                            "candles": older(self.kite.history(inst["token"], tf, days), until)}
                 except Exception:
                     pass
+        from .yahoo import INTERVAL
+        days, more = window(tf, rng, until, INTERVAL[tf][1])
         ysym = _yahoo_in(symbol) if region == "IN" and not symbol.startswith("^") else symbol
-        c = self.yahoo.chart(ysym, "1d", days)
+        c = self.yahoo.chart(ysym, tf, days)
         return {"currency": c["meta"].get("currency") or ("INR" if region == "IN" else "USD"),
-                "source": "Yahoo Finance", "candles": c["candles"]}
+                "source": "Yahoo Finance", "tf": tf, "more": more, "candles": older(c["candles"], until)}
 
     # ---------- market pulse ----------
     def indices(self, region: str) -> list[dict]:

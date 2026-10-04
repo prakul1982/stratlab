@@ -31,6 +31,7 @@ from . import money_mf
 from . import money_mf_ter
 from . import money_advance_tax, money_routes
 from . import journal_routes
+from . import chart_routes
 from . import market_store, storage
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
@@ -265,6 +266,7 @@ app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
 app.include_router(fo_changes_routes.router)  # /trade/fo-changes
+app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
