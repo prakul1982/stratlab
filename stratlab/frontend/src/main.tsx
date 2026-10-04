@@ -64,6 +64,7 @@ const holdingsPage = () => import("./pages/HoldingsPage");
 const HoldingsPage = page(holdingsPage, "HoldingsPage");
 const taxPage = () => import("./pages/TaxReportPage");
 const TaxReportPage = page(taxPage, "TaxReportPage");
+const TaxToolsPage = page(() => import("./pages/money/TaxToolsPage"), "TaxToolsPage");
 const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
@@ -174,6 +175,7 @@ function Routed() {
         <Route path="/news" element={<NewsPage />} />
         <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/tax-report" element={<TaxReportPage />} />
+        <Route path="/money/tax-tools" element={<TaxToolsPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />

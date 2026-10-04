@@ -139,13 +139,22 @@ TAX_SUMMARY = [[], [None, "Client ID", "AB1234"], [None, "Client Name", "Asha Ku
                [None, "RELIANCE", 15, 38600, 42000, 3400], [None, "TCS", 3, 11400, 12300, 900]]
 
 
-def zerodha_tax_zip(summary: list[list] | None = None, deriv: bool = True) -> bytes:
-    """The whole ZIP, the way Console gives it (fixed dates inside, so only the workbook's own stamp varies)."""
+# the dividend sheet newer years' workbooks have (not in the saved fixture, which is FY 2024-25 as it was)
+DIVIDEND_SHEET = [[], [None, "Client ID", "AB1234"], [], [None, "Equity Dividends from 2025-04-01 to 2026-03-31"], [],
+                  [None, "Symbol", "ISIN", "Ex-Date", "Quantity", "Dividend Per Share", "Net Dividend Amount"],
+                  [None, "ITC", "INE154A01025", "2025-05-28", 1000, 7.85, 7850], [None, "ITC", "INE154A01025", "2026-02-04", 1000, 6.5, 6500],
+                  [None, "TCS", "INE467B01029", "2025-07-16", 10, 11, 110], [], [None, "Total Dividend Amount", None, None, None, None, 14460]]
+
+
+def zerodha_tax_zip(summary: list[list] | None = None, deriv: bool = True, dividends: bool = False) -> bytes:
+    """The whole ZIP, the way Console gives it (fixed dates inside, so only the workbook's own stamp varies);
+    `dividends` adds the newer years' dividend sheet."""
     folder = "taxpnl-AB1234-2024_2025-Q1-Q4/"
     exits = "Tradewise Exits from 2024-04-01 to 2025-03-31-"
     files = [(f"{exits}Commodity.csv", _csv(TAX_COMMODITY).encode()), (f"{exits}Non Equity.csv", _csv(TAX_NON_EQUITY).encode()),
              ("taxpnl-2024_2025-Q1-Q4.xlsx", make_workbook([("Equity and Non Equity", summary or TAX_SUMMARY), ("Mutual Funds", [[]])]
-                                                          + (DERIV_SHEETS if deriv else []))),
+                                                          + (DERIV_SHEETS if deriv else [])
+                                                          + ([("Equity Dividends", DIVIDEND_SHEET)] if dividends else []))),
              (f"{exits}Equity - Short Term.csv", _csv(TAX_SHORT).encode()), (f"{exits}Equity - Long Term.csv", _csv(TAX_LONG).encode()),
              (f"{exits}Equity - Intraday.csv", _csv(TAX_INTRADAY).encode()), (f"{exits}F&O.csv", _csv(TAX_FNO).encode()),
              (f"{exits}Currency.csv", _csv(TAX_CURRENCY).encode())]

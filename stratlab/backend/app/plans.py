@@ -30,7 +30,7 @@ PLANS = {
         "deepdives_per_month": 15,
         "decks_per_month": 5,
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
-                     "investor_home"},
+                     "investor_home", "dividends"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -45,15 +45,17 @@ PLANS = {
         "deepdives_per_month": None,  # unlimited (the daily cap on fresh AI reads still applies)
         "decks_per_month": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
-                     "export", "newsletter", "scans", "filings", "investor_home"},
+                     "export", "newsletter", "scans", "filings", "investor_home", "dividends", "tax_tools"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
 # newsletter: the daily editions of both newsletters (the weekly ones are for everyone);
 # scans: the Stage 2 + Supertrend scan and its alert; filings: red flags for the whole watchlist and the evening alert
-# (red flags on a single company page are for everyone)
+# (red flags on a single company page are for everyone); dividends: each company's dividends, TDS and US withholding
+# (the year totals are for everyone); tax_tools: advance tax amounts and the lot-by-lot long-term exemption facts
+# (the due dates and the exemption used are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
-            "newsletter", "scans", "filings", "investor_home")
+            "newsletter", "scans", "filings", "investor_home", "dividends", "tax_tools")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

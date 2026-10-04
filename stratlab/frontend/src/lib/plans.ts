@@ -17,11 +17,11 @@ export const LIMITS: Record<PlanId, Limits> = {
     stock_alerts: 5, screens: 2, holdings: 30, features: [] },
   basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
     stock_alerts: 25, screens: 10, holdings: 100,
-    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home"] },
+    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "dividends"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home"] },
+      "scans", "filings", "investor_home", "dividends", "tax_tools"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -52,7 +52,8 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators"], 
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks"],
   ["scans", "Stage 2 + Supertrend scan, with a daily alert"], ["filings", "Red flags for the whole watchlist, with an evening alert"],
   ["investor_home", "Watchlist at a glance"], ["fno", "Indian F&O"], ["options_signal", "Options entered on your own rules' signals"],
-  ["fast_entries", "Faster group entries and a spread limit"], ["export", "Export rules and trades"]];
+  ["fast_entries", "Faster group entries and a spread limit"], ["export", "Export rules and trades"],
+  ["dividends", "Dividends by company, with TDS and US tax withheld"], ["tax_tools", "Advance tax amounts and long-term exemption facts per lot"]];
 export const EVERYONE = ["Every market, and your own CSV", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
   "Corporate actions, deals and surveillance lists", "My Holdings and the tax report", "Weekly Market Brief and My Stocks",
   "Public company pages, share cards and invite links"];

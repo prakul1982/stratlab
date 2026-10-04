@@ -31,3 +31,8 @@ export function rememberView(path: string) {
   const f = familyOf(path);
   if (f) try { localStorage.setItem(KEY(f), path); } catch { /* storage off */ }
 }
+
+/** The Money space's pages (personal finance): [path, menu label, tooltip]. Each Money feature adds one line here. */
+export const MONEY: [string, string, string][] = [
+  ["/money/tax-tools", "Tax tools", "Dividends, advance tax and the long-term gains exemption"],
+];

@@ -73,7 +73,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -620,8 +620,8 @@ test("the menu: a few short groups, Scans and Watchlist each one entry with tabs
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
   for (const g of ["Research", "Portfolio", "Watch", "Notebooks", "Trading"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
-  // eleven entries in the groups, where there were fifteen flat ones; the old separate entries are gone
-  await expect(main.locator(".side-nav a")).toHaveCount(11);
+  // twelve entries in the groups (Tax tools the latest), where there were fifteen flat ones; the old separate entries are gone
+  await expect(main.locator(".side-nav a")).toHaveCount(12);
   for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance", "My Holdings"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // Account and Admin sit at the bottom, with the markets folded to one line
   const bottom = side.locator(".side-bottom");
@@ -1144,4 +1144,81 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByText(/Full check: 0 of 5,058 done/)).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
+});
+
+test("money tax tools: dividends from a file into the estimate, advance tax by date with reminders, and the long-term exemption", async ({ page, request }, info) => {
+  // the same users as the tax report tests (which run before this one in each project), starting from no tax data
+  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
+  const auth = { Authorization: `Bearer ${token}` };
+  expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
+  expect((await request.post(`${API}/tax/import?filename=zerodha_console_tradebook.csv&mode=add`, {
+    headers: { ...auth, "Content-Type": "application/octet-stream" }, data: readFileSync(TRADEBOOKS + "zerodha_console_tradebook.csv") })).ok()).toBeTruthy();
+  const now = new Date();
+  const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  expect((await request.put(`${API}/tax/inputs`, { headers: auth, data: { fy, regime: "new", other: 2000000, salary: 2000000, deductions: 0 } })).ok()).toBeTruthy();
+
+  const errors = await open(page, "/money/tax-tools", "Dividends, advance tax and the long-term exemption", sessionAs(token, id, email));
+  await settle(page);
+  await expect(page.getByText(/not tax advice/).first()).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // dividends: a CSV of this year's, by company with the TDS the rule gives
+  const csv = `Date,Symbol,Amount\n${fy}-04-06,INFY,12000\n${fy}-04-06,TCS,3000\n`;
+  await page.getByLabel("Dividend file").setInputFiles({ name: "dividends.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await expect(page.getByText("2 dividends added.")).toBeVisible({ timeout: 30_000 });
+  const year = page.getByRole("region", { name: "Dividends for the year" });
+  await expect(year.getByText("From your files")).toBeVisible();
+  await expect(year.getByLabel("Dividend income")).toHaveText("₹15,000");
+  const byCompany = year.getByRole("table", { name: "Dividends by company" });
+  await expect(byCompany.getByRole("row").filter({ hasText: "INFY" })).toContainText("₹1,200");        // 10% once over the threshold
+  await expect(byCompany.getByRole("row").filter({ hasText: "TCS" })).toContainText("₹0");             // under it
+  const inEstimate = page.getByRole("radiogroup", { name: "In the total tax estimate" });
+  await expect(inEstimate.getByRole("radio", { name: "Include in the tax estimate" })).toHaveAttribute("aria-checked", "true");
+  await inEstimate.getByRole("radio", { name: "Leave out" }).click();
+  await expect(page.getByText("Left out of the total tax estimate.")).toBeVisible();
+  await inEstimate.getByRole("radio", { name: "Include in the tax estimate" }).click();
+  await expect(page.getByText("Included in the total tax estimate.")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // advance tax: the four dates, the amounts after TDS and a payment, and reminders
+  await page.getByRole("tab", { name: "Advance tax" }).click();
+  await expect(page.getByRole("list", { name: "Due dates" }).getByRole("listitem")).toHaveCount(4);
+  await expect(page.getByLabel("Tax for the year", { exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "TDS for the year" }).fill("50000");
+  await page.getByRole("button", { name: "Add a payment" }).click();
+  await page.getByLabel("Payment 1 date").fill(`${fy}-06-15`);
+  await page.getByLabel("Payment 1 amount").fill("20000");
+  await page.getByRole("button", { name: "Save and update" }).click();
+  await expect(page.getByText("Saved. The instalments are updated.")).toBeVisible();
+  const instalments = page.getByRole("table", { name: "Instalments" });
+  await expect(instalments.getByRole("row")).toHaveCount(5);
+  await expect(instalments.getByRole("row").nth(1)).toContainText("₹20,000");
+  const reminders = page.getByRole("radiogroup", { name: "Advance tax reminders" });
+  await reminders.getByRole("radio", { name: "On" }).click();
+  await expect(page.getByText(/Reminders on: 7 days and 1 day before each date/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await page.reload();
+  await settle(page);
+  await expect(page.getByRole("radiogroup", { name: "Advance tax reminders" }).getByRole("radio", { name: "On" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("textbox", { name: "TDS for the year" })).toHaveValue("50000");
+
+  // the long-term exemption, with the lots below cost next to it
+  await page.getByRole("tab", { name: "Long-term exemption" }).click();
+  const ex = page.getByRole("region", { name: "Long-term exemption" });
+  await expect(ex.getByText(/doesn't carry forward/)).toBeVisible();
+  await expect(ex.getByLabel("Exemption used")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Open lots below cost" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Turning long-term" })).toBeVisible();
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/you should|we suggest|recommend|book (your )?gains|sell to|harvest/i);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  // the tax report links here, and its estimate for the year now counts the dividends
+  await page.goto("/tax-report");
+  await settle(page);
+  await expect(page.getByRole("region", { name: "Tax tools" }).getByRole("link", { name: "Open tax tools" })).toBeVisible();
+  await page.getByLabel("Financial year").selectOption(String(fy));
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
+  expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
 });
