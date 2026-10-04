@@ -76,8 +76,8 @@ Moved here from the plan above; details in the [changelog](../CHANGELOG.md).
   ₹ lakh crore.
 - **Checks:** the whole-market audit (India NSE and BSE-only, US SEC) checks new listings daily; **Check every
   feature** runs by itself at 4:50 pm IST, retries failures and emails the admins; a security sweep; a load test (about
-  150 requests a second on one server process); browser tests on desktop and phone; Claude's pull requests merge
-  themselves when every check passes.
+  150 requests a second on one server process); browser tests on desktop and phone; every pull request waits for
+  the owner's approval before it merges.
 - **Admin** in tabs: Overview with **Needs your attention**, Services, Data checks, Users and Billing.
 
 ## Waiting on the owner
