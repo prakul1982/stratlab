@@ -5,7 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from ..models import OptionStrategy
-from .data import FREEZE, OptionsData
+from .data import OptionsData, freeze
 from .engine import OptionsEngine
 from .signal import SignalFeed
 
@@ -26,7 +26,7 @@ class OptionSession:
         self.started_at = row["started_at"]
         state = row.get("state") or {}
         s = self.strategy
-        self.engine = OptionsEngine(s, state=state or None, margin_fn=data.margin, freeze_default=FREEZE.get(s.underlying, 0))
+        self.engine = OptionsEngine(s, state=state or None, margin_fn=data.margin, freeze_default=freeze(s.underlying))
         self.equity_curve: list[dict] = state.get("equity_curve", [])
         self.lock = threading.Lock()
         self.dirty = False
