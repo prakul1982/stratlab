@@ -8,17 +8,21 @@ import { Trash, Upload } from "../components/Icons";
 import { track } from "../lib/analytics";
 import { HoldingsActionsPanel } from "../components/CorpActions";
 import { SurvBadges } from "../components/Surveillance";
+import { CompanyCombobox } from "../components/CompanyCombobox";
 
 type Row = {
   symbol: string; exchange: string; name: string; sector: string; qty: number; avg: number | null; price: number | null;
   value: number | null; invested: number | null; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null;
-  weight: number | null;
+  weight: number | null; market?: "IN" | "US"; currency?: string;
 };
+type UsTotals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; in_total: boolean };
 type View = {
   rows: Row[]; allocation: { sector: string; value: number; pct: number | null; count: number }[];
   totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number };
   source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; limit: number; facts_max: number;
+  us?: UsTotals | null; usd_inr?: number | null; us_prices?: boolean | null;
 };
+type Mkt = "IN" | "US";
 type Facts = {
   stage: number | null; st_up: boolean | null; signal: string | null; red: number | null; amber: number | null; flags: string[];
   recent: { at: string; label: string; severity: string; subject: string; url: string | null }[]; results: { date: string; subject: string; url: string | null } | null;
@@ -30,6 +34,8 @@ type ImportReply = { broker: string; imported: number; saved: boolean; unmatched
 const MAX_MB = 2;
 const BROKERS = "Zerodha (Console or Kite), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
 const inr = (v: number | null | undefined) => money(v, "INR", 0);
+const usd = (v: number | null | undefined) => money(v, "USD", 0);
+const isUS = (r: Row) => r.market === "US";
 
 /** The file as base64, the way the server takes it. */
 function readFile(f: File): Promise<string> {
@@ -61,7 +67,7 @@ export function HoldingsPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
   const [edit, setEdit] = useState<Row | null>(null);
-  const [add, setAdd] = useState({ symbol: "", qty: "", avg: "" });
+  const [add, setAdd] = useState<{ symbol: string; qty: string; avg: string; market: Mkt }>({ symbol: "", qty: "", avg: "", market: "IN" });
   const file = useRef<HTMLInputElement>(null);
 
   const loadFacts = useCallback((v: View) => {
@@ -88,22 +94,23 @@ export function HoldingsPage() {
     }
   };
 
-  const save = async (items: { symbol: string; qty: number; avg: number | null }[], done?: string) => {
+  const save = async (items: { symbol: string; qty: number; avg: number | null; market: Mkt }[], done?: string) => {
     setBusy(true);
     try {
       const r = await api<{ unmatched: Unmatched[]; holdings: View }>("/holdings", { method: "PUT", body: { items } });
       show(r.holdings);
-      if (r.unmatched.length) notify(`${r.unmatched.map((u) => u.text).join(", ")}: no listed company on NSE or BSE has that symbol.`);
+      if (r.unmatched.length) notify(`${r.unmatched.map((u) => u.text).join(", ")}: ${r.unmatched[0].reason.startsWith("No US") ? "no US-listed company has that ticker" : "no listed company on NSE or BSE has that symbol"}.`);
       else if (done) notify(done);
       return !r.unmatched.length;
     } catch (e) { fail(e); return false; } finally { setBusy(false); }
   };
-  const current = () => (view?.rows ?? []).map((r) => ({ symbol: r.symbol, qty: r.qty, avg: r.avg }));
+  const current = () => (view?.rows ?? []).map((r) => ({ symbol: r.symbol, qty: r.qty, avg: r.avg, market: (r.market ?? "IN") as Mkt }));
+  const same = (x: { symbol: string; market: Mkt }, r: Row) => x.symbol === r.symbol && x.market === (r.market ?? "IN");
 
   const addOne = async () => {
     const q = Number(add.qty), a = add.avg.trim() ? Number(add.avg) : null;
     if (!add.symbol.trim() || !(q > 0) || (a != null && !(a >= 0))) { notify("Enter the symbol, a quantity above 0 and, if you like, the average price."); return; }
-    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a }], `${add.symbol.trim().toUpperCase()} added.`)) setAdd({ symbol: "", qty: "", avg: "" });
+    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`)) setAdd({ symbol: "", qty: "", avg: "", market: add.market });
   };
 
   const remove = () => {
@@ -190,6 +197,14 @@ export function HoldingsPage() {
             {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${view.source === "Manual" ? "your own entries" : view.source === "CSV" ? "a CSV file" : `your ${view.source} file`}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
             {!view.prices && " · Live prices are offline right now, so values are shown at cost."}
           </p>
+          {view.us && (
+            <p className="small" style={{ margin: 0 }} aria-label="US stocks">
+              <b>US stocks</b> ({view.us.count}): {usd(view.us.value)} · invested {usd(view.us.invested)}
+              {view.us.pnl != null && <> · <span className={signClass(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}
+              <span className="tiny muted"> · {view.us.in_total && view.usd_inr ? `in the rupee totals above at ₹${view.usd_inr.toFixed(2)} a dollar` : "not in the rupee totals above: the exchange rate isn't available right now"}
+                {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. US stocks aren't part of the tax report, which works out Indian capital gains.</span>
+            </p>
+          )}
           <AsOf parts={[["Prices", view.prices_at]]} />
           <HoldingsActionsPanel<View> version={actionsAt} onHoldings={setView} />
 
@@ -222,14 +237,14 @@ export function HoldingsPage() {
                     const f = facts?.rows[r.symbol];
                     return (
                       <tr key={`${r.exchange}:${r.symbol}`}>
-                        <td><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div><SurvBadges region="IN" symbol={r.symbol} /></td>
+                        <td><Link className="link" to={`/research/${isUS(r) ? "US" : "IN"}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}{isUS(r) && <span className="tiny muted"> US</span>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>{!isUS(r) && <SurvBadges region="IN" symbol={r.symbol} />}</td>
                         <td className="small">{r.sector}</td>
                         <td className="num">{qtyText(r.qty)}</td>
-                        <td className="num">{price(r.avg, "INR")}</td>
-                        <td className="num">{price(r.price, "INR")}</td>
-                        <td className="num">{inr(r.value ?? r.invested)}</td>
-                        <td className={`num ${signClass(r.pnl)}`}>{r.pnl == null ? "–" : <>{inr(r.pnl)} <span className="tiny">{pct(r.pnl_pct)}</span></>}</td>
-                        <td className={`num ${signClass(r.day)}`}>{r.day == null ? "–" : <>{inr(r.day)} <span className="tiny">{pct(r.day_pct, 2)}</span></>}</td>
+                        <td className="num">{price(r.avg, r.currency ?? "INR")}</td>
+                        <td className="num">{price(r.price, r.currency ?? "INR")}</td>
+                        <td className="num">{money(r.value ?? r.invested, r.currency ?? "INR", 0)}</td>
+                        <td className={`num ${signClass(r.pnl)}`}>{r.pnl == null ? "–" : <>{money(r.pnl, r.currency ?? "INR", 0)} <span className="tiny">{pct(r.pnl_pct)}</span></>}</td>
+                        <td className={`num ${signClass(r.day)}`}>{r.day == null ? "–" : <>{money(r.day, r.currency ?? "INR", 0)} <span className="tiny">{pct(r.day_pct, 2)}</span></>}</td>
                         <td className="num">{r.weight == null ? "–" : `${r.weight.toFixed(1)}%`}</td>
                         <td style={{ textAlign: "left" }} className="small"><Trend f={f} /></td>
                         <td style={{ textAlign: "left" }} className="small"><FilingsCell f={f} allowed={facts?.filings !== false} plan={facts?.filings_plan} /></td>
@@ -276,12 +291,21 @@ export function HoldingsPage() {
       {view && (
         <section className="card stack" style={{ gap: 12 }}>
           <h2 className="h2">Add a stock by hand</h2>
+          <div className="seg" role="radiogroup" aria-label="Where it's listed" style={{ alignSelf: "flex-start" }}>
+            {(["IN", "US"] as Mkt[]).map((m) => (
+              <button key={m} role="radio" aria-checked={add.market === m} aria-pressed={add.market === m}
+                onClick={() => setAdd({ ...add, market: m, symbol: add.market === m ? add.symbol : "" })}>{m === "IN" ? "India (NSE/BSE)" : "United States"}</button>
+            ))}
+          </div>
           <div className="holdings-add">
-            <label className="field">NSE symbol or BSE code<input value={add.symbol} maxLength={20} placeholder="e.g. RELIANCE" onChange={(e) => setAdd({ ...add, symbol: e.target.value })} /></label>
+            <CompanyCombobox label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} market={add.market} value={add.symbol}
+              placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
+              onChange={(t) => setAdd((x) => ({ ...x, symbol: t }))} onPick={(s) => setAdd((x) => ({ ...x, symbol: s.id, market: s.market }))} onEnter={addOne} />
             <label className="field">Quantity<input value={add.qty} inputMode="decimal" placeholder="10" onChange={(e) => setAdd({ ...add, qty: e.target.value })} /></label>
-            <label className="field">Average price (₹, optional)<input value={add.avg} inputMode="decimal" placeholder="2,450" onChange={(e) => setAdd({ ...add, avg: e.target.value.replace(/,/g, "") })} /></label>
+            <label className="field">Average price ({add.market === "US" ? "$" : "₹"}, optional)<input value={add.avg} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} onChange={(e) => setAdd({ ...add, avg: e.target.value.replace(/,/g, "") })} /></label>
             <button className="btn" disabled={busy} onClick={addOne}>Add</button>
           </div>
+          {add.market === "US" && <p className="tiny muted" style={{ margin: 0 }}>US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. They aren't part of the tax report.</p>}
         </section>
       )}
 
@@ -294,8 +318,8 @@ export function HoldingsPage() {
 
       {edit && (
         <EditHolding row={edit} busy={busy} onClose={() => setEdit(null)}
-          onSave={async (q, a) => { if (await save(current().map((x) => (x.symbol === edit.symbol ? { ...x, qty: q, avg: a } : x)), `${edit.symbol} updated.`)) setEdit(null); }}
-          onRemove={async () => { if (await save(current().filter((x) => x.symbol !== edit.symbol), `${edit.symbol} removed.`)) setEdit(null); }} />
+          onSave={async (q, a) => { if (await save(current().map((x) => (same(x, edit) ? { ...x, qty: q, avg: a } : x)), `${edit.symbol} updated.`)) setEdit(null); }}
+          onRemove={async () => { if (await save(current().filter((x) => !same(x, edit)), `${edit.symbol} removed.`)) setEdit(null); }} />
       )}
     </div>
   );
@@ -310,7 +334,7 @@ function EditHolding({ row, busy, onClose, onSave, onRemove }: { row: Row; busy:
     <Modal title={`Edit ${row.symbol}`} onClose={onClose}>
       <div className="stack" style={{ gap: 14 }}>
         <label className="field">Quantity<input value={q} inputMode="decimal" onChange={(e) => setQ(e.target.value)} /></label>
-        <label className="field">Average price (₹, optional)<input value={a} inputMode="decimal" onChange={(e) => setA(e.target.value.replace(/,/g, ""))} /></label>
+        <label className="field">Average price ({row.market === "US" ? "$" : "₹"}, optional)<input value={a} inputMode="decimal" onChange={(e) => setA(e.target.value.replace(/,/g, ""))} /></label>
         <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
           <button className="btn" disabled={busy || !ok} onClick={() => onSave(qn, an)}>Save</button>
           <button className="btn danger" disabled={busy} onClick={onRemove}><Trash size={16} />Remove from holdings</button>

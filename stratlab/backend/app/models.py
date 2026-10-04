@@ -176,6 +176,7 @@ class HoldingItem(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20)
     qty: float = Field(..., gt=0, le=1e9)
     avg: Optional[float] = Field(None, ge=0, le=1e8)
+    market: Literal["IN", "US"] = "IN"                             # listed in India (NSE symbol or BSE code), or a US ticker
 
 
 class HoldingsReq(BaseModel):

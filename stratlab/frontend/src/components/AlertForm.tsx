@@ -5,6 +5,7 @@ import { price } from "../lib/format";
 import { researchApi, type Region } from "../lib/research";
 import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, type AlertBody, type AlertsPage, type StockAlert } from "../lib/alerts";
 import { Bell } from "./Icons";
+import { CompanyCombobox } from "./CompanyCombobox";
 import { Modal } from "./ui";
 
 type Saved = AlertsPage & { alert: StockAlert; note: string | null };
@@ -67,13 +68,18 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
               <option value="IN">India</option><option value="US">United States</option>
             </select>
           </label>
-          <label className="field" style={{ flex: "1 1 160px" }}>Stock
-            {choices ? (
+          {choices ? (
+            <label className="field" style={{ flex: "1 1 160px" }}>Stock
               <select value={`${region}:${symbol}`} onChange={(e) => { const [rg, s] = e.target.value.split(":"); setRegion(rg as Region); setSymbol(s); }}>
                 {choices.map((x) => <option key={`${x.region}:${x.symbol}`} value={`${x.region}:${x.symbol}`}>{x.symbol}</option>)}
               </select>
-            ) : <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={region === "IN" ? "RELIANCE" : "AAPL"} maxLength={20} autoCapitalize="characters" />}
-          </label>
+            </label>
+          ) : (
+            <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+              <CompanyCombobox label="Stock" market={region} value={symbol} onChange={setSymbol} placeholder={region === "IN" ? "RELIANCE" : "AAPL"}
+                onPick={(s) => { setRegion(s.market); setSymbol(s.id); }} />
+            </div>
+          )}
         </div>
       )}
       {!fixed && now != null && <span className="hint">{sym} is at {price(now, ccy)} now.</span>}

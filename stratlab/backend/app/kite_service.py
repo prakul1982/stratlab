@@ -335,6 +335,11 @@ class KiteService:
         idx = self._index()
         return idx["name"].get(("NSE", want)) or idx["name"].get(("BSE", want))
 
+    def equities(self) -> list[dict]:
+        """Every company's stock in the day's list: NSE (any series), then those listed only on BSE."""
+        self._load_instruments()
+        return [r for r in self._inst if r["type"] == "EQ" and r["exchange"] in ("NSE", "BSE")]
+
     def by_symbol(self, symbol: str, exchange: str = "NSE") -> dict | None:
         """The cash stock or index with this trading symbol."""
         return self._index()["sym"].get((exchange, symbol.strip().upper()))
