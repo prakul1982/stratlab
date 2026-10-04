@@ -212,3 +212,12 @@ def test_confirming_the_newsletter_address(monkeypatch):
         assert c.post("/me/email/confirm", headers=W.headers("admin-token")).json()["confirmed"] is True
     finally:
         w["close"]()
+
+
+def test_brevo_ip_block_says_where_to_turn_it_off():
+    from types import SimpleNamespace
+    from app import alerts
+    r = SimpleNamespace(status_code=401, json=lambda: {"message": "We have detected you are using an unrecognised IP address 1.2.3.4. "
+                                                                  "If you performed this action make sure to add the new IP address in this link: https://app.brevo.com/security/authorised_ips"})
+    msg = str(alerts._refused("Brevo", r))
+    assert "Authorized IPs" in msg and "turn IP blocking off" in msg and "https://app.brevo.com/security/authorised_ips" in msg

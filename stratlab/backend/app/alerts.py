@@ -25,9 +25,13 @@ RESEND_FROM = "StratLab <onboarding@resend.dev>"
 
 def _refused(service: str, r) -> RuntimeError:
     try:
-        why = str((r.json() or {}).get("message") or "")[:160]
+        why = str((r.json() or {}).get("message") or "")[:400]
     except ValueError:
         why = ""
+    if service == "Brevo" and "IP address" in why:
+        # Brevo's "Authorized IPs": the server's address changes with each deploy, so naming the switch beats the link
+        why = ("Brevo only accepts emails from addresses you approved, and this server's address isn't one. In Brevo, "
+               "open your name (top right) → Security → Authorized IPs and turn IP blocking off. " + why)
     return RuntimeError(f"{service} refused the email ({r.status_code}). {why}".strip())
 
 
