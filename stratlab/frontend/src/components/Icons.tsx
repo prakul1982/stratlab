@@ -43,3 +43,6 @@ export const Bell = ({ size }: P) => <svg {...base(size)}><path d="M6 16v-5a6 6 
 export const Receipt = ({ size }: P) => <svg {...base(size)}><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6M9 16h3" /></svg>;
 export const Wallet = ({ size }: P) => <svg {...base(size)}><path d="M4 7a2 2 0 0 1 2-2h11v4" /><path d="M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z" /><path d="M16 14.5h.01" /></svg>;
 export const Calendar = ({ size }: P) => <svg {...base(size)}><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></svg>;
+export const Chevron = ({ size }: P) => <svg {...base(size)}><path d="m9 6 6 6-6 6" /></svg>;
+export const Updown = ({ size }: P) => <svg {...base(size)}><path d="m8 9 4-4 4 4M8 15l4 4 4-4" /></svg>;
+export const LogOut = ({ size }: P) => <svg {...base(size)}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 16l-4-4 4-4M6 12h10" /></svg>;

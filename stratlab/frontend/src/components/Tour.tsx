@@ -47,8 +47,8 @@ const STEPS: Step[] = [
     body: "Send a verdict card from your phone or make a public link (your rules stay private), export the rules as a file, and jot lab notes so you remember why you changed something.",
     where: "\"Share verdict\" on a result, \"More → Export\" and Lab notes in a notebook." },
   { icon: <User size={34} />, title: "Make it yours",
-    body: "Switch to night mode, see your plan and usage, and run the connection check if prices or the idea builder ever look stuck.",
-    where: "Account and Night mode in the sidebar. You can reopen this tour any time from \"Tour\" at the bottom of the sidebar." },
+    body: "Switch to dark mode, see your plan and usage, and run the connection check if prices or the idea builder ever look stuck.",
+    where: "Your initials at the bottom of the sidebar open Account, Dark mode and this tour, any time. The line above them shows which markets are open." },
 ];
 
 export function Tour({ onClose }: { onClose: () => void }) {

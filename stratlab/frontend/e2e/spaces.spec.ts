@@ -75,7 +75,10 @@ test("spaces: the switcher shows one space's menu, All shows every group folded,
   await expect(space.getByRole("radio", { name: "Trade" })).toHaveAttribute("aria-checked", "true");
   await expect(groups(side)).toHaveText([/Notebooks$/, /Trading$/]);
   await expect(side.locator('[data-group="trading"] .side-nav a')).toHaveText(["Options", "Paper trading", "Strategy library", "Import a strategy"]);
-  await expect(side.getByRole("button", { name: "New notebook" })).toBeVisible();
+  // the space's main action is a normal-sized button, not a banner
+  const action = side.getByRole("button", { name: "New notebook" });
+  await expect(action).toBeVisible();
+  expect((await action.boundingBox())!.height).toBeLessThanOrEqual(40);
 
   // Money: its own menu, from the one list each Money feature adds itself to; the page stays where it is
   await space.getByRole("radio", { name: "Money" }).click();

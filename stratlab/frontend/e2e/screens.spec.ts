@@ -139,3 +139,31 @@ test("the search palette fits a landscape phone, and drops the keyboard hints", 
   expect(box && box.y + box.height, "the palette's foot is on the screen").toBeLessThanOrEqual(390);
   await ctx.close();
 });
+
+test("the sidebar fits a short laptop, a tablet drawer and a phone drawer: slim header and footer, one scrolling menu", async ({ browser }) => {
+  for (const vp of [{ width: 1280, height: 720, touch: false }, { width: 1024, height: 768, touch: true }, { width: 768, height: 1024, touch: true }, { width: 390, height: 844, touch: true }]) {
+    const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, hasTouch: vp.touch, isMobile: vp.touch && vp.width < 900 });
+    await ctx.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); localStorage.setItem("stratlab.space", "trade"); }, session);
+    const page = await ctx.newPage();
+    await page.goto(WEB + "/notebooks");
+    const side = page.locator("aside.sidebar");
+    await expect(side.getByRole("navigation", { name: "Main" })).toBeAttached({ timeout: 30_000 });
+    if (vp.width <= 900) await page.getByRole("button", { name: "Open menu" }).click();
+    await expect(side.getByRole("button", { name: /markets open$/ })).toBeVisible({ timeout: 30_000 });
+    const at = `${vp.width}x${vp.height}`;
+    const m = await side.evaluate((aside) => {
+      const h = (sel: string) => aside.querySelector(sel)!.getBoundingClientRect();
+      const nav = aside.querySelector(".side-groups")!;
+      return { top: h(".side-top").height, foot: h(".side-foot").height, footBottom: h(".side-foot").bottom, nav: nav.clientHeight,
+        asideOverflow: aside.scrollHeight - aside.clientHeight, navSideways: nav.scrollWidth - nav.clientWidth, width: aside.getBoundingClientRect().width };
+    });
+    expect(m.top, `${at}: the header stays slim`).toBeLessThanOrEqual(vp.touch ? 230 : 200);
+    expect(m.foot, `${at}: the footer stays slim`).toBeLessThanOrEqual(100);
+    expect(m.footBottom, `${at}: the footer is on the screen`).toBeLessThanOrEqual(vp.height + 1);
+    expect(m.nav, `${at}: the menu keeps most of the height`).toBeGreaterThanOrEqual(vp.height - 340);
+    expect(m.asideOverflow, `${at}: only the menu scrolls`).toBeLessThanOrEqual(0);
+    expect(m.navSideways, `${at}: nothing in the menu is cut off sideways`).toBeLessThanOrEqual(0);
+    if (vp.width > 900) expect(m.width, `${at}: the sidebar's width`).toBeLessThanOrEqual(260);
+    await ctx.close();
+  }
+});
