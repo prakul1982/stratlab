@@ -21,6 +21,8 @@ IN_MCX_OPTIONS = {"stt_sell": 0.0005, "exchange": 0.000418, "sebi": 0.000001, "s
 IN_MCX_FUTURES = {"stt_sell": 0.0001, "exchange": 0.000021, "sebi": 0.000001, "stamp_buy": 0.00002}   # CTT on non-agri sells
 IN_CDS_FUTURES = {"stt_sell": 0.0, "exchange": 0.0000035, "sebi": 0.000001, "stamp_buy": 0.000001}  # no STT on currency
 IN_CDS_OPTIONS = {"stt_sell": 0.0, "exchange": 0.000311, "sebi": 0.000001, "stamp_buy": 0.000001}   # on premium; no STT
+IN_RATES = {"in_eq": IN_EQUITY, "in_eq_mis": IN_EQUITY_MIS, "in_fut": IN_FUTURES, "in_opt": IN_OPTIONS, "in_bse_opt": IN_BSE_OPTIONS,
+            "in_mcx_opt": IN_MCX_OPTIONS, "in_mcx_fut": IN_MCX_FUTURES, "in_cds_fut": IN_CDS_FUTURES, "in_cds_opt": IN_CDS_OPTIONS}
 GST = 0.18
 IN_STCG, IN_LTCG, IN_LTCG_EXEMPT = 0.20, 0.125, 125000
 
@@ -78,8 +80,7 @@ def order_costs(kind: str, side: str, qty: float, price: float, brokerage: float
     value = qty * price
     c = {"brokerage": brokerage}
     if kind.startswith("in_"):
-        r = {"in_eq": IN_EQUITY, "in_eq_mis": IN_EQUITY_MIS, "in_fut": IN_FUTURES, "in_opt": IN_OPTIONS, "in_bse_opt": IN_BSE_OPTIONS,
-             "in_mcx_opt": IN_MCX_OPTIONS, "in_mcx_fut": IN_MCX_FUTURES, "in_cds_fut": IN_CDS_FUTURES, "in_cds_opt": IN_CDS_OPTIONS}[kind]
+        r = IN_RATES[kind]
         stt = r.get("stt", 0) + (r.get("stt_sell", 0) if side == "sell" else 0)
         c["stt"] = value * stt
         exch = value * (r["exchange"] + r["sebi"])

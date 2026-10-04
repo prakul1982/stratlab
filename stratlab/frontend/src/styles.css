@@ -743,6 +743,10 @@ kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radi
 @media (max-width: 720px) { .opt-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 table.legs select, table.legs input { height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); padding: 0 8px; font: inherit; }
 table.legs td { vertical-align: middle; }
+.opt-charge-lines > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--muted); }
+.opt-charge-lines table { width: 100%; max-width: 360px; margin: 4px 0 8px; }
+.opt-charge-lines td { padding: 3px 0; }
+.opt-charge-lines td.num { text-align: right; }
 table.chain-t tr.atm td { background: var(--chip); }
 details.card > summary { cursor: pointer; list-style: none; }
 details.card > summary::-webkit-details-marker { display: none; }

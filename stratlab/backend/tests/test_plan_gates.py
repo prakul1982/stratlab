@@ -228,3 +228,17 @@ def test_experience_level_is_saved_with_other_prefs(monkeypatch):
         assert main.prefs_of("nobody") == {}
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_breakeven_after_costs_is_free(paid, monkeypatch):
+    """The builder's preview, with its round-trip charges and breakevens after costs, works on the Free plan."""
+    from app.options.data import OptionsData
+    from .fake_options_kite import FakeOptionsKite
+    monkeypatch.setattr(main, "options_data", OptionsData(FakeOptionsKite(live=True, drift={})))
+    try:
+        strat = {"underlying": "NIFTY", "legs": [{"side": "sell", "opt": "CE"}, {"side": "sell", "opt": "PE"}],
+                 "sizing": {"mode": "lots", "lots": 1}}
+        r = as_plan("free").post("/options/preview", json={"strategy": strat})
+        assert r.status_code == 200 and r.json()["charges"]["breakevens_after"]
+    finally:
+        main.app.dependency_overrides.clear()

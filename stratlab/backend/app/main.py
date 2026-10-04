@@ -60,7 +60,7 @@ from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators
-from .options import importer as opt_importer
+from .options import charges as opt_charges, importer as opt_importer
 from .options.data import OptionsData, freeze as freeze_limit
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
@@ -3167,8 +3167,12 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
             units = max(0, int(s.sizing.capital * s.sizing.safety // margin_one))
         if margin_one and units:
             margin_all = options_data.margin([{**b, "qty": b["qty"] * units} for b in basket])
+    priced = [{"side": l["side"], "opt": l["opt"], "strike": l["strike"], "fill": l["fill"], "qty": l["lots"] * units * c.lot}
+              for l in legs if l["strike"] is not None and l["fill"] is not None]
+    charges = (opt_charges.summary(priced, opt_charges.kind_for(s.exchange), s.costs.brokerage, freeze)
+               if units and priced and len(priced) == len(legs) else None)
     return {"spot": spot, "atm": atm, "step": c.step(spot), "expiry": c.expiry, "lot": c.lot, "freeze": freeze,
-            "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs,
+            "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs, "charges": charges,
             "strikes": c.strikes, "spot_ts": (options_data.quotes([sk]).get(sk) or {}).get("ts")}
 
 

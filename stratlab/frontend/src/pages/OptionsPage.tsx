@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { money, price } from "../lib/format";
 import { HELP } from "../lib/help";
 import { blankOptions, IMPORTED, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
-import type { LiveRow, Notebook, OptChain, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
+import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
 import { LineChart } from "../components/Charts";
 import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
@@ -89,8 +89,43 @@ function LegsEditor({ s, set, preview }: { s: OptionStrategy; set: (legs: OptLeg
   );
 }
 
+const points = (xs: number[]) => xs.map((b) => Math.round(b).toLocaleString("en-IN")).join(" and ");
+const share = (v: number | null) => (v == null ? "–" : `${v.toFixed(2)}%`);
+const asOf = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/** What opening and closing the structure once costs, line by line, and what that does to its numbers. */
+function Charges({ c }: { c: OptCharges }) {
+  return (
+    <div className="stack opt-charges" style={{ gap: 10 }} data-testid="opt-charges">
+      <div className="opt-stats">
+        <div><span className="eyebrow">Charges to open and close</span><b className="mono">{inr(c.total, 2)}</b></div>
+        <div><span className="eyebrow">Share of the premium</span><b className="mono">{share(c.pct_of_premium)}</b></div>
+        <div><span className="eyebrow">Share of the most it can make</span><b className="mono">{c.max_profit == null ? "No ceiling" : share(c.pct_of_max_profit)}</b></div>
+        {c.credit
+          ? <div><span className="eyebrow">Premium kept after charges</span><b className="mono">{inr(c.premium_after, 2)}</b></div>
+          : <div><span className="eyebrow">Most it can make after charges</span><b className="mono">{c.max_profit_after == null ? "Unlimited" : inr(c.max_profit_after, 2)}</b></div>}
+      </div>
+      <details className="opt-charge-lines">
+        <summary className="small">Charges line by line</summary>
+        <table className="small">
+          <tbody>
+            {c.items.map((i) => <tr key={i.key}><td>{i.label}</td><td className="mono num">{inr(i.amount, 2)}</td></tr>)}
+            <tr><td><b>Total</b></td><td className="mono num"><b>{inr(c.total, 2)}</b></td></tr>
+          </tbody>
+        </table>
+        <p className="small muted">
+          {c.orders} orders at {inr(c.brokerage_per_order)} brokerage each{c.freeze ? `; orders above ${c.freeze.toLocaleString("en-IN")} units go in slices, each one an order` : ""}.
+          Every leg opened and closed once at the fill shown. Rates as of {asOf(c.rates_as_of)}.
+        </p>
+      </details>
+    </div>
+  );
+}
+
 function Payoff({ p }: { p: OptPreview }) {
   const f = useMemo(() => payoff(p), [p]);
+  const c = p.charges;
+  const before = c ? c.breakevens : f.breakevens;
   return (
     <div className="stack" style={{ gap: 10 }}>
       <div className="opt-stats">
@@ -101,11 +136,15 @@ function Payoff({ p }: { p: OptPreview }) {
       </div>
       <LineChart ariaLabel="Profit or loss at expiry across prices" height={200} labels={f.xs.map((x) => `${p.legs.length ? "At " : ""}${Math.round(x).toLocaleString("en-IN")}`)}
         format={(v) => inr(v)} axisFormat={(v) => inr(v)} baseline={0}
-        lines={[{ label: "At expiry", values: f.ys, color: "var(--blue)", width: 1.8 }]} />
-      <p className="small muted">
-        At expiry, before costs, if held to the end. {f.breakevens.length > 0 && <>Breaks even at {f.breakevens.map((b) => Math.round(b).toLocaleString("en-IN")).join(" and ")}. </>}
+        lines={[{ label: "At expiry", values: f.ys, color: "var(--blue)", width: 1.8 },
+          ...(c ? [{ label: "After charges", values: f.ys.map((y) => y - c.total), color: "var(--blue)", width: 1.2, dash: "4 4" }] : [])]} />
+      <p className="small muted" data-testid="opt-breakevens">
+        At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
+        {before.length > 0 && <>Breaks even at {points(before)}{c ? " before charges" : ""}. </>}
+        {c && (c.breakevens_after.length > 0 ? <>After charges: {points(c.breakevens_after)}. </> : <>After charges it doesn't break even at any price. </>)}
         Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.
       </p>
+      {c && <Charges c={c} />}
     </div>
   );
 }

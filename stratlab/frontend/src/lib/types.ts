@@ -173,6 +173,15 @@ export interface OptPreview {
   spot: number; atm: number; step: number; expiry: string; lot: number; freeze: number; units: number;
   margin_one: number | null; margin: number | null; strikes: number[];
   legs: { side: "sell" | "buy"; opt: "CE" | "PE"; lots: number; strike: number | null; sym: string | null; quote: OptQuote | null; fill: number | null }[];
+  charges?: OptCharges | null;     // opening and closing every leg once at the fills shown; null when a leg has no quote
+}
+/** A structure's round-trip charges, with the breakevens before and after them (options/charges.py). */
+export interface OptCharges {
+  total: number; orders: number; brokerage_per_order: number; freeze: number | null;
+  items: { key: string; label: string; amount: number }[];
+  credit: boolean; premium: number; premium_after: number | null; pct_of_premium: number | null;
+  max_profit: number | null; max_profit_after: number | null; pct_of_max_profit: number | null;
+  breakevens: number[]; breakevens_after: number[]; rates_as_of: string;
 }
 export interface OptLegLive { sym: string; opt: "CE" | "PE"; side: "sell" | "buy"; strike: number; qty: number; entry: number; mark: number; open: boolean; pnl: number }
 export interface OptTrade { opened: string; closed: string; why: string; pnl: number; gross: number; costs: number; credit: number; rolls: number;
