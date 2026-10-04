@@ -285,8 +285,8 @@ cd stratlab/frontend && npx playwright test
 - **Backend → Railway**, one process: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - **Frontend → Vercel**, root `stratlab/frontend`; `vercel.json` sets the build (`npm run build`, output `dist`),
   security headers, the CSP and the rewrites to the backend.
-- Every pull request runs the backend, frontend and browser tests and builds a preview to try. Nothing merges by
-  itself: the owner approves and merges each one, and Railway and Vercel then deploy. Run **Admin → Data checks → Check every feature** after a deploy.
+- Pull requests merge once the backend, frontend and browser tests pass and the preview builds; Railway and Vercel then
+  deploy. Run **Admin → Data checks → Check every feature** after a deploy.
 - **Backups:** a GitHub Action copies the main database every night at 02:10 IST, encrypted
   ([docs/ADMIN.md](docs/ADMIN.md#backups)).
 

@@ -1,7 +1,5 @@
 name: Tests
 
-# Tests only. Nothing merges by itself: the owner approves every change and merges it.
-
 on:
   push:
     branches: [main]
@@ -75,3 +73,45 @@ jobs:
         with:
           name: browser-test-screenshots
           path: stratlab/frontend/test-results/
+
+  merge:
+    # Claude's own pull requests merge themselves once backend, frontend and browser have passed and the Vercel preview
+    # has built; Railway and Vercel then deploy main. Skipped: a pull request that changes .github (Claude merges those
+    # itself once green), is a draft, carries the "hold" label, is behind main, or has newer commits still being tested.
+    needs: [backend, frontend, browser]
+    if: >-
+      github.event_name == 'pull_request' &&
+      startsWith(github.head_ref, 'claude/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: read          # the Vercel preview's status
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+      BASE: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - name: Merge when everything has passed
+        run: |
+          hold() { echo "::notice::Not merged automatically: $1."; exit 0; }
+          pr=$(gh api "repos/$REPO/pulls/$PR")
+          [ "$(jq -r .state <<<"$pr")" = open ] || hold "the pull request is already closed"
+          [ "$(jq -r .draft <<<"$pr")" = false ] || hold "it is a draft"
+          [ "$(jq -r .head.sha <<<"$pr")" = "$SHA" ] || hold "newer commits are being tested"
+          jq -e '[.labels[].name] | index("hold")' <<<"$pr" >/dev/null && hold 'it carries the "hold" label'
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          grep -q '^\.github/' <<<"$files" && hold "it changes .github"
+          [ "$(gh api "repos/$REPO/compare/$BASE...$SHA" --jq .behind_by)" = 0 ] || hold "it is behind $BASE"
+          for i in $(seq 60); do
+            state=$(gh api "repos/$REPO/commits/$SHA/status" --jq 'if .total_count == 0 then "success" else .state end')
+            [ "$state" = success ] && break
+            [ "$state" = pending ] || hold "the Vercel preview reports $state"
+            sleep 15
+          done
+          [ "$state" = success ] || hold "the Vercel preview is still building after 15 minutes"
+          gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method=merge -f sha="$SHA" >/dev/null || hold "GitHub refused the merge"
+          echo "::notice::Merged pull request #$PR."
