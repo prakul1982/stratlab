@@ -70,7 +70,7 @@ export function TaxToolsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money · Tax tools</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Dividends, advance tax and the long-term exemption</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Built on your <Link className="link" to="/tax-report">tax report</Link> and <Link className="link" to="/holdings">holdings</Link>: the dividends you received and the TDS on them, the advance tax due by each date, and how much of this year's long-term gains exemption is used. Only you can see these figures.</p>
+        <p className="page-sub">Built on your <Link className="link" to="/tax-report">tax report</Link> and <Link className="link" to="/holdings">holdings</Link>: the dividends you received and the TDS on them, the advance tax due by each date, and how much of this year's long-term gains exemption is used. Only you can see these figures.</p>
       </div>
       <div className="banner tax-note" role="note"><span><b>Estimate only.</b> {DISCLAIMER}</span></div>
       <div className="seg" role="tablist" aria-label="Tax tools" style={{ alignSelf: "flex-start" }}>
@@ -373,7 +373,7 @@ function LtcgTab() {
   if (!v.trades) {
     return (
       <Empty title="No trades yet">
-        <p className="muted" style={{ maxWidth: 520 }}>Upload your tradebooks on the <Link className="link" to="/tax-report">tax report</Link> to see the exemption used and your open lots.</p>
+        <p className="muted">Upload your tradebooks on the <Link className="link" to="/tax-report">tax report</Link> to see the exemption used and your open lots.</p>
       </Empty>
     );
   }

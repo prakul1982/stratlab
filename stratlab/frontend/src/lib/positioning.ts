@@ -69,6 +69,9 @@ export function spanLine(s: Span | undefined, unit = "trading days"): string {
   return `${s.days.toLocaleString("en-IN")} ${unit} since ${dayName(s.first)}`;
 }
 export const ratio = (v: number | null | undefined) => (v == null ? "–" : v.toFixed(2));
+/** Why a part's number is missing, in a few words for the card that shows it (never a bare dash). */
+/** Why a part's number is missing, in words: the server's own reason when it gives one. */
+export const missingWhy = (p: PartStatus | undefined) => p?.reason ?? (p?.error ? "Couldn't be read just now" : "Not published yet");
 export const strike = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-IN", { maximumFractionDigits: 2 }));
 
 /** "3 Oct 2026" from an ISO day. */

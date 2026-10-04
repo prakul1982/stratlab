@@ -6,7 +6,7 @@ import { pct, signClass, TF_NAME } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { Search } from "../components/Icons";
-import { Info, Loading, VerdictBadge } from "../components/ui";
+import { Empty, Info, Loading, VerdictBadge } from "../components/ui";
 
 export interface LibEntry {
   id: string; name: string; question: string; description: string; author: string; market: string;
@@ -99,10 +99,9 @@ export function LibraryPage() {
         </div>
       </div>
       {rows === null ? <Loading label="Opening the library" /> : rows.length === 0 ? (
-        <div className="card stack" style={{ gap: 8 }}>
-          <b>{q || market || verdict ? "Nothing matches that yet." : "The library is empty so far."}</b>
+        <Empty title={q || market || verdict ? "Nothing matches that yet." : "The library is empty so far."}>
           <p className="small muted">Be the first: run an experiment, then on its verdict choose <b>Share verdict → Publish to the library</b>.</p>
-        </div>
+        </Empty>
       ) : (
         <>
           <span className="small muted">{total} strateg{total === 1 ? "y" : "ies"}</span>

@@ -174,7 +174,7 @@ export function TaxReportPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Tax report</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Capital gains on your shares</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Upload your tradebooks or tax P&amp;L files from every broker you use. StratLab matches each sale to its purchase, first in first out, and works out short- and long-term gains for each financial year at the rates that applied, the exemption used, and the set-off. Add your F&amp;O, commodity and currency results and your other income, and it estimates the year's total tax. Only you can see your trades, and you can delete them at any time.</p>
+        <p className="page-sub">Upload your tradebooks or tax P&amp;L files from every broker you use. StratLab matches each sale to its purchase, first in first out, and works out short- and long-term gains for each financial year at the rates that applied, the exemption used, and the set-off. Add your F&amp;O, commodity and currency results and your other income, and it estimates the year's total tax. Only you can see your trades, and you can delete them at any time.</p>
       </div>
       <Disclaimer text={rep?.disclaimer ?? "An estimate from the files you uploaded and the income you entered, not tax advice. It covers only the income you enter or import here, for an individual of the age band and residency you choose. Slab tax depends on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered accountant (CA) before you file or pay tax."} />
 
@@ -246,7 +246,7 @@ export function TaxReportPage() {
       {!rep && <Loading label="Opening your tax report" />}
       {rep && !has && (
         <Empty title="No trades yet">
-          <p className="muted" style={{ maxWidth: 520 }}>Upload a tradebook or tax P&amp;L above to see your capital gains by financial year.</p>
+          <p className="muted">Upload a tradebook or tax P&amp;L above to see your capital gains by financial year.</p>
         </Empty>
       )}
 

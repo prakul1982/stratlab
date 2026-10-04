@@ -216,6 +216,73 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   await expect(page).toHaveURL(new RegExp(NAV_GROUPS.Money[0].to + "$"));
 });
 
+/** How a space home is laid out: every section's left and right edges, the tool strip's rows, figures whose numbers
+ * don't share a line, and figures showing a bare dash. */
+async function layout(page: Page) {
+  return page.evaluate(() => {
+    const box = (el: Element) => el.getBoundingClientRect();
+    const shown = (el: Element) => { const b = box(el); return b.width > 0 && b.height > 0; };
+    const home = document.querySelector(".space-home")!;
+    const edges = Array.from(home.children).filter(shown).map((el) => [Math.round(box(el).left), Math.round(box(el).right)].join("-"));
+    const strip = document.querySelector(".space-strip");
+    const rows: Record<number, { right: number; heights: number[] }> = {};
+    for (const a of strip ? Array.from(strip.children).filter(shown) : []) {
+      const b = box(a), top = Math.round(b.top);
+      rows[top] ??= { right: 0, heights: [] };
+      rows[top].right = Math.max(rows[top].right, Math.round(b.right));
+      if (!a.matches(".space-card-lead")) rows[top].heights.push(Math.round(b.height));
+    }
+    // in a row of figures, the numbers share one line however their labels wrap
+    const offLine: string[] = [];
+    for (const figs of document.querySelectorAll(".space-figs")) {
+      const tops: Record<number, number[]> = {};
+      for (const f of Array.from(figs.children)) {
+        const v = f.children[1];
+        if (!v) continue;
+        const fb = box(f);
+        (tops[Math.round(fb.top)] ??= []).push(Math.round(box(v).top));
+      }
+      for (const t of Object.values(tops)) if (Math.max(...t) - Math.min(...t) > 1) offLine.push(t.join("/"));
+    }
+    const dashes = Array.from(document.querySelectorAll(".space-fig b")).filter((b) => /^\s*[-–—]\s*$/.test(b.textContent ?? "")).length;
+    return { edges: Array.from(new Set(edges)), stripRight: strip ? Math.round(box(strip).right) : 0, rows: Object.values(rows), offLine, dashes };
+  });
+}
+
+test("space homes line up: one content width, a tool strip without holes, each tool linked once, no bare dashes", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  // a new account (no notebooks yet: the Trade home embeds New notebook) and the owner (notebooks, holdings, tax)
+  for (const [u, paths] of [[who(236, phone), ["/trade"]], [ADMIN, ["/trade", "/invest", "/money"]]] as const) {
+    const errors = await signIn(page, u, paths[0]);
+    await page.getByRole("button", { name: /All of it/ }).click({ timeout: 4000 }).catch(() => undefined);   // a first visit's question
+    for (const path of paths) {
+      await page.goto(path);
+      await expect(page.locator(".space-home")).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator(".space-home .spinner")).toHaveCount(0, { timeout: 30_000 });
+      await expect(page.getByText("Reading the newest numbers…")).toHaveCount(0, { timeout: 30_000 });
+      const at = `${u.email} ${path}`;
+      const l = await layout(page);
+      expect(l.edges, `${at}: every section shares the same left and right edges`).toHaveLength(1);
+      expect(l.offLine, `${at}: numbers in a row of figures share a line`).toEqual([]);
+      expect(l.dashes, `${at}: a missing figure says why instead of a dash`).toBe(0);
+      if (path === "/trade") {
+        for (const r of l.rows) {
+          expect(r.right, `${at}: each row of the tool strip reaches its right edge`).toBeGreaterThanOrEqual(l.stripRight - 1);
+          if (r.heights.length) expect(Math.max(...r.heights) - Math.min(...r.heights), `${at}: cards in a row are the same height`).toBeLessThanOrEqual(1);
+        }
+        // each tool once: the strip's card, not again as a card, a button or a "what you can do" entry
+        await expect(page.locator('main a[href="/trade/positioning"]')).toHaveCount(1);
+        await expect(page.locator("main").getByRole("button", { name: /Import a strategy/ })).toHaveCount(0);
+        await expect(page.locator(".explore-card").filter({ hasText: /^(Strategy library|Import a strategy|Paper trade options)/ })).toHaveCount(0);
+      }
+      if (path === "/invest") {
+        await expect(page.locator(".explore-card").filter({ hasText: /^(Red flags in my watchlist|My watchlist at a glance)/ })).toHaveCount(0);
+      }
+      await sane(page, errors, phone);
+    }
+  }
+});
+
 test("search labels each result with its space", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await signIn(page, ADMIN, "/research");

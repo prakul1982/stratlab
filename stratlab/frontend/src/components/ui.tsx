@@ -51,7 +51,7 @@ export function Loading({ label = "Loading" }: { label?: string }) {
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="card dashed stack" style={{ alignItems: "center", textAlign: "center", padding: 40 }}>
+    <div className="card dashed stack empty">
       <h2 className="h2">{title}</h2>
       {children}
     </div>
@@ -97,6 +97,21 @@ export function Info({ children, label = "What does this mean?" }: { children: R
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}>i</button>
       {open && <span id={id} role="note" className={`info-pop ${side}`}>{children}</span>}
     </span>
+  );
+}
+
+/** One labelled figure in a row of them (`.space-figs`): the label, the number, and a note under it. The row is one grid,
+ * so the numbers sit on one line however the labels wrap. A missing number says why in words (`missing`), never a
+ * bare dash. */
+export function Fig({ label, value, note, noteTone = "muted", tone = "", missing = "Not available yet", missingId }:
+  { label: ReactNode; value: ReactNode; note?: ReactNode; noteTone?: string; tone?: string; missing?: string; missingId?: string }) {
+  const none = value == null || value === false || (typeof value === "string" && /^\s*[-–—]?\s*$/.test(value));
+  return (
+    <div className="space-fig">
+      <span className="tiny muted">{label}</span>
+      {none ? <span className="small muted fig-missing" data-testid={missingId}>{missing}</span> : <b className={`num ${tone}`.trim()}>{value}</b>}
+      {note ? <span className={`tiny ${noteTone}`}>{note}</span> : null}
+    </div>
   );
 }
 
