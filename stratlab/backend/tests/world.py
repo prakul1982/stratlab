@@ -225,7 +225,7 @@ def _nse(sw=None):
                                              "priceInfo": {"lastPrice": 2900.5}})
         return httpx.Response(200, text="<html></html>")
     t = httpx.MockTransport(handler)
-    return NSEFilings(transport=sw(t) if sw else t)
+    return NSEFilings(transport=sw(t) if sw else t, sleep=lambda s: None)
 
 
 def _docs(sw=None):
@@ -292,7 +292,7 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     routes.setup(hub, None, None)
     from app.intel.filings import BSEFilings, IndiaFilings
     from tests.fake_intel import fake_bse
-    monkeypatch.setattr(main, "filings_feed", IndiaFilings(_nse(sw("exchange")), BSEFilings(transport=sw("bse filings")(fake_bse())),
+    monkeypatch.setattr(main, "filings_feed", IndiaFilings(_nse(sw("exchange")), BSEFilings(transport=sw("bse filings")(fake_bse()), sleep=lambda s: None),
                                                            lambda s: main.bse_code(s)))
     monkeypatch.setattr(main, "deep_docs", _docs(sw("documents")))
     from app.intel.sec import SEC

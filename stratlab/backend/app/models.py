@@ -282,6 +282,7 @@ class MarketAuditReq(BaseModel):
     region: Literal["IN", "US"] = "IN"
     on: bool | None = None
     full: bool = False
+    retry: bool = False            # re-check only the companies a source turned away (not checked yet)
     read_list: bool = False
 
 

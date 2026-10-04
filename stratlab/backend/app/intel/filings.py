@@ -478,10 +478,11 @@ class NSEFilings:
     name = "the exchange"
     BASE = "https://www.nseindia.com"
 
-    def __init__(self, transport: httpx.BaseTransport | None = None):
+    def __init__(self, transport: httpx.BaseTransport | None = None, sleep=time.sleep):
         self.http = httpx.Client(base_url=self.BASE, timeout=15, transport=transport, follow_redirects=True,
                                  headers={"User-Agent": BROWSER_UA, "Accept": "application/json, text/plain, */*",
                                           "Accept-Language": "en-US,en;q=0.9", "Referer": self.BASE + "/"})
+        self.sleep = sleep
         self.limit = RateLimit(30, 5)
         self.cache = TTLCache(max_items=2000)
         self._primed = 0.0
@@ -532,33 +533,39 @@ class NSEFilings:
         self._circuits[circuit] = (0, 0.0)
         return out
 
+    BACKOFF = (0.0, 2.0)            # the pause before each retry after a refusal: at once with fresh cookies, then later
+
     def _get_once(self, path: str, params: dict, referer: str | None = None):
         self._prime()
         headers = {"Referer": referer} if referer else None
-        for attempt in (0, 1):
+        for attempt in range(len(self.BACKOFF) + 1):
             if not self.limit.take():
                 raise SourceError(self.name, "The exchange feed is busy (our rate limit). Try again in a minute.", busy=True)
             try:
                 r = self.http.get(path, params=params, headers=headers)
             except httpx.HTTPError as e:
                 raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
-            if r.status_code in (401, 403) and attempt == 0:
-                self._prime(force=True)          # cookies expired: fetch fresh ones once
+            if r.status_code in (401, 403, 429) and attempt < len(self.BACKOFF):
+                if self.BACKOFF[attempt] or r.status_code == 429:
+                    self.sleep(max(self.BACKOFF[attempt], 1.0))
+                self._prime(force=True)          # cookies expired, or a bot guard: fresh ones, then again
                 if referer:                      # the quote API also wants the cookies set by the stock's own page
                     try:
                         self.http.get(referer, headers={"Accept": "text/html"})
                     except httpx.HTTPError:
                         pass
                 continue
-            if r.status_code == 429 or r.status_code >= 500:
+            if r.status_code in (401, 403, 429):  # turned away every time: a refusal to try again later, not a fact
+                raise SourceError(self.name, f"The exchange feed refused the request ({r.status_code}). Try again later.", busy=True)
+            if r.status_code >= 500:
                 raise SourceError(self.name, f"The exchange feed is busy ({r.status_code}). Try again in a minute.", busy=True)
             if r.status_code >= 400:
-                raise SourceError(self.name, f"The exchange feed refused the request ({r.status_code}).")
+                raise SourceError(self.name, f"The exchange feed has nothing for that ({r.status_code}).")
             try:
                 return r.json()
             except ValueError:
                 raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).", busy=True) from None
-        raise SourceError(self.name, "The exchange feed refused the request after a fresh session.")
+        raise SourceError(self.name, "The exchange feed refused the request after a fresh session. Try again later.", busy=True)
 
     def announcements(self, symbol: str, days: int = LOOKBACK_DAYS) -> list[dict]:
         key = (symbol, days)
@@ -839,44 +846,94 @@ def bse_rows(table: list[dict]) -> list[dict]:
 
 
 class BSEFilings:
-    """BSE's public corporate-announcements feed, for companies listed only on BSE (by six-digit scrip code)."""
+    """BSE's public corporate-announcements feed, for companies listed only on BSE (by six-digit scrip code). BSE's
+    bot guard turns away requests that come without the cookies its website hands out (403), and refuses a burst of
+    them, so we visit the website first, space the calls out, and on a refusal fetch fresh cookies and try again
+    after a pause. A refusal that outlasts the retries is "busy" (try again later), not a fact about the company."""
     name = "the exchange"
     BASE = "https://api.bseindia.com/BseIndiaAPI/api"
+    HOME = "https://www.bseindia.com/"
     PAGES = 6                       # 50 a page: about a year's filings for a busy small company
+    GAP = 0.5                       # seconds between calls at least: a steady pace, not a burst
+    BACKOFF = (2.0, 6.0)            # the pauses before each retry after a refusal (401, 403, 429)
+    REST = 600                      # refused through every retry: leave BSE alone this long (ten minutes)
 
-    def __init__(self, transport: httpx.BaseTransport | None = None):
+    def __init__(self, transport: httpx.BaseTransport | None = None, sleep=time.sleep):
         self.http = httpx.Client(base_url=self.BASE, timeout=15, transport=transport, follow_redirects=True,
                                  headers={"User-Agent": BROWSER_UA, "Accept": "application/json, text/plain, */*",
-                                          "Accept-Language": "en-US,en;q=0.9", "Referer": "https://www.bseindia.com/",
-                                          "Origin": "https://www.bseindia.com"})
+                                          "Accept-Language": "en-US,en;q=0.9", "Referer": self.HOME,
+                                          "Origin": self.HOME.rstrip("/")})
         self.limit = RateLimit(30, 5)
         self.cache = TTLCache(max_items=2000)
+        self.sleep = sleep
         self._fails, self._down_until = 0, 0.0
+        self._primed, self._last = 0.0, 0.0
+        self._lock = threading.Lock()
 
-    def _page(self, code: str, frm: datetime, to: datetime, page: int) -> dict:
+    def _prime(self, force: bool = False):
+        """Visit BSE's website for the session cookies its API checks for (kept for ten minutes)."""
+        with self._lock:
+            if not force and time.time() - self._primed < 600:
+                return
+            try:
+                self.http.get(self.HOME, headers={"Accept": "text/html"})
+            except httpx.HTTPError:
+                pass                        # the API call itself says whether BSE is reachable
+            self._primed = time.time()
+
+    def _pace(self):
+        """At least GAP seconds since the last call, whichever thread made it."""
+        with self._lock:
+            now = time.time()
+            wait = self._last + self.GAP - now
+            self._last = max(now, self._last + self.GAP)
+        if wait > 0:
+            self.sleep(wait)
+
+    def _call(self, path: str, params: dict) -> dict:
+        """One API call: paced, with fresh cookies and a pause before each retry when BSE turns it away."""
         if time.time() < self._down_until:
             raise SourceError(self.name, "The exchange feed isn't answering right now. Try again in a minute.", busy=True)
-        if not self.limit.take():
-            raise SourceError(self.name, "The exchange feed is busy (our rate limit). Try again in a minute.", busy=True)
-        try:
-            r = self.http.get("/AnnSubCategoryGetData/w", params={
-                "pageno": page, "strCat": "-1", "strPrevDate": frm.strftime("%Y%m%d"), "strScrip": code,
-                "strSearch": "P", "strToDate": to.strftime("%Y%m%d"), "strType": "C", "subcategory": "-1"})
-        except httpx.HTTPError as e:
-            self._failed()
-            raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
-        if r.status_code == 429 or r.status_code >= 500:
-            self._failed()
-            raise SourceError(self.name, f"The exchange feed is busy ({r.status_code}). Try again in a minute.", busy=True)
-        if r.status_code >= 400:
-            raise SourceError(self.name, f"The exchange feed refused the request ({r.status_code}).")
-        try:
-            data = r.json()
-        except ValueError:
-            self._failed()
-            raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).", busy=True) from None
-        self._fails = 0
-        return data if isinstance(data, dict) else {}
+        self._prime()
+        for attempt in range(len(self.BACKOFF) + 1):
+            if not self.limit.take():
+                raise SourceError(self.name, "The exchange feed is busy (our rate limit). Try again in a minute.", busy=True)
+            self._pace()
+            try:
+                r = self.http.get(path, params=params)
+            except httpx.HTTPError as e:
+                self._failed()
+                raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
+            if r.status_code in (401, 403, 429):
+                if attempt == len(self.BACKOFF):        # turned away every time: rest, and say try again later
+                    self._down_until, self._fails = time.time() + self.REST, 0
+                    raise SourceError(self.name, f"The exchange feed refused the request ({r.status_code}). Try again later.", busy=True)
+                wait = self.BACKOFF[attempt]
+                try:                                    # a 429 may say how long to wait
+                    wait = max(wait, min(30.0, float(r.headers.get("retry-after") or 0)))
+                except ValueError:
+                    pass
+                self.sleep(wait)
+                self._prime(force=True)
+                continue
+            if r.status_code >= 500:
+                self._failed()
+                raise SourceError(self.name, f"The exchange feed is busy ({r.status_code}). Try again in a minute.", busy=True)
+            if r.status_code >= 400:
+                raise SourceError(self.name, f"The exchange feed has nothing for that ({r.status_code}).")
+            try:
+                data = r.json()
+            except ValueError:
+                self._failed()
+                raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).", busy=True) from None
+            self._fails = 0
+            return data if isinstance(data, dict) else {}
+        raise SourceError(self.name, "The exchange feed refused the request. Try again later.", busy=True)   # not reached
+
+    def _page(self, code: str, frm: datetime, to: datetime, page: int) -> dict:
+        return self._call("/AnnSubCategoryGetData/w", {
+            "pageno": page, "strCat": "-1", "strPrevDate": frm.strftime("%Y%m%d"), "strScrip": code,
+            "strSearch": "P", "strToDate": to.strftime("%Y%m%d"), "strType": "C", "subcategory": "-1"})
 
     def _failed(self):
         self._fails += 1
@@ -903,6 +960,23 @@ class BSEFilings:
         self.cache.set(key, items, 1800)
         return items
 
+    def industry(self, code: str) -> list[str]:
+        """BSE's own classification of a company, from its quote page's header: sector › industry › group › sub-group
+        (the same four levels as NSE's). Cached for a week."""
+        code = str(code).strip()
+        if not code.isdigit():
+            raise SourceError(self.name, "That isn't a BSE scrip code.")
+        hit = self.cache.get(("industry", code))
+        if hit is not None:
+            return hit
+        data = self._call("/ComHeadernew/w", {"quotetype": "EQ", "scripcode": code, "seriesid": ""})
+        path: list[str] = []
+        for names in (("Sector", "SectorName"), ("IndustryNew", "Industry"), ("IGroupName", "IGroup"), ("ISubGroupName", "ISubGroup")):
+            v = str(_field(data, *names) or "").strip()
+            if v and v not in path and v.upper() not in ("NA", "N.A.", "-"):
+                path.append(v)
+        self.cache.set(("industry", code), path, 7 * 86400)
+        return path
 
     def corporate_actions(self, code: str) -> list[dict]:
         """One BSE company's corporate actions (dividends, bonus issues, splits...), as BSE lists them. Cached for an hour."""
@@ -912,26 +986,8 @@ class BSEFilings:
         hit = self.cache.get(("actions", code))
         if hit is not None:
             return hit
-        if time.time() < self._down_until:
-            raise SourceError(self.name, "The exchange feed isn't answering right now. Try again in a minute.", busy=True)
-        if not self.limit.take():
-            raise SourceError(self.name, "The exchange feed is busy (our rate limit). Try again in a minute.", busy=True)
-        try:
-            r = self.http.get("/DefaultData/w", params={"Fdate": "", "Purposecode": "", "TDate": "", "ddlcategorys": "E",
-                                                        "ddlindustrys": "", "scripcode": code, "segmentid": "0", "strSearch": "S"})
-        except httpx.HTTPError as e:
-            self._failed()
-            raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
-        if r.status_code == 429 or r.status_code >= 500:
-            self._failed()
-            raise SourceError(self.name, f"The exchange feed is busy ({r.status_code}). Try again in a minute.", busy=True)
-        if r.status_code >= 400:
-            raise SourceError(self.name, f"The exchange feed refused the request ({r.status_code}).")
-        try:
-            data = r.json()
-        except ValueError:
-            self._failed()
-            raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).", busy=True) from None
+        data = self._call("/DefaultData/w", {"Fdate": "", "Purposecode": "", "TDate": "", "ddlcategorys": "E",
+                                             "ddlindustrys": "", "scripcode": code, "segmentid": "0", "strSearch": "S"})
         rows = data.get("Table") if isinstance(data, dict) else data
         rows = [x for x in rows if isinstance(x, dict)] if isinstance(rows, list) else []
         self.cache.set(("actions", code), rows, 3600)
@@ -950,7 +1006,8 @@ class IndiaFilings:
         return self.bse.announcements(code, days) if code else self.nse.announcements(symbol, days)
 
     def industry(self, symbol: str) -> list[str]:
-        return [] if self.code_of(symbol) else self.nse.industry(symbol)
+        code = self.code_of(symbol)
+        return self.bse.industry(code) if code else self.nse.industry(symbol)
 
     def last_price(self, symbol: str) -> float | None:
         return None if self.code_of(symbol) else self.nse.last_price(symbol)

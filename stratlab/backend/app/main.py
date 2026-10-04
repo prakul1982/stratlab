@@ -1488,17 +1488,47 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
     except SourceError as e:
         items, doc_note, fsum = [], public_text(str(e)), None
     insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
-    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": price_trend(sym),
-            "trades": insider}
+    trend, why = price_status(sym)
+    cut = (datetime.now(IST) - timedelta(days=366 * years)).strftime("%Y-%m-%dT%H:%M")
+    meets = None if doc_note else sum(1 for i in items if i.get("category") == "concall" and i["at"] >= cut)
+    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": trend,
+            "trend_why": why, "trades": insider, "meets": meets}
+
+
+def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]:
+    """(Stage and Supertrend on daily candles, or None; and when None, why): "untraded" (not on the exchange's
+    trading list, or no trades in the window: suspended), "new" (under 30 days of prices), "stale" (no trade for a
+    month) or "error" (the price source didn't answer: try again later)."""
+    try:
+        ids, _ = universes.resolve(markets, market, [{"symbol": sym}])
+    except Exception:
+        return None, "error"
+    if not ids:
+        return None, "untraded"
+    try:
+        bars = scan._bars(markets, ids[0])
+    except LookupError:
+        return None, "untraded"
+    except Exception:
+        return None, "error"
+    if not bars:
+        return None, "untraded"
+    try:
+        last = datetime.fromisoformat(str(bars[-1].get("t"))[:10]).date()
+        if (datetime.now(IST).date() - last).days > 31:
+            return None, "stale"
+    except (TypeError, ValueError):
+        pass
+    try:
+        got = scan.analyse(bars)
+    except Exception:
+        return None, "error"
+    return (got, None) if got else (None, "new" if len(bars) < 30 else None)
 
 
 def price_trend(sym: str, market: str = "IN") -> dict | None:
     """Stage and Supertrend on daily candles, or None when prices aren't available."""
-    try:
-        ids, _ = universes.resolve(markets, market, [{"symbol": sym}])
-        return scan.analyse(scan._bars(markets, ids[0])) if ids else None
-    except Exception:
-        return None
+    return price_status(sym, market)[0]
 
 
 def deep_view(sym: str, base: dict) -> dict:
@@ -3032,11 +3062,13 @@ def admin_filings_check(symbol: str = "RELIANCE", _=Depends(admin.admin_profile)
 audit_runner = audit.Runner()
 
 
-def live_price(sym: str) -> float | None:
-    """The live exchange price from the broker's feed; the exchange's own website when the feed is offline (it
-    turns cloud servers away, so that is a last resort)."""
+def live_price(sym: str):
+    """The live exchange quote from the broker's feed as (last price, previous close), since a thinly traded stock's
+    last daily close can be either; the exchange's own last price when the feed is offline (its website turns cloud
+    servers away, so that is a last resort). Works for NSE symbols and BSE-only codes alike."""
     if kite.ready():
-        return (kite.quote([sym]).get(sym) or {}).get("price")
+        q = kite.quote([sym]).get(sym) or {}
+        return (q.get("price"), q.get("prev_close"))
     return filings_feed.last_price(sym)
 
 
@@ -3142,11 +3174,12 @@ def _market_check(sym: str) -> dict:
         code = sym.split(":", 1)[1]
         _load_bse_map()
         ts = (_bse_map.get(code) or {}).get("ts")
-        price = (lambda _s: kite.ltp_key(f"BSE:{ts}")) if ts and kite.ready() else None
+        price = live_price if ts and kite.ready() else None          # BSE's own quote, by the scrip code
         row = audit.audit_company(code, deep_base, deep_view, price, None)
         for i in row["issues"]:
             i["detail"] = public_text(i["detail"])
-        return {**row, "symbol": sym, "name": row.get("name") or (_bse_map.get(code) or {}).get("name") or sym}
+        name = row.get("name") if row.get("name") not in (None, "", code) else None   # the check stopped before the name
+        return {**row, "symbol": sym, "name": name or (_bse_map.get(code) or {}).get("name") or sym}
     return _nse_check(sym)
 
 
@@ -3154,15 +3187,20 @@ market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: b
 
 
 def _sec_companies() -> list[dict]:
-    """Every company that files with the SEC, once each: its main ticker, not its preferred shares, warrants or units
-    (the SEC lists those too, under the same company). The SEC's list puts a company's main ticker first."""
-    first: dict[int, str] = {}
-    for t, v in sec_feed.tickers().items():
-        cik = v["cik"]
-        if cik not in first or ("-" in first[cik] and "-" not in t):
-            first[cik] = t
+    """Every operating company that files with the SEC, once each: its main ticker, not its preferred shares,
+    warrants, rights or units (the SEC lists those too, under the same company: ACON's warrant is ACONW, its preferred
+    ACON-PA). Funds, ETFs, commodity trusts and blank-check companies (SPACs) are left out, as BSE's debt and ETF
+    codes are in India: they have no business to check."""
     names = sec_feed.tickers()
-    return [{"symbol": t, "name": names[t]["name"], "listed": None} for t in first.values()]
+    by_cik: dict[int, list[str]] = {}
+    for t, v in names.items():
+        by_cik.setdefault(v["cik"], []).append(t)
+    out = []
+    for tickers in by_cik.values():
+        if sec.not_operating(names[tickers[0]]["name"]):
+            continue
+        out.append(min(tickers, key=lambda t: (sec.derived_ticker(t, tickers), tickers.index(t))))
+    return [{"symbol": t, "name": names[t]["name"], "listed": None} for t in out]
 
 
 market_audit_us = audit.MarketAudit(lambda: _sec_companies(), lambda s: audit_one(s, False, None, "US"),
@@ -3188,6 +3226,8 @@ def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
         m.set_enabled(req.on)
     if req.full:
         m.start_full()
+    if req.retry:                     # only the companies a source turned away last time (the exchange refusing filings)
+        m.start_full(pending=True)
     if req.read_list:
         threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()
     return m.status()

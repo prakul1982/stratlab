@@ -55,17 +55,22 @@ def test_mismatches_against_the_source_are_caught(monkeypatch):
 def test_a_failing_source_is_an_error_row_not_a_crash(monkeypatch):
     def boom(sym):
         raise main.HTTPException(503, {"code": "source_busy", "message": "The company data source is busy."})
-    row = audit.audit_company("ACME", boom, main.deep_view)
-    assert issues(row) == ["Company page: The company data source is busy."]
+    row = audit.audit_company("ACME", boom, main.deep_view)               # busy: not checked yet, checked again later
+    assert issues(row) == ["Company page: Not checked yet: the company data source is busy. It is checked again later."]
+    assert row["issues"][0]["level"] == "pending"
+    broken = audit.audit_company("ACME", lambda s: (_ for _ in ()).throw(KeyError("pl")), main.deep_view)
+    assert broken["issues"][0]["level"] == "error"                       # our own code failing is an error
     shell = audit.audit_company("SPAC", lambda s: (_ for _ in ()).throw(main.HTTPException(
         404, {"code": "x", "message": "The SEC has no annual results filed in XBRL for this company."})), main.deep_view)
-    assert shell["issues"][0]["level"] == "gap"                          # nothing to show, not something broken
+    assert shell["issues"][0]["level"] == "fact"                         # nothing to show, not something broken
     p = company()
     row = run(p, monkeypatch, trend=None, doc_note="The exchange feed is busy.",
               exchange_price=lambda s: (_ for _ in ()).throw(RuntimeError("timeout")))
-    assert "Prices: Exchange price unavailable: timeout" in issues(row, "error")
-    assert "Documents: The exchange feed is busy." in issues(row, "error")
+    assert "Prices: Not checked yet: the exchange's quote couldn't be read (timeout). It is checked again later." in issues(row, "pending")
+    assert "Documents: Not checked yet: the exchange feed is busy. It is checked again later." in issues(row, "pending")
     assert "Prices: No daily prices, so no trend or stage" in issues(row, "gap")
+    row = run(p, monkeypatch, exchange_price=lambda s: (_ for _ in ()).throw(ValueError("no such stock")))
+    assert "Prices: Exchange price unavailable: no such stock" in issues(row, "error")
 
 
 def test_unreadable_documents_are_listed(monkeypatch):
@@ -289,7 +294,7 @@ def test_us_companies_are_audited_from_their_sec_filings(monkeypatch):
         apple = [f"{i['area']}: {i['detail']}" for i in rows["AAPL"]["issues"]]
         assert not any(i["level"] == "error" for i in rows["AAPL"]["issues"]), apple
         assert not any("presentation" in x or "transcript" in x for x in apple)        # US filings, not Indian documents
-        assert rows["ZZZZ"]["issues"][0]["level"] == "gap" and "SEC" in rows["ZZZZ"]["issues"][0]["detail"]    # not a filer: not covered
+        assert rows["ZZZZ"]["issues"][0]["level"] == "fact" and "SEC" in rows["ZZZZ"]["issues"][0]["detail"]    # not a filer: not covered
         # the whole US market: the SEC's own list of companies
         w["client"].post("/admin/audit/market", headers=h, json={"region": "US", "on": True})
         assert main.market_audit_us.step() is None                                       # the first list read isn't "new"
@@ -364,11 +369,12 @@ def test_india_whole_market_adds_bse_only_companies(monkeypatch):
         # one BSE-only company checked: numbers by BSE code, price from BSE's own quote
         page = main.research_hub.screener.company("RELIANCE")
         monkeypatch.setattr(main.research_hub.screener, "company", lambda code: page if code == "543210" else (_ for _ in ()).throw(KeyError(code)))
-        monkeypatch.setattr(main.kite, "ltp_key", lambda key: {"BSE:TINYCO": page["ratios"] and 1300.0}.get(key))
+        monkeypatch.setattr(main.kite, "quote", lambda syms: {"543210": {"price": 1300.0, "prev_close": 1290.0}} if syms == ["543210"] else {})
         monkeypatch.setattr(main.kite, "history", lambda token, tf, days, **k: [])
         row = main._market_check("BSE:543210")
         assert row["symbol"] == "BSE:543210" and row["name"]
-        assert not [i for i in row["issues"] if i["area"] == "Company page"]
+        assert not [i for i in row["issues"] if i["area"] == "Company page" or i["level"] == "error"], row["issues"]
+        assert any(i["level"] == "fact" and i["detail"].startswith("Not trading now") for i in row["issues"])   # no candles
         assert audit._shard("BSE:543210") == "audit:market:rows:bse0" or audit._shard("BSE:543210").endswith("rows:bse0")
     finally:
         w["close"]()
@@ -427,7 +433,7 @@ def test_market_sheet_fixes_us(monkeypatch):
     try:
         monkeypatch.setattr(main.sec_feed, "tickers", lambda: {"AHL": {"cik": 1, "name": "Aspen"}, "AHL-PD": {"cik": 1, "name": "Aspen"},
                                                                "ACONW": {"cik": 2, "name": "Aclarion"}, "ACON": {"cik": 2, "name": "Aclarion"}})
-        assert [c["symbol"] for c in main._sec_companies()] == ["AHL", "ACONW"]
+        assert [c["symbol"] for c in main._sec_companies()] == ["AHL", "ACON"]          # the warrant beside its share
     finally:
         w["close"]()
 
@@ -440,6 +446,6 @@ def test_stored_findings_are_read_with_todays_rules():
            audit._issue("error", "Company page", "the fundamentals source has nothing for that.")]
     now = [audit.restate(i) for i in old]
     assert now[0]["level"] == "gap" and "company page shows" in now[0]["detail"]
-    assert now[1] is None and now[2] == old[2] and now[3] is None and now[4]["level"] == "gap"
+    assert now[1] is None and now[2] == old[2] and now[3] is None and now[4]["level"] == "fact"
     us = audit.restate(audit._issue("mismatch", "Numbers", "Trailing revenue 900 cr vs last four quarters 700 cr"), us=True)
     assert us["detail"] == "Trailing revenue $m900 vs last four quarters $m700"
