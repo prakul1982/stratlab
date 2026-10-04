@@ -1,6 +1,33 @@
 # Changelog
 
+What shipped, newest first, grouped by month. Built from the git history.
+
 ## October 2026
+
+### Landing page and docs brought up to date
+- **The landing page is grouped the way the product is:** Research, Portfolio and tax, Strategy testing and Alerts, each listing what ships today (results calendar, corporate actions, deals, surveillance lists, holdings import, the tax report, share cards and invites among them), then the plans and a refreshed FAQ. The separate "problem", "beyond one chart" and "for investors" sections are folded in; the markets list adds Indian currency futures.
+- **Plans on the landing page match the server exactly:** Free, Basic and Pro come from one shared file (`frontend/src/lib/plans.ts`, also used by Plans), priced in the visitor's currency; a backend test fails if it drifts from `plans.py`, and a browser test checks the cards against the server's plans.
+- **FAQ:** what StratLab does and doesn't tell you, holdings files, the tax report, invite rewards and public company pages; the data-source answer no longer names any source.
+- **Phone:** FAQ questions are 36px tall, so each is easy to tap.
+- **Docs:** a rewritten README (features, architecture, an environment variable table, tests and deploys), `docs/FEATURES.md` (every feature and where it lives), `docs/ADMIN.md` (the Admin page, Check every feature, the data audit, email, PostHog and Sentry), and landing screenshots in `docs/screenshots`.
+
+### Tax report
+- **Capital gains on listed Indian shares, as an estimate:** tradebooks and tax P&L files from Zerodha, Groww, Upstox, Angel One, ICICI Direct, HDFC Securities or a plain CSV, combined without duplicates and matched first in, first out per company. Per financial year: short and long term split at the 23 July 2024 rate change, the ₹1 lakh / ₹1.25 lakh exemption, set-off and carry forward, grandfathering at the 31 January 2018 price, intraday kept apart, and bonus and split adjustments. Open lots below cost at today's prices, CSV and PDF downloads, and one-step delete.
+- **The broker's tax P&L ZIP:** read as it comes (a CSV per segment and the summary sheet), with only the equity files used and everything skipped listed with why; the summary's totals are checked against what was read. Each tax P&L line keeps the buy the broker matched it with. Uploads up to 10 MB a file, with strict limits on what a ZIP may unpack to.
+
+### Exchange surveillance lists
+- **ASM (long and short term, with stages), GSM, ESM, trade-to-trade, price-band changes and the F&O ban,** read twice a trading day, each list kept with its own date. Badges with a plain explanation on company pages, the watchlist, holdings, screens and paper trading; a block on the public company pages; a Screens filter; a stock alert for entering or leaving a list; and a line in My Stocks.
+
+### New prices and plan limits
+- **Basic ₹499 and Pro ₹1,499 a month, GST included** ($8 and $20; €8 and €19; £7 and £16). All indicators, alerts, scans, watchlist red flags and Watchlist at a glance on Basic; Indian F&O on Pro. Deep dives and decks are counted once per company a month. Sector rotation and red flags on a company page are open to everyone, and the weekly newsletters are free.
+
+### Plain numbers instead of scores
+- **The AI read on a company page shows fact rows, not 0-100 scores:** growth, price trend, debt and cash, margins and returns, worked out from reported results and prices, never by AI. Old cached reads lose their scores too. Deal, corporate-action and holdings badges use one neutral style.
+
+### Analytics on, and email fixes
+- **PostHog is live** on the US cloud, with the host allowed in the CSP and described on the privacy page.
+- **A Brevo IP-block error** says where in Brevo to turn the block off.
+- **Whole-market audit fixes:** a source turning a check away is "not checked yet" and retried, not a company error; facts about a company (a new listing, no revenue yet) are kept apart from gaps; more US filing concepts are read.
 
 ### QA round: new features at every screen size, and a security pass
 - **Made-up tickers can't fill the database:** a company page's corporate actions for a ticker with nothing on record are remembered in memory only, and a ticker must start with a letter or digit (or ^ for an index), so "..", "-x" and the like never reach a data source's address.
