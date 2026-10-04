@@ -10,6 +10,8 @@ import { Empty, Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
 import { SurvBadges, survRegion } from "../components/Surveillance";
+import { FoBadges } from "../components/FoBadges";
+import { foSymbol } from "../lib/foChanges";
 import { Earlier, splitToday } from "../components/Earlier";
 import { OrderList, type PaperOrder } from "../components/OrderList";
 
@@ -69,6 +71,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
         <div className="stack" style={{ gap: 6 }}>
           <span className="eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
           <SurvBadges region={survRegion(snap.instrument)} symbol={snap.instrument.symbol} />
+          <FoBadges region={survRegion(snap.instrument)} symbol={foSymbol(snap.instrument)} />
           <h2 className="serif" style={{ fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em" }}>{snap.name}</h2>
         </div>
         <div className="row" style={{ gap: 12 }}>
@@ -143,6 +146,7 @@ function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open
           <b>{r.name}</b>
           <span className="small muted">{r.instrument.symbol} · {new Date(r.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
           <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
+          <FoBadges region={survRegion(r.instrument)} symbol={foSymbol(r.instrument)} plain />
           <span className={`badge ${r.status}`} style={{ alignSelf: "flex-start" }}>{r.status}</span>
         </button>
       ))}

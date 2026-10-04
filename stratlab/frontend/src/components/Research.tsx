@@ -11,6 +11,7 @@ import { LineChart } from "./Charts";
 import { Star } from "./Icons";
 import { Info } from "./ui";
 import { SurvBadges } from "./Surveillance";
+import { FoBadges } from "./FoBadges";
 import { track } from "../lib/analytics";
 
 export { CompanySearch } from "./CompanySearch";
@@ -394,6 +395,7 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
             <span className="num">{q == null ? <span className="skel" /> : x?.price != null ? price(x.price, region === "IN" ? "INR" : "USD") : "–"}</span>
             <span className={`tiny num ${signClass(x?.change_pct)}`}>{x?.change_pct != null ? pct(x.change_pct, 2) : ""}</span>
             <SurvBadges region={region} symbol={s} />
+            <FoBadges region={region} symbol={s} plain />
           </Link>
         );
       })}

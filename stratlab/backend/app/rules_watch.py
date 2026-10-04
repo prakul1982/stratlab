@@ -104,9 +104,10 @@ def read_ppf(page: str) -> float:
     raise ValueError("No PPF rate found on the page.")
 
 
-def read_circulars(data) -> list[dict]:
+def read_circulars(data, words: re.Pattern | None = None) -> list[dict]:
     """[{id, date, subject, url}] from NSE's circulars answer, read loosely (whatever the fields are called), keeping
-    only those about the rules StratLab hard-codes."""
+    only those about the rules StratLab hard-codes (or those whose subject matches `words`)."""
+    words = words or CIRCULAR_WORDS
     rows: list[dict] = []
 
     def walk(x, depth=0):
@@ -124,13 +125,14 @@ def read_circulars(data) -> list[dict]:
     out = []
     for r in rows:
         subject = next((str(v) for k, v in r.items() if "sub" in str(k).lower() and isinstance(v, str)), "")
-        if not subject or not CIRCULAR_WORDS.search(subject):
+        if not subject or not words.search(subject):
             continue
         day = next((str(v) for k, v in r.items() if "date" in str(k).lower() and v), "")
         link = next((str(v) for k, v in r.items() if any(w in str(k).lower() for w in ("link", "file")) and isinstance(v, str)
                      and v.startswith("http")), "")
+        no = next((str(v) for k, v in r.items() if re.search(r"no$|number", str(k), re.I) and isinstance(v, (str, int))), "")
         cid = hashlib.sha1(f"{day}|{subject}".encode()).hexdigest()[:16]
-        out.append({"id": cid, "date": day[:30], "subject": subject[:300], "url": link[:300]})
+        out.append({"id": cid, "date": day[:30], "subject": subject[:300], "url": link[:300], "no": no[:60]})
     return out
 
 
