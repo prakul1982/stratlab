@@ -629,7 +629,7 @@ a.chip-link:hover { border-color: var(--ink); color: var(--ink); }
 .lp-facts b { font-size: 40px; font-weight: 400; letter-spacing: -.03em; line-height: 1; }
 .lp-facts span { color: var(--muted); font-size: 14px; }
 /* sections */
-.lp-sec { padding: clamp(56px, 8vw, 104px) 0; scroll-margin-top: 64px; }
+.lp-sec { padding: clamp(48px, 6vw, 80px) 0; scroll-margin-top: 64px; }
 .lp-alt { background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .lp-head { display: flex; flex-direction: column; gap: 12px; }
 .lp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
@@ -704,6 +704,34 @@ a.chip-link:hover { border-color: var(--ink); color: var(--ink); }
   .lp-cta, .lp-cta-2 { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .lp-demo-body { animation: none; } }
+/* Landing, trimmed (4 Oct): each space card carries a small sample of the product; the markets are one row of pills;
+   Money's ten tools sit five a row (two on a phone) with one line each. On a phone the hero drops its demo, so the three
+   spaces (each with its own picture) come straight after the first screen. */
+.lp-space .lp-space-art { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 14px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); }
+.lp-check-t { font-size: 20px; }
+.lp-space-big { font-size: 26px; line-height: 1.05; letter-spacing: -.02em; }
+.lp-space-rows { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.lp-space-rows > span { display: flex; justify-content: space-between; gap: 10px; }
+.lp-space-rows b { font-size: 13.5px; font-weight: 600; letter-spacing: 0; }
+.lp-space-go { margin-top: auto; padding-top: 4px; color: var(--blue-ink); font-weight: 600; }
+.lp-space .lp-space-art .badge { font-size: 11px; }
+.lp-sec .lp-markets { display: flex; flex-wrap: wrap; gap: 8px; }
+.lp-markets .lp-market { padding: 6px 14px 6px 6px; gap: 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.lp-markets .lp-sym { width: 32px; height: 32px; border-radius: 50%; font-size: 13px; }
+.lp-money { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.lp-money .lp-beyond-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
+.lp-money .lp-fix { margin-top: auto; font-size: 13px; }
+@media (max-width: 1000px) { .lp-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .lp-hero .lp-demo { display: none; }
+  .lp-tools, .lp-steps, .lp-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
+  .lp-steps, .lp-checks { gap: 10px; }
+  .lp-steps .card, .lp-checks .card { padding: 14px; }
+  .lp-steps b { font-size: 15px; }
+  .lp-num { width: 28px; height: 28px; font-size: 13px; margin-bottom: 0; }
+  .lp-check-t { font-size: 17px; }
+  .lp-tool { padding: 14px 0; }
+}
 
 .vdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--chip); border: 1.5px solid var(--dash); box-sizing: border-box; }
 .vdot.edge { background: var(--blue); border-color: var(--blue); }
@@ -1087,7 +1115,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .lp-spaces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .lp-space { display: flex; flex-direction: column; gap: 6px; color: var(--ink); text-decoration: none; }
 .lp-space:hover { border-color: var(--ink-2); color: var(--ink); }
-.lp-space b { font-size: 28px; font-weight: 400; letter-spacing: -.02em; }
+.lp-space > b { font-size: 28px; font-weight: 400; letter-spacing: -.02em; }
 .lp-space[data-space="trade"] { border-color: var(--blue); }
 .lp-options { border-color: var(--blue); }
 @media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }

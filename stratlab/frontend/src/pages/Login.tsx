@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX, type ReactNode } from "react";
 import { NEXT_PAGE, supabase } from "../lib/api";
 import { money, usePricing } from "../lib/currency";
-import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
+import { FEATURES, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
@@ -40,108 +40,83 @@ const DEMOS: {
 ];
 
 const CHECKS: { title: string; body: string; art: JSX.Element }[] = [
-  { title: "Unseen data", body: "We split the test in two, 70/30, and trade each part with fresh money. An idea that only made money in the earlier years probably fitted the past, not the market.", art: <ArtUnseen /> },
-  { title: "Nearby settings", body: "We re-run your idea with up to 25 small variations of its indicator lengths. If only your exact settings make money, that's a lucky fit, not an edge.", art: <ArtNearby /> },
-  { title: "Bad-luck drawdown", body: "We reshuffle the order of your trades 1,000 times to show how deep the losses could get with worse luck, so a bad run doesn't surprise you.", art: <ArtDrawdown /> },
-  { title: "Enough trades", body: "A handful of wins proves nothing. Under 15 trades, luck dominates; 30 or more is a fair sample. We tell you which side you're on.", art: <ArtTrades /> },
+  { title: "Unseen data", body: "Does it still make money on the 30% of years it was never tuned on?", art: <ArtUnseen /> },
+  { title: "Nearby settings", body: "Do small changes to its settings still work, or only your exact numbers?", art: <ArtNearby /> },
+  { title: "Bad-luck drawdown", body: "How deep could the losses get with worse luck, over 1,000 reshuffles?", art: <ArtDrawdown /> },
+  { title: "Enough trades", body: "Under 15 trades, luck dominates; 30 or more is a fair sample.", art: <ArtTrades /> },
 ];
 
-/* What StratLab does today, in the spaces the page is built around. Facts about the product only: nothing here
- * says what to buy or sell, rates a company or names a data source. */
+/* What StratLab does today, in the spaces the page is built around, one short line each. Facts about the product only:
+ * nothing here says what to buy or sell, rates a company or names a data source. */
 const RESEARCH: [string, string][] = [
-  ["Company pages", "Any Indian (NSE or BSE) or US company: price and chart, key numbers, results against estimates, who owns it, news, and an AI read in plain numbers that ends with ideas you can test."],
-  ["Deep dive", "Ten years of sales, margins, capex and free cash flow, then the business model and plans read from the company's own presentations, calls or annual report, each quote checked against its source. As slides too, PowerPoint or PDF."],
-  ["Report card and checklist", "What management said it would deliver on past calls, checked against the results that followed: met, missed or not due yet. Plus fixed, written-down checks with the number behind each."],
-  ["Results calendar", "When Indian companies hold results board meetings and when US companies report, from a week back to four weeks ahead."],
-  ["Corporate actions", "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date and record date, for your stocks or the whole market."],
-  ["Deals and insider trades", "Promoters', directors' and key staff's own trades and pledges, substantial acquisitions, and the day's bulk and block deals, as filed with the exchange."],
-  ["Surveillance lists", "Which Indian stocks are under ASM or GSM and at which stage, ESM, trade-to-trade, price-band changes and the F&O ban, with what each measure means."],
-  ["Filings and red flags", "Fund raises, promoter pledges, auditor or director resignations, defaults, regulator action and rating downgrades, each linked to the filing."],
-  ["Screens", "Filter companies by sector, size, growth, margins, debt, returns, yield, P/E, Stage, distance from the 52-week high and red-flag filings. Save a screen and get its new matches by email."],
-  ["Stage 2 scan", "Which stocks in your watchlist or a ready-made group are in Stage 2 with the Supertrend up, fresh signals first, and a one-click backtest of the same rules."],
-  ["Sector rotation", "Every sector against the market as Leading, Weakening, Lagging or Improving, with the trail it took, down to each sector's biggest stocks."],
-  ["Market breadth", "How many stocks in a group rose or fell, sit above their 20, 50 and 200-day averages, or made new highs and lows, day by day, with a table by sector."],
-  ["Watchlist at a glance", "Your watchlist with live prices, and each company's trend, sector, red flags, checklist and report card on one screen."],
-  ["Themes, pulse and compare", "Companies grouped by theme, the market's mood today, and two companies side by side."],
-  ["News and markets now", "Past newsletters on News, and which exchanges are open right now, with weekends and holidays."],
-  ["Public company pages", "Every listed Indian and US company has a facts page anyone can open without signing in, and a shared card opens it."],
+  ["Company pages", "Any NSE, BSE or US company: price, key numbers, results, owners and news."],
+  ["Deep dive", "Ten years of numbers, then the business and its plans in its own words."],
+  ["Report card and checklist", "What management promised on past calls, against what followed."],
+  ["Results calendar", "Results meetings and report dates, a week back to four weeks ahead."],
+  ["Corporate actions", "Dividends, bonuses, splits and buybacks by ex-date and record date."],
+  ["Deals and insider trades", "Promoters' and directors' own trades, pledges, bulk and block deals."],
+  ["Surveillance lists", "ASM, GSM, ESM, trade-to-trade and the F&O ban, and what each means."],
+  ["Filings and red flags", "Fund raises, pledges, resignations and defaults, linked to the filing."],
+  ["Screens", "Filter by size, growth, debt, returns and more; new matches by email."],
+  ["Stage 2 scan", "Stocks in Stage 2 with the Supertrend up, fresh signals first."],
+  ["Sector rotation", "Every sector against the market: leading, weakening, lagging, improving."],
+  ["Market breadth", "How many stocks rose, fell, or sit above their 20, 50 and 200-day averages."],
 ];
 
 const PORTFOLIO: [string, string, string][] = [
-  ["My Holdings", "Import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (CSV, Excel or the broker's own export), or any file with a stock and a quantity column, and add US stocks too. See value, gain or loss, sector mix, and each stock's trend, filings, results date and surveillance flags. ETFs, REITs, InvITs and gold bonds keep their own label.", "Seen only by you, deleted in one step"],
-  ["Dividends, bonuses and splits", "Dividends ahead and from the last 12 months on what you hold. A bonus or split since you saved your holdings is offered as a one-click Apply, with Undo, and nothing changes without you.", "Your holdings kept in step"],
-  ["Tax report", "Capital gains on listed Indian shares and funds from your broker's tradebooks and tax P&L files, or the ZIP of them: matched first in, first out, short and long term at the rates of the day, the yearly exemption, 2018 grandfathering and set-off. Add F&O and your other income for the year's total tax under either regime. Download it as CSV or PDF.", "An estimate to check with your CA"],
-  ["Mutual funds", "Upload your CAMS or KFintech consolidated statement (CAS). Each fund's value at the latest NAV, what you put in, the gain, XIRR, your mix by category, and capital gains by financial year. The file and its password are never stored.", "Facts and arithmetic, never fund ratings"],
-  ["Net worth", "Your stocks and funds, plus PF, PPF, NPS, deposits, gold, property and cash you add, minus loans. EMIs, interest this year and what a prepayment would change, a register of your insurance policies, and a monthly history.", "Each value shows how it's worked out"],
-  ["Tax tools", "Dividends with the TDS on them, advance tax due by each date with the interest if it falls short, and how much of this year's long-term exemption is used, lot by lot.", "Dates and totals on every plan"],
-  ["US stocks in Indian tax", "Your US share sales in rupees at the rate the Income-tax Rules use, long or short term under the 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the Schedule FA table.", "For a resident individual"],
-  ["ITR-ready export", "Your year laid out like the ITR-2 and ITR-3 schedules: 112A scrip by scrip, capital gains, dividends, F&O turnover, tax paid and Schedule FA, as a spreadsheet or one PDF for your CA.", "Not a filed return"],
-  ["Money calendar", "Advance tax and return due dates, results and dividends for your stocks, maturities, premiums, EMIs and your own dates in one list. Subscribe from Google or Apple Calendar with a private link.", "Dates only, never advice"],
-  ["Share cards and invites", "Share a company's facts as a card that previews on WhatsApp, X and LinkedIn. Invite friends, both get a month of Basic: once a friend has used StratLab on 3 different days in their first 2 weeks, they get a month free, and so do you for your first 2 such friends a year and your first 2 who subscribe.", "A month of Basic each"],
+  ["My Holdings", "From your broker's file: Zerodha, Groww, Upstox, Angel One and more.", "Seen only by you"],
+  ["Tax report", "Capital gains from your tradebooks or their ZIP, first in, first out.", "An estimate for your CA"],
+  ["Mutual funds", "Your CAMS or KFintech statement: value, XIRR and gains by year.", "Never fund ratings"],
+  ["Net worth", "Stocks, funds, PF, PPF, NPS, deposits, gold and property, minus loans.", "Each value explained"],
+  ["Dividends, bonuses and splits", "What's ahead on what you hold; a bonus or split applied in one click.", "Nothing changes without you"],
+  ["Tax tools", "Dividends with TDS, advance tax by due date, the exemption left.", "Dates and totals"],
+  ["US stocks in Indian tax", "US sales in rupees, the 24-month rule, tax credit and Schedule FA.", "For a resident individual"],
+  ["ITR-ready export", "Your year laid out like the ITR schedules, as a spreadsheet or PDF.", "Not a filed return"],
+  ["Money calendar", "Tax dates, results, dividends, maturities and EMIs in one feed.", "Dates only"],
+  ["Share cards and invites", "Share a company's facts as a card; invite friends for a month of Basic.", "A month of Basic each"],
 ];
 
-/** Trade beyond the backtest: who holds the index derivatives, and your own real trades. */
-const TRADE_MORE: [string, string, string][] = [
-  ["Positioning", "Who holds index and stock futures and options (clients, DIIs, FIIs and proprietary traders), long and short; FII and DII cash flows; and each index's put-call ratio, max pain, open interest by strike and ATM IV.", "The exchange's numbers, as published"],
-  ["Trade journal", "Bring your broker's tradebook or tax P&L, equity and F&O. Every real trade paired into round trips after charges, your notes on each, and the verdict's honesty checks run on what you really did.", "Only you can see it"],
-];
-
+/** The strategy lab beyond the four steps, one line each. */
 const TOOLS: [string, string][] = [
-  ["Plain-English rules", "Write the idea the way you'd say it, or type it into Ask (Ctrl+K). AI turns it into exact rules you can read; tap any word to change it."],
-  ["Real trading costs", "STT, stamp duty, GST, exchange fees, SEC and FINRA fees, UK stamp duty, forex spread and slippage, per market."],
-  ["Long, short and intraday", "Buy, short or both. Stops in %, points, ATR or swing lows, trailing stops, entry windows, square-off and a daily loss cap."],
-  ["20+ indicators", "Moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian breakouts and volume."],
-  ["Walk-forward test", "Re-tune on the past, trade the next stretch the tuning never saw, slide forward, repeat."],
-  ["Whole groups", "One set of rules across NIFTY 50, the F&O stocks, US mega caps, large coins or your own list, with one pot of capital."],
-  ["Options, live", "Straddles, condors, spreads or any structure up to eight legs, paper traded at the real bid and ask, at a set time or on your own rules' signal."],
-  ["Bring any strategy", "A config file, Pine Script, Python, MetaTrader, AmiBroker or plain words, set up as a notebook, a group or an option structure."],
-  ["Paper trading", "Run it live on real prices with fake money, see everything at stake across sessions, and get a short report after each close."],
-  ["Compare experiments", "Every run is saved and numbered. Put two side by side to see what changed and whether it helped."],
-  ["Strategy library", "Rules other people published with the verdict they earned, luck included. Copy one and test it yourself."],
-  ["Share the verdict", "A card with the chart and all four checks, or a public link. Your rules stay private."],
+  ["Real trading costs", "STT, stamp duty, GST, exchange fees and slippage, per market."],
+  ["Long, short and intraday", "Stops in %, points or ATR, trailing stops, square-off, a daily loss cap."],
+  ["Walk-forward test", "Re-tune on the past, trade the stretch the tuning never saw, repeat."],
+  ["Whole groups", "One set of rules on NIFTY 50, the F&O stocks, US mega caps or your list."],
+  ["Options, live", "Any structure up to eight legs at the real bid and ask."],
+  ["Paper trading", "Run it live on real prices with fake money, with a report after each close."],
+  ["Positioning", "Who holds index futures and options, FII and DII flows, PCR and max pain."],
+  ["Trade journal", "Your real trades as round trips after charges, with the same honesty checks."],
+  ["Bring any strategy", "Pine Script, Python, MetaTrader, AmiBroker or plain words."],
+  ["Strategy library", "Rules others published with the verdict they earned. Copy and re-test."],
+  ["Compare experiments", "Every run saved; two side by side show what changed."],
+  ["Share the verdict", "A card or a public link with all four checks. Your rules stay private."],
 ];
 
 const ALERTS: [string, string][] = [
-  ["Stock alerts", "A price level, a big day's move, crossing a moving average, an RSI level, a Stage change or a new 52-week high or low; for Indian stocks, new insider trades, deals and surveillance changes too."],
-  ["Results and corporate actions", "On results day and when the numbers are out, when a company you follow announces a dividend, bonus or split, and the evening before its ex-date."],
-  ["Red flags and scans", "An evening alert when a watchlist company files a red flag, and a daily one when a stock newly lines up in the Stage 2 scan."],
-  ["Market breadth", "When the share of a group's stocks above their 50-day average crosses a level you pick."],
-  ["Paper trades", "Every paper trade as it happens, and a short report a few minutes after each market closes."],
-  ["Advance tax", "A reminder a week and a day before each advance tax due date. Dates only: the amounts stay on the page."],
-  ["Money calendar", "One morning message, 1 to 14 days ahead, for the kinds of dates you pick: tax, your stocks' results and dividends, maturities, premiums and EMIs, and your own."],
-  ["Newsletters", "The Market Brief for India or the US and My Stocks for the companies you follow, daily or weekly, plus a Saturday email of a saved screen's new matches."],
-  ["Where they arrive", "As a notification on your phone (install StratLab from the browser), on Telegram, or by email to an address you confirmed. Every email has a one-click unsubscribe."],
+  ["Stock alerts", "A price, a big move, a moving average, RSI, a Stage change, insider trades or a red flag."],
+  ["Results and corporate actions", "Results day, and dividends, bonuses or splits on stocks you follow."],
+  ["Market breadth", "When a group's share of stocks above the 50-day average crosses your level."],
+  ["Advance tax", "A week and a day before each due date. The amounts stay on the page."],
+  ["Money calendar", "One morning message for the dates you pick: tax, results, EMIs, your own."],
+  ["Newsletters", "The Market Brief and My Stocks, daily or weekly, by email."],
 ];
 
-const MARKETS: [string, string, string][] = [
-  ["₹", "India", "NSE and BSE stocks, indices and F&O"], ["₿", "Crypto", "BTC, ETH and hundreds of pairs"], ["$", "United States", "NYSE and NASDAQ stocks and ETFs"],
-  ["£", "United Kingdom", "London Stock Exchange"], ["€", "Europe", "Xetra and Euronext"], ["¥", "Japan", "Tokyo Stock Exchange"],
-  ["€$", "Forex", "Major and minor currency pairs"], ["₹$", "Indian currency futures", "USDINR, EURINR, GBPINR, JPYINR and cross pairs"],
-  ["₹Au", "Indian commodities", "MCX futures in rupees, in whole lots"], ["$Au", "Global commodities", "COMEX, NYMEX and ICE futures in dollars"],
-  ["+", "Your own data", "Upload any CSV of candles"],
+const MARKETS: [string, string][] = [
+  ["₹", "India"], ["₿", "Crypto"], ["$", "United States"], ["£", "United Kingdom"], ["€", "Europe"], ["¥", "Japan"],
+  ["€$", "Forex"], ["₹$", "Indian currency futures"], ["₹Au", "Indian commodities"], ["$Au", "Global commodities"], ["+", "Your own data (CSV)"],
 ];
 
-const fmt = (v: number | null) => (v == null ? "unlimited" : v.toLocaleString("en-IN"));
-const L = LIMITS;
-
-/** The questions people ask before signing up. Plan numbers come from lib/plans.ts, which a test keeps equal to plans.py. */
+/** The questions people ask before signing up, kept to the few that decide it. Plan details are in Pricing above. */
 const FAQ: [string, string][] = [
   ["Does StratLab tell me what to buy?", "No. It shows facts: reported numbers, filings, prices and how a set of rules would have done in the past. It never says buy, sell or hold, gives no price targets or ratings, and nothing on StratLab is investment advice."],
   ["Does StratLab place real trades?", "No. Testing is on past prices and paper trading uses fake money. No real orders are ever placed."],
   ["Do I need to know how to code?", "No. You describe the idea in plain words. If something is missing, like when to sell, StratLab asks. You can also tap any rule to change it."],
-  ["Where do the numbers come from?", "Indian prices come from a live exchange feed; other markets from established market data sources, some a few minutes behind. Company numbers come from reported results and the companies' own filings with the exchanges and the SEC. Every page with company numbers says how fresh they are."],
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
-  ["Which files can I import?", "For stocks, the holdings export from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities is recognised by itself; any CSV or Excel file with a column for the stock and one for the quantity works too, and US stocks can be added by hand. For mutual funds, the CAMS or KFintech consolidated statement (CAS) as a PDF. For trades and tax, your broker's tradebooks, tax P&L files or the ZIP of them."],
-  ["How does the tax report work?", "Upload your broker's tradebooks or tax P&L files, or the ZIP of them (up to 10 MB a file). StratLab matches buys and sales first in, first out, splits short from long term, applies the rate change of 23 July 2024, the yearly long-term exemption and 2018 grandfathering, and shows intraday trades apart. Add your F&O results and other income, pick the regime, and it estimates the year's total tax. It's an estimate to check with a chartered accountant, not tax advice."],
-  ["Does StratLab file my tax return?", "No. The ITR-ready export lays out your year the way the ITR-2 and ITR-3 schedules ask for it, as a spreadsheet or a PDF for your CA. You or your CA file the return; StratLab files nothing."],
   ["Who can see my money data?", "Only you. Your holdings, funds, net worth, trades and tax figures are kept per account, never shown to anyone else, and each page deletes its data in one step. A mutual fund statement and its password are read once and not stored."],
+  ["Does StratLab file my tax return?", "No. The tax report is an estimate to check with a chartered accountant, and the ITR-ready export lays out your year the way the ITR-2 and ITR-3 schedules ask for it. You or your CA file the return."],
   ["Can I test options strategies?", "You can paper trade them live on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask, at a set time or when a notebook's rules signal. Backtesting options needs real past prices for every strike, so StratLab records the NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX chains every 5 minutes to build that history rather than guess with a pricing model."],
-  ["What is the Positioning page?", "The exchange's own end-of-day numbers: how many index and stock futures and options clients, DIIs, FIIs and proprietary traders held long and short, what FIIs and DIIs bought and sold in the cash market, and facts from each index's option chain (put-call ratio, max pain, open interest by strike and ATM IV). It describes positions that were open; it says nothing about what anyone will do next."],
-  ["What does it cost?", `Free to start: ${L.free.backtests_per_month} backtests and ${L.free.ai_builds_per_month} AI strategy builds a month, 5 market days of paper trading, ${L.free.deepdives_per_month} deep dives a month, ${L.free.stock_alerts} stock alerts, ${L.free.screens} saved screens, ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds, the tax report and the money calendar. Basic (₹${PRICE.basic[0].toLocaleString("en-IN")} a month or ₹${PRICE.basic[1].toLocaleString("en-IN")} a year, including GST) adds every indicator, ${fmt(L.basic.backtests_per_month)} backtests, group and options paper trading, trade notifications, ${L.basic.deepdives_per_month} deep dives, the Stage 2 scan, daily newsletters, the full trade journal, positioning and breadth history, every fund and net worth entry, and money reminders. Pro (₹${PRICE.pro[0].toLocaleString("en-IN")} a month or ₹${PRICE.pro[1].toLocaleString("en-IN")} a year) adds ${fmt(L.pro.backtests_per_month)} backtests and deep dives, ${L.pro.live_limit} paper sessions at once, Indian F&O, options on your own signals, export, advance tax amounts, US stocks in Indian tax and the ITR-ready export.`],
   ["How do invite rewards work?", "Invite friends, both get a month of Basic. Your invite link is in Account. When a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a month (about a week extra). If you already pay, your free time is kept and starts if your paid plan ever stops."],
-  ["Can I read a company's facts without signing in?", "Yes. Every listed Indian and US company has a public facts page at stratlab.studio/stocks/in/SYMBOL or /stocks/us/SYMBOL, and a shared company card opens it too."],
   ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon and sends alerts as notifications."],
-  ["Does it know market holidays?", "Yes. Exchange holidays in India, the US, UK, Europe and Japan are built in: the markets panel shows weekends and holidays, the daily report skips them, and they don't count toward the free trial."],
 ];
 
 /** Sign in with Google; `next` is the page to open once signed in. */
@@ -155,11 +130,11 @@ function signIn(next?: string) {
 const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], ["money", "Money"],
   ["alerts", "Alerts"], ["pricing", "Pricing"], ["faq", "FAQ"]];
 
-/** The three spaces, one line each, in the order the page tells them. */
+/** The three spaces, one line and one small picture of the product each, in the order the page tells them. */
 const SPACES: [string, string, string, string][] = [
-  ["trade", "Trade", "The strategy lab", "Describe a trading idea in plain words, test it on years of real prices after real costs with four honesty checks, paper trade it or an option structure with fake money, and keep a journal of your real trades."],
-  ["invest", "Invest", "Research", "Any Indian or US company from its own filings: ten years of numbers, results dates, corporate actions, deals, surveillance lists, red flags, screens, market breadth and your watchlist."],
-  ["money", "Money", "What you own", "Your holdings, mutual funds and net worth from your own files, capital gains and the year's tax estimate, US stocks in Indian tax, an ITR-ready export and a money calendar."],
+  ["trade", "Trade", "The strategy lab", "Test a trading idea on years of real prices, then paper trade it."],
+  ["invest", "Invest", "Research", "Any Indian or US company from its own numbers and filings."],
+  ["money", "Money", "What you own", "Holdings, funds, net worth and the year's tax, from your files."],
 ];
 
 /** A section's eyebrow, heading and one line under it. */
@@ -203,26 +178,18 @@ export function Login() {
       <main>
       <section id="top" className="lp-hero ruled">
         <div className="lp-wrap lp-hero-grid">
-          <div className="stack" style={{ gap: 24 }}>
+          <div className="stack" style={{ gap: 22 }}>
             <span className="eyebrow">Trade · Invest · Money · Indian and US stocks</span>
             <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>
-            <p className="serif lp-lede">Your money in one place. Test a trading idea or an option structure on years of real prices before your money does, research any Indian or US company from its own filings, and keep your holdings, funds, net worth and tax together.</p>
+            <p className="serif lp-lede">One place for trading ideas, company research and your own money. Facts and honest tests, never tips.</p>
             <div className="row wrap" style={{ gap: 12 }}>
               {cta()}
-              <a className="btn quiet lp-cta-2" href="#trade">See what's inside</a>
+              <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>
             </div>
             {error && <p className="banner" role="alert">{error}</p>}
-            <p className="small muted">Free to start · No card · No code · Facts, never tips · Paper trading only, no real orders</p>
+            <p className="small muted">Free to start · No card · No code · Paper trading only, no real orders</p>
           </div>
           <HeroDemo />
-        </div>
-      </section>
-
-      <section className="lp-band" aria-label="StratLab in numbers">
-        <div className="lp-wrap lp-facts">
-          {[["10 yrs", "of numbers on Indian and US companies"], ["4", "honesty checks on every backtest"], ["10", "markets to test on, plus your own data"], ["₹0", "to start, no card needed"]].map(([n, t]) => (
-            <div key={t}><b className="serif">{n}</b><span>{t}</span></div>
-          ))}
         </div>
       </section>
 
@@ -233,87 +200,67 @@ export function Login() {
             {SPACES.map(([id, name, sub, what]) => (
               <a key={id} href={`#${id}`} className="card lp-space" data-space={id}>
                 <span className="eyebrow">{sub}</span><b className="serif">{name}</b><p className="small muted">{what}</p>
+                <SpaceArt space={id} />
+                <span className="small lp-space-go">See {name} ↓</span>
               </a>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="trade" className="lp-sec">
-        <div className="lp-wrap stack" style={{ gap: 40 }}>
+      <section id="trade" className="lp-sec lp-alt">
+        <div className="lp-wrap stack" style={{ gap: 36 }}>
           <Head eyebrow="Trade · the strategy lab" title="From a sentence to an honest verdict.">
-            Most backtests are tuned until the curve looks good. StratLab tests the idea on years of real prices after real costs, then asks whether you should believe the result.
+            Most backtests are tuned until the curve looks good. StratLab tests the idea on real prices after real costs, then checks whether the result holds up.
           </Head>
           <ol className="lp-steps">
-            <li className="card"><span className="lp-num">1</span><b>Describe it</b><p className="small muted">"Buy Reliance when it's above its 200-day average and RSI crosses 50." Pick the market, or let StratLab find the stock in your sentence.</p></li>
-            <li className="card"><span className="lp-num">2</span><b>Check the rules</b><p className="small muted">The idea becomes plain-English rules. Tap any highlighted word to change an indicator, a number or the stop loss.</p></li>
-            <li className="card"><span className="lp-num">3</span><b>Get the verdict</b><p className="small muted">Years of real prices, real costs and four honesty checks. Every number has an (i) that explains it.</p></li>
-            <li className="card"><span className="lp-num">4</span><b>Improve, or paper trade</b><p className="small muted">Change one thing and run again, compare the two, and when it holds up, run it live with fake money.</p></li>
+            <li className="card"><span className="lp-num">1</span><b>Describe it</b><p className="small muted">"Buy Reliance when it's above its 200-day average and RSI crosses 50."</p></li>
+            <li className="card"><span className="lp-num">2</span><b>Check the rules</b><p className="small muted">Plain-English rules. Tap any highlighted word to change it.</p></li>
+            <li className="card"><span className="lp-num">3</span><b>Get the verdict</b><p className="small muted">Years of real prices, real costs and four honesty checks.</p></li>
+            <li className="card"><span className="lp-num">4</span><b>Paper trade it</b><p className="small muted">When it holds up, run it live with fake money.</p></li>
           </ol>
 
-          <div className="card lp-travel lp-options">
-            <div className="stack" style={{ gap: 8 }}>
-              <span className="eyebrow">Options</span>
-              <b className="serif" style={{ fontSize: 24 }}>Paper trade option structures on live prices.</b>
-              <p className="small muted" style={{ maxWidth: "60ch" }}>Straddles, strangles, iron flies, condors, spreads or any structure up to eight legs on NSE, BSE, MCX and NSE currency options, filled at the real bid and ask, at a set time or when a notebook's rules signal. Fake money, real prices.</p>
-            </div>
-            <span className="lp-fix">No real orders, ever</span>
-          </div>
-
-          <div className="lp-grid2">
-            {TRADE_MORE.map(([t, b, tag]) => (
-              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
-            ))}
-          </div>
-
-          <div id="checks" className="stack lp-anchor" style={{ gap: 20 }}>
+          <div id="checks" className="stack lp-anchor" style={{ gap: 18 }}>
             <h3 className="serif lp-h3">Four questions every strategy has to answer.</h3>
             <div className="lp-checks">
               {CHECKS.map((c) => (
                 <div key={c.title} className="card lp-check">
                   <div className="lp-art" aria-hidden="true">{c.art}</div>
-                  <b className="serif" style={{ fontSize: 21 }}>{c.title}</b>
+                  <b className="serif lp-check-t">{c.title}</b>
                   <p className="small muted">{c.body}</p>
                 </div>
               ))}
             </div>
-            <div className="card lp-travel">
-              <div className="stack" style={{ gap: 8 }}>
-                <span className="eyebrow">And one more</span>
-                <b className="serif" style={{ fontSize: 24 }}>Does it work on similar stocks?</b>
-                <p className="small muted" style={{ maxWidth: "52ch" }}>One tap runs your exact rules on about 10 well-known names from the same market and counts how many make money. Real patterns travel. Lucky charts don't.</p>
-              </div>
-              <div className="lp-dots" aria-label="7 of 10 similar instruments profitable">
-                {Array.from({ length: 10 }, (_, i) => <span key={i} className={i < 7 ? "on" : ""} />)}
-                <small className="mono">7 of 10 made money</small>
-              </div>
-            </div>
           </div>
 
-          <div className="stack" style={{ gap: 20 }}>
-            <h3 className="serif lp-h3">Everything a serious test needs.</h3>
-            <div className="lp-tools">
-              {TOOLS.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
+          <div className="card lp-travel lp-options">
+            <div className="stack" style={{ gap: 6 }}>
+              <span className="eyebrow">Options</span>
+              <b className="serif" style={{ fontSize: 24 }}>Paper trade option structures on live prices.</b>
+              <p className="small muted" style={{ maxWidth: "60ch" }}>Straddles, strangles, condors or any structure up to eight legs, filled at the real bid and ask.</p>
             </div>
+            <span className="lp-fix">No real orders, ever</span>
           </div>
 
-          <div id="markets" className="stack lp-anchor" style={{ gap: 20 }}>
+          <div className="lp-tools">
+            {TOOLS.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
+          </div>
+
+          <div id="markets" className="stack lp-anchor" style={{ gap: 14 }}>
             <h3 className="serif lp-h3">Test where you trade.</h3>
-            <p className="lp-p">Each market uses its own trading hours, currency, holidays, and the fees and taxes you'd actually pay there.</p>
+            <p className="lp-p">Each market with its own hours, currency, holidays, fees and taxes.</p>
             <div className="lp-markets">
-              {MARKETS.map(([s, n, d]) => (
-                <div key={n} className="card lp-market"><span className="lp-sym serif">{s}</span><div><b>{n}</b><p className="small muted">{d}</p></div></div>
-              ))}
+              {MARKETS.map(([sym, n]) => <div key={n} className="lp-market"><span className="lp-sym serif" aria-hidden="true">{sym}</span><b>{n}</b></div>)}
             </div>
           </div>
         </div>
       </section>
 
-      <section id="invest" className="lp-sec lp-alt">
-        <div className="lp-wrap stack" style={{ gap: 40 }}>
+      <section id="invest" className="lp-sec">
+        <div className="lp-wrap stack" style={{ gap: 36 }}>
           <div className="lp-split">
             <Head eyebrow="Invest · research" title="Start with any company, Indian or US.">
-              Everything comes from reported numbers, exchange filings and the company's own documents. Plain numbers, never scores, ratings or calls on the stock.
+              Reported numbers, exchange filings and the company's own documents. Plain numbers, never scores, ratings or calls on the stock.
             </Head>
             <ResearchMock />
           </div>
@@ -323,12 +270,12 @@ export function Login() {
         </div>
       </section>
 
-      <section id="money" className="lp-sec">
+      <section id="money" className="lp-sec lp-alt">
         <div className="lp-wrap stack" style={{ gap: 32 }}>
           <Head eyebrow="Money" title="What you own, and what it means at tax time.">
-            Bring the files you already have: your broker's exports and your mutual fund statement. StratLab reads them, keeps them private, and reports facts and arithmetic about what you own.
+            Bring the files you already have. StratLab keeps them private and reports facts and arithmetic about what you own.
           </Head>
-          <div className="lp-grid2">
+          <div className="lp-money">
             {PORTFOLIO.map(([t, b, tag]) => (
               <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
             ))}
@@ -336,10 +283,10 @@ export function Login() {
         </div>
       </section>
 
-      <section id="alerts" className="lp-sec lp-alt">
+      <section id="alerts" className="lp-sec">
         <div className="lp-wrap stack" style={{ gap: 32 }}>
           <Head eyebrow="Alerts" title="Hear about it when it happens.">
-            Pick what matters to you and where it should reach you. Alerts report what happened, never what to do about it.
+            On your phone, on Telegram or by email, including every paper trade. Alerts report what happened, never what to do about it.
           </Head>
           <div className="lp-tools lp-tools-3">
             {ALERTS.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
@@ -363,7 +310,7 @@ export function Login() {
       <section className="lp-final ruled">
         <div className="lp-wrap stack" style={{ gap: 20, alignItems: "center", textAlign: "center" }}>
           <h2 className="serif lp-h2" style={{ maxWidth: "18ch" }}>Find out before your money does.</h2>
-          <p className="lp-p">Sign in with Google, no card needed. A short first-steps list on your home page walks you through a backtest, a watchlist, a deep dive, paper trading and alerts.</p>
+          <p className="lp-p">Sign in with Google, no card needed. Your home page shows the first steps.</p>
           {cta("Continue with Google")}
         </div>
       </section>
@@ -392,7 +339,7 @@ function Pricing() {
     <section id="pricing" className="lp-sec">
       <div className="lp-wrap stack" style={{ gap: 32 }}>
         <Head eyebrow="Pricing" title="Free to start. Pay when you need more.">
-          Every market, company pages, deep dives, screens, today's positioning and breadth, My Holdings, the tax report and the money calendar are on the Free plan. Paid plans raise the limits and add the scans, alerts, live tools, history and the deeper tax tools. Cancel any time.
+          Every market and every space is on the Free plan. Paid plans raise the limits and add the scans, alerts, live tools, history and the deeper tax tools. Cancel any time.
         </Head>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
@@ -460,6 +407,39 @@ function HeroDemo() {
           <span className="tiny muted">Sample result</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** A small picture of each space as it looks inside (sample figures), so the three choices show, not tell. */
+function SpaceArt({ space }: { space: string }) {
+  if (space === "trade") return (
+    <div className="lp-space-art" aria-hidden="true">
+      <span className="tiny muted mono">BTC/USD · 61 trades</span>
+      <span className="serif lp-space-big" style={{ color: "var(--blue)" }}>Likely a real edge.</span>
+      <span className="row wrap" style={{ gap: 4 }}>
+        {(["pass", "pass", "warn", "pass"] as Status[]).map((st, k) => <span key={k} className={`badge ${st}`}>{["Unseen", "Nearby", "Drawdown", "Trades"][k]}</span>)}
+      </span>
+    </div>
+  );
+  if (space === "invest") return (
+    <div className="lp-space-art" aria-hidden="true">
+      <span className="tiny muted mono">NSE · RELIANCE</span>
+      <span className="lp-space-rows">
+        <span><span className="muted">Sales, 3 years</span><b className="num">+11.2% a year</b></span>
+        <span><span className="muted">Debt to equity</span><b className="num">0.41</b></span>
+        <span><span className="muted">Results</span><b className="num">18 Oct</b></span>
+      </span>
+    </div>
+  );
+  return (
+    <div className="lp-space-art" aria-hidden="true">
+      <span className="tiny muted mono">My Holdings · 6 stocks</span>
+      <span className="lp-space-rows">
+        <span><span className="muted">Value</span><b className="num">₹7,10,215</b></span>
+        <span><span className="muted">Gain or loss</span><b className="num" style={{ color: "var(--blue)" }}>+₹4,49,403</b></span>
+        <span><span className="muted">Tax this year (estimate)</span><b className="num">₹12,480</b></span>
+      </span>
     </div>
   );
 }
