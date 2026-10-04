@@ -88,6 +88,16 @@ def not_operating(name: str | None) -> bool:
     return bool(NOT_OPERATING.search(str(name or "")))
 
 
+# a ticker's suffix that marks a preferred share, warrant, unit or right, never the common stock: AHL-PD, BAC.PRL,
+# ACON-W, ALFU-U, XYZ-RT. Share classes of the common stock (BRK-A, BRK-B) are left alone.
+NON_COMMON = re.compile(r"[-.](?:P[A-Z]?|PR[A-Z]?|W[A-Z]?|WT[A-Z]?|WS[A-Z]?|U|UN|R|RT|RI)$")
+
+
+def non_common(t: str) -> bool:
+    """A preferred share, warrant, unit or right by its ticker alone, whether or not its common stock is listed too."""
+    return bool(NON_COMMON.search(str(t or "").upper()))
+
+
 def derived_ticker(t: str, siblings: list[str]) -> bool:
     """A preferred share, warrant, right or unit of a company whose main ticker is also listed: AHL-PD beside AHL,
     ACONW beside ACON, ALFUU beside ALFU."""

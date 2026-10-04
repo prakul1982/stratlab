@@ -1488,12 +1488,16 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
         p["insider"] = None
     cut = (datetime.now(IST).date() - timedelta(days=366 * years)).isoformat()
     docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
-    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": price_trend(sym, "US")}
+    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": price_trend(sym, "US"),
+            "quote": {"price": m.get("price"), "prev_close": m.get("prev_close")} if m.get("price") else None}
 
 
 def deep_years(years: int) -> int:
     lo, hi = report_card.YEARS
     return max(lo, min(hi, int(years or 2)))
+
+
+BSE_WAIT = "Documents are not available from BSE right now (it is turning requests away). Try again later."
 
 
 def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True) -> dict:
@@ -1511,7 +1515,9 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
         items = filings_feed.announcements(sym, max(deepdive.DOC_DAYS, 366 * years))
         doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:
-        items, doc_note, fsum = [], public_text(str(e)), None
+        # a company listed only on BSE, and BSE turning this server away: its documents wait, they aren't missing
+        note = BSE_WAIT if code and getattr(e, "busy", False) else str(e)
+        items, doc_note, fsum = [], public_text(note), None
     insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
     trend, why = price_status(sym)
     cut = (datetime.now(IST) - timedelta(days=366 * years)).strftime("%Y-%m-%dT%H:%M")
@@ -3329,12 +3335,14 @@ market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: b
 def _sec_companies() -> list[dict]:
     """Every operating company that files with the SEC, once each: its main ticker, not its preferred shares,
     warrants, rights or units (the SEC lists those too, under the same company: ACON's warrant is ACONW, its preferred
-    ACON-PA). Funds, ETFs, commodity trusts and blank-check companies (SPACs) are left out, as BSE's debt and ETF
-    codes are in India: they have no business to check."""
+    ACON-PA). A company whose only tickers are preferred shares and the like (AHL-PD, once its common stock left the
+    exchange) is left out too: there's no common stock to check. Funds, ETFs, commodity trusts and blank-check
+    companies (SPACs) are left out, as BSE's debt and ETF codes are in India: they have no business to check."""
     names = sec_feed.tickers()
     by_cik: dict[int, list[str]] = {}
     for t, v in names.items():
-        by_cik.setdefault(v["cik"], []).append(t)
+        if not sec.non_common(t):
+            by_cik.setdefault(v["cik"], []).append(t)
     out = []
     for tickers in by_cik.values():
         if sec.not_operating(names[tickers[0]]["name"]):
@@ -3355,22 +3363,50 @@ def market_for(region: str):
 def admin_market_audit(region: str = "IN", _=Depends(admin.admin_profile)):
     """The whole-market audit: new listings in India, NSE and BSE-only (or new SEC filers), checked in the background
     while switched on."""
-    return market_for(deep_region(region)).status()
+    return market_status(deep_region(region))
+
+
+def bse_waiting(rows: list[dict]) -> int:
+    """Companies listed only on BSE whose documents are waiting because BSE turned the request away."""
+    return sum(1 for r in rows if str(r.get("symbol") or "").startswith("BSE:")
+               and any(i.get("level") == "pending" and i.get("area") == "Documents" for i in r.get("issues") or []))
+
+
+def market_status(region: str) -> dict:
+    """The whole-market audit's state, and for India whether BSE is turning this server away and how many companies
+    listed only there are waiting for their documents."""
+    out = market_for(region).status()
+    if region == "IN":
+        bse = getattr(filings_feed, "bse", None)
+        live = bse.state() if hasattr(bse, "state") else {}
+        out["bse"] = {**live, "waiting": bse_waiting(out.get("rows") or [])}
+    return out
 
 
 @app.post("/admin/audit/market")
 def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
-    """Switch the whole-market audit on or off, re-read the exchange's list now, or check every company once."""
+    """Start or pause the whole-market audit, reset it and check every company again from nothing, re-read the
+    exchange's list now, re-check the companies not checked yet or one company, or switch the monthly check."""
     m = market_for(req.region)
     if req.on is not None:
         m.set_enabled(req.on)
-    if req.full:
+    if req.monthly is not None:
+        m.set_monthly(req.monthly)
+    if req.reset:                     # every result cleared; the list read again so it starts from today's market
+        m.reset()
+        threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()
+    elif req.full:
         m.start_full()
     if req.retry:                     # only the companies a source turned away last time (the exchange refusing filings)
         m.start_full(pending=True)
-    if req.read_list:
+    if req.read_list and not req.reset:
         threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()
-    return m.status()
+    if req.recheck:
+        try:
+            m.recheck(req.recheck.strip())
+        except KeyError:
+            err(404, "not_listed", "That company isn't on the market's list.")
+    return market_status(req.region)
 
 
 @app.get("/admin/audit")

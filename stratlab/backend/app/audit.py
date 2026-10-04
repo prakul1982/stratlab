@@ -69,7 +69,8 @@ LEVELS = ("mismatch", "error", "gap", "fact", "pending")
 # a source turning us away or not answering: the company wasn't checked, nothing is wrong with it
 RETRY_LATER = re.compile(r"refused the request|isn't answering|is busy|having trouble|rate limiting|sent a page instead|"
                          r"sent something that isn't data|couldn't reach|server disconnected|unknown content-type|"
-                         r"service unavailable|bad gateway|gateway time|timed? ?out|connection (?:reset|aborted)", re.I)
+                         r"service unavailable|bad gateway|gateway time|timed? ?out|connection (?:reset|aborted)|"
+                         r"not available from BSE right now", re.I)
 
 
 def _issue(level: str, area: str, detail: str) -> dict:
@@ -164,10 +165,12 @@ def _near(ours: float, other: float) -> bool:
     return off is None or off <= PRICE_TOLERANCE or abs(ours - other) <= PRICE_TICK
 
 
-def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = None) -> list[dict]:
+def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = None, page_quote=None) -> list[dict]:
     """Our last daily close against the exchange's quote and the company page. `exchange` is the quote's last price,
     or (last price, previous close): a thinly traded stock's close can be a day older than its last trade, or BSE's
     closing price (an average of the last half hour) rather than the last trade, so either agreeing is a match.
+    `page_quote` is the company page's own (last price, previous close) when it has them (US): the page's price can
+    be today's while our last daily close is yesterday's, so its previous close counts too, as the exchange's does.
     `why` says why there's no trend when there isn't one ("new", "untraded", "stale" or "error")."""
     out = []
     if not trend:
@@ -180,8 +183,11 @@ def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = Non
     quote = [x for x in (exchange if isinstance(exchange, (list, tuple)) else [exchange]) if x]
     if ours is not None and quote and not any(_near(ours, q) for q in quote):
         out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {quote[0]:,.2f} on the exchange's live quote"))
-    elif ours is not None and snap.get("price") and not _near(ours, snap["price"]):
-        out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {snap['price']:,.2f} on the company page"))
+    elif ours is not None and snap.get("price"):
+        page = [x for x in (page_quote or ()) if x] or [snap["price"]]
+        if not any(_near(ours, q) for q in page):
+            prev = f" (previous close {page[1]:,.2f})" if len(page) > 1 else ""
+            out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {page[0]:,.2f} on the company page{prev}"))
     return out
 
 
@@ -380,7 +386,9 @@ def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None) ->
                 why = str(e)[:120] or e.__class__.__name__
                 issues.append(_later("Prices", f"the exchange's quote couldn't be read ({why})") if RETRY_LATER.search(why)
                               else _issue("error", "Prices", f"Exchange price unavailable: {why}"))
-        issues += check_prices(view.get("snapshot") or {}, base.get("trend"), ex, base.get("trend_why"))
+        q = base.get("quote") or {}
+        issues += check_prices(view.get("snapshot") or {}, base.get("trend"), ex, base.get("trend_why"),
+                               (q.get("price"), q.get("prev_close")) if q else None)
         issues += check_view(view, base.get("meets"))
         if read and view.get("documents"):
             issues += check_documents(view["documents"], lambda c, pr: read(c, pr, p))
@@ -476,11 +484,18 @@ class Runner:
 
 
 MARKET = "audit:market"        # settings keys: the switch and list state, the list itself, and results in shards
-RETRY_HOURS = 6                # a check that failed because a source was down is tried again after this long
-MAX_TRIES = 3                  # ...this many times in all, then it is left as it is
+RETRY_HOURS = 1                # a check a source turned away is tried again no sooner than this
+MAX_TRIES = 3                  # an error from an unreachable source is tried this many times in all; "not checked
+                               # yet" (a source refusing us) is tried for as long as it takes, at the slow pace below
+RETRY_BATCH = 20               # retries go in small batches: this many, then a pause of RETRY_GAP hours...
+RETRY_GAP = 1
+RETRY_GAP_MAX = 24             # ...doubled (up to a day) each time a whole batch is turned away again
 TRANSIENT_AREAS = {"Company page", "Prices", "Audit"}      # errors from a source being unreachable, not from the data
+BLOCKING_AREAS = {"Company page", "Audit"}                 # the whole check failed: slow down. Documents alone don't
 NEW_DAYS = 30                  # listed (or first seen on the list) within this many days: checked
 LIST_EVERY = 86400             # re-read the exchange's list of companies once a day
+SHARDS = [*"ABCDEFGHIJKLMNOPQRSTUVWXYZ0", *(f"bse{d}" for d in "0123456789")]
+COOL_MAX = 1800                # a source turning every company away: wait up to half an hour between checks
 
 
 def _shard(sym: str, key: str = MARKET) -> str:
@@ -496,15 +511,40 @@ def _transient(row: dict) -> bool:
                for i in row.get("issues") or [])
 
 
-COOL_MAX = 1800                # a source turning every company away: wait up to half an hour between checks
+def _blocked(row: dict) -> bool:
+    """The whole check was turned away (the company page or the check itself), not just one part such as documents."""
+    return any(i.get("level") in ("pending", "error") and i.get("area") in BLOCKING_AREAS for i in row.get("issues") or [])
+
+
+def _retry_forever(row: dict) -> bool:
+    """A source refused us (not checked yet): tried again for as long as it takes, at the batches' pace."""
+    return any(i.get("level") == "pending" for i in row.get("issues") or [])
+
+
+def india_tz():
+    """India time: the monthly check runs on the 1st there."""
+    from zoneinfo import ZoneInfo
+    return ZoneInfo("Asia/Kolkata")
+
+
+def next_month_start(now: datetime) -> str:
+    """The 1st of the month after `now`, as "2026-11-01"."""
+    y, m = (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+    return f"{y:04d}-{m:02d}-01"
+
+
+def _fresh_retry() -> dict:
+    return {"next": None, "gap": RETRY_GAP, "left": RETRY_BATCH, "tried": 0, "refused": 0}
 
 
 class MarketAudit:
-    """New listings, checked in the background as they appear. The exchange's list is read once a day; a company that
-    listed (or first showed up on the list) in the last NEW_DAYS days is checked once, a delisted company is dropped,
-    and a check that failed only because a source was down is tried again. The thousands of companies already listed
-    are not re-run: going through a whole market takes more than a day and its storage. Each result is saved as it
-    finishes, so a restart carries on where it stopped. Gives way while a hand-started audit runs."""
+    """Every listed company, checked in the background. The exchange's list is read once a day; a company that listed
+    (or first showed up on the list) in the last NEW_DAYS days is checked once, a delisted company is dropped, and a
+    check a source turned away is tried again in small hourly batches (slower while the source keeps refusing).
+    A full check of every company runs on the 1st of each month (India time), or when started by hand; a reset
+    clears every result and starts one from nothing. Each result is saved as it finishes, so a restart carries on
+    where it stopped, and the month's run is marked in the database so a restart doesn't repeat it. Gives way while
+    a hand-started audit runs."""
 
     def __init__(self, list_fn, check_fn, busy_fn=lambda: False, pause: float = 3.0, key: str = MARKET):
         self.list_fn, self.check_fn, self.busy_fn, self.pause, self.key = list_fn, check_fn, busy_fn, pause, key
@@ -525,7 +565,7 @@ class MarketAudit:
         try:
             self.state.update(json.loads(db.get_setting(self.key) or "{}"))
             self.listing = json.loads(db.get_setting(f"{self.key}:list") or "{}")
-            for c in [*"ABCDEFGHIJKLMNOPQRSTUVWXYZ0", *(f"bse{d}" for d in "0123456789")]:
+            for c in SHARDS:
                 self.rows.update(json.loads(db.get_setting(f"{self.key}:rows:{c}") or "{}"))
             us = self.key.endswith("-us")
             for row in self.rows.values():          # older checks, read with today's rules
@@ -549,15 +589,35 @@ class MarketAudit:
             print("could not save the market audit:", e)
 
     # control
+    def _begin_full(self, everything: bool = True, pending: bool = False):
+        """Start a full check (the lock held)."""
+        self.state.update(full_since=datetime.now(timezone.utc).isoformat(), full_done=None, full_all=everything,
+                          full_pending=pending)
+        self._save("state")
+
     def start_full(self, everything: bool = True, pending: bool = False):
         """Check listed companies once, then go back to new listings: every one of them again (results stay until
         each is replaced), with everything=False only those never checked, or with pending=True only those a source
         turned away last time (an exchange refusing the documents step), however many times they were tried."""
         with self.lock:
             self._load()
-            self.state.update(full_since=datetime.now(timezone.utc).isoformat(), full_done=None, full_all=everything,
-                              full_pending=pending)
-            self._save("state")
+            self._begin_full(everything, pending)
+
+    def reset(self):
+        """Clear every stored result and start a full check from nothing, switched on. The list stays (the caller
+        re-reads it); the monthly marker stays, so this doesn't move the next monthly check."""
+        import json
+        with self.lock:
+            self._load()
+            self.rows.clear()
+            self.secs, self.cool = [], 0.0
+            self.state.update(enabled=True, reset_at=datetime.now(timezone.utc).isoformat(), retry=_fresh_retry())
+            self._begin_full(everything=True)
+            for c in SHARDS:
+                try:
+                    db.set_setting(f"{self.key}:rows:{c}", json.dumps({}))
+                except Exception as e:
+                    print("could not clear the market audit:", e)
 
     def full_once(self):
         """The first time this runs: every company not checked yet, once, so the whole market starts out checked.
@@ -567,6 +627,31 @@ class MarketAudit:
             started = self.state.get("full_since") or self.state.get("full_done")
         if not started:
             self.start_full(everything=False)
+
+    def set_monthly(self, on: bool):
+        with self.lock:
+            self._load()
+            self.state["monthly"] = bool(on)
+            self._save("state")
+
+    def monthly(self, now: datetime | None = None) -> bool:
+        """On the 1st of each month (India time), start a full check of every company, once: the month it ran is
+        saved, so a restart that day doesn't start it again. The very first time it only marks this month, so a
+        deploy mid-month doesn't start one straight away. True when it started one."""
+        month = (now or datetime.now(india_tz())).strftime("%Y-%m")
+        with self.lock:
+            self._load()
+            if not self.state.get("monthly", True):
+                return False
+            last = self.state.get("monthly_run")
+            if last and last >= month:
+                return False
+            self.state["monthly_run"] = month
+            if not last:
+                self._save("state")
+                return False
+            self._begin_full(everything=True)
+            return True
 
     def _full_left(self) -> list[str]:
         since = self.state.get("full_since")
@@ -621,28 +706,81 @@ class MarketAudit:
         except ValueError:
             return False
 
-    def queue(self) -> list[str]:
-        """Companies due a check, in order: new listings not yet checked (newest first), failed checks to retry, then
-        (during a full check) every company not yet checked since it started."""
-        now = datetime.now(timezone.utc)
-        today = now.date()
-        retry_cut = (now - timedelta(hours=RETRY_HOURS)).isoformat()
-        new, retry = [], []
-        for sym, info in self.listing.items():
+    def _retry(self) -> dict:
+        r = self.state.get("retry")
+        if not isinstance(r, dict):
+            r = self.state["retry"] = _fresh_retry()
+        return r
+
+    def waiting(self, now: datetime | None = None) -> list[str]:
+        """Companies a source turned away that are due another try, oldest first: at least RETRY_HOURS since the
+        last, and (an error rather than a refusal) fewer than MAX_TRIES tries so far."""
+        cut = ((now or datetime.now(timezone.utc)) - timedelta(hours=RETRY_HOURS)).isoformat()
+        out = []
+        for sym in self.listing:
             row = self.rows.get(sym) or {}
             at = row.get("at")
-            if not at:
-                if self._is_new(sym, today):
-                    new.append((info.get("listed") or info.get("seen") or "", sym))
-            elif _transient(row) and (row.get("tries") or 1) < MAX_TRIES and at < retry_cut:
-                retry.append((at, sym))           # a source was down or busy: try again later
-        first = [s for _, s in sorted(new, reverse=True)] + [s for _, s in sorted(retry)]
+            if at and at < cut and _transient(row) and (_retry_forever(row) or (row.get("tries") or 1) < MAX_TRIES):
+                out.append((at, sym))
+        return [s for _, s in sorted(out)]
+
+    def _retries_now(self, now: datetime) -> list[str]:
+        """The retries allowed right now: the rest of this batch, or none while the batches are resting."""
+        r = self._retry()
+        if r.get("next") and now.isoformat() < r["next"]:
+            return []
+        return self.waiting(now)[:max(0, int(r.get("left") or 0))]
+
+    def queue(self) -> list[str]:
+        """Companies due a check, in order: new listings not yet checked (newest first), this batch of checks to
+        retry, then (during a full check) every company not yet checked since it started."""
+        now = datetime.now(timezone.utc)
+        today = now.date()
+        new = []
+        for sym, info in self.listing.items():
+            if not (self.rows.get(sym) or {}).get("at") and self._is_new(sym, today):
+                new.append((info.get("listed") or info.get("seen") or "", sym))
+        first = [s for _, s in sorted(new, reverse=True)] + self._retries_now(now)
         taken = set(first)
         return first + [s for s in self._full_left() if s not in taken]
+
+    def _store(self, sym: str, row: dict, retried: bool = False):
+        """Save one finished check (the lock held). A retry counts against its batch; when the batch is through, the
+        retries rest an hour, or twice as long as last time when the whole batch was turned away again."""
+        row["at"] = datetime.now(timezone.utc).isoformat()
+        info = self.listing.get(sym) or {}
+        if info.get("name") and row.get("name") in (None, "", sym, sym.split(":")[-1]):
+            row["name"] = info["name"]          # the check failed before the company's name was read
+        prev = self.rows.get(sym) or {}
+        row["tries"] = (prev.get("tries") or 1) + 1 if _transient(prev) and _transient(row) else 1
+        # the whole check turned away: slow down (doubling, up to half an hour) until the source answers again. One
+        # part refused (documents from an exchange that turns this server away) waits for the hourly retries instead
+        self.cool = min(COOL_MAX, max(60.0, self.cool * 2)) if _blocked(row) else 0.0
+        if sym in self.listing:
+            self.rows[sym] = row
+            self.secs = (self.secs + [row.get("seconds") or 0])[-50:]
+            self._save(sym)
+        if not retried:
+            return
+        r = self._retry()
+        r["left"] = int(r.get("left") or RETRY_BATCH) - 1
+        r["tried"] = int(r.get("tried") or 0) + 1
+        r["refused"] = int(r.get("refused") or 0) + (1 if _transient(row) else 0)
+        if r["left"] <= 0 or not self.waiting():
+            gap = r.get("gap") or RETRY_GAP
+            gap = min(RETRY_GAP_MAX, gap * 2) if r["refused"] >= r["tried"] else RETRY_GAP
+            nxt = datetime.now(timezone.utc) + timedelta(hours=gap)
+            self.state["retry"] = {**_fresh_retry(), "gap": gap, "next": nxt.isoformat(),
+                                   "last": {"tried": r["tried"], "refused": r["refused"]}}
+        self._save("state")
 
     # work
     def step(self) -> str | None:
         """Check one due company; returns its symbol, or None when there's nothing to do right now."""
+        try:
+            self.monthly()
+        except Exception as e:
+            print("market audit: couldn't start the monthly check:", e)
         with self.lock:
             self._load()
             if not self.state.get("enabled"):
@@ -651,9 +789,11 @@ class MarketAudit:
             return None
         self.refresh_list()
         with self.lock:
+            now = datetime.now(timezone.utc)
             due = self.queue()
+            retries = set(self._retries_now(now))
             if self.state.get("full_since") and not self._full_left():     # the full check is through
-                self.state.update(full_since=None, full_done=datetime.now(timezone.utc).isoformat())
+                self.state.update(full_since=None, full_done=now.isoformat())
                 self._save("state")
             if not due:
                 return None
@@ -663,20 +803,23 @@ class MarketAudit:
         finally:
             with self.lock:
                 self.current = None
-        row["at"] = datetime.now(timezone.utc).isoformat()
         with self.lock:
-            info = self.listing.get(sym) or {}
-            if info.get("name") and row.get("name") in (None, "", sym, sym.split(":")[-1]):
-                row["name"] = info["name"]          # the check failed before the company's name was read
-            prev = self.rows.get(sym) or {}
-            row["tries"] = (prev.get("tries") or 1) + 1 if _transient(prev) and _transient(row) else 1
-            # a source turning us away: slow down (doubling, up to half an hour) until it answers again
-            self.cool = min(COOL_MAX, max(60.0, self.cool * 2)) if _transient(row) else 0.0
-            if sym in self.listing:
-                self.rows[sym] = row
-                self.secs = (self.secs + [row.get("seconds") or 0])[-50:]
-                self._save(sym)
+            self._store(sym, row, retried=sym in retries)
         return sym
+
+    def recheck(self, sym: str) -> dict:
+        """Check one listed company again now (the panel's "Re-check" link); the new result replaces the old."""
+        with self.lock:
+            self._load()
+            if sym not in self.listing:
+                raise KeyError(sym)
+        try:
+            row = self.check_fn(sym)
+        except Exception as e:                # one company failing is a finding, never a broken page
+            row = {"symbol": sym, "name": sym, "seconds": 0, "issues": [_issue("error", "Audit", str(e)[:200] or e.__class__.__name__)]}
+        with self.lock:
+            self._store(sym, row)
+            return self.rows.get(sym) or row
 
     def loop(self):
         try:
@@ -698,22 +841,40 @@ class MarketAudit:
             return [r for r in self.rows.values() if (r.get("at") or "") >= since_iso]
 
     def status(self) -> dict:
+        """Everything the panel shows. `paused` says why nothing is being checked: "off" (switched off), "busy" (an
+        audit started by hand is running), "cooling" (a source is turning every company away, so it waits between
+        checks), or None (running). The rate is companies checked in the last hour; the time left follows from it."""
+        busy = bool(self.busy_fn())
         with self.lock:
             self._load()
+            now = datetime.now(timezone.utc)
             due = self.queue()
-            today = datetime.now(timezone.utc).date()
+            today = now.date()
             rows = list(self.rows.values())
             new = sorted(({"symbol": s, "name": i.get("name"), "listed": i.get("listed"),
                            "checked": bool((self.rows.get(s) or {}).get("at"))}
                           for s, i in self.listing.items() if self._is_new(s, today)), key=lambda x: x["listed"] or "", reverse=True)
             avg = (sum(self.secs) / len(self.secs) + self.pause) if self.secs else None
+            hour_ago = (now - timedelta(hours=1)).isoformat()
+            rate = sum(1 for r in rows if (r.get("at") or "") >= hour_ago)
             left = len(self._full_left())
-            return {**{k: self.state.get(k) for k in ("enabled", "list_at", "list_tried_at", "list_error")},
+            eta = round(len(due) / rate, 1) if rate else round(len(due) * avg / 3600, 1) if avg else None
+            enabled = bool(self.state.get("enabled"))
+            r = self._retry()
+            waiting = sum(1 for x in rows if _transient(x))
+            on = bool(self.state.get("monthly", True))
+            return {**{k: self.state.get(k) for k in ("enabled", "list_at", "list_tried_at", "list_error", "reset_at")},
+                    "paused": "off" if not enabled else "busy" if busy else "cooling" if self.cool else None,
+                    "cool_minutes": round(self.cool / 60) if self.cool else 0,
                     "full": {"running": bool(self.state.get("full_since")), "since": self.state.get("full_since"),
                              "done_at": self.state.get("full_done"), "left": left,
                              "checked": len(self.listing) - left if self.state.get("full_since") else None,
                              "everything": bool(self.state.get("full_all", True)), "pending_only": bool(self.state.get("full_pending"))},
-                    "pending": sum(1 for r in rows if _transient(r)),
+                    "monthly": {"on": on, "last": self.state.get("monthly_run"),
+                                "next": next_month_start(datetime.now(india_tz())) if on else None},
+                    "retry": {"waiting": waiting, "due": len(self.waiting(now)), "next": r.get("next"),
+                              "gap_hours": r.get("gap") or RETRY_GAP, "batch": RETRY_BATCH, "last": r.get("last")},
+                    "pending": waiting,
                     "listed": len(self.listing), "checked": len(self.rows), "due": len(due), "current": self.current,
-                    "eta_hours": round(len(due) * avg / 3600, 1) if avg else None, "new_listings": new[:30],
-                    "summary": summarise(rows), "rows": [r for r in rows if r.get("issues")]}
+                    "rate_per_hour": rate, "eta_hours": eta, "new_listings": new[:30],
+                    "summary": summarise(rows), "rows": [x for x in rows if x.get("issues")]}

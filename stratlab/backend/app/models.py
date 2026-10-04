@@ -285,6 +285,9 @@ class MarketAuditReq(BaseModel):
     full: bool = False
     retry: bool = False            # re-check only the companies a source turned away (not checked yet)
     read_list: bool = False
+    reset: bool = False            # clear every stored result and check every company again from nothing
+    monthly: bool | None = None    # the full check on the 1st of each month: on or off
+    recheck: str | None = Field(None, max_length=40)     # one company, checked again now
 
 
 class AuditReq(BaseModel):
