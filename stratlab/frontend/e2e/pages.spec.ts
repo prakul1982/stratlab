@@ -620,8 +620,8 @@ test("the menu: a few short groups, Scans and Watchlist each one entry with tabs
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
   for (const g of ["Research", "Portfolio", "Watch", "Notebooks", "Trading"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
-  // eleven entries in the groups, where there were fifteen flat ones; the old separate entries are gone
-  await expect(main.locator(".side-nav a")).toHaveCount(11);
+  // twelve entries in the groups (eleven, plus Net worth under Portfolio), where there were fifteen flat ones; the old separate entries are gone
+  await expect(main.locator(".side-nav a")).toHaveCount(12);
   for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance", "My Holdings"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // Account and Admin sit at the bottom, with the markets folded to one line
   const bottom = side.locator(".side-bottom");

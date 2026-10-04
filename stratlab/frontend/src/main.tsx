@@ -74,6 +74,8 @@ const CompanyPage = page(research, "CompanyPage");
 const AlertsPage = page(() => import("./pages/AlertsPage"), "AlertsPage");
 const screensPage = () => import("./pages/Screens");
 const ScreensPage = page(screensPage, "ScreensPage");
+const netWorth = () => import("./pages/money/NetWorthPage");
+const NetWorthPage = page(netWorth, "NetWorthPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -90,6 +92,7 @@ function warmFirstPage(path: string) {
     : path === "/news" ? news
     : path === "/holdings" ? holdingsPage
     : path === "/tax-report" ? taxPage
+    : path === "/money/net-worth" ? netWorth
     : path === "/research/screens" || (path === "/research/scans" && lastView("scans") === "/research/screens") ? screensPage
     : path.startsWith("/research") ? research
     : null;
@@ -174,6 +177,7 @@ function Routed() {
         <Route path="/news" element={<NewsPage />} />
         <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/tax-report" element={<TaxReportPage />} />
+        <Route path="/money/net-worth" element={<NetWorthPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />

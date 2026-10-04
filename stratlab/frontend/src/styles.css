@@ -962,3 +962,8 @@ label.btn.disabled { opacity: .5; }
 .tax-line-sub td { font-weight: 600; }
 .tax-line-total td { font-weight: 700; border-top: 2px solid var(--line-2); }
 @media (max-width: 560px) { .tax-inputs .field { width: 100% !important; } }
+
+/* Money: net worth */
+.nw-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-items: end; }
+.nw-form .field input, .nw-form .field select { width: 100%; min-width: 0; }
+@media (max-width: 560px) { .nw-form { grid-template-columns: minmax(0, 1fr); } }

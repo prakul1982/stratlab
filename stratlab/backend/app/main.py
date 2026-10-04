@@ -69,6 +69,8 @@ from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
+from . import money_networth
+from .plans import networth_items
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
@@ -201,6 +203,7 @@ async def lifespan(app: FastAPI):
     surv_job.start()
     lifecycle_job.start()
     invite_job.start()
+    networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
@@ -2018,6 +2021,63 @@ def holdings_delete(profile=Depends(current_profile)):
     """Delete my holdings: every saved position, at once."""
     holdings.delete(profile["id"])
     return {"deleted": True}
+
+
+# ---------- Money: net worth (stocks from My Holdings, everything else typed in; Free keeps 5 entries) ----------
+_nw_prices: dict = {}                  # {"gold": (time read, (rupees a gram, as of))}, {"BTC": (time read, dollars)}
+NW_PRICE_TTL = 600.0
+
+
+def _nw_cached(key: str, read):
+    hit = _nw_prices.get(key)
+    if hit and time.time() - hit[0] < NW_PRICE_TTL:
+        return hit[1]
+    got = _quiet(read)
+    _nw_prices[key] = (time.time(), got)
+    return got
+
+
+def _nw_gold():
+    """Rupees a gram of 24 carat gold: the front-month gold future on the commodity exchange (quoted per 10 g)."""
+    def read():
+        prov = markets.provider("MCX")
+        inst = prov.instrument("GOLD") if prov and prov.ready() else None
+        p = prov.ltp(inst) if inst else None
+        return (p / 10, datetime.now(timezone.utc).isoformat(timespec="minutes")) if p and p > 0 else None
+    return _nw_cached("gold", read)
+
+
+def _nw_crypto(coin: str):
+    def read():
+        prov = markets.provider("CRYPTO")
+        inst = prov.instrument(f"{coin}-USD") if prov else None
+        p = prov.ltp(inst) if inst else None
+        return p if p and p > 0 else None
+    return _nw_cached("crypto:" + coin, read)
+
+
+def _nw_stocks(profile) -> dict:
+    """My Holdings in rupees: Indian and US stocks apart (a position without a price counts at cost, as on Holdings)."""
+    h = holdings_view(profile)
+    worth = (lambda r: r["value"] if r["value"] is not None else r["invested"] or 0)
+    rate = h.get("usd_inr")
+    return {"in": sum(worth(r) for r in h["rows"] if r.get("market") != "US"),
+            "us": sum(worth(r) for r in h["rows"] if r.get("market") == "US") * rate if rate else 0,
+            "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"])}
+
+
+app.include_router(money_networth.make_router(
+    current_profile, _nw_stocks, money_networth.Prices(_nw_gold, _nw_crypto, usd_inr),
+    networth_items, lambda plan: allows(plan, "networth"), throttle))
+
+
+def _nw_value_of(uid: str) -> dict | None:
+    p = db.get_profile(uid)
+    return money_networth.build(money_networth.load(uid)["items"], _quiet(_nw_stocks, p) if p else None,
+                                money_networth.mf_value(uid), money_networth.Prices(_nw_gold, _nw_crypto, usd_inr))
+
+
+networth_job = money_networth.Job(_nw_value_of)
 
 
 # ---------- Tax report: capital gains from the user's own tradebooks (everyone) ----------

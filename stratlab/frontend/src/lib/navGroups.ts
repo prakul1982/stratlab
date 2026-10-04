@@ -12,6 +12,11 @@ export const FAMILIES: Record<Family, { label: string; home: string; views: [str
   },
 };
 
+/** The Money space's pages (personal finance), in menu order. Each Money feature adds its own line. */
+export const MONEY: { to: string; label: string; title: string }[] = [
+  { to: "/money/net-worth", label: "Net worth", title: "What you own minus what you owe, with your insurance policies" },
+];
+
 /** The family a path belongs to, if any. */
 export function familyOf(path: string): Family | null {
   for (const f of Object.keys(FAMILIES) as Family[]) if (FAMILIES[f].views.some(([p]) => p === path)) return f;
