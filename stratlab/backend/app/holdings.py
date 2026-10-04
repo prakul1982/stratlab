@@ -69,9 +69,19 @@ def delete(uid: str):
     db.delete_setting(_key(uid))
 
 
+def market_of(i: dict) -> str:
+    """"IN" for a stock listed in India (every holding saved before US stocks could be added), or "US"."""
+    return "US" if i.get("market") == "US" else "IN"
+
+
+def indian(items: list[dict]) -> list[dict]:
+    """The holdings listed in India: the only ones the exchange's filings, corporate actions and tax rules cover."""
+    return [i for i in items if market_of(i) == "IN"]
+
+
 def symbols(uid: str) -> list[str]:
-    """The user's holdings, largest first by cost, for the My Stocks newsletter."""
-    items = load(uid)["items"]
+    """The user's Indian holdings, largest first by cost, for the My Stocks newsletter."""
+    items = indian(load(uid)["items"])
     return [i["symbol"] for i in sorted(items, key=lambda i: -(i["qty"] * (i.get("avg") or 0)))]
 
 
@@ -121,6 +131,25 @@ class Matcher:
         return None, "No listed company on NSE or BSE matches this line."
 
 
+US_TICKER = re.compile(r"[A-Z][A-Z0-9]{0,5}(?:-[A-Z])?")
+
+
+def match_us(rows: list[dict], find) -> tuple[list[dict], list[dict]]:
+    """(holdings, unmatched lines) for US tickers typed in. find(ticker) gives {"symbol", "name"} for a listed US
+    company's common shares, or None."""
+    found, missed = [], []
+    for r in rows:
+        sym = (r.get("symbol") or "").strip().upper().replace(".", "-")
+        hit = find(sym) if US_TICKER.fullmatch(sym) else None
+        if not hit:
+            missed.append({"line": r.get("line"), "text": r.get("text") or sym, "reason": "No US-listed company has that ticker."})
+            continue
+        found.append({"symbol": hit["symbol"], "exchange": "US", "name": hit.get("name") or hit["symbol"], "market": "US",
+                      "currency": "USD", "isin": None, "qty": round(float(r["qty"]), 4),
+                      "avg": round(float(r["avg"]), 4) if r.get("avg") else None})
+    return found, missed
+
+
 def merge(rows: list[dict]) -> list[dict]:
     """One holding per company: lines for the same stock (on NSE and on BSE, or split by the broker) add up, and the
     average price is weighted by quantity."""
@@ -163,49 +192,87 @@ def sector_label(index: str | None, exchange_path: list[str] | None) -> str:
     return UNCLASSIFIED
 
 
+def us_sector(fund: str | None) -> str:
+    """A US stock's sector, from the sector fund it's in (XLK: Technology), in the same words as the US pages."""
+    if not fund:
+        return UNCLASSIFIED
+    from .rotation import _label
+    return _label("US", fund, None)
+
+
 # ---------- the page ----------
 def _r(v, dp=2):
     return None if v is None else round(v, dp)
 
 
-def view(items: list[dict], quotes: dict[str, dict]) -> dict:
-    """Each position at today's price (when there is one), the totals and the mix by sector. A position without a
-    price keeps its cost, so the page still adds up; one without an average price has no gain or loss."""
-    rows, value, cost, cost_priced, day = [], 0.0, 0.0, 0.0, 0.0
-    for i in items:
-        q = quotes.get(i["symbol"]) or {}
-        price, qty, avg = q.get("price"), i["qty"], i.get("avg")
-        val = qty * price if price else None
-        inv = qty * avg if avg else None
-        pnl = val - inv if val is not None and inv is not None else None
-        chg = qty * q["change"] if price and q.get("change") is not None else None
-        rows.append({"symbol": i["symbol"], "exchange": i.get("exchange") or "NSE", "name": i.get("name") or i["symbol"],
-                     "sector": i.get("sector") or UNCLASSIFIED, "qty": qty, "avg": _r(avg), "price": _r(price),
-                     "value": _r(val), "invested": _r(inv), "pnl": _r(pnl), "pnl_pct": _r(pnl / inv * 100) if pnl is not None and inv else None,
-                     "day": _r(chg), "day_pct": _r(q.get("change_pct"))})
-        value += val if val is not None else (inv or 0)
-        cost += inv or 0
-        if pnl is not None:
-            cost_priced += inv
-        day += chg or 0
-    priced = [r for r in rows if r["pnl"] is not None]
-    pnl = sum(r["pnl"] for r in priced) if priced else None
-    days = [r for r in rows if r["day"] is not None]
-    day_total = day if days else None
-    before = sum(r["value"] - r["day"] for r in days)
+def _position(i: dict, q: dict) -> dict:
+    """One holding at today's price, in its own currency."""
+    price, qty, avg = q.get("price"), i["qty"], i.get("avg")
+    val = qty * price if price else None
+    inv = qty * avg if avg else None
+    pnl = val - inv if val is not None and inv is not None else None
+    chg = qty * q["change"] if price and q.get("change") is not None else None
+    us = market_of(i) == "US"
+    return {"symbol": i["symbol"], "exchange": i.get("exchange") or ("US" if us else "NSE"), "name": i.get("name") or i["symbol"],
+            "market": "US" if us else "IN", "currency": "USD" if us else "INR",
+            "sector": i.get("sector") or UNCLASSIFIED, "qty": qty, "avg": _r(avg), "price": _r(price),
+            "value": _r(val), "invested": _r(inv), "pnl": _r(pnl), "pnl_pct": _r(pnl / inv * 100) if pnl is not None and inv else None,
+            "day": _r(chg), "day_pct": _r(q.get("change_pct"))}
+
+
+def _totals(rows: list[dict], rate) -> dict:
+    """Value, cost, gain or loss and the day's change of some positions, each converted with rate(row) (None leaves
+    a position out). A position without a price counts at cost."""
+    value = cost = cost_priced = day = before = 0.0
+    pnl, days, n = None, False, 0
     for r in rows:
+        fx = rate(r)
+        if fx is None:
+            continue
+        n += 1
+        value += fx * (r["value"] if r["value"] is not None else r["invested"] or 0)
+        cost += fx * (r["invested"] or 0)
+        if r["pnl"] is not None:
+            pnl = (pnl or 0) + fx * r["pnl"]
+            cost_priced += fx * r["invested"]
+        if r["day"] is not None:
+            days = True
+            day += fx * r["day"]
+            before += fx * (r["value"] - r["day"])
+    day_total = day if days else None
+    return {"value": _r(value), "invested": _r(cost), "pnl": _r(pnl), "pnl_pct": _r(pnl / cost_priced * 100) if pnl is not None and cost_priced else None,
+            "day": _r(day_total), "day_pct": _r(day_total / before * 100) if day_total is not None and before else None,
+            "count": n, "priced": sum(1 for r in rows if r["price"] is not None and rate(r) is not None)}
+
+
+def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] | None = None, usd_inr: float | None = None) -> dict:
+    """Each position at today's price (when there is one), the totals and the mix by sector. A position without a
+    price keeps its cost, so the page still adds up; one without an average price has no gain or loss.
+
+    US stocks are valued in dollars (prices from `us_quotes`) and counted in the rupee totals at `usd_inr` rupees a
+    dollar; without a rate they're left out of the rupee totals and shown on their own. `us` has their dollar totals."""
+    us_quotes = us_quotes or {}
+    rows = [_position(i, (us_quotes if market_of(i) == "US" else quotes).get(i["symbol"]) or {}) for i in items]
+    rate = (lambda r: 1.0 if r["market"] == "IN" else usd_inr)
+    totals = _totals(rows, rate)
+    value = totals["value"] or 0
+    for r in rows:
+        fx = rate(r)
         weight = r["value"] if r["value"] is not None else r["invested"]
-        r["weight"] = _r((weight or 0) / value * 100, 1) if value else None
-    rows.sort(key=lambda r: -(r["value"] if r["value"] is not None else r["invested"] or 0))
+        r["weight"] = _r((weight or 0) * fx / value * 100, 1) if value and fx is not None else None
+    rows.sort(key=lambda r: -((r["value"] if r["value"] is not None else r["invested"] or 0) * (rate(r) or 0)))
     sectors: dict[str, float] = {}
     for r in rows:
-        sectors[r["sector"]] = sectors.get(r["sector"], 0) + (r["value"] if r["value"] is not None else r["invested"] or 0)
-    allocation = [{"sector": s, "value": _r(v), "pct": _r(v / value * 100, 1) if value else None, "count": sum(1 for r in rows if r["sector"] == s)}
+        if rate(r) is not None:
+            sectors[r["sector"]] = sectors.get(r["sector"], 0) + (r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r)
+    allocation = [{"sector": s, "value": _r(v), "pct": _r(v / value * 100, 1) if value else None,
+                   "count": sum(1 for r in rows if r["sector"] == s and rate(r) is not None)}
                   for s, v in sorted(sectors.items(), key=lambda kv: -kv[1])]
-    return {"rows": rows, "allocation": allocation,
-            "totals": {"value": _r(value), "invested": _r(cost), "pnl": _r(pnl), "pnl_pct": _r(pnl / cost_priced * 100) if pnl is not None and cost_priced else None,
-                       "day": _r(day_total), "day_pct": _r(day_total / before * 100) if day_total is not None and before else None,
-                       "count": len(rows), "priced": sum(1 for r in rows if r["price"] is not None)}}
+    us = [r for r in rows if r["market"] == "US"]
+    totals["count"] = len(rows)
+    return {"rows": rows, "allocation": allocation, "totals": totals,
+            "us": {**_totals(us, lambda r: 1.0), "in_total": usd_inr is not None} if us else None,
+            "usd_inr": _r(usd_inr, 4) if us and usd_inr else None}
 
 
 def facts(trend: dict | None, filings: list[dict] | None, today, upcoming) -> dict:

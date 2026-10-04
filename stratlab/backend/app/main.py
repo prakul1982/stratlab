@@ -28,6 +28,7 @@ from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, tax_export, tax_lots
+from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
@@ -1767,33 +1768,87 @@ def holdings_matcher() -> holdings.Matcher:
                             lambda c: (isins.get(c) or [None])[0], listed, kite.ready())
 
 
+def _india_suggestions() -> list[dict]:
+    return suggest.india_rows(kite.equities()) if kite.ready() else []
+
+
+def _india_listed() -> dict[str, dict]:
+    """The stored list of Indian companies, named from the exchange's list where the stored one has no name."""
+    names = {v[0]: v[1] for v in isin_list().values() if isinstance(v, list) and len(v) == 2}
+    return {s: {**v, "name": v.get("name") or names.get(s)} for s, v in stock_pages.companies("IN").items()}
+
+
+suggester = suggest.Suggester({"IN": _india_suggestions, "US": lambda: suggest.us_rows(_sec_companies())},
+                              {"IN": _india_listed, "US": lambda: stock_pages.companies("US")})
+
+
+@app.get("/suggest/companies")
+def suggest_companies(q: str = Query("", max_length=40), market: str | None = Query(None, max_length=4),
+                      profile=Depends(current_profile)):
+    """Up to 8 listed companies for what's typed (India, the US or both): the exact symbol first, then symbols
+    starting with it, then names. Each has the identifier to save (`id`: NSE symbol, BSE code or US ticker)."""
+    m = (market or "").upper()
+    return ok({"rows": suggester.search(q[:40], m if m in suggest.MARKETS else None)})
+
+
+def _us_find(sym: str) -> dict | None:
+    """A US company's common shares by ticker: from the list of companies, else any ticker the US prices know."""
+    hit = suggester.find(sym, "US")
+    if hit:
+        return hit
+    if not suggest.us_common(sym, set()):
+        return None
+    q = _quiet(research_hub.quotes, "US", [sym]) or {}
+    return {"symbol": sym, "name": sym} if (q.get(sym) or {}).get("price") else None
+
+
 def with_sectors(items: list[dict], known: dict[str, str] | None = None) -> list[dict]:
-    """Each holding with its broad sector: the exchange's own, or its sector index's when the exchange is slow."""
+    """Each holding with its broad sector: the exchange's own, or its sector index's when the exchange is slow. A US
+    stock's is its sector fund's, when it's in one."""
     known = known or {}
 
     def path(i):
         return [] if i["exchange"] != "NSE" else filings_feed.industry(i["symbol"])
-    todo = {i["symbol"]: _holdings_pool.submit(path, i) for i in items if not known.get(i["symbol"])}
+    todo = {i["symbol"]: _holdings_pool.submit(path, i) for i in holdings.indian(items) if not known.get(i["symbol"])}
     if todo:
         wait_all(list(todo.values()), timeout=SECTOR_WAIT)
     out = []
     for i in items:
+        if holdings.market_of(i) == "US":
+            out.append({**i, "sector": holdings.us_sector(investor.sector_of("US", i["symbol"]))})
+            continue
         f = todo.get(i["symbol"])
         got = f.result() if f is not None and f.done() and not f.exception() else None
         out.append({**i, "sector": known.get(i["symbol"]) or holdings.sector_label(investor.sector_of("IN", i["symbol"]), got)})
     return out
 
 
+def usd_inr() -> float | None:
+    """Rupees a dollar: the day's stored rate, else read now; None when neither is there."""
+    got = pricing.rates().get("USD")
+    if not got:
+        got = _quiet(fx_rate, "USD")
+    return float(got) if got else None
+
+
 def holdings_view(profile) -> dict:
     h = holdings.load(profile["id"])
-    quotes, live = {}, bool(h["items"]) and kite.ready()
+    ind = holdings.indian(h["items"])
+    us = [i["symbol"] for i in h["items"] if holdings.market_of(i) == "US"]
+    quotes, live = {}, bool(ind) and kite.ready()
     if live:
         try:
-            quotes = kite.quote([i["symbol"] for i in h["items"]])
+            quotes = kite.quote([i["symbol"] for i in ind])
         except Exception:
             live = False
-    return {**holdings.view(h["items"], quotes), "source": h["source"], "updated_at": h["updated_at"], "prices": live,
-            "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if live else None,
+    us_quotes = {}
+    for n in range(0, len(us), 24):          # the US prices are read 24 at a time
+        us_quotes.update({k: v for k, v in (_quiet(research_hub.quotes, "US", us[n:n + 24]) or {}).items() if v})
+    rate = usd_inr() if us else None
+    now = datetime.now(timezone.utc).isoformat(timespec="minutes")
+    return {**holdings.view(h["items"], quotes, us_quotes, rate), "source": h["source"], "updated_at": h["updated_at"],
+            "prices": live or (not ind and bool(us_quotes)), "prices_at": now if live or us_quotes else None,
+            "us_prices": bool(us_quotes) if us else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
 
 
@@ -1807,7 +1862,7 @@ def my_holdings(profile=Depends(current_profile)):
 def holdings_facts(profile=Depends(current_profile)):
     """For each held stock (the largest 40): its stage and Supertrend and, on plans with filings, red flags in the
     last 3 months, the latest filings and a scheduled results meeting. The same facts the other pages show."""
-    items = sorted(holdings.load(profile["id"])["items"], key=lambda i: -(i["qty"] * (i.get("avg") or 1)))
+    items = sorted(holdings.indian(holdings.load(profile["id"])["items"]), key=lambda i: -(i["qty"] * (i.get("avg") or 1)))
     can = allows(profile["_plan"], "filings")
     today = datetime.now(IST).date()
 
@@ -1845,7 +1900,7 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
     limit = holdings_limit(profile["_plan"])
     over, found = [i["symbol"] for i in found[limit:]], found[:limit]
     if found:                             # nothing matched: the saved holdings stay as they were
-        known = {i["symbol"]: i.get("sector") for i in before["items"]}
+        known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
         holdings.save(profile["id"], with_sectors(found, known), parsed["broker"])
         invite_rewards.safe_touch(profile, "holdings")
     return ok({"broker": parsed["broker"], "imported": len(found), "saved": bool(found), "unmatched": missed[:200],
@@ -1861,18 +1916,21 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     if len(req.items) > limit:
         upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
     before = holdings.load(profile["id"])
-    saved = {i["symbol"]: i for i in before["items"]}
-    kept, rows = [], []
+    saved = {(holdings.market_of(i), i["symbol"]): i for i in before["items"]}
+    kept, rows, us_rows = [], [], []
     for n, i in enumerate(req.items, 1):
-        old = saved.get(i.symbol.strip().upper())
+        old = saved.get((i.market, i.symbol.strip().upper()))
         if old:                           # already matched: kept as it is, even while market data is offline
             kept.append({**old, "qty": i.qty, "avg": i.avg or None})
         else:
-            rows.append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
+            (us_rows if i.market == "US" else rows).append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
     found, missed = holdings.match_all(rows, holdings_matcher()) if rows else ([], [])
+    if us_rows:
+        us_found, us_missed = holdings.match_us(us_rows, _us_find)
+        found, missed = found + us_found, missed + us_missed
     found = holdings.merge(kept + found)
     if found:
-        known = {i["symbol"]: i.get("sector") for i in before["items"]}
+        known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
         holdings.save(profile["id"], with_sectors(found, known), before["source"] or "Manual")
     elif not missed:
         holdings.delete(profile["id"])    # every row removed
@@ -1907,11 +1965,12 @@ def _corp_histories(uid: str, symbols: list[str], today) -> int:
 def holdings_corp_view(profile, fetch: bool = True) -> dict:
     h = holdings.load(profile["id"])
     today = datetime.now(IST).date()
-    syms = [i["symbol"] for i in h["items"]]
+    ind = holdings.indian(h["items"])           # the exchange's corporate actions are for Indian stocks
+    syms = [i["symbol"] for i in ind]
     checking = _corp_histories(profile["id"], syms, today) if fetch and syms else 0
     cal = corp_actions.load("IN")["rows"]
     acts = {s: corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) for s in syms}
-    return {**corp_actions.holdings_view(h["items"], acts, today, h["updated_at"]), "checking": checking}
+    return {**corp_actions.holdings_view(ind, acts, today, h["updated_at"]), "checking": checking}
 
 
 @app.get("/holdings/corp-actions")
@@ -1927,7 +1986,7 @@ def holdings_corp_action(req: CorpActionReq, profile=Depends(current_profile)):
     throttle(profile, "holdings_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
     h = holdings.load(profile["id"])
     sym = req.symbol.strip().upper()
-    item = next((i for i in h["items"] if i["symbol"] == sym), None)
+    item = next((i for i in holdings.indian(h["items"]) if i["symbol"] == sym), None)
     if not item:
         err(404, "not_held", f"{sym} isn't in your holdings.")
     today = datetime.now(IST).date()
@@ -2056,7 +2115,7 @@ def tax_inputs(profile) -> dict:
         except Exception:
             live = False
     return {"data": data, "trades": trades, "acts": acts, "fmv": fmv, "fmv_src": fmv_src, "pre": pre, "quotes": quotes,
-            "live": live, "items": holdings.load(uid)["items"], "today": today.isoformat()}
+            "live": live, "items": holdings.indian(holdings.load(uid)["items"]), "today": today.isoformat()}
 
 
 def tax_view(profile) -> dict:

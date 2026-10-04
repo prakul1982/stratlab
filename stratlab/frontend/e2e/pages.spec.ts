@@ -323,6 +323,70 @@ test("my holdings: edit by hand and delete them all", async ({ page }, info) => 
   await sane(page, errors);
 });
 
+test("my holdings: add by hand from suggestions, an Indian stock with the keyboard, then a US one", async ({ page, request }, info) => {
+  // each project signs in as its own user with no holdings, so the two runs don't add to the same account
+  const n = info.project.name === "phone" ? 152 : 151;
+  const [token, id, email] = [`load-${n}`, `u-load-${n}`, `load${n}@example.com`];
+  expect((await request.delete(`${API}/holdings`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
+  const errors = await open(page, "/holdings", "No holdings yet", sessionAs(token, id, email));
+  await settle(page);
+  const box = page.getByRole("combobox", { name: "NSE symbol or BSE code" });
+  await box.fill("re");
+  const list = page.getByRole("listbox", { name: "Suggestions" });
+  const reliance = list.getByRole("option", { name: /Reliance/ }).first();
+  await expect(reliance).toBeVisible();
+  await expect(box).toHaveAttribute("aria-expanded", "true");
+  const options = await list.getByRole("option").allInnerTexts();
+  expect(options.length).toBeGreaterThan(0);
+  expect(options.length).toBeLessThanOrEqual(8);
+  expect(options[0]).toMatch(/\bRE/);                                             // symbols starting with what's typed come first
+  const width = page.viewportSize()!.width;
+  const b = (await list.boundingBox())!;
+  expect(b.x).toBeGreaterThanOrEqual(0);
+  expect(b.x + b.width, "the suggestions fit on the screen").toBeLessThanOrEqual(width + 1);
+  if (info.project.name === "phone") await touchable(page);
+  // the keyboard: down to Reliance, Enter picks it and fills the NSE symbol
+  const at = options.findIndex((t) => /Reliance/.test(t));
+  for (let i = 0; i <= at; i++) await box.press("ArrowDown");
+  await expect(reliance).toHaveAttribute("aria-selected", "true");
+  await box.press("Enter");
+  await expect(box).toHaveValue("RELIANCE");
+  await expect(list).toBeHidden();
+  await page.getByLabel("Quantity").fill("5");
+  await page.getByLabel(/Average price/).fill("2400");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByText("RELIANCE added.")).toBeVisible({ timeout: 30_000 });
+  const table = page.getByRole("table", { name: "Positions" });
+  await expect(table.getByText("RELIANCE", { exact: true })).toBeVisible();
+  // a US stock: found by its name, valued in dollars
+  await page.getByRole("radio", { name: "United States" }).click();
+  const us = page.getByRole("combobox", { name: "US ticker" });
+  await us.fill("apple");
+  const apple = list.getByRole("option", { name: /Apple Inc/ });
+  await expect(apple).toBeVisible();
+  await expect(apple.getByText("US", { exact: true })).toBeVisible();
+  await us.press("ArrowDown");
+  await us.press("Enter");
+  await expect(us).toHaveValue("AAPL");
+  await page.getByLabel("Quantity").fill("3");
+  await page.getByLabel("Average price ($, optional)").fill("150");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByText("AAPL added.")).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByText("AAPL", { exact: true })).toBeVisible();
+  await expect(table.getByRole("row", { name: /AAPL/ })).toContainText("$");
+  const usLine = page.getByLabel("US stocks");
+  await expect(usLine).toContainText("$");
+  await expect(usLine).toContainText("aren't part of the tax report");
+  // an exact symbol typed without picking still works
+  await page.getByRole("radio", { name: "India (NSE/BSE)" }).click();
+  await box.fill("INFY");
+  await page.getByLabel("Quantity").fill("2");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByText("INFY added.")).toBeVisible({ timeout: 30_000 });
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+});
+
 const TRADEBOOKS = new URL("../../backend/tests/fixtures/tradebooks/", import.meta.url).pathname;
 const TAXPNL = new URL("../../backend/tests/fixtures/taxpnl/", import.meta.url).pathname;
 
