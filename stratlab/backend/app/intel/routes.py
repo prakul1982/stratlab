@@ -89,8 +89,13 @@ def company(region: str, symbol: str, profile=Depends(current_profile)):
 
 
 @router.get("/chart/{region}/{symbol}")
-def chart(region: str, symbol: str, range: str = "1y", profile=Depends(current_profile)):
-    return ok(source_call(lambda: hub.chart(region_of(region), symbol_of(symbol), range)))
+def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: str | None = None,
+          profile=Depends(current_profile)):
+    """A company's candles. `tf` is 5m, 15m, 1h or 1d; `before` (an ISO time) asks for the page of older
+    candles when the chart is scrolled back, and `more` says whether still older ones exist."""
+    if tf not in ("5m", "15m", "1h", "1d"):
+        err(400, "bad_tf", "Pick 5m, 15m, 1h or 1d candles.")
+    return ok(source_call(lambda: hub.chart(region_of(region), symbol_of(symbol), range[:5], tf, (before or "")[:40])))
 
 
 @router.get("/quotes")
