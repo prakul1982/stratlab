@@ -1,6 +1,7 @@
 import { money, price, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import { HELP } from "../lib/help";
-import { LineChart } from "./Charts";
+import { ChartEmpty, LineChart } from "./Charts";
+import { moneyCompact } from "../lib/chartFormat";
 import { Info } from "./ui";
 import { Earlier, splitToday } from "./Earlier";
 import { OrderList } from "./OrderList";
@@ -78,10 +79,10 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
           <section className="card stack" style={{ gap: 10 }}>
             <h3 className="h3">Paper equity</h3>
             {snap.equity_curve.length > 1 ? (
-              <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, true))} height={170}
-                format={(v) => money(v, cur)} axisFormat={(v) => money(v, cur)} baseline={a.capital}
-                lines={[{ label: "Account", values: snap.equity_curve.map((p) => p.eq), color: "var(--blue)", width: 1.6 }]} />
-            ) : <p className="muted">Fills in as candles close.</p>}
+              <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, true))} height={170} times={snap.equity_curve.map((p) => p.t)} tz={tz}
+                format={(v) => money(v, cur)} axisFormat={(v) => moneyCompact(v, cur ?? "INR")} baseline={a.capital}
+                lines={[{ label: "Account", values: snap.equity_curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
+            ) : <ChartEmpty height={170}>Fills in as candles close.</ChartEmpty>}
           </section>
           {snap.members.length > 0 && (
             <details className="card">

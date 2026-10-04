@@ -6,7 +6,7 @@ import {
   contracts, contractsShort, crore, dayName, istTime, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike,
   type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
-import { Legend, LineChart } from "../components/Charts";
+import { ChartEmpty, Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
 import { Info, Loading } from "../components/ui";
 
@@ -334,11 +334,11 @@ function useHistory<T>(kind: string, range: string, name = "NIFTY") {
   return d;
 }
 
-function ChartBox({ title, children, empty, emptyText }: { title: string; children: ReactNode; empty: boolean; emptyText?: string }) {
+function ChartBox({ title, children, empty, emptyText, height = 200 }: { title: string; children: ReactNode; empty: boolean; emptyText?: string; height?: number }) {
   return (
     <div className="stack pos-chart" style={{ gap: 8 }}>
       <h3 className="small" style={{ fontWeight: 600 }}>{title}</h3>
-      {empty ? <p className="small muted">{emptyText ?? "Not enough stored days to draw yet."}</p> : children}
+      {empty ? <ChartEmpty height={height}>{emptyText ?? "Not enough stored days to draw yet."}</ChartEmpty> : children}
     </div>
   );
 }
@@ -356,7 +356,7 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
   const cash = cashH && cashH !== "error" ? cashH.points : cashH;
   const chain = chainH && chainH !== "error" ? chainH.points : chainH;
   const label = (p: { day: string }[]) => p.map((x) => dayName(x.day));
-  const axis = (p: { day: string }[]) => p.map((x) => shortDay(x.day));
+  const days = (p: { day: string }[]) => p.map((x) => x.day.slice(0, 10));
   const mlabel = MEASURES.find(([k]) => k === measure)?.[1] ?? "";
   const slabel = SHARES.find(([k]) => k === share)?.[1] ?? "";
   const whoName = PARTICIPANTS.find(([k]) => k === who)?.[1] ?? "";
@@ -383,27 +383,26 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
                     {MEASURES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                   </select>
                 </label>
-                <ChartBox title={`${whoName}: ${mlabel.toLowerCase()} (contracts)`} empty={parts.length < 2}>
+                <ChartBox title={`${whoName}: ${mlabel.toLowerCase()} (contracts)`} empty={parts.length < 2} height={220}>
                   <LineChart lines={[{ values: parts.map((p) => p[who as "fii"]?.[measure] ?? null), color: "var(--pos-call)", width: 2, label: mlabel }]}
-                    labels={label(parts)} axisLabels={axis(parts)} format={contracts} axisFormat={contractsShort} baseline={0} height={220}
+                    labels={label(parts)} times={days(parts)} sync="pos-history" ranges={false} format={contracts} axisFormat={contractsShort} baseline={0} height={220}
                     ariaLabel={`${whoName} ${mlabel} by day`} />
                 </ChartBox>
               </div>
               <div className="stack" style={{ gap: 8 }}>
                 <Seg label="Long share of" value={share} onChange={setShare} options={SHARES} />
-                <ChartBox title={`${whoName}: ${slabel.toLowerCase()}, long share (% of long + short)`} empty={parts.length < 2}>
+                <ChartBox title={`${whoName}: ${slabel.toLowerCase()}, long share (% of long + short)`} empty={parts.length < 2} height={220}>
                   <LineChart lines={[{ values: parts.map((p) => p[who as "fii"]?.[share] ?? null), color: "var(--pos-call)", width: 2, label: "Long share" }]}
-                    labels={label(parts)} axisLabels={axis(parts)} format={(v) => `${v.toFixed(1)}% long · ${(100 - v).toFixed(1)}% short`}
+                    labels={label(parts)} times={days(parts)} sync="pos-history" ranges={false} format={(v) => `${v.toFixed(1)}% long · ${(100 - v).toFixed(1)}% short`}
                     axisFormat={(v) => `${v.toFixed(0)}%`} height={220} ariaLabel={`${whoName} ${slabel} long share by day`} />
                 </ChartBox>
               </div>
             </div>
             <ChartBox title="Cash market, net (₹ crore)" empty={cash.length < 2}
               emptyText={`${cash.length ? "One day" : "No days"} stored so far: the exchange shows only its latest day, so this chart grows a day at a time from when StratLab started reading the numbers.`}>
-              <Legend items={[{ label: "FII/FPI", color: "var(--pos-call)" }, { label: "DII", color: "var(--pos-put)" }]} />
               <LineChart lines={[{ values: cash.map((p) => p.fii), color: "var(--pos-call)", width: 2, label: "FII/FPI" },
                 { values: cash.map((p) => p.dii), color: "var(--pos-put)", width: 2, label: "DII" }]}
-                labels={label(cash)} axisLabels={axis(cash)} format={(v) => crore(v, true)} axisFormat={(v) => contractsShort(v)} baseline={0} height={200}
+                labels={label(cash)} times={days(cash)} sync="pos-history" ranges={false} legend format={(v) => crore(v, true)} axisFormat={(v) => contractsShort(v)} baseline={0} height={200}
                 ariaLabel="FII and DII net cash market flows by day" />
             </ChartBox>
             <div className="stack" style={{ gap: 8 }}>
@@ -415,14 +414,13 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
                     <Source testId="chain-history-source">{recordedLine(name, chainH.recorded)}</Source>
                     <div className="grid2" style={{ gap: 18 }}>
                       <ChartBox title={`${name} PCR, near the money`} empty={chain.length < 2} emptyText={`Not enough recorded days of ${name} to draw yet.`}>
-                        <Legend items={[{ label: "Open interest", color: "var(--pos-call)" }, { label: "Volume", color: "var(--pos-put)" }]} />
                         <LineChart lines={[{ values: chain.map((p) => p.pcr_oi), color: "var(--pos-call)", width: 2, label: "Open interest" },
                           { values: chain.map((p) => p.pcr_vol), color: "var(--pos-put)", width: 2, label: "Volume" }]}
-                          labels={label(chain)} axisLabels={axis(chain)} format={ratio} height={200} ariaLabel={`${name} put-call ratio by day`} />
+                          labels={label(chain)} times={days(chain)} sync="pos-history" ranges={false} legend format={ratio} height={200} ariaLabel={`${name} put-call ratio by day`} />
                       </ChartBox>
                       <ChartBox title={`${name} ATM implied volatility (%)`} empty={chain.length < 2} emptyText={`Not enough recorded days of ${name} to draw yet.`}>
                         <LineChart lines={[{ values: chain.map((p) => p.atm_iv), color: "var(--pos-call)", width: 2, label: "ATM IV" }]}
-                          labels={label(chain)} axisLabels={axis(chain)} format={(v) => `${v.toFixed(1)}%`} height={200} ariaLabel={`${name} at-the-money IV by day`} />
+                          labels={label(chain)} times={days(chain)} sync="pos-history" ranges={false} format={(v) => `${v.toFixed(1)}%`} height={200} ariaLabel={`${name} at-the-money IV by day`} />
                       </ChartBox>
                     </div>
                   </>

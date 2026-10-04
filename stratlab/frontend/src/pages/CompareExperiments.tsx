@@ -2,7 +2,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { money, pct, TF_NAME, tzOf } from "../lib/format";
 import { refName, opSay } from "../lib/rules";
 import type { Cond, Experiment, Strategy } from "../lib/types";
-import { LineChart, Legend } from "../components/Charts";
+import { XYChart } from "../components/Charts";
+import { pctTick } from "../lib/chartFormat";
 import { Empty, Info, Loading, VerdictBadge } from "../components/ui";
 import { useNotebook } from "./NotebookPage";
 
@@ -119,11 +120,10 @@ export function CompareExperiments() {
       </section>
       <section className="card stack" style={{ gap: 12 }}>
         <h2 className="h3">Return over the test</h2>
-        <LineChart ariaLabel="Both experiments' return over time" height={260} labels={lbl} axisLabels={lbl}
-          lines={[{ values: dates.map((d) => ra.get(d) ?? null), color: "var(--dash)", width: 2, label: `v${a.v}` },
-            { values: dates.map((d) => rb.get(d) ?? null), color: "var(--blue)", width: 2.4, label: `v${b.v}` }]}
-          format={(v) => pct(v)} baseline={0} />
-        <Legend items={[{ label: `v${a.v} · ${a.label}`, color: "var(--dash)" }, { label: `v${b.v} · ${b.label}`, color: "var(--blue)" }]} />
+        <XYChart ariaLabel="Both experiments' return over time" height={260} times={dates} labels={lbl}
+          series={[{ id: "a", values: dates.map((d) => ra.get(d) ?? null), color: "var(--muted)", width: 1.5, dash: "5 4", label: `v${a.v} · ${a.label}` },
+            { id: "b", values: dates.map((d) => rb.get(d) ?? null), color: "var(--series-1)", label: `v${b.v} · ${b.label}` }]}
+          format={(v) => pct(v)} axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
       </section>
       <section className="card" style={{ padding: 0 }}>
         <div className="table-wrap" style={{ margin: 0 }}>

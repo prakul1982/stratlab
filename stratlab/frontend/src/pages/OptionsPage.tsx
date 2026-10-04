@@ -6,7 +6,8 @@ import { money, price } from "../lib/format";
 import { HELP } from "../lib/help";
 import { blankOptions, IMPORTED, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
-import { LineChart } from "../components/Charts";
+import { PayoffChart } from "../components/Charts";
+import { moneyCompact } from "../lib/chartFormat";
 import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
 import { track } from "../lib/analytics";
@@ -145,10 +146,13 @@ function Payoff({ p }: { p: OptPreview }) {
           {c && c.max_loss_after != null && <span className="small muted">{inr(c.max_loss_after)} after charges</span>}</div>
         <div><span className="eyebrow">Margin needed</span><b className="mono">{p.margin != null ? inr(p.margin) : "Not available"}</b></div>
       </div>
-      <LineChart ariaLabel="Profit or loss at expiry across prices" height={200} labels={f.xs.map((x) => `${p.legs.length ? "At " : ""}${Math.round(x).toLocaleString("en-IN")}`)}
-        format={(v) => inr(v)} axisFormat={(v) => inr(v)} baseline={0}
-        lines={[{ label: "At expiry", values: f.ys, color: "var(--blue)", width: 1.8 },
-          ...(c ? [{ label: "After charges", values: f.ys.map((y) => y - c.total), color: "var(--blue)", width: 1.2, dash: "4 4" }] : [])]} />
+      <PayoffChart ariaLabel="Profit or loss at expiry across prices" height={220} xs={f.xs} testId="payoff-chart"
+        format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
+        curves={[{ id: "expiry", label: "At expiry", values: f.ys },
+          ...(c ? [{ id: "after", label: "After charges", values: f.ys.map((y) => y - c.total), dash: "4 4", width: 1.4 }] : [])]}
+        markers={[{ x: p.spot, label: `Spot ${Math.round(p.spot).toLocaleString("en-IN")}`, kind: "spot" as const },
+          ...before.map((x) => ({ x, label: "Breakeven", kind: "breakeven" as const })),
+          ...(c ? c.breakevens_after.map((x) => ({ x, label: "Breakeven after charges", kind: "other" as const })) : [])]} />
       <p className="small muted" data-testid="opt-breakevens">
         At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
         {before.length > 0 && <>Breaks even at {points(before)}{c ? " before charges" : ""}. </>}

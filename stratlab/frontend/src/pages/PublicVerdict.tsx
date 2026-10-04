@@ -3,7 +3,8 @@ import { useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { money, pct, signClass, TF_NAME } from "../lib/format";
 import type { CheckStatus, Stats, VerdictKind } from "../lib/types";
-import { LineChart } from "../components/Charts";
+import { XYChart } from "../components/Charts";
+import { moneyCompact } from "../lib/chartFormat";
 import { Logo } from "../components/Logo";
 import { Loading, STATUS_NAME } from "../components/ui";
 
@@ -62,12 +63,11 @@ export function PublicVerdict() {
             <section className="card stack" style={{ gap: 10 }}>
               <div className="spread"><h2 className="h3">Return after costs</h2><span className="small muted">{v.checks.length} honesty checks · {v.passed} passed</span></div>
               {snap.series.t.length > 1 && (
-                <LineChart ariaLabel="Strategy against buy and hold" height={240} split={snap.series.split}
+                <XYChart ariaLabel="Strategy against buy and hold" height={240} split={snap.series.split} times={snap.series.t} compare
                   splitNotes={["tuned on these years", "never seen"]}
-                  labels={snap.series.t.map((t) => new Date(t).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }))}
-                  format={(x) => money(x, cur)} axisFormat={(x) => money(x, cur)}
-                  lines={[{ label: "Strategy", values: snap.series.equity, color: "var(--ink)", width: 1.8 },
-                    { label: "Buy and hold", values: snap.series.buy_hold, color: "var(--muted)", width: 1.2, dash: "4 4" }]} />
+                  format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "USD")}
+                  series={[{ id: "strategy", label: "Strategy", values: snap.series.equity, color: "var(--ink)", width: 2 },
+                    { id: "hold", label: "Buy and hold", values: snap.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" }]} />
               )}
               <div className="stats-grid opt-stats">
                 {[["Return after costs", pct(snap.stats.ret), snap.stats.ret], ["Buy and hold", pct(snap.stats.buy_hold_ret), snap.stats.buy_hold_ret],

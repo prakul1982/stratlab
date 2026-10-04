@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, moneyShort, price, signClass, when } from "../lib/format";
+import { money, price, signClass, when } from "../lib/format";
 import { HELP } from "../lib/help";
 import type { OptionSnapshot } from "../lib/types";
-import { LineChart } from "../components/Charts";
+import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info, Loading } from "../components/ui";
 import { Earlier, splitToday } from "../components/Earlier";
 import { contract, OrderList, ordersBetween, ordersSince } from "../components/OrderList";
+import { moneyCompact } from "../lib/chartFormat";
 
 const TZ = "Asia/Kolkata";
 const inr = (v: number | null | undefined) => money(v, "INR");
@@ -146,11 +147,10 @@ export function OptionsSession() {
       <section className="card stack" style={{ gap: 10 }}>
         <h3 className="h3">Paper equity</h3>
         {snap.equity_curve.length > 1 ? (
-          <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((x) => t(x.t))} height={170}
-            axisLabels={snap.equity_curve.map((x) => new Date(x.t).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: TZ }))}
-            format={(v) => inr(v)} axisFormat={(v) => moneyShort(v, "INR")} baseline={a.capital}
-            lines={[{ label: "Account", values: snap.equity_curve.map((x) => x.eq), color: "var(--blue)", width: 1.6 }]} />
-        ) : <p className="muted small">Fills in minute by minute while the market is open.</p>}
+          <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((x) => t(x.t))} height={170} times={snap.equity_curve.map((x) => x.t)} tz={TZ}
+            format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} baseline={a.capital}
+            lines={[{ label: "Account", values: snap.equity_curve.map((x) => x.eq), color: "var(--series-1)", width: 2 }]} />
+        ) : <ChartEmpty height={170}>Fills in minute by minute while the market is open.</ChartEmpty>}
       </section>
     </div>
   );

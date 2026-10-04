@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, moneyShort, signClass } from "../../lib/format";
+import { money, signClass } from "../../lib/format";
 import { track } from "../../lib/analytics";
 import { AsOf, Empty, Info, Loading, Modal, STATUS_NAME } from "../../components/ui";
-import { DrawdownBand, LineChart } from "../../components/Charts";
+import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash, Upload } from "../../components/Icons";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
+import { moneyCompact } from "../../lib/chartFormat";
 
 /* The real-trade journal (Trade space): import a tradebook or tax P&L, see every round trip with its charges, keep a
  * note on each, and see the stats and the backtest verdict's honesty checks run on the real trades. Facts about past
@@ -184,9 +185,9 @@ export function JournalPage() {
           <Stats s={s} />
           <section className="card stack" style={{ gap: 12 }} aria-labelledby="j-curve">
             <h2 id="j-curve" className="h2">Running P&amp;L after charges</h2>
-            <LineChart lines={[{ values: s.equity.map((p) => p.v), color: "var(--blue)", label: "P&L after charges", width: 2 }]}
-              labels={s.equity.map((p) => when(p.t))} axisLabels={s.equity.map((p) => day(p.t))} format={(v) => inr(v)} axisFormat={(v) => moneyShort(v, "INR")}
-              baseline={0} ariaLabel={`Running P&L after charges over ${s.n} trades, ending at ${inr(s.net)}`} />
+            <XYChart series={[{ values: s.equity.map((p) => p.v), color: "var(--series-1)", label: "P&L after charges", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]}
+              times={s.equity.map((p) => p.t)} format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} testId="journal-curve"
+              refs={[{ v: 0, strong: true }]} ariaLabel={`Running P&L after charges over ${s.n} trades, ending at ${inr(s.net)}`} />
             <p className="tiny muted" style={{ margin: 0 }}>Each point is a trade's exit, adding up from ₹0. {s.first && s.last ? `${day(s.first)} to ${day(s.last)}.` : ""}</p>
           </section>
           {j.breakdowns ? <Breakdowns b={j.breakdowns} r={j.r} /> : <Locked plan={j.plan_name} what="Breakdowns by day, time of day, setup, instrument and holding time, and R-multiples" />}
