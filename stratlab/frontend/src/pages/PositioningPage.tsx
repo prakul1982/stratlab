@@ -119,11 +119,10 @@ function SidesFig({ label, long, short, words, chg }: { label: string; long: num
   return (
     <div className="space-fig" data-testid="sides-fig">
       <span className="tiny muted">{label}</span>
+      {/* the bar sits inside the number: a figure is three rows (label, number, note) shared with its neighbours */}
       {long == null || short == null ? <b className="num">–</b> : (
-        <>
-          <b className="num pos-sides"><span>{pct(long)} {words[0]}</span><span>{pct(short)} {words[1]}</span></b>
-          <span className="pos-split-bar" aria-hidden="true"><span style={{ width: `${long}%` }} /></span>
-        </>
+        <b className="num pos-sides"><span>{pct(long)} {words[0]}</span><span>{pct(short)} {words[1]}</span>
+          <span className="pos-split-bar" aria-hidden="true"><span style={{ width: `${long}%` }} /></span></b>
       )}
       {chg != null && <span className="tiny muted">{pts(chg)}</span>}
     </div>

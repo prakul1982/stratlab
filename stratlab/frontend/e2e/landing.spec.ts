@@ -38,16 +38,26 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   // what ships today, one line each
   const research = page.locator("#invest");
   for (const t of ["Company pages", "Deep dive", "Results calendar", "Corporate actions", "Deals and insider trades", "Surveillance lists",
-    "Filings and red flags", "Screens", "Stage 2 scan", "Sector rotation"]) await expect(research.getByText(t, { exact: true })).toBeVisible();
+    "Filings and red flags", "Screens", "Stage 2 scan", "Sector rotation", "Market breadth"]) await expect(research.getByText(t, { exact: true })).toBeVisible();
   const portfolio = page.locator("#money");
-  for (const t of ["My Holdings", "Tax report", "Share cards and invites"]) await expect(portfolio.getByText(t, { exact: true })).toBeVisible();
+  for (const t of ["My Holdings", "Tax report", "Mutual funds", "Net worth", "Tax tools", "US stocks in Indian tax", "ITR-ready export", "Money calendar",
+    "Share cards and invites"]) await expect(portfolio.getByText(t, { exact: true })).toBeVisible();
   await expect(portfolio).toContainText("Zerodha");
   await expect(portfolio).toContainText("Groww");
   await expect(portfolio).toContainText("ZIP");
-  for (const t of ["Walk-forward test", "Options, live", "Paper trading", "Strategy library"]) await expect(page.locator("#trade").getByText(t, { exact: true })).toBeVisible();
+  await expect(portfolio).toContainText("Not a filed return");
+  for (const t of ["Walk-forward test", "Options, live", "Paper trading", "Strategy library", "Positioning", "Trade journal"]) await expect(page.locator("#trade").getByText(t, { exact: true })).toBeVisible();
   await expect(page.locator("#markets .lp-market")).toHaveCount(11);
-  for (const t of ["Stock alerts", "Results and corporate actions", "Newsletters"]) await expect(page.locator("#alerts").getByText(t, { exact: true })).toBeVisible();
+  for (const t of ["Stock alerts", "Results and corporate actions", "Market breadth", "Advance tax", "Money calendar", "Newsletters"]) await expect(page.locator("#alerts").getByText(t, { exact: true })).toBeVisible();
+  // the grids stay full: four research tools a row, three alerts a row, Money's cards in pairs
+  expect(await page.locator("#invest .lp-tool").count() % 4).toBe(0);
+  expect(await page.locator("#alerts .lp-tool").count() % 3).toBe(0);
+  expect(await page.locator("#money .lp-beyond-card").count() % 2).toBe(0);
   await expect(page.locator("#faq details")).not.toHaveCount(0);
+  // the option chains StratLab records, as the server records them
+  const options = page.locator("#faq details", { hasText: "Can I test options strategies?" });
+  await options.locator("summary").click();
+  await expect(options).toContainText("NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX");
   // the invite rule, as the owner wrote it
   const invites = page.locator("#faq details", { hasText: "How do invite rewards work?" });
   await invites.locator("summary").click();
@@ -72,6 +82,13 @@ test("landing: the plans match the server's plans exactly", async ({ page, reque
   await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`up to ${plans.free.holdings} holdings`);
   await expect(page.locator('.lp-price[data-plan="basic"]')).toContainText(`${plans.basic.screens} saved screens, ${plans.basic.holdings} holdings`);
   await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText(`Paper trade ${plans.pro.live_limit} strategies`);
+  await expect(page.locator("#pricing")).toContainText(`Paying yearly in rupees: Basic ₹${plans.basic.price_year.toLocaleString("en-IN")}, Pro ₹${plans.pro.price_year.toLocaleString("en-IN")}.`);
+  await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`${plans.free.mf_schemes} mutual funds and ${plans.free.networth_items} net worth entries`);
+  await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`your last ${plans.free.journal_trades} trades`);
+  // each space's paid tools on the card of the plan that adds them (tests/test_plan_copy.py checks every one)
+  await expect(page.locator('.lp-price[data-plan="basic"]')).toContainText("full trade journal");
+  await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText("ITR-ready");
+  for (const card of await page.locator(".lp-price").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
 });
 
 test("landing: facts only, no data sources, fits the screen", async ({ page }) => {

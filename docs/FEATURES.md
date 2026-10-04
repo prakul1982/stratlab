@@ -2,64 +2,35 @@
 
 [← Back to the project overview](../README.md)
 
-Everything that ships today, grouped the way the landing page groups it. Plan limits are in the
-[README's plans table](../README.md#plans) and in [`plans.py`](../stratlab/backend/app/plans.py), which is the only
+Everything that ships today, grouped the way the app and the landing page group it: three spaces, **Trade** (the
+strategy lab), **Invest** (research) and **Money** (your own finances), then alerts and your account. Plan limits are in
+the [README's plans table](../README.md#plans) and in [`plans.py`](../stratlab/backend/app/plans.py), which is the only
 place they are set.
 
-StratLab reports facts: reported numbers, exchange filings, prices and how a set of rules would have done in the past.
-It never says buy, sell or hold, gives no price targets, ratings or scores, and never ranks companies as better or
-worse. Public pages, emails and the app never name where market data comes from.
+StratLab reports facts: reported numbers, exchange filings, prices, your own files, and how a set of rules would have
+done in the past. It never says buy, sell or hold, gives no price targets, ratings or scores, and never ranks companies
+or funds as better or worse. Every estimate says what it assumes and the date it's as of. Public pages, emails and the
+app never name where market data comes from.
 
 ## Getting around
 
 | You want to… | Where it is |
 | --- | --- |
-| Get started | New accounts see a **first steps** checklist on Home: run a backtest, add to the watchlist, open a deep dive, start paper trading, set up newsletters or alerts. Each step ticks itself when you really do it; the list goes once it's done, dismissed or the account is a month old |
-| Take the tour | A short tour opens the first time you sign in; **Tour** at the bottom of the sidebar reopens it |
-| Ask or do anything | **Ask** at the top of the sidebar or Home, or **Ctrl+K** (⌘K). "deep dive Apollo Hospitals", "which sectors are leading?", "red flags in my watchlist", "compare TCS and Infosys" open the right page; "Test: buy NIFTY when RSI drops below 30" builds the rules and runs the test; "what is walk-forward?" is answered in place. Pasting a strategy imports it |
-| See which markets are open | **Markets now** at the bottom of the sidebar: how many are open, each one's next open or close, and **weekend** or **holiday** when an exchange is shut |
-| Put investing or trading first | **Account → What you're here for** (asked once at sign-up). It orders the menu, Home and the examples; nothing is hidden |
-| Read at night | **Night mode** at the bottom of the sidebar |
+| Pick a space | **Trade · Invest · Money · All** at the top of the menu. Each space has its own menu and home page (`/trade`, `/invest`, `/money`); **All** shows every menu group, folded. The choice is kept on your account; a link into another space shows that space's menu |
+| Get started | New accounts see a **first steps** checklist on their space's home: run a backtest, add to the watchlist, open a deep dive, start paper trading, set up newsletters or alerts. Each step ticks itself when you really do it; the list goes once it's done, dismissed or the account is a month old |
+| Take the tour | A short tour opens the first time you sign in; the account menu at the foot of the sidebar (your initials) reopens it |
+| Ask or do anything | **Ask or do anything** at the top of the menu, or **Ctrl+K** (⌘K). "deep dive Apollo Hospitals", "which sectors are leading?", "red flags in my watchlist", "compare TCS and Infosys" open the right page, labelled by space; "Test: buy NIFTY when RSI drops below 30" builds the rules and runs the test; "what is walk-forward?" is answered in place. Pasting a strategy imports it |
+| See which markets are open | **N of M markets open** at the foot of the menu: a pop-up with each market's next open or close, and **weekend** or **holiday** when an exchange is shut |
+| Choose where StratLab opens | **Account → What you see first**: what you're here for (Trade, Invest, Manage my money, or All of it, asked once at sign-up) and your experience. It picks the space the menu and `/` open in; nothing is hidden |
+| Read at night | **Dark mode** in the account menu at the foot of the sidebar |
 | Put it on your phone | **Account → On your phone**: install to the home screen and turn on notifications |
+| Find what's current | Lists show what's live or coming first; what's finished folds under one line with a count: stopped paper sessions, earlier orders and trades, alerts fired earlier, results days gone by this week, corporate actions of the last two weeks, and the money calendar's past week. Nothing is deleted |
 
-## Research
-
-| You want to… | Where it is |
-| --- | --- |
-| Look up a company | **Investing → Companies**, or search. India (NSE, and BSE-only companies) and the US: price and chart, key numbers, results against estimates, who owns it, news, and an AI read whose facts are plain numbers (growth, price trend, debt and cash, margins and returns) and whose ideas open as a notebook in one click |
-| Read a company's facts without signing in | The public pages at `stratlab.studio/stocks/in/SYMBOL` and `/stocks/us/SYMBOL`, built for search engines and listed in the sitemaps |
-| Understand the business and its plans | **Deep dive** on any company page: ten years of sales, profit, margins, capex and free cash flow, the last twelve quarters, then the business model and capex and growth plans read from the company's own presentations and call transcripts (India) or 10-K and earnings releases (US). Every quote is checked against its document. Pick how far back to read, from the last year to the last 5 years |
-| Measure it the way its industry is measured | In the deep dive: industry measures (occupancy for hospitals, NIM and NPAs for banks, RevPAR for hotels, EBITDA per tonne for cement), and valuation on EV/EBITDA, price to book or P/E, whichever its industry uses |
-| See whether management delivered | **Check past calls** (US: **Check past releases**) in the deep dive builds the **management report card**: each stated target against the reported result, met, missed or not due yet, with the quote and source |
-| Run fixed checks | The **investor checklist** in the deep dive: pass, watch or fail on trend, growth, returns, margins, debt, cash conversion, promoter or insider activity, filings and the report card, adjusted to the industry, with the number behind each |
-| Take it away as slides | **Slides (PowerPoint)** or **Slides (PDF)** in the deep dive |
-| Know when companies report | **Research → Results**: Indian results board meetings and US results dates, from a week back to four weeks ahead |
-| Know when dividends, bonuses and splits go ex | **Research → Corporate actions**: dividends, bonus issues, splits, consolidations, buybacks, rights issues and demergers by ex-date and record date, for your stocks or every company, India or US. Each company page has a panel of those ahead and the last three years' |
-| See who traded a company's shares | **Deals and insider trades** on any Indian company page and deep dive: promoters', directors' and key staff's trades and pledges, substantial acquisitions, and bulk and block deals, as filed |
-| Check exchange surveillance | Badges on Indian company pages, search results, screens, holdings and paper trading: long- and short-term ASM with the stage, GSM stage, ESM, trade-to-trade (BE/BZ), price-band changes and the F&O ban, each with an (i) saying what the measure does and the list's date |
-| Check filings for red flags | **Investing → Red flags** for the India watchlist, or **Filings and red flags** on any Indian company page: fund raises, promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades, each linked to the filing |
-| Filter companies by plain facts | **Research → Screens**: sector, size, 3-year revenue growth, margins, debt to equity, ROE and ROCE, dividend yield, P/E, Stage, distance from the 52-week high, red-flag filings, promoter or insider buying and surveillance. **Save this screen** keeps it and emails new matches on Saturday morning |
-| Find Stage 2 stocks with the Supertrend up | **Investing → Stage 2 trend scan** on your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click |
-| See which sectors are leading | **Investing → Sector rotation**: sectors, size and style indices or US industries as Leading, Weakening, Lagging or Improving, with a trail and **Animate**; **Stocks →** shows a sector's biggest stocks against it |
-| Keep a watchlist | **Watch** on a company page; **Investing → Watchlist**, and **Watchlist at a glance** for trend, rotation, red flags, checklist and report card per company |
-| Explore a theme or the market's mood | **Research → Themes** and **Research → Market pulse**; **Research → Compare** for two companies side by side |
-| Read past newsletters | **News** |
-| Share a company's facts | **Share** on a company page or deep dive: a card with price, 1-year range and key numbers, and a link that previews as the card on WhatsApp, X and LinkedIn and opens the public page |
-| Know how fresh the numbers are | Every page with company numbers says when its prices and numbers are from |
-
-## Portfolio and tax
+## Trade: the strategy lab
 
 | You want to… | Where it is |
 | --- | --- |
-| See your own portfolio | **Investing → My Holdings**: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (CSV, Excel or the broker's HTML `.xls`), or any file with a column for the stock (symbol, ISIN or name) and one for the quantity, or type them in. Value, gain or loss, sector mix, and each stock's trend, filings, results date and surveillance flags. Seen only by you; **Delete** removes everything |
-| Track dividends and corporate actions on what you hold | In **My Holdings**: dividends with an ex-date ahead and those of the last 12 months (estimated), and a bonus or split since the holdings were saved, offered as **Apply** or **Already in my file**, with **Undo** |
-| Estimate capital gains | **Tax report**: upload tradebooks, tax P&L files, or the broker's ZIP of tax P&L files (up to 10 MB a file). Buys and sales are matched first in, first out per company (a tax P&L line keeps the buy the broker matched it with); short and long term at the rates for the sale date (the 23 July 2024 change included); the long-term exemption per financial year; 2018 grandfathering; intraday shown apart; set-off rules applied. Open lots below cost are listed with how long each is held. **Download CSV** and **Download PDF summary** keep a copy. An estimate to check with a CA, not tax advice |
-| Invite a friend | **Account → Invite friends**: your link, who joined and the free months earned. Invite friends, both get a month of Basic: when a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a month (about a week extra). Account shows "Use: 2 of 2 · Subscribed: 1 of 2 · Extra: 0 weeks" and friends waiting to subscribe. Paying users bank the free time for later |
-
-## Strategy testing
-
-| You want to… | Where it is |
-| --- | --- |
+| See it all at once | **Trade home** (`/trade`): Options, paper sessions running now, the trade journal's totals, the strategy library and import, today's positioning, and your notebooks |
 | Test a new idea | **New notebook**: pick the market, then describe the idea in plain words or start from a classic one |
 | Bring a strategy you already have | **Import a strategy**: a StratLab export, a config file, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words. It sets up a notebook, a group notebook or an Options structure and lists anything it couldn't carry over |
 | Tweak a rule | Tap any highlighted word in **The rules**; **×** removes a rule, **+ Add** adds one, **Edit in words** rebuilds them |
@@ -70,8 +41,10 @@ worse. Public pages, emails and the app never name where market data comes from.
 | Check it isn't one lucky chart | **Does it work on similar stocks?** on a verdict |
 | Compare two runs | **Compare experiments →** in a notebook |
 | Test on a whole group | **Testing on → Or test on a group**: NIFTY 50, Bank NIFTY, F&O stocks, US mega caps, large coins or your own list, with one pot of capital |
-| Paper trade | **Paper trade** on a notebook or verdict; **Paper trading** shows every session and what's at stake across them, per currency |
-| Paper trade options | **Options**: underlying, expiry and structure (up to eight legs), **Price it now**, then **Start paper trading**; enter at a set time or when a notebook's rules signal |
+| Paper trade | **Paper trade** on a notebook or verdict; **Paper trading** lists running sessions first (stopped ones fold under **Stopped sessions**) and what's at stake across them, per currency. A session shows **Orders today**, with the rest under **Earlier orders** |
+| Paper trade options | **Options**: underlying, expiry and structure (up to eight legs), **Price it now**, then **Start paper trading**; enter at a set time or when a notebook's rules signal. A session page shows **Today** first (the open trade with its orders folded under it, and trades closed today, or one line such as "No trades today. Next entry 09:30."), then **Earlier trades** folded with their total after costs; tap a trade to see its orders, grouped by the moment they were sent |
+| See who holds index derivatives | **Positioning** (a tab beside Options, and in the Trade menu): the exchange's participant-wise open interest and volume for clients, DIIs, FIIs and proprietary traders, in index or stock futures and options, long and short with each side's share and the change from the day before; FII and DII cash market buying and selling; the put-call ratio of NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX; and one index's chain facts: max pain, open interest and its change by strike, the strikes with the most open interest and the at-the-money IV. Each section says where its numbers come from and how many days are stored, and a missing number says why. Today's numbers on every plan; the history charts and the IV percentile and rank on Basic |
+| Keep a journal of your real trades | **Trade journal**: bring a tradebook (every broker the tax report reads, F&O included), tax P&L files or their ZIP (equity, F&O, commodity, currency), the trades already in your tax report, or add trades by hand. Every purchase and sale is paired into round trips (part fills, scaling in and out, shorts; options past expiry closed at zero) with their charges. Each trade takes a setup tag, notes, links, feelings and mistakes, and a planned stop and target for R-multiples. Stats and breakdowns by weekday, hour, setup, instrument, holding time, segment and side; the verdict's checks on what you really did (enough trades, luck or edge, bad-luck drawdown, charges); and paper vs real per setup. Free keeps your last 50 trades with the basic stats; Basic and Pro everything. **Delete my journal** removes it |
 | Borrow or publish a strategy | **Strategy library**: rules published with their verdict, luck included; **Copy and re-test** |
 | Share a verdict | **Share verdict**: a card with the chart and the four checks, or a public link that never shows your rules |
 | Save the rules | **Export** in a notebook (Pro) |
@@ -80,14 +53,61 @@ Markets: India (NSE and BSE stocks, indices and F&O), Indian currency futures, I
 US, UK, Europe, Japan, forex, global commodities, and any CSV of candles. Each uses its own hours, currency,
 holidays, fees and taxes.
 
+## Invest: research
+
+| You want to… | Where it is |
+| --- | --- |
+| See it all at once | **Invest home** (`/invest`): company search, your watchlist's prices, results today for your stocks, today's market breadth, and red flags in your watchlist |
+| Look up a company | **Companies**, or search. India (NSE, and BSE-only companies) and the US: price and chart, key numbers, results against estimates, who owns it, news, and an AI read whose facts are plain numbers (growth, price trend, debt and cash, margins and returns) and whose ideas open as a notebook in one click |
+| Read a company's facts without signing in | The public pages at `stratlab.studio/stocks/in/SYMBOL` and `/stocks/us/SYMBOL`, built for search engines and listed in the sitemaps |
+| Understand the business and its plans | **Deep dive** on any company page: ten years of sales, profit, margins, capex and free cash flow, the last twelve quarters, then the business model and capex and growth plans read from the company's own presentations and call transcripts (India) or 10-K and earnings releases (US). Every quote is checked against its document. Pick how far back to read, from the last year to the last 5 years |
+| Measure it the way its industry is measured | In the deep dive: industry measures (occupancy for hospitals, NIM and NPAs for banks, RevPAR for hotels, EBITDA per tonne for cement), and valuation on EV/EBITDA, price to book or P/E, whichever its industry uses |
+| See whether management delivered | **Check past calls** (US: **Check past releases**) in the deep dive builds the **management report card**: each stated target against the reported result, met, missed or not due yet, with the quote and source |
+| Run fixed checks | The **investor checklist** in the deep dive: pass, watch or fail on trend, growth, returns, margins, debt, cash conversion, promoter or insider activity, filings and the report card, adjusted to the industry, with the number behind each |
+| Take it away as slides | **Slides (PowerPoint)** or **Slides (PDF)** in the deep dive |
+| Know when companies report | The **Results** tab: Indian results board meetings and US results dates, from a week back to four weeks ahead; this week's days gone by fold under **Earlier this week** |
+| Know when dividends, bonuses and splits go ex | The **Corporate actions** tab: dividends, bonus issues, splits, consolidations, buybacks, rights issues and demergers by ex-date and record date, for your stocks or every company, India or US; **Coming up** first, the **Last two weeks** folded below. Each company page has a panel of those ahead and the last three years' |
+| See who traded a company's shares | **Deals and insider trades** on any Indian company page and deep dive: promoters', directors' and key staff's trades and pledges, substantial acquisitions, and bulk and block deals, as filed |
+| Check exchange surveillance | Badges on Indian company pages, search results, screens, holdings and paper trading: long- and short-term ASM with the stage, GSM stage, ESM, trade-to-trade (BE/BZ), price-band changes and the F&O ban, each with an (i) saying what the measure does and the list's date |
+| Check filings for red flags | **Scans → Red flags** for the India watchlist, or **Filings and red flags** on any Indian company page: fund raises, promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades, each linked to the filing |
+| Filter companies by plain facts | **Scans → Screener**: sector, size, 3-year revenue growth, margins, debt to equity, ROE and ROCE, dividend yield, P/E, Stage, distance from the 52-week high, red-flag filings, promoter or insider buying and surveillance. **Save this screen** keeps it and emails new matches on Saturday morning |
+| Find Stage 2 stocks with the Supertrend up | **Scans → Trend scan** on your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click |
+| See which sectors are leading | **Scans → Sector rotation**: sectors, size and style indices or US industries as Leading, Weakening, Lagging or Improving, with a trail and **Animate**; **Stocks →** shows a sector's biggest stocks against it |
+| See how many stocks take part in a move | **Market breadth** (in the Invest menu, and a Scans tab): for all NSE stocks, the NIFTY 50, NIFTY 500, Midcap 150, Smallcap 250 or US large caps, each day's advances and declines, stocks above their 20, 50 and 200-day averages, 52-week highs and lows, big moves, Stage 2 counts and up and down volume, with the A/D line, McClellan oscillator and summation, breadth thrust and TRIN, a table by sector, and an alert when the share above the 50-day average crosses your level. Every stock counts once, worked out from closing prices after each close. Today's numbers on every plan; the history, charts and sector table on Basic |
+| Keep a watchlist | **Watch** on a company page; **Watchlist**, with **List** and **At a glance** (trend, rotation, red flags, checklist and report card per company) as tabs |
+| Explore a theme or the market's mood | The **Themes** and **Market pulse** tabs; **Compare** for two companies side by side |
+| Read past newsletters | **News** |
+| Share a company's facts | **Share** on a company page or deep dive: a card with price, 1-year range and key numbers, and a link that previews as the card on WhatsApp, X and LinkedIn and opens the public page |
+| Know how fresh the numbers are | Every page with company numbers says when its prices and numbers are from |
+
+## Money: what you own
+
+Everything here is seen only by you and deleted in one step from its own page. Tax figures are estimates to check
+with a chartered accountant (CA), not tax advice.
+
+| You want to… | Where it is |
+| --- | --- |
+| See it all at once | **Money home** (`/money`): your holdings' value and gain or loss, this financial year's capital gains tax estimate (with what it assumes), and a card for every Money tool |
+| See your own portfolio | **My Holdings**: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (CSV, Excel or the broker's HTML `.xls`), or any file with a column for the stock (symbol, ISIN or name) and one for the quantity, or type them in, with company suggestions as you type. Value, gain or loss, sector mix, and each stock's trend, filings, results date and surveillance flags. ETFs, REITs, InvITs and sovereign gold bonds keep a label of their own. **India / US**: US stocks are priced in dollars and counted in the rupee total at the day's rate (left out of filings, corporate actions, the tax report and My Stocks). **Delete** removes everything |
+| Track dividends and corporate actions on what you hold | In **My Holdings**: dividends with an ex-date ahead and those of the last 12 months (estimated), and a bonus or split since the holdings were saved, offered as **Apply** or **Already in my file**, with **Undo** |
+| Estimate capital gains | **Tax report**: upload tradebooks, tax P&L files, or the broker's ZIP of tax P&L files (up to 10 MB a file). Buys and sales are matched first in, first out per company (a tax P&L line keeps the buy the broker matched it with); short and long term at the rates for the sale date (the 23 July 2024 change included); the long-term exemption per financial year; 2018 grandfathering; intraday shown apart; set-off rules applied. Mutual fund and US share sales join the same set-off; gold, silver, international and debt ETFs and gold bonds go under their own heads. Open lots below cost are listed with how long each is held. **Download CSV** and **Download PDF summary** keep a copy |
+| Estimate the year's total tax | In the **Tax report**, per financial year: F&O, commodity and currency results read from the ZIP (result, charges and turnover), your other income (with the salary part) and old-regime deductions, the regime, your age band and whether you're resident. Slab rates for FY 2020-21 to 2026-27, the 87A rebate, surcharge and cess, loss set-off and carry-forward, and the ITR-3 and tax audit facts, with **How we got here**. Covers only the income entered or imported |
+| See your mutual funds | **Mutual funds**: upload the detailed consolidated account statement (CAS) PDF from CAMS or KFintech with its password, or a CSV of transactions; the file and the password are never stored. Each scheme's value at the latest NAV, what you put in, the gain, XIRR per scheme and overall, the mix by category and ELSS lock-in dates. Capital gains per financial year (Basic) with grandfathering and the rules for specified funds. Free keeps 5 schemes |
+| Add up what you own and owe | **Net worth**: your holdings and funds, plus EPF, PPF, NPS, deposits (FD, RD), gold and gold bonds, cash, property, crypto and anything else you add, each valued with its rule and date. Loans with the EMI, the balance owed, interest this year and what a prepayment would do (shorter loan or lower EMI). Insurance policies with the next due date and yearly premium (kept apart from net worth). Allocation bars, a monthly history (Basic) and a CSV export. Free keeps 5 entries |
+| Track dividends, advance tax and the exemption | **Tax tools**, three tabs. **Dividends**: from your tax P&L's dividend sheet, a dividend file, or estimated from holdings (labelled), with the TDS expected per company and US tax withheld; per company on Basic, the year's totals for everyone; choose whether they count in the total tax estimate. **Advance tax**: the due dates for everyone, and (Pro) the amount due by each date from the year's estimate, less the TDS and payments you enter, with 234C and 234B interest; **reminders** a week and a day before each date (dates only). **Long-term exemption**: how much of this year's exemption is used and left, and (Pro) each open lot's long-term gain today, lots turning long-term in 30, 60 or 90 days, and lots below cost |
+| Put US shares into Indian tax | **US stocks tax**: US trades from a file or a form; each sale in rupees at SBI's TT buying rate on the date Rule 115 names (the RBI reference rate, labelled, where SBI's is missing), long or short term under the 24-month rule, first in, first out through splits. US dividends with the 25% withheld and the foreign tax credit (Form 67 workings), and the calendar-year Schedule FA per lot with the peak and 31 December values. Each year's totals and each lot's term for everyone; the sale-by-sale workings, credit and Schedule FA on Pro. For a resident individual |
+| Hand your year to a CA | **ITR-ready export**: the figures from the tax report, tax tools and US stocks laid out like the ITR-2 and ITR-3 schedules (Schedule 112A scrip by scrip, CG, dividends by period, intraday and F&O turnover, tax paid, foreign income and tax relief, Schedule FA) as an Excel workbook, a ZIP of CSVs or one PDF for your CA (Pro; the preview is for everyone). Not a filed return: StratLab files nothing |
+| Keep every money date in one place | **Money calendar**: advance tax and return due dates, results and corporate actions for your holdings and watchlist, gold bond maturities, deposit maturities, premiums and EMIs from Net worth, and your own dates (once, monthly or yearly), as a list or a month. **Subscribe** from Google Calendar or Apple Calendar with a private link you can turn off or replace (amounts only if you ask). **Reminders** (Basic): one morning message 1 to 14 days ahead for the kinds of dates you pick, by email or phone |
+
 ## Alerts and email
 
 | You want to… | Where it is |
 | --- | --- |
-| Get told when a stock does something | **Set alert** on a company page, the deep dive or the watchlist: a price level, a day's move, crossing a moving average, an RSI level, a Stage change, a new 52-week high or low, and for Indian stocks new insider trades, deals or surveillance changes. All are on **Investing → Alerts** |
+| Get told when a stock does something | **Set alert** on a company page, the deep dive or the watchlist: a price level, a day's move, crossing a moving average, an RSI level, a Stage change, a new 52-week high or low, and for Indian stocks new insider trades, deals or surveillance changes. All are on **Alerts** (in the Invest menu), with **Fired today** first and **Fired earlier** folded |
 | Hear about results and corporate actions | Results-day and results-out messages for companies you follow; a message when one announces a dividend, bonus or split, and the evening before its ex-date |
-| Hear about red flags and scans | The evening red-flag alert for the watchlist and the daily Stage 2 scan alert (Basic and Pro) |
+| Hear about red flags, scans and breadth | The evening red-flag alert for the watchlist, the daily Stage 2 scan alert, and a market breadth alert when the share of a group's stocks above their 50-day average crosses your level (Basic and Pro) |
 | Get every paper trade | Turn on alerts in **Account**: each trade as it happens and a short report after each market closes (Basic and Pro) |
+| Be reminded of money dates | **Tax tools → Advance tax → reminders** (everyone) and **Money calendar → Reminders** (Basic and Pro) |
 | Get the market and your stocks by email | **Account → Newsletters**: the Market Brief (India or US) and My Stocks, daily (Basic and Pro) or weekly (everyone) |
 | Choose where alerts arrive | **Account**: phone notifications, Telegram, or email to an address confirmed from a link. **Account → Emails from StratLab** for tips and reminders. Every email has a one-click unsubscribe |
 
@@ -95,6 +115,8 @@ holidays, fees and taxes.
 
 | You want to… | Where it is |
 | --- | --- |
-| See your plan, usage or upgrade | **Account → Plan and usage** and **Plans** |
+| See your plan, usage or upgrade | **Account → Plan and usage** and **Plans** (every limit and feature side by side) |
 | Get a GST invoice | **Account → Invoices**: every payment's invoice, and the name, address and GSTIN for future ones |
+| Invite a friend | **Account → Invite friends**: your link, who joined and the free time earned. Invite friends, both get a month of Basic: when a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a month (about a week extra). Account shows "Use: 2 of 2 · Subscribed: 1 of 2 · Extra: 0 weeks" and friends waiting to subscribe. Paying users bank the free time for later |
 | Check the connections | **Account → Connection check**: market data and each AI provider |
+| Remove your data | Each Money page and the trade journal delete their own data in one step; **Delete** in My Holdings and the tax report remove every saved position and trade |

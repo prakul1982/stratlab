@@ -216,6 +216,7 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
   await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "2", "15", "Unlimited"]);
+  await expect(row("Trades the journal keeps")).toHaveText(["Trades the journal keeps", "50", "Unlimited", "Unlimited"]);
   await expect(row("All 20+ indicators")).toHaveText(["All 20+ indicators", "–", "✓", "✓"]);
   await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
   await expect(row("Indian F&O")).toHaveText(["Indian F&O", "–", "–", "✓"]);
@@ -1567,6 +1568,12 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   expect(lo + sh).toBeCloseTo(100, 1);
   await expect(main.getByTestId("sides-fig")).toContainText(/[\d.]+% long\s*[\d.]+% short/);
   await expect(main.getByTestId("sides-fig")).toContainText(/Long share [+−][\d.]+ pts from the day before/);
+  // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
+  const overlaps = await main.locator(".space-fig").evaluateAll((figs) => figs.flatMap((f) => {
+    const rows = Array.from(f.children).map((c) => c.getBoundingClientRect()).filter((b) => b.height > 0);
+    return rows.slice(1).flatMap((b, i) => (b.top < rows[i].bottom - 1 ? [`${(f.textContent ?? "").slice(0, 40)}: row ${i + 2} over row ${i + 1}`] : []));
+  }));
+  expect(overlaps, "figures drawn over themselves").toEqual([]);
   // where the numbers come from and how much is stored, in a line per section
   await expect(main.getByTestId("part-source")).toContainText("end-of-day participant-wise file");
   await expect(main.getByTestId("part-source")).toContainText(/\d+ trading days since/);

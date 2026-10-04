@@ -60,14 +60,30 @@ const RESEARCH: [string, string][] = [
   ["Screens", "Filter companies by sector, size, growth, margins, debt, returns, yield, P/E, Stage, distance from the 52-week high and red-flag filings. Save a screen and get its new matches by email."],
   ["Stage 2 scan", "Which stocks in your watchlist or a ready-made group are in Stage 2 with the Supertrend up, fresh signals first, and a one-click backtest of the same rules."],
   ["Sector rotation", "Every sector against the market as Leading, Weakening, Lagging or Improving, with the trail it took, down to each sector's biggest stocks."],
-  ["Watchlist, news and markets", "Your watchlist at a glance, the market pulse, themes and side-by-side comparisons, past newsletters on News, and which exchanges are open right now."],
+  ["Market breadth", "How many stocks in a group rose or fell, sit above their 20, 50 and 200-day averages, or made new highs and lows, day by day, with a table by sector."],
+  ["Watchlist at a glance", "Your watchlist with live prices, and each company's trend, sector, red flags, checklist and report card on one screen."],
+  ["Themes, pulse and compare", "Companies grouped by theme, the market's mood today, and two companies side by side."],
+  ["News and markets now", "Past newsletters on News, and which exchanges are open right now, with weekends and holidays."],
+  ["Public company pages", "Every listed Indian and US company has a facts page anyone can open without signing in, and a shared card opens it."],
 ];
 
 const PORTFOLIO: [string, string, string][] = [
-  ["My Holdings", "Import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (CSV, Excel or the broker's own export), or any file with a stock and a quantity column. See value, gain or loss, sector mix, and each stock's trend, filings, results date and surveillance flags.", "Seen only by you, deleted in one step"],
+  ["My Holdings", "Import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (CSV, Excel or the broker's own export), or any file with a stock and a quantity column, and add US stocks too. See value, gain or loss, sector mix, and each stock's trend, filings, results date and surveillance flags. ETFs, REITs, InvITs and gold bonds keep their own label.", "Seen only by you, deleted in one step"],
   ["Dividends, bonuses and splits", "Dividends ahead and from the last 12 months on what you hold. A bonus or split since you saved your holdings is offered as a one-click Apply, with Undo, and nothing changes without you.", "Your holdings kept in step"],
-  ["Tax report", "Capital gains on listed Indian shares from your broker's tradebooks and tax P&L files, or the ZIP of them: matched first in, first out, short and long term at the rates of the day, the yearly exemption, 2018 grandfathering, intraday shown apart, and set-off. Download it as CSV or PDF.", "An estimate to check with your CA"],
+  ["Tax report", "Capital gains on listed Indian shares and funds from your broker's tradebooks and tax P&L files, or the ZIP of them: matched first in, first out, short and long term at the rates of the day, the yearly exemption, 2018 grandfathering and set-off. Add F&O and your other income for the year's total tax under either regime. Download it as CSV or PDF.", "An estimate to check with your CA"],
+  ["Mutual funds", "Upload your CAMS or KFintech consolidated statement (CAS). Each fund's value at the latest NAV, what you put in, the gain, XIRR, your mix by category, and capital gains by financial year. The file and its password are never stored.", "Facts and arithmetic, never fund ratings"],
+  ["Net worth", "Your stocks and funds, plus PF, PPF, NPS, deposits, gold, property and cash you add, minus loans. EMIs, interest this year and what a prepayment would change, a register of your insurance policies, and a monthly history.", "Each value shows how it's worked out"],
+  ["Tax tools", "Dividends with the TDS on them, advance tax due by each date with the interest if it falls short, and how much of this year's long-term exemption is used, lot by lot.", "Dates and totals on every plan"],
+  ["US stocks in Indian tax", "Your US share sales in rupees at the rate the Income-tax Rules use, long or short term under the 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the Schedule FA table.", "For a resident individual"],
+  ["ITR-ready export", "Your year laid out like the ITR-2 and ITR-3 schedules: 112A scrip by scrip, capital gains, dividends, F&O turnover, tax paid and Schedule FA, as a spreadsheet or one PDF for your CA.", "Not a filed return"],
+  ["Money calendar", "Advance tax and return due dates, results and dividends for your stocks, maturities, premiums, EMIs and your own dates in one list. Subscribe from Google or Apple Calendar with a private link.", "Dates only, never advice"],
   ["Share cards and invites", "Share a company's facts as a card that previews on WhatsApp, X and LinkedIn. Invite friends, both get a month of Basic: once a friend has used StratLab on 3 different days in their first 2 weeks, they get a month free, and so do you for your first 2 such friends a year and your first 2 who subscribe.", "A month of Basic each"],
+];
+
+/** Trade beyond the backtest: who holds the index derivatives, and your own real trades. */
+const TRADE_MORE: [string, string, string][] = [
+  ["Positioning", "Who holds index and stock futures and options (clients, DIIs, FIIs and proprietary traders), long and short; FII and DII cash flows; and each index's put-call ratio, max pain, open interest by strike and ATM IV.", "The exchange's numbers, as published"],
+  ["Trade journal", "Bring your broker's tradebook or tax P&L, equity and F&O. Every real trade paired into round trips after charges, your notes on each, and the verdict's honesty checks run on what you really did.", "Only you can see it"],
 ];
 
 const TOOLS: [string, string][] = [
@@ -89,7 +105,10 @@ const ALERTS: [string, string][] = [
   ["Stock alerts", "A price level, a big day's move, crossing a moving average, an RSI level, a Stage change or a new 52-week high or low; for Indian stocks, new insider trades, deals and surveillance changes too."],
   ["Results and corporate actions", "On results day and when the numbers are out, when a company you follow announces a dividend, bonus or split, and the evening before its ex-date."],
   ["Red flags and scans", "An evening alert when a watchlist company files a red flag, and a daily one when a stock newly lines up in the Stage 2 scan."],
+  ["Market breadth", "When the share of a group's stocks above their 50-day average crosses a level you pick."],
   ["Paper trades", "Every paper trade as it happens, and a short report a few minutes after each market closes."],
+  ["Advance tax", "A reminder a week and a day before each advance tax due date. Dates only: the amounts stay on the page."],
+  ["Money calendar", "One morning message, 1 to 14 days ahead, for the kinds of dates you pick: tax, your stocks' results and dividends, maturities, premiums and EMIs, and your own."],
   ["Newsletters", "The Market Brief for India or the US and My Stocks for the companies you follow, daily or weekly, plus a Saturday email of a saved screen's new matches."],
   ["Where they arrive", "As a notification on your phone (install StratLab from the browser), on Telegram, or by email to an address you confirmed. Every email has a one-click unsubscribe."],
 ];
@@ -112,10 +131,13 @@ const FAQ: [string, string][] = [
   ["Do I need to know how to code?", "No. You describe the idea in plain words. If something is missing, like when to sell, StratLab asks. You can also tap any rule to change it."],
   ["Where do the numbers come from?", "Indian prices come from a live exchange feed; other markets from established market data sources, some a few minutes behind. Company numbers come from reported results and the companies' own filings with the exchanges and the SEC. Every page with company numbers says how fresh they are."],
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
-  ["Which holdings files can I import?", "The holdings export from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities is recognised by itself; any CSV or Excel file with a column for the stock and one for the quantity works too. Only you can see your holdings, and you can delete them in one step."],
-  ["How does the tax report work?", "Upload your broker's tradebooks or tax P&L files, or the ZIP of them (up to 10 MB a file). StratLab matches buys and sales first in, first out, splits short from long term, applies the rate change of 23 July 2024, the yearly long-term exemption and 2018 grandfathering, and shows intraday trades apart. It's an estimate to check with a chartered accountant, not tax advice."],
-  ["Can I test options strategies?", "You can paper trade them live on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask, at a set time or when a notebook's rules signal. Backtesting options needs real past prices for every strike, so StratLab records the NIFTY, BANKNIFTY and SENSEX chains every 5 minutes to build that history rather than guess with a pricing model."],
-  ["What does it cost?", `Free to start: ${L.free.backtests_per_month} backtests and ${L.free.ai_builds_per_month} AI strategy builds a month, 5 market days of paper trading, ${L.free.deepdives_per_month} deep dives a month, ${L.free.stock_alerts} stock alerts, ${L.free.screens} saved screens, ${L.free.holdings} holdings and the tax report. Basic (₹${PRICE.basic[0].toLocaleString("en-IN")} a month including GST) adds every indicator, ${fmt(L.basic.backtests_per_month)} backtests, group and options paper trading, trade notifications, ${L.basic.deepdives_per_month} deep dives, the Stage 2 scan and daily newsletters. Pro (₹${PRICE.pro[0].toLocaleString("en-IN")}) adds ${fmt(L.pro.backtests_per_month)} backtests and deep dives, ${L.pro.live_limit} paper sessions at once, Indian F&O, options on your own signals and export.`],
+  ["Which files can I import?", "For stocks, the holdings export from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities is recognised by itself; any CSV or Excel file with a column for the stock and one for the quantity works too, and US stocks can be added by hand. For mutual funds, the CAMS or KFintech consolidated statement (CAS) as a PDF. For trades and tax, your broker's tradebooks, tax P&L files or the ZIP of them."],
+  ["How does the tax report work?", "Upload your broker's tradebooks or tax P&L files, or the ZIP of them (up to 10 MB a file). StratLab matches buys and sales first in, first out, splits short from long term, applies the rate change of 23 July 2024, the yearly long-term exemption and 2018 grandfathering, and shows intraday trades apart. Add your F&O results and other income, pick the regime, and it estimates the year's total tax. It's an estimate to check with a chartered accountant, not tax advice."],
+  ["Does StratLab file my tax return?", "No. The ITR-ready export lays out your year the way the ITR-2 and ITR-3 schedules ask for it, as a spreadsheet or a PDF for your CA. You or your CA file the return; StratLab files nothing."],
+  ["Who can see my money data?", "Only you. Your holdings, funds, net worth, trades and tax figures are kept per account, never shown to anyone else, and each page deletes its data in one step. A mutual fund statement and its password are read once and not stored."],
+  ["Can I test options strategies?", "You can paper trade them live on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask, at a set time or when a notebook's rules signal. Backtesting options needs real past prices for every strike, so StratLab records the NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX chains every 5 minutes to build that history rather than guess with a pricing model."],
+  ["What is the Positioning page?", "The exchange's own end-of-day numbers: how many index and stock futures and options clients, DIIs, FIIs and proprietary traders held long and short, what FIIs and DIIs bought and sold in the cash market, and facts from each index's option chain (put-call ratio, max pain, open interest by strike and ATM IV). It describes positions that were open; it says nothing about what anyone will do next."],
+  ["What does it cost?", `Free to start: ${L.free.backtests_per_month} backtests and ${L.free.ai_builds_per_month} AI strategy builds a month, 5 market days of paper trading, ${L.free.deepdives_per_month} deep dives a month, ${L.free.stock_alerts} stock alerts, ${L.free.screens} saved screens, ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds, the tax report and the money calendar. Basic (₹${PRICE.basic[0].toLocaleString("en-IN")} a month or ₹${PRICE.basic[1].toLocaleString("en-IN")} a year, including GST) adds every indicator, ${fmt(L.basic.backtests_per_month)} backtests, group and options paper trading, trade notifications, ${L.basic.deepdives_per_month} deep dives, the Stage 2 scan, daily newsletters, the full trade journal, positioning and breadth history, every fund and net worth entry, and money reminders. Pro (₹${PRICE.pro[0].toLocaleString("en-IN")} a month or ₹${PRICE.pro[1].toLocaleString("en-IN")} a year) adds ${fmt(L.pro.backtests_per_month)} backtests and deep dives, ${L.pro.live_limit} paper sessions at once, Indian F&O, options on your own signals, export, advance tax amounts, US stocks in Indian tax and the ITR-ready export.`],
   ["How do invite rewards work?", "Invite friends, both get a month of Basic. Your invite link is in Account. When a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a month (about a week extra). If you already pay, your free time is kept and starts if your paid plan ever stops."],
   ["Can I read a company's facts without signing in?", "Yes. Every listed Indian and US company has a public facts page at stratlab.studio/stocks/in/SYMBOL or /stocks/us/SYMBOL, and a shared company card opens it too."],
   ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon and sends alerts as notifications."],
@@ -135,9 +157,9 @@ const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], 
 
 /** The three spaces, one line each, in the order the page tells them. */
 const SPACES: [string, string, string, string][] = [
-  ["trade", "Trade", "The strategy lab", "Describe a trading idea in plain words, test it on years of real prices after real costs with four honesty checks, then paper trade it or an option structure with fake money."],
-  ["invest", "Invest", "Research", "Any Indian or US company from its own filings: ten years of numbers, results dates, corporate actions, deals, surveillance lists, red flags, screens and your watchlist."],
-  ["money", "Money", "What you own", "Your holdings from your broker's file, dividends, bonuses and splits kept in step, and capital gains by financial year from your tradebooks."],
+  ["trade", "Trade", "The strategy lab", "Describe a trading idea in plain words, test it on years of real prices after real costs with four honesty checks, paper trade it or an option structure with fake money, and keep a journal of your real trades."],
+  ["invest", "Invest", "Research", "Any Indian or US company from its own filings: ten years of numbers, results dates, corporate actions, deals, surveillance lists, red flags, screens, market breadth and your watchlist."],
+  ["money", "Money", "What you own", "Your holdings, mutual funds and net worth from your own files, capital gains and the year's tax estimate, US stocks in Indian tax, an ITR-ready export and a money calendar."],
 ];
 
 /** A section's eyebrow, heading and one line under it. */
@@ -184,7 +206,7 @@ export function Login() {
           <div className="stack" style={{ gap: 24 }}>
             <span className="eyebrow">Trade · Invest · Money · Indian and US stocks</span>
             <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>
-            <p className="serif lp-lede">Your money in one place. Test a trading idea or an option structure on years of real prices before your money does, research any Indian or US company from its own filings, and keep your holdings and capital gains together.</p>
+            <p className="serif lp-lede">Your money in one place. Test a trading idea or an option structure on years of real prices before your money does, research any Indian or US company from its own filings, and keep your holdings, funds, net worth and tax together.</p>
             <div className="row wrap" style={{ gap: 12 }}>
               {cta()}
               <a className="btn quiet lp-cta-2" href="#trade">See what's inside</a>
@@ -236,6 +258,12 @@ export function Login() {
               <p className="small muted" style={{ maxWidth: "60ch" }}>Straddles, strangles, iron flies, condors, spreads or any structure up to eight legs on NSE, BSE, MCX and NSE currency options, filled at the real bid and ask, at a set time or when a notebook's rules signal. Fake money, real prices.</p>
             </div>
             <span className="lp-fix">No real orders, ever</span>
+          </div>
+
+          <div className="lp-grid2">
+            {TRADE_MORE.map(([t, b, tag]) => (
+              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
+            ))}
           </div>
 
           <div id="checks" className="stack lp-anchor" style={{ gap: 20 }}>
@@ -298,7 +326,7 @@ export function Login() {
       <section id="money" className="lp-sec">
         <div className="lp-wrap stack" style={{ gap: 32 }}>
           <Head eyebrow="Money" title="What you own, and what it means at tax time.">
-            Bring the file your broker already gives you. StratLab reads it, keeps it private, and reports facts about your own positions.
+            Bring the files you already have: your broker's exports and your mutual fund statement. StratLab reads them, keeps them private, and reports facts and arithmetic about what you own.
           </Head>
           <div className="lp-grid2">
             {PORTFOLIO.map(([t, b, tag]) => (
@@ -364,7 +392,7 @@ function Pricing() {
     <section id="pricing" className="lp-sec">
       <div className="lp-wrap stack" style={{ gap: 32 }}>
         <Head eyebrow="Pricing" title="Free to start. Pay when you need more.">
-          Every market, company pages, deep dives, screens, My Holdings and the tax report are on the Free plan. Paid plans raise the limits and add the scans, alerts and live tools. Cancel any time.
+          Every market, company pages, deep dives, screens, today's positioning and breadth, My Holdings, the tax report and the money calendar are on the Free plan. Paid plans raise the limits and add the scans, alerts, live tools, history and the deeper tax tools. Cancel any time.
         </Head>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
@@ -390,7 +418,7 @@ function Pricing() {
             );
           })}
         </div>
-        <p className="small muted" style={{ maxWidth: "80ch" }}>Rupee prices include 18% GST, and every payment gets a GST invoice. Visitors outside India see prices in their own currency. Paid plans renew each month until you cancel, which you can do any time from Account.</p>
+        <p className="small muted" style={{ maxWidth: "80ch" }}>Rupee prices include 18% GST, and every payment gets a GST invoice. Visitors outside India see prices in their own currency. Paying yearly in rupees: Basic ₹{PRICE.basic[1].toLocaleString("en-IN")}, Pro ₹{PRICE.pro[1].toLocaleString("en-IN")}. Paid plans renew each month or year until you cancel, which you can do any time from Account.</p>
       </div>
     </section>
   );

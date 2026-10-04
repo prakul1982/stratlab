@@ -68,13 +68,13 @@ def check() -> dict:
         raise RuntimeError("Couldn't read the database's size: " + r["error"])
     if r.get("missing"):
         return {"name": "Database space", "area": "Server", "state": "warn", "seconds": None,
-                "detail": "The size check isn't set up: copy the SQL from Admin → Checks → Storage into Supabase's SQL editor once."}
+                "detail": "The size check isn't set up: copy the SQL from Admin → Data checks → Storage into Supabase's SQL editor once."}
     share, state = r["share"], "pass"
     detail = f"{_mb(r['total'])} of {_mb(r['limit'])} used ({share:.0%})."
     if share >= WARN_AT:
         state = "fail" if share >= FAIL_AT else "warn"
-        detail += (" Move the market data to the second database: Admin → Checks → Storage." if r["market"]["enabled"]
-                   else " Add a Postgres on Railway and set MARKET_DATABASE_URL, then move the market data (Admin → Checks → Storage).")
+        detail += (" Move the market data to the second database: Admin → Data checks → Storage." if r["market"]["enabled"]
+                   else " Add a Postgres on Railway and set MARKET_DATABASE_URL, then move the market data (Admin → Data checks → Storage).")
     if r["market"].get("error"):
         state, detail = "fail", detail + " The second database can't be reached: " + r["market"]["error"]
     return {"name": "Database space", "area": "Server", "state": state, "detail": detail, "seconds": None}
