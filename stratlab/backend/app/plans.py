@@ -34,7 +34,7 @@ PLANS = {
         "networth_items": None,
         "mf_schemes": None,       # unlimited
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
-                     "investor_home", "networth", "mf_gains"},
+                     "investor_home", "networth", "mf_gains", "dividends"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -51,15 +51,17 @@ PLANS = {
         "networth_items": None,
         "mf_schemes": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
-                     "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains"},
+                     "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
 # newsletter: the daily editions of both newsletters (the weekly ones are for everyone);
 # scans: the Stage 2 + Supertrend scan and its alert; filings: red flags for the whole watchlist and the evening alert
-# (red flags on a single company page are for everyone); networth: unlimited Net worth entries and its history chart; mf_gains: mutual fund capital gains per financial year
+# (red flags on a single company page are for everyone); networth: unlimited Net worth entries and its history chart; mf_gains: mutual fund capital gains per financial year;
+# dividends: each company's dividends, TDS and US withholding (the year totals are for everyone); tax_tools: advance tax
+# amounts and the lot-by-lot long-term exemption facts (the due dates and the exemption used are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
-            "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains")
+            "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

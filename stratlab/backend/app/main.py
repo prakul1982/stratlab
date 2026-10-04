@@ -29,6 +29,7 @@ from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, tax_export, tax_lots, tax_total
 from . import money_mf
+from . import money_advance_tax, money_routes
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
@@ -171,6 +172,7 @@ corp_job = corp_actions.Job(lambda: {"in": filings_feed, "us": research_hub.yaho
 surv_job = surveillance.Job(lambda: filings_feed, lambda changes, now: stock_alerts.fire_events(
     [{**c, "kind": "surveillance"} for c in changes], now, _alert_limit))
 lifecycle_job = lifecycle.Job()
+advance_tax_job = money_advance_tax.Job()       # advance tax reminders, for those who turned them on
 invite_job = invite_rewards.Job()
 
 
@@ -203,6 +205,7 @@ async def lifespan(app: FastAPI):
     corp_job.start()
     surv_job.start()
     lifecycle_job.start()
+    advance_tax_job.start()
     invite_job.start()
     networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
@@ -224,6 +227,7 @@ app = FastAPI(title="StratLab API", lifespan=lifespan)
 research_routes.setup(research_hub, _gemini, _anthropic)
 app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
+app.include_router(money_routes.router)
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -631,7 +635,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
         lifecycle.set_tips(uid, False)
     if act and what in ("screens", "all"):
         screens.mute(uid)
-    if act and what not in ("tips", "screens"):
+    if act and what in ("advance_tax", "all"):
+        money_advance_tax.set_remind(uid, False)
+    if act and what not in ("tips", "screens", "advance_tax"):
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
@@ -2206,7 +2212,7 @@ def tax_view(profile) -> dict:
     i = tax_inputs(profile)
     mf = tax_mf(profile)
     rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"],
-                          extra=mf["rows"])
+                          extra=mf["rows"], dividends=money_routes.dividends_for_tax(profile))
     rep["names"].update(mf["names"])
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
@@ -2266,6 +2272,7 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     except holdings_file.FileError as e:
         err(400, "bad_file", str(e))
     trades, missed = tax_match(parsed["trades"])
+    div_added = money_routes.import_from_tax_file(profile, data, filename)     # a tax P&L's dividend sheet, if it has one
     before = tax_lots.load(profile["id"])
     old = [] if mode == "replace" else before["trades"]
     merged, added, dup = tax_lots.merge(old, trades)
@@ -2286,7 +2293,7 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
                             "years": sorted({b["fy"] for b in parsed.get("business") or []})},
                "over_limit": over, "problems": parsed["problems"][:200], "problem_count": len(parsed["problems"]),
                "not_listed": missed[:50], "skipped": parsed.get("skipped", []), "check": parsed.get("check", []),
-               "files": parsed.get("files", []), "report": tax_view(profile)})
+               "files": parsed.get("files", []), "dividends_added": div_added, "report": tax_view(profile)})
 
 
 @app.put("/tax/fmv")
@@ -2316,9 +2323,11 @@ def tax_income(req: TaxInputsReq, profile=Depends(current_profile)):
 
 @app.delete("/tax")
 def tax_delete(profile=Depends(current_profile)):
-    """Delete my tax data: every uploaded trade and file, and the income entered for the estimate, at once."""
+    """Delete my tax data: every uploaded trade and file, the income entered for the estimate, and the dividends and
+    advance tax figures of the tax tools, at once."""
     tax_lots.delete(profile["id"])
     tax_total.delete_inputs(profile["id"])
+    money_routes.delete_all(profile["id"])
     return {"deleted": True}
 
 
@@ -2332,7 +2341,8 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     mf = tax_mf(profile)
     c["realised"] += mf["rows"]
     c["names"].update(mf["names"])
-    y = tax_lots.with_total(tax_lots.year(fy, c["realised"], c["intraday"], limit=None), i["business"], i["income"].get(fy))
+    y = tax_lots.with_total(tax_lots.year(fy, c["realised"], c["intraday"], limit=None), i["business"], i["income"].get(fy),
+                            money_routes.dividends_for_tax(profile).get(fy, 0.0))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":
         below = tax_lots.below_cost(c["open"], i["quotes"], i["today"]) if fy == tax_lots.fy_of(i["today"]) else None

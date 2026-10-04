@@ -216,12 +216,13 @@ def _with_surcharge(b: dict, total: float, special_income: float, cap: float) ->
 
 
 def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, business: float,
-             business_parts: dict[str, float] | None = None) -> dict:
+             business_parts: dict[str, float] | None = None, dividends: float = 0.0) -> dict:
     """The year's total tax estimate.
 
     `buckets` are the capital gains year's buckets (key, rate, after_setoff, exempt, taxable); `intraday` the
     speculative profit or loss; `business` the F&O, commodity and currency profit or loss after charges, with
-    `business_parts` the same by segment. Returns the steps in plain words, a breakdown table and the total."""
+    `business_parts` the same by segment; `dividends` the year's dividend income (income from other sources, at slab
+    rates), when the user includes it. Returns the steps in plain words, a breakdown table and the total."""
     v = clean(inputs)
     r = rules(fy, v["regime"], v["age"], v["resident"])
     if r is None:
@@ -254,6 +255,10 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     if v["other"]:
         steps.append(f"Other income you entered: {money(v['other'])}" + (f", of which {money(salary)} is salary or pension." if salary else ", none of it salary.")
                      + (" All of it is taken as salary, as you didn't say how much is." if v["salary"] is None and salary else ""))
+    div = max(0.0, min(float(dividends or 0.0), MAX_AMOUNT)) if isinstance(dividends, (int, float)) and math.isfinite(dividends) else 0.0
+    if div:
+        rest += div
+        steps.append(f"Dividends of {money(div)} are income from other sources, taxed at your slab rate (from Tax tools, where they can be left out).")
     if std:
         steps.append(f"Standard deduction of {money(std)} on salary ({v['regime']} regime, {money(r['std'])} at most).")
 
@@ -394,6 +399,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     parts["capital_gains"] = round(parts["capital_gains"] + parts.pop("slab_gains"), 2)
 
     line("Other income (salary, interest and the like)", v["other"])
+    if div:
+        line("Dividends (income from other sources)", div)
     if std:
         line("Less standard deduction", -std)
     line("Intraday (speculative) profit or loss", intraday)
@@ -423,7 +430,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
             "slab_tax": round(b["slab"], 2), "special_tax": round(b["special_total"], 2), "rebate": round(b["rebate"], 2),
             "surcharge": round(sc - relief, 2), "surcharge_rate": rate, "cess": round(cess, 2),
             "income": {"normal": round(normal, 2), "special": round(special_income, 2), "total": round(total, 2),
-                       "salary": round(salary, 2), "standard_deduction": round(std, 2), "deductions": round(ded, 2)},
+                       "salary": round(salary, 2), "standard_deduction": round(std, 2), "deductions": round(ded, 2),
+                       "dividends": round(div, 2)},
             "carry_forward": {"speculative": round(spec_cf, 2), "business": round(biz_cf, 2)},
             "steps": steps, "lines": lines, "notes": notes, "confirmed": r["confirmed"], "source": r["source"]}
 

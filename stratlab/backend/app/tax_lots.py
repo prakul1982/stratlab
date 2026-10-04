@@ -247,15 +247,16 @@ def business_year(fy: int, chunks: list[dict]) -> dict:
             "turnover_contract": _r(sum(x["turnover_contract"] for x in segs)), "trades": sum(x["trades"] for x in segs)}
 
 
-def with_total(y: dict, business: list[dict], inputs: dict | None) -> dict:
+def with_total(y: dict, business: list[dict], inputs: dict | None, dividends: float = 0.0) -> dict:
     """A year from year() with its F&O totals, the total tax estimate on the user's inputs (and the other regime's
-    figure on the same inputs, as a fact), and the return and audit facts."""
+    figure on the same inputs, as a fact), and the return and audit facts. `dividends`: the year's dividend income
+    the user included (from Tax tools)."""
     biz = business_year(y["fy"], business)
     parts = {s["seg"]: s["net"] for s in biz["segments"]}
     v = tax_total.clean(inputs) if inputs else tax_total.default_inputs()
-    total = tax_total.estimate(y["fy"], v, y["buckets"], y["intraday"]["pnl"], biz["net"], parts)
+    total = tax_total.estimate(y["fy"], v, y["buckets"], y["intraday"]["pnl"], biz["net"], parts, dividends=dividends)
     other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"],
-                               y["intraday"]["pnl"], biz["net"], parts)
+                               y["intraday"]["pnl"], biz["net"], parts, dividends=dividends)
     turnover = (y["intraday"].get("turnover") or 0) + biz["turnover"]
     return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)},
             "other_regime": {"regime": other["regime"], "total": other.get("total")} if other.get("available") else None,
@@ -620,20 +621,22 @@ def holdings_check(open_lots: list[dict], items: list[dict]) -> list[dict]:
 
 
 def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: list[dict], today: str,
-           business: list[dict] | None = None, inputs: dict[int, dict] | None = None, extra: list[dict] | None = None) -> dict:
+           business: list[dict] | None = None, inputs: dict[int, dict] | None = None, extra: list[dict] | None = None,
+           dividends: dict[int, float] | None = None) -> dict:
     """The whole page: every financial year with trades or F&O (and the current one), each with its total tax
     estimate, open lots below cost, and the lines that couldn't be worked out."""
     c = compute(trades, actions, fmv, today)
     c["realised"] += extra or []              # mutual fund sales (money_mf.realised), worked out there
     business, inputs = business or [], inputs or {}
-    fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today)},
+    fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today)}
+                 | set(dividends or {}),
                  reverse=True)
     unmatched = {}
     for u in c["unmatched"]:
         cur = unmatched.setdefault(u["key"], {"key": u["key"], "qty": 0.0, "first": u["d"]})
         cur["qty"] = round(cur["qty"] + u["qty"], 4)
         cur["first"] = min(cur["first"], u["d"])
-    return {"years": [with_total(year(y, c["realised"], c["intraday"]), business, inputs.get(y)) for y in fys], "current_fy": fy_of(today),
+    return {"years": [with_total(year(y, c["realised"], c["intraday"]), business, inputs.get(y), (dividends or {}).get(y, 0.0)) for y in fys], "current_fy": fy_of(today),
             "below_cost": below_cost(c["open"], quotes, today), "names": c["names"],
             "unmatched_sales": sorted(unmatched.values(), key=lambda u: u["first"])[:100],
             "holdings_check": holdings_check(c["open"], items) if items else [],

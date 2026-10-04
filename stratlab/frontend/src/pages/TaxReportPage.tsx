@@ -259,6 +259,7 @@ export function TaxReportPage() {
           </div>
 
           <TotalCard y={y} onSave={saveInputs} filing={y.filing.length > 0} />
+          <TaxToolsLink />
 
           <div className="stat-row">
             <div className="stat"><span className="tiny muted">Short-term gains (net)</span><b className={`num ${signClass(y.stcg.net)}`}>{inr(y.stcg.net)}</b><span className="tiny muted">{inr(y.stcg.gains)} gains · {inr(y.stcg.losses)} losses</span></div>
@@ -605,5 +606,16 @@ function FmvRow({ symbol, id, fmv, onSave }: { symbol: string; id: string; fmv?:
       <button className="btn quiet sm" disabled={!(n > 0)} onClick={() => { onSave(id, n); setV(""); }} aria-label={`Save the 31 Jan 2018 price for ${symbol}`}>Save</button>
       {fmv?.source === "yours" && <button className="btn quiet sm" onClick={() => onSave(id, null)} aria-label={`Clear my price for ${symbol}`}>Clear</button>}
     </div>
+  );
+}
+
+/** Where the dividends, advance tax and long-term exemption tools are. */
+function TaxToolsLink() {
+  return (
+    <section className="card stack" style={{ gap: 6 }} aria-label="Tax tools">
+      <h2 className="h2">Dividends, advance tax and the long-term exemption</h2>
+      <p className="small muted" style={{ margin: 0 }}>Dividend income with the TDS on it (and whether it goes into the estimate above), the advance tax due by each date with TDS and payments taken off, and how much of this year's long-term exemption is used.</p>
+      <Link className="btn quiet sm" style={{ alignSelf: "flex-start" }} to="/money/tax-tools">Open tax tools</Link>
+    </section>
   );
 }

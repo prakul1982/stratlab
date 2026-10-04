@@ -48,5 +48,7 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Stocks, funds, PF, PPF, NPS, FDs, gold and property, minus loans; with EMIs, prepayment maths and your policies." },
     { to: "/money/mutual-funds", label: "Mutual funds", icon: "layers", title: "Your funds from your CAS: value, XIRR, allocation and capital gains",
       blurb: "Import your CAMS/KFintech statement: each fund's value, XIRR, category mix and capital gains by year." },
+    { to: "/money/tax-tools", label: "Tax tools", icon: "receipt", title: "Dividends, advance tax and the long-term gains exemption",
+      blurb: "Dividends with TDS, advance tax due on each date with reminders, and how much of the ₹1.25 lakh exemption is left." },
   ],
 };
