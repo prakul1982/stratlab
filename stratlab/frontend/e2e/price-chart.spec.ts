@@ -3,9 +3,26 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // The price chart on a company page and on a backtest in a notebook: chart types, indicators, drawings, zoom and
 // reset, full screen, older candles loading on scroll-back, and nothing wider than a phone's screen.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
-const admin = { Authorization: "Bearer admin-token" };
-const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
-  refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
+// Desktop and phone run at the same time and both save drawings, so each signs in as its own user.
+const USERS: Record<string, [string, string, string]> = { desktop: ["admin-token", "u-admin", "owner@example.com"], phone: ["pro-token", "u-pro", "pro@example.com"] };
+let admin = { Authorization: "Bearer admin-token" };
+let session = sessionOf(USERS.desktop);
+function sessionOf([token, id, email]: [string, string, string]) {
+  return { access_token: token, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
+    refresh_token: "r", user: { id, aud: "authenticated", email, role: "authenticated", app_metadata: {}, user_metadata: {} } };
+}
+test.beforeEach(async ({ request }, info) => {
+  const u = USERS[info.project.name] ?? USERS.desktop;
+  admin = { Authorization: `Bearer ${u[0]}` };
+  session = sessionOf(u);
+  await request.put(`${API}/me/prefs`, { headers: admin, data: { level: "some", focus: "both" } });     // no welcome questions
+});
+
+/** No drawings on this symbol yet, for this test's user. */
+async function noDrawings(request: import("@playwright/test").APIRequestContext, symbol: string) {
+  const r = await request.put(`${API}/chart/drawings`, { headers: admin, data: { symbol, items: [] } });
+  expect(r.ok(), await r.text()).toBeTruthy();
+}
 
 async function open(page: Page, path: string) {
   const errors: string[] = [];
@@ -126,7 +143,8 @@ async function exercise(page: Page, chart: Locator, phone: boolean, key: string)
     await expect.poll(() => num(chart, "spacing")).toBeLessThan(s2);
   }
   await chart.getByRole("button", { name: "Reset the view" }).click();
-  await expect.poll(() => num(chart, "spacing")).toBeCloseTo(spacing, 1);
+  // back to the first view (the price axis may have widened a few px for longer labels meanwhile)
+  await expect.poll(async () => Math.abs(await num(chart, "spacing") / spacing - 1)).toBeLessThan(0.06);
 
   // log and % scales
   await chart.getByRole("button", { name: "Log" }).click();
@@ -158,7 +176,7 @@ async function exercise(page: Page, chart: Locator, phone: boolean, key: string)
 
 test("price chart on a company page: types, indicators, drawings, zoom, full screen", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
-  await request.delete(`${API}/chart/drawings`, { headers: admin });
+  await noDrawings(request, "IN:RELIANCE");
   const chunks: string[] = [];
   page.on("request", (r) => { if (/PriceChart-[\w-]+\.js$/.test(r.url())) chunks.push(r.url()); });
   const { chart, errors } = await open(page, "/research/IN/RELIANCE");
@@ -194,11 +212,10 @@ test("price chart on a backtest: candles with the trades and the rules' indicato
   const phone = info.project.name === "phone";
   const ema = { name: "Chart check", tf: "1d", entry: [{ l: { t: "ema", p: 10 }, op: "xa", r: { t: "ema", p: 30 } }],
     exit: [{ l: { t: "ema", p: 10 }, op: "xb", r: { t: "ema", p: 30 } }], risk: { capital: 10000, riskPct: 2, sl: 4, tgt: 0, brokerage: 0, slippage: 0.05 } };
-  await request.put(`${API}/me/prefs`, { headers: admin, data: { level: "some", focus: "both" } });
   const nb = await (await request.post(`${API}/notebooks`, { headers: admin, data: { name: `Chart ${info.project.name}`, question: "q", strategy: ema, instrument: "CRYPTO:BTC-USD" } })).json();
   const run = await request.post(`${API}/notebooks/${nb.id}/experiments`, { headers: admin, data: { days: 800 } });
   expect(run.ok(), await run.text()).toBeTruthy();
-  await request.delete(`${API}/chart/drawings`, { headers: admin });
+  await noDrawings(request, "CRYPTO:BTC-USD");
   const { chart, errors } = await open(page, `/n/${nb.id}/e/1`);
   await expect(chart).toHaveAttribute("data-studies", "2");          // EMA 10 and EMA 30, from the rules
   await expect(chart.locator(".pc-legend")).toContainText("EMA 10");
