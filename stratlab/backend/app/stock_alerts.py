@@ -25,9 +25,10 @@ from .engine.indicators import rsi, stage
 
 KEY = "stockalerts:"                 # app_settings: stockalerts:<uid> = {"uid", "items": [...], "sent": [...], "pending": [...]}
 REGIONS = ("IN", "US")
-KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal")
+KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance")
 NEEDS_BARS = {"ma", "rsi", "stage", "high52", "low52"}
-EVENTS = {"insider": ("insider", "sast"), "deal": ("bulk", "block")}   # alerts on exchange disclosures, not on the price
+EVENTS = {"insider": ("insider", "sast"), "deal": ("bulk", "block"),   # alerts on exchange disclosures, not on the price
+          "surveillance": ("surveillance",)}                   # and on the exchange's surveillance lists
 MAX_SEEN = 300                       # disclosure ids an event alert remembers, so none is sent twice
 MA_PERIODS = (20, 50, 100, 150, 200)
 RSI_PERIOD = 14
@@ -95,6 +96,8 @@ def describe(a: dict) -> str:
         return "A promoter or insider trade is disclosed"
     if k == "deal":
         return "A bulk or block deal is reported"
+    if k == "surveillance":
+        return "Enters or leaves an exchange surveillance list (ASM, GSM, ESM, trade-to-trade, F&O ban, price band)"
     return "Makes a new 52-week high" if k == "high52" else "Makes a new 52-week low"
 
 
@@ -115,7 +118,7 @@ def clean(req: dict) -> dict:
     if kind not in KINDS:
         raise AlertError("Pick what the alert should watch for.")
     if kind in EVENTS and region != "IN":
-        raise AlertError("Alerts on insider trades and bulk or block deals cover Indian stocks.")
+        raise AlertError("Alerts on exchange disclosures and surveillance lists cover Indian stocks.")
     op, v, period = req.get("op"), req.get("value"), req.get("period")
     out = {"region": region, "symbol": sym, "kind": kind, "op": None, "value": None, "period": None,
            "repeat": bool(req.get("repeat")), "note": str(req.get("note") or "").strip()[:120] or None}
@@ -553,11 +556,14 @@ def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
     seen = [x for x in st.get("seen") or [] if isinstance(x, str)]
     since = str(a.get("created_at") or "")[:10]
     new = [d for d in rows if isinstance(d, dict) and d.get("kind") in EVENTS.get(a["kind"], ()) and d.get("symbol") == a["symbol"]
-           and d.get("id") not in seen and str(d.get("filed") or d.get("date") or "") >= since]
+           and d.get("id") not in seen and str(d.get("filed") or d.get("date") or d.get("day") or "") >= since]
     if not new:
         return None, st
-    from .deals import describe as say
     st["seen"] = (seen + [d["id"] for d in new])[-MAX_SEEN:]
+    if a["kind"] == "surveillance":
+        from .surveillance import change_text
+        return f"{a['symbol']} {'; '.join(change_text(d) for d in new[:4])}. From exchange surveillance lists", st
+    from .deals import describe as say
     more = f"; and {len(new) - 1} more" if len(new) > 1 else ""
     return f"{a['symbol']}: {say(new[0])}{more}. From exchange disclosures", st
 

@@ -21,7 +21,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from html import escape
 
-from . import db, deals, sector_members, stock_pages
+from . import db, deals, sector_members, stock_pages, surveillance
 from .newsletter import job as news_job
 
 INDEX_KEY = "screens:index:"          # screens:index:IN = {"at", "rows": [...]}
@@ -70,6 +70,10 @@ HELP = {
     "insider_buy": "Purchases on the open market by the company's promoters, directors or key staff, from the "
                    "insider-trading disclosures they file with the exchange. Off-market transfers, employee stock "
                    "options and pledges don't count. India only.",
+    "surveillance": "Whether the stock is on one of the exchange's surveillance lists today: ASM (long or short "
+                    "term), GSM, ESM, trade-to-trade settlement, or the F&O ban period. These are the exchange's own "
+                    "trading measures (higher margins, narrower price bands, delivery-only trades), applied for a time. "
+                    "India only.",
     "red_flags": "Filings in the last three months that match fixed red-flag rules: fund raises (QIP, preferential, "
                  "rights, warrants), promoter pledges, auditor resignations, defaults, insolvency, regulator action "
                  "and rating downgrades. India only.",
@@ -204,7 +208,8 @@ def clean(region, filters) -> dict:
         filters = {}
     if not isinstance(filters, dict):
         raise ScreenError("Those filters didn't arrive in a form StratLab can read.")
-    out: dict = {"sector": [], "cap": [], "stage": [], "red_flags": None, "insider_buy": None, "insider_days": INSIDER_DAYS, "ranges": {}}
+    out: dict = {"sector": [], "cap": [], "stage": [], "red_flags": None, "insider_buy": None, "insider_days": INSIDER_DAYS,
+                 "surveillance": None, "surv_lists": [], "ranges": {}}
     sectors = filters.get("sector") or []
     if not isinstance(sectors, list) or len(sectors) > MAX_SECTORS or not all(isinstance(s, str) and 0 < len(s) <= 80 for s in sectors):
         raise ScreenError("Pick sectors from the list.")
@@ -228,6 +233,13 @@ def clean(region, filters) -> dict:
         raise ScreenError(f"Promoter or insider bought: pick the last {', '.join(map(str, deals.SCREEN_DAYS))} days.")
     out["insider_buy"] = bought if bought in ("yes", "no") and region == "IN" else None
     out["insider_days"] = int(days) if days not in (None, "") else INSIDER_DAYS
+    surv, lists = filters.get("surveillance"), filters.get("surv_lists")
+    if surv not in (None, "", "any", "on", "off"):
+        raise ScreenError("Exchange surveillance: choose on a list, on none, or either.")
+    if lists not in (None, "") and (not isinstance(lists, list) or not all(isinstance(x, str) and x in surveillance.FAMILIES for x in lists)):
+        raise ScreenError("Exchange surveillance: pick lists from the choices.")
+    out["surveillance"] = surv if surv in ("on", "off") and region == "IN" else None
+    out["surv_lists"] = [x for x in surveillance.FAMILIES if x in (lists or [])] if out["surveillance"] else []
     ranges = filters.get("ranges")
     ranges = {} if ranges is None else ranges
     if not isinstance(ranges, dict):
@@ -280,6 +292,9 @@ def matches(region: str, r: dict, f: dict) -> bool:
         cut = (deals.ist_now().date() - timedelta(days=f.get("insider_days") or INSIDER_DAYS)).isoformat()
         if (f["insider_buy"] == "yes") != (str(r.get("insider_buy_at") or "") >= cut):
             return False
+    if f.get("surveillance"):
+        if (f["surveillance"] == "on") != surveillance.on_family(r["symbol"], f.get("surv_lists")):
+            return False
     for k, b in f["ranges"].items():
         v = _num(r.get(k))
         if v is None or (b["min"] is not None and v < b["min"]) or (b["max"] is not None and v > b["max"]):
@@ -297,6 +312,7 @@ def run(region: str, filters: dict, sort: str = "name", desc: bool = False, limi
         raise ScreenError("Sort by one of the table's columns.")
     index = index or load_index(region)
     hit = [r for r in index["rows"] if matches(region, r, f)]
+    flags = surveillance.snapshot()["flags"] if region == "IN" else {}
     text = sort in ("name", "symbol", "sector")
     have = [r for r in hit if r.get(sort) is not None]
     rest = sorted((r for r in hit if r.get(sort) is None), key=lambda r: r["name"].lower())
@@ -305,8 +321,16 @@ def run(region: str, filters: dict, sort: str = "name", desc: bool = False, limi
     rows = have + rest
     limit, offset = max(1, min(MAX_ROWS, int(limit or 100))), max(0, int(offset or 0))
     return {"region": region, "filters": f, "sort": sort, "desc": bool(desc), "total": len(rows), "offset": offset,
-            "rows": [{k: v for k, v in r.items() if k != "built_at"} for r in rows[offset:offset + limit]],
+            "rows": [_shown(region, r, flags) for r in rows[offset:offset + limit]],
             "indexed": len(index["rows"]), "as_of": as_of(index), "index_at": index.get("at")}
+
+
+def _shown(region: str, r: dict, flags: dict) -> dict:
+    """One row as the table shows it, with the stock's surveillance flags today (India)."""
+    out = {k: v for k, v in r.items() if k != "built_at"}
+    if region == "IN":
+        out["surveillance"] = flags.get(r["symbol"], [])
+    return out
 
 
 def meta(region: str) -> dict:
@@ -319,6 +343,7 @@ def meta(region: str) -> dict:
             "ranges": [{"id": k, "label": v[0], "unit": v[1], "help": v[2]} for k, v in RANGES.items()],
             "help": HELP, "red_flags": region == "IN", "columns": list(COLUMNS),
             "insider": {"days": list(deals.SCREEN_DAYS), "default": INSIDER_DAYS, "from": deals.buys().get("from")} if region == "IN" else None,
+            "surveillance": {"lists": [{"id": k, "label": v} for k, v in surveillance.FAMILY_NAME.items()]} if region == "IN" else None,
             "indexed": len(index["rows"]), "as_of": as_of(index), "index_at": index.get("at")}
 
 
@@ -345,6 +370,9 @@ def describe(region: str, f: dict) -> list[str]:
         days = f.get("insider_days") or INSIDER_DAYS
         out.append(f"A promoter or insider bought on the open market in the last {days} days" if f["insider_buy"] == "yes"
                    else f"No promoter or insider bought on the open market in the last {days} days")
+    if f.get("surveillance"):
+        names = " or ".join(surveillance.FAMILY_NAME[x] for x in f.get("surv_lists") or []) or "any exchange surveillance list"
+        out.append(f"On {names}" if f["surveillance"] == "on" else f"Not on {names}")
     if f["red_flags"]:
         out.append("Red-flag filings in the last 3 months" if f["red_flags"] == "yes" else "No red-flag filings in the last 3 months")
     return out

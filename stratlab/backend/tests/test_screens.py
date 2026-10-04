@@ -164,8 +164,8 @@ def test_fuzz_the_filters_never_crash(idx):
     """Random junk in every shape: either a clean ScreenError or a result, never anything else."""
     rng = random.Random(11)
     junk = [None, "", "x", 0, -1, 1.5, 1e309, float("nan"), True, [], {}, [1, "a"], {"min": "x"}, {"min": 1, "max": 0},
-            "<script>", "\x00", ["Energy"], [2], ["large"], "yes", {"min": -5}, 90, 365.0]
-    keys = ["sector", "cap", "stage", "red_flags", "insider_buy", "insider_days", "ranges", "other"]
+            "<script>", "\x00", ["Energy"], [2], ["large"], "yes", {"min": -5}, 90, 365.0, "on", "off", ["asm", "t2t"], ["xyz"]]
+    keys = ["sector", "cap", "stage", "red_flags", "insider_buy", "insider_days", "surveillance", "surv_lists", "ranges", "other"]
     for _ in range(600):
         f = {rng.choice(keys): rng.choice(junk) for _ in range(rng.randint(0, 4))}
         if rng.random() < 0.5:

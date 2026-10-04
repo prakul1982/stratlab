@@ -99,6 +99,11 @@ def stock_lines(r: dict, since: str) -> list[dict]:
         lines.append({"text": f"New filing ({'red flag' if i['severity'] == 'red' else 'worth a look'}): {i['label']}. {i['subject']}".strip(), "url": i.get("url")})
     for d in r.get("deals") or []:
         lines.append({"text": f"New disclosure. {d['text']}", "url": d.get("url")})
+    surv = r.get("surveillance") or {}
+    for c in surv.get("changes") or []:
+        lines.append({"text": f"Exchange surveillance: {c['text']} (list of {_day(c['day'])})", "url": None})
+    if surv.get("now") and not surv.get("changes"):
+        lines.append({"text": "On exchange surveillance lists: " + ", ".join(surv["now"]), "url": None})
     for h in r.get("headlines") or []:
         if not banned(h["headline"]):
             lines.append({"text": h["headline"], "url": h.get("url")})

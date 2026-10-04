@@ -57,6 +57,8 @@ def build():
                          json={"filename": name, "data": base64.b64encode(trades.read_bytes()).decode()})
     invite_rewards()
     main.corp_job.refresh("IN")             # the corporate-actions calendar, as the morning job would have built it
+    from app import surveillance
+    surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them
     screen_index()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)

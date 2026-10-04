@@ -9,14 +9,19 @@ export interface Filters {
   sector: string[]; cap: string[]; stage: number[]; red_flags: "yes" | "no" | null; ranges: Partial<Record<RangeId, Bound>>;
   /** a promoter or insider bought on the open market in the last `insider_days` days (India) */
   insider_buy?: "yes" | "no" | null; insider_days?: number;
+  /** on (or not on) one of the exchange surveillance lists in `surv_lists`, or any list when it is empty (India) */
+  surveillance?: "on" | "off" | null; surv_lists?: string[];
 }
-export const NO_FILTERS: Filters = { sector: [], cap: [], stage: [], red_flags: null, insider_buy: null, insider_days: 90, ranges: {} };
+export const NO_FILTERS: Filters = {
+  sector: [], cap: [], stage: [], red_flags: null, insider_buy: null, insider_days: 90, surveillance: null, surv_lists: [], ranges: {},
+};
 
 export interface ScreenMeta {
   region: Region; sectors: string[]; cap: { id: string; label: string }[]; stages: { id: number; label: string }[];
   ranges: { id: RangeId; label: string; unit: "%" | "x"; help: string }[]; help: Record<string, string>;
   red_flags: boolean; columns: string[]; indexed: number; as_of: string | null; index_at: string | null;
   insider: { days: number[]; default: number; from: string | null } | null;
+  surveillance?: { lists: { id: string; label: string }[] } | null;
 }
 
 export interface ScreenRow {
@@ -24,6 +29,8 @@ export interface ScreenRow {
   from_high: number | null; sales_cagr_3y: number | null; net_margin: number | null; opm: number | null; debt_equity: number | null;
   roe: number | null; roce: number | null; div_yield: number | null; pe: number | null; stage: number | null; red_flags: number | null;
   price_at: string | null;
+  /** the stock's exchange surveillance flags today (India) */
+  surveillance?: string[];
 }
 
 export interface ScreenResult {
@@ -51,6 +58,6 @@ export const screensApi = {
 
 /** How many conditions a screen has, for the filter button's badge. */
 export function conditionCount(f: Filters): number {
-  return (f.sector.length ? 1 : 0) + (f.cap.length ? 1 : 0) + (f.stage.length ? 1 : 0) + (f.red_flags ? 1 : 0) + (f.insider_buy ? 1 : 0)
+  return (f.sector.length ? 1 : 0) + (f.cap.length ? 1 : 0) + (f.stage.length ? 1 : 0) + (f.red_flags ? 1 : 0) + (f.insider_buy ? 1 : 0) + (f.surveillance ? 1 : 0)
     + Object.values(f.ranges).filter((b) => b && (b.min != null || b.max != null)).length;
 }

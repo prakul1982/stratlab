@@ -9,6 +9,7 @@ import { LineChart, type Marker } from "../components/Charts";
 import { Empty, Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
+import { SurvBadges, survRegion } from "../components/Surveillance";
 
 function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
   const { fail, refreshMe } = useApp();
@@ -61,6 +62,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
       <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
         <div className="stack" style={{ gap: 6 }}>
           <span className="eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
+          <SurvBadges region={survRegion(snap.instrument)} symbol={snap.instrument.symbol} />
           <h2 className="serif" style={{ fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em" }}>{snap.name}</h2>
         </div>
         <div className="row" style={{ gap: 12 }}>
@@ -182,6 +184,7 @@ export function PaperPage() {
                 border: r.id === sid ? "2px solid var(--ink)" : undefined }}>
               <b>{r.name}</b>
               <span className="small muted">{r.instrument.symbol} · {new Date(r.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+              <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
               <span className={`badge ${r.status}`} style={{ alignSelf: "flex-start" }}>{r.status}</span>
             </button>
           ))}

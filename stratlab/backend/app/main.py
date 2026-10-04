@@ -58,6 +58,7 @@ from . import ask, company_cards, daily_report, deals, first_steps, ideas, invit
 from .newsletter import job as news
 from . import results as results_calendar
 from . import corp_actions
+from . import surveillance
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
@@ -157,6 +158,9 @@ deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
 # corporate actions: the exchange's list for India, the price history's dividends and splits for the US
 corp_job = corp_actions.Job(lambda: {"in": filings_feed, "us": research_hub.yahoo})
+# the exchange's surveillance lists, twice a trading day; stocks entering or leaving one fire the stock alerts
+surv_job = surveillance.Job(lambda: filings_feed, lambda changes, now: stock_alerts.fire_events(
+    [{**c, "kind": "surveillance"} for c in changes], now, _alert_limit))
 lifecycle_job = lifecycle.Job()
 invite_job = invite_rewards.Job()
 
@@ -188,6 +192,7 @@ async def lifespan(app: FastAPI):
     newsletter_job.start()
     results_job.start()
     corp_job.start()
+    surv_job.start()
     lifecycle_job.start()
     invite_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
@@ -1206,6 +1211,10 @@ def alert_seed(region: str, sym: str) -> dict | None:
 def alert_note(a: dict, q: dict | None) -> str | None:
     """Say so when the price is already past the level, since the alert waits for the next crossing."""
     p = (q or {}).get("price")
+    if a["kind"] == "surveillance":
+        now = [f["label"] for f in surveillance.flags_for(a["symbol"])]
+        return (f"{a['symbol']} is on {', '.join(now)} now. " if now else f"{a['symbol']} isn't on an exchange surveillance list now. ") + \
+            "The alert fires when it enters, leaves or changes stage on one."
     if a["kind"] != "price" or not isinstance(p, (int, float)) or (a.get("state") or {}).get("side") != a["op"]:
         return None
     m = stock_alerts.money
@@ -1298,6 +1307,21 @@ def deals_company(symbol: str, profile=Depends(current_profile)):
     sym = research_routes.symbol_of(symbol)
     out = filing_call(lambda: deals.report(filings_feed, sym))
     return ok({**out, "flow_text": deals.flow_text(out["flow"]) if out["flow"] else None})
+
+
+@app.get("/research/surveillance")
+def surveillance_lists(profile=Depends(current_profile)):
+    """Every Indian stock on an exchange surveillance list now (ASM, GSM, ESM, trade-to-trade, F&O ban, a recent
+    price-band change), the words for each flag, and the date of each list. One answer for every badge in the app."""
+    return ok(surveillance.view())
+
+
+@app.post("/admin/surveillance/refresh")
+def admin_surveillance_refresh(_=Depends(admin.admin_profile)):
+    """Read the surveillance lists now (no alerts are sent from here) and say what each list answered."""
+    out = surveillance.refresh(filings_feed)
+    return {"changes": len(out["changes"]), "problems": [public_text(p) for p in out["problems"]],
+            "lists": surveillance.view()["lists"], "job": surv_job.status}
 
 
 @app.put("/research/filings/alerts")
@@ -2329,6 +2353,8 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     except stock_pages.Busy:
         return JSONResponse(status_code=503, headers={"Retry-After": "600"},
                             content={"detail": {"code": "busy", "message": "This page is being prepared. Try again in a few minutes."}})
+    if r == "IN":                           # the surveillance lists change daily, so they're added as the page is sent
+        page = stock_pages.with_surveillance(page, surveillance.flags_for(sym))
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=SEO_HEADERS)
 
 
@@ -3230,6 +3256,7 @@ def platform_checks() -> list:
                ("Exchange filings", "Filings", lambda: pc.check_filings(filings_feed)),
                ("BSE filings", "Filings", lambda: pc.check_bse_filings(filings_feed.bse)),
                ("Insider trades", "Filings", lambda: pc.check_insider_trades(filings_feed)),
+               ("Surveillance lists", "Filings", lambda: pc.check_surveillance(filings_feed)),
                ("Company page: RELIANCE", "Research", lambda: pc.check_company(research_hub, "IN", "RELIANCE")),
                ("Company page: AAPL", "Research", lambda: pc.check_company(research_hub, "US", "AAPL")),
                ("News", "Research", lambda: pc.check_news(research_hub)),

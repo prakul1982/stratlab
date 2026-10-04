@@ -7,6 +7,7 @@ import { AsOf, Empty, Loading, Modal } from "../components/ui";
 import { Trash, Upload } from "../components/Icons";
 import { track } from "../lib/analytics";
 import { HoldingsActionsPanel } from "../components/CorpActions";
+import { SurvBadges } from "../components/Surveillance";
 
 type Row = {
   symbol: string; exchange: string; name: string; sector: string; qty: number; avg: number | null; price: number | null;
@@ -221,7 +222,7 @@ export function HoldingsPage() {
                     const f = facts?.rows[r.symbol];
                     return (
                       <tr key={`${r.exchange}:${r.symbol}`}>
-                        <td><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div></td>
+                        <td><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div><SurvBadges region="IN" symbol={r.symbol} /></td>
                         <td className="small">{r.sector}</td>
                         <td className="num">{qtyText(r.qty)}</td>
                         <td className="num">{price(r.avg, "INR")}</td>

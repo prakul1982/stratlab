@@ -329,6 +329,138 @@ def sort_deals(rows: list[dict]) -> list[dict]:
     return out
 
 
+# ---------- exchange surveillance lists (ASM, GSM, ESM, trade-to-trade, price bands, the F&O ban) ----------
+SURV_PAGES = {                       # where the exchange publishes each list, for the explanations' links
+    "asm": "https://www.nseindia.com/reports/asm",
+    "gsm": "https://www.nseindia.com/reports/gsm",
+    "esm": "https://www.nseindia.com/reports/esm",
+    "fo_ban": "https://www.nseindia.com/market-data/securities-available-for-trading",
+    "bands": "https://www.nseindia.com/market-data/securities-available-for-trading",
+}
+SEC_LIST = "https://nsearchives.nseindia.com/content/equities/sec_list.csv"
+FO_BAN = "https://nsearchives.nseindia.com/archives/fo/sec_ban/fo_secban.csv"
+T2T_SERIES = ("BE", "BZ")           # trade-to-trade: every trade settles by delivery
+_ROMAN = {"0": 0, "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6}
+_STAGE = re.compile(r"stage\s*[-:._]?\s*(vi|iv|v|iii|ii|i|[0-6])\b", re.I)
+_SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&\-_.]{0,19}$")
+
+
+def stage_of(text) -> int | None:
+    """The stage in "Stage II", "LTASM Stage - 4" or "stage-1"; None when the text names none."""
+    m = _STAGE.search(str(text or ""))
+    if not m:
+        return None
+    g = m.group(1).lower()
+    return int(g) if g.isdigit() else _ROMAN.get(g)
+
+
+def _sym(v) -> str | None:
+    s = str(v or "").strip().upper()
+    return s if _SYMBOL.match(s) else None
+
+
+def _row_stage(r: dict) -> int | None:
+    """A list row's stage: from a field named for it first (a bare "II" counts there), then any text that says one."""
+    for k, v in r.items():
+        key = str(k).lower()
+        if any(w in key for w in ("stage", "indicator", "surv")):
+            s = stage_of(v)
+            if s is None and str(v or "").strip().lower() in _ROMAN:
+                s = _ROMAN[str(v).strip().lower()]
+            if s is not None:
+                return s
+    for v in r.values():
+        if isinstance(v, str) and (s := stage_of(v)) is not None:
+            return s
+    return None
+
+
+def stage_rows(raw) -> dict[str, int | None]:
+    """{symbol: stage} from one of the exchange's surveillance lists, read loosely: the symbol from any field called
+    symbol, the stage from whichever field states it. A list with rows but no readable symbol has changed shape."""
+    rows = [r for _, rs in _lists_in(raw) for r in _rows(rs)]
+    out: dict[str, int | None] = {}
+    for r in rows:
+        sym = _sym(_field(r, "symbol", "tradingSymbol", "scrip"))
+        if sym:
+            out[sym] = _row_stage(r)
+    if rows and not out:
+        raise ValueError("rows without symbols")
+    return out
+
+
+def _lists_in(data) -> list[tuple[str, list]]:
+    """Every list of rows in an answer, with the key path that led to it ("longterm.data"), so the long-term and
+    short-term halves of the ASM answer can be told apart whatever the exchange calls them."""
+    out = []
+
+    def walk(x, path, depth):
+        if depth > 6:
+            return
+        if isinstance(x, list) and any(isinstance(r, dict) for r in x):
+            out.append((path, x))
+        elif isinstance(x, dict):
+            for k, v in x.items():
+                walk(v, f"{path}.{k}".lower() if path else str(k).lower(), depth + 1)
+    walk(data, "", 0)
+    return out
+
+
+def asm_rows(data) -> dict[str, dict[str, int | None]]:
+    """The ASM answer as {"lt": {symbol: stage}, "st": {...}}. Each half is told by its key (long/short) or, in one
+    flat list, by each row's own wording (LT-ASM / ST-ASM)."""
+    out: dict[str, dict] = {"lt": {}, "st": {}}
+    lists = _lists_in(data)
+    for path, rows in lists:
+        side = "lt" if re.search(r"long|\blt", path) else "st" if re.search(r"short|\bst", path) else None
+        for r in _rows(rows):
+            sym = _sym(_field(r, "symbol", "tradingSymbol"))
+            if not sym:
+                continue
+            which = side
+            if which is None:
+                text = " ".join(str(v) for v in r.values() if isinstance(v, str)).lower()
+                which = "st" if re.search(r"short|st[- ]?asm", text) else "lt"
+            out[which][sym] = _row_stage(r)
+    if lists and not any(out.values()):
+        raise ValueError("rows without symbols")
+    return out
+
+
+def fo_ban_rows(text: str) -> tuple[str | None, list[str]]:
+    """The F&O ban file: ("2026-10-05" the trade date it states, [symbols]). The file reads "Securities in Ban For
+    Trade Date 05-OCT-2026:" then "1,SYMBOL" lines (or NIL)."""
+    text = str(text or "")
+    if "<html" in text.lower() or not text.strip():
+        raise ValueError("not the ban file")
+    m = re.search(r"(\d{1,2}-[A-Za-z]{3}-\d{4})", text)
+    day = _iso_day(m.group(1).title()) if m else None
+    syms = []
+    for line in text.splitlines():
+        parts = [p.strip().strip('"') for p in line.split(",")]
+        if len(parts) >= 2 and parts[0].isdigit() and (s := _sym(parts[1])):
+            syms.append(s)
+    if not day and not syms:
+        raise ValueError("no date and no rows")
+    return day, sorted(set(syms))
+
+
+def sec_list_rows(text: str) -> dict[str, dict]:
+    """The exchange's securities-available-for-trading file: {symbol: {"series", "band"}} for the equity series, the
+    band as the daily price limit in percent (None for "No Band")."""
+    import csv
+    import io
+    out: dict[str, dict] = {}
+    for row in csv.DictReader(io.StringIO(str(text or "").replace("\x00", ""))):
+        row = {str(k or "").strip().lower(): str(v or "").strip() for k, v in row.items() if isinstance(k, str)}
+        sym, series = _sym(row.get("symbol")), (row.get("series") or "").upper()
+        if not sym or series not in ("EQ",) + T2T_SERIES:
+            continue
+        band = _amount(row.get("band") or row.get("price band") or row.get("price band %"))
+        out[sym] = {"series": series, "band": band if band and 0 < band <= 100 else None}
+    return out
+
+
 # (path, referer, extra params, row reader) for each kind of deal; symbol and dates are added per call
 DEAL_FEEDS = {
     "insider": ("/api/corporates-pit", DEAL_PAGES["insider"], {"index": "equities"}, insider_rows),
@@ -617,6 +749,70 @@ class NSEFilings:
     def block_deals(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
         """Block deals: large trades matched in the exchange's separate block-deal window."""
         return self._deals("block", symbol, days, to)
+
+    # the surveillance lists: each read once a day for the whole market, behind a breaker of their own
+    def _surv_json(self, path: str, what: str, read):
+        key = ("surv", path)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        data = self._get(path, {}, referer=SURV_PAGES[what], circuit="surveillance")
+        try:
+            out = read(data)
+        except (ValueError, TypeError, AttributeError):
+            raise SourceError(self.name, f"The exchange's {what.upper()} list wasn't in the expected shape.") from None
+        self.cache.set(key, out, 1800)
+        return out
+
+    def _surv_text(self, url: str) -> str:
+        """One of the exchange's daily files, with the surveillance breaker: three outages in a row and it rests a
+        minute."""
+        fails, down = self._circuits.get("surveillance", (0, 0.0))
+        if time.time() < down:
+            raise SourceError(self.name, "The exchange's files aren't answering right now. Try again in a minute.", busy=True)
+        busy = True
+        try:
+            try:
+                r = self.http.get(url, headers={"Accept": "text/csv,text/plain,*/*"})
+            except httpx.HTTPError as e:
+                raise SourceError(self.name, f"Couldn't reach the exchange's files ({e.__class__.__name__}).", busy=True) from None
+            busy = r.status_code == 429 or r.status_code >= 500
+            if r.status_code >= 400:
+                raise SourceError(self.name, f"The exchange's file was refused ({r.status_code}).", busy=busy)
+        except SourceError:
+            if busy:
+                fails += 1
+                self._circuits["surveillance"] = (0, time.time() + 60) if fails >= 3 else (fails, 0.0)
+            raise
+        self._circuits["surveillance"] = (0, 0.0)
+        return r.text
+
+    def asm_list(self) -> dict[str, dict[str, int | None]]:
+        """The Additional Surveillance Measure lists: {"lt": {symbol: stage}, "st": {symbol: stage}}."""
+        return self._surv_json("/api/reportASM", "asm", asm_rows)
+
+    def gsm_list(self) -> dict[str, int | None]:
+        """The Graded Surveillance Measure list: {symbol: stage}."""
+        return self._surv_json("/api/reportGSM", "gsm", stage_rows)
+
+    def esm_list(self) -> dict[str, int | None]:
+        """The Enhanced Surveillance Measure list (small companies): {symbol: stage}."""
+        return self._surv_json("/api/reportESM", "esm", stage_rows)
+
+    def fo_ban(self) -> tuple[str | None, list[str]]:
+        """The securities in the F&O ban period: (the trade date the file is for, [symbols])."""
+        try:
+            return fo_ban_rows(self._surv_text(FO_BAN))
+        except ValueError:
+            raise SourceError(self.name, "The exchange's F&O ban file wasn't in the expected shape.") from None
+
+    def security_bands(self) -> dict[str, dict]:
+        """Every equity's series (EQ, or BE/BZ for trade-to-trade) and daily price band, from the exchange's
+        securities-available-for-trading file. Far fewer rows than the market has means a broken answer."""
+        rows = sec_list_rows(self._surv_text(SEC_LIST))
+        if len(rows) < 300:                 # the real file has a couple of thousand equities
+            raise SourceError(self.name, f"The exchange's price-band file looked wrong ({len(rows)} securities).")
+        return rows
 
 
 BSE_ATTACH = "https://www.bseindia.com/xml-data/corpfiling/"
