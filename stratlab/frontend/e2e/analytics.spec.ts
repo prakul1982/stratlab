@@ -70,6 +70,7 @@ test.describe("analytics wrapper", () => {
 
 test.describe("analytics in the app", () => {
   test("with no key nothing loads and nothing is sent", async ({ page }) => {
+    test.setTimeout(120_000);      // two full pages, the deep dive the heaviest, on a busy CI runner
     const rs = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");
     await page.goto("/admin");
     await expect(page.getByText("Needs your attention")).toBeVisible({ timeout: 30_000 });

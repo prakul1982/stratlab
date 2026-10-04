@@ -71,9 +71,23 @@ async function pickTool(page: Page, chart: Locator, name: string, phone: boolean
   } else await chart.getByRole("button", { name, exact: true }).click();
 }
 
+/** The plot's box once it's on screen and has stopped moving (the page around it may still be laying out). */
+async function stageBox(chart: Locator) {
+  const stage = chart.locator(".pc-stage");
+  await stage.scrollIntoViewIfNeeded();
+  let box = (await stage.boundingBox())!;
+  await expect.poll(async () => {
+    const now = (await stage.boundingBox())!;
+    const same = now.x === box.x && now.y === box.y && now.width === box.width && now.height === box.height;
+    box = now;
+    return same;
+  }, { timeout: 5000, intervals: [100] }).toBe(true);
+  return box;
+}
+
 /** Drag across the chart's plot, from and to fractions of its size. */
 async function dragOn(page: Page, chart: Locator, from: [number, number], to: [number, number]) {
-  const box = (await chart.locator(".pc-stage").boundingBox())!;
+  const box = await stageBox(chart);
   await page.mouse.move(box.x + box.width * from[0], box.y + box.height * from[1]);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * (from[0] + to[0]) / 2, box.y + box.height * (from[1] + to[1]) / 2, { steps: 4 });
@@ -120,7 +134,7 @@ async function exercise(page: Page, chart: Locator, phone: boolean, key: string)
   // a price level: one click; selected by clicking it again, deleted with the key
   await pickTool(page, chart, "Price level", phone);
   const stage = chart.locator(".pc-stage");
-  const at = async (fx: number, fy: number) => { const b = (await stage.boundingBox())!; await page.mouse.click(b.x + b.width * fx, b.y + b.height * fy); };
+  const at = async (fx: number, fy: number) => { const b = await stageBox(chart); await page.mouse.click(b.x + b.width * fx, b.y + b.height * fy); };
   await at(0.4, 0.6);
   await expect(chart).toHaveAttribute("data-drawings", "1");
   await at(0.2, 0.85);                     // somewhere else: deselects
