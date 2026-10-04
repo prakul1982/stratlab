@@ -8,7 +8,6 @@ import {
 } from "../lib/positioning";
 import { Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
-import { TradeTabs } from "../components/PositioningCard";
 import { Info, Loading } from "../components/ui";
 
 /* /trade/positioning: who holds index futures and options (the exchange's participant-wise files), FII and DII cash
@@ -456,7 +455,6 @@ export function PositioningPage() {
   }, []);
   return (
     <div className="stack pos-page" style={{ gap: 20 }}>
-      <TradeTabs />
       <div className="stack" style={{ gap: 6 }}>
         <h1 className="page-title">Positioning</h1>
         <p className="muted" style={{ maxWidth: "68ch" }}>Who holds index and stock futures and options, how foreign and domestic institutions bought and sold in the cash market, and what the index option chains show. The exchange's numbers as published, and arithmetic on option chains: facts, not advice.</p>
