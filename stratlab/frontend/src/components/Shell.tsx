@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
+import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Receipt, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
 
@@ -57,6 +57,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="eyebrow" style={{ padding: "0 8px 6px" }}>Investing</div>
       <NavLink to="/research" className={() => (/^\/research(\/(IN|US)\/.*)?$/.test(loc.pathname) ? "active" : "")}><Lens />Companies</NavLink>
       <NavLink to="/holdings"><Book />My Holdings</NavLink>
+      <NavLink to="/tax-report" title="Capital gains by financial year, from your tradebooks"><Receipt />Tax report</NavLink>
       <NavLink to="/research/investor" className={onResearch("/research/investor")} title="Investor home: every watchlist company on one page"><Compass />Watchlist at a glance</NavLink>
       <NavLink to="/news"><News />News</NavLink>
       <NavLink to="/research/scan" className={onResearch("/research/scan")}><Search />Stage 2 trend scan</NavLink>

@@ -50,6 +50,11 @@ def build():
     sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
     w["client"].post("/holdings/import", headers=world.headers("admin-token"),
                      json={"filename": sample.name, "data": base64.b64encode(sample.read_bytes()).decode()})
+    # ...and their trades from two brokers, for the tax report
+    for name in ("zerodha_console_tradebook.csv", "zerodha_tax_pnl.xlsx"):
+        trades = Path(__file__).parent / "fixtures" / "tradebooks" / name
+        w["client"].post("/tax/import", headers=world.headers("admin-token"),
+                         json={"filename": name, "data": base64.b64encode(trades.read_bytes()).decode()})
     invite_rewards()
     main.corp_job.refresh("IN")             # the corporate-actions calendar, as the morning job would have built it
     screen_index()

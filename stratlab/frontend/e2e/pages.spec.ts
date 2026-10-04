@@ -73,7 +73,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -268,6 +268,63 @@ test("my holdings: edit by hand and delete them all", async ({ page }, info) => 
   await page.getByRole("button", { name: "Delete my holdings" }).click();
   await expect(page.getByText("No holdings yet")).toBeVisible();
   await expect(page.getByText("Your holdings are deleted.")).toBeVisible();
+  await sane(page, errors);
+});
+
+const TRADEBOOKS = new URL("../../backend/tests/fixtures/tradebooks/", import.meta.url).pathname;
+
+test("tax report: tradebooks from several brokers, one year's gains, lots below cost, downloads and delete", async ({ page, request }, info) => {
+  // each project signs in as its own user and starts with no trades, so the two runs don't share tax data
+  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
+  expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
+  const errors = await open(page, "/tax-report", "Capital gains on your shares", sessionAs(token, id, email));
+  await settle(page);
+  await expect(page.getByText("No trades yet")).toBeVisible();
+  await expect(page.getByText(/not tax advice/).first()).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // three files, two brokers, one pick: the last one's result is shown, with the line it left out
+  await page.locator("input[type=file]").setInputFiles(["upstox_tradebook.csv", "zerodha_tax_pnl.xlsx", "zerodha_console_tradebook.csv"].map((f) => TRADEBOOKS + f));
+  await expect(page.getByText(/Read as a Zerodha Console tradebook/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("table", { name: "Lines left out" }).getByText(/Futures, options/)).toBeVisible();
+  await expect(page.getByText(/15 trades from 3 files/)).toBeVisible();
+
+  await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
+  await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Gains by rate" }).getByText("Long-term, sold from 23 Jul 2024")).toBeVisible();
+  await expect(page.getByText("1 same-day round trip", { exact: false })).toBeVisible();          // INFY, kept apart
+  const sales = page.getByRole("table", { name: "Realised sales" });
+  await expect(sales.getByText("RELIANCE").first()).toBeVisible();
+  await expect(sales.getByText("grandfathered")).toBeVisible();                                   // WIPRO, from the tax P&L
+  await expect(page.getByRole("table", { name: "Open lots below cost" }).getByText("TCS")).toBeVisible();
+  await expect(page.getByText("Shares held on 31 Jan 2018")).toBeVisible();
+  await page.getByRole("button", { name: "What is tax-loss harvesting?" }).click();
+  await expect(page.getByRole("note").filter({ hasText: "wash-sale" })).toBeVisible();
+
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/you should|we suggest|consider selling|sell now|recommend/i);
+  expect(text).not.toMatch(/yahoo|finnhub|kite|screener/i);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  const csv = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  expect((await csv).suggestedFilename()).toBe("stratlab-tax-FY-2024-25.csv");
+  const pdf = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF summary" }).click();
+  expect((await pdf).suggestedFilename()).toBe("stratlab-tax-FY-2024-25.pdf");
+
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Delete my tax data" }).click();
+  await expect(page.getByText("Your tax data is deleted.")).toBeVisible();
+  await expect(page.getByText("No trades yet")).toBeVisible();
+});
+
+test("tax report: a file that isn't a tradebook gets a plain answer", async ({ page }) => {
+  const errors = await open(page, "/tax-report", "Capital gains on your shares");
+  await settle(page);
+  await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "upstox_holdings.csv");
+  await expect(page.getByText(/looks like a holdings file/)).toBeVisible({ timeout: 30_000 });
   await sane(page, errors);
 });
 
