@@ -30,6 +30,7 @@ import httpx
 from . import db
 from .intel.net import SourceError, TTLCache, num
 from .newsletter import job as news_job
+from .options.greeks import black76, implied_vol, years_to  # noqa: F401  (Black's formula lives with the Greeks)
 
 IST = ZoneInfo("Asia/Kolkata")
 UNDERLYINGS = (("NFO", "NIFTY"), ("NFO", "BANKNIFTY"), ("NFO", "FINNIFTY"), ("NFO", "MIDCPNIFTY"), ("BFO", "SENSEX"))
@@ -380,49 +381,10 @@ def top_strikes(rows: list[list]) -> dict:
     return {"call": top(4), "put": top(8)}
 
 
-def _ncdf(x: float) -> float:
-    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
-
-
-def black76(f: float, k: float, t: float, sigma: float, kind: str) -> float:
-    """An option's price on a forward `f` (no interest rate): Black's 1976 formula."""
-    if t <= 0 or sigma <= 0:
-        return max(0.0, f - k) if kind == "CE" else max(0.0, k - f)
-    sd = sigma * math.sqrt(t)
-    d1 = (math.log(f / k) + sd * sd / 2) / sd
-    d2 = d1 - sd
-    return f * _ncdf(d1) - k * _ncdf(d2) if kind == "CE" else k * _ncdf(-d2) - f * _ncdf(-d1)
-
-
-def implied_vol(price: float, f: float, k: float, t: float, kind: str) -> float | None:
-    """The volatility (a year, as a fraction) at which Black's formula gives `price`, by bisection; None when the price
-    is outside what any volatility gives (below the intrinsic value, or above the forward or strike)."""
-    if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in (price, f, k, t)) or min(f, k, t) <= 0 or price <= 0:
-        return None
-    lo, hi = 1e-4, 5.0
-    if price <= black76(f, k, t, lo, kind) or price >= black76(f, k, t, hi, kind):
-        return None
-    for _ in range(80):
-        mid = (lo + hi) / 2
-        if black76(f, k, t, mid, kind) < price:
-            lo = mid
-        else:
-            hi = mid
-    return (lo + hi) / 2
-
-
 def _price(bid, ask, ltp):
     if bid and ask and ask >= bid > 0:
         return (bid + ask) / 2
     return ltp if ltp and ltp > 0 else None
-
-
-def years_to(expiry: str, at: datetime) -> float:
-    """Time from `at` to 15:30 India time on the expiry day, in years of 365 days."""
-    end = datetime.combine(date.fromisoformat(expiry), dtime(15, 30), IST)
-    if at.tzinfo is None:
-        at = at.replace(tzinfo=IST)
-    return (end - at).total_seconds() / (365 * 86400)
 
 
 def atm_iv(rows: list[list], spot: float | None, expiry: str, at: datetime) -> dict | None:

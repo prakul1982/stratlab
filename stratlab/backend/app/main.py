@@ -63,7 +63,7 @@ from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators
-from .options import charges as opt_charges, importer as opt_importer
+from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer
 from .options.data import OptionsData, freeze as freeze_limit
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
@@ -77,7 +77,7 @@ from . import surveillance
 from . import etf_nav
 from . import positioning
 from . import fo_changes_routes
-from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
+from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
@@ -3091,7 +3091,8 @@ def options_chain(exchange: str = "NFO", underlying: str = "NIFTY", expiry: str 
     if exchange not in ("NFO", "BFO", "MCX", "CDS") or not re.fullmatch(r"[A-Z0-9&-]{1,30}", underlying) or \
             not re.fullmatch(r"current|next|month|\d{4}-\d{2}-\d{2}", expiry):
         err(400, "bad_request", "Pick an exchange, an underlying and an expiry.")
-    return options_data.chain(exchange, underlying, expiry)
+    # each strike's IV and Greeks are model estimates, on every plan
+    return opt_greeks.add_to_chain(options_data.chain(exchange, underlying, expiry), positioning.ist_now())
 
 
 # ---------- derivatives positioning (Trade) ----------
@@ -3200,7 +3201,112 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
                if units and priced and len(priced) == len(legs) else None)
     return {"spot": spot, "atm": atm, "step": c.step(spot), "expiry": c.expiry, "lot": c.lot, "freeze": freeze,
             "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs, "charges": charges,
-            "strikes": c.strikes, "spot_ts": (options_data.quotes([sk]).get(sk) or {}).get("ts")}
+            "strikes": c.strikes, "expiries": options_data.expiries(s.exchange, s.underlying)[:6],
+            "spot_ts": (options_data.quotes([sk]).get(sk) or {}).get("ts"),
+            **_preview_greeks(c, spot, legs, units)}
+
+
+def _preview_greeks(c, spot: float, legs: list[dict], units: int) -> dict:
+    """The model's view of a priced structure, for every plan: the shared inputs, each leg's IV and Greeks, and the
+    net Greeks of the whole position (empty when the expiry has passed)."""
+    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now())
+    if not m:
+        return {"model": None, "greeks": None}
+    have = [l for l in legs if l["strike"] is not None]
+    pos = opt_greeks.position([{**l, "qty": l["lots"] * max(units, 1) * c.lot} for l in have], m)
+    per = iter(pos["legs"])
+    pos["legs"] = [next(per) if l["strike"] is not None else None for l in legs]
+    return {"model": opt_greeks.public_model(m), "greeks": pos}
+
+
+def _held(req: OptGreeksReq, expiry: str | None = None):
+    """The contracts, spot and model for a request's underlying and expiry, or a clear error."""
+    options_ready()
+    c = options_data.contracts(req.exchange, req.underlying, expiry or req.expiry)
+    if not c:
+        err(404, "no_contracts", f"No {req.underlying} options are listed on {req.exchange} for that expiry.")
+    sk = options_data.spot_key(req.exchange, req.underlying, c.expiry)
+    spot = (options_data.quotes([sk]).get(sk) or {}).get("ltp") if sk else None
+    if not spot:
+        err(503, "no_spot", f"Couldn't get the {req.underlying} price just now.")
+    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now())
+    if not m:
+        err(409, "expired", "That expiry has passed, so there's nothing left to model.")
+    return c, spot, m
+
+
+def _other(side: str) -> str:
+    return "buy" if side == "sell" else "sell"
+
+
+@app.post("/options/greeks")
+def options_greeks(req: OptGreeksReq, profile=Depends(current_profile)):
+    """A position's model IV and Greeks on today's quotes, leg by leg and net, with what closing every leg now would
+    cost in charges (the session page). Model estimates, on every plan."""
+    c, spot, m = _held(req)
+    legs = [l.model_dump() for l in req.legs]
+    keys = [c.key(l["opt"], l["strike"]) for l in legs]
+    q = options_data.quotes([k for k in keys if k])
+    for l, k in zip(legs, keys):
+        l["quote"] = q.get(k) if k else None
+    pos = opt_greeks.position(legs, m)
+    closes = [{"side": _other(l["side"]), "qty": l["qty"], "fill": fill_price(l["quote"], _other(l["side"]), 0)} for l in legs]
+    kind = opt_charges.kind_for(req.exchange)
+    cost = (opt_charges.orders_cost(closes, kind, req.brokerage, req.freeze or freeze_limit(req.underlying))
+            if all(x["fill"] is not None for x in closes) else None)
+    return {"model": opt_greeks.public_model(m), "spot": spot, **pos,
+            "close_charges": {"total": round(cost["total"], 2), "orders": cost["orders"], "items": opt_charges.labelled(cost["items"], kind)} if cost else None}
+
+
+@app.post("/options/roll")
+def options_roll(req: OptRollReq, profile=Depends(current_profile)):
+    """Close one leg and open another strike or expiry in its place, priced on today's bid and ask: the premium that
+    changes hands, the charges of the two orders, and the position's net Greeks before and after (model estimates).
+    Pro."""
+    need(profile, "options_whatif", "The roll preview")
+    if req.leg >= len(req.legs):
+        err(400, "bad_request", "Pick one of the position's legs.")
+    c, spot, m = _held(req)
+    c2, m2 = c, m
+    if req.to_expiry and req.to_expiry != c.expiry:
+        c2, _, m2 = _held(req, req.to_expiry)
+    if req.strike not in c2.strikes:
+        err(400, "bad_strike", "That strike isn't listed for that expiry.")
+    legs = [l.model_dump() for l in req.legs]
+    old = legs[req.leg]
+    keys = [c.key(l["opt"], l["strike"]) for l in legs]
+    new_key = c2.key(old["opt"], req.strike)
+    q = options_data.quotes([k for k in keys + [new_key] if k])
+    for l, k in zip(legs, keys):
+        l["quote"] = q.get(k) if k else None
+    close_side = _other(old["side"])
+    close_px = fill_price(old["quote"], close_side, 0)
+    open_px = fill_price(q.get(new_key), old["side"], 0)
+    if close_px is None or open_px is None:
+        err(409, "no_quote", "One of the two contracts has no price right now, so the roll can't be priced.")
+    new = {**old, "strike": req.strike, "fill": open_px, "quote": q.get(new_key)}
+    before = opt_greeks.position(legs, m)
+    new_g = opt_greeks.position([new], m2)
+    after_legs = [(l, g) for i, (l, g) in enumerate(zip(legs, before["legs"])) if i != req.leg] + [(new, new_g["legs"][0])]
+    sign = 1 if old["side"] == "sell" else -1           # a sold leg pays to close and takes in the new premium
+    premium = sign * (open_px - close_px) * old["qty"]
+    kind = opt_charges.kind_for(req.exchange)
+    cost = opt_charges.orders_cost([{"side": close_side, "qty": old["qty"], "fill": close_px},
+                                    {"side": old["side"], "qty": old["qty"], "fill": open_px}],
+                                   kind, req.brokerage, req.freeze or freeze_limit(req.underlying))
+    return {
+        "leg": req.leg, "spot": spot,
+        "close": {"opt": old["opt"], "strike": old["strike"], "expiry": c.expiry, "side": close_side, "px": close_px,
+                  "sym": keys[req.leg].split(":", 1)[1] if keys[req.leg] else None},
+        "open": {"opt": old["opt"], "strike": req.strike, "expiry": c2.expiry, "side": old["side"], "px": open_px,
+                 "sym": new_key.split(":", 1)[1] if new_key else None, **new_g["legs"][0]},
+        "premium": round(premium, 2),
+        "charges": {"total": round(cost["total"], 2), "orders": cost["orders"], "items": opt_charges.labelled(cost["items"], kind)},
+        "net": round(premium - cost["total"], 2),
+        "before": opt_greeks.net(legs, before["legs"]), "after": opt_greeks.net(*map(list, zip(*after_legs))),
+        "complete": before["complete"] and new_g["complete"],
+        "model": opt_greeks.public_model(m), "model_to": opt_greeks.public_model(m2),
+    }
 
 
 @app.post("/options/sessions")

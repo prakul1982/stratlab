@@ -1386,3 +1386,17 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 .ch-table td, .ch-table th { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ch-table td.num, .ch-table th.num { font-family: var(--sans); text-align: right; }
 @media (prefers-reduced-motion: reduce) { .ch-line { transition: none; } }
+
+/* options: the pricing model's what-if sliders, Greeks tables and roll preview (components/OptionModel.tsx) */
+.whatif { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--paper-2, transparent); }
+.whatif-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 20px; }
+@media (max-width: 720px) { .whatif-grid { grid-template-columns: 1fr; } }
+.whatif-slider { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.whatif-slider input[type=range] { width: 100%; height: 32px; margin: 0; accent-color: var(--series-3); cursor: pointer; }
+table.greeks-t { width: 100%; }
+table.greeks-t th, table.greeks-t td { white-space: nowrap; padding: 6px 8px; text-align: right; }
+table.greeks-t th:first-child, table.greeks-t td:first-child { text-align: left; }
+table.greeks-t tr.greeks-net td { border-top: 1px solid var(--line-2); }
+.opt-extras > * { min-width: 0; }      /* a wide chain scrolls inside its card instead of stretching the grid past the screen */
+table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; padding: 5px 7px; }
+.model-inputs { max-width: 80ch; }

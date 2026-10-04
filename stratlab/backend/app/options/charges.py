@@ -16,26 +16,38 @@ def kind_for(exchange: str) -> str:
     return {"MCX": "in_mcx_opt", "CDS": "in_cds_opt", "BFO": "in_bse_opt"}.get(exchange, "in_opt")
 
 
-def round_trip(legs: list[dict], kind: str, brokerage: float, freeze: int) -> dict:
-    """Itemised charges for opening and closing each leg once at its fill. Each leg is {side, qty, fill}; the open is
-    on the leg's own side and the close on the other. An order larger than the freeze limit goes as several slices,
-    each paying brokerage."""
+def orders_cost(orders: list[dict], kind: str, brokerage: float, freeze: int) -> dict:
+    """Itemised charges for a list of orders, each {side, qty, fill}. An order larger than the freeze limit goes as
+    several slices, each paying brokerage."""
     r = C.IN_RATES[kind]
     items = {"brokerage": 0.0, "stt": 0.0, "exchange": 0.0, "sebi": 0.0, "stamp": 0.0, "gst": 0.0}
-    orders = 0
-    for lg in legs:
-        slices = max(1, math.ceil(lg["qty"] / freeze)) if freeze else 1
-        for side in (lg["side"], "buy" if lg["side"] == "sell" else "sell"):
-            c = C.order_costs(kind, side, lg["qty"], lg["fill"], slices * brokerage)
-            sebi = lg["qty"] * lg["fill"] * r["sebi"]
-            items["brokerage"] += c["brokerage"]
-            items["stt"] += c["stt"]
-            items["exchange"] += c["exchange"] - sebi
-            items["sebi"] += sebi
-            items["stamp"] += c["stamp"]
-            items["gst"] += c["gst"]
-            orders += slices
-    return {"items": items, "total": sum(items.values()), "orders": orders}
+    count = 0
+    for o in orders:
+        slices = max(1, math.ceil(o["qty"] / freeze)) if freeze else 1
+        c = C.order_costs(kind, o["side"], o["qty"], o["fill"], slices * brokerage)
+        sebi = o["qty"] * o["fill"] * r["sebi"]
+        items["brokerage"] += c["brokerage"]
+        items["stt"] += c["stt"]
+        items["exchange"] += c["exchange"] - sebi
+        items["sebi"] += sebi
+        items["stamp"] += c["stamp"]
+        items["gst"] += c["gst"]
+        count += slices
+    return {"items": items, "total": sum(items.values()), "orders": count}
+
+
+def round_trip(legs: list[dict], kind: str, brokerage: float, freeze: int) -> dict:
+    """Itemised charges for opening and closing each leg once at its fill. Each leg is {side, qty, fill}; the open is
+    on the leg's own side and the close on the other."""
+    return orders_cost([{**lg, "side": side} for lg in legs for side in (lg["side"], "buy" if lg["side"] == "sell" else "sell")],
+                       kind, brokerage, freeze)
+
+
+def labelled(items: dict, kind: str) -> list[dict]:
+    """Charge lines as the page shows them, leaving out the ones that come to nothing."""
+    labels = {"brokerage": "Brokerage", "stt": STT_LABEL.get(kind, "STT"), "exchange": "Exchange charges", "sebi": "SEBI fee",
+              "stamp": "Stamp duty", "gst": "GST"}
+    return [{"key": k, "label": labels[k], "amount": round(v, 2)} for k, v in items.items() if v > 0.0049]
 
 
 def _payoff_at(legs: list[dict], x: float) -> float:
@@ -96,11 +108,9 @@ def summary(legs: list[dict], kind: str, brokerage: float, freeze: int) -> dict:
     net = sum((1 if lg["side"] == "sell" else -1) * lg["fill"] * lg["qty"] for lg in legs)
     premium = abs(net)
     best, worst = max_profit(legs), max_loss(legs)
-    labels = {"brokerage": "Brokerage", "stt": STT_LABEL.get(kind, "STT"), "exchange": "Exchange charges", "sebi": "SEBI fee",
-              "stamp": "Stamp duty", "gst": "GST"}
     return {
         "total": round(cost, 2), "orders": rt["orders"], "brokerage_per_order": brokerage, "freeze": freeze or None,
-        "items": [{"key": k, "label": labels[k], "amount": round(v, 2)} for k, v in rt["items"].items() if v > 0.0049],
+        "items": labelled(rt["items"], kind),
         "credit": net > 0, "premium": round(premium, 2),
         "premium_after": round(net - cost, 2) if net > 0 else None,
         "pct_of_premium": round(cost / premium * 100, 4) if premium > 0 else None,

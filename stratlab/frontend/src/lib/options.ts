@@ -48,27 +48,48 @@ export const sessionFor = (exchange: string) =>
     : exchange === "CDS" ? { entry: "09:15", lastEntry: "16:15", squareoff: "16:45" }
       : { entry: "09:30", lastEntry: "14:45", squareoff: "15:15" };
 
+/** A held or priced leg: its contract, units of the underlying and the price it filled at. */
+export interface HeldLeg { side: "buy" | "sell"; opt: "CE" | "PE"; strike: number; qty: number; fill: number }
+
+/** Profit at expiry with the underlying at x, before costs. */
+export function atExpiry(legs: HeldLeg[], x: number): number {
+  return legs.reduce((sum, l) => {
+    const intrinsic = l.opt === "CE" ? Math.max(0, x - l.strike) : Math.max(0, l.strike - x);
+    return sum + (l.side === "sell" ? l.fill - intrinsic : intrinsic - l.fill) * l.qty;
+  }, 0);
+}
+
+/** A leg in a few words: "Sold 25,000 CE". */
+export const legName = (side: "buy" | "sell", strike: number, opt: "CE" | "PE") =>
+  `${side === "sell" ? "Sold" : "Bought"} ${strike.toLocaleString("en-IN")} ${opt}`;
+
+/** Prices 10% either side of the spot: an even grid plus every strike inside it, where the payoff bends. */
+export function priceGrid(spot: number, strikes: number[], n = 121): number[] {
+  const lo = spot * 0.9, hi = spot * 1.1;
+  return [...Array.from({ length: n }, (_, i) => lo + ((hi - lo) * i) / (n - 1)), ...strikes.filter((k) => k > lo && k < hi)]
+    .sort((a, b) => a - b).filter((x, i, arr) => i === 0 || x !== arr[i - 1]);
+}
+
+/** A priced structure's legs, sized: each leg's lots × units × the lot size. */
+export function heldLegs(p: OptPreview): HeldLeg[] {
+  return p.legs.filter((l) => l.strike != null && l.fill != null)
+    .map((l) => ({ side: l.side, opt: l.opt, strike: l.strike!, fill: l.fill!, qty: l.lots * p.units * p.lot }));
+}
+
 /** Profit or loss at expiry across a range of prices, for a priced structure. */
 export function payoff(p: OptPreview) {
-  const legs = p.legs.filter((l) => l.strike != null && l.fill != null);
-  const qty = (l: (typeof legs)[number]) => l.lots * p.units * p.lot;
-  const at = (x: number) => legs.reduce((sum, l) => {
-    const intrinsic = l.opt === "CE" ? Math.max(0, x - l.strike!) : Math.max(0, l.strike! - x);
-    return sum + (l.side === "sell" ? l.fill! - intrinsic : intrinsic - l.fill!) * qty(l);
-  }, 0);
-  const lo = p.spot * 0.9, hi = p.spot * 1.1, n = 121;
-  // an even grid plus every strike, where the line bends
-  const xs = [...Array.from({ length: n }, (_, i) => lo + ((hi - lo) * i) / (n - 1)), ...legs.map((l) => l.strike!).filter((k) => k > lo && k < hi)]
-    .sort((a, b) => a - b).filter((x, i, arr) => i === 0 || x !== arr[i - 1]);
+  const legs = heldLegs(p);
+  const at = (x: number) => atExpiry(legs, x);
+  const xs = priceGrid(p.spot, legs.map((l) => l.strike));
   const ys = xs.map(at);
   // exact bounds, as options/charges.py works them out: the payoff is straight between strikes and the price stops at
   // zero, so the extremes are at zero or a strike; only above the top strike can it run on, by the calls' net slope
-  const at0 = [0, ...legs.map((l) => l.strike!)], corners = at0.map(at);
-  const slopeAbove = legs.reduce((n, l) => n + (l.opt === "CE" ? (l.side === "buy" ? 1 : -1) * qty(l) : 0), 0);
+  const at0 = [0, ...legs.map((l) => l.strike)], corners = at0.map(at);
+  const slopeAbove = legs.reduce((n, l) => n + (l.opt === "CE" ? (l.side === "buy" ? 1 : -1) * l.qty : 0), 0);
   const maxP = Math.max(...corners), maxL = Math.min(...corners);
   const breakevens: number[] = [];
   for (let i = 1; i < xs.length; i++) if ((ys[i - 1] < 0) !== (ys[i] < 0)) breakevens.push(xs[i - 1] + ((xs[i] - xs[i - 1]) * -ys[i - 1]) / (ys[i] - ys[i - 1]));
-  const credit = legs.reduce((s, l) => s + (l.side === "sell" ? 1 : -1) * l.fill! * qty(l), 0);
+  const credit = legs.reduce((s, l) => s + (l.side === "sell" ? 1 : -1) * l.fill * l.qty, 0);
   return { xs, ys, maxProfit: slopeAbove > 1e-9 ? null : maxP, maxLoss: slopeAbove < -1e-9 ? null : maxL, breakevens, credit,
     bestAt: at0[corners.indexOf(maxP)], worstAt: at0[corners.indexOf(maxL)] };   // the price where each bound is reached
 }

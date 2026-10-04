@@ -4,9 +4,11 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, price } from "../lib/format";
 import { HELP } from "../lib/help";
-import { blankOptions, IMPORTED, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
+import { blankOptions, IMPORTED, legName, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
-import { PayoffChart } from "../components/Charts";
+import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
+import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
+import type { OptionGreeks } from "../lib/greeks";
 import { moneyCompact } from "../lib/chartFormat";
 import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
@@ -125,9 +127,25 @@ function Charges({ c }: { c: OptCharges }) {
   );
 }
 
-function Payoff({ p }: { p: OptPreview }) {
+function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
+  const { me } = useApp();
   const f = useMemo(() => payoff(p), [p]);
   const c = p.charges;
+  const whatif = !!me?.plan_info?.features?.options_whatif;
+  const [rollOpen, setRollOpen] = useState(false);
+  const g = p.greeks;
+  // each priced leg with its model inputs, for the Greeks, the today curve and the what-if
+  const rows: ModelRow[] = useMemo(() => {
+    if (!g) return [];
+    let m = 0;
+    return p.legs.flatMap((l, i) => {
+      if (l.strike == null || l.fill == null) return [];
+      const gi = g.legs[i];
+      const ml = gi?.iv ? g.model_legs[m++] ?? null : null;
+      const qty = l.lots * p.units * p.lot;
+      return [{ label: legName(l.side, l.strike, l.opt), held: { side: l.side, opt: l.opt, strike: l.strike, qty, fill: l.fill }, g: gi, m: ml }];
+    });
+  }, [p, g]);
   const before = c ? c.breakevens : f.breakevens;
   // exact bounds at expiry (the price can fall to zero; only calls can run on above the top strike), from the server
   // when it has priced the charges, else the same sums here
@@ -136,6 +154,11 @@ function Payoff({ p }: { p: OptPreview }) {
   const lo = f.xs[0], hi = f.xs[f.xs.length - 1];
   const outside = (v: number | null, x: number) => v != null && (x < lo || x > hi) ? Math.round(x).toLocaleString("en-IN") : null;
   const bestOut = outside(best, f.bestAt), worstOut = outside(worst, f.worstAt);
+  const curves: PayoffCurve[] = [{ id: "expiry", label: "At expiry", values: f.ys },
+    ...(c ? [{ id: "after", label: "After charges", values: f.ys.map((y) => y - c.total), dash: "4 4", width: 1.4 }] : [])];
+  const markers: PayoffMarker[] = [{ x: p.spot, label: `Spot ${Math.round(p.spot).toLocaleString("en-IN")}`, kind: "spot" as const },
+    ...before.map((x) => ({ x, label: "Breakeven", kind: "breakeven" as const })),
+    ...(c ? c.breakevens_after.map((x) => ({ x, label: "Breakeven after charges", kind: "other" as const })) : [])];
   return (
     <div className="stack" style={{ gap: 10 }}>
       <div className="opt-stats">
@@ -146,13 +169,15 @@ function Payoff({ p }: { p: OptPreview }) {
           {c && c.max_loss_after != null && <span className="small muted">{inr(c.max_loss_after)} after charges</span>}</div>
         <div><span className="eyebrow">Margin needed</span><b className="mono">{p.margin != null ? inr(p.margin) : "Not available"}</b></div>
       </div>
-      <PayoffChart ariaLabel="Profit or loss at expiry across prices" height={220} xs={f.xs} testId="payoff-chart"
-        format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
-        curves={[{ id: "expiry", label: "At expiry", values: f.ys },
-          ...(c ? [{ id: "after", label: "After charges", values: f.ys.map((y) => y - c.total), dash: "4 4", width: 1.4 }] : [])]}
-        markers={[{ x: p.spot, label: `Spot ${Math.round(p.spot).toLocaleString("en-IN")}`, kind: "spot" as const },
-          ...before.map((x) => ({ x, label: "Breakeven", kind: "breakeven" as const })),
-          ...(c ? c.breakevens_after.map((x) => ({ x, label: "Breakeven after charges", kind: "other" as const })) : [])]} />
+      {p.model && rows.length > 0 ? (
+        <ModelPanel model={p.model} rows={rows} xs={f.xs} expiry={curves} markers={markers} charges={c ? c.total : null}
+          chargesLabel="the round trip's charges" whatif={whatif} plan="Pro" name={s.underlying} testId="opt-model"
+          ariaLabel="Profit or loss at expiry and today across prices" />
+      ) : (
+        <PayoffChart ariaLabel="Profit or loss at expiry across prices" height={220} xs={f.xs} testId="payoff-chart"
+          format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
+          curves={curves} markers={markers} />
+      )}
       <p className="small muted" data-testid="opt-breakevens">
         At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
         {before.length > 0 && <>Breaks even at {points(before)}{c ? " before charges" : ""}. </>}
@@ -160,8 +185,16 @@ function Payoff({ p }: { p: OptPreview }) {
         {bestOut != null && <>The most it can make is reached at {bestOut}, outside the chart. </>}
         {worstOut != null && <>The most it can lose is reached at {worstOut}, outside the chart. </>}
         Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.
+        {p.model && rows.length > 0 && " The today line is the pricing model's value of the position now, at each option's current IV; it is an estimate, not a quote."}
       </p>
       {c && <Charges c={c} />}
+      {whatif && p.model && rows.length > 0 && (
+        <details className="opt-charge-lines" data-testid="roll-fold" onToggle={(e) => setRollOpen((e.target as HTMLDetailsElement).open)}>
+          <summary className="small">Roll a leg: preview</summary>
+          {rollOpen && <RollPreview legs={rows.map(({ label, held }) => ({ label, held }))} exchange={s.exchange} underlying={s.underlying}
+            expiry={p.expiry} strikes={p.strikes} expiries={p.expiries ?? [p.expiry]} step={p.step} brokerage={s.costs.brokerage} freeze={p.freeze} />}
+        </details>
+      )}
     </div>
   );
 }
@@ -175,30 +208,63 @@ function Chain({ s }: { s: OptionStrategy }) {
     try { setChain(await api<OptChain>(`/options/chain?exchange=${s.exchange}&underlying=${encodeURIComponent(s.underlying)}&expiry=${s.expiry}`)); }
     catch (e) { fail(e); } finally { setBusy(false); }
   };
+  const [view, setView] = useState<"quotes" | "greeks">("quotes");
   const q = (x: { bid: number | null; ask: number | null; ltp: number | null } | null) => x ? `${x.bid ?? "–"} / ${x.ask ?? "–"}` : "–";
+  const greeks = view === "greeks" && !!chain?.model;
   return (
     <details className="card chain" onToggle={(e) => (e.target as HTMLDetailsElement).open && !chain && load()}>
-      <summary className="h3">Option chain<span className="small muted" style={{ fontWeight: 400, marginLeft: 8 }}>bid / ask, live</span></summary>
+      <summary className="h3">Option chain<span className="small muted" style={{ fontWeight: 400, marginLeft: 8 }}>bid / ask, IV and Greeks, live</span></summary>
       {busy && <Loading label="Loading the chain" />}
       {chain && (
         <div className="stack" style={{ gap: 8, marginTop: 12 }}>
-          <div className="spread small"><span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
-            <button className="btn quiet sm" onClick={load}>Refresh</button></div>
+          <div className="spread small" style={{ flexWrap: "wrap", gap: 8 }}><span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
+            <span className="row" style={{ gap: 8 }}>
+              {chain.model && <Seg label="Chain columns" value={view} options={[["quotes", "Bid / ask"], ["greeks", "IV and Greeks"]]} onChange={setView} />}
+              <button className="btn quiet sm" onClick={load}>Refresh</button></span></div>
           <div className="table-wrap" style={{ margin: 0 }}>
-            <table className="chain-t">
-              <thead><tr><th>Call bid / ask</th><th>Call OI</th><th>Strike</th><th>Put bid / ask</th><th>Put OI</th></tr></thead>
-              <tbody>{chain.rows.map((r) => (
-                <tr key={r.strike} className={r.strike === chain.atm ? "atm" : ""}>
-                  <td className="mono">{q(r.ce)}</td><td className="mono muted">{r.ce?.oi?.toLocaleString("en-IN") ?? "–"}</td>
-                  <td className="mono"><b>{r.strike}</b></td>
-                  <td className="mono">{q(r.pe)}</td><td className="mono muted">{r.pe?.oi?.toLocaleString("en-IN") ?? "–"}</td>
-                </tr>
-              ))}</tbody>
-            </table>
+            {greeks ? (
+              <table className="chain-t chain-g small" data-testid="chain-greeks">
+                <thead>
+                  <tr><th colSpan={5}>Calls</th><th /><th colSpan={5}>Puts</th></tr>
+                  <tr><th>IV</th><th>Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th><th>Strike</th><th>IV</th><th>Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th></tr>
+                </thead>
+                <tbody>{chain.rows.map((r) => (
+                  <tr key={r.strike} className={r.strike === chain.atm ? "atm" : ""}>
+                    <ChainGreeks g={r.ce_g} />
+                    <td className="mono"><b>{r.strike}</b></td>
+                    <ChainGreeks g={r.pe_g} />
+                  </tr>
+                ))}</tbody>
+              </table>
+            ) : (
+              <table className="chain-t">
+                <thead><tr><th>Call bid / ask</th><th>Call OI</th><th>Strike</th><th>Put bid / ask</th><th>Put OI</th></tr></thead>
+                <tbody>{chain.rows.map((r) => (
+                  <tr key={r.strike} className={r.strike === chain.atm ? "atm" : ""}>
+                    <td className="mono">{q(r.ce)}</td><td className="mono muted">{r.ce?.oi?.toLocaleString("en-IN") ?? "–"}</td>
+                    <td className="mono"><b>{r.strike}</b></td>
+                    <td className="mono">{q(r.pe)}</td><td className="mono muted">{r.pe?.oi?.toLocaleString("en-IN") ?? "–"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
           </div>
+          {greeks && chain.model && <ModelInputs m={chain.model} extra="Per option; an asterisk marks an IV taken from the at-the-money strike." />}
         </div>
       )}
     </details>
+  );
+}
+
+/** One side of a chain row in the Greeks view: IV, delta, gamma, theta per day and vega per vol point (per option). */
+function ChainGreeks({ g }: { g?: OptionGreeks | null }) {
+  if (!g?.iv) return <><td className="muted">–</td><td /><td /><td /><td /></>;
+  const n = (v: number, dp: number) => (v < 0 ? "−" : "") + Math.abs(v).toFixed(dp);
+  return (
+    <>
+      <td className="mono">{(g.iv * 100).toFixed(1)}%{g.iv_from === "atm" ? "*" : ""}</td><td className="mono">{n(g.delta!, 2)}</td>
+      <td className="mono">{+g.gamma!.toPrecision(2)}</td><td className="mono">{n(g.theta!, 2)}</td><td className="mono">{n(g.vega!, 2)}</td>
+    </>
   );
 }
 
@@ -489,7 +555,7 @@ export function OptionsPage() {
         {preview && (
           <div className="stack" style={{ gap: 10 }}>
             <span className="small muted">{s.underlying} {price(preview.spot, "INR")} · ATM {preview.atm} · expiry {expiryName(preview.expiry)} · lot {preview.lot} · {preview.units} unit{preview.units === 1 ? "" : "s"}{s.sizing.mode === "margin" && preview.margin_one ? ` (${inr(preview.margin_one)} margin each)` : ""}</span>
-            {preview.units === 0 ? <p className="neg small">Not enough capital for one unit at today's margin.</p> : <Payoff p={preview} />}
+            {preview.units === 0 ? <p className="neg small">Not enough capital for one unit at today's margin.</p> : <Payoff p={preview} s={s} />}
           </div>
         )}
       </section>
