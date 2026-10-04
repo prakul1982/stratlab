@@ -82,7 +82,7 @@ def real_requests(ctx: dict) -> dict:
         ("POST", "/export/strategy"): [({}, {"strategy": s}) for s in STRATEGIES],
         ("POST", "/ask"): [({}, {"q": q}) for q in ("is reliance in stage 2", "deep dive apollo", "backtest ema cross on nifty")],
         ("POST", "/search/ideas"): [({}, {"q": "momentum in midcaps"})],
-        ("PUT", "/me/prefs"): [({}, {"level": "new", "focus": "invest"}), ({}, {"focus": "trade"})],
+        ("PUT", "/me/prefs"): [({}, {"level": "new", "focus": "invest"}), ({}, {"focus": "trade"}), ({}, {"focus": "money", "space": "all"})],
         ("PUT", "/me/alerts"): [({}, {"alerts_enabled": True, "telegram_chat_id": "12345", "alert_email": "a@b.co", "daily_report": True})],
         ("POST", "/push/subscribe"): [({}, {"subscription": {"endpoint": "https://push.example.com/x", "keys": {"p256dh": "k", "auth": "a"}}})],
         ("POST", "/push/unsubscribe"): [({}, {"subscription": {"endpoint": "https://push.example.com/x", "keys": {"p256dh": "k", "auth": "a"}}})],

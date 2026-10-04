@@ -31,3 +31,26 @@ export function rememberView(path: string) {
   const f = familyOf(path);
   if (f) try { localStorage.setItem(KEY(f), path); } catch { /* storage off */ }
 }
+
+/** One menu entry kept as data. `icon` names one of the menu's icons (ICONS in Shell); an unknown name gets a plain
+ * one. `blurb` is the line under it on its space's home page. */
+export type NavEntry = { to: string; label: string; icon?: string; title?: string; blurb?: string };
+
+/** Menu groups kept as data, by name. "Money" is the Money space's menu, in order: each Money feature adds one line
+ * here, and it shows both in the menu and as a card on the Money home, so only what's built ever appears. */
+export const NAV_GROUPS: Record<string, NavEntry[]> = {
+  Money: [
+    { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",
+      blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings." },
+    { to: "/tax-report", label: "Tax report", icon: "receipt", title: "Capital gains by financial year, from your tradebooks",
+      blurb: "Capital gains by financial year from your tradebooks, matched first in, first out. An estimate to check with your CA." },
+    { to: "/money/net-worth", label: "Net worth", icon: "wallet", title: "What you own minus what you owe, with your insurance policies",
+      blurb: "Stocks, funds, PF, PPF, NPS, FDs, gold and property, minus loans; with EMIs, prepayment maths and your policies." },
+    { to: "/money/mutual-funds", label: "Mutual funds", icon: "layers", title: "Your funds from your CAS: value, XIRR, allocation and capital gains",
+      blurb: "Import your CAMS/KFintech statement: each fund's value, XIRR, category mix and capital gains by year." },
+    { to: "/money/tax-tools", label: "Tax tools", icon: "receipt", title: "Dividends, advance tax and the long-term gains exemption",
+      blurb: "Dividends with TDS, advance tax due on each date with reminders, and how much of the ₹1.25 lakh exemption is left." },
+    { to: "/money/calendar", label: "Money calendar", icon: "calendar", title: "Tax due dates, results, dividends and your own dates in one calendar",
+      blurb: "Advance tax and ITR dates, results and dividends for your stocks, maturities, premiums and EMIs, with a calendar feed." },
+  ],
+};

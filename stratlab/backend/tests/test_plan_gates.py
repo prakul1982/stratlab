@@ -42,9 +42,9 @@ def test_everything_open_during_early_access(monkeypatch):
 
 def test_features_per_plan_once_payments_are_live(paid):
     assert not any(plan_info("free")["features"].values())
-    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home"}
+    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders"}
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
-    assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export"}
+    assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {
         "indicators": "basic", "alerts": "basic", "scans": "basic", "fno": "pro", "export": "pro"}
     assert group_size("free") == 10 and group_size("basic") == 25
@@ -215,10 +215,14 @@ def test_experience_level_is_saved_with_other_prefs(monkeypatch):
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
     try:
         c = as_plan("free")
-        assert c.put("/me/prefs", json={"level": "pro"}).json() == {"prefs": {"level": "pro", "focus": None}}
+        assert c.put("/me/prefs", json={"level": "pro"}).json() == {"prefs": {"level": "pro", "focus": None, "space": None}}
         assert '"daily_report": false' in store["prefs:u1"] and '"level": "pro"' in store["prefs:u1"]
         # what the user came for is saved alongside, without touching the level
-        assert c.put("/me/prefs", json={"focus": "invest"}).json() == {"prefs": {"level": "pro", "focus": "invest"}}
+        assert c.put("/me/prefs", json={"focus": "invest"}).json() == {"prefs": {"level": "pro", "focus": "invest", "space": None}}
+        # the menu's space is kept too, and "money" is a reason to come
+        assert c.put("/me/prefs", json={"focus": "money", "space": "all"}).json() == {"prefs": {"level": "pro", "focus": "money", "space": "all"}}
+        assert c.put("/me/prefs", json={"space": "money"}).json()["prefs"]["space"] == "money"
+        assert c.put("/me/prefs", json={"space": "bank"}).status_code == 422
         assert c.put("/me/prefs", json={"level": "expert"}).status_code == 422
         assert c.put("/me/prefs", json={"focus": "gamble"}).status_code == 422
         assert main.prefs_of("nobody") == {}

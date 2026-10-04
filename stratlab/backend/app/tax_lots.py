@@ -19,7 +19,7 @@ import math
 import re
 from datetime import date, datetime, timedelta, timezone
 
-from . import db, tax_total
+from . import db, instrument_kinds, tax_total
 from .engine.costs import IN_LTCG, IN_LTCG_EXEMPT, IN_STCG
 
 KEY = "taxlots:"
@@ -247,17 +247,21 @@ def business_year(fy: int, chunks: list[dict]) -> dict:
             "turnover_contract": _r(sum(x["turnover_contract"] for x in segs)), "trades": sum(x["trades"] for x in segs)}
 
 
-def with_total(y: dict, business: list[dict], inputs: dict | None) -> dict:
+def with_total(y: dict, business: list[dict], inputs: dict | None, dividends: float = 0.0, units: dict | None = None) -> dict:
     """A year from year() with its F&O totals, the total tax estimate on the user's inputs (and the other regime's
-    figure on the same inputs, as a fact), and the return and audit facts."""
+    figure on the same inputs, as a fact), and the return and audit facts. `dividends`: the year's dividend income
+    the user included (from Tax tools). `units` is the year's gold, silver, international and debt ETFs and gold bonds
+    (instrument_kinds.other_year), taxed under their own heads."""
     biz = business_year(y["fy"], business)
     parts = {s["seg"]: s["net"] for s in biz["segments"]}
     v = tax_total.clean(inputs) if inputs else tax_total.default_inputs()
-    total = tax_total.estimate(y["fy"], v, y["buckets"], y["intraday"]["pnl"], biz["net"], parts)
-    other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"],
-                               y["intraday"]["pnl"], biz["net"], parts)
+    extra = [{"key": "lt_112", "rate": instrument_kinds.LT_RATE, "taxable": units["lt"]["taxable"], "exempt": 0.0}] if units and units["lt"]["taxable"] else []
+    slab = (units or {}).get("slab", {}).get("taxable") or 0.0
+    total = tax_total.estimate(y["fy"], v, y["buckets"] + extra, y["intraday"]["pnl"], biz["net"], parts, dividends=dividends, slab_gains=slab)
+    other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"] + extra,
+                               y["intraday"]["pnl"], biz["net"], parts, dividends=dividends, slab_gains=slab)
     turnover = (y["intraday"].get("turnover") or 0) + biz["turnover"]
-    return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)},
+    return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)}, "units": units,
             "other_regime": {"regime": other["regime"], "total": other.get("total")} if other.get("available") else None,
             "filing": tax_total.filing_facts(y["fy"], turnover, bool(biz["segments"]) or y["intraday"]["count"] > 0),
             "turnover": _r(turnover)}
@@ -463,14 +467,24 @@ def _by_day(rows: list[dict]) -> list[dict]:
 
 # ---------- one financial year ----------
 BUCKETS = [("st_new", "Short-term, sold from 23 Jul 2024", IN_STCG), ("st_old", "Short-term, sold before 23 Jul 2024", OLD_STCG),
-           ("lt_new", "Long-term, sold from 23 Jul 2024", IN_LTCG), ("lt_old", "Long-term, sold before 23 Jul 2024", OLD_LTCG)]
+           ("lt_new", "Long-term, sold from 23 Jul 2024", IN_LTCG), ("lt_old", "Long-term, sold before 23 Jul 2024", OLD_LTCG),
+           # mutual funds that aren't equity-oriented (money_mf.py): no exemption; slab-rate gains go to slab income
+           ("st_slab", "Short-term at your slab rate (debt and other funds)", 0.0),
+           ("lt_112", "Long-term, other funds, 12.5% without indexation", 0.125),
+           ("lt_112i", "Long-term, other funds, 20% with indexation", 0.20)]
+SLAB = {"st_slab"}
+ST_ORDER, LT_ORDER = ["st_new", "st_old", "st_slab"], ["lt_112i", "lt_new", "lt_112", "lt_old"]
 
 
 STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)", "st_old": "short-term gains taxed at 15% (sold before 23 Jul 2024)",
-              "lt_new": "long-term gains taxed at 12.5% (sold from 23 Jul 2024)", "lt_old": "long-term gains taxed at 10% (sold before 23 Jul 2024)"}
+              "lt_new": "long-term gains taxed at 12.5% (sold from 23 Jul 2024)", "lt_old": "long-term gains taxed at 10% (sold before 23 Jul 2024)",
+              "st_slab": "short-term gains taxed at your slab rate (mutual funds)", "lt_112": "long-term fund gains taxed at 12.5% without indexation",
+              "lt_112i": "long-term fund gains taxed at 20% with indexation"}
 
 
 def _bucket(r: dict) -> str | None:
+    if r.get("bucket"):                     # a mutual fund sale under the non-equity rules
+        return r["bucket"]
     if r["term"] == "LT" and r["sold"] < LTCG_START:
         return None                         # exempt then, gains and losses alike
     return f"{'st' if r['term'] == 'ST' else 'lt'}_{'new' if r['sold'] >= RATE_CHANGE else 'old'}"
@@ -514,9 +528,9 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
                 loss -= take
                 steps.append(f"{what} of {money(take)} set off against {STEP_NAMES[b]}.")
         return loss
-    st_left = use(["st_new", "st_old"], st_loss, "Short-term losses")
-    lt_left = use(["lt_new", "lt_old"], lt_loss, "Long-term losses")
-    st_left = use(["lt_new", "lt_old"], st_left, "Short-term losses")
+    st_left = use(ST_ORDER, st_loss, "Short-term losses")
+    lt_left = use(LT_ORDER, lt_loss, "Long-term losses")
+    st_left = use(LT_ORDER, st_left, "Short-term losses")
     cap = exemption(fy)
     ex_left, exempt = cap, {b: 0.0 for b in net}
     for b in ("lt_new", "lt_old"):
@@ -534,7 +548,7 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
         tax += t
         if gains[b] or net[b]:
             buckets.append({"key": b, "label": label, "rate": rate, "gains": _r(gains[b]), "after_setoff": _r(net[b]),
-                            "exempt": _r(exempt[b]), "taxable": _r(taxable), "tax": _r(t)})
+                            "exempt": _r(exempt[b]), "taxable": _r(taxable), "tax": _r(t), **({"slab": True} if b in SLAB else {})})
     if st_left > EPS or lt_left > EPS:
         steps.append(f"Left to carry forward: {money(st_left)} short-term and {money(lt_left)} long-term loss.")
     st_rows = [r for r in rows if r["term"] == "ST"]
@@ -565,7 +579,8 @@ def _r(v, dp=2):
 def _row(r: dict) -> dict:
     return {"key": r["key"], "bought": r["bought"], "sold": r["sold"], "qty": round(r["qty"], 4), "cost": _r(r["cost"]),
             "sale": _r(r["sale"]), "gain": _r(r["gain"]), "term": r["term"], "bonus": r["bonus"], "gf": r["gf"],
-            "rate": (rates(r["sold"])[0] if r["term"] == "ST" else rates(r["sold"])[1])}
+            "rate": r["rate"] if "rate" in r else (rates(r["sold"])[0] if r["term"] == "ST" else rates(r["sold"])[1]),
+            **({"mf": True, "kind": r.get("kind")} if r.get("src") == "mf" else {})}
 
 
 # ---------- open lots below cost ----------
@@ -609,21 +624,46 @@ def holdings_check(open_lots: list[dict], items: list[dict]) -> list[dict]:
 
 
 def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: list[dict], today: str,
-           business: list[dict] | None = None, inputs: dict[int, dict] | None = None) -> dict:
+           business: list[dict] | None = None, inputs: dict[int, dict] | None = None, extra: list[dict] | None = None,
+           dividends: dict[int, float] | None = None) -> dict:
     """The whole page: every financial year with trades or F&O (and the current one), each with its total tax
     estimate, open lots below cost, and the lines that couldn't be worked out."""
     c = compute(trades, actions, fmv, today)
+    c["realised"] += extra or []              # mutual fund sales (money_mf.realised), worked out there
     business, inputs = business or [], inputs or {}
-    fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today)},
+    equity, units = split_units(c)
+    fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today)}
+                 | set(dividends or {}),
                  reverse=True)
     unmatched = {}
     for u in c["unmatched"]:
         cur = unmatched.setdefault(u["key"], {"key": u["key"], "qty": 0.0, "first": u["d"]})
         cur["qty"] = round(cur["qty"] + u["qty"], 4)
         cur["first"] = min(cur["first"], u["d"])
-    return {"years": [with_total(year(y, c["realised"], c["intraday"]), business, inputs.get(y)) for y in fys], "current_fy": fy_of(today),
+    return {"years": [with_total(year(y, equity, c["intraday"]), business, inputs.get(y), (dividends or {}).get(y, 0.0),
+                                 instrument_kinds.other_year(y, units, c["names"]))
+                      for y in fys], "current_fy": fy_of(today), "kinds": kinds(c["names"]),
+            "unit_notes": instrument_kinds.NOTES if any(kinds(c["names"]).values()) else [],
             "below_cost": below_cost(c["open"], quotes, today), "names": c["names"],
             "unmatched_sales": sorted(unmatched.values(), key=lambda u: u["first"])[:100],
             "holdings_check": holdings_check(c["open"], items) if items else [],
             "pre_2018": sorted({l["key"] for l in c["open"] if l["d"] <= GF_DATE} | {r["key"] for r in c["realised"] if r["gf"]}),
             "rules": SETOFF_RULES, "notes": NOTES, "disclaimer": DISCLAIMER}
+
+
+# ---------- ETFs, REITs, InvITs and gold bonds (instrument_kinds) ----------
+def split_units(c: dict) -> tuple[list[dict], list[dict]]:
+    """(sales taxed like shares, the other units' sales) from compute(): REIT and InvIT units sold before 23 Jul 2024
+    get their 36-month rule first."""
+    instrument_kinds.adjust_trusts(c["realised"], c["names"])
+    return instrument_kinds.split(c["realised"], c["names"])
+
+
+def kinds(names: dict) -> dict[str, str]:
+    """The badge for each key that isn't a company's shares ("Gold ETF", "REIT"...)."""
+    out = {}
+    for k, n in names.items():
+        code = instrument_kinds.code_of(n)
+        if instrument_kinds.base(code) != "stock":
+            out[k] = instrument_kinds.label(code)
+    return out

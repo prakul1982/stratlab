@@ -216,12 +216,15 @@ def _with_surcharge(b: dict, total: float, special_income: float, cap: float) ->
 
 
 def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, business: float,
-             business_parts: dict[str, float] | None = None) -> dict:
+             business_parts: dict[str, float] | None = None, dividends: float = 0.0, slab_gains: float = 0.0) -> dict:
     """The year's total tax estimate.
 
     `buckets` are the capital gains year's buckets (key, rate, after_setoff, exempt, taxable); `intraday` the
     speculative profit or loss; `business` the F&O, commodity and currency profit or loss after charges, with
-    `business_parts` the same by segment. Returns the steps in plain words, a breakdown table and the total."""
+    `business_parts` the same by segment; `dividends` the year's dividend income (income from other sources, at slab
+    rates), when the user includes it; `slab_gains` short-term gains taxed at slab rates (gold, debt and other
+    non-equity ETFs and gold bonds, after their own set-off). Returns the steps in plain words, a breakdown table and
+    the total."""
     v = clean(inputs)
     r = rules(fy, v["regime"], v["age"], v["resident"])
     if r is None:
@@ -249,14 +252,27 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         lines.append({"label": label, "amount": round(amount, 2), "kind": kind})
 
     salary = v["other"] if v["salary"] is None else v["salary"]
-    rest = max(0.0, v["other"] - salary)
+    rest = max(0.0, v["other"] - salary) + max(0.0, slab_gains)
     std = min(r["std"], salary)
     if v["other"]:
         steps.append(f"Other income you entered: {money(v['other'])}" + (f", of which {money(salary)} is salary or pension." if salary else ", none of it salary.")
                      + (" All of it is taken as salary, as you didn't say how much is." if v["salary"] is None and salary else ""))
+    div = max(0.0, min(float(dividends or 0.0), MAX_AMOUNT)) if isinstance(dividends, (int, float)) and math.isfinite(dividends) else 0.0
+    if div:
+        rest += div
+        steps.append(f"Dividends of {money(div)} are income from other sources, taxed at your slab rate (from Tax tools, where they can be left out).")
+    if slab_gains > 0:
+        steps.append(f"Short-term gains on ETFs and gold bonds taxed at slab rates: {money(slab_gains)}.")
     if std:
         steps.append(f"Standard deduction of {money(std)} on salary ({v['regime']} regime, {money(r['std'])} at most).")
 
+    # mutual fund gains taxed at the slab rate (money_mf.py) are slab income, not special-rate gains
+    slab_cg = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab"))
+    buckets = [b for b in buckets if not b.get("slab")]
+    if slab_cg:
+        rest += slab_cg
+        steps.append(f"Mutual fund gains taxed at your slab rate (debt funds and the like, after set-off): {money(slab_cg)}, "
+                     "added to the income taxed at slab rates.")
     g_rates = {b["key"]: b["rate"] for b in buckets}
     lt_exempt = {b["key"]: b.get("exempt") or 0.0 for b in buckets}
     taxable = {b["key"]: max(0.0, b.get("taxable") or 0.0) for b in buckets}
@@ -378,17 +394,25 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     rel_special = relief * (sc_special / total_sc) if total_sc else 0.0
     cg_tax = (special_after + sc_special - rel_special) * (1 + CESS)
     slab_total = max(0.0, final - cg_tax)
-    shares = {"other": max(0.0, salary - std + rest), "intraday": spec, "fno": biz}
+    slab_left = min(slab_cg, rest)        # what's left of the slab-rate fund gains after any business loss set-off
+    shares = {"other": max(0.0, salary - std + rest - slab_left), "intraday": spec, "fno": biz, "slab_gains": slab_left}
     whole = sum(shares.values())
     parts = {"capital_gains": round(cg_tax, 2)}
     for k, s in shares.items():
         parts[k] = round(slab_total * s / whole, 2) if whole > 0 else 0.0
+    parts["capital_gains"] = round(parts["capital_gains"] + parts.pop("slab_gains"), 2)
 
     line("Other income (salary, interest and the like)", v["other"])
+    if div:
+        line("Dividends (income from other sources)", div)
     if std:
         line("Less standard deduction", -std)
+    if slab_gains > 0:
+        line("Non-equity short-term gains at slab rates (ETFs, gold bonds)", slab_gains)
     line("Intraday (speculative) profit or loss", intraday)
     line("F&O, commodity and currency profit or loss, after charges", business)
+    if slab_cg:
+        line("Mutual fund gains taxed at slab rates", slab_cg)
     if spec_cf:
         line("Intraday loss carried forward (not set off this year)", spec_cf, "note")
     if biz_cf:
@@ -412,7 +436,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
             "slab_tax": round(b["slab"], 2), "special_tax": round(b["special_total"], 2), "rebate": round(b["rebate"], 2),
             "surcharge": round(sc - relief, 2), "surcharge_rate": rate, "cess": round(cess, 2),
             "income": {"normal": round(normal, 2), "special": round(special_income, 2), "total": round(total, 2),
-                       "salary": round(salary, 2), "standard_deduction": round(std, 2), "deductions": round(ded, 2)},
+                       "salary": round(salary, 2), "standard_deduction": round(std, 2), "deductions": round(ded, 2),
+                       "dividends": round(div, 2)},
             "carry_forward": {"speculative": round(spec_cf, 2), "business": round(biz_cf, 2)},
             "steps": steps, "lines": lines, "notes": notes, "confirmed": r["confirmed"], "source": r["source"]}
 

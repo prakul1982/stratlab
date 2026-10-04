@@ -896,6 +896,9 @@ table.legs input[type=number] { width: 72px !important; }
 .promo-countdown .promo-left { white-space: nowrap; }
 .mail-preview { width: 100%; height: 460px; border: 1px solid var(--line); border-radius: 10px; background: #f4f5f7; }
 /* My Holdings */
+/* Money: mutual funds upload (file, password, button) */
+.mf-upload { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.mf-upload .field { flex: 1 1 260px; }
 .holdings-add { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; }
 @media (max-width: 640px) { .holdings-add { grid-template-columns: minmax(0, 1fr); } }
 label.btn.disabled { opacity: .5; }
@@ -962,3 +965,85 @@ label.btn.disabled { opacity: .5; }
 .tax-line-sub td { font-weight: 600; }
 .tax-line-total td { font-weight: 700; border-top: 2px solid var(--line-2); }
 @media (max-width: 560px) { .tax-inputs .field { width: 100% !important; } }
+
+/* ---------- spaces: Trade · Invest · Money, the switcher at the top of the menu and each space's home ---------- */
+.space-switch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; border-radius: 10px; background: var(--chip); }
+.space-switch button { min-height: 34px; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 500; color: var(--ink-2); }
+.space-switch button:hover { color: var(--ink); }
+.space-switch button[aria-checked="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+@media (pointer: coarse) { .space-switch button { min-height: 40px; } }
+.side-home { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 12px; border-radius: 10px; color: var(--ink-2); text-decoration: none; font-weight: 600; }
+.side-home:hover, .side-home.active { background: var(--card); color: var(--ink); }
+@media (pointer: coarse) { .side-home { min-height: 42px; } }
+.space-strip { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 28px; }
+.space-card { display: flex; flex-direction: column; gap: 6px; min-height: 44px; padding: 14px 16px; color: var(--ink); text-decoration: none; }
+.space-card:hover { border-color: var(--ink-2); color: var(--ink); }
+.space-card-lead { border-color: var(--blue); background: var(--blue-soft); }
+.space-card-lead b { font-size: 18px; }
+@media (max-width: 1100px) { .space-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .space-card-lead { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .space-strip { grid-template-columns: minmax(0, 1fr); } }
+.space-panels { align-items: start; }
+a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink); }
+.space-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-height: 32px; color: var(--ink); text-decoration: none; }
+.space-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px 18px; }
+.space-fig { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.space-fig b { font-size: 20px; font-weight: 600; }
+.lp-spaces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lp-space { display: flex; flex-direction: column; gap: 6px; color: var(--ink); text-decoration: none; }
+.lp-space:hover { border-color: var(--ink-2); color: var(--ink); }
+.lp-space b { font-size: 28px; font-weight: 400; letter-spacing: -.02em; }
+.lp-space[data-space="trade"] { border-color: var(--blue); }
+.lp-options { border-color: var(--blue); }
+@media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }
+.space-tag { flex: none; align-self: center; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+/* Money: net worth */
+.nw-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-items: end; }
+.nw-form .field input, .nw-form .field select { width: 100%; min-width: 0; }
+@media (max-width: 560px) { .nw-form { grid-template-columns: minmax(0, 1fr); } }
+/* ---------- Money: instrument badges (holdings, tax report) and the money calendar ---------- */
+.badge[class*="kind-"] { background: var(--blue-soft); color: var(--blue-ink); font-size: 11.5px; padding: 1px 8px; vertical-align: 1px; }
+.mc-days { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.mc-date { font-size: 14px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.mc-date.today { color: var(--blue-ink); }
+.mc-evs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.mc-ev { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: start; }
+.mc-ev.past { opacity: .6; }
+.mc-ev-title { font-weight: 500; overflow-wrap: anywhere; }
+.mc-amount { color: var(--muted); font-weight: 400; }
+.mc-cat { justify-self: start; font-size: 11.5px; padding: 2px 8px; }
+.mc-tax { background: var(--orange-soft); color: var(--orange-ink); }
+.mc-holdings { background: var(--blue-soft); color: var(--blue-ink); }
+.mc-money { background: var(--chip); color: var(--ink-2); }
+.mc-custom { background: var(--card); color: var(--ink); border: 1px solid var(--line-2); }
+.mc-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.mc-wd { font-family: var(--mono); font-size: 11.5px; text-transform: uppercase; color: var(--muted); text-align: center; padding: 2px 0; }
+.mc-cell { min-height: 92px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left; padding: 6px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; font: inherit; min-width: 0; overflow: hidden; }
+.mc-cell.empty { border: 0; background: transparent; cursor: default; }
+.mc-cell.today { border-color: var(--blue); }
+.mc-cell.picked, .mc-cell:hover { border-color: var(--ink); }
+.mc-n { font-size: 13px; font-weight: 600; }
+.mc-cell.today .mc-n { color: var(--blue-ink); }
+.mc-dots { display: none; gap: 3px; flex-wrap: wrap; }
+.mc-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.mc-dot.mc-tax { background: var(--orange); }
+.mc-dot.mc-holdings { background: var(--blue); }
+.mc-dot.mc-money, .mc-dot.mc-custom { background: var(--muted); }
+.mc-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mc-t { font-size: 11.5px; line-height: 1.3; padding: 1px 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-more { font-size: 11px; color: var(--muted); }
+.mc-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.mc-form .mc-wide { grid-column: 1 / -1; }
+.mc-form .field input, .mc-form .field select { width: 100%; min-width: 0; }
+.mc-own { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mc-own > li { padding: 6px 0; border-top: 1px solid var(--line); }
+.mc-url { width: 100%; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
+.mc-grid { align-items: start; }
+@media (max-width: 760px) {
+  .mc-grid { grid-template-columns: minmax(0, 1fr); }
+  .mc-cell { min-height: 48px; padding: 4px; align-items: center; }
+  .mc-titles { display: none; }
+  .mc-dots { display: flex; justify-content: center; }
+  .mc-ev { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+@media (max-width: 420px) { .mc-form { grid-template-columns: minmax(0, 1fr); } }

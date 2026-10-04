@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from app import guard, holdings_file as hf, tax_lots as T
+from app import guard, holdings_file as hf, instrument_kinds as I, tax_lots as T
 from tests import tradebook_maker as M, world
 
 ZIP = Path(__file__).parent / "fixtures" / "taxpnl" / "zerodha_taxpnl_2024_2025.zip"
@@ -54,19 +54,20 @@ def send(c, data: bytes, name: str = "taxpnl.zip", mode: str = "add", headers=PR
 # ---------- reading the ZIP ----------
 def test_the_zip_is_read_and_checked_against_the_summary():
     got = hf.parse_trades(ZIP.read_bytes(), ZIP.name)
-    assert (got["broker"], got["kind"], len(got["trades"]), got["problems"]) == ("Zerodha", "pnl", 16, [])
-    assert [(f["section"], f["lines"]) for f in got["files"]] == [("Commodity", 2), ("Equity short term", 3), ("Equity long term", 2),
-                                                                  ("Equity intraday", 3), ("F&O", 4), ("Currency", 1)]
-    assert got["check"][:3] == [{"section": "Equity short term", "file": 4300.0, "summary": 4300, "ok": True},
+    assert (got["broker"], got["kind"], len(got["trades"]), got["problems"]) == ("Zerodha", "pnl", 18, [])
+    assert [(f["section"], f["lines"]) for f in got["files"]] == [("Commodity", 2), ("Non-equity", 1), ("Equity short term", 3),
+                                                                  ("Equity long term", 2), ("Equity intraday", 3), ("F&O", 4), ("Currency", 1)]
+    assert got["check"][:4] == [{"section": "Equity short term", "file": 4300.0, "summary": 4300, "ok": True},
                                 {"section": "Equity long term", "file": 13000.0, "summary": 13000, "ok": True},
-                                {"section": "Equity intraday", "file": 80.0, "summary": 80, "ok": True}]
-    assert [(c["section"], c["file"], c["ok"]) for c in got["check"][3:]] == [
+                                {"section": "Equity intraday", "file": 80.0, "summary": 80, "ok": True},
+                                {"section": "Non-equity", "file": 500.0, "summary": 500, "ok": True}]
+    assert [(c["section"], c["file"], c["ok"]) for c in got["check"][4:]] == [
         ("F&O", -1212.5, True), ("F&O turnover", 3787.5, True), ("Commodity", 1500.0, True), ("Commodity turnover", 2500.0, True),
         ("Currency", 100.0, True), ("Currency turnover", 100.0, True)]
-    skipped = {s["name"].rsplit("-", 1)[-1]: s["reason"] for s in got["skipped"]}
-    assert set(skipped) == {"Non Equity.csv"}                                                    # no __MACOSX junk listed
-    assert "other rules" in skipped["Non Equity.csv"]
-    assert not any(t["symbol"] in ("NIFTY24SEP25000CE", "GOLDBEES", "CRUDEOIL24AUGFUT") for t in got["trades"])
+    assert got["skipped"] == []                                                                 # no __MACOSX junk listed
+    assert not any(t["symbol"] in ("NIFTY24SEP25000CE", "CRUDEOIL24AUGFUT") for t in got["trades"])
+    gold = [t for t in got["trades"] if t["symbol"] == "GOLDBEES"]                               # the non-equity file is read now
+    assert [(t["side"], t["kind"]) for t in gold] == [("B", "etf-gold"), ("S", "etf-gold")]
     wipro = next(t for t in got["trades"] if t["symbol"] == "WIPRO" and t["side"] == "B")
     assert wipro["fmv"] == 310 and wipro["d"] == "2017-06-12"                                   # 15,500 for 50 shares
 
@@ -80,8 +81,8 @@ def test_fno_is_streamed_and_other_segments_never_unpacked(monkeypatch):
     real = hf._unpack
     monkeypatch.setattr(hf, "_unpack", lambda zf, info, budget, cap=None: opened.append(info.filename) or real(zf, info, budget, cap))
     hf.parse_trades(ZIP.read_bytes())
-    # the three equity files and the workbook are unpacked; F&O, commodity and currency stream; the rest stay shut
-    assert len(opened) == 4 and not any(k in n for n in opened for k in ("F&O", "Commodity", "Currency", "Non Equity", "__MACOSX"))
+    # the equity and non-equity files and the workbook are unpacked; F&O, commodity and currency stream; the rest stay shut
+    assert len(opened) == 5 and not any(k in n for n in opened for k in ("F&O", "Commodity", "Currency", "__MACOSX"))
 
 
 # ---------- F&O, commodity and currency ----------
@@ -169,10 +170,10 @@ def test_a_summary_that_differs_is_flagged():
 def test_the_summary_or_another_segment_alone_gets_a_plain_answer():
     with pytest.raises(hf.FileError, match="summary page of a tax P&L"):
         hf.parse_trades(M.make_xlsx(M.TAX_SUMMARY), "taxpnl-2024_2025-Q1-Q4.xlsx")
-    with pytest.raises(hf.FileError, match="Non-equity file of a tax P&L"):
-        hf.parse_trades(M._csv(M.TAX_NON_EQUITY).encode(), EXITS + "Non Equity.csv")
-    with pytest.raises(hf.FileError, match="No equity, F&O, commodity or currency trades were found in that ZIP.*Non Equity"):
-        hf.parse_trades(make_zip([(EXITS + "Non Equity.csv", M._csv(M.TAX_NON_EQUITY).encode()), ("notes.pdf", b"%PDF-1.4")]))
+    with pytest.raises(hf.FileError, match="Mutual funds file of a tax P&L"):
+        hf.parse_trades(M._csv(M.TAX_NON_EQUITY).encode(), EXITS + "Mutual Funds.csv")
+    with pytest.raises(hf.FileError, match="No equity, F&O, commodity or currency trades were found in that ZIP.*Mutual Funds"):
+        hf.parse_trades(make_zip([(EXITS + "Mutual Funds.csv", M._csv(M.TAX_NON_EQUITY).encode()), ("notes.pdf", b"%PDF-1.4")]))
     # a ZIP of F&O only is fine: business income, no trades
     only = hf.parse_trades(make_zip([(EXITS + "F&O.csv", M._csv(M.TAX_FNO).encode())]))
     assert only["kind"] == "business" and only["trades"] == [] and only["business"][0]["pnl"] == -1212.5
@@ -189,8 +190,13 @@ def test_a_big_tax_pnl_file_is_read_whole():
 def test_a_tax_pnl_line_keeps_its_buy_and_isnt_taken_for_intraday():
     trades = hf.parse_trades(ZIP.read_bytes())["trades"]
     c = T.compute(trades, today=TODAY)
-    y = T.year(2024, c["realised"], c["intraday"])
+    equity, units = T.split_units(c)
+    y = T.year(2024, equity, c["intraday"])
     sym = {k: v["symbol"] for k, v in c["names"].items()}
+    assert [sym[r["key"]] for r in units] == ["GOLDBEES"]                 # a gold ETF: its own rules, not the shares'
+    gold = I.other_year(2024, units, c["names"])
+    # bought 15 Apr 2024 (after 1 Apr 2023) and sold 20 Nov 2024 (before 1 Apr 2025): section 50AA, slab rate
+    assert gold["rows"][0]["head"] == "slab" and gold["slab"]["taxable"] == 500 and gold["lt"]["taxable"] == 0
     rel = sorted((r["bought"], r["sold"], r["qty"], r["term"]) for r in c["realised"] if sym[r["key"]] == "RELIANCE")
     assert rel == [("2024-05-10", "2024-09-16", 10, "ST"), ("2024-09-16", "2024-12-02", 5, "ST")]
     assert {sym[i["key"]] for i in c["intraday"]} == {"INFY", "SBIN"} and y["intraday"]["count"] == 2   # one line a company a day
@@ -285,8 +291,8 @@ def test_upload_the_zip_as_the_body(w):
     r = send(c, ZIP.read_bytes())
     assert r.status_code == 200, r.text
     j = r.json()
-    assert (j["broker"], j["kind"], j["added"]) == ("Zerodha", "pnl", 16)
-    assert all(x["ok"] for x in j["check"]) and len(j["skipped"]) == 1 and len(j["files"]) == 6
+    assert (j["broker"], j["kind"], j["added"]) == ("Zerodha", "pnl", 18)
+    assert all(x["ok"] for x in j["check"]) and len(j["skipped"]) == 0 and len(j["files"]) == 7
     assert j["business"] == {"lines": 7, "added": 3, "replaced": 0, "same": 0, "years": [2024]}
     y = next(y for y in j["report"]["years"] if y["fy"] == 2024)
     assert y["intraday"]["count"] == 2 and y["stcg"]["net"] < 4300 and y["ltcg"]["net"] < 13000      # less charges and grandfathering
@@ -297,7 +303,7 @@ def test_upload_the_zip_as_the_body(w):
     assert again["report"]["business_lines"] == 7
     # the older way, base64 in JSON, still works and gives the same
     old = c.post("/tax/import", headers=PRO, json={"filename": "z.zip", "data": base64.b64encode(ZIP.read_bytes()).decode(), "mode": "replace"})
-    assert old.status_code == 200 and old.json()["added"] == 16
+    assert old.status_code == 200 and old.json()["added"] == 18
 
 
 def test_damaged_zips_through_the_app_never_crash(w):

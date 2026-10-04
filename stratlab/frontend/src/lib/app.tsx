@@ -4,6 +4,7 @@ import { api, ApiError, setApiHandlers, supabase } from "./api";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
 import { identify, resetAnalytics, track, trackSignup } from "./analytics";
+import { saveView, savedView, viewForFocus, type SpaceView } from "./spaces";
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
@@ -29,9 +30,18 @@ interface AppState {
   /** What the user came for. Orders the menu, the home page and the examples; never hides anything. */
   focus: Focus | null;
   setFocus: (f: Focus) => Promise<void>;
+  /** Several preferences in one save, like the welcome question's answers. */
+  savePrefs: (p: Prefs) => Promise<void>;
+  /** The menu showing: one space (Trade, Invest, Money) or all of them. */
+  space: SpaceView;
+  /** Show another space's menu. `save` keeps it as the account's choice too (the switcher); a deep link into another
+   * space only switches on this device. */
+  setSpace: (s: SpaceView, save?: boolean) => void;
   theme: "light" | "dark" | "system";
   setTheme: (t: "light" | "dark" | "system") => void;
 }
+
+type Prefs = { level?: Level; focus?: Focus; space?: SpaceView };
 
 const Ctx = createContext<AppState | null>(null);
 export const useApp = () => useContext(Ctx)!;
@@ -46,6 +56,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const [dataOffline, setDataOffline] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
   const timer = useRef<number>(undefined);
+  const [spaceHere, setSpaceHere] = useState<SpaceView | null>(savedView);
   const [theme, setThemeState] = useState<"light" | "dark" | "system">(() => {
     try { return (localStorage.getItem("stratlab-theme") as "light" | "dark") || "system"; } catch { return "system"; }
   });
@@ -115,21 +126,27 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     } catch { /* private mode */ }
   }, []);
 
-  const setLevel = useCallback(async (l: Level) => {
-    setMe((m) => (m ? { ...m, prefs: { ...(m.prefs ?? {}), level: l } } : m));
-    try { await api("/me/prefs", { method: "PUT", body: { level: l } }); } catch (e) { fail(e); }
+  /** Save some of the preferences in one request (two at once could each overwrite the other's change). */
+  const savePrefs = useCallback(async (p: Prefs, quiet = false) => {
+    if (p.space) { setSpaceHere(p.space); saveView(p.space); }
+    setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), ...p } } : m));
+    try { await api("/me/prefs", { method: "PUT", body: p }); } catch (e) { if (!quiet) fail(e); }
   }, [fail]);
-
-  const setFocus = useCallback(async (f: Focus) => {
-    setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), focus: f } } : m));
-    try { await api("/me/prefs", { method: "PUT", body: { focus: f } }); } catch (e) { fail(e); }
-  }, [fail]);
+  const setLevel = useCallback((l: Level) => savePrefs({ level: l }), [savePrefs]);
+  const setFocus = useCallback((f: Focus) => savePrefs({ focus: f }), [savePrefs]);
+  const setSpace = useCallback((s: SpaceView, save = true) => {
+    if (save) { savePrefs({ space: s }, true); return; }       // only a default: a failed save isn't worth a message
+    setSpaceHere(s);
+    saveView(s);
+  }, [savePrefs]);
+  // this device's last menu, else the account's choice, else what the person came for, else Trade
+  const space: SpaceView = spaceHere ?? me?.prefs?.space ?? viewForFocus(me?.prefs?.focus) ?? "trade";
 
   const value = useMemo<AppState>(() => ({
     session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
     allIndicators: !!me?.plan_info.indicators, fno: !!me?.plan_info.fno, level: me?.prefs?.level ?? null, setLevel,
-    focus: me?.prefs?.focus ?? null, setFocus, theme, setTheme,
-  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, theme, setTheme]);
+    focus: me?.prefs?.focus ?? null, setFocus, savePrefs, space, setSpace, theme, setTheme,
+  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

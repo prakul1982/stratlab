@@ -21,8 +21,8 @@ async function open(page: Page, path: string, ready: string, who: typeof session
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
   // a first visit asks what the person came for; answer it like a new user would
-  const ask = page.getByText("What brings you to StratLab?");
-  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /Both/ }).first().click()).catch(() => undefined);
+  const ask = page.getByText("What brings you here?");
+  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
   await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(400);
   return errors;
@@ -71,9 +71,9 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
+  ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -445,15 +445,15 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await settle(page);
   await expect(page.locator("input[type=file]")).toHaveAttribute("accept", /\.zip/);
   await page.locator("input[type=file]").setInputFiles(TAXPNL + "zerodha_taxpnl_2024_2025.zip");
-  await expect(page.getByText(/Read as a Zerodha tax P&L: 16 trades added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Read as a Zerodha tax P&L: 18 trades added/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/7 F&O, commodity and currency lines added up as business income/)).toBeVisible();
-  await expect(page.getByText(/From the ZIP: Commodity \(2 lines\), Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\), F&O \(4 lines\), Currency \(1 line\)/)).toBeVisible();
+  await expect(page.getByText(/From the ZIP: Commodity \(2 lines\), Non-equity \(1 line\), Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\), F&O \(4 lines\), Currency \(1 line\)/)).toBeVisible();
   const check = page.getByRole("list", { name: "Totals checked against your broker's summary" });
-  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(9);
+  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(10);
   await expect(check.getByText(/F&O turnover: ₹3,788 netted per contract/)).toBeVisible();
-  const left = page.getByRole("list", { name: "Files left out" });
-  await expect(left.getByText("Non Equity.csv", { exact: false })).toBeVisible();
-  await expect(left.getByText("F&O.csv", { exact: false })).toHaveCount(0);
+  // the non-equity file is read now (a gold ETF under its own rules), so nothing is left out
+  await expect(page.getByRole("list", { name: "Files left out" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "ETFs and gold bonds" }).getByText("Gold ETF")).toBeVisible();
   // the only year with sales opens by itself
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
   await expect(page.getByText("2 same-day round trips", { exact: false })).toBeVisible();
@@ -643,16 +643,24 @@ async function menu(page: Page, phone: boolean) {
   return side;
 }
 
-test("the menu: a few short groups, Scans and Watchlist each one entry with tabs, old links still open", async ({ page }, info) => {
+test("the menu: a space's few short groups, Scans and Watchlist each one entry with tabs, old links still open", async ({ page }, info) => {
   const phone = info.project.name === "phone";
+  // the owner's account is shared with every other test: keep this test's space choices out of it
+  await page.route("**/me/prefs", (r) => (r.request().method() === "PUT" ? r.fulfill({ json: { prefs: {} } }) : r.fallback()));
   const errors = await open(page, "/research", "Companies");
-  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); });
+  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); localStorage.setItem("stratlab.space", "invest"); });
+  await page.reload();
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
-  for (const g of ["Research", "Portfolio", "Watch", "Notebooks", "Trading"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
-  // eleven entries in the groups, where there were fifteen flat ones; the old separate entries are gone
-  await expect(main.locator(".side-nav a")).toHaveCount(11);
-  for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance", "My Holdings"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
+  const space = side.getByRole("radiogroup", { name: "Space" });
+  await expect(space.getByRole("radio")).toHaveText(["Trade", "Invest", "Money", "All"]);
+  await expect(space.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
+  // Invest: its home, then two short groups; the other spaces' groups wait behind the switcher
+  for (const g of ["Research", "Watch"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
+  for (const g of ["Notebooks", "Trading", "Money"]) await expect(main.getByRole("button", { name: g, exact: true })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
+  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", "Watchlist", "Alerts"]);
+  for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // Account and Admin sit at the bottom, with the markets folded to one line
   const bottom = side.locator(".side-bottom");
   await expect(bottom.getByRole("link", { name: /^Account/ })).toBeVisible();
@@ -694,21 +702,24 @@ test("the menu: a few short groups, Scans and Watchlist each one entry with tabs
 
   // a group folds, by mouse or keyboard, and stays folded on this device; so do the markets
   side = await menu(page, phone);
-  const trading = side.getByRole("button", { name: "Trading", exact: true });
-  await expect(trading).toHaveAttribute("aria-expanded", "true");
-  await trading.click();
-  await expect(trading).toHaveAttribute("aria-expanded", "false");
-  await expect(side.getByRole("link", { name: "Paper trading" })).toBeHidden();
+  const watch = side.getByRole("button", { name: "Watch", exact: true });
+  await expect(watch).toHaveAttribute("aria-expanded", "true");
+  await watch.click();
+  await expect(watch).toHaveAttribute("aria-expanded", "false");
+  await expect(side.getByRole("link", { name: "Alerts" })).toBeHidden();
   await side.locator(".mkt-box > summary").click();
   await expect(side.locator(".mkt-grid")).toBeVisible();
   // the open state is saved by the toggle event, which fires a moment after the click: wait for it before reloading
   await expect.poll(() => page.evaluate(() => localStorage.getItem("stratlab.markets.open"))).toBe("1");
   await page.reload();
   side = await menu(page, phone);
-  await expect(side.getByRole("button", { name: "Trading", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(side.getByRole("button", { name: "Watch", exact: true })).toHaveAttribute("aria-expanded", "false");
   await expect(side.locator(".mkt-grid")).toBeVisible();
-  // the keyboard: Tab from the search button lands on the first group, with a visible focus ring, and Enter folds it
+  // the keyboard: Tab from the search button passes the space's home and lands on the first group, with a visible
+  // focus ring, and Enter folds it
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
+  await page.keyboard.press("Tab");
+  await expect(side.getByRole("link", { name: "Invest home" })).toBeFocused();
   await page.keyboard.press("Tab");
   const first = side.locator(".side-toggle").first();
   await expect(first).toBeFocused();
@@ -1174,4 +1185,131 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByText(/Full check: 0 of 5,058 done/)).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
+});
+
+const MF = new URL("../../backend/tests/fixtures/mf/", import.meta.url).pathname;
+
+test("mutual funds: a password-protected CAS read, holdings, allocation, gains by year, the tax report, and delete", async ({ page, request }, info) => {
+  // each project signs in as its own user (both on Pro) and starts with no funds
+  const [token, id, email] = info.project.name === "phone" ? ["load-74", "u-load-74", "load74@example.com"] : ["load-71", "u-load-71", "load71@example.com"];
+  expect((await request.delete(`${API}/money/mutual-funds`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
+  const errors = await open(page, "/money/mutual-funds", "Your mutual funds, in one place", sessionAs(token, id, email));
+  await settle(page);
+  await expect(page.getByText("No funds yet")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // a synthetic statement (made-up investor and funds), locked with a password: first the wrong one
+  await page.locator("input[type=file]").setInputFiles(MF + "synthetic_cas.pdf");
+  await page.getByLabel("PDF password").fill("WRONG");
+  await page.getByRole("button", { name: "Read my funds" }).click();
+  await expect(page.getByText(/That password didn't open the PDF/)).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel("PDF password").fill("ABCDE1234F");
+  await page.getByRole("button", { name: "Read my funds" }).click();
+  await expect(page.getByText(/7 transactions added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
+
+  const schemes = page.getByRole("table", { name: "Schemes" });
+  await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible();
+  await expect(schemes.getByText("Sample Short Duration Fund - Direct Plan - Growth")).toBeVisible();
+  await expect(page.getByText("₹42,500").first()).toBeVisible();             // 1,100 units at 25 and 500 at 30
+  await expect(page.getByRole("heading", { name: "By category" })).toBeVisible();
+
+  await page.getByRole("combobox", { name: "Financial year" }).selectOption("2025");
+  await expect(page.getByRole("table", { name: "Gains by rate" }).getByText("Short-term at your slab rate (debt and other funds)")).toBeVisible();
+  await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
+  await expect(page.getByRole("table", { name: "Redemptions matched to purchases" }).getByText("grandfathered")).toBeVisible();
+
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/you should|we suggest|recommend|better fund|switch to|rating/i);
+  expect(text).not.toMatch(/yahoo|finnhub|kite|screener/i);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  // the tax report counts the same gains
+  await page.goto("/tax-report");
+  await expect(page.getByRole("region", { name: "Mutual funds" }).getByText(/redemption/)).toBeVisible({ timeout: 30_000 });
+
+  await page.goto("/money/mutual-funds");
+  await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Delete my mutual fund data" }).click();
+  await expect(page.getByText("Your mutual fund data is deleted.")).toBeVisible();
+  await expect(page.getByText("No funds yet")).toBeVisible();
+});
+
+test("money tax tools: dividends from a file into the estimate, advance tax by date with reminders, and the long-term exemption", async ({ page, request }, info) => {
+  // the same users as the tax report tests (which run before this one in each project), starting from no tax data
+  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
+  const auth = { Authorization: `Bearer ${token}` };
+  expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
+  expect((await request.post(`${API}/tax/import?filename=zerodha_console_tradebook.csv&mode=add`, {
+    headers: { ...auth, "Content-Type": "application/octet-stream" }, data: readFileSync(TRADEBOOKS + "zerodha_console_tradebook.csv") })).ok()).toBeTruthy();
+  const now = new Date();
+  const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  expect((await request.put(`${API}/tax/inputs`, { headers: auth, data: { fy, regime: "new", other: 2000000, salary: 2000000, deductions: 0 } })).ok()).toBeTruthy();
+
+  const errors = await open(page, "/money/tax-tools", "Dividends, advance tax and the long-term exemption", sessionAs(token, id, email));
+  await settle(page);
+  await expect(page.getByText(/not tax advice/).first()).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // dividends: a CSV of this year's, by company with the TDS the rule gives
+  const csv = `Date,Symbol,Amount\n${fy}-04-06,INFY,12000\n${fy}-04-06,TCS,3000\n`;
+  await page.getByLabel("Dividend file").setInputFiles({ name: "dividends.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await expect(page.getByText("2 dividends added.")).toBeVisible({ timeout: 30_000 });
+  const year = page.getByRole("region", { name: "Dividends for the year" });
+  await expect(year.getByText("From your files")).toBeVisible();
+  await expect(year.getByLabel("Dividend income")).toHaveText("₹15,000");
+  const byCompany = year.getByRole("table", { name: "Dividends by company" });
+  await expect(byCompany.getByRole("row").filter({ hasText: "INFY" })).toContainText("₹1,200");        // 10% once over the threshold
+  await expect(byCompany.getByRole("row").filter({ hasText: "TCS" })).toContainText("₹0");             // under it
+  const inEstimate = page.getByRole("radiogroup", { name: "In the total tax estimate" });
+  await expect(inEstimate.getByRole("radio", { name: "Include in the tax estimate" })).toHaveAttribute("aria-checked", "true");
+  await inEstimate.getByRole("radio", { name: "Leave out" }).click();
+  await expect(page.getByText("Left out of the total tax estimate.")).toBeVisible();
+  await inEstimate.getByRole("radio", { name: "Include in the tax estimate" }).click();
+  await expect(page.getByText("Included in the total tax estimate.")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // advance tax: the four dates, the amounts after TDS and a payment, and reminders
+  await page.getByRole("tab", { name: "Advance tax" }).click();
+  await expect(page.getByRole("list", { name: "Due dates" }).getByRole("listitem")).toHaveCount(4);
+  await expect(page.getByLabel("Tax for the year", { exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "TDS for the year" }).fill("50000");
+  await page.getByRole("button", { name: "Add a payment" }).click();
+  await page.getByLabel("Payment 1 date").fill(`${fy}-06-15`);
+  await page.getByLabel("Payment 1 amount").fill("20000");
+  await page.getByRole("button", { name: "Save and update" }).click();
+  await expect(page.getByText("Saved. The instalments are updated.")).toBeVisible();
+  const instalments = page.getByRole("table", { name: "Instalments" });
+  await expect(instalments.getByRole("row")).toHaveCount(5);
+  await expect(instalments.getByRole("row").nth(1)).toContainText("₹20,000");
+  const reminders = page.getByRole("radiogroup", { name: "Advance tax reminders" });
+  await reminders.getByRole("radio", { name: "On" }).click();
+  await expect(page.getByText(/Reminders on: 7 days and 1 day before each date/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await page.reload();
+  await settle(page);
+  await expect(page.getByRole("radiogroup", { name: "Advance tax reminders" }).getByRole("radio", { name: "On" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("textbox", { name: "TDS for the year" })).toHaveValue("50000");
+
+  // the long-term exemption, with the lots below cost next to it
+  await page.getByRole("tab", { name: "Long-term exemption" }).click();
+  const ex = page.getByRole("region", { name: "Long-term exemption" });
+  await expect(ex.getByText(/doesn't carry forward/)).toBeVisible();
+  await expect(ex.getByLabel("Exemption used")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Open lots below cost" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Turning long-term" })).toBeVisible();
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/you should|we suggest|recommend|book (your )?gains|sell to|harvest/i);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  // the tax report links here, and its estimate for the year now counts the dividends
+  await page.goto("/tax-report");
+  await settle(page);
+  await expect(page.getByRole("region", { name: "Tax tools" }).getByRole("link", { name: "Open tax tools" })).toBeVisible();
+  await page.getByLabel("Financial year").selectOption(String(fy));
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
+  expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
 });

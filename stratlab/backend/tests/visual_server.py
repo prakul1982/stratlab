@@ -61,6 +61,11 @@ def build():
     from app import surveillance
     surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them
     screen_index()
+    # the public NAV files, from the test fixtures, for the mutual funds page
+    from app import money_mf_nav
+    navs = Path(__file__).parent / "fixtures" / "mf"
+    mp.setattr(money_mf_nav, "fetch_text", lambda url: (navs / ("NAVAll.txt" if url == money_mf_nav.DAILY_URL else "nav_2018-01-31.txt")).read_text())
+    mp.setattr(money_mf_nav, "MIN_SCHEMES", 1)
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     return w

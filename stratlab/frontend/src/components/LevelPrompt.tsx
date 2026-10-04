@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import type { Focus, Level } from "../lib/types";
+import { homeOf, SPACE_HOMES, viewForFocus } from "../lib/spaces";
 import { Modal } from "./ui";
 import { track } from "../lib/analytics";
 
@@ -10,38 +12,43 @@ export const LEVELS: [Level, string, string][] = [
   ["pro", "I do this actively", "Every tool in view, including the advanced ones. Detailed settings stay tidy: open them once and they stay open."],
 ];
 
+/** What brings someone here, which also picks the space the menu and home page start in. Trade first: the strategy
+ * lab is where StratLab began. */
 export const FOCUSES: [Focus, string, string][] = [
-  ["invest", "Investing", "Research companies for the long term: scans, sector rotation, red flags, deep dives and the management report card."],
-  ["trade", "Trading", "Test trading rules on years of real prices, then run them live with fake money: stocks, F&O, options, crypto."],
-  ["both", "Both", "Everything side by side."],
+  ["trade", "Trade", "Test strategies on years of real prices, paper trade them with fake money, and options."],
+  ["invest", "Invest", "Research companies: their numbers, filings, red flags, results dates and your watchlist."],
+  ["money", "Manage my money", "Your holdings, capital gains tax and everything you own, in one place."],
+  ["both", "All of it", "Every space side by side, Trade first."],
 ];
 
-/** Asked once, after the first sign-in (and once to anyone who answered only the old experience question). Both answers
- * only change what's shown first; every tool stays available, and both can be changed on the Account page. */
+/** Asked once, after the first sign-in (and again to anyone who answered only one of the two old questions): one short
+ * step. The experience level sits above the choices, already set to the middle one; picking what you came for answers
+ * both. Neither hides anything, and both can be changed on the Account page. */
 export function LevelPrompt({ onDone }: { onDone: () => void }) {
-  const { level, focus, setLevel, setFocus } = useApp();
-  const [step, setStep] = useState<"focus" | "level">(focus ? "level" : "focus");
-  const pickFocus = async (f: Focus) => {
-    await setFocus(f);
-    if (level) { track("onboarding answered", { focus: f, level }); onDone(); } else setStep("level");
+  const { level, focus, savePrefs } = useApp();
+  const [lvl, setLvl] = useState<Level>(level ?? "some");
+  const nav = useNavigate();
+  const loc = useLocation();
+  const pick = async (f: Focus) => {
+    const view = viewForFocus(f)!;
+    // on a home page, open the home of what they picked
+    if (loc.pathname === "/" || SPACE_HOMES.includes(loc.pathname)) nav(homeOf(view, f), { replace: true });
+    track("onboarding answered", { focus: f, level: lvl });
+    onDone();
+    await savePrefs({ focus: f, level: lvl, space: view });     // closes this: the answers are in
   };
-  const pickLevel = async (l: Level) => { await setLevel(l); track("onboarding answered", { focus: focus ?? undefined, level: l }); onDone(); };
-  if (step === "focus") return (
-    <Modal title="What brings you to StratLab?" onClose={() => pickFocus("both")}>
-      <p className="muted" style={{ marginBottom: 16 }}>We'll put what you came for first. Everything else stays one tap away, and you can change this any time on the Account page.</p>
+  return (
+    <Modal title="What brings you here?" onClose={() => pick(focus ?? "both")}>
+      <p className="muted" style={{ marginBottom: 14 }}>StratLab has three spaces: Trade, Invest and Money. We'll open the one you pick. The others stay one tap away, and you can change this any time on the Account page.</p>
+      <div className="stack" style={{ gap: 6, marginBottom: 14 }}>
+        <span className="small muted">How much have you done?</span>
+        <div className="seg" role="radiogroup" aria-label="Experience" style={{ alignSelf: "flex-start" }}>
+          {LEVELS.map(([l, title, what]) => <button key={l} role="radio" aria-checked={lvl === l} aria-pressed={lvl === l} title={what} onClick={() => setLvl(l)}>{title}</button>)}
+        </div>
+      </div>
       <div className="stack" style={{ gap: 10 }}>
         {FOCUSES.map(([f, title, what]) => (
-          <button key={f} className="card explore-card" onClick={() => pickFocus(f)}><b>{title}</b><span className="small muted">{what}</span></button>
-        ))}
-      </div>
-    </Modal>
-  );
-  return (
-    <Modal title={focus === "invest" ? "How much investing have you done?" : "How much trading have you done?"} onClose={() => pickLevel("some")}>
-      <p className="muted" style={{ marginBottom: 16 }}>This only changes what starts open. Every tool is available whatever you pick.</p>
-      <div className="stack" style={{ gap: 10 }}>
-        {LEVELS.map(([l, title, what]) => (
-          <button key={l} className="card explore-card" onClick={() => pickLevel(l)}><b>{title}</b><span className="small muted">{what}</span></button>
+          <button key={f} className="card explore-card" data-focus={f} onClick={() => pick(f)}><b>{title}</b><span className="small muted">{what}</span></button>
         ))}
       </div>
     </Modal>

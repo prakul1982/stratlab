@@ -24,6 +24,7 @@ DEFAULT_SYMBOLS = [("NSE", "NIFTY 50"), ("NSE", "NIFTY BANK")]
 
 
 NSE_SERIES = ("BE", "BZ", "SM", "ST", "SZ")     # trade-to-trade, z-group and SME series, on the broker as SYMBOL-BE…
+UNIT_SERIES = ("GB", "RR", "IV")                # gold bonds, REITs and InvITs, when a file gives the symbol without them
 
 
 def norm_name(n: str | None) -> str:
@@ -319,7 +320,7 @@ class KiteService:
         if hit and hit["type"] == "EQ":
             return hit
         symbol = symbol.strip().upper()
-        for series in NSE_SERIES:
+        for series in NSE_SERIES + UNIT_SERIES:
             hit = self.by_symbol(f"{symbol}-{series}")
             if hit and hit["type"] == "EQ":
                 return hit

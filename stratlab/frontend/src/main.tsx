@@ -21,12 +21,17 @@ import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
 import { lastView } from "./lib/navGroups";
+import { SPACE_HOMES } from "./lib/spaces";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
   lazy(() => load().then((m) => ({ default: m[name] })));
 const home = () => import("./pages/Home");
-const Home = page(home, "Home");
+const spaceHomes = () => import("./pages/SpaceHomes");
+const SpaceHome = page(spaceHomes, "SpaceHome");
+const TradeHome = page(spaceHomes, "TradeHome");
+const InvestHome = page(spaceHomes, "InvestHome");
+const MoneyHome = page(spaceHomes, "MoneyHome");
 const NotebooksHome = page(home, "NotebooksHome");
 const NewNotebook = page(home, "NewNotebook");
 const login = () => import("./pages/Login");
@@ -63,7 +68,12 @@ const InvestorHomePage = page(investor, "InvestorHomePage");
 const holdingsPage = () => import("./pages/HoldingsPage");
 const HoldingsPage = page(holdingsPage, "HoldingsPage");
 const taxPage = () => import("./pages/TaxReportPage");
+const mfPage = () => import("./pages/money/MutualFundsPage");
+const MutualFundsPage = page(mfPage, "MutualFundsPage");
 const TaxReportPage = page(taxPage, "TaxReportPage");
+const TaxToolsPage = page(() => import("./pages/money/TaxToolsPage"), "TaxToolsPage");
+const moneyCalendar = () => import("./pages/money/MoneyCalendarPage");
+const MoneyCalendarPage = page(moneyCalendar, "MoneyCalendarPage");
 const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
@@ -74,6 +84,8 @@ const CompanyPage = page(research, "CompanyPage");
 const AlertsPage = page(() => import("./pages/AlertsPage"), "AlertsPage");
 const screensPage = () => import("./pages/Screens");
 const ScreensPage = page(screensPage, "ScreensPage");
+const netWorth = () => import("./pages/money/NetWorthPage");
+const NetWorthPage = page(netWorth, "NetWorthPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -82,7 +94,8 @@ function warmFirstPage(path: string) {
   const load = LEGAL_PAGES.some((p) => p.path === path) ? legal
     : path.startsWith("/verdict/") ? verdict
     : !saved ? login
-    : /^\/(notebooks|new)?$/.test(path) ? home
+    : /^\/(trade|invest|money)?$/.test(path) ? spaceHomes
+    : /^\/(notebooks|new)$/.test(path) ? home
     : /^\/n\/[^/]+$/.test(path) ? notebook
     : /^\/n\/[^/]+\/e\//.test(path) ? experiment
     : /^\/research\/(IN|US)\/[^/]+\/deep$/.test(path) ? deep
@@ -90,6 +103,9 @@ function warmFirstPage(path: string) {
     : path === "/news" ? news
     : path === "/holdings" ? holdingsPage
     : path === "/tax-report" ? taxPage
+    : path === "/money/net-worth" ? netWorth
+    : path === "/money/mutual-funds" ? mfPage
+    : path === "/money/calendar" ? moneyCalendar
     : path === "/research/screens" || (path === "/research/scans" && lastView("scans") === "/research/screens") ? screensPage
     : path.startsWith("/research") ? research
     : null;
@@ -152,10 +168,13 @@ function Routed() {
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
-      {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && <PromoBanner until={me.promo.until} />}{/* those two show a countdown */}
+      {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<SpaceHome />} />
+        <Route path="/trade" element={<TradeHome />} />
+        <Route path="/invest" element={<InvestHome />} />
+        <Route path="/money" element={<MoneyHome />} />
         <Route path="/notebooks" element={<NotebooksHome />} />
         <Route path="/new" element={<NewNotebook />} />
         <Route path="/n/:id" element={<NotebookPage />} />
@@ -174,6 +193,10 @@ function Routed() {
         <Route path="/news" element={<NewsPage />} />
         <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/tax-report" element={<TaxReportPage />} />
+        <Route path="/money/net-worth" element={<NetWorthPage />} />
+        <Route path="/money/mutual-funds" element={<MutualFundsPage />} />
+        <Route path="/money/tax-tools" element={<TaxToolsPage />} />
+        <Route path="/money/calendar" element={<MoneyCalendarPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />

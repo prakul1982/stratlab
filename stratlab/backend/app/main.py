@@ -27,7 +27,9 @@ from pydantic import ValidationError
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import holdings, holdings_file, tax_export, tax_lots, tax_total
+from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
+from . import money_mf
+from . import money_advance_tax, money_routes
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
@@ -69,6 +71,8 @@ from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
+from . import money_networth
+from .plans import networth_items
 from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
@@ -163,11 +167,13 @@ newsletter_job = news.Job()
 deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit))
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
 # corporate actions: the exchange's list for India, the price history's dividends and splits for the US
+money_calendar_job = money_calendar.Job()
 corp_job = corp_actions.Job(lambda: {"in": filings_feed, "us": research_hub.yahoo})
 # the exchange's surveillance lists, twice a trading day; stocks entering or leaving one fire the stock alerts
 surv_job = surveillance.Job(lambda: filings_feed, lambda changes, now: stock_alerts.fire_events(
     [{**c, "kind": "surveillance"} for c in changes], now, _alert_limit))
 lifecycle_job = lifecycle.Job()
+advance_tax_job = money_advance_tax.Job()       # advance tax reminders, for those who turned them on
 invite_job = invite_rewards.Job()
 
 
@@ -198,9 +204,12 @@ async def lifespan(app: FastAPI):
     newsletter_job.start()
     results_job.start()
     corp_job.start()
+    money_calendar_job.start()
     surv_job.start()
     lifecycle_job.start()
+    advance_tax_job.start()
     invite_job.start()
+    networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
@@ -219,6 +228,9 @@ if settings.SENTRY_DSN:
 app = FastAPI(title="StratLab API", lifespan=lifespan)
 research_routes.setup(research_hub, _gemini, _anthropic)
 app.include_router(research_routes.router)
+app.include_router(money_mf.router)          # /money/mutual-funds
+app.include_router(money_routes.router)
+app.include_router(money_calendar.router)
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -507,7 +519,7 @@ def me(profile=Depends(current_profile)):
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
-        "prefs": {k: prefs_of(profile["id"]).get(k) for k in ("level", "focus")},
+        "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},
         "data_online": kite.ready(),
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
@@ -526,6 +538,9 @@ def data_note() -> dict | None:
     return {"closed": closed, "back_at": back.isoformat() if back else None}
 
 
+PREF_KEYS = ("level", "focus", "space")
+
+
 def prefs_of(uid: str) -> dict:
     try:
         p = json.loads(db.get_setting(daily_report.PREFS + uid) or "{}")
@@ -536,11 +551,13 @@ def prefs_of(uid: str) -> dict:
 
 @app.put("/me/prefs")
 def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
-    """Experience level and what the user came for (investing, trading or both): they only change defaults (what's
-    expanded, what's suggested first, the menu order), never what's allowed."""
-    prefs = {**prefs_of(profile["id"]), **{k: v for k, v in (("level", req.level), ("focus", req.focus)) if v}}
+    """Experience level, what the user came for (trading, investing, their money or all of it) and the space last picked
+    in the menu: they only change defaults (what's expanded, what's suggested first, which menu shows), never what's
+    allowed."""
+    given = {k: getattr(req, k) for k in PREF_KEYS}
+    prefs = {**prefs_of(profile["id"]), **{k: v for k, v in given.items() if v}}
     db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
-    return {"prefs": {k: prefs.get(k) for k in ("level", "focus")}}
+    return {"prefs": {k: prefs.get(k) for k in PREF_KEYS}}
 
 
 @app.get("/push/key")
@@ -621,7 +638,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
         lifecycle.set_tips(uid, False)
     if act and what in ("screens", "all"):
         screens.mute(uid)
-    if act and what not in ("tips", "screens"):
+    if act and what in ("advance_tax", "all"):
+        money_advance_tax.set_remind(uid, False)
+    if act and what not in ("tips", "screens", "advance_tax"):
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
@@ -846,6 +865,9 @@ def throttle(profile, what: str, times: int, per_seconds: float, message: str):
         _recent[key] = hits + [now]
         if len(_recent) > 20000:
             _recent.clear()
+
+
+money_mf.setup(throttle)
 
 
 # ---------- backtests and notebooks ----------
@@ -2020,6 +2042,63 @@ def holdings_delete(profile=Depends(current_profile)):
     return {"deleted": True}
 
 
+# ---------- Money: net worth (stocks from My Holdings, everything else typed in; Free keeps 5 entries) ----------
+_nw_prices: dict = {}                  # {"gold": (time read, (rupees a gram, as of))}, {"BTC": (time read, dollars)}
+NW_PRICE_TTL = 600.0
+
+
+def _nw_cached(key: str, read):
+    hit = _nw_prices.get(key)
+    if hit and time.time() - hit[0] < NW_PRICE_TTL:
+        return hit[1]
+    got = _quiet(read)
+    _nw_prices[key] = (time.time(), got)
+    return got
+
+
+def _nw_gold():
+    """Rupees a gram of 24 carat gold: the front-month gold future on the commodity exchange (quoted per 10 g)."""
+    def read():
+        prov = markets.provider("MCX")
+        inst = prov.instrument("GOLD") if prov and prov.ready() else None
+        p = prov.ltp(inst) if inst else None
+        return (p / 10, datetime.now(timezone.utc).isoformat(timespec="minutes")) if p and p > 0 else None
+    return _nw_cached("gold", read)
+
+
+def _nw_crypto(coin: str):
+    def read():
+        prov = markets.provider("CRYPTO")
+        inst = prov.instrument(f"{coin}-USD") if prov else None
+        p = prov.ltp(inst) if inst else None
+        return p if p and p > 0 else None
+    return _nw_cached("crypto:" + coin, read)
+
+
+def _nw_stocks(profile) -> dict:
+    """My Holdings in rupees: Indian and US stocks apart (a position without a price counts at cost, as on Holdings)."""
+    h = holdings_view(profile)
+    worth = (lambda r: r["value"] if r["value"] is not None else r["invested"] or 0)
+    rate = h.get("usd_inr")
+    return {"in": sum(worth(r) for r in h["rows"] if r.get("market") != "US"),
+            "us": sum(worth(r) for r in h["rows"] if r.get("market") == "US") * rate if rate else 0,
+            "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"])}
+
+
+app.include_router(money_networth.make_router(
+    current_profile, _nw_stocks, money_networth.Prices(_nw_gold, _nw_crypto, usd_inr),
+    networth_items, lambda plan: allows(plan, "networth"), throttle))
+
+
+def _nw_value_of(uid: str) -> dict | None:
+    p = db.get_profile(uid)
+    return money_networth.build(money_networth.load(uid)["items"], _quiet(_nw_stocks, p) if p else None,
+                                money_networth.mf_value(uid), money_networth.Prices(_nw_gold, _nw_crypto, usd_inr))
+
+
+networth_job = money_networth.Job(_nw_value_of)
+
+
 # ---------- Tax report: capital gains from the user's own tradebooks (everyone) ----------
 FMV_LOOKUPS = 20                 # 31 Jan 2018 prices looked up in one request; the rest on the next visit
 
@@ -2125,10 +2204,23 @@ def tax_inputs(profile) -> dict:
             "income": tax_total.load_inputs(uid)}
 
 
+def tax_mf(profile) -> dict:
+    """The user's mutual fund sales for the tax report (Basic and up), from the Money space."""
+    if not allows(profile["_plan"], "mf_gains"):
+        return {"rows": [], "names": {}, "years": {}, "allowed": False}
+    return {**money_mf.for_tax(profile["id"]), "allowed": True}
+
+
 def tax_view(profile) -> dict:
     i = tax_inputs(profile)
-    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"])
-    return {**rep, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
+    mf = tax_mf(profile)
+    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"],
+                          extra=mf["rows"], dividends=money_routes.dividends_for_tax(profile))
+    rep["names"].update(mf["names"])
+    for y in rep["years"]:
+        y["mutual_funds"] = mf["years"].get(y["fy"])
+    return {**rep, "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
+                          "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
@@ -2183,6 +2275,7 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     except holdings_file.FileError as e:
         err(400, "bad_file", str(e))
     trades, missed = tax_match(parsed["trades"])
+    div_added = money_routes.import_from_tax_file(profile, data, filename)     # a tax P&L's dividend sheet, if it has one
     before = tax_lots.load(profile["id"])
     old = [] if mode == "replace" else before["trades"]
     merged, added, dup = tax_lots.merge(old, trades)
@@ -2203,7 +2296,7 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
                             "years": sorted({b["fy"] for b in parsed.get("business") or []})},
                "over_limit": over, "problems": parsed["problems"][:200], "problem_count": len(parsed["problems"]),
                "not_listed": missed[:50], "skipped": parsed.get("skipped", []), "check": parsed.get("check", []),
-               "files": parsed.get("files", []), "report": tax_view(profile)})
+               "files": parsed.get("files", []), "dividends_added": div_added, "report": tax_view(profile)})
 
 
 @app.put("/tax/fmv")
@@ -2233,9 +2326,11 @@ def tax_income(req: TaxInputsReq, profile=Depends(current_profile)):
 
 @app.delete("/tax")
 def tax_delete(profile=Depends(current_profile)):
-    """Delete my tax data: every uploaded trade and file, and the income entered for the estimate, at once."""
+    """Delete my tax data: every uploaded trade and file, the income entered for the estimate, and the dividends and
+    advance tax figures of the tax tools, at once."""
     tax_lots.delete(profile["id"])
     tax_total.delete_inputs(profile["id"])
+    money_routes.delete_all(profile["id"])
     return {"deleted": True}
 
 
@@ -2246,7 +2341,12 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
     c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
-    y = tax_lots.with_total(tax_lots.year(fy, c["realised"], c["intraday"], limit=None), i["business"], i["income"].get(fy))
+    mf = tax_mf(profile)
+    c["realised"] += mf["rows"]
+    c["names"].update(mf["names"])
+    equity, units = tax_lots.split_units(c)
+    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy),
+                            money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":
         below = tax_lots.below_cost(c["open"], i["quotes"], i["today"]) if fy == tax_lots.fy_of(i["today"]) else None

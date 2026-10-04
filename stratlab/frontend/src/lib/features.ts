@@ -16,10 +16,16 @@ export const GOALS: Record<Goal, { title: string; sub: string }> = {
 };
 export const GOAL_ORDER: Record<string, Goal[]> = {
   invest: ["find", "understand", "test", "trade"], trade: ["test", "trade", "find", "understand"],
-  both: ["understand", "test", "find", "trade"],
+  money: ["find", "understand", "test", "trade"], both: ["test", "trade", "understand", "find"],
 };
 
 export const FEATURES: Feature[] = [
+  { id: "trade_home", title: "Trade", what: "The strategy lab: your notebooks, paper trading and options in one place.", to: "/trade",
+    words: "trade trading home strategy lab notebooks paper options overview space" },
+  { id: "invest_home", title: "Invest", what: "Your watchlist at a glance, today's results and red flags, and any company to look up.", to: "/invest",
+    words: "invest investing home research watchlist results red flags overview space" },
+  { id: "money_home", title: "Money", what: "Your holdings, this year's capital gains tax estimate and everything you own.", to: "/money",
+    words: "money personal finance net worth wealth home holdings tax overview space my money" },
   { id: "idea", title: "Test an idea", what: "Describe a strategy in plain words and get an honest verdict on years of real prices.", to: "/new",
     words: "new notebook backtest test idea strategy rules describe plain english build", home: true, goal: "test" },
   { id: "research", title: "Research a company", what: "Price, key numbers, results, news and an AI read that ends with ideas to test.", to: "/research",
@@ -70,6 +76,8 @@ export const FEATURES: Feature[] = [
     words: "investor home dashboard watchlist checklist report card management track record long term", home: true, goal: "find" },
   { id: "holdings", title: "My Holdings", what: "Upload your holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities: value, P&L, sectors and each stock's filings.", to: "/holdings",
     words: "holdings portfolio my stocks import upload broker zerodha console kite groww upstox angel one icici direct hdfc securities csv excel xlsx pnl p&l profit loss value sector allocation", home: true, goal: "find" },
+  { id: "networth", title: "Net worth", what: "Everything you own minus what you owe: stocks, EPF, PPF, NPS, FDs, gold, property and loans, with your insurance policies.", to: "/money/net-worth",
+    words: "net worth networth assets liabilities epf ppf nps fd rd fixed deposit recurring gold sgb sovereign gold bond property cash crypto loan emi prepay prepayment home loan insurance policy premium term health money" },
   { id: "news", title: "News and newsletters", what: "A short brief after each market close, for India, the US and the companies you follow. On the page or by email.", to: "/news",
     words: "news newsletter brief digest email daily weekly market close my stocks watchlist headlines", goal: "find" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },

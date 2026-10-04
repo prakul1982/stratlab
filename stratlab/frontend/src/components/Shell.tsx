@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Receipt, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
+import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Receipt, Shield, Wallet, Moon, Plus, Pulse, Search, Sparkle, Sun, User, Calendar } from "./Icons";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
-import { FAMILIES, familyOf } from "../lib/navGroups";
+import { FAMILIES, NAV_GROUPS, familyOf } from "../lib/navGroups";
+import { ALL_GROUPS, SPACE_IDS, SPACES, spaceOf, type GroupId, type SpaceView } from "../lib/spaces";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
@@ -17,7 +18,8 @@ const tourSeen = () => { try { return localStorage.getItem(TOUR_SEEN) === "1"; }
 /** The menu lists this many notebooks (pinned first, then the latest); the rest are one tap away on the notebooks page. */
 const SIDE_NOTEBOOKS = 6;
 
-type GroupId = "research" | "portfolio" | "watch" | "notebooks" | "trading";
+/** Icons a menu entry kept as data (NAV_GROUPS) can name. */
+const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, bell: Bell, lens: Lens, news: News, pin: Pin, pulse: Pulse, layers: Layers, library: Library, upload: Upload, search: Search, compass: Compass, wallet: Wallet, calendar: Calendar };
 const SHUT_KEY = "stratlab.side.shut";
 /** Which menu groups you closed, remembered on this device. */
 function readShut(): Partial<Record<GroupId, boolean>> {
@@ -29,7 +31,7 @@ const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US",
 
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, theme, setTheme, me, level, focus } = useApp();
+  const { notebooks, markets, theme, setTheme, me, level, focus, space, setSpace } = useApp();
   const [open, setOpen] = useState(false);
   const [mktOpen, setMktOpen] = useState(() => { try { return localStorage.getItem("stratlab.markets.open") === "1"; } catch { return false; } });
   const [shut, setShut] = useState(readShut);
@@ -53,6 +55,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
+  // a link into another space shows that space's menu, so where you are is always in it ("All" already shows it)
+  const here = spaceOf(loc.pathname);
+  useEffect(() => { if (here && space !== "all" && here !== space) setSpace(here, false); }, [here]);   // eslint-disable-line react-hooks/exhaustive-deps
   const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
   // pinned first, then the latest; the one you have open always stays in the list
   const openId = loc.pathname.match(/^\/n\/([^/]+)/)?.[1];
@@ -72,29 +77,30 @@ export function Shell({ children }: { children: ReactNode }) {
       item("/news", <News />, "News"),
       item(FAMILIES.scans.home, <Search />, "Scans", fam === "scans", "Trend scan, screener, sector rotation and red flags"),
     ] },
-    portfolio: { label: "Portfolio", on: /^\/(holdings|tax-report)/.test(path), items: [
-      item("/holdings", <Book />, "Holdings"),
-      item("/tax-report", <Receipt />, "Tax report", undefined, "Capital gains by financial year, from your tradebooks"),
-    ] },
+    money: { label: "Money", on: SPACES.money.paths.test(path) && path !== SPACES.money.home, items: NAV_GROUPS.Money.map((e) => {
+      const Icon = ICONS[e.icon ?? ""] ?? Compass;
+      return item(e.to, <Icon />, e.label, undefined, e.title);
+    }) },
     watch: { label: "Watch", on: fam === "watch" || path === "/alerts", items: [
       item(FAMILIES.watch.home, <Pin />, "Watchlist", fam === "watch", "Your watchlist, as a list or every company at a glance"),
       item("/alerts", <Bell />, "Alerts"),
     ] },
     notebooks: { label: "Notebooks", on: path.startsWith("/n/") || path === "/notebooks", items: [] },
     trading: { label: "Trading", on: /^\/(paper|options|import|library)/.test(path), items: [
-      item("/paper", <Pulse />, "Paper trading"),
       item("/options", <Layers />, "Options"),
+      item("/paper", <Pulse />, "Paper trading"),
       item("/library", <Library />, "Strategy library"),
       item("/import", <Upload />, "Import a strategy"),
     ] },
   };
-  const order: GroupId[] = focus === "invest" ? ["research", "portfolio", "watch", "notebooks", "trading"] : ["notebooks", "trading", "research", "portfolio", "watch"];
-  const isShut = (g: GroupId) => shut[g] ?? (focus === "invest" && (g === "notebooks" || g === "trading"));
+  // one space's groups, or every group (Trade's first) folded until opened
+  const order: GroupId[] = space === "all" ? ALL_GROUPS : SPACES[space].groups;
+  const isShut = (g: GroupId) => shut[g] ?? space === "all";
   const toggle = (g: GroupId) => setShut((s) => { const next = { ...s, [g]: !isShut(g) }; saveShut(next); return next; });
   // opening a page in a closed group opens that group, so where you are is always in view
   const activeGroup = order.find((g) => groups[g].on);
-  useEffect(() => { if (activeGroup && isShut(activeGroup)) toggle(activeGroup); }, [activeGroup]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const allNotebooks = focus === "invest" ? "/notebooks" : "/";
+  useEffect(() => { if (activeGroup && isShut(activeGroup)) toggle(activeGroup); }, [activeGroup, space]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const allNotebooks = "/notebooks";
   const notebookList = (
     <>
       {notebooks === null && <span className="small muted side-note">Loading…</span>}
@@ -121,13 +127,21 @@ export function Shell({ children }: { children: ReactNode }) {
   const sidebar = (
     <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
       <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
-      {focus === "invest"
+      <SpaceSwitch space={space} onPick={(s) => setSpace(s)} />
+      {space === "invest" || (space === "all" && focus === "invest")
         ? <button className="btn" onClick={() => nav("/research")}><Lens size={18} />Look up a company</button>
+        : space === "money" || (space === "all" && focus === "money")
+        ? <button className="btn" onClick={() => nav("/holdings")}><Book size={18} />Add your holdings</button>
         : <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>}
       <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
         <Sparkle size={17} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
       </button>
       <nav className="side-groups" aria-label="Main">
+        {space !== "all" && (
+          <NavLink to={SPACES[space].home} className={({ isActive }) => `side-home${isActive ? " active" : ""}`}>
+            <Compass size={16} />{SPACES[space].label} home
+          </NavLink>
+        )}
         {order.map((g) => {
           const { label, items } = groups[g];
           const shutNow = isShut(g);
@@ -213,3 +227,17 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
+
+/** Trade · Invest · Money · All at the top of the menu: which space's menu shows. Every page stays reachable from
+ * any of them (search, links, "All"). */
+function SpaceSwitch({ space, onPick }: { space: SpaceView; onPick: (s: SpaceView) => void }) {
+  const views: [SpaceView, string, string][] = [...SPACE_IDS.map((s) => [s, SPACES[s].label, SPACES[s].what] as [SpaceView, string, string]),
+    ["all", "All", "Every menu group, folded"]];
+  return (
+    <div className="space-switch" role="radiogroup" aria-label="Space">
+      {views.map(([v, label, what]) => (
+        <button key={v} role="radio" aria-checked={space === v} title={what} data-space={v} onClick={() => onPick(v)}>{label}</button>
+      ))}
+    </div>
+  );
+}
