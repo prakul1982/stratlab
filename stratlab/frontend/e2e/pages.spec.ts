@@ -186,8 +186,8 @@ test.describe("a visitor in India", () => {
   test.use({ locale: "en-US", timezoneId: "Asia/Kolkata" });
   test("sees prices in rupees", async ({ page }) => {
     const errors = await open(page, "/plans", "Plans");
-    await expect(page.getByText("₹499 / month", { exact: true })).toBeVisible();
-    await expect(page.getByText("₹1,499 / month", { exact: true })).toBeVisible();
+    await expect(page.getByText("₹699 / month", { exact: true })).toBeVisible();
+    await expect(page.getByText("₹1,999 / month", { exact: true })).toBeVisible();
     await expect(page.getByText("incl. GST", { exact: true })).toHaveCount(2);        // next to each rupee price
     await sane(page, errors);
   });

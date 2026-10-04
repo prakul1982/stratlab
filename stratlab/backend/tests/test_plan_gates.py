@@ -25,8 +25,8 @@ def as_plan(plan):
 
 
 def test_prices_and_limits():
-    assert (PLANS["basic"]["price"], PLANS["pro"]["price"]) == (499, 1499)            # rupees, GST included
-    assert (PLANS["basic"]["price_year"], PLANS["pro"]["price_year"]) == (4990, 14990)    # ten months: two free
+    assert (PLANS["basic"]["price"], PLANS["pro"]["price"]) == (699, 1999)            # rupees, GST included
+    assert (PLANS["basic"]["price_year"], PLANS["pro"]["price_year"]) == (6990, 19990)    # ten months: two free
     row = lambda k: [PLANS[p][k] for p in ("free", "basic", "pro")]  # noqa: E731
     assert row("backtests_per_month") == [10, 100, None] and row("ai_builds_per_month") == [10, 100, None]
     assert row("live_limit") == [1, 2, 10] and row("group_size") == [10, 25, 50]

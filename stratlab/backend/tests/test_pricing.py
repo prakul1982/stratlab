@@ -18,7 +18,7 @@ def store(monkeypatch):
 
 def test_every_currency_has_prices_and_is_charged_in_rupees_until_its_plans_exist(store):
     t = pricing.table()
-    assert (t["INR"]["basic"], t["INR"]["pro"], t["INR"]["basic_year"], t["INR"]["pro_year"]) == (499, 1499, 4990, 14990)
+    assert (t["INR"]["basic"], t["INR"]["pro"], t["INR"]["basic_year"], t["INR"]["pro_year"]) == (699, 1999, 6990, 19990)
     assert t["INR"]["charged_in"] == "INR"
     assert (t["USD"]["basic"], t["USD"]["pro"], t["USD"]["basic_year"], t["USD"]["pro_year"]) == (8, 20, 80, 200)
     assert t["USD"]["charged_in"] == "INR"
@@ -34,7 +34,7 @@ def test_admin_changes_prices_and_plans(store):
     t = pricing.save({"USD": {"basic": 9, "pro": 29.5, "plan_basic": "plan_ABC123", "plan_pro": "plan_DEF456"},
                       "INR": {"basic": 1}, "XXX": {"basic": 1}})
     assert t["USD"]["basic"] == 9 and t["USD"]["pro"] == 29.5 and t["USD"]["charged_in"] == "USD"
-    assert t["INR"]["basic"] == 499                                          # rupee prices come from the plans
+    assert t["INR"]["basic"] == 699                                          # rupee prices come from the plans
     assert pricing.plan_id("USD", "pro", "month") == "plan_DEF456" and pricing.plan_id("USD", "pro", "year") is None
     assert pricing.all_plan_ids()["plan_ABC123"] == ("USD", "basic", "month")
     with pytest.raises(ValueError, match="positive"):
@@ -90,10 +90,10 @@ def test_prices_follow_the_rupee_price_at_todays_rate(store, monkeypatch):
     state = pricing.refresh_rates(lambda code: rates.get(code) or 1 / 0)
     assert state["rates"] == rates and any("EUR" in e for e in state["errors"])
     t = pricing.table()
-    assert t["AUD"]["basic"] == 9 and t["AUD"]["pro"] == 26 and t["AUD"]["auto"]        # 499/58, 1499/58, tidied
-    assert t["JPY"]["basic"] == 845 and t["AUD"]["basic_year"] == 90
+    assert t["AUD"]["basic"] == 12 and t["AUD"]["pro"] == 34 and t["AUD"]["auto"]       # 699/58, 1999/58, tidied
+    assert t["JPY"]["basic"] == 1200 and t["AUD"]["basic_year"] == 120
     assert t["CAD"]["basic"] == 8                                                       # no rate yet: the built-in amount
-    # dollars, euros and pounds keep their own prices whatever the rate ($8 and $20, not 499/88 = $6)
+    # dollars, euros and pounds keep their own prices whatever the rate ($8 and $20, whatever 699/88 comes to)
     assert (t["USD"]["basic"], t["USD"]["pro"], t["USD"]["pro_year"], t["GBP"]["basic"]) == (8, 20, 200, 7)
     monkeypatch.setitem(pricing.PLANS["basic"], "price", 999)                           # the rupee price changes...
     assert pricing.table()["AUD"]["basic"] == 17 and pricing.table()["USD"]["basic"] == 8   # ...the others follow
