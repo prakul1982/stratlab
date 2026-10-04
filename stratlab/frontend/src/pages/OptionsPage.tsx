@@ -6,7 +6,8 @@ import { money, price } from "../lib/format";
 import { HELP } from "../lib/help";
 import { blankOptions, IMPORTED, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
-import { LineChart } from "../components/Charts";
+import { PayoffChart } from "../components/Charts";
+import { moneyCompact } from "../lib/chartFormat";
 import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
 import { track } from "../lib/analytics";
@@ -99,9 +100,11 @@ function Payoff({ p }: { p: OptPreview }) {
         <div><span className="eyebrow">Most it can lose</span><b className="mono neg">{f.maxLoss == null ? "Unlimited" : inr(f.maxLoss)}</b></div>
         <div><span className="eyebrow">Margin needed</span><b className="mono">{p.margin != null ? inr(p.margin) : "Not available"}</b></div>
       </div>
-      <LineChart ariaLabel="Profit or loss at expiry across prices" height={200} labels={f.xs.map((x) => `${p.legs.length ? "At " : ""}${Math.round(x).toLocaleString("en-IN")}`)}
-        format={(v) => inr(v)} axisFormat={(v) => inr(v)} baseline={0}
-        lines={[{ label: "At expiry", values: f.ys, color: "var(--blue)", width: 1.8 }]} />
+      <PayoffChart ariaLabel="Profit or loss at expiry across prices" height={220} xs={f.xs} testId="payoff-chart"
+        format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
+        curves={[{ id: "expiry", label: "At expiry", values: f.ys }]}
+        markers={[{ x: p.spot, label: `Spot ${Math.round(p.spot).toLocaleString("en-IN")}`, kind: "spot" },
+          ...f.breakevens.map((x) => ({ x, label: "Breakeven", kind: "breakeven" as const }))]} />
       <p className="small muted">
         At expiry, before costs, if held to the end. {f.breakevens.length > 0 && <>Breaks even at {f.breakevens.map((b) => Math.round(b).toLocaleString("en-IN")).join(" and ")}. </>}
         Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.

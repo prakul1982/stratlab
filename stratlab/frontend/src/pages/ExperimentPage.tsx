@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, moneyShort, pct, periodName, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
+import { money, pct, periodName, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import type { Basket, Check, Experiment, Notebook, WalkForward } from "../lib/types";
-import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars, type Marker } from "../components/Charts";
+import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars, XYChart, type Marker } from "../components/Charts";
+import { pctTick, moneyCompact } from "../lib/chartFormat";
 import { Info, Loading, Modal, STATUS_NAME } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
@@ -63,11 +64,10 @@ function WalkForwardInner({ nb, e }: { nb: Notebook; e: Experiment }) {
             </div>
           </div>
           {s && s.t.length > 1 && <>
-            <LineChart ariaLabel="Walk-forward return against your fixed settings" height={220}
-              labels={s.t.map((t) => when(t, tzOf(e.instrument), false))} axisLabels={s.t.map((t) => shortDate(t))}
-              lines={[{ values: s.fixed, color: "var(--dash)", width: 1.6, label: "Your settings" }, { values: s.wf, color: "var(--blue)", width: 2.4, label: "Walk-forward" }]}
-              format={(v) => pct(v)} baseline={0} />
-            <Legend items={[{ label: "Walk-forward (re-tuned each block)", color: "var(--blue)" }, { label: "Your settings, never re-tuned", color: "var(--dash)" }]} />
+            <XYChart ariaLabel="Walk-forward return against your fixed settings" height={220} times={s.t} tz={tzOf(e.instrument)}
+              series={[{ id: "wf", values: s.wf, color: "var(--series-1)", label: "Walk-forward (re-tuned each block)" },
+                { id: "fixed", values: s.fixed, color: "var(--muted)", width: 1.5, dash: "5 4", label: "Your settings, never re-tuned" }]}
+              format={(v) => pct(v)} axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
           </>}
           <p className="hint">
             Each step tried {w.grid_size} nearby settings around your {w.tuned?.join(" and ")} on the past and kept the best.
@@ -303,14 +303,13 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
             <h2 className="h2 row" style={{ gap: 0 }}>Where the money came from, and went<Info>{HELP.equity}</Info></h2>
             <span className="mono small muted">{money(cap, cur)} start</span>
           </div>
-          <LineChart ariaLabel="Account value over the test, with the unseen part shaded" labels={labels} axisLabels={years} height={260}
-            format={(x) => moneyShort(x, cur)} baseline={cap} split={e.series.split}
+          <XYChart ariaLabel="Account value over the test, with the unseen part shaded" times={e.series.t} tz={tz} height={260} compare
+            format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} refs={[{ v: cap }]} split={e.series.split}
             splitNotes={unseen ? [`tuned on these years: ${pct(unseen.built_ret, 0)}`, `never seen: ${pct(unseen.unseen_ret, 0)}`] : undefined}
-            lines={[
-              { label: "Strategy", values: e.series.equity, color: "var(--ink)", width: 2.2 },
-              { label: "Buy and hold", values: e.series.buy_hold, color: "var(--dash)", width: 1.4, dash: "5 4" },
+            series={[
+              { id: "strategy", label: "Strategy", values: e.series.equity, color: "var(--ink)", width: 2 },
+              { id: "hold", label: "Buy and hold", values: e.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" },
             ]} />
-          <Legend items={[{ label: "Strategy", color: "var(--ink)" }, { label: "Buy and hold", color: "var(--dash)", dash: true }]} />
         </div>
         <div className="card stack" style={{ flex: "1 1 300px", gap: 12 }}>
           <div className="spread" style={{ flexWrap: "wrap", gap: "4px 12px" }}><h2 className="h2 row" style={{ gap: 0, whiteSpace: "nowrap" }}>What you'd keep<Info>{HELP.keep}</Info></h2><span className="small muted">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span></div>

@@ -6,7 +6,7 @@ import {
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type RangeId, type SectorTable, type Today,
 } from "../lib/breadth";
 import { ResearchNav, Panel } from "../components/Research";
-import { LineChart, Legend, PairBars } from "../components/Charts";
+import { LineChart, PairBars } from "../components/Charts";
 import { AsOf, Info, Loading } from "../components/ui";
 
 /* Market breadth: how many stocks in a group take part in the market's moves. Today's numbers for everyone; the
@@ -200,51 +200,48 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
     <>
       <div className="rs-grid" data-testid="breadth-charts">
         <Panel title="Advance/decline line" info={help.ad_line}>
-          <LineChart lines={[{ values: h.ad_line, color: A, label: "A/D line", width: 2 }]} labels={labels} height={200}
+          <LineChart lines={[{ values: h.ad_line, color: A, label: "A/D line", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} height={200}
             format={fmtInt} ariaLabel={`Advance/decline line, ${labels[0]} to ${last}`} />
           {asOf(`Running total from ${since ?? "the first stored day"} · last ${last}`)}
         </Panel>
         <Panel title="Share above the 50- and 200-day averages" info={help.ma}>
-          <Legend items={[{ label: "50-day", color: A }, { label: "200-day", color: B }]} />
-          <LineChart lines={[{ values: h.pct50, color: A, label: "Above 50-day", width: 2 }, { values: h.pct200, color: B, label: "Above 200-day", width: 2 }]}
-            labels={labels} height={200} format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Share of stocks above their 50- and 200-day averages" />
+          <LineChart lines={[{ values: h.pct50, color: A, label: "Above 50-day", width: 2 }, { values: h.pct200, color: B, label: "Above 200-day", width: 2 }]} legend
+            labels={labels} times={h.days} sync="breadth" ranges={false} height={200} format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Share of stocks above their 50- and 200-day averages" />
           {asOf(`Last ${last}`)}
         </Panel>
         <Panel title={data.group.index_name} info={help.index}>
-          {hasIndex ? <LineChart lines={[{ values: h.index, color: "var(--ink-2)", label: data.group.index_name, width: 2 }]} labels={labels} height={200}
+          {hasIndex ? <LineChart lines={[{ values: h.index, color: "var(--ink-2)", label: data.group.index_name, width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} height={200}
             format={(v) => v.toLocaleString("en-IN", { maximumFractionDigits: 2 })} axisFormat={fmtInt} ariaLabel={`${data.group.index_name} closing level`} />
             : <p className="small muted">The index's prices weren't available for these days.</p>}
           {asOf(`Closing level · last ${last}`)}
         </Panel>
         <Panel title="New 52-week highs and lows" info={help.highs_lows}>
-          <SwatchKey items={[["New highs", A], ["New lows", B]]} />
-          <PairBars up={h.highs} down={h.lows} labels={labels} upLabel="new highs" downLabel="new lows" upColor={A} downColor={B}
+          <PairBars up={h.highs} down={h.lows} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="New highs" downLabel="New lows" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="New 52-week highs (up) and lows (down) each day" />
           {asOf(`Highs drawn up, lows down · last ${last}`)}
         </Panel>
         <Panel title="McClellan oscillator" info={help.mcclellan}>
-          <LineChart lines={[{ values: h.mcclellan, color: A, label: "Oscillator", width: 2 }]} labels={labels} height={200}
+          <LineChart lines={[{ values: h.mcclellan, color: A, label: "Oscillator", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan oscillator" />
           {asOf(`Last ${last}`)}
         </Panel>
         <Panel title="McClellan summation index" info={help.summation}>
-          <LineChart lines={[{ values: h.summation, color: A, label: "Summation", width: 2 }]} labels={labels} height={200}
+          <LineChart lines={[{ values: h.summation, color: A, label: "Summation", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan summation index" />
           {asOf(`Added up from ${since ?? "the first stored day"} · last ${last}`)}
         </Panel>
         <Panel title="Stocks up 4% and down 4%" info={help.moves}>
-          <SwatchKey items={[["Up 4% or more", A], ["Down 4% or more", B]]} />
-          <PairBars up={h.up4} down={h.down4} labels={labels} upLabel="up 4%+" downLabel="down 4%+" upColor={A} downColor={B}
+          <PairBars up={h.up4} down={h.down4} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="Up 4% or more" downLabel="Down 4% or more" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="Stocks up 4% or more (up) and down 4% or more (down) each day" />
           {asOf(`Last ${last}`)}
         </Panel>
         <Panel title="Share in Stage 2" info={help.stage2}>
-          <LineChart lines={[{ values: h.stage2, color: A, label: "In Stage 2", width: 2 }]} labels={labels} height={200}
+          <LineChart lines={[{ values: h.stage2, color: A, label: "In Stage 2", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} height={200}
             format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Share of stocks in Stage 2" />
           {asOf(`Last ${last}`)}
         </Panel>
         <Panel title="Breadth thrust measure" info={help.thrust}>
-          <LineChart lines={[{ values: h.thrust, color: A, label: "10-day average", width: 2 }]} labels={labels} height={200}
+          <LineChart lines={[{ values: h.thrust, color: A, label: "10-day average", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} height={200}
             levels={[{ v: 40, color: "var(--dash)", label: "40%" }, { v: 61.5, color: "var(--dash)", label: "61.5%" }]}
             format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Breadth thrust measure, with lines at 40% and 61.5%" />
           <p className="small" data-testid="breadth-thrusts">
@@ -253,7 +250,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           </p>
         </Panel>
         <Panel title="TRIN" info={help.trin}>
-          <LineChart lines={[{ values: h.trin, color: A, label: "TRIN", width: 2 }]} labels={labels} height={200} baseline={1}
+          <LineChart lines={[{ values: h.trin, color: A, label: "TRIN", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} height={200} refs={[{ v: 1, dash: true }]}
             format={(v) => v.toFixed(2)} ariaLabel="TRIN each day, with a line at 1" />
           {asOf(`Dashed line at 1 · last ${last}`)}
         </Panel>
@@ -267,16 +264,6 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
         </Panel>
       </div>
     </>
-  );
-}
-
-function SwatchKey({ items }: { items: [string, string][] }) {
-  return (
-    <div className="row wrap small muted" style={{ gap: 16 }}>
-      {items.map(([label, color]) => (
-        <span key={label} className="row" style={{ gap: 6 }}><span className="bx-swatch" style={{ background: color }} />{label}</span>
-      ))}
-    </div>
   );
 }
 

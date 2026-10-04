@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { money, signClass } from "../lib/format";
-import { LineChart } from "./Charts";
+import { XYChart } from "./Charts";
+import { moneyCompact } from "../lib/chartFormat";
 import { Info } from "./ui";
 
 interface Cur {
@@ -44,9 +45,9 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
               ))}
             </div>
             {c.curve.length > 1 && (
-              <LineChart ariaLabel={`Combined paper P&L in ${c.currency}`} height={150} labels={c.curve.map((p) => day(p.t))} baseline={0}
-                format={(v) => money(v, c.currency)} axisFormat={(v) => money(v, c.currency)}
-                lines={[{ label: "All sessions", values: c.curve.map((p) => p.pnl), color: "var(--blue)", width: 1.6 }]} />
+              <XYChart ariaLabel={`Combined paper P&L in ${c.currency}`} height={150} times={c.curve.map((p) => p.t)} refs={[{ v: 0, strong: true }]}
+                format={(v) => money(v, c.currency)} axisFormat={(v) => moneyCompact(v, c.currency)}
+                series={[{ label: "All sessions", values: c.curve.map((p) => p.pnl), color: "var(--series-1)", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]} />
             )}
             <div className="table-wrap"><table>
               <thead><tr><th>Session</th><th>Kind</th><th>Open value</th><th>Share</th><th>Today</th><th>Since the start</th></tr></thead>

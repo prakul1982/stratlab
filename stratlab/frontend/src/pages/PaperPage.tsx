@@ -3,15 +3,16 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, moneyShort, pct, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
+import { money, pct, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
-import { LineChart, type Marker } from "../components/Charts";
+import { ChartEmpty, LineChart, type Marker } from "../components/Charts";
 import { Empty, Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
 import { SurvBadges, survRegion } from "../components/Surveillance";
 import { Earlier, splitToday } from "../components/Earlier";
 import { OrderList, type PaperOrder } from "../components/OrderList";
+import { moneyCompact } from "../lib/chartFormat";
 
 function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
   const { fail, refreshMe } = useApp();
@@ -95,9 +96,9 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
           <section className="card stack" style={{ gap: 10 }}>
             <h3 className="h3 row" style={{ gap: 0 }}>Paper equity<Info>{HELP.equityLive}</Info></h3>
             {snap.equity_curve.length > 1 ? (
-              <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, intraday))} height={160}
-                format={(x) => moneyShort(x, cur)} baseline={a.capital} lines={[{ label: "Equity", values: snap.equity_curve.map((p) => p.eq), color: "var(--blue)", width: 2 }]} />
-            ) : <p className="muted small">Your equity curve starts after the first closed candle.</p>}
+              <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, intraday))} times={snap.equity_curve.map((p) => p.t)} tz={tz} height={160}
+                format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} baseline={a.capital} lines={[{ label: "Equity", values: snap.equity_curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
+            ) : <ChartEmpty height={160}>Your equity curve starts after the first closed candle.</ChartEmpty>}
           </section>
         </div>
         <div className="stack" style={{ gap: 16 }}>
