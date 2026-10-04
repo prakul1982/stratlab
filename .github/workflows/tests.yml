@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: stratlab/frontend/package-lock.json
       - run: npm ci
@@ -56,7 +56,7 @@ jobs:
           cache-dependency-path: stratlab/backend/requirements.txt
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: stratlab/frontend/package-lock.json
       - run: pip install -r requirements.txt pytest
