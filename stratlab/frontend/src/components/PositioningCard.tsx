@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { signClass } from "../lib/format";
 import { crore, dayName, missingWhy, ratio, sides, signed, type Summary } from "../lib/positioning";
-import { Fig } from "./ui";
+import { Fig, PanelSkel } from "./ui";
 
 /** The newest positioning numbers in a few lines (FII index futures, the FII and DII cash flows, NIFTY's PCR), for the
  * Trade home and the Options page. */
@@ -18,7 +18,7 @@ export function PositioningCard() {
         <h2 id="pos-card-h" className="h3">Positioning</h2>
         <Link to="/trade/positioning" className="link">Participants, flows and PCR →</Link>
       </div>
-      {s === null ? <p className="small muted">Reading the newest numbers…</p>
+      {s === null ? <PanelSkel figs label="Reading the newest numbers" />
         : s === "error" ? <p className="small muted">The positioning numbers couldn't be read just now. <Link className="link" to="/trade/positioning">Open the page</Link>.</p>
         : (
           <div className="space-figs">

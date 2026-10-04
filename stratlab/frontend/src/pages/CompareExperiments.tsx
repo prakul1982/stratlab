@@ -3,7 +3,7 @@ import { money, pct, TF_NAME, tzOf } from "../lib/format";
 import { refName, opSay } from "../lib/rules";
 import type { Cond, Experiment, Strategy } from "../lib/types";
 import { LineChart, Legend } from "../components/Charts";
-import { Info, Loading, VerdictBadge } from "../components/ui";
+import { Empty, Info, Loading, VerdictBadge } from "../components/ui";
 import { useNotebook } from "./NotebookPage";
 
 const condText = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
@@ -53,7 +53,10 @@ export function CompareExperiments() {
   if (!a || !b || a.v === b.v) return (
     <div className="stack" style={{ gap: 16 }}>
       <Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>
-      <p className="muted">Run at least two experiments in this notebook to compare them.</p>
+      <Empty title="Nothing to compare yet">
+        <p className="muted">Comparing needs two runs of this notebook. {exps.length ? "It has one so far: change one thing and run it again." : "It has none yet."}</p>
+        <Link to={`/n/${nb.id}`} className="btn">{exps.length ? "Change the rules and run again" : "Run the first test"}</Link>
+      </Empty>
     </div>
   );
   const pick = (k: "a" | "b", v: number) => { const p = new URLSearchParams(params); p.set(k, String(v)); nav(`?${p}`, { replace: true }); };

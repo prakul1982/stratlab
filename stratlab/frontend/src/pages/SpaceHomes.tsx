@@ -1,25 +1,29 @@
-import { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, pct, signClass } from "../lib/format";
+import { ago, money, pct, signClass } from "../lib/format";
 import { homeOf } from "../lib/spaces";
 import { NAV_GROUPS } from "../lib/navGroups";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
-import { AsOf, Fig, Loading } from "../components/ui";
+import { AsOf, Fig, Loading, PanelSkel, VerdictBadge } from "../components/ui";
 import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PositioningCard } from "../components/PositioningCard";
-import { Book, Layers, Library, Pulse, Upload } from "../components/Icons";
-import { AskBar, InvestorStart, NotebooksHome } from "./Home";
+import { Explore } from "../components/Explore";
+import { CompanySearch } from "../components/CompanySearch";
+import { Book, Calendar, Compass, Layers, Library, Pulse, Receipt, Search, Wallet } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
- * pages' own pieces; nothing here is new data, only what those pages already show, gathered. */
+ * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
+ *
+ * Every home has the same shape: a short heading, the one next step (start, or pick up where you left off), one row of
+ * four equal tool cards, then one or two live panels and, last, the rest of the space's tools. */
 
 /** `/`: the home of the space showing (for "All", of what the person came for). Waits for the account on a first visit. */
 export function SpaceHome() {
@@ -33,81 +37,157 @@ function Top() {
   return <><PromoCountdown /><FirstSteps /></>;
 }
 
+/** A space home's heading: the space's name, one question or title, one line under it. */
+function Head({ eyebrow, title, children }: { eyebrow: string; title: string; children: ReactNode }) {
+  return (
+    <header className="space-head">
+      <span className="eyebrow">{eyebrow}</span>
+      <h1 className="serif">{title}</h1>
+      <p className="muted">{children}</p>
+    </header>
+  );
+}
+
+/** One tool on a space's strip. `status`: a live line (e.g. "2 running"); null while it loads (a placeholder of the
+ * same height); left out, the card's foot says where it goes instead. */
+type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: string | null; go?: string; lead?: boolean; testId?: string; data?: Record<string, string> };
+
+/** Four tools in one row of equal cards (two by two when the column is narrow). The lead tool is marked by its
+ * border and tint, not its size. Every card has the same three lines, so the row never jumps when a status loads. */
+function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
+  return (
+    <nav className="space-strip" aria-label={label}>
+      {tools.map((t) => (
+        <Link key={t.to} to={t.to} className={`card space-card${t.lead ? " space-card-lead" : ""}`} {...t.data}>
+          <span className="space-card-title">{t.icon}<b>{t.title}</b></span>
+          <span className="small muted space-card-line">{t.line}</span>
+          {t.status === null ? <span className="space-card-foot" aria-hidden="true"><span className="skel" /></span>
+            : <span className={`small space-card-foot${t.status ? " live" : ""}`} data-testid={t.testId}>{t.status || t.go || "Open →"}</span>}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 /* ---------- Trade: the strategy lab ---------- */
-/** Tools the strip and the positioning panel already link to: the notebooks' "what you can do" leaves them out. */
-const TRADE_LINKED = ["options", "positioning", "paper", "library", "import"];
+/** Tools the strip and the positioning panel already link to: "more you can do" leaves them out. */
+const TRADE_LINKED = ["options", "positioning", "paper", "library", "idea"];
+type Journal = { count: number; net: number; win_rate: number | null };
 
 export function TradeHome() {
+  const [rows, setRows] = useState<LiveRow[] | null>(null);
+  useEffect(() => { api<LiveRow[]>("/live/sessions").then(setRows).catch(() => setRows([])); }, []);
+  const [journal, setJournal] = useState<Journal | null | "none">(null);
+  useEffect(() => { api<Journal>("/trade/journal/brief").then(setJournal).catch(() => setJournal("none")); }, []);
+  const running = rows?.filter((r) => r.status === "running") ?? [];
+  const options = running.filter((r) => r.instrument?.type === "OPTIONS");
+  const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+  const tools: Tool[] = [
+    { to: "/options", icon: <Layers size={18} />, title: "Options", lead: true, line: "Straddles, strangles, condors or any legs, at the live bid and ask.",
+      status: rows === null ? null : options.length ? `${options.length} running` : "", go: "Build a structure →" },
+    { to: "/paper", icon: <Pulse size={18} />, title: "Paper trading", line: "Run a notebook's rules live with fake money.", testId: "paper-summary",
+      status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? `None running · ${rows.length} stopped` : "" },
+    { to: "/trade/journal", icon: <Book size={18} />, title: "Trade journal", line: "Your real trades as round trips, after charges.", data: { "data-trade": "/trade/journal" },
+      status: journal === null ? null : journal !== "none" && journal.count ? `${plural(journal.count, "closed trade")} · ${money(journal.net, "INR")}` : "" },
+    { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Rules others published, with the verdict they earned." },
+  ];
   return (
     <div className="space-home">
       <Top />
-      <TradeStrip />
+      <Head eyebrow="Trade · your strategy lab" title="Test an idea, then trade it on paper">
+        Years of real prices, real costs and four checks for luck. Fake money, never real orders.
+      </Head>
+      <NextIdea />
+      <ToolStrip label="Trade tools" tools={tools} />
       <PositioningCard />
-      <NotebooksHome hide={TRADE_LINKED} />
+      <Explore title="More you can do" hide={TRADE_LINKED} order="trade" />
     </div>
   );
 }
 
-/** Options first and big, then four tools in a 2 by 2 block beside it: paper sessions running now, the journal, the
- * library and import. Positioning has its own panel under the strip. Blurbs stay one or two short lines. */
-function TradeStrip() {
-  const [rows, setRows] = useState<LiveRow[] | null>(null);
-  useEffect(() => { api<LiveRow[]>("/live/sessions").then(setRows).catch(() => setRows([])); }, []);
-  const [journal, setJournal] = useState<{ count: number; net: number; win_rate: number | null } | null>(null);
-  useEffect(() => { api<{ count: number; net: number; win_rate: number | null }>("/trade/journal/brief").then(setJournal).catch(() => setJournal(null)); }, []);
-  const running = rows?.filter((r) => r.status === "running") ?? [];
-  const options = running.filter((r) => r.instrument?.type === "OPTIONS");
+/** Trade's next step: for a new account, how a test goes and the button to start one; after that, the latest
+ * notebooks to pick up again. */
+function NextIdea() {
+  const { notebooks } = useApp();
+  if (notebooks === null) return <section className="card space-next" aria-busy="true"><PanelSkel lines={3} label="Opening your notebooks" /></section>;
+  if (!notebooks.length) return (
+    <section className="card space-next" aria-labelledby="next-h">
+      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
+        <h2 id="next-h" className="h3">Start here: your first notebook</h2>
+        <Link to="/new" className="btn">Test your first idea</Link>
+      </div>
+      <ol className="how" aria-label="How a test goes">
+        <li><b>1. Describe it</b><span>In plain words. It becomes rules you can read and edit.</span></li>
+        <li><b>2. Test it honestly</b><span>On years of real prices, after costs, with four checks for luck.</span></li>
+        <li><b>3. Trade it on paper</b><span>If the edge holds up, run it live with fake money.</span></li>
+      </ol>
+    </section>
+  );
+  const recent = [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned)).slice(0, 3);
   return (
-    <section className="space-strip" aria-label="Trade">
-      <Link to="/options" className="card space-card space-card-lead">
-        <span className="row" style={{ gap: 8 }}><Layers size={20} /><b>Options</b></span>
-        <span className="small muted">Straddles, strangles, condors or any structure up to eight legs, paper traded at the live bid and ask.</span>
-        <span className="small space-card-foot">{options.length > 0 ? `${options.length} option session${options.length === 1 ? "" : "s"} running · ` : ""}Build a structure →</span>
-      </Link>
-      <Link to="/paper" className="card space-card">
-        <span className="row" style={{ gap: 8 }}><Pulse size={18} /><b>Paper trading</b></span>
-        <span className="small muted" data-testid="paper-summary">
-          {rows === null ? "Checking your sessions…" : running.length
-            ? `${running.length} running: ${running.slice(0, 3).map((r) => r.name).join(", ")}${running.length > 3 ? "…" : ""}`
-            : rows.length ? `None running · ${rows.length} stopped` : "Run a notebook's rules live with fake money."}
-        </span>
-      </Link>
-      <Link to="/trade/journal" className="card space-card" data-trade="/trade/journal">
-        <span className="row" style={{ gap: 8 }}><Book size={18} /><b>Trade journal</b></span>
-        <span className="small muted">{journal?.count
-          ? `${journal.count} closed trade${journal.count === 1 ? "" : "s"} · ${money(journal.net, "INR")} after charges · ${journal.win_rate}% won`
-          : "Your real trades as round trips, after charges."}</span>
-      </Link>
-      <Link to="/library" className="card space-card">
-        <span className="row" style={{ gap: 8 }}><Library size={18} /><b>Strategy library</b></span>
-        <span className="small muted">Rules others published, with the verdict they earned.</span>
-      </Link>
-      <Link to="/import" className="card space-card">
-        <span className="row" style={{ gap: 8 }}><Upload size={18} /><b>Import a strategy</b></span>
-        <span className="small muted">Pine Script, Python, MetaTrader, AmiBroker or plain words.</span>
-      </Link>
+    <section className="card space-next" aria-labelledby="next-h">
+      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
+        <h2 id="next-h" className="h3">Pick up where you left off</h2>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <Link to="/notebooks" className="btn quiet sm">All {notebooks.length} notebook{notebooks.length === 1 ? "" : "s"}</Link>
+          <Link to="/new" className="btn sm">Test a new idea</Link>
+        </div>
+      </div>
+      <div className="space-recent">
+        {recent.map((n) => (
+          <Link key={n.id} to={`/n/${n.id}`} className="space-recent-row">
+            <span className="stack" style={{ gap: 2, minWidth: 0 }}>
+              <b className="space-recent-name">{n.name}</b>
+              <span className="tiny muted">{n.instrument && "symbol" in n.instrument ? `${n.instrument.symbol} · ` : ""}{n.summary?.experiments ?? 0} run{n.summary?.experiments === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
+            </span>
+            <VerdictBadge v={n.summary?.last_verdict} />
+          </Link>
+        ))}
+      </div>
     </section>
   );
 }
 
 /* ---------- Invest: research ---------- */
-/** Tools the panels and the questions on the Invest home already link to. */
-const INVEST_LINKED = ["breadth", "filings", "investor", "watchlist", "rotation", "scan"];
+/** Tools the strip and the panels on the Invest home already link to. */
+const INVEST_LINKED = ["breadth", "filings", "investor", "watchlist", "rotation", "scan", "research", "holdings"];
 
 export function InvestHome() {
+  const nav = useNavigate();
+  const [region, setRegion] = useState<Region>("IN");
+  const popular = region === "IN" ? ["RELIANCE", "HDFCBANK", "TCS", "TITAN", "LT"] : ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"];
+  const tools: Tool[] = [
+    { to: "/research/screens", icon: <Search size={18} />, title: "Screener", lead: true, line: "Filter companies by plain facts: growth, debt, returns." },
+    { to: "/research/rotation", icon: <Compass size={18} />, title: "Sector rotation", line: "Which sectors lead or lag the market, with their stocks." },
+    { to: "/research/scan?set=nifty50", icon: <Pulse size={18} />, title: "Trend scan", line: "Stocks in a rising trend with the Supertrend up." },
+    { to: "/research/corporate-actions", icon: <Calendar size={18} />, title: "Dividends", line: "Dividends, bonuses and splits ahead, for your stocks and all." },
+  ];
   return (
     <div className="space-home">
       <Top />
-      <InvestorStart hide={INVEST_LINKED}>
-        <div className="grid2 space-panels">
-          <WatchPanel />
-          <ResultsToday />
+      <Head eyebrow="Invest · your research desk" title="Which company do you want to look into?">
+        The numbers, the business in its own words, red flags and whether management delivers. Facts, not tips.
+      </Head>
+      <section className="card stack space-next" aria-label="Find a company">
+        <div className="seg" role="radiogroup" aria-label="Market" style={{ alignSelf: "flex-start" }}>
+          {(["IN", "US"] as const).map((r) => <button key={r} role="radio" aria-checked={region === r} aria-pressed={region === r} onClick={() => setRegion(r)}>{r === "IN" ? "₹ India" : "$ United States"}</button>)}
         </div>
-        <div className="grid2 space-panels">
-          <BreadthCard />
-          <RedFlags />
+        <CompanySearch region={region} autoFocus />
+        <div className="row wrap" style={{ gap: 8 }}>
+          <span className="small muted">Popular:</span>
+          {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}
         </div>
-      </InvestorStart>
+      </section>
+      <ToolStrip label="Invest tools" tools={tools} />
+      <div className="grid2 space-panels">
+        <WatchPanel />
+        <ResultsToday />
+      </div>
+      <div className="grid2 space-panels">
+        <BreadthCard />
+        <RedFlags />
+      </div>
+      <Explore title="More you can do" hide={INVEST_LINKED} order="invest" />
     </div>
   );
 }
@@ -119,7 +199,7 @@ function WatchPanel() {
   const regions = (["IN", "US"] as Region[]).filter((r) => by(r).length);
   return (
     <Panel title="Your watchlist" right={<Link to="/research/investor" className="link">At a glance →</Link>}>
-      {items === null ? <Loading label="Opening your watchlist" />
+      {items === null ? <PanelSkel label="Opening your watchlist" />
         : !regions.length ? <p className="small muted">Press Watch on any company to keep it here, with live prices.</p>
         : regions.map((r) => (
           <div key={r} className="stack" style={{ gap: 6 }}>
@@ -150,7 +230,7 @@ function ResultsToday() {
   }, []);
   return (
     <Panel title="Results today" right={<Link to="/research/results" className="link">Calendar →</Link>}>
-      {rows === null ? <Loading label="Checking results dates" />
+      {rows === null ? <PanelSkel label="Checking results dates" />
         : rows.today.length ? (
           <div className="stack" style={{ gap: 6 }}>
             {rows.today.slice(0, 6).map((r) => (
@@ -178,7 +258,7 @@ function RedFlags() {
   return (
     <Panel title="Red flags in your watchlist" right={<Link to="/research/filings" className="link">All filings →</Link>}>
       {!allowed ? <p className="small muted">Red flags for your whole watchlist are on the Basic plan. Each company's own page shows its red flags on every plan.</p>
-        : data === null ? <Loading label="Reading your companies' filings" />
+        : data === null ? <PanelSkel label="Reading your companies' filings" />
         : !data.rows.length ? <p className="small muted">Your watchlist has no India stocks yet: their filings show here.</p>
         : !flagged.length ? <p className="small muted">No red flags filed by your {data.rows.length} India watchlist compan{data.rows.length === 1 ? "y" : "ies"} lately.</p>
         : (
@@ -201,30 +281,36 @@ type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: bo
 type TaxYear = { fy: number; label: string; count: number; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number } };
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number };
 
+const MONEY_ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, wallet: Wallet, layers: Layers, calendar: Calendar, compass: Compass };
+
 export function MoneyHome() {
+  // the first four Money tools on the strip, the rest under the panels: each Money feature shows once
+  const strip = NAV_GROUPS.Money.slice(0, 4), rest = NAV_GROUPS.Money.slice(4);
+  const tools: Tool[] = strip.map((e, i) => {
+    const Icon = MONEY_ICONS[e.icon ?? ""] ?? Compass;
+    return { to: e.to, icon: <Icon size={18} />, title: e.label, line: e.title ?? e.blurb ?? "", lead: i === 0, data: { "data-money": e.to } };
+  });
   return (
     <div className="space-home">
       <Top />
-      <div className="stack" style={{ gap: 28 }}>
-        <div className="stack" style={{ gap: 8 }}>
-          <span className="eyebrow">Money</span>
-          <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Your money</h1>
-          <p className="muted" style={{ fontSize: 17 }}>What you own and what it means at tax time, from your own files. Facts and arithmetic: seen only by you.</p>
-        </div>
-        <div className="grid2 space-panels">
-          <HoldingsSummary />
-          <TaxSummary />
-        </div>
+      <Head eyebrow="Money · seen only by you" title="Your money">
+        What you own and what it means at tax time, from your own files. Facts and arithmetic.
+      </Head>
+      <ToolStrip label="Money tools" tools={tools} />
+      <div className="grid2 space-panels">
+        <HoldingsSummary />
+        <TaxSummary />
+      </div>
+      {rest.length > 0 && (
         <section className="stack" style={{ gap: 10 }} aria-labelledby="money-tools">
-          <h2 id="money-tools" className="h2">Everything in Money</h2>
+          <h2 id="money-tools" className="h2">More in Money</h2>
           <div className="explore-grid">
-            {NAV_GROUPS.Money.map((e) => (
+            {rest.map((e) => (
               <Link key={e.to} to={e.to} className="card explore-card" data-money={e.to}><b>{e.label}</b><span className="small muted">{e.blurb ?? e.title}</span></Link>
             ))}
           </div>
         </section>
-        <AskBar />
-      </div>
+      )}
     </div>
   );
 }
@@ -234,7 +320,7 @@ function HoldingsSummary() {
   useEffect(() => { api<Holdings>("/holdings").then(setH).catch(() => setH("error")); }, []);
   return (
     <Panel title="My Holdings" right={<Link to="/holdings" className="link">Open →</Link>}>
-      {h === null ? <Loading label="Adding up your holdings" />
+      {h === null ? <PanelSkel figs label="Adding up your holdings" />
         : h === "error" ? <p className="small muted">Your holdings couldn't be opened just now. <Link className="link" to="/holdings">Try the page</Link>.</p>
         : !h.rows.length ? (
           <div className="stack" style={{ gap: 10, alignItems: "flex-start" }}>
@@ -263,7 +349,7 @@ function TaxSummary() {
   const year = t && t !== "error" ? t.years.find((y) => y.fy === t.current_fy) ?? null : null;
   return (
     <Panel title="Tax this year" right={<Link to="/tax-report" className="link">Tax report →</Link>}>
-      {t === null ? <Loading label="Working out this year's gains" />
+      {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !t.trades ? (
           <div className="stack" style={{ gap: 10, alignItems: "flex-start" }}>

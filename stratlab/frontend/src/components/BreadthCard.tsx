@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { breadthApi, count, savedPick, share, type BreadthView } from "../lib/breadth";
 import { Panel } from "./Research";
-import { AsOf, Loading } from "./ui";
+import { AsOf, PanelSkel } from "./ui";
 
 /** Market breadth on the Invest home: the latest day's numbers for the group last picked (every plan). */
 export function BreadthCard() {
@@ -10,7 +10,7 @@ export function BreadthCard() {
   useEffect(() => { breadthApi.get(savedPick().group, "1y", true).then(setD).catch(() => setD("error")); }, []);
   return (
     <Panel title="Market breadth" right={<Link to="/invest/breadth" className="link">Charts →</Link>}>
-      {d === null ? <Loading label="Counting the market" />
+      {d === null ? <PanelSkel figs label="Counting the market" />
         : d === "error" ? <p className="small muted">Breadth couldn't be opened just now. <Link className="link" to="/invest/breadth">Try the page</Link>.</p>
         : !d.today ? <p className="small muted">The first counts for {d.group.name} come after the next close.</p>
         : (

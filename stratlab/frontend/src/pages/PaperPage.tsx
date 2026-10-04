@@ -186,6 +186,7 @@ export function PaperPage() {
   return (
     <div className="stack" style={{ gap: 24 }}>
       <div className="stack" style={{ gap: 8 }}>
+        <span className="eyebrow">Trade · paper trading</span>
         <h1 className="page-title">Paper trading<Info>{HELP.paper}</Info></h1>
         <p className="page-sub">Your rules on live prices, with fake money. Each market runs in its own hours; crypto never closes.</p>
         {sub && <span className="page-chip">{sub}</span>}
