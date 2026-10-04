@@ -31,3 +31,8 @@ export function rememberView(path: string) {
   const f = familyOf(path);
   if (f) try { localStorage.setItem(KEY(f), path); } catch { /* storage off */ }
 }
+
+/** The Money space's pages (personal finance), for the menu: [path, label, what it is]. Each Money feature adds its line. */
+export const MONEY: [string, string, string][] = [
+  ["/money/calendar", "Money calendar", "Tax due dates, results, dividends and your own dates in one calendar"],
+];

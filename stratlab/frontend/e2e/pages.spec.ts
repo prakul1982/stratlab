@@ -445,15 +445,15 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await settle(page);
   await expect(page.locator("input[type=file]")).toHaveAttribute("accept", /\.zip/);
   await page.locator("input[type=file]").setInputFiles(TAXPNL + "zerodha_taxpnl_2024_2025.zip");
-  await expect(page.getByText(/Read as a Zerodha tax P&L: 16 trades added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Read as a Zerodha tax P&L: 18 trades added/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/7 F&O, commodity and currency lines added up as business income/)).toBeVisible();
-  await expect(page.getByText(/From the ZIP: Commodity \(2 lines\), Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\), F&O \(4 lines\), Currency \(1 line\)/)).toBeVisible();
+  await expect(page.getByText(/From the ZIP: Commodity \(2 lines\), Non-equity \(1 line\), Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\), F&O \(4 lines\), Currency \(1 line\)/)).toBeVisible();
   const check = page.getByRole("list", { name: "Totals checked against your broker's summary" });
-  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(9);
+  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(10);
   await expect(check.getByText(/F&O turnover: ₹3,788 netted per contract/)).toBeVisible();
-  const left = page.getByRole("list", { name: "Files left out" });
-  await expect(left.getByText("Non Equity.csv", { exact: false })).toBeVisible();
-  await expect(left.getByText("F&O.csv", { exact: false })).toHaveCount(0);
+  // the non-equity file is read now (a gold ETF under its own rules), so nothing is left out
+  await expect(page.getByRole("list", { name: "Files left out" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "ETFs and gold bonds" }).getByText("Gold ETF")).toBeVisible();
   // the only year with sales opens by itself
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
   await expect(page.getByText("2 same-day round trips", { exact: false })).toBeVisible();
@@ -620,8 +620,8 @@ test("the menu: a few short groups, Scans and Watchlist each one entry with tabs
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
   for (const g of ["Research", "Portfolio", "Watch", "Notebooks", "Trading"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
-  // eleven entries in the groups, where there were fifteen flat ones; the old separate entries are gone
-  await expect(main.locator(".side-nav a")).toHaveCount(11);
+  // twelve entries in the groups (the money calendar joined Portfolio), where there were fifteen flat ones
+  await expect(main.locator(".side-nav a")).toHaveCount(12);
   for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance", "My Holdings"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // Account and Admin sit at the bottom, with the markets folded to one line
   const bottom = side.locator(".side-bottom");

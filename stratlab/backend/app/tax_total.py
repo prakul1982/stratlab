@@ -164,12 +164,14 @@ def _with_surcharge(b: dict, total: float, special_income: float, cap: float) ->
 
 
 def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, business: float,
-             business_parts: dict[str, float] | None = None) -> dict:
+             business_parts: dict[str, float] | None = None, slab_gains: float = 0.0) -> dict:
     """The year's total tax estimate.
 
     `buckets` are the capital gains year's buckets (key, rate, after_setoff, exempt, taxable); `intraday` the
     speculative profit or loss; `business` the F&O, commodity and currency profit or loss after charges, with
-    `business_parts` the same by segment. Returns the steps in plain words, a breakdown table and the total."""
+    `business_parts` the same by segment; `slab_gains` short-term gains taxed at slab rates (gold, debt and other
+    non-equity ETFs and gold bonds, after their own set-off). Returns the steps in plain words, a breakdown table and
+    the total."""
     v = clean(inputs)
     r = rules(fy, v["regime"])
     if r is None:
@@ -182,11 +184,13 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         lines.append({"label": label, "amount": round(amount, 2), "kind": kind})
 
     salary = v["other"] if v["salary"] is None else v["salary"]
-    rest = max(0.0, v["other"] - salary)
+    rest = max(0.0, v["other"] - salary) + max(0.0, slab_gains)
     std = min(r["std"], salary)
     if v["other"]:
         steps.append(f"Other income you entered: {money(v['other'])}" + (f", of which {money(salary)} is salary or pension." if salary else ", none of it salary.")
                      + (" All of it is taken as salary, as you didn't say how much is." if v["salary"] is None and salary else ""))
+    if slab_gains > 0:
+        steps.append(f"Short-term gains on ETFs and gold bonds taxed at slab rates: {money(slab_gains)}.")
     if std:
         steps.append(f"Standard deduction of {money(std)} on salary ({v['regime']} regime, {money(r['std'])} at most).")
 
@@ -317,6 +321,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     line("Other income (salary, interest and the like)", v["other"])
     if std:
         line("Less standard deduction", -std)
+    if slab_gains > 0:
+        line("Non-equity short-term gains at slab rates (ETFs, gold bonds)", slab_gains)
     line("Intraday (speculative) profit or loss", intraday)
     line("F&O, commodity and currency profit or loss, after charges", business)
     if spec_cf:

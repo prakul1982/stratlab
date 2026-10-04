@@ -1,10 +1,10 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Receipt, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
+import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Receipt, Shield, Moon, Plus, Pulse, Search, Sparkle, Sun, User, Calendar } from "./Icons";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
-import { FAMILIES, familyOf } from "../lib/navGroups";
+import { FAMILIES, familyOf, MONEY } from "../lib/navGroups";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
@@ -72,9 +72,10 @@ export function Shell({ children }: { children: ReactNode }) {
       item("/news", <News />, "News"),
       item(FAMILIES.scans.home, <Search />, "Scans", fam === "scans", "Trend scan, screener, sector rotation and red flags"),
     ] },
-    portfolio: { label: "Portfolio", on: /^\/(holdings|tax-report)/.test(path), items: [
+    portfolio: { label: "Portfolio", on: /^\/(holdings|tax-report|money)/.test(path), items: [
       item("/holdings", <Book />, "Holdings"),
       item("/tax-report", <Receipt />, "Tax report", undefined, "Capital gains by financial year, from your tradebooks"),
+      ...MONEY.map(([to, label, title]) => item(to, <Calendar />, label, undefined, title)),
     ] },
     watch: { label: "Watch", on: fam === "watch" || path === "/alerts", items: [
       item(FAMILIES.watch.home, <Pin />, "Watchlist", fam === "watch", "Your watchlist, as a list or every company at a glance"),

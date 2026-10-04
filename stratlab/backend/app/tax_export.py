@@ -99,6 +99,15 @@ def to_csv(y: dict, rows: list[dict], names: dict) -> str:
                                        "bought before 1 Feb 2018: 31 Jan 2018 price not known, actual cost used" if r["gf"] == "missing" else "") if x)
         w.writerow([_safe(_name(names, r["key"])), _safe(n.get("isin") or ""), r["bought"], r["sold"], f"{r['qty']:g}", f"{r['cost']:.2f}",
                     f"{r['sale']:.2f}", f"{r['gain']:.2f}", "Long-term" if r["term"] == "LT" else "Short-term", _pct(r["rate"]), note])
+    units = y.get("units")
+    if units:                                  # gold, silver, international and debt ETFs and gold bonds: their own heads
+        heads = {"slab": "Short-term, slab rate", "lt": "Long-term, 12.5% (section 112)", "exempt": "Exempt", "old": "Old rules (not worked out)"}
+        w.writerow([])
+        w.writerow(["ETFs and gold bonds taxed under other rules"])
+        w.writerow(["Unit", "Type", "Bought", "Sold", "Quantity", "Cost (with charges)", "Sale (after charges)", "Gain or loss", "Head", "Why"])
+        for r in units["rows"]:
+            w.writerow([_safe(_name(names, r["key"])), r["label"], r["bought"], r["sold"], f"{r['qty']:g}", f"{r['cost']:.2f}",
+                        f"{r['sale']:.2f}", f"{r['gain']:.2f}", heads[r["head"]], _safe(r["why"])])
     return out.getvalue()
 
 

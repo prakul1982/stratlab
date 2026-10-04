@@ -19,7 +19,7 @@ import math
 import re
 from datetime import date, datetime, timedelta, timezone
 
-from . import db, tax_total
+from . import db, instrument_kinds, tax_total
 from .engine.costs import IN_LTCG, IN_LTCG_EXEMPT, IN_STCG
 
 KEY = "taxlots:"
@@ -243,17 +243,20 @@ def business_year(fy: int, chunks: list[dict]) -> dict:
             "turnover_contract": _r(sum(x["turnover_contract"] for x in segs)), "trades": sum(x["trades"] for x in segs)}
 
 
-def with_total(y: dict, business: list[dict], inputs: dict | None) -> dict:
+def with_total(y: dict, business: list[dict], inputs: dict | None, units: dict | None = None) -> dict:
     """A year from year() with its F&O totals, the total tax estimate on the user's inputs (and the other regime's
-    figure on the same inputs, as a fact), and the return and audit facts."""
+    figure on the same inputs, as a fact), and the return and audit facts. `units` is the year's gold, silver,
+    international and debt ETFs and gold bonds (instrument_kinds.other_year), taxed under their own heads."""
     biz = business_year(y["fy"], business)
     parts = {s["seg"]: s["net"] for s in biz["segments"]}
     v = tax_total.clean(inputs) if inputs else tax_total.default_inputs()
-    total = tax_total.estimate(y["fy"], v, y["buckets"], y["intraday"]["pnl"], biz["net"], parts)
-    other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"],
-                               y["intraday"]["pnl"], biz["net"], parts)
+    extra = [{"key": "lt_112", "rate": instrument_kinds.LT_RATE, "taxable": units["lt"]["taxable"], "exempt": 0.0}] if units and units["lt"]["taxable"] else []
+    slab = (units or {}).get("slab", {}).get("taxable") or 0.0
+    total = tax_total.estimate(y["fy"], v, y["buckets"] + extra, y["intraday"]["pnl"], biz["net"], parts, slab_gains=slab)
+    other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"] + extra,
+                               y["intraday"]["pnl"], biz["net"], parts, slab_gains=slab)
     turnover = (y["intraday"].get("turnover") or 0) + biz["turnover"]
-    return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)},
+    return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)}, "units": units,
             "other_regime": {"regime": other["regime"], "total": other.get("total")} if other.get("available") else None,
             "filing": tax_total.filing_facts(y["fy"], turnover, bool(biz["segments"]) or y["intraday"]["count"] > 0),
             "turnover": _r(turnover)}
@@ -610,6 +613,7 @@ def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: li
     estimate, open lots below cost, and the lines that couldn't be worked out."""
     c = compute(trades, actions, fmv, today)
     business, inputs = business or [], inputs or {}
+    equity, units = split_units(c)
     fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today)},
                  reverse=True)
     unmatched = {}
@@ -617,9 +621,29 @@ def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: li
         cur = unmatched.setdefault(u["key"], {"key": u["key"], "qty": 0.0, "first": u["d"]})
         cur["qty"] = round(cur["qty"] + u["qty"], 4)
         cur["first"] = min(cur["first"], u["d"])
-    return {"years": [with_total(year(y, c["realised"], c["intraday"]), business, inputs.get(y)) for y in fys], "current_fy": fy_of(today),
+    return {"years": [with_total(year(y, equity, c["intraday"]), business, inputs.get(y), instrument_kinds.other_year(y, units, c["names"]))
+                      for y in fys], "current_fy": fy_of(today), "kinds": kinds(c["names"]),
+            "unit_notes": instrument_kinds.NOTES if any(kinds(c["names"]).values()) else [],
             "below_cost": below_cost(c["open"], quotes, today), "names": c["names"],
             "unmatched_sales": sorted(unmatched.values(), key=lambda u: u["first"])[:100],
             "holdings_check": holdings_check(c["open"], items) if items else [],
             "pre_2018": sorted({l["key"] for l in c["open"] if l["d"] <= GF_DATE} | {r["key"] for r in c["realised"] if r["gf"]}),
             "rules": SETOFF_RULES, "notes": NOTES, "disclaimer": DISCLAIMER}
+
+
+# ---------- ETFs, REITs, InvITs and gold bonds (instrument_kinds) ----------
+def split_units(c: dict) -> tuple[list[dict], list[dict]]:
+    """(sales taxed like shares, the other units' sales) from compute(): REIT and InvIT units sold before 23 Jul 2024
+    get their 36-month rule first."""
+    instrument_kinds.adjust_trusts(c["realised"], c["names"])
+    return instrument_kinds.split(c["realised"], c["names"])
+
+
+def kinds(names: dict) -> dict[str, str]:
+    """The badge for each key that isn't a company's shares ("Gold ETF", "REIT"...)."""
+    out = {}
+    for k, n in names.items():
+        code = instrument_kinds.code_of(n)
+        if instrument_kinds.base(code) != "stock":
+            out[k] = instrument_kinds.label(code)
+    return out

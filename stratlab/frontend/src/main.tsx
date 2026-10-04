@@ -64,6 +64,8 @@ const holdingsPage = () => import("./pages/HoldingsPage");
 const HoldingsPage = page(holdingsPage, "HoldingsPage");
 const taxPage = () => import("./pages/TaxReportPage");
 const TaxReportPage = page(taxPage, "TaxReportPage");
+const moneyCalendar = () => import("./pages/money/MoneyCalendarPage");
+const MoneyCalendarPage = page(moneyCalendar, "MoneyCalendarPage");
 const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
@@ -90,6 +92,7 @@ function warmFirstPage(path: string) {
     : path === "/news" ? news
     : path === "/holdings" ? holdingsPage
     : path === "/tax-report" ? taxPage
+    : path === "/money/calendar" ? moneyCalendar
     : path === "/research/screens" || (path === "/research/scans" && lastView("scans") === "/research/screens") ? screensPage
     : path.startsWith("/research") ? research
     : null;
@@ -174,6 +177,7 @@ function Routed() {
         <Route path="/news" element={<NewsPage />} />
         <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/tax-report" element={<TaxReportPage />} />
+        <Route path="/money/calendar" element={<MoneyCalendarPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />

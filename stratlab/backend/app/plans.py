@@ -30,7 +30,7 @@ PLANS = {
         "deepdives_per_month": 15,
         "decks_per_month": 5,
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
-                     "investor_home"},
+                     "investor_home", "money_reminders"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -45,15 +45,16 @@ PLANS = {
         "deepdives_per_month": None,  # unlimited (the daily cap on fresh AI reads still applies)
         "decks_per_month": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
-                     "export", "newsletter", "scans", "filings", "investor_home"},
+                     "export", "newsletter", "scans", "filings", "investor_home", "money_reminders"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
 # newsletter: the daily editions of both newsletters (the weekly ones are for everyone);
 # scans: the Stage 2 + Supertrend scan and its alert; filings: red flags for the whole watchlist and the evening alert
-# (red flags on a single company page are for everyone)
+# (red flags on a single company page are for everyone); money_reminders: the money calendar's reminders (the calendar
+# and its feed are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
-            "newsletter", "scans", "filings", "investor_home")
+            "newsletter", "scans", "filings", "investor_home", "money_reminders")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
