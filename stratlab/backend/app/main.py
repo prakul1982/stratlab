@@ -36,7 +36,8 @@ from . import money_itr, money_us_routes
 from . import rules, rules_watch
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
-from .ai_providers import health as ai_health, test_all as ai_test_all
+from .ai_providers import health as ai_health
+from . import ai_admin, ai_providers
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
 from . import alerts
@@ -243,6 +244,7 @@ async def lifespan(app: FastAPI):
     screen_job.start()
     breadth_job.start()
     etf_job.start()
+    ai_providers.job.start()          # measures the AI models every 6 hours
     yield
 
 
@@ -266,6 +268,7 @@ app.include_router(fo_changes_routes.router)  # /trade/fo-changes
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
+app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -4183,11 +4186,6 @@ def admin_news_build(kind: str = "market", region: str = "IN", weekly: bool = Fa
     if not issue:
         err(404, "empty", "Nothing to put in this issue right now: the sources are down, or nothing changed for your stocks.")
     return {**news_view(issue), "text": issue["text"]}
-
-
-@app.post("/admin/ai/test")
-def admin_ai_test(_=Depends(admin.admin_profile)):
-    return {"providers": ai_test_all(gemini=_gemini, anthropic=_anthropic)}
 
 
 @app.post("/admin/kite/login-url")

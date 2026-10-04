@@ -1271,3 +1271,8 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 .fo-yours { font-size: 12px; color: var(--blue-ink); }
 .fo-alert input { flex: none; width: 18px; height: 18px; }
 .surv-badge.fo-badge { white-space: normal; max-width: 100%; }   /* wraps inside a narrow card */
+/* Admin: the AI panel */
+.ai-provider { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
+.ai-model, .ai-missing { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px dashed var(--line); }
+.ai-missing { border-top-style: solid; }
+.ai-id { overflow-wrap: anywhere; }
