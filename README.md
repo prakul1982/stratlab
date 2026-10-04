@@ -5,15 +5,12 @@
   <img alt="StratLab" src="docs/images/logo-light.png" width="340">
 </picture>
 
-**Test your trading idea before your money does.**
+**Know the company. Test the idea.**
 
-**For investors:** understand any Indian company (NSE or BSE) or US company from its own filings: ten years of numbers, the business in its own words, its capex and growth plans, the measures its industry is judged on, how it's valued, red flags, and whether management delivered what it promised. Scan for Stage 2 stocks and see which sectors lead.
+Company research, holdings and a capital gains report, stock alerts, and honest strategy backtests with paper trading,
+for Indian (NSE and BSE) and US stocks. Facts, never tips.
 
-**For traders:** describe a strategy in plain English, test it honestly on Indian, US, UK, European and Japanese stocks, forex, Indian currency futures, crypto or commodities (MCX and global), then paper trade it on live prices with fake money.
-
-One question when you sign up (investing, trading or both) puts what you came for first.
-
-### [🌐 stratlab.studio](https://stratlab.studio)
+### [stratlab.studio](https://stratlab.studio)
 
 ![Python 3.11](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
@@ -26,373 +23,236 @@ One question when you sign up (investing, trading or both) puts what you came fo
 </div>
 
 <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/landing-dark.png">
+  <img alt="The landing page: 'Know the company. Test the idea.', with an example idea, the rules StratLab reads from it, and its verdict" src="docs/screenshots/landing-light.png">
+</picture>
+
+## What it is
+
+StratLab is one place to understand a listed company, keep track of what you own, hear when something changes, and
+find out whether a trading idea has a real edge before any money is at risk.
+
+- **Facts, not advice.** Every number comes from reported results, exchange filings, the company's own documents or
+  prices. StratLab never says buy, sell or hold, gives no price targets, ratings or quality scores, and never ranks
+  stocks. AI summaries restate the facts and nothing more.
+- **Honest backtests.** Every strategy test ends in a plain verdict (*Likely a real edge* to *No edge here*) backed by
+  four checks: unseen data, nearby settings, bad-luck drawdown and enough trades.
+- **Paper trading only.** No real orders are ever placed.
+
+## Features
+
+The full list, with where each thing lives in the app, is in **[docs/FEATURES.md](docs/FEATURES.md)**.
+
+**Research**
+- Company pages for every Indian (NSE, and BSE-only) and US company, plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
+- Deep dive: ten years of numbers, the business and its plans read from the company's own presentations, calls or 10-K, industry measures, valuation on the yardstick its industry uses, a management report card, an investor checklist, and the whole thing as PowerPoint or PDF slides.
+- Results calendar, corporate actions (dividends, bonuses, splits, buybacks, rights, demergers), deals and insider trades (including bulk and block deals), exchange surveillance lists (ASM, GSM, ESM, trade-to-trade, price bands, F&O ban), and filings with red flags.
+- Screens on plain facts, the Stage 2 + Supertrend scan, sector rotation, a watchlist and Watchlist at a glance, themes, market pulse, compare, News, and Markets now.
+
+**Portfolio and tax**
+- My Holdings: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (or any CSV or Excel file), with value, P&L, sectors, dividends and one-click bonus and split adjustments.
+- Tax report: capital gains on listed Indian shares from tradebooks, tax P&L files or the broker's ZIP of them, matched FIFO with the July 2024 rates, the yearly exemption, 2018 grandfathering and intraday apart; CSV and PDF downloads. An estimate, not tax advice.
+- Share cards for a company's facts, and invite rewards (a free month of Basic for both once a friend is active).
+
+**Strategy testing**
+- Notebooks: describe an idea in plain English (or Ask with Ctrl+K), tap any word to change a rule, run numbered experiments, compare them.
+- Real costs per market, long/short/intraday rules, 20+ indicators, walk-forward tests, the similar-stocks check, group tests with one pot of capital, imports from Pine Script, Python, MetaTrader, AmiBroker and configs.
+- Paper trading on live prices in every market, options structures at the real bid and ask, a strategy library, and share cards and public links for verdicts.
+- Markets: India (stocks, indices, F&O), Indian currency futures, MCX, crypto, US, UK, Europe, Japan, forex, global commodities, and any CSV.
+
+**Alerts**
+- Stock alerts (price, day move, moving average, RSI, Stage, 52-week high or low; for India, insider trades, deals and surveillance), results and corporate-action messages, the red-flag and Stage 2 alerts, every paper trade and a daily report, the Market Brief and My Stocks newsletters, and a weekly email per saved screen.
+- By phone notification (install from the browser), Telegram or email to a confirmed address.
+
+**Getting started:** a first-steps checklist on Home (a backtest, a watchlist, a deep dive, paper trading, alerts) and a short tour.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/deepdive-dark.png">
+  <img alt="A company deep dive: growth over 3 and 5 years, ten years of sales and profit, and quarters with growth on a year earlier" src="docs/images/deepdive-light.png">
+</picture>
+
+<picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/verdict-dark.png">
   <img alt="A verdict page: 'No edge here', with four honesty checks: unseen data, nearby settings, bad-luck drawdown and enough trades" src="docs/images/verdict-light.png">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/investor-start-dark.png">
-  <img alt="The investor home: 'Which company do you want to look into?' with company search, popular names and four starting questions, and the Investing section of the menu" src="docs/images/investor-start-light.png">
-</picture>
-
-## What makes it different
-
-Most backtesting tools show a flattering chart. StratLab tells you whether the edge is **real or luck**.
-
-- **A verdict on every experiment.** Each test ends in one plain answer: *Likely a real edge*, *Mixed evidence*, *Probably luck*, *Not enough evidence* or *No edge here*. Four checks back it up:
-  - **Unseen data:** the rules are tested separately on the last 30% of the period, which they were never tuned on.
-  - **Nearby settings:** 25 variations of your indicator lengths. If only your exact numbers make money, that's a lucky fit.
-  - **Bad-luck drawdown:** your trades reshuffled 1,000 times, to show how deep the losses could realistically get.
-  - **Enough trades:** under 15 trades, luck dominates.
-- **Two deeper checks, one tap each.**
-  - **Walk-forward test:** re-tunes your settings on a stretch of the past, trades them on the next stretch the tuning never saw, slides forward and repeats. It shows what re-tuning as you go would really have earned, without hindsight.
-  - **Does it work on similar stocks?** Runs the same rules on about 10 similar instruments from the same market. Real patterns travel; lucky charts don't.
-- **Real costs, in the market's own currency.** India: STT, exchange and SEBI fees, stamp duty, GST, plus a capital-gains estimate. US: SEC and FINRA fees. UK: stamp duty on share buys. Forex: the spread. Crypto: exchange fees. MCX commodities: CTT on sells, MCX fees, stamp duty and GST. Indian currency futures: no STT; exchange and SEBI fees, stamp duty and GST. Global commodities: a spread and commission estimate. Slippage on every fill. You see what you'd actually keep.
-- **Lab notebooks.** Each idea is a notebook: a question, the rules written as sentences, numbered experiments you can compare side by side, and your own lab notes.
-- **A full toolkit.** Buy, sell short, or trade both ways with separate long and short rules. Stops in %, points, ATR or the recent swing low/high; targets in %, points or R-multiples; trailing stops and time limits. 20+ indicators (moving averages, RSI, MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian, volume) plus the candle itself (open, high, low, body, wicks, range) and the trading day (previous close, day open/high/low, day change %). Any value can be taken N candles ago, multiplied, or computed on a higher timeframe.
-- **Options, live.** A separate Options tab paper trades straddles, strangles, iron flies, condors, spreads or any structure up to 8 legs on live NSE, BSE, MCX and NSE currency (USDINR, EURINR, GBPINR, JPYINR) option quotes, filling at the real bid and ask. Entries come at a set time or whenever a notebook's own rules signal: a 7 EMA cross can buy the ATM NIFTY call, and a short signal the put. It covers MTM stops and targets, trailing, per-leg stops, daily caps, re-centring, margin-based sizing and freeze-limit slicing. Options backtesting is not here yet: it needs real past prices for every strike, so StratLab records the NIFTY, BANKNIFTY and SENSEX option chains every 5 minutes to build that history.
-- **Test on a whole group.** Run the rules on a ready-made group (NIFTY 50, Bank NIFTY, liquid F&O stocks, US mega caps, large coins) or your own list of up to 50, sharing one pot of capital with a limit on positions open at once. The verdict breaks the result down member by member. Paper trading an Indian group can enter on the live price instead of waiting for the candle to close, and skip stocks whose bid-ask spread is too wide.
-- **Built for intraday.** An entry window, a square-off time, a cap on trades per day, a cooldown after each trade and a daily loss cap. Entry rules can be combined as a weighted conviction score. Size by risk or by fixed capital per trade with leverage; Indian intraday trades use MIS costs.
-- **Any market.** Indian stocks (NSE, and companies listed only on BSE), indices and F&O on a live exchange feed; Indian currency futures; US, UK, European and Japanese stocks and ETFs, forex and crypto; or upload a CSV of candles from anywhere. No extra keys needed.
-- **Commodities, as two separate markets.**
-  - **Indian commodities (MCX):** gold, gold mini and petal, silver, silver mini and micro, crude oil and crude mini, natural gas and its mini, copper, zinc, aluminium, lead.
-    - Rupees, whole lots (one GOLDM lot is 100 g, so 10 times the quoted price per 10 g).
-    - Costs: CTT 0.01% on sells, MCX fees, stamp duty, GST.
-    - Hours 9:00 am to 11:30 pm IST, NSE holiday calendar.
-    - Daily history is stitched across expiries for years of data; intraday history covers only the current contract.
-    - Paper sessions trade the front-month contract, which rolls 3 days before expiry.
-  - **Global commodities:** COMEX, NYMEX, CBOT and ICE front-month futures: gold, silver, platinum, copper, WTI and Brent crude, natural gas, corn, wheat, soybeans, coffee, sugar, cocoa, cotton.
-    - Dollars (grain prices in cents are converted), sized per ounce, barrel or bushel rather than per exchange contract.
-    - A spread and commission estimate per side.
-    - Sunday 6 pm to Friday 5 pm New York, US holiday calendar.
-- **Indian currency futures (NSE CDS).** USDINR, EURINR, GBPINR and JPYINR, plus the cross pairs EURUSD, GBPUSD and USDJPY.
-  - Whole lots of 1,000 units (100,000 yen). The cross pairs are priced and counted in dollars or yen; brokerage set in rupees is converted at the day's rate.
-  - Hours 9:00 am to 5:00 pm IST, with the segment's own holiday list read from the exchange each day.
-  - Daily history is stitched across expiries; intraday history covers the current contract. Paper sessions trade the front month, rolled 3 days before expiry.
-- **Research built in.** Company pages for India and the US: live price and chart, valuation and growth with context, sales and profit history, results against estimates, who owns it, insider trades, news, and an AI read whose trading ideas open as a notebook in one click. Plus AI theme maps, a daily market pulse, side-by-side comparisons and a watchlist.
-- **For investors, not just traders.** The **Investing** section of the menu has every tool one tap away, and investors get their own home page: "Which company do you want to look into?"
-  - **Company deep dive (India and US):** ten years of sales, profit, margins, capex and free cash flow, and the last twelve quarters; then the business model and every capex and growth plan, read from the company's own documents. Every quote is checked against the document it's credited to, and anything that can't be found there is dropped. Choose how far back to read, from the last year to the last 5 years.
-    - **India (NSE and BSE-only companies):** investor presentations and earnings-call transcripts filed with the exchange. When a filing is only a letter with no link (or a dead one), the company's own investor pages are searched for the document naming that quarter. Scanned, image-only PDFs are read by OCR.
-    - **US:** the SEC's filings: the numbers from 10-K and 10-Q reports, the business, risks and outlook from the latest 10-K, and plans from earnings releases.
-    - **Amounts in the unit people use:** a chart or table switches to $ billion or ₹ lakh crore only when the numbers are large and every one still shows within 1%.
-  - **Industry-aware:** banks, insurers, holding companies, real estate, power and telecom, and cyclicals each get rules that fit them. Each industry's own measures (revenue per occupied bed and occupancy for hospitals, NIM and NPAs for banks, RevPAR for hotels, ARPU for telecom, EBITDA per tonne for cement and metals) are pulled from the company's documents, with the quote.
-  - **How it's valued:** EV/EBITDA for asset-heavy businesses (cash subtracted from enterprise value), price to book for lenders, insurers and developers, P/E for the rest, always with P/E alongside.
-  - **Management report card:** promises against results. The targets management gave on past earnings calls (India) or in earnings releases (US), each checked against the reported results: met, missed or not due yet, with the quote and its source. Six calls over two years by default, up to twelve over five. Targets the numbers can't settle (a loan-to-deposit ratio, a retail mix) are settled from what the company said after the period ended, quoted word for word. "This year" and "next year" are resolved to the company's own financial year; analysts' numbers never count.
-  - **Investor checklist:** fixed, written-down pass / watch / fail checks on trend, growth, return on capital or equity, margins, debt, cash conversion, promoter holding (India) or insiders' open-market buying and selling over six months (US), filings and management's record.
-  - **Investor home and slides:** every watchlist company, India or US, on one page (trend, sector, red flags, checklist, report card), and any deep dive as slides to download as PowerPoint or PDF.
-  - **Stage 2 + Supertrend scan (ST S2):** which stocks in your watchlist or a ready-made group are in Weinstein's Stage 2 with the Supertrend up, fresh signals first, with a daily alert and a one-click backtest of the ST S2 rules on the whole group.
-  - **Sector rotation:** every sector against the market, as Leading, Weakening, Lagging or Improving, with the trail it took. Click a sector to see its biggest stocks against it. NSE sectors, size and style indices, S&P 500 sectors and US industries.
-  - **Filings and red flags (India, NSE and BSE):** fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades, each linked to the filing, with an evening alert.
-- **Plain-English builder.** Describe the idea; the AI turns it into rules and asks only about what you left out. It tries several free AI services in turn (Groq, Cerebras, Gemini, Mistral, SambaNova, OpenRouter), with Claude as an optional paid fallback, and a simple built-in converter if all of them are down.
-- **Import any strategy.** One **Import a strategy** page takes a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export or plain words. It sets up the right thing: a notebook for rules on one instrument, a group notebook for strategies that scan a list (like an F&O momentum scanner), or an Options structure. Anything that can't be carried over is listed.
-- **Paper trading in every market.** Run the rules on live prices with fake money: India (stocks, F&O, MCX and currency futures), the US, UK, Europe, Japan and forex during their market hours, crypto around the clock. A single instrument, a whole group with shared capital, or an option structure. Sessions keep running until you stop them. With alerts on, each trade comes as a phone notification, on Telegram or by email, plus a short report a few minutes after each market closes.
-- **Share a verdict.** A card with the equity chart, all four checks and the numbers, sent straight from your phone's share menu, or a public link anyone can open without an account. It previews in WhatsApp, X and LinkedIn, shows the verdict but never your rules, and turns off with one tap.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/walkforward-dark.png">
-  <img alt="A walk-forward test: re-tuned on the past and traded on unseen blocks, it made money in 5 of 5, with the settings picked at each step" src="docs/images/walkforward-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/pricing-dark.png">
+  <img alt="The plans on the landing page: Free, Basic and Pro with what each includes" src="docs/screenshots/pricing-light.png">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/notebook-dark.png">
-  <img alt="A notebook: the question being tested, rules written as editable sentences, and lab notes" src="docs/images/notebook-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/portfolio-dark.png">
+  <img alt="Portfolio and tax on the landing page: My Holdings, dividends, bonuses and splits, the tax report, share cards and invites" src="docs/screenshots/portfolio-light.png">
 </picture>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/options-dark.png">
-  <img alt="The Options tab: a NIFTY iron fly priced on live bid and ask, with entry and square-off times, stop and target, and a button to start paper trading" src="docs/images/options-light.png">
-</picture>
+More screenshots are in [docs/images](docs/images) and [docs/screenshots](docs/screenshots). <sub>Screenshots use synthetic sample data, not real market data.</sub>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/import-dark.png">
-  <img alt="Import a strategy: one place for any format, which sets up a notebook, a group or an options structure" src="docs/images/import-light.png">
-</picture>
+## Plans
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/deepdive-dark.png">
-  <img alt="A company deep dive for Reliance Industries: growth over 3 and 5 years, ten years of sales and profit, and quarters with growth on a year earlier" src="docs/images/deepdive-light.png">
-</picture>
+Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server. The website's copy of them,
+[`frontend/src/lib/plans.ts`](stratlab/frontend/src/lib/plans.ts), is checked against it by
+`backend/tests/test_plan_copy.py`, and the landing page's e2e test checks the plans it shows against the server's.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/reportcard-dark.png">
-  <img alt="The management report card: 3 of 4 checkable targets met, each with the quote, the call it came from, the target and the actual result" src="docs/images/reportcard-light.png">
-</picture>
+| | Free | Basic | Pro |
+|---|---|---|---|
+| Price (rupee prices include 18% GST) | ₹0 | ₹499 a month (₹4,990 a year) · $8 | ₹1,499 a month (₹14,990 a year) · $20 |
+| Backtests, each with a verdict | 10 a month | 100 a month | Unlimited |
+| AI strategy builds | 10 a month | 100 a month | Unlimited (a daily safety cap applies) |
+| Paper trading | 1 session, for 5 market days | 2 at a time | 10 at a time |
+| Instruments in a group test | 10 | 25 | 50 |
+| Company deep dives (each company counted once a month) | 2 a month | 15 a month | Unlimited |
+| Company slide decks | 1 a month | 5 a month | Unlimited |
+| Stock alerts on at once / saved screens / holdings kept | 5 / 2 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
+| All 20+ indicators (Free: price, SMA, EMA, RSI) | – | ✓ | ✓ |
+| Group and options paper trading, trade notifications, daily report | – | ✓ | ✓ |
+| Stage 2 scan, watchlist red flags, Watchlist at a glance, with alerts | – | ✓ | ✓ |
+| Daily Market Brief and My Stocks (weekly for everyone) | – | ✓ | ✓ |
+| Indian F&O, options on your own signals, faster group entries, export | – | – | ✓ |
+| Every market, company pages, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, My Holdings, tax report, share cards, invites | ✓ | ✓ | ✓ |
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/rotation-dark.png">
-  <img alt="Sector rotation: the 11 S&P 500 sectors against SPY in four quadrants, with a summary of which are Leading, Improving, Weakening and Lagging" src="docs/images/rotation-light.png">
-</picture>
+Paid features switch on once Razorpay's keys and monthly plan IDs are set; until then every feature is open to
+everyone and only the monthly counts apply. The admin can also run a **launch offer** (Pro for everyone for N days), and
+invite rewards give free months of Basic. Visitors outside India see prices in their own currency; every payment gets a
+GST invoice.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scan-dark.png">
-  <img alt="The Stage 2 + Supertrend scan: 20 US large caps with their stage, Supertrend direction and ST S2 signal" src="docs/images/scan-light.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/filings-dark.png">
-  <img alt="Filings and red flags: a watchlist company's QIP flagged as a fund raise, a director resignation, and a 3-month summary" src="docs/images/filings-light.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/research-dark.png">
-  <img alt="A research page for Reliance Industries: price chart, 52-week range and a button to test a strategy on it" src="docs/images/research-light.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/search-dark.png">
-  <img alt="Ask or do anything (Ctrl+K): a question like 'momentum ideas for bank stocks' returns four testable ideas, plus matching features" src="docs/images/search-light.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/library-dark.png">
-  <img alt="The strategy library: published rules with their honest verdicts, 'Likely real edge' next to 'No edge', each with a Copy and re-test button" src="docs/images/library-light.png">
-</picture>
-
-## Everything you can do, and where to find it
-
-New here? A short tour pops up the first time you sign in. You can reopen it any time from **Tour** at the bottom of the sidebar. **Markets now** at the bottom of the sidebar shows how many markets are open; tap it to list each one, and hover (or tap) a market to see when it opens or closes: it says **weekend** or **holiday** when an exchange is shut.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/tour-dark.png">
-  <img alt="The feature tour: step 3 of 10, 'Research a company first', with where to find it" src="docs/images/tour-light.png">
-</picture>
-
-| You want to… | Where it is |
-| --- | --- |
-| Find an idea | **Investing → Companies** in the menu: a company's AI read ends with ideas to test in one click |
-| Explore a sector | **Research → Themes**: a map of who's involved, where the margin sits, and the listed companies along the chain |
-| See the market's mood | **Research → Market pulse**: index levels, headlines and an AI read of what's moving |
-| Keep an eye on companies | **Watch** on a company page; they're listed under **Investing → Watchlist** |
-| Find Stage 2 stocks with the Supertrend up | **Investing → Stage 2 trend scan**: your watchlist or a ready-made group; **Backtest ST S2 on this group** makes a notebook in one click, and the checkbox turns on a daily alert (Pro) |
-| See which sectors are leading | **Investing → Sector rotation**: sectors, size and style indices or US industries, weekly or daily, with a trail and **Animate**; **Stocks →** on a sector shows its biggest stocks against it (Pro) |
-| Check a company's filings for red flags | **Investing → Red flags** for your India watchlist, or **Filings and red flags** on any Indian company page; tick the box for an evening alert (Pro) |
-| Understand a company's business and its capex plans | On any Indian or US company page, **Deep dive**. Pick how far back to read (**Last year** to **Last 5 years**); **Read the latest presentation and calls** (US: **Read the annual report and releases**) has the AI read the company's own documents; **Check past calls** (US: **Check past releases**) builds the management report card; **Slides (PowerPoint)** and **Slides (PDF)** download the whole deep dive (Pro) |
-| See the whole watchlist the investor way | **Investing → Watchlist at a glance**: trend, sector rotation, red flags, checklist and report card for each watchlist company, with an India / US switch (Pro) |
-| Filter companies by plain facts | **Research → Screens**: sector, size, 3-year revenue growth, margins, debt to equity, ROE and ROCE, dividend yield, P/E, Stage, price against the 52-week high and recent red-flag filings. Sort by any column; **Save this screen** keeps it, and its weekly email on Saturday morning lists the companies that newly meet it (Free 1 saved screen, Basic 5, Pro 25) |
-| Know when companies report results | **Research → Results**: India's board meetings for results and US results dates, from a week back to four weeks ahead, with a message on results day and when the numbers are out for the companies you follow |
-| See who bought or sold a company's shares | **Deals and insider trades** on any Indian company page or deep dive: promoters', directors' and key staff's own trades and pledges, substantial acquisitions, and bulk and block deals, as filed with the exchange. Facts as filed, never a call on the stock |
-| Know when dividends, bonuses and splits go ex | **Research → Corporate actions**: dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, for your stocks or every company; a panel on each company page; and in **My Holdings**, the dividends ahead and of the last 12 months, and a bonus or split since your holdings were saved offered as a one-click **Apply** (with **Undo**) |
-| Get told when a stock does something | **Set alert** on a company page, the deep dive or the watchlist: a price level, a day's move, crossing a moving average, RSI, a Stage change or a 52-week high or low. All of them are on **Investing → Alerts** (Free 3, Basic 20, Pro 100) |
-| See your own portfolio | **Investing → My Holdings**: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (or any CSV with symbol, quantity and price) for value, P&L, sectors and each stock's trend, filings and results date |
-| Share a company's facts | **Share** on a company page or the deep dive: a card with its price, 1-year range and key numbers, and a public link that previews as the card and opens the company's public page |
-| Invite a friend | **Account → Invite friends**: your own link, how many friends joined through it and the free months earned (a month of Basic each once a friend uses the app on 3 days in their first 14) |
-| Read a company's facts without signing in | The public company pages at `stratlab.studio/stocks/in/SYMBOL` and `/stocks/us/SYMBOL`, made for search engines |
-| Choose which emails you get | **Account → Newsletters** for the market and My Stocks emails, and **Account → Emails from StratLab** for tips and reminders (a welcome, trial and offer reminders, what's new). Every email has a one-click unsubscribe |
-| Know how fresh the numbers are | Every page with company numbers (company page, deep dive, holdings, screens, at a glance, newsletters) says when its prices and numbers are from |
-| Test a new idea | **New notebook**: pick the market first, then describe the idea or start from a classic one |
-| Bring a strategy you already have | **Import a strategy** in the sidebar (or on New notebook): it sets up a notebook, a group notebook or an Options structure depending on what you bring; a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words |
-| Keep favourites at the top | **Pin** on a notebook (or the pin on its card); pinned notebooks lead the sidebar and the list |
-| Find a notebook | Search and sort (recent, name, best verdict) on **All notebooks**; the dot beside each name in the sidebar is its last verdict |
-| Try a variation without losing the original | **More → Make a copy** at the top of a notebook (Export and Delete are there too) |
-| Rename a notebook | Click its name at the top of the notebook |
-| Choose or change the market | Step 1 on a new notebook, or the **Testing on** button at the top of any notebook |
-| Rewrite the idea from scratch | **Describe the idea again** at the top of a notebook |
-| Tweak a rule | Tap any highlighted word (marked ▾) in **The rules**: indicator, length, condition or number. The **×** at the end of a rule removes it; **+ Add** under Entry or Exit adds one |
-| Rewrite the whole strategy | **Edit in words** on **The rules**: describe it again and the rules are rebuilt, keeping the market and capital |
-| Fine-tune (trailing stop, time limit, intraday limits, costs, sizing) | **More settings** at the bottom of **The rules**. It stays closed until you open it, remembers, and shows how many are switched on |
-| Run a test | **Run experiment** in a notebook (or press Ctrl/⌘ + Enter); each run is saved and numbered so you can compare |
-| Short instead of buy, or trade both ways | Tap **Buy** at the start of the rules and pick **Sell short** or **Trade both ways** |
-| Trade intraday | Pick 5- or 15-minute or 1-hour candles; a **During the day** line appears for the entry window, square-off, trades a day, cooldown and daily loss cap |
-| Use the candle's shape, an earlier candle or a higher timeframe | Tap a value in a rule → **More**: candles ago, multiply by, timeframe |
-| Score your entry conditions | Tap **all of these** and pick **enough of these**: each rule gets a weight and the trade needs a minimum score |
-| Trail the stop or cap how long a trade lasts | The **Trail the stop by … and close any trade after …** line in **The rules** |
-| Compare two runs | **Compare experiments →** in a notebook, or **Compare with the previous run** on a verdict |
-| Check a tuned idea without hindsight | **Walk-forward test** on a verdict: re-tunes on the past, trades the next unseen stretch, and repeats |
-| Check it isn't one lucky chart | **Does it work on similar stocks?** on a verdict runs the same rules on about 10 similar instruments |
-| Understand a number | Every check, stat and setting has an **(i)** button that explains it in plain words |
-| Decide what to do next | The **Next** bar on a verdict: change the rules, try another market, paper trade, write a lab note |
-| Test on a whole group of stocks | **Testing on → Or test on a group**: a ready-made group (NIFTY 50, Bank NIFTY, F&O stocks, US mega caps, large coins) or your own list, with a limit on positions open at once; **Paper trade** runs the whole group live on intraday candles. For Indian groups you can turn on **faster entries** (enter on the live price instead of waiting for the candle to close) and a **spread limit**, and for any group a **minimum price** |
-| Paper trade options | **Options** in the sidebar: pick the underlying, expiry and structure, press **Price it now** for live fills, payoff and margin, then **Start paper trading**; three steps (what to trade, structure, when and risk); re-centring, trailing, caps, sizing and costs are under **More settings** |
-| Trade options on your own signal | On **Options**, set **Enter** to **When a notebook's rules say so** and pick a notebook with rules on 5-minute, 15-minute or hourly candles, for example a 7 EMA crossover. When the rules go long it enters your structure (say, buy the ATM NIFTY call); when they go short it can enter the mirror (buy the put); when they exit, it closes |
-| Paper trade | **Paper trade** at the top of a notebook or verdict; running sessions are under **Paper trading** |
-| Share a result | **Share verdict** on a verdict: send the card (chart, the four checks, the numbers) straight to an app on your phone or save it on a computer, or **Make a public link**: a read-only page anyone can open without an account. It shows the verdict, not your rules, and you can turn it off at any time |
-| Save the rules | **Export** in a notebook saves the rules as a file |
-| Put investing or trading first | **Account → What you're here for**: Investing, Trading or Both (asked once when you sign up). It orders the menu, the home page and the examples; nothing is hidden |
-| Set how much is shown up front | **Account → Experience**: New to trading, I've traded a bit, or I trade actively. It changes only what starts open; every tool stays available |
-| See all your paper trading at once | **Paper trading** shows **All running sessions** on top: open position value, today, total P&L, the worst day and the deepest fall for everything together, per currency, with each session's share |
-| Borrow a strategy, or share yours | **Strategy library** in the sidebar: rules other traders published with their honest verdict (luck included). **Copy and re-test** puts them in a notebook of your own. Publish yours from a verdict: **Share verdict → Publish to the strategy library** |
-| Ask or do anything | **Ask or do anything** at the top of the sidebar or on your home page, or **Ctrl+K** (⌘K) anywhere. Type a line and press Enter: "deep dive Apollo Hospitals", "which sectors are leading?", "red flags in my watchlist", "Stage 2 stocks in NIFTY 50" and "compare TCS and Infosys" open the right page; "Test: buy NIFTY when RSI drops below 30" builds the rules and shows the verdict, "paper trade an EMA cross on BTC" starts paper trading, "research HDFC Bank" opens research, "what is walk-forward?" is answered in place, "momentum ideas for banks" gives testable ideas. Pasting a strategy imports it |
-| See your plan or upgrade | **Account → Plan and usage** (Plans lives inside Account) |
-| Get a GST invoice for a payment | **Account → Invoices**: every payment's invoice, ready to print or save as PDF, and the name, address and GSTIN to put on future ones |
-| Put it on your phone | **Account → On your phone**: install StratLab to the home screen (its own icon, full screen) and **Turn on notifications** to get trade alerts and the daily report on that device, no Telegram needed. On an iPhone, first Share → Add to Home Screen |
-| Check that everything's connected | **Account → Connection check** shows market data and each AI provider |
-| Get the market and your stocks by email | **Account → Newsletters**: the Market Brief (India or US) daily or weekly, and My Stocks for the stocks in your watchlist, notebooks and paper trading (Pro); past issues are on **News** |
-| Read at night | **Night mode** at the bottom of the sidebar |
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/new-dark.png">
-  <img alt="The New notebook page: choose the market and instrument first, then describe the idea" src="docs/images/new-light.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/landing-dark.png">
-  <img alt="The landing page: 'Know the company. Test the idea.', for investors and traders, with an example idea, the rules StratLab reads from it, and its verdict" src="docs/images/landing-light.png">
-</picture>
-
-<sub>Screenshots use synthetic sample prices, not real market data.</sub>
-
-## How it works
+## Architecture
 
 ```mermaid
 flowchart LR
-    UI["Frontend<br/>React + Vite"] -- "REST, Supabase JWT" --> API["FastAPI backend"]
+    UI["Frontend<br/>Vite + React + TypeScript<br/>(Vercel)"] -- "REST + Supabase JWT" --> API["Backend<br/>FastAPI, one process<br/>(Railway)"]
     UI -- "Google sign-in" --> SB[("Supabase<br/>Auth + Postgres")]
     API --> SB
-    API -- "India: candles, live ticks" --> BROKER["Broker market data API"]
-    API -- "crypto: candles, prices" --> CB["Coinbase public data"]
-    API -- "US, UK, EU, Japan, forex, global commodities; charts" --> YF["Market data API"]
-    API -- "research: US companies" --> FH["Company data API"]
-    API -- "research: Indian fundamentals, news" --> SC["Fundamentals, news, Wikipedia"]
-    API -- "India: company filings, presentations, call transcripts" --> EX["Exchange announcements and documents<br/>(NSE and BSE), company investor pages"]
-    API -- "US: 10-K, 10-Q, earnings releases" --> SEC["SEC filings"]
-    API -- "subscriptions" --> RZP["Razorpay"]
-    RZP -- "webhooks" --> API
-    API --> AI["AI provider chain<br/>Groq, Cerebras, Gemini, Mistral,<br/>SambaNova, OpenRouter, Claude"]
-    API --> ALERT["Phone, Telegram and email alerts, newsletters<br/>(email through Brevo, Resend or SMTP)"]
+    API --> MD["Market data<br/>(broker feed for India, public data elsewhere)"]
+    API --> CO["Company data<br/>(reported results, exchange filings, SEC filings, company documents)"]
+    API --> AI["AI provider chain"]
+    API --> PAY["Razorpay"]
+    API --> OUT["Phone push, Telegram, email<br/>(Brevo, Resend or SMTP)"]
+    UI -. "optional" .-> PH["PostHog, Sentry"]
 ```
 
-The browser only talks to the backend. The backend owns every secret: the Supabase service key, broker and Razorpay credentials, and the AI keys. Backtests, verdict checks and live paper trading all use the same engine, so a strategy behaves the same everywhere.
-
-## Repository layout
+- **Frontend** (`stratlab/frontend`): a Vite + React 19 + TypeScript single-page app on **Vercel**. Pages load on
+  demand. `public/config.js` holds the API address and public keys and is read at runtime. Vercel forwards `/v/*`,
+  `/c/*`, `/stocks/*`, `/sitemap.xml` and `/sitemaps/*` to the backend, which renders those public pages itself.
+- **Backend** (`stratlab/backend`): **FastAPI** on **Railway**, run as one process, because live paper sessions, the
+  tick feed and the scheduled jobs (newsletters, alerts, audits, the daily checks) live in memory. Backtests run in
+  worker processes. The backend owns every secret; the browser only talks to it and to Supabase sign-in.
+- **Database and sign-in**: **Supabase** (Postgres + Google OAuth). The schema is in `stratlab/supabase/schema.sql`;
+  per-user settings and job state live in the `app_settings` key-value table.
+- The same engine runs backtests, the verdict checks and live paper trading, so a strategy behaves the same everywhere.
 
 ```
 stratlab/
-├── backend/                  FastAPI app (deploys to Railway)
-│   ├── app/
-│   │   ├── main.py           API routes
-│   │   ├── engine/
-│   │   │   ├── core.py       rule evaluation and the trading engine
-│   │   │   ├── indicators.py SMA, EMA, RSI, MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, Donchian
-│   │   │   ├── costs.py      per-market trading costs and tax estimates
-│   │   │   ├── verdict.py    the four honesty checks and the verdict
-│   │   │   ├── portfolio.py  group tests: one pot of capital across many instruments
-│   │   │   └── walkforward.py walk-forward test: re-tune on the past, trade the unseen next block
-│   │   ├── options/          Options tab: contracts, chains, quotes and margin; the options engine and sessions
-│   │   ├── universes.py      ready-made groups of stocks and coins
-│   │   ├── group_live.py     paper trading a whole group with one pot of capital
-│   │   ├── basket.py         "does it work on similar stocks?": same rules on ~10 similar instruments
-│   │   ├── data/             market data: markets list, one provider per market (India, MCX, currency futures, crypto, US, UK, EU, Japan, forex, global commodities), holidays
-│   │   ├── intel/            research: company data, fundamentals, SEC filings, news, Wikipedia, AI reads, exchange filings and red flags, /research API
-│   │   ├── scan.py           Stage 2 + Supertrend (ST S2) scans, the ready-made ST S2 strategy and its daily alert
-│   │   ├── deepdive.py       company deep dive: 10-year numbers and capex, AI reads of presentations, call transcripts, 10-Ks and earnings releases
-│   │   ├── docs.py           downloads company documents (the exchanges' hosts or the company's own site, size-capped) and cuts them to the passages that matter
-│   │   ├── report_card.py    management report card: targets from past earnings calls (US: earnings releases) checked against results
-│   │   ├── checklist.py      the investor checklist: fixed pass / watch / fail rules
-│   │   ├── investor.py       the investor home: one row per watchlist company
-│   │   ├── deck.py           the deep dive as slides, PowerPoint or PDF
-│   │   ├── ocr.py            text from scanned (image-only) PDFs
-│   │   ├── audit.py          data audits: a set of companies, or the whole market (India NSE + BSE-only, US SEC) as new listings appear
-│   │   ├── platform_check.py "Check every feature": each part of the app run on live data, daily and on demand
-│   │   ├── invoices.py       GST invoices, one per payment (domestic, and exports under the LUT)
-│   │   ├── pricing.py        prices in 18 currencies that follow the rupee price
-│   │   ├── fixtures.py       the admin's real-price snapshot for tests
-│   │   ├── rotation.py       sector rotation: relative strength and momentum against a benchmark, with trails
-│   │   ├── sector_members.py the biggest stocks in each sector index and sector fund, for drilling into a sector
-│   │   ├── research.py       load candles, run an experiment, keep a compact record
-│   │   ├── live.py           paper trading on live ticks (India) or polled candles (every other market)
-│   │   ├── kite_service.py   the broker data API: login, candles, live ticks
-│   │   ├── kite_auto.py      optional automatic daily broker login
-│   │   ├── admin.py          owner-only admin page API (Overview, Services, Data checks, Users, Billing)
-│   │   ├── billing.py        Razorpay subscriptions
-│   │   ├── plans.py          plan limits and prices, and the admin-started launch offer
-│   │   ├── library.py        the public strategy library, with reports and moderation
-│   │   ├── guard.py          request size cap, rate limits and security headers
-│   │   ├── ai_writer.py      plain English → strategy rules
-│   │   ├── ai_providers.py   the AI provider chain and its order for quick jobs and research reads
-│   │   ├── push.py           phone and browser notifications (Web Push)
-│   │   ├── newsletter/       the Market Brief and My Stocks newsletters: facts, writing, the send schedule
-│   │   ├── screens.py        stock screens: the index of company facts, filters, saved screens and their weekly email
-│   │   ├── stock_pages.py    public company pages for search engines (/stocks/in|us/SYMBOL), robots and sitemaps
-│   │   ├── company_cards.py  shareable company fact cards and their public /c/ links
-│   │   ├── referrals.py      invite links: who invited whom
-│   │   ├── invite_rewards.py a free month of Basic for both once an invited friend is active; its daily check
-│   │   ├── stock_alerts.py   price, move, moving average, RSI, Stage and 52-week alerts on single stocks
-│   │   ├── holdings.py       My Holdings: positions, value, P&L and sectors (holdings_file.py reads the brokers' files)
-│   │   ├── results.py        the results calendar and its results-day messages
-│   │   ├── deals.py          deals and insider trades from exchange disclosures, and their evening job
-│   │   ├── corp_actions.py   corporate actions: the ex-date calendar, company histories, holdings income and adjustments
-│   │   ├── product_analytics.py  server-side usage events (a payment going through), off without POSTHOG_KEY
-│   │   ├── lifecycle.py      welcome, trial, offer and what's-new emails (first_steps.py: the Home checklist)
-│   │   ├── mail_tokens.py    signed links in emails: confirm an address, unsubscribe
-│   │   └── alerts.py         phone, Telegram and email alerts
-│   ├── tests/                pytest suite, including fuzz, failure, calendar, security and load tests
-│   └── .env.example          every setting the server reads
-├── frontend/                 React + TypeScript app built with Vite (deploys to Vercel)
-│   ├── e2e/                  browser tests (Playwright): every main page on desktop and phone
-│   ├── public/               config.js (API URL, Supabase public key), favicon, app icons, link-preview image
-│   └── src/
-│       ├── pages/            notebook, verdict, markets, research, paper trading, options, plans, account, admin
-│       ├── components/       rules editor, charts, sidebar, feature tour, logo, share image
-│       └── lib/              API client, formatting, rule parser, CSV import, (i) help texts, brand
-└── supabase/
-    └── schema.sql            tables, row-level security, sign-up trigger
+├── backend/app/      main.py (routes), engine/ (backtests, costs, verdict, walk-forward), options/, data/ (markets),
+│                     intel/ (company research, filings), newsletter/, and one module per feature: deepdive, screens,
+│                     holdings, tax_lots, results, corp_actions, deals, surveillance, stock_alerts, invite_rewards…
+├── backend/tests/    pytest: units, every route with hostile input, failing sources, tricky dates, security, load
+├── frontend/src/     pages/, components/, lib/ (API client, plans, formatting, rules, analytics)
+├── frontend/e2e/     Playwright: every page on desktop and phone, every route at several sizes, the landing page
+└── supabase/         schema.sql
+docs/                 FEATURES.md, ADMIN.md, ROADMAP.md, images/, screenshots/
 ```
 
-## Quick start
+## Local setup
 
 ```bash
 # backend
 cd stratlab/backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # fill in Supabase, broker, Razorpay and AI keys
+cp .env.example .env          # fill in what you need (table below); everything but Supabase is optional
 uvicorn app.main:app --reload --port 8000
 
-# frontend (in another terminal)
+# frontend (another terminal)
 cd stratlab/frontend
 npm install
-npm run dev                   # open http://localhost:5500
+npm run dev                   # http://localhost:5500; point public/config.js at http://localhost:8000
 ```
 
-Run the tests with `cd stratlab/backend && pytest`, check the frontend with `cd stratlab/frontend && npm run build`, and run the browser tests with `npm run e2e`.
+The **[setup guide](stratlab/README.md)** walks through Supabase, the broker data API and its daily login, Razorpay,
+the AI keys, alerts and deploys.
 
-The **[setup guide](stratlab/README.md)** covers Supabase, the broker data API (including the automatic daily login), Razorpay, the AI writer, deployment, and how the engine and the verdict work.
+## Environment variables
 
-## Plans
+Set on the backend (Railway, or `stratlab/backend/.env`). Names and purposes only; never commit values.
 
-Paid plans switch on once Razorpay's keys and plan IDs are set; until then every feature is open to everyone, with the Free plan's monthly limits. The site owner can also start a **launch offer** from the Admin page: every user gets Pro free for a set number of days.
+| Variable | Purpose |
+| --- | --- |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | The database and sign-in check (service-role key, server only) |
+| `KITE_API_KEY`, `KITE_API_SECRET` | The broker market data API for Indian prices, F&O, MCX and live ticks |
+| `KITE_USER_ID`, `KITE_PASSWORD`, `KITE_TOTP_SECRET` | Optional automatic daily broker login (off unless all three are set) |
+| `KITE_AUTO_LOGIN_AT` | Time of the automatic login, IST (default 08:00) |
+| `KITE_RESTART_AFTER_LOGIN` | Restart the live feed after the daily login (default true) |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Payments and the payment webhook |
+| `RAZORPAY_PLAN_BASIC`, `RAZORPAY_PLAN_PRO` | Monthly plan IDs; paid features lock to plans once these and the keys are set |
+| `RAZORPAY_PLAN_BASIC_YEAR`, `RAZORPAY_PLAN_PRO_YEAR` | Optional yearly plan IDs |
+| `AI_PROVIDERS`, `AI_PROVIDERS_RESEARCH`, `AI_PROVIDER` | The order AI providers are tried in, for quick jobs and long research reads |
+| `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI provider keys; each is used only when set |
+| `GROQ_MODEL`, `CEREBRAS_MODEL`, `SAMBANOVA_MODEL`, `MISTRAL_MODEL`, `OPENROUTER_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL` | Pin a model per provider (`auto` picks one) |
+| `FINNHUB_API_KEY` | US company data for the research pages |
+| `RESEARCH_AI_PER_DAY` | Fresh AI research reads per user per day (default 60) |
+| `TELEGRAM_BOT_TOKEN` | Telegram alerts |
+| `ADMIN_TELEGRAM_CHAT_ID` | Where a failed automatic login is reported |
+| `BREVO_API_KEY`, `RESEND_API_KEY` | Email over HTTPS, tried in that order |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Email over SMTP, the last resort |
+| `ALERT_FROM_EMAIL` | The sender address for every email |
+| `MAIL_TOKEN_SECRET` | Signs unsubscribe and confirm links (derived from the service key when unset) |
+| `FRONTEND_ORIGIN` | Allowed browser origins for CORS, comma-separated |
+| `PUBLIC_SITE_URL` | The public site, for shared links, public pages and sitemaps (default https://stratlab.studio) |
+| `PUBLIC_API_URL` | The backend's public address, for links in emails (defaults to `RAILWAY_PUBLIC_DOMAIN` on Railway) |
+| `STOCK_PAGE_BUILDS_PER_MINUTE` | Fresh public company pages built a minute (default 6) |
+| `ADMIN_EMAILS` | Google addresses that can open Admin |
+| `OPTION_SNAPSHOTS`, `OPTION_SNAPSHOT_MINUTES`, `OPTION_SNAPSHOT_KEEP_DAYS` | Which option chains are recorded, how often, and for how long |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional own key pair for phone notifications (made automatically otherwise) |
+| `SENTRY_DSN`, `SENTRY_ENV` | Optional server error alerts |
+| `POSTHOG_KEY`, `POSTHOG_HOST` | Optional server-side usage events (a completed payment) |
+| `BACKTEST_PROCESSES` | Backtest worker processes (default 2; 0 runs them in the server process) |
+| `HEAVY_SLOTS` | Heavy requests (backtests, scans, document reads) run at once (default 2) |
 
-| | Free | Basic · ₹499/mo · $8 | Pro · ₹1,499/mo · $20 |
-|---|---|---|---|
-| Yearly (two months free) | – | ₹4,990 · $80 | ₹14,990 · $200 |
-| Who it's for | Try every tool | Investors and part-time traders | Active traders and heavy research |
-| Backtests (each with a full verdict) | 10 / month | 100 / month | Unlimited |
-| AI strategy builds | 10 / month | 100 / month | Unlimited |
-| Group tests | Up to 10 instruments | Up to 25 | Up to 50 |
-| Paper trading | 5-market-day trial, 1 session | 2 at a time | 10 at a time |
-| Group paper trading | – | ✓ | ✓ with faster entries and a spread limit |
-| Options paper trading | – | At set times | At set times or on a notebook's signal |
-| Indicators | Price, SMA, EMA, RSI | All 20+ | All 20+ |
-| Markets | All, except Indian F&O | same | + Indian F&O |
-| Trade notifications (phone, Telegram, email) and the daily report | – | ✓ | ✓ |
-| Company deep dive (business, capex plans, management report card, investor checklist), counted once per company a month | 2 / month | 15 / month | Unlimited |
-| Slide decks (PowerPoint and PDF) | 1 / month | 5 / month | Unlimited |
-| Stage 2 + Supertrend scan, watchlist red flags, Watchlist at a glance, with alerts | – | ✓ | ✓ |
-| Sector rotation, red flags on every company page, screens, results calendar | ✓ | ✓ | ✓ |
-| Stock alerts / saved screens / holdings | 5 / 2 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
-| Newsletters (Market Brief and My Stocks) | Weekly | Daily or weekly | Daily or weekly |
-| Export rules and trades | – | – | ✓ |
-| Research AI reads | 60 / day | 60 / day | 60 / day |
-| Share cards and public links | ✓ | ✓ | ✓ |
+The frontend's `public/config.js` sets `API_BASE`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public), and optionally
+`SENTRY_DSN`, `POSTHOG_KEY`, `POSTHOG_HOST`, `BUSINESS_NAME`, `CONTACT_EMAIL` and `BUSINESS_ADDRESS`.
 
-Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server. Rupee prices include 18% GST. Visitors outside India see prices in their own currency (US dollars, euros and pounds have their own prices; the other 15 follow the rupee price at the day's exchange rate). Every payment gets a GST invoice: CGST and SGST within the state, IGST across states, and exports zero-rated under the LUT.
+## Tests
 
-## How it's checked
+```bash
+# backend: the whole suite (~8 minutes; add -n auto with pytest-xdist)
+cd stratlab/backend && python -m pytest -q
 
-- **On every change.** The backend tests call every server route with hostile input, break every data source in every way it fails in real life, and run the whole app at 16 tricky moments (holidays, expiry days, midnight IST, clock changes). A security sweep checks that only the intended routes answer without sign-in, that every admin route refuses ordinary users, and that nobody can touch another user's notebooks, sessions or invoices. Browser tests open every main page on desktop and on a phone and fail on errors, broken numbers, anything wider than the screen, or controls too small to tap.
-- **Merged when green.** Claude's pull requests merge themselves once the backend, frontend and browser tests have passed and the preview has built; Railway and Vercel then deploy. A draft, one marked "hold", one behind main, or one that changes the workflows themselves is merged by hand.
-- **Under load.** One server process answers about 150 requests a second, with no errors at 300 very active users. Heavy work (backtests, scans, document reads) takes turns, so ordinary pages stay quick.
-- **Every day on live data.** At 4:50 pm IST, **Check every feature** runs each part of StratLab once on the live server: prices in every market, a backtest per market, the scans, sector rotation, the option chain, filings, company pages, news and the database. Anything that fails is tried again; whatever still fails is emailed to the admins.
-- **The whole market.** The data audit watches every company listed in India (NSE and BSE-only) and every company filing with the SEC: the lists are read daily, and each new listing is put through the deep dive's checks as it appears.
-- **One admin page.** Admin is split into Overview (with **Needs your attention**, worst first), Services, Data checks, Users and Billing.
+# frontend: typecheck and production build
+cd stratlab/frontend && npx tsc --noEmit && npx vite build
+
+# browser tests (Playwright) against the backend's fake world; E2E_API_PORT / E2E_WEB_PORT move the servers
+cd stratlab/frontend && npx playwright test
+```
+
+- **Backend:** units for every module, every route called with hostile input (`test_stress_fuzz.py`: no route may
+  return a 500), every data source failing in every way it fails in real life, the app at tricky moments (holidays,
+  expiry days, midnight IST), a security sweep (sign-in, admin-only routes, other users' data), and a load test.
+- **Browser:** every main page on desktop and phone (no errors, no broken numbers, nothing wider than the screen,
+  every control at least 32px tall on a phone), every route at five screen sizes in light and dark
+  (`E2E_ALL_SIZES=1` sweeps ten, 320 to 1920 px), a new user's first session, and the landing page's sections and plans.
+- **On live data:** **Check every feature** runs daily at 4:50 pm IST, and the whole-market audit checks every new
+  listing. See [docs/ADMIN.md](docs/ADMIN.md).
+
+## Deploy
+
+- **Backend → Railway**, one process: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- **Frontend → Vercel**, root `stratlab/frontend`; `vercel.json` sets the build (`npm run build`, output `dist`),
+  security headers, the CSP and the rewrites to the backend.
+- Pull requests merge once the backend, frontend and browser tests pass and the preview builds; Railway and Vercel then
+  deploy. Run **Admin → Data checks → Check every feature** after a deploy.
+
+Running it day to day (the Admin page, the audits, email, PostHog, Sentry): **[docs/ADMIN.md](docs/ADMIN.md)**.
 
 ## What's new
 
-See the [changelog](CHANGELOG.md) for what has shipped and the [roadmap](docs/ROADMAP.md) for what is planned and the known gaps.
+The [changelog](CHANGELOG.md) lists what shipped, by month; the [roadmap](docs/ROADMAP.md) lists what's next and the
+known gaps.
 
 ## Disclaimer
 
-StratLab is a research and paper trading tool. It places no real orders and gives no investment advice, and past backtest results don't predict future returns.
+StratLab is a research and paper trading tool. It places no real orders and gives no investment advice, and past
+backtest results don't predict future returns.
 
 ## License
 

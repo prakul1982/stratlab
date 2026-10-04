@@ -7,49 +7,7 @@ import { dateOnly } from "../lib/format";
 import { money, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { track } from "../lib/analytics";
-
-type PlanId = "free" | "basic" | "pro";
-// about 8 lines a card; the full grid is in the comparison table below the cards
-const FEATURES: Record<PlanId, string[]> = {
-  free: ["10 backtests a month, each with a full verdict", "10 AI strategy builds a month", "Paper trading free for 5 market days",
-    "2 company deep dives and 1 slide deck a month", "Screens, sector rotation, results calendar and red flags on every company",
-    "5 stock alerts and 2 saved screens", "Import up to 30 holdings, with a weekly My Stocks email", "Every market we cover, and your own CSV"],
-  basic: ["Everything in Free, plus:", "100 backtests and 100 AI builds a month", "All 20+ indicators: MACD, Supertrend, Bollinger Bands, VWAP and more",
-    "Paper trade 2 strategies at a time, whole groups and options at set times", "Trade notifications and a daily report after each close",
-    "15 company deep dives (report card and checklist) and 5 decks a month", "Stage 2 scan, watchlist red flags and Watchlist at a glance, with alerts",
-    "25 stock alerts, 10 saved screens, 100 holdings", "Daily Market Brief and My Stocks"],
-  pro: ["Everything in Basic, plus:", "Unlimited backtests, AI builds, deep dives and decks", "Paper trade 10 strategies at a time",
-    "Indian F&O and options entered on your own rules' signals", "Group tests of up to 50, with faster entries and a spread limit",
-    "Export rules and trades", "100 stock alerts, 25 saved screens, 300 holdings"],
-};
-const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
-// shown until /me arrives; the server's plans.py is the source of truth, and the same amounts must be set on the Razorpay plans
-const PRICE: Record<PlanId, [number, number]> = { free: [0, 0], basic: [499, 4990], pro: [1499, 14990] };
-
-type Limits = { backtests_per_month: number | null; ai_builds_per_month: number | null; live_limit: number; group_size: number;
-  deepdives_per_month: number | null; decks_per_month: number | null; stock_alerts: number; screens: number; holdings: number; features: string[] };
-// the same numbers as plans.py, for visitors who aren't signed in (signed-in visitors get the server's own)
-const LIMITS: Record<PlanId, Limits> = {
-  free: { backtests_per_month: 10, ai_builds_per_month: 10, live_limit: 1, group_size: 10, deepdives_per_month: 2, decks_per_month: 1,
-    stock_alerts: 5, screens: 2, holdings: 30, features: [] },
-  basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
-    stock_alerts: 25, screens: 10, holdings: 100,
-    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home"] },
-  pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
-    stock_alerts: 100, screens: 25, holdings: 300,
-    features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home"] },
-};
-const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backtests a month, each with a verdict"], ["ai_builds_per_month", "AI strategy builds a month"],
-  ["live_limit", "Paper trading sessions at a time"], ["group_size", "Instruments in a group test"], ["deepdives_per_month", "Company deep dives a month"],
-  ["decks_per_month", "Company slide decks a month"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"]];
-const FLAGS: [string, string][] = [["indicators", "All 20+ indicators"], ["group_live", "Paper trade a whole group"], ["options", "Options paper trading at set times"],
-  ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks"],
-  ["scans", "Stage 2 + Supertrend scan, with a daily alert"], ["filings", "Red flags for the whole watchlist, with an evening alert"],
-  ["investor_home", "Watchlist at a glance"], ["fno", "Indian F&O"], ["options_signal", "Options entered on your own rules' signals"],
-  ["fast_entries", "Faster group entries and a spread limit"], ["export", "Export rules and trades"]];
-const EVERYONE = ["Every market, and your own CSV", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
-  "Weekly Market Brief and My Stocks", "Public company pages, share cards and invite links"];
+import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 
 /** Every limit and feature side by side, from the server's plans when signed in. */
 function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
