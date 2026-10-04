@@ -497,6 +497,99 @@ test("the tools grid shows one group until asked, and the menu reaches Account w
   await sane(page, errors);
 });
 
+// ---------- the sidebar menu ----------
+/** On a phone the menu is a drawer: open it. */
+async function menu(page: Page, phone: boolean) {
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 1500 }).catch(() => undefined);   // the experience question
+  if (phone) await page.getByRole("button", { name: "Open menu" }).click();
+  const side = page.locator("aside.sidebar");
+  await expect(side.getByRole("navigation", { name: "Main" })).toBeVisible();
+  return side;
+}
+
+test("the menu: a few short groups, Scans and Watchlist each one entry with tabs, old links still open", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/research", "Companies");
+  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); });
+  let side = await menu(page, phone);
+  const main = side.getByRole("navigation", { name: "Main" });
+  for (const g of ["Research", "Portfolio", "Watch", "Notebooks", "Trading"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
+  // eleven entries in the groups, where there were fifteen flat ones; the old separate entries are gone
+  await expect(main.locator(".side-nav a")).toHaveCount(11);
+  for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance", "My Holdings"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
+  // Account and Admin sit at the bottom, with the markets folded to one line
+  const bottom = side.locator(".side-bottom");
+  await expect(bottom.getByRole("link", { name: /^Account/ })).toBeVisible();
+  await expect(bottom.getByRole("link", { name: "Admin" })).toBeVisible();
+  await expect(bottom.locator(".mkt-box > summary")).toHaveText(/^\d+ of \d+ markets open/);
+  await expect(bottom.locator(".mkt-grid")).toBeHidden();
+  if (phone) for (const el of await side.locator("a, button, summary").all()) {
+    const b = await el.boundingBox();
+    if (b && b.height) expect(b.height, `"${(await el.innerText()).slice(0, 30)}" is too small to tap`).toBeGreaterThanOrEqual(32);
+  }
+
+  // Scans: one entry, four tabs, each tab its own address
+  await main.getByRole("link", { name: "Scans" }).click();
+  await expect(page).toHaveURL(/\/research\/scan$/);
+  const tabs = page.getByRole("navigation", { name: "Scans" });
+  await expect(tabs.getByRole("link")).toHaveText(["Trend scan", "Screener", "Sector rotation", "Red flags"]);
+  await tabs.getByRole("link", { name: "Sector rotation" }).click();
+  await expect(page).toHaveURL(/\/research\/rotation$/);
+  await expect(tabs.getByRole("link", { name: "Sector rotation" })).toHaveAttribute("aria-current", "page");
+  // the entry reopens the tab you left, and the old addresses still work
+  await page.goto("/research/scans");
+  await expect(page).toHaveURL(/\/research\/rotation$/);
+  await page.goto("/research/filings");
+  await expect(page.getByText("Filings and red flags").first()).toBeVisible({ timeout: 30_000 });
+  side = await menu(page, phone);
+  await expect(side.getByRole("link", { name: "Scans" })).toHaveClass(/active/);
+  await expect(side.getByRole("link", { name: "Companies" })).not.toHaveClass(/active/);    // one entry lit at a time
+
+  // Watchlist: the list and "at a glance" are two tabs of one entry
+  await side.getByRole("link", { name: "Watchlist" }).click();
+  await expect(page).toHaveURL(/\/research\/watchlist$/);
+  const views = page.getByRole("navigation", { name: "Watchlist" });
+  await views.getByRole("link", { name: "At a glance" }).click();
+  await expect(page).toHaveURL(/\/research\/investor$/);
+  await page.goto("/watchlist");
+  await expect(page).toHaveURL(/\/research\/watchlist$/);
+  await page.goto("/research/scan");
+  await expect(page.getByText("Stage 2").first()).toBeVisible({ timeout: 30_000 });
+
+  // a group folds, by mouse or keyboard, and stays folded on this device; so do the markets
+  side = await menu(page, phone);
+  const trading = side.getByRole("button", { name: "Trading", exact: true });
+  await expect(trading).toHaveAttribute("aria-expanded", "true");
+  await trading.click();
+  await expect(trading).toHaveAttribute("aria-expanded", "false");
+  await expect(side.getByRole("link", { name: "Paper trading" })).toBeHidden();
+  await side.locator(".mkt-box > summary").click();
+  await expect(side.locator(".mkt-grid")).toBeVisible();
+  await page.reload();
+  side = await menu(page, phone);
+  await expect(side.getByRole("button", { name: "Trading", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(side.locator(".mkt-grid")).toBeVisible();
+  // the keyboard: Tab from the search button lands on the first group, with a visible focus ring, and Enter folds it
+  await side.getByRole("button", { name: /Ask or do anything/ }).focus();
+  await page.keyboard.press("Tab");
+  const first = side.locator(".side-toggle").first();
+  await expect(first).toBeFocused();
+  expect(await first.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+  const was = await first.getAttribute("aria-expanded");
+  await page.keyboard.press("Enter");
+  await expect(first).toHaveAttribute("aria-expanded", was === "true" ? "false" : "true");
+  await page.keyboard.press("Enter");
+  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.markets.open"); });
+  await sane(page, errors);
+});
+
+test("the menu shows Admin only to admins", async ({ page }, info) => {
+  await open(page, "/research", "Companies", sessionAs("free-token", "u-free", "free@example.com"));
+  const side = await menu(page, info.project.name === "phone");
+  await expect(side.getByRole("link", { name: /^Account/ })).toBeVisible();
+  await expect(side.getByRole("link", { name: "Admin" })).toHaveCount(0);
+});
+
 // ---------- sharing: company fact cards and invite links ----------
 /** Watch what the page shares: the phone's share sheet (stubbed, as headless browsers have none) and the clipboard. */
 async function watchSharing(page: Page) {

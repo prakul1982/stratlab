@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { FAMILIES, familyOf, rememberView, type Family } from "../lib/navGroups";
 import { useApp } from "../lib/app";
 import { ago, pct, price, priceAxis, safeHref, signClass } from "../lib/format";
 import {
@@ -16,8 +17,13 @@ export { CompanySearch } from "./CompanySearch";
 
 /* ---------- navigation ---------- */
 export function ResearchNav({ region, setRegion }: { region: Region; setRegion?: (r: Region) => void }) {
-  const tabs: [string, string][] = [["/research", "Companies"], ["/research/themes", "Themes"], ["/research/pulse", "Market pulse"],
-    ["/research/compare", "Compare"], ["/research/watchlist", "Watchlist"], ["/research/investor", "At a glance"], ["/research/scan", "Scan"], ["/research/screens", "Screens"], ["/research/rotation", "Rotation"], ["/research/results", "Results"], ["/research/corporate-actions", "Corporate actions"], ["/research/filings", "Red flags"]];
+  const { pathname } = useLocation();
+  const fam = familyOf(pathname);
+  useEffect(() => rememberView(pathname), [pathname]);
+  // the scans and the two watchlist views each share one tab, with their own row of tabs below
+  const tabs: [string, string, Family | null][] = [["/research", "Companies", null], ["/research/themes", "Themes", null], ["/research/pulse", "Market pulse", null],
+    ["/research/compare", "Compare", null], [FAMILIES.watch.home, "Watchlist", "watch"], [FAMILIES.scans.home, "Scans", "scans"],
+    ["/research/results", "Results", null], ["/research/corporate-actions", "Corporate actions", null]];
   // on a phone the tabs scroll sideways in one row: bring the open one into view
   const bar = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -27,8 +33,9 @@ export function ResearchNav({ region, setRegion }: { region: Region; setRegion?:
   return (
     <div className="spread research-nav" style={{ flexWrap: "wrap", gap: 12 }}>
       <nav className="seg" aria-label="Research sections" ref={bar}>
-        {tabs.map(([to, label]) => (
-          <NavLink key={to} to={to} end={to === "/research"} className={({ isActive }) => `seg-link${isActive ? " on" : ""}`}>{label}</NavLink>
+        {tabs.map(([to, label, f]) => (
+          <NavLink key={to} to={to} end={to === "/research"} aria-current={f && f === fam ? "page" : undefined}
+            className={({ isActive }) => `seg-link${(f ? f === fam : isActive) ? " on" : ""}`}>{label}</NavLink>
         ))}
       </nav>
       {setRegion && (
@@ -39,6 +46,13 @@ export function ResearchNav({ region, setRegion }: { region: Region; setRegion?:
             </button>
           ))}
         </div>
+      )}
+      {fam && (
+        <nav className="seg sub-seg" aria-label={FAMILIES[fam].label}>
+          {FAMILIES[fam].views.map(([to, label]) => (
+            <NavLink key={to} to={to} end className={({ isActive }) => `seg-link${isActive ? " on" : ""}`}>{label}</NavLink>
+          ))}
+        </nav>
       )}
     </div>
   );
