@@ -273,12 +273,17 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         steps.append(f"Standard deduction of {money(std)} on salary ({v['regime']} regime, {money(r['std'])} at most).")
 
     # mutual fund gains taxed at the slab rate (money_mf.py) are slab income, not special-rate gains
-    slab_cg = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab"))
+    slab_mf = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab") and b["key"] != "st_us")
+    slab_us = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab") and b["key"] == "st_us")
+    slab_cg = slab_mf + slab_us
     buckets = [b for b in buckets if not b.get("slab")]
-    if slab_cg:
-        rest += slab_cg
-        steps.append(f"Mutual fund gains taxed at your slab rate (debt funds and the like, after set-off): {money(slab_cg)}, "
+    if slab_mf:
+        steps.append(f"Mutual fund gains taxed at your slab rate (debt funds and the like, after set-off): {money(slab_mf)}, "
                      "added to the income taxed at slab rates.")
+    if slab_us:
+        steps.append(f"Short-term gains on foreign shares (held 24 months or less), after set-off: {money(slab_us)}, "
+                     "added to the income taxed at slab rates.")
+    rest += slab_cg
     g_rates = {b["key"]: b["rate"] for b in buckets}
     lt_exempt = {b["key"]: b.get("exempt") or 0.0 for b in buckets}
     taxable = {b["key"]: max(0.0, b.get("taxable") or 0.0) for b in buckets}
@@ -417,8 +422,10 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         line("Non-equity short-term gains at slab rates (ETFs, gold bonds)", slab_gains)
     line("Intraday (speculative) profit or loss", intraday)
     line("F&O, commodity and currency profit or loss, after charges", business)
-    if slab_cg:
-        line("Mutual fund gains taxed at slab rates", slab_cg)
+    if slab_mf:
+        line("Mutual fund gains taxed at slab rates", slab_mf)
+    if slab_us:
+        line("Foreign share gains taxed at slab rates", slab_us)
     if spec_cf:
         line("Intraday loss carried forward (not set off this year)", spec_cf, "note")
     if biz_cf:

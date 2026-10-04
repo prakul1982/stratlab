@@ -31,6 +31,7 @@ from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_exp
 from . import money_mf
 from . import money_advance_tax, money_routes
 from . import journal_routes
+from . import money_itr, money_us_routes
 from . import rules, rules_watch
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
@@ -244,6 +245,8 @@ app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
+app.include_router(money_us_routes.router)     # /money/us-tax
+app.include_router(money_itr.router)           # /money/itr
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -2227,12 +2230,15 @@ def tax_mf(profile) -> dict:
 def tax_view(profile) -> dict:
     i = tax_inputs(profile)
     mf = tax_mf(profile)
+    usr = money_us_routes.for_tax(profile)
     rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"],
-                          extra=mf["rows"], dividends=money_routes.dividends_for_tax(profile))
+                          extra=mf["rows"] + usr["rows"], dividends=money_routes.dividends_for_tax(profile), more_years=set(usr["years"]))
     rep["names"].update(mf["names"])
+    rep["names"].update(usr["names"])
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
-    return {**rep, "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
+        y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None
+    return {**rep, "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if i["live"] else None,
@@ -2355,8 +2361,10 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     i = tax_inputs(profile)
     c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
     mf = tax_mf(profile)
-    c["realised"] += mf["rows"]
+    usr = money_us_routes.for_tax(profile)
+    c["realised"] += mf["rows"] + usr["rows"]
     c["names"].update(mf["names"])
+    c["names"].update(usr["names"])
     equity, units = tax_lots.split_units(c)
     y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy),
                             money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))

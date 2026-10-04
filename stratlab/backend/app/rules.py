@@ -55,6 +55,7 @@ def _crore(v: float) -> str:
 def registry() -> list[dict]:
     """Every rule: {id, area, name, value, where, source, since}. `value` is read from the module that uses it."""
     from . import instrument_kinds as K, money_advance_tax as A, money_dividends as D, money_networth as N, tax_lots as L, tax_total as T
+    from . import money_fx as FX, money_us_tax as U
     from .data.markets import BY_ID
     from .engine import costs as C
     from .intel import filings as F
@@ -129,6 +130,35 @@ def registry() -> list[dict]:
         "money_dividends.py", "Finance Act 2025 (section 194; 393 of the 2025 Act)", "2025-04-01")
     add("us_withholding", "tax", "US dividend withholding", _pct(D.US_WITHHOLDING) + " (India-US treaty, Article 10, with a W-8BEN)",
         "money_dividends.py", "https://www.irs.gov/individuals/international-taxpayers/tax-treaty-tables")
+    add("us_shares", "tax", "US (foreign) shares, capital gains",
+        f"long term when held more than {U.LT_MONTHS} months: {_pct(U.LT_RATE)} without indexation for sales from {L.RATE_CHANGE} "
+        f"({_pct(U.LT_RATE_OLD)} with indexation before); short term at the slab rate; no 112A exemption",
+        "money_us_tax.py", "https://www.incometaxindia.gov.in/w/tax-on-long-term-capital-gains%E2%80%8B and "
+        "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2036604 (Finance (No. 2) Act 2024)", L.RATE_CHANGE)
+    add("rule115", "tax", "Foreign income in rupees (Rule 115; rule 206 of the 2026 Rules)",
+        "SBI TT buying rate on the last day of the month before the transfer (gains) or the dividend; cost at the month "
+        f"before the purchase; the last rate SBI published (up to {FX.STEP_BACK} days back) when it has none that day",
+        "money_fx.py rule115", "https://www.incometaxindia.gov.in/w/rule-115-2")
+    add("ttbr_data", "tax", "Where the TT buying rates come from",
+        f"SBI's daily rate sheets as archived at {FX.SBI_URL.format(cur='USD')}; RBI reference rate fallback (labelled) "
+        f"from {FX.RBI_URL}", "money_fx.py", "checked 4 Oct 2026: SBI from Jan 2020, RBI from 1998, both updated daily")
+    add("ftc", "tax", "Foreign tax credit (section 90, Rule 128)",
+        "the lower of the foreign tax and the Indian tax on that income, at the TT buying rate on the last day of the month "
+        "before the tax was cut; Form 67 by the end of the assessment year (Form 44 from tax year 2026-27)",
+        "money_us_tax.py ftc", "CBDT Notification 100/2022 (Rule 128(9)): https://x.com/IncomeTaxIndia/status/1560560670659059717",
+        "2022-08-18")
+    add("schedule_fa", "tax", "Schedule FA (foreign assets)",
+        "calendar year ending in the financial year; Table A3 one line per lot with initial, peak and closing value and "
+        "income, each at the TT buying rate on its own date; Black Money Act ₹10 lakh penalty, none from 1 Oct 2024 when "
+        "assets other than property total ₹20 lakh or less", "money_us_tax.py schedule_fa",
+        "https://www.incometax.gov.in/iec/foportal/sites/default/files/2026-03/Step%20by%20Step%20Guide%20FA%20FSI.pdf and "
+        "https://taxguru.in/income-tax/budget-2024-amends-penalty-undisclosed-foreign-income-assets-itr.html", "2024-10-01")
+    add("itr_layouts", "tax", "ITR schedule layouts (AY 2026-27)",
+        "112A columns 1a to 14 with 1b (transfer before or from 23 Jul 2024) and one consolidated AE line on upload; CG "
+        "Table F and OS dividends in five periods for 234C; ITR-3 intraday and F&O turnover and income separately, "
+        "turnover as the sum of absolute profit and loss per trade (ICAI guidance note, 2022)", "money_itr.py",
+        "https://www.incometax.gov.in/iec/foportal/sites/default/files/2026-05/CBDT__e-Filing_ITR%202_Validation%20Rules_AY%202026-27_V1.0.pdf and "
+        "https://static.incometax.gov.in/iec/foservices/assets/itr-shared/documents/112A_115AD_CSV_Instructions.pdf", "2026-04-01")
     add("specified_fund", "tax", "Specified mutual fund (50AA)", f"bought from {K.SPECIFIED_FROM}: slab rate; from {K.SPECIFIED_NEW_DEF} only funds with more than 65% in debt",
         "instrument_kinds.py, money_mf.py", "Finance (No.2) Act 2024", K.SPECIFIED_NEW_DEF)
     add("sgb_tax", "tax", "Gold bond redemption", f"exempt at maturity; from FY {K.SGB_PRIMARY_ONLY_FY}-{str(K.SGB_PRIMARY_ONLY_FY + 1)[2:]} only for bonds bought at issue",

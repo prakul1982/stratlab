@@ -313,7 +313,7 @@ svg { display: block; }
 .costs-table .total { padding-top: 10px; border-top: 1px solid var(--ink); font-weight: 500; font-size: 16px; }
 
 /* ---------- tables ---------- */
-.table-wrap { overflow-x: auto; margin: 0 -24px -24px; }
+.table-wrap { overflow-x: auto; margin: 0 -24px -24px; position: relative; }   /* keeps a screen-reader-only caption inside it */
 @media (max-width: 640px) { .table-wrap { margin: 0 -16px -18px; } }
 .table-wrap:not(:last-child) { margin-bottom: 0; }   /* bleed to the card's edge only when nothing follows */
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -1143,3 +1143,13 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .j-form input[type=time], .j-form input[type=date] { min-width: 0; max-width: 100%; }
 table.j-trades td { vertical-align: top; }
 table.j-trades td:first-child { text-align: left; min-width: 150px; }
+/* Money · US stocks tax and the ITR-ready export */
+.us-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+.us-form .field input, .us-form .field select { width: 100%; }
+.itr-downloads { display: flex; flex-wrap: wrap; gap: 10px; }
+.itr-downloads .btn { min-height: 52px; height: auto; padding-top: 8px; padding-bottom: 8px; }
+.itr-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 20px; margin: 0; }
+.itr-summary div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.itr-summary dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.itr-head { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; gap: 10px; align-items: center; text-align: left; }
+@media (max-width: 600px) { .itr-downloads .btn { flex: 1 1 100%; justify-content: flex-start; } }
