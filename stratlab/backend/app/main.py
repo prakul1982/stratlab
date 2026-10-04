@@ -3918,8 +3918,7 @@ def my_referrals(profile=Depends(current_profile)):
         mine = invite_rewards.mine(profile)
     except Exception as e:         # the link still shows without the counts
         print("invite rewards:", str(e)[:160])
-        mine = {"joined": len(referrals.joined(profile["id"])), "months": 0, "cap": invite_rewards.REFERRER_CAP,
-                "free_basic_until": None, "banked_days": 0}
+        mine = {"joined": len(referrals.joined(profile["id"])), "months": 0, "free_basic_until": None, "banked_days": 0}
     return {"code": code, "link": referrals.link(code), **mine}
 
 

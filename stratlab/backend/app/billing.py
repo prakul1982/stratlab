@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import razorpay
 from razorpay.errors import BadRequestError, SignatureVerificationError
 
-from . import db, invoices, lifecycle, pricing, product_analytics
+from . import db, invite_rewards, invoices, lifecycle, pricing, product_analytics
 from .config import settings
 
 _client = None
@@ -193,9 +193,12 @@ def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str)
         raise SignatureVerificationError("Subscription belongs to another user.")
     activate(profile, sub)
     try:
-        invoice_for(profile, sub, client().payment.fetch(payment_id))
+        payment = client().payment.fetch(payment_id)
     except Exception as e:
         print("could not fetch the payment for its invoice:", e)
+        return
+    invoice_for(profile, sub, payment)
+    invite_rewards.safe_paid(profile, payment)    # an invited friend's first payment (the webhook brings it too)
 
 
 def handle_webhook(body: bytes, signature: str, event_id: str = ""):
@@ -213,8 +216,27 @@ def handle_webhook(body: bytes, signature: str, event_id: str = ""):
         db.set_setting(seen, "1")
 
 
+REVERSALS = ("refund.created", "refund.processed", "payment.dispute.created")
+
+
+def _entity(event: dict, name: str) -> dict:
+    payload = event.get("payload")
+    part = payload.get(name) if isinstance(payload, dict) else None
+    ent = part.get("entity") if isinstance(part, dict) else None
+    return ent if isinstance(ent, dict) else {}
+
+
+def _reversed_payment(event: dict) -> str | None:
+    """The payment a refund or dispute event is about."""
+    return (_entity(event, "refund").get("payment_id") or _entity(event, "dispute").get("payment_id")
+            or _entity(event, "payment").get("id"))
+
+
 def _act(event: dict):
     name = event.get("event", "")
+    if name in REVERSALS:                      # these carry no subscription: only invite rewards care
+        invite_rewards.safe_refunded(_reversed_payment(event))
+        return
     sub = (event.get("payload", {}).get("subscription") or {}).get("entity")
     if not sub:
         return
@@ -227,7 +249,9 @@ def _act(event: dict):
     if name in ("subscription.activated", "subscription.charged", "subscription.resumed"):
         activate(profile, sub)
         if name == "subscription.charged":
-            invoice_for(profile, sub, (event.get("payload", {}).get("payment") or {}).get("entity"))
+            payment = (event.get("payload", {}).get("payment") or {}).get("entity")
+            invoice_for(profile, sub, payment)
+            invite_rewards.safe_paid(profile, payment)      # an invited friend's first real payment
     elif name in ("subscription.cancelled", "subscription.completed", "subscription.halted", "subscription.paused"):
         if profile.get("razorpay_subscription_id") == sub["id"]:
             db.update_profile(profile["id"], plan="free", plan_status=sub.get("status", "cancelled"),

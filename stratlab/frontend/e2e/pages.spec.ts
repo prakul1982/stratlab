@@ -921,8 +921,17 @@ test("account: your invite link, how many friends joined, and sharing it", async
   const phone = info.project.name === "phone";
   await watchSharing(page);
   const errors = await open(page, "/account", "Invite friends");
-  await expect(page.getByTestId("friends-joined")).toHaveText(/^3 friends joined · 1 free month earned$/);
-  await expect(page.getByTestId("invite-reward-line")).toHaveText(/you both get a month of Basic free \(up to 12 months for you\)/);
+  await expect(page.getByTestId("friends-joined")).toHaveText(/^6 friends joined · 3 free months earned$/);
+  await expect(page.getByTestId("invite-reward-line")).toHaveText("Invite friends, both get a month of Basic. When a friend joins with your link and uses "
+    + "StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends "
+    + "who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a "
+    + "month (about a week extra).");
+  await expect(page.getByTestId("invite-status")).toHaveText("Use: 2 of 2 · Subscribed: 1 of 2 · Extra: 0 weeks");
+  await expect(page.getByTestId("invite-waiting")).toHaveText("1 friend waiting to subscribe");
+  for (const id of ["invite-reward-line", "invite-status", "invite-waiting"]) {      // nothing spills past the card
+    const box = (await page.getByTestId(id).boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  }
   await expect(page.getByLabel("Your invite link")).toHaveValue(/\/\?ref=[A-Za-z0-9_-]{12}$/);
   if (phone) await touchable(page);
   await page.getByRole("button", { name: "Share your link" }).click();
@@ -962,6 +971,10 @@ test("admin: invite rewards waiting for review are approved or rejected", async 
   const panel = page.getByTestId("invite-rewards");
   await expect(panel.getByText("Waiting for your review")).toBeVisible();
   await expect(panel.locator("tr", { hasText: "load3@example.com" })).toBeVisible();          // given
+  await expect(panel.locator("th", { hasText: "Reward" })).toBeVisible();
+  await expect(panel.locator("tr", { hasText: "load3@example.com" }).getByTestId("reward-type")).toHaveText("Use");
+  await expect(panel.locator("tr", { hasText: "load6@example.com" }).getByTestId("reward-type")).toHaveText("Payment");
+  await expect(panel.locator("tr", { hasText: "load5@example.com" }).getByTestId("reward-type")).toHaveText("Waiting to subscribe");
   if (phone) await touchable(page);
   // each run decides its own row: desktop rejects one, phone approves the other
   const row = panel.locator("tr", { hasText: phone ? "load2@example.com" : "load1@example.com" }).filter({ has: page.getByRole("button") });

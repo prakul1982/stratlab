@@ -56,7 +56,12 @@ about 3 to 10 seconds a company.
   countdown; Plans and Account still show what they actually pay for. It ends by itself, or press **End now**.
 - **Invite rewards** (Users): more than 5 sign-ups through one link in a day wait here for review; the sign-ups
   themselves go through. Approve or reject each reward. A daily check from 6 am IST gives rewards and closes invites
-  whose 14 days ran out.
+  whose 14 days ran out. The Given table's **Reward** column says how the inviter earned: **Use** (the friend used
+  StratLab on 3 days in their first 2 weeks; 2 a rolling year), **Payment** (the friend's first real Razorpay charge
+  within 90 days of joining; 2 a rolling year), **Payment (25% of a month)** (8 days of free time after that; 8 a year;
+  the percentage is `INVITE_EXTRA_PCT` in `invite_rewards.py`), **Waiting to subscribe**, or **Taken back (refund)**.
+  For refunds and disputes to take a payment-based reward back, tick `refund.created`, `refund.processed` and
+  `payment.dispute.created` in Razorpay's webhook settings, next to the subscription events.
 - **Prices** (Billing): rupee prices are set in `plans.py` only. US dollars, euros and pounds have their own prices
   (`pricing.py`); every other currency follows the rupee price at the day's exchange rate. Any price can be overridden
   here, and cleared to go back to the default.

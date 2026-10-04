@@ -48,6 +48,12 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   await expect(page.locator("#markets .lp-market")).toHaveCount(11);
   for (const t of ["Stock alerts", "Results and corporate actions", "Newsletters"]) await expect(page.locator("#alerts").getByText(t, { exact: true })).toBeVisible();
   await expect(page.locator("#faq details")).not.toHaveCount(0);
+  // the invite rule, as the owner wrote it
+  const invites = page.locator("#faq details", { hasText: "How do invite rewards work?" });
+  await invites.locator("summary").click();
+  await expect(invites).toContainText("Invite friends, both get a month of Basic.");
+  await expect(invites).toContainText("for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a month (about a week extra).");
+  await expect(portfolio).not.toContainText("12 free months");
   expect(errors).toEqual([]);
 });
 

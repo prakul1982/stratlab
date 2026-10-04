@@ -1,5 +1,6 @@
 """Invite rewards: a free month of Basic for both people once an invited friend is active (3 days with a real action
-in their first 14), the caps (12 months for the one inviting, once for the newcomer, never the same mailbox), free
+in their first 14), the caps (2 use-based months a year for the one inviting, once for the newcomer, never the same
+mailbox; payment-based rewards are in test_invite_payments.py), free
 time stacking and kept for later by paying users, more than 5 sign-ups a day held for review, the notes and emails,
 the daily job, and what Account and Admin show."""
 import json
@@ -144,19 +145,35 @@ def test_only_invited_newcomers_are_tracked(w):
 
 
 # ---------- caps ----------
-def test_the_one_inviting_earns_at_most_12_months(w):
+def test_the_one_inviting_earns_2_use_based_months_a_year_and_the_rest_wait_to_subscribe(w):
     user("u-ref")
-    for i in range(14):
+    for i in range(5):
         day = NOW + i * DAY                                       # one a day: never held for review
         invite("u-ref", f"u-f{i}", now=day)
         active(f"u-f{i}", start=day)
     rows = R.all_rows()
-    assert sum(r["referrer_months"] for r in rows.values()) == 12
     assert all(r["newcomer_months"] == 1 for r in rows.values())     # every friend still gets theirs
-    assert R.months_earned("u-ref")["referrer"] == 12
-    assert [r.get("capped", False) for _, r in sorted(rows.items(), key=lambda kv: kv[1]["at"])][-2:] == [True, True]
+    assert [rows[f"u-f{i}"]["referrer_months"] for i in range(5)] == [1, 1, 0, 0, 0]
+    assert [R.kind_of(rows[f"u-f{i}"]) for i in range(2)] == ["use", "use"]
+    assert [rows[f"u-f{i}"]["referrer_pending"] for i in range(5)] == [False, False, True, True, True]
+    assert R.months_earned("u-ref")["referrer"] == 2
+    year = R.this_year("u-ref", NOW + 5 * DAY)
+    assert year == {"use": 2, "payment": 0, "extra": 0, "waiting_to_subscribe": 3}
     until = plans.free_basic("u-ref")["until"]
-    assert timedelta(days=12 * 30) <= until - NOW <= timedelta(days=12 * 30 + 14)
+    assert timedelta(days=60) <= until - NOW <= timedelta(days=62)
+
+
+def test_the_use_based_months_come_back_after_a_rolling_year(w):
+    user("u-ref")
+    for i in range(3):
+        invite("u-ref", f"u-f{i}", now=NOW + i * DAY)
+        active(f"u-f{i}", start=NOW + i * DAY)
+    assert R.row("u-f2")["referrer_pending"] is True
+    later = NOW + 366 * DAY                                        # the first two are more than 365 days back
+    invite("u-ref", "u-late", now=later)
+    active("u-late", start=later)
+    assert R.kind_of(R.row("u-late")) == "use" and R.this_year("u-ref", later + 3 * DAY)["use"] == 1
+    assert R.this_year("u-ref", later)["waiting_to_subscribe"] == 0        # u-f2's 90 days to pay are long over
 
 
 def test_the_newcomer_gets_theirs_once(w):
@@ -205,7 +222,7 @@ def test_the_free_month_carries_basics_current_limits(w, monkeypatch):
     assert info["indicators"] and not info["fno"] and info["features"]["alerts"] and info["stock_alerts"] == 25
     text = lifecycle.basic_includes()
     assert "100 backtests and 100 AI strategy builds" in text and "15 company deep dives and 5 decks" in text
-    assert R.REFERRER_CAP == 12                                     # the owner kept 12 months, ever
+    assert (R.USE_CAP, R.PAY_CAP, R.INVITE_EXTRA_PCT, R.EXTRA_DAYS, R.EXTRA_CAP) == (2, 2, 25, 8, 8)
 
 
 def test_rewards_stack_onto_free_time_left(w):
@@ -272,7 +289,7 @@ def test_more_than_5_signups_a_day_wait_for_review_and_signups_still_count(w):
         active(f"u-f{i}")
     rows = R.all_rows()
     assert [rows[f"u-f{i}"]["status"] for i in range(7)] == ["given"] * 5 + ["review"] * 2
-    assert months("u-ref") == 5 and months("u-f6") == 0
+    assert months("u-ref") == 2 and months("u-f6") == 0             # the referrer: 2 use-based months a year
     # the next day starts a new count
     invite("u-ref", "u-next", now=NOW + DAY)
     assert R.row("u-next")["status"] == "waiting"
@@ -299,7 +316,7 @@ def test_admin_reviews_held_rewards(w, outbox):
     assert months("u-f6") == 0
     for bad in ("u-f6/approve", "u-f0/approve", "nobody/reject", "u-f5/maybe", "..%2F/approve"):
         assert c.post(f"/admin/invite-rewards/{bad}", headers=headers("admin-token")).status_code == 404
-    assert months("u-ref") == 6
+    assert months("u-ref") == 2
 
 
 # ---------- telling people ----------
@@ -345,13 +362,13 @@ def test_free_months_judge_the_paid_plan_at_the_time_given(w):
     assert plans.add_free_basic(p, 30, then) == {"until": None, "banked": 30}
 
 
-def test_no_email_to_a_referrer_past_the_cap(w, outbox):
+def test_no_email_to_a_referrer_past_the_use_cap(w, outbox):
     user("u-ref")
-    for i in range(13):
+    for i in range(4):
         invite("u-ref", f"u-f{i}", now=NOW + i * DAY)
         active(f"u-f{i}", start=NOW + i * DAY)
-    assert sum(1 for m in outbox if m["to"] == "u-ref@example.com") == 12
-    assert sum(1 for m in outbox if m["to"] != "u-ref@example.com") == 13
+    assert sum(1 for m in outbox if m["to"] == "u-ref@example.com") == 2
+    assert sum(1 for m in outbox if m["to"] != "u-ref@example.com") == 4
 
 
 # ---------- the daily job ----------
@@ -405,7 +422,7 @@ def test_account_and_admin_show_friends_and_months(w):
     _new(w, "u-free")
     assert c.post("/me/referral", headers=headers("free-token"), json={"code": code}).json() == {"recorded": True}
     mine = c.get("/me/referrals", headers=headers("pro-token")).json()
-    assert mine["joined"] == 1 and mine["months"] == 0 and mine["cap"] == 12
+    assert mine["joined"] == 1 and mine["months"] == 0 and mine["use_cap"] == 2 and mine["use_months"] == 0
     # the friend adds to their watchlist on three days: one today over HTTP, two recorded before
     db.set_setting(R.DAYS + "u-free", json.dumps([(datetime.now(plans.IST) - timedelta(days=d)).date().isoformat()
                                                   for d in (1, 2)]))

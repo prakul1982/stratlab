@@ -283,6 +283,20 @@ def add_free_basic(profile: dict, days: int, now: datetime | None = None) -> dic
     return {"until": until, "banked": banked}
 
 
+def take_free_basic(uid: str, days: int, now: datetime | None = None) -> dict:
+    """Take back `days` of free Basic given earlier (an invite reward whose payment was refunded): from the days kept
+    for later first, then from the end of the free time running, never into the past."""
+    now = now or datetime.now(timezone.utc)
+    have = free_basic(uid)
+    until, banked = have["until"], have["banked"]
+    take = min(banked, days)
+    banked, left = banked - take, days - take
+    if left and until:
+        until = max(until - timedelta(days=left), now)
+    _save_free(uid, until, banked)
+    return {"until": until, "banked": banked}
+
+
 def free_basic_until(profile: dict, now: datetime | None = None) -> datetime | None:
     """When the user's free Basic ends, or None when they have none running. Banked days start here, the first time
     the user is on Free (their paid plan ended)."""
