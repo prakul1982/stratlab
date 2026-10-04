@@ -12,7 +12,8 @@ Three kinds of facts, each with its date:
 Facts and arithmetic only: nothing here reads a number as a signal, or says what anyone should do with it.
 
 A job reads the exchange's files after they are published (from 18:40 India time, retried until 21:30), keeps a
-history by day and fills in the past from the exchange's archives, a few files at a time and politely paced. The
+history by day and fills in the past from the exchange's archives, a few files at a time and politely paced; at other
+times it catches up on whatever an evening run missed (a restart, a server started on a weekend). The
 option-chain history comes from the recorded option chains (options/recorder.py), one summary per day."""
 import csv
 import io
@@ -55,6 +56,9 @@ PUBLISH_FROM, PUBLISH_UNTIL = "18:40", "21:30"     # the job's window, India tim
 RETRY_MINUTES = 20
 BACKFILL_DAYS = 365          # how far back the archives are read on a new server
 BACKFILL_STEP = 25           # days of archive files read per run, so one run never hammers the exchange
+MISS_RUN = 5                 # trading days in a row the archive hasn't got: it's refusing, not missing them
+CATCH_UP_DAYS = 10           # recent days whose files the catch-up looks for when the evening run missed them
+CATCH_UP_TRIES = 3           # times the catch-up asks for a recent day's file before it takes the day as not there
 PACE = 1.5                   # seconds between two archive files
 KEEP_CHAIN_DAYS = 400        # daily option-chain summaries kept per index
 AROUND_LIVE = 40             # strikes each side of the money read for today's chain
@@ -474,8 +478,25 @@ def _net(row: dict, a: str, b: str):
     return x - y if isinstance(x, int) and isinstance(y, int) else None
 
 
+# the long/short pairs in the file: (segment, long column, short column)
+SEGMENTS = (("fut_idx", "fut_idx_long", "fut_idx_short"), ("fut_stk", "fut_stk_long", "fut_stk_short"),
+            ("opt_idx_call", "opt_idx_call_long", "opt_idx_call_short"), ("opt_idx_put", "opt_idx_put_long", "opt_idx_put_short"),
+            ("opt_stk_call", "opt_stk_call_long", "opt_stk_call_short"), ("opt_stk_put", "opt_stk_put_long", "opt_stk_put_short"))
+
+
+def shares(row: dict, a: str, b: str) -> tuple[float | None, float | None]:
+    """The long and the short side's share of long + short, in percent (one decimal, adding up to 100); None, None
+    when either side is missing or both are zero."""
+    lo, sh = row.get(a), row.get(b)
+    if not isinstance(lo, int) or not isinstance(sh, int) or lo < 0 or sh < 0 or lo + sh <= 0:
+        return None, None
+    long_pct = round(100 * lo / (lo + sh), 1)
+    return long_pct, round(100 - long_pct, 1)
+
+
 def participant_view(rows: dict, prev: dict | None) -> list[dict]:
-    """Each participant's index futures and options, long, short and net, with the change from the day before."""
+    """Each participant's index and stock futures and options: long, short and net, each side's share of long +
+    short, with the change from the day before."""
     out = []
     for p, label in (*PARTICIPANTS, ("total", "Total")):
         r = rows.get(p) or {}
@@ -487,15 +508,16 @@ def participant_view(rows: dict, prev: dict | None) -> list[dict]:
             item[k] = r.get(k)
             if q and isinstance(r.get(k), int) and isinstance(q.get(k), int):
                 item[k + "_chg"] = r[k] - q[k]
-        for name, a, b in (("fut_idx_net", "fut_idx_long", "fut_idx_short"), ("fut_stk_net", "fut_stk_long", "fut_stk_short"),
-                           ("opt_idx_call_net", "opt_idx_call_long", "opt_idx_call_short"),
-                           ("opt_idx_put_net", "opt_idx_put_long", "opt_idx_put_short")):
+        for seg, a, b in SEGMENTS:
+            name = seg + "_net"
             item[name] = _net(r, a, b)
             was = _net(q, a, b) if q else None
             if item[name] is not None and was is not None:
                 item[name + "_chg"] = item[name] - was
-        lo, sh = r.get("fut_idx_long"), r.get("fut_idx_short")
-        item["fut_idx_long_pct"] = round(100 * lo / (lo + sh), 1) if isinstance(lo, int) and isinstance(sh, int) and lo + sh > 0 else None
+            item[seg + "_long_pct"], item[seg + "_short_pct"] = shares(r, a, b)
+            was_pct = shares(q, a, b)[0] if q else None
+            if item[seg + "_long_pct"] is not None and was_pct is not None:
+                item[seg + "_long_pct_chg"] = round(item[seg + "_long_pct"] - was_pct, 1)
         out.append(item)
     return out
 
@@ -517,8 +539,36 @@ def trading_today(now: datetime) -> bool:
     return is_trading_day("IN", now.astimezone(IST).date())
 
 
+WHAT = {"participants": "participant files", "cash": "FII/DII numbers"}
+
+
+def _day_words(iso: str | None) -> str:
+    try:
+        d = date.fromisoformat(str(iso)[:10])
+    except ValueError:
+        return str(iso or "")
+    return f"{d.day} {d:%b %Y}"
+
+
+def reason(st: dict, part: str) -> str | None:
+    """Why the expected day's numbers aren't shown, in a line: not read yet, not published yet, or what went wrong
+    the last time they were asked for. None when they're there."""
+    what = WHAT[part]
+    if st.get("status") == "ok":
+        return None
+    if st.get("error"):
+        return f"The last try ({_day_words(st.get('checked'))}, {str(st.get('checked'))[11:16]} IST) didn't get them: {st['error']}"
+    if st.get("status") == "none" and not st.get("checked"):
+        return (f"Not read yet. StratLab reads the {what} each trading evening once the exchange publishes them, "
+                f"and catches up within {RETRY_MINUTES} minutes when a run was missed.")
+    if st.get("expected"):
+        return f"The exchange hasn't published {_day_words(st['expected'])}'s {what} yet."
+    return None
+
+
 def _status(have: str | None, now: datetime, part: str) -> dict:
-    """Whether the newest stored day is the one expected: "ok", "pending" (not published yet), "none"."""
+    """Whether the newest stored day is the one expected: "ok", "pending" (not published yet), "none"; and `reason`,
+    a line on why when it isn't "ok"."""
     exp = expected_day(now)
     local = now.astimezone(IST)
     st = (state().get("parts") or {}).get(part) or {}
@@ -531,6 +581,7 @@ def _status(have: str | None, now: datetime, part: str) -> dict:
         out["status"] = "pending"
     if trading_today(now) and local.strftime("%H:%M") >= "15:30" and (not have or have < local.date().isoformat()):
         out["today"] = "pending"           # today's numbers come in the evening
+    out["reason"] = reason(out, part)
     return out
 
 
@@ -748,7 +799,8 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
     now = now or ist_now()
     ex = NAMES[name]
     got = live_chain(options_data, ex, name, choice) or recorded_chain(name, choice, now.date())
-    out = {"name": name, "exchange": ex, "choice": choice, "source": None, "rows": [], "note": NOTE}
+    out = {"name": name, "exchange": ex, "choice": choice, "source": None, "rows": [], "note": NOTE,
+           "recorded": chain_coverage(name)}
     if not got:
         return out
     rows = sorted(got["chain"], key=lambda r: r[0])
@@ -800,10 +852,40 @@ def summary(options_data, full: bool, brief: bool = False, with_pcr: bool = True
     out = {"participants": participants_today(now), "cash": cash_today(now),
            "pcr": pcr_table(options_data, now, ("NIFTY",) if brief else tuple(NAMES)) if with_pcr else None,
            "names": list(NAMES), "full": full, "note": NOTE, "source": SOURCE, "today": now.date().isoformat()}
+    if not brief:
+        out["coverage"] = coverage()
     if brief:
         out["participants"].pop("vol", None)
         out["participants"]["oi"] = [r for r in out["participants"]["oi"] if r["id"] == "fii"]
     return out
+
+
+def _point(r: dict) -> dict:
+    """One participant's day for the history charts: each segment's net and long share, and the futures' two sides."""
+    out = {"fut_idx_long": r.get("fut_idx_long"), "fut_idx_short": r.get("fut_idx_short")}
+    for seg, a, b in SEGMENTS:
+        out[seg + "_net"] = _net(r, a, b)
+        out[seg + "_long_pct"] = shares(r, a, b)[0]
+    return out
+
+
+def _span(days: list[str]) -> dict:
+    return {"days": len(days), "first": days[0] if days else None, "last": days[-1] if days else None}
+
+
+def chain_coverage(name: str) -> dict:
+    """The days of an index's chain StratLab has summarised from its own recordings: how many, the first and last."""
+    return _span(sorted(d for d, v in chain_history(name).items() if isinstance(v, dict)))
+
+
+def coverage() -> dict:
+    """How much history is stored, for the page's source lines: the participant files' days (and whether the archive
+    walk has finished), the cash numbers' days, and each index's recorded chain days."""
+    bf = state().get("backfill") or {}
+    parts = [d for d, v in history("part") if v.get("oi")]
+    return {"participants": {**_span(parts), "backfill_done": bool(bf.get("done")), "backfill_target": BACKFILL_DAYS},
+            "cash": _span([d for d, v in history("cash") if v.get("fii")]),
+            "chains": {n: chain_coverage(n) for n in NAMES}}
 
 
 def history_view(kind: str, name: str | None, rng: str, now: datetime | None = None) -> dict:
@@ -816,19 +898,14 @@ def history_view(kind: str, name: str | None, rng: str, now: datetime | None = N
             oi = v.get("oi") or {}
             if not oi:
                 continue
-            pts.append({"day": d, **{p: {"fut_idx_net": _net(oi.get(p) or {}, "fut_idx_long", "fut_idx_short"),
-                                         "fut_idx_long": (oi.get(p) or {}).get("fut_idx_long"),
-                                         "fut_idx_short": (oi.get(p) or {}).get("fut_idx_short"),
-                                         "opt_idx_call_net": _net(oi.get(p) or {}, "opt_idx_call_long", "opt_idx_call_short"),
-                                         "opt_idx_put_net": _net(oi.get(p) or {}, "opt_idx_put_long", "opt_idx_put_short"),
-                                         "fut_stk_net": _net(oi.get(p) or {}, "fut_stk_long", "fut_stk_short")}
-                                     for p, _ in PARTICIPANTS}})
-        return {"kind": kind, "range": rng, "points": pts}
+            pts.append({"day": d, **{p: _point(oi.get(p) or {}) for p, _ in PARTICIPANTS}})
+        return {"kind": kind, "range": rng, "points": pts, "stored": coverage()["participants"]}
     if kind == "cash":
         pts = [{"day": d, "fii": (v.get("fii") or {}).get("net"), "dii": (v.get("dii") or {}).get("net")}
                for d, v in history("cash", since)]
         return {"kind": kind, "range": rng, "points": pts}
-    return {"kind": kind, "range": rng, "name": name, "points": chain_series(name or "NIFTY", since)}
+    return {"kind": kind, "range": rng, "name": name, "points": chain_series(name or "NIFTY", since),
+            "recorded": chain_coverage(name or "NIFTY")}
 
 
 # ---------- the daily run ----------
@@ -914,7 +991,8 @@ class Runner:
             d = date.fromisoformat(bf["next"]) if bf.get("next") else today - timedelta(days=1)
             stop = today - timedelta(days=days)
             have = {k for k, _ in history("part", stop.isoformat())}
-            read = 0
+            read, misses, streak = 0, 0, None
+            stuck = dict(bf.get("stuck") or {})
             while d >= stop and read < step:
                 if is_trading_day("IN", d) and d.isoformat() not in have:
                     r = self.participants_day(feed, d)
@@ -923,6 +1001,16 @@ class Runner:
                         break                       # the exchange is busy or refusing: try again on the next run
                     read += 1
                     bf["read"] = bf.get("read", 0) + (r == "ok")
+                    misses, streak = (misses + 1, streak or d) if r == "missing" else (0, None)
+                    # the archive keeps every trading day's files: five in a row not there is the archive turning us
+                    # away (a page instead of the file), so walk back from the first of them on the next run instead
+                    # of passing them by for good; after three such runs at the same day, take them as not there
+                    if misses >= MISS_RUN and stuck.get(streak.isoformat(), 0) < 3:
+                        stuck = {streak.isoformat(): stuck.get(streak.isoformat(), 0) + 1}
+                        bf["stuck"] = stuck
+                        bf["error"] = f"The archive had none of {MISS_RUN} trading days in a row from {_day_words(streak.isoformat())}; trying again later."
+                        d = streak
+                        break
                 d -= timedelta(days=1)
             else:
                 bf.pop("error", None)
@@ -932,6 +1020,56 @@ class Runner:
                 bf["chains"] = self.chain_backfill(today)
             _set_state(backfill=bf)
             return bf
+        finally:
+            self.running = False
+
+    def catch_up(self, now: datetime | None = None) -> dict:
+        """Fill in what the evening run missed (a restart, a server started on a weekend or holiday, an evening the
+        exchange was slow): the participant files of the last few trading days that aren't stored, and the cash
+        numbers when the stored ones are older than the latest trading day's. The exchange's cash numbers only ever
+        show its latest day, so they're read as soon as they're found missing: a day passed by can't be read later."""
+        from .data.calendar import is_trading_day
+        now = now or ist_now()
+        exp = expected_day(now)
+        if not exp:
+            return {}
+        self.running = True
+        try:
+            st = state()
+            tries = dict(st.get("catch_up") or {})
+            have = {d for d, v in history("part", (exp - timedelta(days=CATCH_UP_DAYS)).isoformat()) if v.get("oi")}
+            res: dict = {}
+            feed = None
+            d = exp
+            while d > exp - timedelta(days=CATCH_UP_DAYS):
+                key = d.isoformat()
+                if is_trading_day("IN", d) and key not in have and tries.get(key, 0) < CATCH_UP_TRIES:
+                    feed = feed or self._feed()
+                    r = self.participants_day(feed, d)
+                    res.setdefault("participants", {})[key] = r
+                    if r == "missing":
+                        tries[key] = tries.get(key, 0) + 1
+                    elif r != "ok":
+                        break                          # busy or refusing: the next catch-up tries again
+                d -= timedelta(days=1)
+            got = latest("cash", need="fii")
+            if not got or got[0] < exp.isoformat():
+                feed = feed or self._feed()
+                res["cash"] = self.cash(feed, exp)
+            stamp = now.astimezone(IST).isoformat(timespec="minutes")
+            parts = dict(st.get("parts") or {})
+            if res.get("participants"):
+                newest = res["participants"].get(exp.isoformat())
+                bad = next((r for r in res["participants"].values() if r not in ("ok", "missing")), None)
+                if newest is not None or bad:
+                    parts["participants"] = {"checked": stamp, "error": bad, "missing": exp.isoformat() if newest == "missing" else None}
+            if "cash" in res:
+                r = res["cash"]
+                parts["cash"] = {"checked": stamp, "error": None if r in ("ok", "missing") else r,
+                                 "missing": exp.isoformat() if r == "missing" else None}
+            cutoff = (exp - timedelta(days=CATCH_UP_DAYS)).isoformat()
+            _set_state(parts=parts, catch_up={k: v for k, v in tries.items() if k > cutoff}, last_catch_up=stamp)
+            return res
         finally:
             self.running = False
 
@@ -958,13 +1096,23 @@ class Runner:
 class Job(news_job.Job):
     """Every five minutes: on a trading day from 18:40 India time, read the day's files until they're all in (every
     twenty minutes until 21:30, when it gives up for the day); the newsletter job's run marker (newsjob:positioning)
-    remembers a finished day across restarts. Outside market hours it also walks the archives back a few days."""
+    remembers a finished day across restarts. At any other time it catches up on what an evening run missed (every
+    twenty minutes while something is behind), and outside market hours it walks the archives back a few days."""
 
     def __init__(self, runner: Runner):
         super().__init__()
         self.runner = runner
-        self._tried = 0.0
-        self.status.update(last_result=None, backfill=None)
+        self._tried = self._caught = 0.0
+        self.status.update(last_result=None, backfill=None, catch_up=None)
+
+    @staticmethod
+    def _behind(now: datetime) -> bool:
+        """Whether the stored participant files or cash numbers are older than the latest trading day's."""
+        exp = expected_day(now)
+        if not exp:
+            return False
+        part, cash = latest("part", need="oi"), latest("cash", need="fii")
+        return any(not got or got[0] < exp.isoformat() for got in (part, cash))
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="positioning").start()
@@ -981,6 +1129,11 @@ class Job(news_job.Job):
             finished = res["participants"] == "ok" and res["cash"] == "ok"
             if finished or local.strftime("%H:%M") >= PUBLISH_UNTIL:
                 self.mark("positioning", day)
+            return 0
+        # any other time (a weekend, a holiday, after a restart), fill in what the evening run missed, every twenty minutes
+        if not day and time.time() - self._caught >= RETRY_MINUTES * 60 and self._behind(now):
+            self._caught = time.time()
+            self.status["catch_up"] = self.runner.catch_up(now)
             return 0
         hhmm = local.strftime("%H:%M")
         if not ("09:00" <= hhmm <= "15:45") and not (state().get("backfill") or {}).get("done"):

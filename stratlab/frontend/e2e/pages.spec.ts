@@ -1546,8 +1546,27 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByTestId("part-status")).toContainText("As of");
   for (const who of ["client", "dii", "fii", "pro", "total"]) await expect(main.locator(`tr[data-participant="${who}"]`)).toBeVisible();
   await expect(main.getByText("FII index futures, net")).toBeVisible();
+  // both sides of the futures: the long and the short share, adding up to 100
+  await expect(main.getByText("FII index futures, long · short")).toBeVisible();
+  const split = await main.getByTestId("split-fii").innerText();
+  const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
+  expect(lo + sh).toBeCloseTo(100, 1);
+  await expect(main.getByTestId("sides-fig")).toContainText(/[\d.]+% long\s*[\d.]+% short/);
+  await expect(main.getByTestId("sides-fig")).toContainText(/Long share [+−][\d.]+ pts from the day before/);
+  // where the numbers come from and how much is stored, in a line per section
+  await expect(main.getByTestId("part-source")).toContainText("end-of-day participant-wise file");
+  await expect(main.getByTestId("part-source")).toContainText(/\d+ trading days since/);
+  await expect(main.getByTestId("cash-source")).toContainText("provisional FII/DII figures");
+  await expect(main.getByTestId("pcr-source")).toBeVisible();
+  // stock futures and options from the same file
+  await main.getByRole("button", { name: "Stock F&O", exact: true }).click();
+  await expect(main.getByTestId("part-table")).toHaveAttribute("data-segment", "stk");
+  await expect(main.getByText("FII stock futures, net")).toBeVisible();
+  await expect(main.getByRole("columnheader", { name: "Stock F&O" })).toBeVisible();
+  await main.getByRole("button", { name: "Index F&O", exact: true }).click();
   await main.getByRole("button", { name: "Volume", exact: true }).click();
-  await expect(main.getByRole("columnheader", { name: "Futures bought" })).toBeVisible();
+  await expect(main.getByRole("columnheader", { name: "Futures bought", exact: true })).toBeVisible();
+  await expect(main.getByRole("columnheader", { name: "Futures bought / sold" })).toBeVisible();
   await expect(main.getByText("FII/FPI net")).toBeVisible();
   const pcr = main.getByTestId("pcr-table");
   for (const n of ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]) await expect(pcr.locator(`tr[data-pcr="${n}"]`)).toBeVisible({ timeout: 30_000 });
@@ -1564,9 +1583,17 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByRole("columnheader", { name: "Call OI" })).toBeVisible();
   // the history (the owner is on Pro): each participant's positions and each index's PCR and IV by day
   await expect(main.getByText("FII: index futures, net (contracts)")).toBeVisible({ timeout: 30_000 });
+  await expect(main.getByText("FII: index futures, long share (% of long + short)")).toBeVisible();
+  await expect(main.getByTestId("history-source")).toContainText("Participant files:");
   await expect(main.getByText("NIFTY ATM implied volatility (%)")).toBeVisible();
+  await expect(main.getByTestId("chain-history-source")).toContainText("recorded NIFTY's chain since");
   await main.getByRole("group", { name: "Participant" }).getByRole("button", { name: "Client" }).click();
   await expect(main.getByText("Client: index futures, net (contracts)")).toBeVisible();
+  await main.getByRole("group", { name: "Long share of" }).getByRole("button", { name: "Stock futures" }).click();
+  await expect(main.getByText("Client: stock futures, long share (% of long + short)")).toBeVisible();
+  // an index with nothing recorded yet says so instead of an empty chart
+  await main.getByRole("group", { name: "Index for the chain history" }).getByRole("button", { name: "MIDCPNIFTY" }).click();
+  await expect(main.getByTestId("chain-history-source")).toContainText(/MIDCPNIFTY/);
   const text = await main.innerText();
   expect(text).not.toMatch(/kite|zerodha|yahoo|screener|finnhub|nseindia/i);
   expect(text).not.toMatch(/\b(bullish|bearish|support|resistance|you should|buy now|sell now)\b/i);
@@ -1574,11 +1601,25 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   if (info.project.name === "phone") await touchable(page);
 });
 
+test("positioning: a missing cash number says why instead of a dash", async ({ page }) => {
+  const reason = "The last try (4 Oct 2026, 21:04 IST) didn't get them: The exchange feed refused the request (403). Try again later.";
+  await page.route("**/trade/positioning?*", async (r) => {
+    const res = await r.fetch();
+    const body = await res.json();
+    await r.fulfill({ response: res, json: { ...body, cash: { status: "none", as_of: null, expected: "2026-10-01", reason } } });
+  });
+  await sane(page, await open(page, "/trade", "Straddles, strangles"));
+  await expect(page.getByTestId("pos-card-cash-reason")).toContainText("refused the request (403)", { timeout: 30_000 });
+  await page.goto("/trade/positioning");
+  await expect(page.getByTestId("cash-status")).toContainText("No cash numbers stored yet. The last try");
+});
+
 test("positioning: a card on the Trade home and the Options tab, and the tabs between Options and Positioning", async ({ page }, info) => {
   await sane(page, await open(page, "/trade", "Straddles, strangles"));
   const card = page.getByTestId("positioning-card");
   await expect(card.getByText("FII index futures, net")).toBeVisible({ timeout: 30_000 });
   await expect(card.getByText("NIFTY PCR (open interest)")).toBeVisible();
+  await expect(card.getByTestId("pos-card-sides")).toContainText(/% long · [\d.]+% short/);
   await page.goto("/options");
   await expect(page.getByTestId("positioning-card").getByText("FII/FPI cash, net")).toBeVisible({ timeout: 30_000 });
   const tabs = page.getByRole("navigation", { name: "Options" });
