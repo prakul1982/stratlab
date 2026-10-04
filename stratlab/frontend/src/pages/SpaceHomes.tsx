@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -7,7 +7,7 @@ import { homeOf } from "../lib/spaces";
 import { NAV_GROUPS } from "../lib/navGroups";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
-import { AsOf, Loading } from "../components/ui";
+import { AsOf, Fig, Loading } from "../components/ui";
 import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
@@ -34,18 +34,22 @@ function Top() {
 }
 
 /* ---------- Trade: the strategy lab ---------- */
+/** Tools the strip and the positioning panel already link to: the notebooks' "what you can do" leaves them out. */
+const TRADE_LINKED = ["options", "positioning", "paper", "library", "import"];
+
 export function TradeHome() {
   return (
-    <>
+    <div className="space-home">
       <Top />
       <TradeStrip />
       <PositioningCard />
-      <NotebooksHome />
-    </>
+      <NotebooksHome hide={TRADE_LINKED} />
+    </div>
   );
 }
 
-/** Options first, then the paper sessions running now, the library and import. */
+/** Options first and big, then four tools in a 2 by 2 block beside it: paper sessions running now, the journal, the
+ * library and import. Positioning has its own panel under the strip. Blurbs stay one or two short lines. */
 function TradeStrip() {
   const [rows, setRows] = useState<LiveRow[] | null>(null);
   useEffect(() => { api<LiveRow[]>("/live/sessions").then(setRows).catch(() => setRows([])); }, []);
@@ -57,8 +61,8 @@ function TradeStrip() {
     <section className="space-strip" aria-label="Trade">
       <Link to="/options" className="card space-card space-card-lead">
         <span className="row" style={{ gap: 8 }}><Layers size={20} /><b>Options</b></span>
-        <span className="small muted">Straddles, strangles, iron flies, condors or any structure up to eight legs, paper traded at the live bid and ask, at a set time or on your own rules' signal.</span>
-        {options.length > 0 && <span className="small">{options.length} option session{options.length === 1 ? "" : "s"} running</span>}
+        <span className="small muted">Straddles, condors or any structure up to eight legs, paper traded at the live bid and ask, at a set time or on your own signal.</span>
+        <span className="small space-card-foot">{options.length > 0 ? `${options.length} option session${options.length === 1 ? "" : "s"} running · ` : ""}Build a structure →</span>
       </Link>
       <Link to="/paper" className="card space-card">
         <span className="row" style={{ gap: 8 }}><Pulse size={18} /><b>Paper trading</b></span>
@@ -68,17 +72,15 @@ function TradeStrip() {
             : rows.length ? `None running · ${rows.length} stopped` : "Run a notebook's rules live with fake money."}
         </span>
       </Link>
-      {NAV_GROUPS.Trade.map((e) => (
-        <Link key={e.to} to={e.to} className="card space-card" data-trade={e.to}>
-          <span className="row" style={{ gap: 8 }}><Book size={18} /><b>{e.label}</b></span>
-          <span className="small muted">{e.to === "/trade/journal" && journal?.count
-            ? `${journal.count} closed trade${journal.count === 1 ? "" : "s"} · ${money(journal.net, "INR")} after charges · ${journal.win_rate}% won`
-            : e.blurb ?? e.title}</span>
-        </Link>
-      ))}
+      <Link to="/trade/journal" className="card space-card" data-trade="/trade/journal">
+        <span className="row" style={{ gap: 8 }}><Book size={18} /><b>Trade journal</b></span>
+        <span className="small muted">{journal?.count
+          ? `${journal.count} closed trade${journal.count === 1 ? "" : "s"} · ${money(journal.net, "INR")} after charges · ${journal.win_rate}% won`
+          : "Your real trades as round trips, after charges."}</span>
+      </Link>
       <Link to="/library" className="card space-card">
         <span className="row" style={{ gap: 8 }}><Library size={18} /><b>Strategy library</b></span>
-        <span className="small muted">Rules others published with the verdict they earned.</span>
+        <span className="small muted">Rules others published, with the verdict they earned.</span>
       </Link>
       <Link to="/import" className="card space-card">
         <span className="row" style={{ gap: 8 }}><Upload size={18} /><b>Import a strategy</b></span>
@@ -89,11 +91,14 @@ function TradeStrip() {
 }
 
 /* ---------- Invest: research ---------- */
+/** Tools the panels and the questions on the Invest home already link to. */
+const INVEST_LINKED = ["breadth", "filings", "investor", "watchlist", "rotation", "scan"];
+
 export function InvestHome() {
   return (
-    <>
+    <div className="space-home">
       <Top />
-      <InvestorStart>
+      <InvestorStart hide={INVEST_LINKED}>
         <div className="grid2 space-panels">
           <WatchPanel />
           <ResultsToday />
@@ -103,7 +108,7 @@ export function InvestHome() {
           <RedFlags />
         </div>
       </InvestorStart>
-    </>
+    </div>
   );
 }
 
@@ -198,9 +203,9 @@ type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; pr
 
 export function MoneyHome() {
   return (
-    <>
+    <div className="space-home">
       <Top />
-      <div className="stack" style={{ gap: 24 }}>
+      <div className="stack" style={{ gap: 28 }}>
         <div className="stack" style={{ gap: 8 }}>
           <span className="eyebrow">Money</span>
           <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Your money</h1>
@@ -220,12 +225,8 @@ export function MoneyHome() {
         </section>
         <AskBar />
       </div>
-    </>
+    </div>
   );
-}
-
-function Figure({ label, children, tone }: { label: string; children: ReactNode; tone?: string }) {
-  return <div className="space-fig"><span className="tiny muted">{label}</span><b className={`num ${tone ?? ""}`}>{children}</b></div>;
 }
 
 function HoldingsSummary() {
@@ -243,10 +244,11 @@ function HoldingsSummary() {
         ) : (
           <div className="stack" style={{ gap: 10 }} data-testid="holdings-summary">
             <div className="space-figs">
-              <Figure label={`Value · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`}>{money(h.totals.value, "INR")}</Figure>
-              <Figure label="Gain or loss" tone={signClass(h.totals.pnl)}>{money(h.totals.pnl, "INR")} <span className="small">{pct(h.totals.pnl_pct)}</span></Figure>
-              {h.totals.day != null && <Figure label="Today" tone={signClass(h.totals.day)}>{money(h.totals.day, "INR")}</Figure>}
-              {h.us && h.us.count > 0 && <Figure label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`}>{money(h.us.value, "USD")}</Figure>}
+              <Fig label={`Value · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />
+              <Fig label="Gain or loss" tone={signClass(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
+                note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signClass(h.totals.pnl)} missing="Needs the buy prices" />
+              {h.totals.day != null && <Fig label="Today" tone={signClass(h.totals.day)} value={money(h.totals.day, "INR")} />}
+              {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")} />}
             </div>
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
           </div>
@@ -271,9 +273,9 @@ function TaxSummary() {
         ) : (
           <div className="stack" style={{ gap: 10 }} data-testid="tax-summary">
             <div className="space-figs">
-              <Figure label={`Capital gains tax, ${year?.label ?? "this year"} (estimate)`}>{money(year?.tax_with_cess ?? 0, "INR")}</Figure>
-              <Figure label="Short-term gains" tone={signClass(year?.stcg.net)}>{money(year?.stcg.net ?? 0, "INR")}</Figure>
-              <Figure label="Long-term gains" tone={signClass(year?.ltcg.net)}>{money(year?.ltcg.net ?? 0, "INR")}</Figure>
+              <Fig label={`Capital gains tax, ${year?.label ?? "this year"} (estimate)`} value={money(year?.tax_with_cess ?? 0, "INR")} />
+              <Fig label="Short-term gains" tone={signClass(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
+              <Fig label="Long-term gains" tone={signClass(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
             <p className="tiny muted">Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at this year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge. {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} so far this year.` : "No sales this year yet."} An estimate to check with your CA.</p>
             <AsOf parts={[["Trades", t.updated_at], ["Prices", t.prices_at]]} />

@@ -837,7 +837,7 @@ table.legs input[type=number] { width: 72px !important; }
 .palette-sub { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .palette-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--line); }
 @media (max-width: 640px) { .palette-back { padding: 8px; place-items: start stretch; } .palette { max-height: calc(100vh - 16px); } .palette-foot { display: none; } }
-.explore-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.explore-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }   /* auto-fit: a short list fills the row */
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {
@@ -1021,19 +1021,31 @@ label.btn.disabled { opacity: .5; }
 @media (max-width: 560px) { .tax-inputs .field { width: 100% !important; } }
 
 /* ---------- spaces: Trade · Invest · Money, the switcher at the top of the menu and each space's home ---------- */
-.space-strip { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 28px; }
+/* One content column per space home: the promo, the strip, the panels and the sections under them share both edges and
+   one gap, and the narrow column a page like /new keeps on its own widens to it here. */
+.space-home { display: flex; flex-direction: column; gap: 28px; width: 100%; max-width: 1080px; margin: 0 auto; }
+.space-home > * { margin-top: 0; margin-bottom: 0; }
+.space-home .page-narrow { max-width: none; }
+/* Trade's tools: Options big on the left and four tools in a 2 by 2 block beside it. Every row the same height, no
+   holes at any width: 2 columns (Options across the top) on a tablet, 1 on a phone. */
+.space-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 12px; }
 .space-card { display: flex; flex-direction: column; gap: 6px; min-height: 44px; padding: 14px 16px; color: var(--ink); text-decoration: none; }
 .space-card:hover { border-color: var(--ink-2); color: var(--ink); }
 .space-card-lead { border-color: var(--blue); background: var(--blue-soft); }
+.space-card-lead { grid-column: span 2; grid-row: span 2; }
 .space-card-lead b { font-size: 18px; }
-@media (max-width: 1100px) { .space-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .space-card-lead { grid-column: 1 / -1; } }
-@media (max-width: 520px) { .space-strip { grid-template-columns: minmax(0, 1fr); } }
-.space-panels { align-items: start; }
+.space-card-foot { margin-top: auto; padding-top: 6px; color: var(--blue-ink); font-weight: 600; }   /* the lead's action sits on its bottom edge */
+@media (max-width: 1100px) { .space-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .space-card-lead { grid-row: auto; } }
+@media (max-width: 520px) { .space-strip { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; } .space-card-lead { grid-column: auto; } }
 a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink); }
 .space-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-height: 32px; color: var(--ink); text-decoration: none; }
-.space-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px 18px; }
-.space-fig { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* A row of figures: each is label, number, note on a shared subgrid, so a label that wraps to two lines doesn't push
+   its number below its neighbours'. */
+.space-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px 18px; }
+.space-fig { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 2px; align-content: start; min-width: 0; }
+.space-fig > :first-child { align-self: end; }
 .space-fig b { font-size: 20px; font-weight: 600; }
+.space-fig .fig-missing { align-self: center; }
 .lp-spaces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .lp-space { display: flex; flex-direction: column; gap: 6px; color: var(--ink); text-decoration: none; }
 .lp-space:hover { border-color: var(--ink-2); color: var(--ink); }
@@ -1129,7 +1141,6 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .key-line { width: 12px; height: 2px; display: inline-block; border-radius: 1px; }
 .pos-chart { min-width: 0; }
 @media (max-width: 640px) { .trade-tabs { flex-wrap: nowrap; } }
-.space-strip + .pos-card { margin-top: -16px; margin-bottom: 28px; }   /* the Trade home: right under the strip */
 /* ---------- trade journal ---------- */
 .j-bar { position: relative; height: 12px; min-width: 80px; }
 .j-bar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); }

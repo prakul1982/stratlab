@@ -100,6 +100,21 @@ export function Info({ children, label = "What does this mean?" }: { children: R
   );
 }
 
+/** One labelled figure in a row of them (`.space-figs`): the label, the number, and a note under it. The row is one grid,
+ * so the numbers sit on one line however the labels wrap. A missing number says why in words (`missing`), never a
+ * bare dash. */
+export function Fig({ label, value, note, noteTone = "muted", tone = "", missing = "Not available yet" }:
+  { label: ReactNode; value: ReactNode; note?: ReactNode; noteTone?: string; tone?: string; missing?: string }) {
+  const none = value == null || value === false || (typeof value === "string" && /^\s*[-–—]?\s*$/.test(value));
+  return (
+    <div className="space-fig">
+      <span className="tiny muted">{label}</span>
+      {none ? <span className="small muted fig-missing">{missing}</span> : <b className={`num ${tone}`.trim()}>{value}</b>}
+      {note ? <span className={`tiny ${noteTone}`}>{note}</span> : <span className="fig-note-none" />}
+    </div>
+  );
+}
+
 /** A small "as of" line, so people know how fresh the numbers next to it are. Each part shows only when known. */
 export function AsOf({ parts }: { parts: [string, string | null | undefined][] }) {
   const shown = parts.map(([label, iso]) => [label, asOf(iso)] as const).filter(([, t]) => t);

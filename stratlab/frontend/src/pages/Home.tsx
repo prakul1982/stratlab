@@ -152,7 +152,8 @@ function usePrefill(setWhere: (w: Where) => void): Prefill | null {
   return prefill;
 }
 
-export function NewNotebook() {
+/** `hide`: tools the page around it already links to (on the Trade home, the strip's Import card), offered once. */
+export function NewNotebook({ hide = [] }: { hide?: string[] }) {
   const { markets } = useApp();
   const [where, setWhere] = useState<Where>({ market: "", instrument: null });
   const prefill = usePrefill(setWhere);
@@ -171,13 +172,13 @@ export function NewNotebook() {
   useEffect(() => { if (where.market) try { localStorage.setItem(LAST_MARKET, where.market); } catch { /* private mode */ } }, [where.market]);
   const create = useCreateNotebook(where);
   return (
-    <div className="stack" style={{ gap: 28, maxWidth: 960, margin: "0 auto" }}>
+    <div className="stack page-narrow" style={{ gap: 28 }}>
       <div className="stack" style={{ gap: 10 }}>
-        <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+        <div className="spread" style={{ flexWrap: "wrap", gap: 10, minHeight: 36 }}>
           <span className="eyebrow">New notebook</span>
-          <button className="btn outline sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }}>
+          {!hide.includes("import") && <button className="btn outline sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }}>
             <Upload size={16} />Import a strategy
-          </button>
+          </button>}
         </div>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
           What trading idea do you want to test?
@@ -216,25 +217,26 @@ export function NewNotebook() {
         <h2 className="h2">Or start from a classic idea</h2>
         <Starters where={where} />
       </div>
-      <Explore title="More you can do" />
+      <Explore title="More you can do" hide={hide} />
     </div>
   );
 }
 
-/** The home page for someone who came to invest: start from a company or a question, not from a trading rule. */
-export function InvestorStart({ children }: { children?: ReactNode }) {
+/** The home page for someone who came to invest: start from a company or a question, not from a trading rule. The
+ * watchlist and red flags have their own panels on the Invest home (`children`), so the questions here go elsewhere. */
+export function InvestorStart({ children, hide = [] }: { children?: ReactNode; hide?: string[] }) {
   const { notebooks } = useApp();
   const nav = useNavigate();
   const [region, setRegion] = useState<"IN" | "US">("IN");
   const quick: [string, string, string][] = [
     ["Sectors leading right now", "Which sectors are beating the market, and their stocks", "/research/rotation"],
     ["Stage 2 stocks in NIFTY 50", "Rising trend with the Supertrend up", "/research/scan?set=nifty50"],
-    ["Red flags in my watchlist", "Fund raises, pledges, resignations, defaults", "/research/filings"],
-    ["My watchlist at a glance", "Trend, sector, red flags and checklist for each", "/research/investor"],
+    ["Dividends and bonuses ahead", "Record dates for your stocks and the whole market", "/research/corporate-actions"],
+    ["Market pulse", "Index levels and the day's headlines", "/research/pulse"],
   ];
   const popular = region === "IN" ? ["RELIANCE", "HDFCBANK", "TCS", "APOLLOHOSP", "TITAN", "LT"] : ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"];
   return (
-    <div className="stack" style={{ gap: 28, maxWidth: 960, margin: "0 auto" }}>
+    <div className="stack page-narrow" style={{ gap: 28 }}>
       <div className="stack" style={{ gap: 10 }}>
         <span className="eyebrow">Invest · your research desk</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
@@ -263,7 +265,7 @@ export function InvestorStart({ children }: { children?: ReactNode }) {
       </div>
       <AskBar />
       {!!notebooks?.length && <p className="small muted">You also have {notebooks.length} trading notebook{notebooks.length === 1 ? "" : "s"}: <Link className="link" to="/notebooks">open them</Link>.</p>}
-      <Explore title="Everything else" skip={["find"]} />
+      <Explore title="Everything else" skip={["find"]} hide={hide} />
     </div>
   );
 }
@@ -271,7 +273,8 @@ export function InvestorStart({ children }: { children?: ReactNode }) {
 const VERDICT_RANK: Record<string, number> = { edge: 0, mixed: 1, not_enough: 2, luck: 3, no_edge: 4 };
 type Sort = "recent" | "name" | "verdict";
 
-export function NotebooksHome() {
+/** `hide`: tools the page around it already links to, so each shows once (see Explore). */
+export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
   const { notebooks, me, refreshNotebooks, fail } = useApp();
   const nav = useNavigate();
   const [q, setQ] = useState("");
@@ -287,7 +290,7 @@ export function NotebooksHome() {
     return [...rows].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (sort === "recent" ? 0 : key(a).localeCompare(key(b))));
   }, [notebooks, q, sort]);
   if (notebooks === null) return <Loading label="Opening your notebooks" />;
-  if (notebooks.length === 0) return <NewNotebook />;
+  if (notebooks.length === 0) return <NewNotebook hide={hide} />;
 
   const togglePin = async (id: string, pinned: boolean) => {
     try { await api(`/notebooks/${id}`, { method: "PUT", body: { pinned } }); await refreshNotebooks(); } catch (e) { fail(e); }
@@ -339,7 +342,7 @@ export function NotebooksHome() {
           );
         })}
       </div>
-      <Explore />
+      <Explore hide={hide} />
     </div>
   );
 }

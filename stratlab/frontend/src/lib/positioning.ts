@@ -53,6 +53,8 @@ export const signed = (v: number | null | undefined) => (v == null ? "–" : `${
 export const crore = (v: number | null | undefined, sign = false) =>
   v == null ? "–" : `${sign && v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
 export const ratio = (v: number | null | undefined) => (v == null ? "–" : v.toFixed(2));
+/** Why a part's number is missing, in a few words for the card that shows it (never a bare dash). */
+export const missingWhy = (p: PartStatus | undefined) => (p?.error ? "Couldn't be read just now" : "Not published yet");
 export const strike = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-IN", { maximumFractionDigits: 2 }));
 
 /** "3 Oct 2026" from an ISO day. */
