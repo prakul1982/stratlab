@@ -49,6 +49,19 @@ export function Loading({ label = "Loading" }: { label?: string }) {
   return <div className="row muted" style={{ padding: 40, justifyContent: "center" }}><span className="spinner" />{label}…</div>;
 }
 
+/** A panel's placeholder while it loads, about the height of what replaces it: a row of figures (`figs`), or `lines`
+ * of text. Screen readers hear `label`. */
+export function PanelSkel({ label, figs, lines = 2 }: { label: string; figs?: boolean; lines?: number }) {
+  return (
+    <div className="panel-skel" role="status" aria-label={label} aria-busy="true">
+      {figs ? (
+        <div className="panel-skel-figs">{[0, 1, 2].map((i) => <span key={i}><span className="skel" /><span className="skel big" /></span>)}</div>
+      ) : Array.from({ length: lines }, (_, i) => <span key={i} className="skel line" style={{ width: `${92 - i * 17}%` }} />)}
+      <span className="skel line" style={{ width: "40%" }} />
+    </div>
+  );
+}
+
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="card dashed stack empty">

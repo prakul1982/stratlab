@@ -187,14 +187,15 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   const strip = page.locator(".space-strip > a");
   await expect(strip.first()).toContainText("Options");
   await expect(strip.first()).toHaveAttribute("href", "/options");
-  await expect(page.getByTestId("paper-summary")).not.toHaveText(/Checking/, { timeout: 30_000 });
-  await expect(page.getByText(/Your notebooks|What trading idea/).first()).toBeVisible();
+  await expect(page.getByTestId("paper-summary")).toBeVisible({ timeout: 30_000 });     // the status, once its placeholder is gone
+  // the one next step: start a first notebook, or pick up the latest ones
+  await expect(page.getByRole("heading", { name: /Start here|Pick up where you left off/ })).toBeVisible();
   await sane(page, errors, phone);
 
   await page.goto("/invest");
   await expect(page.getByRole("heading", { name: "Which company do you want to look into?" })).toBeVisible({ timeout: 30_000 });
   for (const t of ["Your watchlist", "Results today", "Red flags in your watchlist"]) await expect(page.getByText(t, { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/Checking results dates|Reading your companies' filings/)).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.locator(".panel-skel")).toHaveCount(0, { timeout: 30_000 });
   await sane(page, errors, phone);
 
   await page.goto("/money");
@@ -216,8 +217,8 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   await expect(page).toHaveURL(new RegExp(NAV_GROUPS.Money[0].to + "$"));
 });
 
-/** How a space home is laid out: every section's left and right edges, the tool strip's rows, figures whose numbers
- * don't share a line, and figures showing a bare dash. */
+/** How a space home is laid out: every section's left and right edges, the tool strip's cards and rows, figures whose
+ * numbers don't share a line, and figures showing a bare dash. */
 async function layout(page: Page) {
   return page.evaluate(() => {
     const box = (el: Element) => el.getBoundingClientRect();
@@ -225,12 +226,14 @@ async function layout(page: Page) {
     const home = document.querySelector(".space-home")!;
     const edges = Array.from(home.children).filter(shown).map((el) => [Math.round(box(el).left), Math.round(box(el).right)].join("-"));
     const strip = document.querySelector(".space-strip");
-    const rows: Record<number, { right: number; heights: number[] }> = {};
-    for (const a of strip ? Array.from(strip.children).filter(shown) : []) {
+    const rows: Record<number, { right: number; heights: number[]; widths: number[] }> = {};
+    const cards = strip ? Array.from(strip.children).filter(shown) : [];
+    for (const a of cards) {
       const b = box(a), top = Math.round(b.top);
-      rows[top] ??= { right: 0, heights: [] };
+      rows[top] ??= { right: 0, heights: [], widths: [] };
       rows[top].right = Math.max(rows[top].right, Math.round(b.right));
-      if (!a.matches(".space-card-lead")) rows[top].heights.push(Math.round(b.height));
+      rows[top].heights.push(Math.round(b.height));     // the lead card too: it stands out by its tint, not its size
+      rows[top].widths.push(Math.round(b.width));
     }
     // in a row of figures, the numbers share one line however their labels wrap
     const offLine: string[] = [];
@@ -245,11 +248,11 @@ async function layout(page: Page) {
       for (const t of Object.values(tops)) if (Math.max(...t) - Math.min(...t) > 1) offLine.push(t.join("/"));
     }
     const dashes = Array.from(document.querySelectorAll(".space-fig b")).filter((b) => /^\s*[-–—]\s*$/.test(b.textContent ?? "")).length;
-    return { edges: Array.from(new Set(edges)), stripRight: strip ? Math.round(box(strip).right) : 0, rows: Object.values(rows), offLine, dashes };
+    return { edges: Array.from(new Set(edges)), stripRight: strip ? Math.round(box(strip).right) : 0, cards: cards.length, rows: Object.values(rows), offLine, dashes };
   });
 }
 
-test("space homes line up: one content width, a tool strip without holes, each tool linked once, no bare dashes", async ({ page }, info) => {
+test("space homes line up: one content width, four equal tool cards without holes, each tool linked once, no bare dashes", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   // a new account (no notebooks yet: the Trade home embeds New notebook) and the owner (notebooks, holdings, tax)
   for (const [u, paths] of [[who(236, phone), ["/trade"]], [ADMIN, ["/trade", "/invest", "/money"]]] as const) {
@@ -259,21 +262,27 @@ test("space homes line up: one content width, a tool strip without holes, each t
       await page.goto(path);
       await expect(page.locator(".space-home")).toBeVisible({ timeout: 30_000 });
       await expect(page.locator(".space-home .spinner")).toHaveCount(0, { timeout: 30_000 });
-      await expect(page.getByText("Reading the newest numbers…")).toHaveCount(0, { timeout: 30_000 });
+      await expect(page.locator(".space-home .panel-skel, .space-home .skel")).toHaveCount(0, { timeout: 30_000 });   // placeholders, not "Loading…" text
       const at = `${u.email} ${path}`;
       const l = await layout(page);
       expect(l.edges, `${at}: every section shares the same left and right edges`).toHaveLength(1);
       expect(l.offLine, `${at}: numbers in a row of figures share a line`).toEqual([]);
       expect(l.dashes, `${at}: a missing figure says why instead of a dash`).toBe(0);
+      // every space: four tools, one row of four or two rows of two, every card the same size
+      expect(l.cards, `${at}: four tools on the strip`).toBe(4);
+      expect([1, 2], `${at}: the strip is one row, or two by two`).toContain(l.rows.length);
+      const heights = l.rows.flatMap((r) => r.heights), widths = l.rows.flatMap((r) => r.widths);
+      expect(Math.max(...heights) - Math.min(...heights), `${at}: tool cards are the same height`).toBeLessThanOrEqual(1);
+      expect(Math.max(...widths) - Math.min(...widths), `${at}: tool cards are the same width`).toBeLessThanOrEqual(1);
+      for (const r of l.rows) {
+        expect(r.heights.length, `${at}: rows of the strip have no holes`).toBe(4 / l.rows.length);
+        expect(r.right, `${at}: each row of the tool strip reaches its right edge`).toBeGreaterThanOrEqual(l.stripRight - 1);
+      }
       if (path === "/trade") {
-        for (const r of l.rows) {
-          expect(r.right, `${at}: each row of the tool strip reaches its right edge`).toBeGreaterThanOrEqual(l.stripRight - 1);
-          if (r.heights.length) expect(Math.max(...r.heights) - Math.min(...r.heights), `${at}: cards in a row are the same height`).toBeLessThanOrEqual(1);
-        }
         // each tool once: the strip's card, not again as a card, a button or a "what you can do" entry
         await expect(page.locator('main a[href="/trade/positioning"]')).toHaveCount(1);
-        await expect(page.locator("main").getByRole("button", { name: /Import a strategy/ })).toHaveCount(0);
-        await expect(page.locator(".explore-card").filter({ hasText: /^(Strategy library|Import a strategy|Paper trade options)/ })).toHaveCount(0);
+        expect(await page.locator("main").getByRole("button", { name: /Import a strategy/ }).count(), `${at}: Import offered at most once`).toBeLessThanOrEqual(1);
+        await expect(page.locator(".explore-card").filter({ hasText: /^(Strategy library|Paper trade options|Paper trade|Test an idea)/ })).toHaveCount(0);
       }
       if (path === "/invest") {
         await expect(page.locator(".explore-card").filter({ hasText: /^(Red flags in my watchlist|My watchlist at a glance)/ })).toHaveCount(0);

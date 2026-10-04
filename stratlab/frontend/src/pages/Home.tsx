@@ -1,5 +1,5 @@
 import { Explore } from "../components/Explore";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -12,7 +12,6 @@ import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
 import { Pin, Search, Sparkle, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
-import { CompanySearch } from "../components/CompanySearch";
 import { askExamples, useRotating } from "../lib/rotating";
 
 export type Where = { market: string; instrument: Instrument | null };
@@ -218,54 +217,6 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
         <Starters where={where} />
       </div>
       <Explore title="More you can do" hide={hide} />
-    </div>
-  );
-}
-
-/** The home page for someone who came to invest: start from a company or a question, not from a trading rule. The
- * watchlist and red flags have their own panels on the Invest home (`children`), so the questions here go elsewhere. */
-export function InvestorStart({ children, hide = [] }: { children?: ReactNode; hide?: string[] }) {
-  const { notebooks } = useApp();
-  const nav = useNavigate();
-  const [region, setRegion] = useState<"IN" | "US">("IN");
-  const quick: [string, string, string][] = [
-    ["Sectors leading right now", "Which sectors are beating the market, and their stocks", "/research/rotation"],
-    ["Stage 2 stocks in NIFTY 50", "Rising trend with the Supertrend up", "/research/scan?set=nifty50"],
-    ["Dividends and bonuses ahead", "Record dates for your stocks and the whole market", "/research/corporate-actions"],
-    ["Market pulse", "Index levels and the day's headlines", "/research/pulse"],
-  ];
-  const popular = region === "IN" ? ["RELIANCE", "HDFCBANK", "TCS", "APOLLOHOSP", "TITAN", "LT"] : ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"];
-  return (
-    <div className="stack page-narrow" style={{ gap: 28 }}>
-      <div className="stack" style={{ gap: 10 }}>
-        <span className="eyebrow">Invest · your research desk</span>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-          Which company do you want to look into?
-        </h1>
-        <p className="muted" style={{ fontSize: 17 }}>The numbers, the business in its own words, red flags and whether management delivers. Facts, not tips.</p>
-      </div>
-      <section className="card stack" style={{ gap: 14 }}>
-        <div className="seg" role="radiogroup" aria-label="Market" style={{ alignSelf: "flex-start" }}>
-          {(["IN", "US"] as const).map((r) => <button key={r} role="radio" aria-checked={region === r} aria-pressed={region === r} onClick={() => setRegion(r)}>{r === "IN" ? "₹ India" : "$ United States"}</button>)}
-        </div>
-        <CompanySearch region={region} autoFocus />
-        <div className="row wrap" style={{ gap: 8 }}>
-          <span className="small muted">Popular:</span>
-          {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}
-        </div>
-      </section>
-      {children}
-      <div className="stack" style={{ gap: 10 }}>
-        <h2 className="h2">Or start from a question</h2>
-        <div className="explore-grid">
-          {quick.map(([t, sub, to]) => (
-            <button key={t} className="card explore-card" onClick={() => nav(to)}><b>{t}</b><span className="small muted">{sub}</span></button>
-          ))}
-        </div>
-      </div>
-      <AskBar />
-      {!!notebooks?.length && <p className="small muted">You also have {notebooks.length} trading notebook{notebooks.length === 1 ? "" : "s"}: <Link className="link" to="/notebooks">open them</Link>.</p>}
-      <Explore title="Everything else" skip={["find"]} hide={hide} />
     </div>
   );
 }
