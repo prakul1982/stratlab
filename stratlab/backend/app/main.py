@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
 import logging
 from html import escape as html_escape
-import math
 import re
 import secrets
 import threading
@@ -44,6 +43,7 @@ from .auth import current_profile
 from .config import settings
 from .branding import public_text
 from .errors import report
+from .responses import err, ok
 from .guard import Guard, HeavyGate
 from . import research
 from .engine import walkforward
@@ -332,10 +332,6 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
 
 
 # ---------- helpers ----------
-def err(status: int, code: str, message: str):
-    raise HTTPException(status, {"code": code, "message": public_text(message)})
-
-
 def upgrade(message: str, code: str = "upgrade_required"):
     err(402, code, message)
 
@@ -352,20 +348,6 @@ def check_group_size(profile, n: int):
         bigger = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["group_size"] >= n), None)
         upgrade(f"Your plan tests groups of up to {cap} instruments; this one has {n}."
                 + (f" {bigger} goes up to {PLANS['pro' if bigger == 'Pro' else 'basic']['group_size']}." if bigger else ""))
-
-
-def safe(obj):
-    if isinstance(obj, float):
-        return obj if math.isfinite(obj) else None
-    if isinstance(obj, dict):
-        return {k: safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [safe(v) for v in obj]
-    return obj
-
-
-def ok(data) -> JSONResponse:
-    return JSONResponse(content=safe(data))
 
 
 def month_start_iso() -> str:
