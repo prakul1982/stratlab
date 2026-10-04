@@ -205,12 +205,15 @@ class TaxFmvReq(BaseModel):
 
 class TaxInputsReq(BaseModel):
     """What the total tax estimate needs from the user for one financial year: the regime, their other income (and
-    how much of it is salary, when they say) and, under the old regime, their deductions."""
+    how much of it is salary, when they say), under the old regime their deductions, their age band and whether
+    they are resident in India."""
     fy: int = Field(ge=2000, le=2100)
     regime: Literal["new", "old"] = "new"
     other: float = Field(0, ge=0, le=1e11)
     salary: Optional[float] = Field(None, ge=0, le=1e11)
     deductions: float = Field(0, ge=0, le=1e11)
+    age: Literal["below60", "60to79", "80plus"] = "below60"
+    resident: bool = True
 
 
 class ExperimentReq(DataReq):

@@ -2224,7 +2224,8 @@ def tax_fmv(req: TaxFmvReq, profile=Depends(current_profile)):
 @app.put("/tax/inputs")
 def tax_income(req: TaxInputsReq, profile=Depends(current_profile)):
     """Save what the total tax estimate needs for one financial year: the regime, other income (and how much of it
-    is salary) and deductions under the old regime. Kept with the user's tax data and deleted with it."""
+    is salary), deductions under the old regime, the age band and residency. Kept with the user's tax data and
+    deleted with it."""
     throttle(profile, "tax_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
     tax_total.save_inputs(profile["id"], req.fy, req.model_dump(exclude={"fy"}))
     return ok(tax_view(profile))

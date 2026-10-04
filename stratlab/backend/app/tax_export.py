@@ -6,6 +6,7 @@ import io
 from datetime import datetime, timezone
 
 from .tax_lots import DISCLAIMER, SETOFF_RULES, money
+from .tax_total import AGE_NAMES
 
 
 def _name(names: dict, key: str) -> str:
@@ -52,7 +53,8 @@ def total_lines(y: dict) -> list[tuple[str, str]]:
     if not t.get("available"):
         return [("Total tax estimate", t.get("reason") or "Not available for this year.")]
     v = t["inputs"]
-    out = [("Regime", REGIMES[t["regime"]]), ("Other income you entered", money(v["other"]))]
+    out = [("Regime", REGIMES[t["regime"]]), ("Age band", AGE_NAMES.get(v.get("age"), "below 60")),
+           ("Resident in India", "No" if v.get("resident") is False else "Yes"), ("Other income you entered", money(v["other"]))]
     if v["salary"] is not None:
         out.append(("Of which salary or pension", money(v["salary"])))
     if t["regime"] == "old":
@@ -87,6 +89,8 @@ def to_csv(y: dict, rows: list[dict], names: dict) -> str:
         w.writerow(["How we got here"])
         for i, step in enumerate((y["total"].get("steps") or []), 1):
             w.writerow([i, _safe(step)])
+        for note in y["total"].get("notes") or []:
+            w.writerow(["Note", _safe(note)])
         for fact in y.get("filing") or []:
             w.writerow(["Note", _safe(fact)])
     w.writerow([])
@@ -128,6 +132,7 @@ def to_pdf(y: dict, names: dict, below: dict | None = None) -> bytes:
                   Table([[escape(a), escape(b)] for a, b in total_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
         if y["total"].get("steps"):
             story += [Paragraph("How we got here", h2)] + [Paragraph(f"{i}. " + escape(s), body) for i, s in enumerate(y["total"]["steps"], 1)]
+        story += [Paragraph("<b>Note:</b> " + escape(n), body) for n in y["total"].get("notes") or []]
     story += [Paragraph("Capital gains and other results", h2),
               Table([[escape(a), escape(b)] for a, b in summary_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
     if y["steps"]:

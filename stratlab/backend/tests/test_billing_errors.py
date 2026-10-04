@@ -109,14 +109,14 @@ def test_setup_check_reports_keys_and_plans(monkeypatch):
     assert r["currencies"] == ["INR"] and r["international"]["enabled"] is None
 
 
-def test_international_status_reads_razorpay_or_points_to_the_dashboard():
+def test_international_cards_is_an_info_row_not_an_error(monkeypatch):
+    """Razorpay has no public API for the international payments setting, so the row points to the dashboard as
+    information: no network call, no "Couldn't ask Razorpay" error, no warning."""
     import httpx
 
-    def via(body, status=200):
-        return httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(status, json=body)))
-    assert billing.international_status("k", "s", via({"card": True, "international": True}))["enabled"] is True
-    off = billing.international_status("k", "s", via({"card": True, "options": {"international_cards": False}}))
-    assert off["enabled"] is False and "International payments" in off["detail"]
-    assert billing.international_status("k", "s", via({"card": True}))["enabled"] is None          # answer doesn't say
-    gone = billing.international_status("k", "s", via({}, 401))
-    assert gone["enabled"] is None and "Couldn't ask" in gone["detail"]
+    def boom(*a, **k):
+        raise AssertionError("no call to Razorpay")
+    monkeypatch.setattr(httpx, "get", boom)
+    r = billing.international_status("rzp_live_x", "secret")
+    assert r["enabled"] is None and r["info"] is True
+    assert "Account & Settings → International payments" in r["detail"] and "Couldn't" not in r["detail"]

@@ -35,11 +35,11 @@ type AITest = { label: string; ok: boolean; error: string | null; model: string 
 const PLAN_NAME: Record<Plan, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 const DURATIONS: [string, number | null][] = [["30 days", 30], ["90 days", 90], ["1 year", 365], ["No end date", null]];
 
-function Status({ ok, warn, label, detail }: { ok: boolean; warn?: boolean; label: string; detail: string }) {
+function Status({ ok, warn, info, label, detail }: { ok: boolean; warn?: boolean; info?: boolean; label: string; detail: string }) {
   return (
     <div className="spread" style={{ padding: "10px 0", borderBottom: "1px solid var(--line)", gap: 12 }}>
       <span className="stack" style={{ gap: 0, minWidth: 0 }}><b style={{ fontSize: 14.5 }}>{label}</b><span className="small muted">{detail}</span></span>
-      <span className={`badge ${ok ? "pass" : warn ? "warn" : "fail"}`}>{ok ? "OK" : warn ? "Check" : "Problem"}</span>
+      <span className={`badge ${ok ? "pass" : info ? "fact" : warn ? "warn" : "fail"}`}>{ok ? "OK" : info ? "Info" : warn ? "Check" : "Problem"}</span>
     </div>
   );
 }
@@ -89,7 +89,7 @@ function PlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: () => v
 interface BillingCheck {
   key_id: string; mode: string; secret_length: number; webhook_secret_set: boolean; keys_ok: boolean; keys_error: string | null;
   plans: { label: string; id: string | null; ok: boolean; detail: string | null }[];
-  international?: { enabled: boolean | null; detail: string }; currencies?: string[];
+  international?: { enabled: boolean | null; info?: boolean; detail: string }; currencies?: string[];
 }
 
 interface ReportedRow {
@@ -512,7 +512,7 @@ export function AdminPage() {
                         detail={billingCheck.keys_ok ? `Razorpay accepts key ${billingCheck.key_id}` : `Key ${billingCheck.key_id}, secret ${billingCheck.secret_length} characters: ${billingCheck.keys_error}. Regenerate the key in Razorpay and paste BOTH the new Key ID and secret into Railway.`} />
                       {billingCheck.plans.map((p) => <Status key={p.label} ok={p.ok} warn={!p.id} label={p.label} detail={p.detail ?? ""} />)}
                       <Status ok={billingCheck.webhook_secret_set} label="Webhook secret" detail={billingCheck.webhook_secret_set ? "Set" : "RAZORPAY_WEBHOOK_SECRET is missing"} />
-                      {billingCheck.international && <Status ok={billingCheck.international.enabled === true} warn={billingCheck.international.enabled !== false}
+                      {billingCheck.international && <Status ok={billingCheck.international.enabled === true} warn={billingCheck.international.enabled !== false} info={!!billingCheck.international.info}
                         label="International cards" detail={`${billingCheck.international.detail}${billingCheck.currencies?.length ? ` Plans are priced in ${billingCheck.currencies.join(", ")}.` : ""}`} />}
                     </div>
                   )}

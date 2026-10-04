@@ -34,9 +34,10 @@ MAX_FILES = 40
 MAX_ROWS = 2000                   # realised lines sent for one year (the CSV has all of them)
 EPS = 1e-6
 
-DISCLAIMER = ("An estimate from the files you uploaded and the income you entered, not tax advice. Slab tax depends "
-              "on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered "
-              "accountant (CA) before you file or pay tax.")
+DISCLAIMER = ("An estimate from the files you uploaded and the income you entered, not tax advice. It covers only "
+              "the income you enter or import here, for an individual of the age band and residency you choose. Slab "
+              "tax depends on your full income, and advance tax and TDS already paid aren't included. Check it with a "
+              "chartered accountant (CA) before you file or pay tax.")
 SEGMENTS = ("fno", "commodity", "currency")
 SEGMENT_NAMES = {"fno": "F&O", "commodity": "Commodity", "currency": "Currency"}
 MAX_BUSINESS = 120                # segment-year totals kept (three segments, many years, a few files each)
@@ -62,8 +63,11 @@ NOTES = [
     "your broker's file (including STT and CTT, which business income can deduct) are taken off the result.",
     "Turnover is the total of profits and losses, trade by trade. Brokers' summaries often net them per contract "
     "first, which gives a smaller figure; both are shown.",
-    "A resident individual under 60 is assumed. The 87A rebate, surcharge (with its marginal relief) and cess follow "
-    "each year's rules; the slab tax on the rest of your income is only as good as the figure you enter.",
+    "The estimate is for an individual of the age band and residency you choose (resident and below 60 until you say "
+    "otherwise). The 87A rebate, surcharge (with its marginal relief) and cess follow each year's rules; the slab tax "
+    "on the rest of your income is only as good as the figure you enter.",
+    "It covers only income you enter or import here: house property, foreign income, other capital assets and "
+    "anything else not entered aren't in it.",
 ]
 
 
