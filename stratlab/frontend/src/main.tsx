@@ -20,6 +20,7 @@ import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
+import { lastView } from "./lib/navGroups";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -89,7 +90,7 @@ function warmFirstPage(path: string) {
     : path === "/news" ? news
     : path === "/holdings" ? holdingsPage
     : path === "/tax-report" ? taxPage
-    : path === "/research/screens" ? screensPage
+    : path === "/research/screens" || (path === "/research/scans" && lastView("scans") === "/research/screens") ? screensPage
     : path.startsWith("/research") ? research
     : null;
   load?.().catch(() => undefined);    // only a head start: the page itself reports a failed download
@@ -180,6 +181,9 @@ function Routed() {
         <Route path="/research/compare" element={<ComparePage />} />
         <Route path="/research/watchlist" element={<WatchlistPage />} />
         <Route path="/research/scan" element={<ScanPage />} />
+        <Route path="/research/scans" element={<Navigate to={lastView("scans")} replace />} />
+        <Route path="/scans" element={<Navigate to={lastView("scans")} replace />} />
+        <Route path="/watchlist" element={<Navigate to="/research/watchlist" replace />} />
         <Route path="/research/screens" element={<ScreensPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
