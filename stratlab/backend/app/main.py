@@ -28,6 +28,7 @@ from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
 from . import money_mf
+from . import money_mf_ter
 from . import money_advance_tax, money_routes
 from . import journal_routes
 from . import market_store, storage
@@ -243,6 +244,8 @@ app = FastAPI(title="StratLab API", lifespan=lifespan)
 research_routes.setup(research_hub, _gemini, _anthropic)
 app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
+app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
+app.include_router(money_mf_ter.admin_router)  # /admin/ter
 app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
@@ -3818,7 +3821,8 @@ def platform_checks() -> list:
                ("Database", "Server", lambda: pc.check_database(db)),
                ("Database space", "Server", storage.check),
                ("Holiday calendar", "Server", lambda: pc.check_calendar(today)),
-               ("Rates and rules last reviewed", "Rules", lambda: pc.check_rules(today, rules_watch.state()))]
+               ("Rates and rules last reviewed", "Rules", lambda: pc.check_rules(today, rules_watch.state())),
+               ("Fund costs (TER)", "Money", lambda: pc.check_fund_costs(money_mf_ter))]
     return checks
 
 

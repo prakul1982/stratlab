@@ -7,9 +7,18 @@ from tests import world
 
 @pytest.fixture
 def w(monkeypatch):
+    from pathlib import Path
+    from app import money_mf_ter as ter
     built = world.build(monkeypatch)
+    # the TER disclosure, from the fund costs fixture (made-up schemes), read here rather than in a thread
+    html = (Path(__file__).parent / "fixtures" / "mf" / "ter_disclosure.html").read_text()
+    monkeypatch.setattr(ter, "fetch_month", lambda m, y: html)
+    for k, v in (("MIN_ROWS", 1), ("PAUSE", 0), ("BACKGROUND", False), ("CHECK_SCHEMES", 3)):
+        monkeypatch.setattr(ter, k, v)
+    ter.forget()
     yield built
     built["close"]()
+    ter.forget()
 
 
 def run(w):

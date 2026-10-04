@@ -68,6 +68,11 @@ def build():
     navs = Path(__file__).parent / "fixtures" / "mf"
     mp.setattr(money_mf_nav, "fetch_text", lambda url: (navs / ("NAVAll.txt" if url == money_mf_nav.DAILY_URL else "nav_2018-01-31.txt")).read_text())
     mp.setattr(money_mf_nav, "MIN_SCHEMES", 1)
+    # the public TER disclosure (made-up schemes), the same table for every month, for the fund costs
+    from app import money_mf_ter
+    mp.setattr(money_mf_ter, "fetch_month", lambda m, y: (navs / "ter_disclosure.html").read_text())
+    for k, v in (("MIN_ROWS", 1), ("PAUSE", 0), ("BACKGROUND", False), ("BACKFILL", 3)):
+        mp.setattr(money_mf_ter, k, v)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
     fx_rates.seed()

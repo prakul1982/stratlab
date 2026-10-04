@@ -6,6 +6,7 @@ import { ago, dateOnly, money, pct, price, qty as qtyText, signClass } from "../
 import { AsOf, Empty, Info, Loading } from "../../components/ui";
 import { Trash, Upload } from "../../components/Icons";
 import { track } from "../../lib/analytics";
+import { FundCosts } from "./FundCosts";
 
 type Kind = "equity" | "debt" | "hybrid" | "other";
 type Scheme = {
@@ -219,6 +220,8 @@ export function MutualFundsPage() {
               <ul className="tiny muted" style={{ margin: "6px 0 0", paddingLeft: 18 }}>{(Object.keys(view.kinds) as Kind[]).map((k) => <li key={k}>{view.kinds[k]}</li>)}</ul>
             </details>
           </section>
+
+          {held.length > 0 && <FundCosts version={`${view.updated_at}|${view.txns}`} />}
 
           {!view.gains_allowed && (
             <div className="banner"><span>Capital gains for each financial year, and every scheme you hold, are on the {view.gains_plan} plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>
