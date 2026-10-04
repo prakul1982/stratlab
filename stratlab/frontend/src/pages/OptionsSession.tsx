@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -17,6 +17,8 @@ export function OptionsSession() {
   const { fail, refreshMe } = useApp();
   const nav = useNavigate();
   const [snap, setSnap] = useState<OptionSnapshot | null>(null);
+  const [shown, setShown] = useState<Set<string>>(new Set());     // closed trades whose orders are open
+  const toggle = (k: string) => setShown((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
   const load = useCallback(async () => {
     try { setSnap(await api<OptionSnapshot>(`/live/sessions/${sid}`)); } catch (e) { fail(e); }
@@ -102,6 +104,12 @@ export function OptionsSession() {
                     ))}</tbody>
                   </table>
                 </div>
+                {ordersSince(snap.events, p.opened).length > 0 && (
+                  <details className="open-orders">
+                    <summary className="small">Orders in this trade ({ordersSince(snap.events, p.opened).length})</summary>
+                    <OrderList events={ordersSince(snap.events, p.opened)} />
+                  </details>
+                )}
               </>
             )}
           </section>
@@ -114,18 +122,29 @@ export function OptionsSession() {
             ) : <p className="muted">Fills in minute by minute while the market is open.</p>}
           </section>
           <section className="card stack" style={{ gap: 10 }}>
-            <h3 className="h3">Trades</h3>
+            <div className="spread"><h3 className="h3">Trades</h3>
+              {snap.trades.length > 0 && <span className="small muted">Tap a trade to see its orders</span>}</div>
             {snap.trades.length === 0 ? <p className="muted">No closed trades yet.</p> : (
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>Opened</th><th>Closed</th><th>Premium</th><th>Before costs</th><th>Costs</th><th>P&amp;L</th><th>Why it closed</th></tr></thead>
-                  <tbody>{[...snap.trades].reverse().map((x) => (
-                    <tr key={x.opened + x.closed}>
-                      <td>{t(x.opened)}</td><td>{t(x.closed)}</td><td className="mono">{inr(x.credit)}</td><td className={`mono ${signClass(x.gross)}`}>{inr(x.gross)}</td>
-                      <td className="mono">{inr(x.costs)}</td><td className={`mono ${signClass(x.pnl)}`}><b>{inr(x.pnl)}</b></td>
-                      <td>{x.why}{x.rolls ? `, ${x.rolls} roll${x.rolls === 1 ? "" : "s"}` : ""}</td>
-                    </tr>
-                  ))}</tbody>
+                  <tbody>{[...snap.trades].reverse().map((x) => {
+                    const key = x.opened + x.closed, open = shown.has(key);
+                    const orders = ordersBetween(snap.events, x.opened, x.closed);
+                    return (
+                      <Fragment key={key}>
+                        <tr className={`trade-row${open ? " open" : ""}`}>
+                          <td><button className="link-btn trade-toggle" aria-expanded={open} disabled={!orders.length}
+                            aria-label={`${open ? "Hide" : "Show"} the orders of the trade opened ${t(x.opened)}`} onClick={() => toggle(key)}>
+                            <span className="chev" aria-hidden>{open ? "▾" : "▸"}</span>{t(x.opened)}</button></td>
+                          <td>{t(x.closed)}</td><td className="mono">{inr(x.credit)}</td><td className={`mono ${signClass(x.gross)}`}>{inr(x.gross)}</td>
+                          <td className="mono">{inr(x.costs)}</td><td className={`mono ${signClass(x.pnl)}`}><b>{inr(x.pnl)}</b></td>
+                          <td>{x.why}{x.rolls ? `, ${x.rolls} roll${x.rolls === 1 ? "" : "s"}` : ""}</td>
+                        </tr>
+                        {open && <tr className="trade-orders-row"><td colSpan={7}><OrderList events={orders} /></td></tr>}
+                      </Fragment>
+                    );
+                  })}</tbody>
                 </table>
               </div>
             )}
@@ -146,24 +165,6 @@ export function OptionsSession() {
               <li>{s.sizing.mode === "margin" ? `As much as margin allows on ${inr(s.sizing.capital)}` : `${s.sizing.lots} unit${s.sizing.lots === 1 ? "" : "s"}`}</li>
             </ul>
           </section>
-          <section className="card stack" style={{ gap: 8 }}>
-            <h3 className="h3">Orders</h3>
-            {snap.events.length === 0 ? <p className="muted small">None yet.</p> : (
-              <div className="orders-scroll">{orderGroups(snap.events).map((g) => (
-                <div key={g.key} className="order-group">
-                  <div className="order-head small"><span className="muted">{g.why} · {t(g.t)}</span>
-                    {g.pnl != null && <b className={`order-num ${signClass(g.pnl)}`}>{inr(g.pnl)}</b>}</div>
-                  <ul className="orders">{g.rows.map((e, i) => (
-                    <li key={i} title={e.slices && e.slices > 1 ? `Sent in ${e.slices} slices (the exchange's freeze limit)` : undefined}>
-                      <span className={`side-chip ${e.side}`} aria-label={e.side === "buy" ? "Buy" : "Sell"} role="img">{e.side === "buy" ? "B" : "S"}</span>
-                      <span className="order-sym">{contract(e)}</span>
-                      <span className="order-num small muted">{e.qty.toLocaleString("en-IN")} × {price(e.px, "INR")}</span>
-                    </li>
-                  ))}</ul>
-                </div>
-              ))}</div>
-            )}
-          </section>
         </div>
       </div>
     </div>
@@ -172,10 +173,33 @@ export function OptionsSession() {
 
 type OrderEvent = OptionSnapshot["events"][number];
 
-/** Orders sent together (same moment, same reason) under one heading, newest first, with their P&L added up. */
+const ms = (iso: string) => new Date(iso).getTime();
+const ordersBetween = (events: OrderEvent[], from: string, to: string) => events.filter((e) => ms(e.t) >= ms(from) && ms(e.t) <= ms(to));
+const ordersSince = (events: OrderEvent[], from: string) => events.filter((e) => ms(e.t) >= ms(from));
+
+/** One trade's orders, in the order they were sent: each moment (entry, re-centre, stop) a line, its legs under it. */
+function OrderList({ events }: { events: OrderEvent[] }) {
+  return (
+    <div className="order-list">{orderGroups(events).map((g) => (
+      <div key={g.key} className="order-group">
+        <div className="order-head small"><span><b>{g.why}</b> <span className="muted">· {t(g.t)}</span></span>
+          {g.pnl != null && <span className={`order-num ${signClass(g.pnl)}`}>{inr(g.pnl)}</span>}</div>
+        <ul className="orders">{g.rows.map((e, i) => (
+          <li key={i} title={e.slices && e.slices > 1 ? `Sent in ${e.slices} slices (the exchange's freeze limit)` : undefined}>
+            <span className={`side-chip ${e.side}`} aria-label={e.side === "buy" ? "Buy" : "Sell"} role="img">{e.side === "buy" ? "B" : "S"}</span>
+            <span className="order-sym">{contract(e)}</span>
+            <span className="order-num small muted">{e.qty.toLocaleString("en-IN")} × {price(e.px, "INR")}</span>
+          </li>
+        ))}</ul>
+      </div>
+    ))}</div>
+  );
+}
+
+/** Orders sent together (same moment, same reason) as one group, oldest first, with their P&L added up. */
 function orderGroups(events: OrderEvent[]) {
   const out: { key: string; t: string; why: string; pnl: number | null; rows: OrderEvent[] }[] = [];
-  for (const e of [...events].reverse().slice(0, 120)) {
+  for (const e of events) {
     const last = out[out.length - 1];
     if (last && last.t === e.t && last.why === e.why) {
       last.rows.push(e);

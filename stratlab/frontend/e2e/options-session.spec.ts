@@ -46,20 +46,25 @@ async function open(page: Page) {
   await page.goto("/options/s/s1");
 }
 
-test("options session: orders sent together under one line, readable contracts, the list scrolls in its card", async ({ page }, info) => {
+test("options session: a closed trade's orders open under its row, grouped by moment, with readable contracts", async ({ page }, info) => {
   await open(page);
-  const orders = page.locator("section", { has: page.getByRole("heading", { name: "Orders" }) });
-  const groups = orders.locator(".order-group");
-  await expect(groups).toHaveCount(21);
-  const first = groups.first();
-  await expect(first.locator(".order-head")).toContainText("Stop loss");
-  await expect(first.locator(".order-head b")).toHaveText("−₹33,631");                     // the two legs' P&L added up
-  await expect(first.locator(".order-sym")).toHaveText(["NIFTY 22450 CE", "NIFTY 22450 PE"]);   // saved, then read from the symbol
-  await expect(first.getByRole("img", { name: "Buy" })).toHaveCount(2);
-  // the card holds the list; the page doesn't grow with it
-  const box = (await orders.locator(".orders-scroll").boundingBox())!;
-  expect(box.height).toBeLessThanOrEqual(720);
-  const scroll = await orders.locator(".orders-scroll").evaluate((el) => el.scrollHeight > el.clientHeight);
-  expect(scroll).toBe(true);
-  await page.screenshot({ path: `test-results/options-session-${info.project.name}.png`, fullPage: false });
+  await expect(page.getByRole("heading", { name: "Orders" })).toHaveCount(0);          // no separate list of every order
+  const trades = page.locator("section", { has: page.getByRole("heading", { name: "Trades" }) });
+  await expect(trades.locator(".order-group")).toHaveCount(0);                          // closed trades' orders stay folded
+  const toggle = trades.getByRole("button", { name: /Show the orders of the trade opened/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(trades.getByRole("button", { name: /Hide the orders/ })).toHaveAttribute("aria-expanded", "true");
+  const group = trades.locator(".order-group");
+  await expect(group).toHaveCount(1);
+  await expect(group.locator(".order-head")).toContainText("Stop loss");
+  await expect(group.locator(".order-head .order-num")).toHaveText("−₹33,631");          // the two legs' P&L added up
+  await expect(group.locator(".order-sym")).toHaveText(["NIFTY 22450 PE", "NIFTY 22450 CE"]);   // read from the symbol, then saved
+  await expect(group.getByRole("img", { name: "Buy" })).toHaveCount(2);
+  // nothing spills sideways on a phone
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(wide).toBeLessThanOrEqual(1);
+  await trades.screenshot({ path: `test-results/options-session-${info.project.name}.png` });
+  await trades.getByRole("button", { name: /Hide the orders/ }).click();
+  await expect(trades.locator(".order-group")).toHaveCount(0);
 });
