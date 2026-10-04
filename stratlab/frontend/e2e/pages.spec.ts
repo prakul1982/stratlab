@@ -71,7 +71,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
+  ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
@@ -1538,4 +1538,53 @@ test("market breadth on the Free plan: today's numbers, and the charts behind Ba
   await expect(page.getByTestId("breadth-charts")).toHaveCount(0);
   await expect(page.getByRole("radiogroup", { name: "Time range" })).toHaveCount(0);
   await sane(page, errors);
+});
+
+test("positioning: participants, cash flows, PCR, the chain by strike and the history; facts only", async ({ page }, info) => {
+  const errors = await open(page, "/trade/positioning", "Participant-wise open interest");
+  const main = page.locator("main");
+  await expect(main.getByTestId("part-status")).toContainText("As of");
+  for (const who of ["client", "dii", "fii", "pro", "total"]) await expect(main.locator(`tr[data-participant="${who}"]`)).toBeVisible();
+  await expect(main.getByText("FII index futures, net")).toBeVisible();
+  await main.getByRole("button", { name: "Volume", exact: true }).click();
+  await expect(main.getByRole("columnheader", { name: "Futures bought" })).toBeVisible();
+  await expect(main.getByText("FII/FPI net")).toBeVisible();
+  const pcr = main.getByTestId("pcr-table");
+  for (const n of ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]) await expect(pcr.locator(`tr[data-pcr="${n}"]`)).toBeVisible({ timeout: 30_000 });
+  const facts = main.getByTestId("chain-facts");
+  await expect(facts.getByText("Max-pain strike")).toBeVisible({ timeout: 30_000 });
+  await expect(facts.getByText(/IV percentile/)).toBeVisible();
+  await expect(facts.locator(".strike-chart svg path").first()).toBeVisible();
+  await expect(facts).toContainText("IST");
+  await facts.getByRole("button", { name: "Change", exact: true }).click();
+  await expect(facts.locator(".strike-chart svg path").first()).toBeVisible();
+  await main.getByRole("group", { name: "Index", exact: true }).getByRole("button", { name: "BANKNIFTY" }).click();
+  await expect(main.getByTestId("chain-facts")).toContainText("spot 55,000", { timeout: 30_000 });
+  await main.getByText("Show the strikes as a table").click();
+  await expect(main.getByRole("columnheader", { name: "Call OI" })).toBeVisible();
+  // the history (the owner is on Pro): each participant's positions and each index's PCR and IV by day
+  await expect(main.getByText("FII: index futures, net (contracts)")).toBeVisible({ timeout: 30_000 });
+  await expect(main.getByText("NIFTY ATM implied volatility (%)")).toBeVisible();
+  await main.getByRole("group", { name: "Participant" }).getByRole("button", { name: "Client" }).click();
+  await expect(main.getByText("Client: index futures, net (contracts)")).toBeVisible();
+  const text = await main.innerText();
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener|finnhub|nseindia/i);
+  expect(text).not.toMatch(/\b(bullish|bearish|support|resistance|you should|buy now|sell now)\b/i);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+});
+
+test("positioning: a card on the Trade home and the Options tab, and the tabs between Options and Positioning", async ({ page }, info) => {
+  await sane(page, await open(page, "/trade", "Straddles, strangles"));
+  const card = page.getByTestId("positioning-card");
+  await expect(card.getByText("FII index futures, net")).toBeVisible({ timeout: 30_000 });
+  await expect(card.getByText("NIFTY PCR (open interest)")).toBeVisible();
+  await page.goto("/options");
+  await expect(page.getByTestId("positioning-card").getByText("FII/FPI cash, net")).toBeVisible({ timeout: 30_000 });
+  const tabs = page.getByRole("navigation", { name: "Options" });
+  await expect(tabs.getByRole("link", { name: "Options" })).toHaveAttribute("aria-current", "page");
+  await tabs.getByRole("link", { name: "Positioning" }).click();
+  await expect(page).toHaveURL(/\/trade\/positioning$/);
+  await expect(page.getByRole("heading", { name: "Positioning", level: 1 })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
 });

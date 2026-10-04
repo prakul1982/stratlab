@@ -34,7 +34,7 @@ PLANS = {
         "networth_items": None,
         "mf_schemes": None,       # unlimited
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
-                     "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth"},
+                     "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -52,7 +52,7 @@ PLANS = {
         "mf_schemes": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-                     "breadth"},
+                     "breadth", "positioning"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -62,10 +62,11 @@ PLANS = {
 # dividends: each company's dividends, TDS and US withholding (the year totals are for everyone); tax_tools: advance tax
 # amounts and the lot-by-lot long-term exemption facts (the due dates and the exemption used are for everyone); money_reminders: the money calendar's
 # reminders (the calendar and its feed are for everyone); breadth: market breadth history, charts and sector table (today's
-# numbers are for everyone)
+# numbers are for everyone); positioning: derivatives positioning history and the IV percentile and rank (today's
+# participant numbers, cash flows and option-chain facts are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-            "breadth")
+            "breadth", "positioning")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

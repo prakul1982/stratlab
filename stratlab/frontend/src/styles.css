@@ -1112,3 +1112,21 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .bx-level { width: 64px; height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); padding: 0 8px; font: inherit; }
 .bx-alert-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .bx-alert-list .btn { min-height: 32px; }
+/* ---------- derivatives positioning (Trade) ---------- */
+/* calls and puts: one hue each, validated for both themes (dataviz validator: light on --card, dark on --card) */
+:root { --pos-call: #1F4FB5; --pos-put: #B4500F; }
+:root[data-theme="dark"] { --pos-call: #6A8EE4; --pos-put: #D9773A; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --pos-call: #6A8EE4; --pos-put: #D9773A; } }
+.trade-tabs { align-self: flex-start; max-width: 100%; }
+.pos-table td .tiny { font-family: var(--mono); }
+.pos-table tr.total th, .pos-table tr.total td { font-weight: 600; border-top: 1px solid var(--line-2); }
+.pos-table tr.atm td, .pos-table tr.atm th { background: var(--chip); }
+.pos-section { min-width: 0; }
+.pos-details summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.strike-chart svg { display: block; }
+.strike-tip { position: absolute; transform: translateX(-50%); background: var(--card); border: 1px solid var(--line-2); border-radius: 8px;
+  padding: 6px 10px; font-size: 12.5px; pointer-events: none; white-space: nowrap; box-shadow: var(--shadow); z-index: 2; }
+.key-line { width: 12px; height: 2px; display: inline-block; border-radius: 1px; }
+.pos-chart { min-width: 0; }
+@media (max-width: 640px) { .trade-tabs { flex-wrap: nowrap; } }
+.space-strip + .pos-card { margin-top: -16px; margin-bottom: 28px; }   /* the Trade home: right under the strip */

@@ -30,12 +30,15 @@ def in_hours(now: datetime) -> bool:
 
 
 def compact(chain: dict) -> list[list]:
-    """[strike, ce bid, ce ask, ce ltp, ce oi, pe bid, pe ask, pe ltp, pe oi] per strike: about a third the size of the full rows."""
+    """[strike, ce bid, ce ask, ce ltp, ce oi, pe bid, pe ask, pe ltp, pe oi, ce volume, pe volume] per strike: about a
+    third the size of the full rows. The two volumes (the day's contracts traded so far) came later: older recordings
+    stop at the put's open interest."""
     def q(x):
         x = x or {}
         r2 = lambda v: round(v, 2) if isinstance(v, float) else v
         return [r2(x.get("bid")), r2(x.get("ask")), r2(x.get("ltp")), x.get("oi")]
-    return [[r["strike"], *q(r.get("ce")), *q(r.get("pe"))] for r in chain.get("rows") or []]
+    return [[r["strike"], *q(r.get("ce")), *q(r.get("pe")), (r.get("ce") or {}).get("volume"), (r.get("pe") or {}).get("volume")]
+            for r in chain.get("rows") or []]
 
 
 class Recorder:

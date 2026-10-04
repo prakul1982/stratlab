@@ -36,8 +36,8 @@ def test_targets_and_hours():
 
 
 def test_compact_rows():
-    assert compact({"rows": [{"strike": 100.0, "ce": {"bid": 1, "ask": 2, "ltp": 1.5, "oi": 9}, "pe": None}]}) == \
-        [[100.0, 1, 2, 1.5, 9, None, None, None, None]]
+    assert compact({"rows": [{"strike": 100.0, "ce": {"bid": 1, "ask": 2, "ltp": 1.5, "oi": 9, "volume": 40}, "pe": None}]}) == \
+        [[100.0, 1, 2, 1.5, 9, None, None, None, None, 40, None]]
 
 
 def test_records_current_and_next_in_hours_only():

@@ -10,6 +10,7 @@ import { LineChart } from "../components/Charts";
 import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
 import { track } from "../lib/analytics";
+import { PositioningCard, TradeTabs } from "../components/PositioningCard";
 
 const DRAFT = "stratlab.options.draft.v1";
 
@@ -251,6 +252,7 @@ export function OptionsPage() {
 
   return (
     <div className="stack opt-page" style={{ gap: 20 }}>
+      <TradeTabs />
       <div className="stack" style={{ gap: 6 }}>
         <h1 className="page-title">Options<Info>{HELP.options}</Info></h1>
         <p className="muted" style={{ maxWidth: "62ch" }}>Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask.</p>
@@ -442,6 +444,8 @@ export function OptionsPage() {
         <button className="btn quiet sm" onClick={() => { if (confirm("Start over with a fresh short straddle?")) { setS(blankOptions()); setPreview(null); } }}>Start over</button>
         <Link to="/import" className="btn quiet sm">Import a structure</Link>
       </div>
+
+      <PositioningCard />
 
       {rows && rows.length > 0 && (
         <section className="stack" style={{ gap: 10 }} aria-labelledby="o-sess">

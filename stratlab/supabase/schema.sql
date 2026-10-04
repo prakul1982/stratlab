@@ -74,7 +74,8 @@ create table if not exists public.app_settings (
 );
 
 -- Option chains recorded every few minutes in market hours, for options backtesting later.
--- chain: one [strike, ce bid, ce ask, ce ltp, ce oi, pe bid, pe ask, pe ltp, pe oi] per strike. Server only.
+-- chain: one [strike, ce bid, ce ask, ce ltp, ce oi, pe bid, pe ask, pe ltp, pe oi, ce volume, pe volume] per strike
+-- (recordings before Oct 2026 stop at pe oi). Server only.
 create table if not exists public.option_snapshots (
   id bigserial primary key,
   taken_at timestamptz not null,

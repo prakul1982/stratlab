@@ -42,7 +42,7 @@ def test_everything_open_during_early_access(monkeypatch):
 
 def test_features_per_plan_once_payments_are_live(paid):
     assert not any(plan_info("free")["features"].values())
-    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth"}
+    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning"}
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
     assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {
