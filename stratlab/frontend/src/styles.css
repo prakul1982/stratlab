@@ -993,3 +993,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .lp-options { border-color: var(--blue); }
 @media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }
 .space-tag { flex: none; align-self: center; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+/* Money: net worth */
+.nw-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-items: end; }
+.nw-form .field input, .nw-form .field select { width: 100%; min-width: 0; }
+@media (max-width: 560px) { .nw-form { grid-template-columns: minmax(0, 1fr); } }

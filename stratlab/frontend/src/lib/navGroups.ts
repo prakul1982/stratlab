@@ -44,5 +44,7 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings." },
     { to: "/tax-report", label: "Tax report", icon: "receipt", title: "Capital gains by financial year, from your tradebooks",
       blurb: "Capital gains by financial year from your tradebooks, matched first in, first out. An estimate to check with your CA." },
+    { to: "/money/net-worth", label: "Net worth", icon: "wallet", title: "What you own minus what you owe, with your insurance policies",
+      blurb: "Stocks, funds, PF, PPF, NPS, FDs, gold and property, minus loans; with EMIs, prepayment maths and your policies." },
   ],
 };

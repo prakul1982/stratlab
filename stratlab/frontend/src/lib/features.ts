@@ -76,6 +76,8 @@ export const FEATURES: Feature[] = [
     words: "investor home dashboard watchlist checklist report card management track record long term", home: true, goal: "find" },
   { id: "holdings", title: "My Holdings", what: "Upload your holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities: value, P&L, sectors and each stock's filings.", to: "/holdings",
     words: "holdings portfolio my stocks import upload broker zerodha console kite groww upstox angel one icici direct hdfc securities csv excel xlsx pnl p&l profit loss value sector allocation", home: true, goal: "find" },
+  { id: "networth", title: "Net worth", what: "Everything you own minus what you owe: stocks, EPF, PPF, NPS, FDs, gold, property and loans, with your insurance policies.", to: "/money/net-worth",
+    words: "net worth networth assets liabilities epf ppf nps fd rd fixed deposit recurring gold sgb sovereign gold bond property cash crypto loan emi prepay prepayment home loan insurance policy premium term health money" },
   { id: "news", title: "News and newsletters", what: "A short brief after each market close, for India, the US and the companies you follow. On the page or by email.", to: "/news",
     words: "news newsletter brief digest email daily weekly market close my stocks watchlist headlines", goal: "find" },
   { id: "plans", title: "Plans", what: "What each plan includes.", to: "/plans", words: "plans pricing upgrade pro basic free price billing" },

@@ -41,3 +41,4 @@ export const News = ({ size }: P) => <svg {...base(size)}><path d="M5 4h12v15a2 
 export const Library = ({ size }: P) => <svg {...base(size)}><path d="M4 4h4v16H4zM10 4h4v16h-4z" /><path d="m15.5 5.3 3.8-1 3.4 14.6-3.8 1z" /></svg>;
 export const Bell = ({ size }: P) => <svg {...base(size)}><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" /><path d="M10 21h4" /></svg>;
 export const Receipt = ({ size }: P) => <svg {...base(size)}><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6M9 16h3" /></svg>;
+export const Wallet = ({ size }: P) => <svg {...base(size)}><path d="M4 7a2 2 0 0 1 2-2h11v4" /><path d="M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z" /><path d="M16 14.5h.01" /></svg>;
