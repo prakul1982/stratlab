@@ -10,9 +10,8 @@ import { HELP } from "../lib/help";
 import { InstrumentSearch } from "../components/InstrumentSearch";
 import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
-import { Pin, Search, Sparkle, Upload } from "../components/Icons";
+import { Pin, Search, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
-import { askExamples, useRotating } from "../lib/rotating";
 
 export type Where = { market: string; instrument: Instrument | null };
 
@@ -40,22 +39,6 @@ export function useCreateNotebook(where?: Where | null) {
       fail(e);
     }
   };
-}
-
-/** The big "type anything" bar: opens the search box, which works out what you mean and does it. */
-export function AskBar() {
-  const { focus } = useApp();
-  const example = useRotating(askExamples(focus));
-  return (
-    <button className="ask-bar" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}>
-      <Sparkle size={20} />
-      <span className="stack" style={{ gap: 2, minWidth: 0 }}>
-        <b>Ask or do anything</b>
-        <span className="small muted ask-example" aria-live="off">Try: “{example}”</span>
-      </span>
-      <kbd className="small muted">{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
-    </button>
-  );
 }
 
 /** Step 1 of a new notebook: the market and instrument to test on. */
@@ -226,7 +209,7 @@ type Sort = "recent" | "name" | "verdict";
 
 /** `hide`: tools the page around it already links to, so each shows once (see Explore). */
 export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
-  const { notebooks, me, refreshNotebooks, fail } = useApp();
+  const { notebooks, refreshNotebooks, fail } = useApp();
   const nav = useNavigate();
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>(() => { try { return (localStorage.getItem("stratlab.nbSort") as Sort) || "recent"; } catch { return "recent"; } });
@@ -251,14 +234,13 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
     <div className="stack" style={{ gap: 24 }}>
       <div className="spread" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 14 }}>
         <div className="stack" style={{ gap: 8 }}>
-          <span className="eyebrow">{me?.email ?? "Your lab"}</span>
+          <span className="eyebrow">Trade · your lab</span>
           <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Your notebooks</h1>
         </div>
         <div className="row wrap" style={{ gap: 10 }}>
           <button className="btn" onClick={() => nav("/new")}>Test a new idea</button>
         </div>
       </div>
-      <AskBar />
       {notebooks.length > 3 && (
         <div className="row wrap" style={{ gap: 10 }}>
           <label className="search-box" style={{ flex: "1 1 260px" }}>

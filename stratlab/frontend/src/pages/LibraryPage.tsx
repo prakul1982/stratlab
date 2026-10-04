@@ -84,6 +84,7 @@ export function LibraryPage() {
   return (
     <div className="stack" style={{ gap: 22 }}>
       <div className="stack" style={{ gap: 8 }}>
+        <span className="eyebrow">Trade · strategy library</span>
         <h1 className="page-title">Strategy library<Info>{"Strategies people published from their own experiments, each with the verdict it earned: the lucky ones are shown as plainly as the real edges. Copy any of them into a notebook of your own and re-test it on your market and dates. Publish yours from a verdict: Share verdict → Publish to the library."}</Info></h1>
         <p className="page-sub">Real rules with honest verdicts, published by other traders. Copy one and test it yourself: a verdict here is a starting point, not a promise.</p>
       </div>

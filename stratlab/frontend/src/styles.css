@@ -356,13 +356,6 @@ table.plan-compare th:not(:first-child), table.plan-compare td:not(:first-child)
 .palette-answer.problem p { color: var(--orange-ink); }
 .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink); animation: spin .8s linear infinite; flex: none; }
 
-.ask-bar { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; cursor: text; padding: 16px 20px;
-  border: 1.5px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); font: inherit; }
-.ask-bar:hover, .ask-bar:focus-visible { border-color: var(--ink); }
-.ask-bar > .stack { flex: 1; }
-.ask-bar .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ask-bar kbd { flex: none; }
-@media (max-width: 640px) { .ask-bar .small { white-space: normal; } .ask-bar kbd { display: none; } }
 
 /* ---------- calm forms: one idea per block, advanced settings folded away ---------- */
 .block { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
@@ -753,7 +746,7 @@ a.chip-link:hover { border-color: var(--ink); color: var(--ink); }
 kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--paper); }
 @media (max-width: 640px) { .kbd-hint { display: none; } }
 /* a touch screen with no keyboard: shortcut hints only puzzle (a landscape phone is wider than 640px) */
-@media (hover: none) and (pointer: coarse) { .kbd-hint, .ask-bar kbd, .search-btn kbd { display: none; } }
+@media (hover: none) and (pointer: coarse) { .kbd-hint, .search-btn kbd { display: none; } }
 .ref-more summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--blue-ink); }
 .ref-more .field .hint { font-weight: 400; }
 .ref-more summary { min-height: 32px; display: flex; align-items: center; }

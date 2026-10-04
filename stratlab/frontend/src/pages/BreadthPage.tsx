@@ -50,8 +50,8 @@ export function BreadthPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Scans · {g?.region === "US" ? "United States" : "India"}</span>
         <h1 className="page-title">Market breadth</h1>
-        <p className="page-sub">How many stocks in a group rose or fell, sit above their averages, or made new highs and lows, day by day.
-          Every stock counts once, whatever its size. Worked out from daily closing prices after each close: facts about what happened, not a forecast.</p>
+        <p className="page-sub">How many stocks in a group rose or fell, sit above their averages, or made new highs and lows, day by day,
+          from daily closes. Every stock counts once: facts about what happened, not a forecast.</p>
       </div>
 
       <div className="row wrap bx-filters" style={{ gap: 10, alignItems: "center" }}>
