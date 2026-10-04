@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { download, shareLink, siteUrl } from "../lib/share";
 import { renderCompanyCard, type CompanyCard } from "./companyCard";
 import { Share } from "./Icons";
 import { track } from "../lib/analytics";
-
-const asDataUrl = (blob: Blob) => new Promise<string>((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.readAsDataURL(blob); });
 
 /** Share a company: draws its fact card, makes a public link that previews as the card (and opens the company's
  *  public page), then the phone's share sheet or, on a computer, the link copied with the image a click away. */
@@ -19,7 +17,7 @@ export function ShareCompanyButton({ region, symbol }: { region: "IN" | "US"; sy
       const path = `/cards/company/${region}/${encodeURIComponent(symbol)}`;
       const card = await api<CompanyCard>(path);
       const blob = await renderCompanyCard(card, "light");
-      const out = await api<{ token: string }>(path, { method: "POST", body: { image: await asDataUrl(blob) } });
+      const out = await api<{ token: string }>(path, { method: "POST", body: { image: await dataUrl(blob) } });
       const url = `${siteUrl()}/c/${out.token}`;
       const file = new File([blob], `stratlab-${card.symbol.toLowerCase()}-facts.png`, { type: "image/png" });
       const save = { label: "Save the image", run: () => download(blob, file.name) };

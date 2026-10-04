@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly, money, pct, price, qty as qtyText, safeHref, signClass } from "../lib/format";
 import { AsOf, Empty, Loading, Modal } from "../components/ui";
@@ -38,16 +38,6 @@ const inr = (v: number | null | undefined) => money(v, "INR", 0);
 const usd = (v: number | null | undefined) => money(v, "USD", 0);
 const isUS = (r: Row) => r.market === "US";
 
-/** The file as base64, the way the server takes it. */
-function readFile(f: File): Promise<string> {
-  return new Promise((ok, bad) => {
-    const r = new FileReader();
-    r.onload = () => ok(String(r.result));
-    r.onerror = () => bad(new Error("That file couldn't be read. Pick it again."));
-    r.readAsDataURL(f);
-  });
-}
-
 function Trend({ f }: { f?: Facts }) {
   if (!f || f.stage == null) return <span className="muted">–</span>;
   return <>Stage {f.stage} · ST {f.st_up ? "up" : "down"}</>;
@@ -84,7 +74,7 @@ export function HoldingsPage() {
     if (f.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); return; }
     setBusy(true);
     try {
-      const data = await readFile(f);
+      const data = await dataUrl(f);
       const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode } });
       track("holdings imported", { rows: r.imported, method: mode });
       setResult(r);
