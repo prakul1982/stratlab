@@ -110,7 +110,7 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              "Free: 50 to 150 requests a day per model (8,000 tokens in, 4,000 out per request).", "prototype",
              ("openai/gpt-4.1-mini", "meta/Llama-3.3-70B-Instruct", "openai/gpt-4.1", "mistral-ai/mistral-small-2503"),
              models_url="https://models.github.ai/catalog/models", limit_scope="model", ctx=8000, max_out=4000, probe_max=2, probe_every_h=24,
-             prior=(20, 20, 20),
+             prior=(20, 20, 20), headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
              note="GitHub's free tier is meant for prototyping, so StratLab asks it only after every other free provider."),
     Provider("nvidia", "NVIDIA API catalog", "openai", "https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "https://build.nvidia.com/settings/api-keys",
              "Free for development: about 40 requests a minute.", "prototype",
@@ -169,10 +169,10 @@ def base_url(name: str) -> str:
 
 # Never chat models: speech, pictures, search indexes and safety filters.
 NOT_CHAT = re.compile(
-    r"embed|whisper|tts|speech|audio|transcri|voice|orpheus|playai|"     # speech in or out
+    r"embed|whisper|tts|speech|audio|transcri|voice|voxtral|orpheus|playai|"     # speech in or out
     r"image|vision|-vl\b|-vl-|\bvl-|pixtral|diffusion|flux|sdxl|dall-?e|imagen|veo|video|"   # pictures (vision-first models)
     r"guard|moderation|safety|shield|prompt-?guard|"                    # safety classifiers, not answerers
-    r"rerank|retriev|ocr|"                                             # search and document tools
+    r"rerank|retriev|ocr|\bbge-|\be5-|\bgte-|nomic|minilm|colbert|"      # search and document tools (embedders)
     r"compound|search|deep-?research|"                                 # agent systems with their own tools and quotas
     r"realtime|-live\b|computer-use|robotics", re.I)
 

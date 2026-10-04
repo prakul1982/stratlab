@@ -474,6 +474,22 @@ def test_model_lists_are_filtered_to_usable_english_chat_models():
     assert (size_b("qwen3-30b-a3b"), size_b("Meta-Llama-3.3-70B-Instruct"), size_b("gemma-3n-e4b-it"), size_b("gpt-4.1")) == (30, 70, 4, None)
 
 
+@pytest.mark.parametrize("provider,model,why", [
+    ("mistral", "mistral-ocr-latest", "not a chat model"), ("mistral", "voxtral-small-latest", "not a chat model"),
+    ("mistral", "ministral-3b-latest", "too small"), ("mistral", "pixtral-large-latest", "not a chat model"),
+    ("mistral", "codestral-latest", "specialist"), ("mistral", "mistral-small-latest", None), ("mistral", "ministral-8b-latest", None),
+    ("sambanova", "E5-Mistral-7B-Instruct", "not a chat model"), ("sambanova", "DeepSeek-R1-0528", "thinks too long"),
+    ("sambanova", "Meta-Llama-3.3-70B-Instruct", None), ("groq", "openai/gpt-oss-safeguard-20b", "not a chat model"),
+    ("gemini", "gemini-2.5-flash-preview-tts", "not for this job"), ("gemini", "gemini-embedding-001", "not a chat model"),
+    ("gemini", "gemma-3-1b-it", "too small"), ("gemini", "gemma-3-27b-it", None),
+    ("openrouter", "qwen/qwen2.5-vl-72b-instruct:free", "not a chat model"), ("nvidia", "nvidia/llama-3.1-nemoguard-8b-content-safety", "not a chat model"),
+    ("cloudflare", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", None), ("cloudflare", "@cf/baai/bge-m3", "not a chat model"),
+])
+def test_one_model_at_a_time(provider, model, why):
+    from app.ai_catalog import unusable
+    assert unusable(provider, model) == why
+
+
 def test_every_providers_model_list_format_is_read():
     assert C.parse_models({"data": [{"id": "a", "context_window": 131072}, {"id": "b", "context_length": 8192}]}) == \
         [{"id": "a", "ctx": 131072}, {"id": "b", "ctx": 8192}]

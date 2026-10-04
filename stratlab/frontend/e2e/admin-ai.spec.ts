@@ -129,7 +129,7 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
   await expect(groq.getByText("Test: answered with llama-3.3-70b-versatile in 0.8 s")).toBeVisible();
   await panel.getByRole("button", { name: "Re-rank models" }).click();
   await groq.getByRole("button", { name: "Re-rank Groq models" }).click();
-  expect(sent).toEqual([
+  await expect.poll(() => sent).toEqual([
     { path: "/admin/ai/pin", body: { provider: "groq", model: "openai/gpt-oss-120b" } },
     { path: "/admin/ai/block", body: { provider: "groq", model: "qwen/qwen3-32b", blocked: true } },
     { path: "/admin/ai/pin", body: { provider: "groq", model: null } },
