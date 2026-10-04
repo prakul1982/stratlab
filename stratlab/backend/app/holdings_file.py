@@ -603,10 +603,11 @@ def _fmv(v: float | None, qty: float, buy_price: float) -> float | None:
     return each if abs(math.log(each / buy_price)) <= abs(math.log(whole / buy_price)) else whole
 
 
-def _read_trades(rows: list[list[str]], filename: str = "") -> dict:
+def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = False) -> dict:
     """The trades in one table: {"broker", "kind", "trades", "problems", "gross", "taxable"}: what the tax P&L lines add
     up to before charges, sales less purchases, and the same with the 31 Jan 2018 value as the cost where it's higher
-    (brokers' summaries show one or the other). Raises FileError when there are none."""
+    (brokers' summaries show one or the other). Raises FileError when there are none. `derivatives` keeps futures and
+    options lines too (the trade journal pairs them; the tax report leaves them out), each with its segment cell."""
     found = _trade_header(rows)
     if not found:
         if summary(rows):
@@ -628,7 +629,7 @@ def _read_trades(rows: list[list[str]], filename: str = "") -> dict:
         if not text or re.match(r"(?i)^(total|grand total|sub ?total)\b", sym or nm or ""):
             continue
         seg = _cell(row, cols.get("segment"))
-        if (seg and NOT_EQUITY.match(seg)) or (not ISIN.match(isin) and DERIVATIVE.search(sym.upper())):
+        if not derivatives and ((seg and NOT_EQUITY.match(seg)) or (not ISIN.match(isin) and DERIVATIVE.search(sym.upper()))):
             problems.append({"line": n, "text": text, "reason": "Futures, options and other non-equity trades are left out of a tradebook (F&O is "
                              "business income, read from the F&O tax P&L file instead)."})
             continue
@@ -685,7 +686,7 @@ def _read_trades(rows: list[list[str]], filename: str = "") -> dict:
                 tm = hit.group(0) if hit else ""
             fmv = _fmv(number(_cell(row, cols.get("fmv"))), qty, price) if sd_ == "B" and d <= "2018-01-31" else None
             out.append({**base, "d": d, "t": tm[:20], "side": sd_, "qty": qty, "price": round(price, 4), "charges": charges,
-                        "tid": _cell(row, cols.get("trade_id"))[:40], "fmv": fmv, "src": "trades"})
+                        "tid": _cell(row, cols.get("trade_id"))[:40], "fmv": fmv, "src": "trades", **({"seg": seg[:20]} if derivatives else {})})
         if len(out) >= MAX_TRADES:
             break
     if not out:

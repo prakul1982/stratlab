@@ -39,6 +39,12 @@ export type NavEntry = { to: string; label: string; icon?: string; title?: strin
 /** Menu groups kept as data, by name. "Money" is the Money space's menu, in order: each Money feature adds one line
  * here, and it shows both in the menu and as a card on the Money home, so only what's built ever appears. */
 export const NAV_GROUPS: Record<string, NavEntry[]> = {
+  /** The Trade space's entries kept as data: each shows as a card on the Trade home, and in the Trade menu wherever
+   * the menu reads this group. */
+  Trade: [
+    { to: "/trade/journal", label: "Trade journal", icon: "book", title: "Your real trades paired into round trips, judged by the verdict's checks",
+      blurb: "Import your tradebook or tax P&L, equity and F&O: every round trip with its charges, your notes, and the verdict's honesty checks on your real trades." },
+  ],
   Money: [
     { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",
       blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings." },
