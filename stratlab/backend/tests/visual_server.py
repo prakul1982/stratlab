@@ -60,6 +60,8 @@ def build():
     main.corp_job.refresh("IN")             # the corporate-actions calendar, as the morning job would have built it
     from app import surveillance
     surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them
+    from app import fo_changes
+    fo_changes.refresh(main.filings_feed)    # the F&O contract file and circulars, likewise
     screen_index()
     breadth(mp)
     positioning_history()

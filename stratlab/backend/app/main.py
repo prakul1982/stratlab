@@ -74,6 +74,7 @@ from . import corp_actions
 from . import surveillance
 from . import etf_nav
 from . import positioning
+from . import fo_changes_routes
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
@@ -233,6 +234,7 @@ async def lifespan(app: FastAPI):
     invite_job.start()
     rules_watch_job.start()
     positioning_job.start()
+    fo_changes_routes.job.start()               # F&O contract changes, twice a trading day
     networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
@@ -260,6 +262,7 @@ app.include_router(money_mf_ter.admin_router)  # /admin/ter
 app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
+app.include_router(fo_changes_routes.router)  # /trade/fo-changes
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps

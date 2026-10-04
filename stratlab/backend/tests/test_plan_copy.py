@@ -65,6 +65,7 @@ CARD_WORDS = {
     "tax_tools": "Advance tax amounts", "itr_export": "ITR-ready", "us_tax": "US stocks in Indian tax",
     "mf_costs": "fund costs in rupees",
     "etf_gaps": "ETF gap alerts",
+    "fo_alerts": "F&O change alerts",
 }
 
 

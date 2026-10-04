@@ -12,6 +12,8 @@ import { Info, Loading } from "../components/ui";
 import { track } from "../lib/analytics";
 import { PositioningCard } from "../components/PositioningCard";
 import { Earlier } from "../components/Earlier";
+import { FoBadges } from "../components/FoBadges";
+import { foSymbol } from "../lib/foChanges";
 
 const DRAFT = "stratlab.options.draft.v1";
 
@@ -519,6 +521,7 @@ function OptSessionCards({ rows }: { rows: LiveRow[] }) {
         <Link key={x.id} to={`/options/s/${x.id}`} className="card" style={{ flex: "none", minWidth: 200, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
           <b>{x.name}</b>
           <span className="small muted">{new Date(x.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+          <FoBadges region="IN" symbol={foSymbol(x.instrument)} plain />
           <span className={`badge ${x.status}`} style={{ alignSelf: "flex-start" }}>{x.status}</span>
         </Link>
       ))}

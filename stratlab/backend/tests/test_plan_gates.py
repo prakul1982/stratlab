@@ -42,7 +42,7 @@ def test_everything_open_during_early_access(monkeypatch):
 
 def test_features_per_plan_once_payments_are_live(paid):
     assert not any(plan_info("free")["features"].values())
-    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps"}
+    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts"}
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
     assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {
@@ -272,3 +272,21 @@ def test_etf_gap_alerts_are_basic(paid, monkeypatch):
     monkeypatch.setattr(main.db, "get_setting", lambda k: None)
     assert not main._alert_kind_ok({"id": "u1", "plan": "free"}, "etfgap") and main._alert_kind_ok({"id": "u1", "plan": "free"}, "price")
     assert main._alert_kind_ok({"id": "u1", "plan": "basic", "plan_status": "active"}, "etfgap")
+
+
+def test_fo_changes_free_to_view_alerts_on_basic(paid, monkeypatch):
+    """F&O contract changes: the list and badges for everyone, the alert on Basic and up (turning it off always works)."""
+    from tests.fake_db import FakeSupabase
+    monkeypatch.setattr(main.db, "_client", FakeSupabase())
+    assert FEATURE_PLAN["fo_alerts"] == "basic" and not plan_info("free")["features"]["fo_alerts"]
+    try:
+        c = as_plan("free")
+        assert c.get("/trade/fo-changes").status_code == 200
+        r = c.put("/trade/fo-changes/alerts", json={"on": True})
+        assert r.status_code == 402 and "Basic plan" in r.json()["detail"]["message"]
+        assert c.put("/trade/fo-changes/alerts", json={"on": False}).status_code == 200
+        for plan in ("basic", "pro"):
+            r = as_plan(plan).put("/trade/fo-changes/alerts", json={"on": True})
+            assert r.status_code == 200 and r.json()["on"] is True
+    finally:
+        main.app.dependency_overrides.clear()
