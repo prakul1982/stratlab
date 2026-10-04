@@ -9,6 +9,9 @@ least their price that day (grandfathering), and before 1 April 2018 long-term g
 the same shares on the same day is intraday (speculative business income), shown apart. A bonus issue adds shares
 that cost nothing and are held from the bonus date; a split changes the number of shares, not the cost or the date.
 
+F&O, commodity and currency results (non-speculative business income) are kept as totals per segment and year, not
+line by line, and go into the total tax estimate (tax_total.py) with the intraday result and the user's other income.
+
 Stored per user in app_settings (taxlots:<uid>), seen only by that user, and deleted in one step. Facts and
 arithmetic on the user's own trades; never a view on what to do."""
 import json
@@ -16,7 +19,7 @@ import math
 import re
 from datetime import date, datetime, timedelta, timezone
 
-from . import db
+from . import db, tax_total
 from .engine.costs import IN_LTCG, IN_LTCG_EXEMPT, IN_STCG
 
 KEY = "taxlots:"
@@ -31,8 +34,12 @@ MAX_FILES = 40
 MAX_ROWS = 2000                   # realised lines sent for one year (the CSV has all of them)
 EPS = 1e-6
 
-DISCLAIMER = ("An estimate from the files you uploaded, not tax advice. Check it with a chartered accountant (CA) "
-              "before you file or pay tax.")
+DISCLAIMER = ("An estimate from the files you uploaded and the income you entered, not tax advice. Slab tax depends "
+              "on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered "
+              "accountant (CA) before you file or pay tax.")
+SEGMENTS = ("fno", "commodity", "currency")
+SEGMENT_NAMES = {"fno": "F&O", "commodity": "Commodity", "currency": "Currency"}
+MAX_BUSINESS = 120                # segment-year totals kept (three segments, many years, a few files each)
 SETOFF_RULES = [
     "Short-term capital losses can be set off against both short-term and long-term gains.",
     "Long-term capital losses can only be set off against long-term gains.",
@@ -42,6 +49,8 @@ SETOFF_RULES = [
     "Carried forward, they follow the same two rules.",
     "Capital losses can't be set off against salary or other income.",
     "Intraday (speculative) losses can only be set off against speculative income, and carried forward for 4 years.",
+    "F&O, commodity and currency losses (non-speculative business losses) can be set off against any income except "
+    "salary in the same year, and carried forward for 8 years against business income.",
 ]
 NOTES = [
     "Rates before 4% cess and any surcharge. Your basic exemption limit and rebate can change the amount.",
@@ -49,6 +58,12 @@ NOTES = [
     "Brokerage and other charges in the files are added to the cost or taken off the sale. STT is not deductible.",
     "A bonus share costs nothing and is held from the bonus date. A split keeps the cost and the buy date.",
     "Intraday trades (bought and sold the same day) are speculative business income, taxed at your slab rate.",
+    "F&O, commodity and currency trades are non-speculative business income, taxed at your slab rate. The charges in "
+    "your broker's file (including STT and CTT, which business income can deduct) are taken off the result.",
+    "Turnover is the total of profits and losses, trade by trade. Brokers' summaries often net them per contract "
+    "first, which gives a smaller figure; both are shown.",
+    "A resident individual under 60 is assumed. The 87A rebate, surcharge (with its marginal relief) and cess follow "
+    "each year's rules; the slab tax on the rest of your income is only as good as the figure you enter.",
 ]
 
 
@@ -138,8 +153,19 @@ def _key(uid: str) -> str:
     return f"{KEY}{uid}"
 
 
+def _chunk_ok(c) -> bool:
+    """A stored F&O, commodity or currency total that is whole: its segment, year, dates and numbers."""
+    if not isinstance(c, dict) or c.get("seg") not in SEGMENTS or not isinstance(c.get("fy"), int) or not 2000 <= c["fy"] <= 2100:
+        return False
+    if not all(isinstance(c.get(k), str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", c[k]) for k in ("first", "last")):
+        return False
+    return all(isinstance(c.get(k), (int, float)) and not isinstance(c.get(k), bool) and math.isfinite(c[k])
+               for k in ("pnl", "turnover", "turnover_contract", "charges", "stt", "trades"))
+
+
 def load(uid: str) -> dict:
-    """{"trades": [...], "files": [{name, broker, kind, trades, at}], "fmv": {symbol: price}, "updated_at"}."""
+    """{"trades": [...], "files": [{name, broker, kind, trades, at}], "fmv": {symbol: price}, "business": [segment-year
+    totals], "updated_at"}."""
     got = db.json_value(db.get_setting(_key(uid)), {})
     got = got if isinstance(got, dict) else {}
     ok = []
@@ -150,14 +176,87 @@ def load(uid: str) -> dict:
             ok.append(t)
     fmv = got.get("fmv") if isinstance(got.get("fmv"), dict) else {}
     return {"trades": ok, "files": [f for f in got.get("files") or [] if isinstance(f, dict)],
-            "fmv": {k: v for k, v in fmv.items() if isinstance(v, (int, float)) and v > 0}, "updated_at": got.get("updated_at")}
+            "fmv": {k: v for k, v in fmv.items() if isinstance(v, (int, float)) and v > 0},
+            "business": [c for c in got.get("business") or [] if _chunk_ok(c)], "updated_at": got.get("updated_at")}
 
 
-def save(uid: str, trades: list[dict], files: list[dict], fmv: dict | None = None):
+def save(uid: str, trades: list[dict], files: list[dict], fmv: dict | None = None, business: list[dict] | None = None):
     keep = ("d", "t", "side", "qty", "price", "charges", "isin", "symbol", "name", "sym", "exchange", "tid", "fmv", "src")
     slim = [{k: t[k] for k in keep if t.get(k) not in (None, "")} for t in trades[:MAX_TRADES]]
     db.set_setting(_key(uid), json.dumps({"trades": slim, "files": files[-MAX_FILES:], "fmv": fmv or {},
+                                          "business": (business or [])[-MAX_BUSINESS:],
                                           "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}, separators=(",", ":")))
+
+
+def merge_business(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int, int]:
+    """(totals, added, replaced, same): a new file's F&O, commodity and currency totals beside the saved ones. Lines
+    aren't kept, so a file can't be matched line by line: a segment's year from a file whose dates overlap a saved
+    one replaces it (the same file again, or a full year after a quarter), and one that doesn't overlap is added (the
+    next quarter)."""
+    out = list(old)
+    added = replaced = same = 0
+    for c in new:
+        hits = [o for o in out if o["seg"] == c["seg"] and o["fy"] == c["fy"] and not (c["last"] < o["first"] or c["first"] > o["last"])]
+        if any(_same(o, c) for o in hits):
+            same += 1
+            continue
+        out = [o for o in out if not any(o is h for h in hits)]
+        out.append(c)
+        if hits:
+            replaced += 1
+        else:
+            added += 1
+    return out, added, replaced, same
+
+
+def _same(a: dict, b: dict) -> bool:
+    return all(a.get(k) == b.get(k) for k in ("seg", "fy", "first", "last", "trades", "pnl", "charges"))
+
+
+def business_year(fy: int, chunks: list[dict]) -> dict:
+    """One year's F&O, commodity and currency totals, by segment: the result before and after charges, turnover and
+    the biggest underlyings."""
+    segs = []
+    for seg in SEGMENTS:
+        cs = [c for c in chunks if c["seg"] == seg and c["fy"] == fy]
+        if not cs:
+            continue
+        by: dict[str, dict] = {}
+        for c in cs:
+            for b in c.get("by") or []:
+                if isinstance(b, dict) and isinstance(b.get("pnl"), (int, float)):
+                    cur = by.setdefault(str(b.get("u") or "?")[:20], {"pnl": 0.0, "turnover": 0.0, "trades": 0})
+                    cur["pnl"] += b["pnl"]
+                    cur["turnover"] += b.get("turnover") or 0
+                    cur["trades"] += int(b.get("trades") or 0)
+        pnl, charges = sum(c["pnl"] for c in cs), sum(c["charges"] for c in cs)
+        segs.append({"seg": seg, "label": SEGMENT_NAMES[seg], "trades": int(sum(c["trades"] for c in cs)), "pnl": _r(pnl),
+                     "charges": _r(charges), "stt": _r(sum(c["stt"] for c in cs)), "net": _r(pnl - charges),
+                     "turnover": _r(sum(c["turnover"] for c in cs)), "turnover_contract": _r(sum(c["turnover_contract"] for c in cs)),
+                     "first": min(c["first"] for c in cs), "last": max(c["last"] for c in cs),
+                     "options": {k: _r(sum((c.get("options") or {}).get(k) or 0 for c in cs)) for k in ("pnl", "turnover", "trades")},
+                     "futures": {k: _r(sum((c.get("futures") or {}).get(k) or 0 for c in cs)) for k in ("pnl", "turnover", "trades")},
+                     "by": sorted(({"u": u, **{k: _r(v) for k, v in x.items()}} for u, x in by.items()),
+                                  key=lambda x: (x["u"] == "Others", -abs(x["pnl"])))[:30]})
+    return {"segments": segs, "pnl": _r(sum(x["pnl"] for x in segs)), "charges": _r(sum(x["charges"] for x in segs)),
+            "net": _r(sum(x["net"] for x in segs)), "turnover": _r(sum(x["turnover"] for x in segs)),
+            "turnover_contract": _r(sum(x["turnover_contract"] for x in segs)), "trades": sum(x["trades"] for x in segs)}
+
+
+def with_total(y: dict, business: list[dict], inputs: dict | None) -> dict:
+    """A year from year() with its F&O totals, the total tax estimate on the user's inputs (and the other regime's
+    figure on the same inputs, as a fact), and the return and audit facts."""
+    biz = business_year(y["fy"], business)
+    parts = {s["seg"]: s["net"] for s in biz["segments"]}
+    v = tax_total.clean(inputs) if inputs else tax_total.default_inputs()
+    total = tax_total.estimate(y["fy"], v, y["buckets"], y["intraday"]["pnl"], biz["net"], parts)
+    other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"],
+                               y["intraday"]["pnl"], biz["net"], parts)
+    turnover = (y["intraday"].get("turnover") or 0) + biz["turnover"]
+    return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)},
+            "other_regime": {"regime": other["regime"], "total": other.get("total")} if other.get("available") else None,
+            "filing": tax_total.filing_facts(y["fy"], turnover, bool(biz["segments"]) or y["intraday"]["count"] > 0),
+            "turnover": _r(turnover)}
 
 
 def delete(uid: str):
@@ -449,7 +548,7 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
         "buckets": buckets, "steps": steps, "tax": _r(tax), "tax_with_cess": _r(tax * (1 + CESS)),
         "carry_forward": {"st": _r(st_left), "lt": _r(lt_left)},
         "intraday": {"count": len(intra), "buy": _r(sum(i["buy"] for i in intra)), "sell": _r(sum(i["sell"] for i in intra)),
-                     "pnl": _r(sum(i["pnl"] for i in intra))},
+                     "pnl": _r(sum(i["pnl"] for i in intra)), "turnover": _r(sum(abs(i["pnl"]) for i in intra))},
         "gf_missing": sum(1 for r in rows if r["gf"] == "missing"), "gf_applied": sum(1 for r in rows if r["gf"] == "applied"),
         "count": len(rows), "rows": [_row(r) for r in rows_out[:limit]],
     }
@@ -505,17 +604,20 @@ def holdings_check(open_lots: list[dict], items: list[dict]) -> list[dict]:
     return out[:50]
 
 
-def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: list[dict], today: str) -> dict:
-    """The whole page: every financial year with trades (and the current one), open lots below cost, and the lines
-    that couldn't be worked out."""
+def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: list[dict], today: str,
+           business: list[dict] | None = None, inputs: dict[int, dict] | None = None) -> dict:
+    """The whole page: every financial year with trades or F&O (and the current one), each with its total tax
+    estimate, open lots below cost, and the lines that couldn't be worked out."""
     c = compute(trades, actions, fmv, today)
-    fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {fy_of(today)}, reverse=True)
+    business, inputs = business or [], inputs or {}
+    fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today)},
+                 reverse=True)
     unmatched = {}
     for u in c["unmatched"]:
         cur = unmatched.setdefault(u["key"], {"key": u["key"], "qty": 0.0, "first": u["d"]})
         cur["qty"] = round(cur["qty"] + u["qty"], 4)
         cur["first"] = min(cur["first"], u["d"])
-    return {"years": [year(y, c["realised"], c["intraday"]) for y in fys], "current_fy": fy_of(today),
+    return {"years": [with_total(year(y, c["realised"], c["intraday"]), business, inputs.get(y)) for y in fys], "current_fy": fy_of(today),
             "below_cost": below_cost(c["open"], quotes, today), "names": c["names"],
             "unmatched_sales": sorted(unmatched.values(), key=lambda u: u["first"])[:100],
             "holdings_check": holdings_check(c["open"], items) if items else [],

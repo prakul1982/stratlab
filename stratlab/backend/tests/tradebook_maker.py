@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from tests.xlsxmaker import make_xlsx
+from tests.xlsxmaker import make_workbook, make_xlsx
 
 DIR = Path(__file__).parent / "fixtures" / "tradebooks"
 
@@ -103,9 +103,31 @@ TAX_INTRADAY = [PNL_HEAD,
                 ["INFY", "INE009A01021", "2024-09-02", "2024-09-02", 20, 36000, 36300, 300, 0, 0, 300, 300, 20, 2.1, 0.07, 0.07, 0, 0, 4.0, 1.08, 9.07],
                 ["INFY", "INE009A01021", "2024-09-02", "2024-09-02", 10, 18010, 17990, -20, 0, 0, -20, 20, 10, 1.05, 0.04, 0.04, 0, 0, 2.0, 0.54, 4.5],
                 ["SBIN", "INE062A01020", "2024-11-05", "2024-11-05", 50, 41000, 40800, -200, 0, 0, -200, 200, 20, 2.4, 0.08, 0.08, 0, 0, 4.4, 1.23, 10.2]]
-TAX_FNO = [DERIV_HEAD, ["NIFTY24SEP25000CE", "2024-09-10T10:00:00", "2024-09-12T14:00:00", 25, 3012.5, 4100, 1087.5, 1087.5, 40, 1.4, 0.01, 0.01, 0, 0, 7.4, 0.1, 2.6]]
-TAX_COMMODITY = [DERIV_HEAD, ["CRUDEOIL24AUGFUT", "2024-08-01T10:00:00", "2024-08-02T10:00:00", 1, 650000, 652000, 2000, 2000, 40, 3, 0, 0.1, 0, 0, 7.9, 0.2, 0]]
+# F&O: one option contract traded twice (a gain, then a loss), a futures loss and another option's gain. Results
+# 1,087.5 - 400 - 2,500 + 600 = -1,212.5; turnover trade by trade 4,587.5, netted per contract 3,787.5 (as the
+# summary sheet adds it up); charges 50 + 20 + 120 + 30 = 220
+TAX_FNO = [DERIV_HEAD,
+           ["NIFTY24SEP25000CE", "2024-09-10T10:00:00", "2024-09-12T14:00:00", 25, 3012.5, 4100, 1087.5, 1087.5, 40, 1.4, 0.01, 0.99, 0, 0, 5, 0.1, 2.5],
+           ["NIFTY24SEP25000CE", "2024-09-13T09:30:00", "2024-09-13T15:00:00", 25, 4000, 3600, -400, 400, 15, 0.5, 0, 0.5, 0, 0, 2, 0, 2],
+           ["BANKNIFTY24OCTFUT", "2024-10-01T09:20:00", "2024-10-03T15:10:00", 15, 780000, 777500, -2500, 2500, 40, 30, 0.5, 1.5, 0, 0, 13, 20, 15],
+           ["RELIANCE24NOV3000PE", "2024-11-04T10:00:00", "2024-11-06T11:00:00", 250, 5000, 5600, 600, 600, 20, 2, 0, 0.5, 0, 0, 4, 0.5, 3]]
+# commodity: a crude oil futures gain and a gold futures loss (1,500 net, turnover 2,500, charges 51.2 + 20 = 71.2)
+TAX_COMMODITY = [DERIV_HEAD,
+                 ["CRUDEOIL24AUGFUT", "2024-08-01T10:00:00", "2024-08-02T10:00:00", 1, 650000, 652000, 2000, 2000, 40, 3, 0, 0.1, 0, 0, 7.9, 0.2, 0],
+                 ["GOLDM24OCTFUT", "2024-10-01T10:00:00", "2024-10-08T10:00:00", 1, 750000, 749500, -500, 500, 15, 2, 0, 0, 0, 0, 3, 0, 0]]
 TAX_CURRENCY = [DERIV_HEAD, ["USDINR24AUGFUT", "2024-08-01T10:00:00", "2024-08-05T10:00:00", 1000, 83500, 83600, 100, 100, 40, 0.3, 0, 0, 0, 0, 7.3, 0.01, 0]]
+
+
+def deriv_summary(segment: str, options: tuple[float, float], futures: tuple[float, float]) -> list[list]:
+    """A segment's sheet of the summary workbook: (result, turnover) for options and for futures."""
+    return [[], [None, "Client ID", "AB1234"], [], [None, f"Taxpnl Statement for {segment} from 2024-04-01 to 2025-03-31"], [],
+            [None, "Realized Profit Breakdown"], [], [None, "Options Realized Profit", options[0]], [None, "Futures Realized Profit", futures[0]],
+            [], [None, "Turnover Breakdown"], [], [None, "Options Turnover", options[1]], [None, "Futures Turnover", futures[1]]]
+
+
+DERIV_SHEETS = [("F&O", deriv_summary("F&O", (1287.5, 1287.5), (-2500, 2500))),
+                ("Currency", deriv_summary("Currency", (0, 0), (100, 100))),
+                ("Commodity", deriv_summary("Commodity", (0, 0), (1500, 2500)))]
 TAX_NON_EQUITY = [PNL_HEAD, ["GOLDBEES", "INF204KB17I5", "2024-04-15", "2024-11-20", 100, 6100, 6600, 500, 219, 0, 500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
 TAX_SUMMARY = [[], [None, "Client ID", "AB1234"], [None, "Client Name", "Asha Kumar"], [None, "PAN", "ABCDE1234F"], [],
                [None, "Taxpnl Statement for Equity from 2024-04-01 to 2025-03-31"], [], [None, "Realized Profit Breakdown"], [],
@@ -117,12 +139,13 @@ TAX_SUMMARY = [[], [None, "Client ID", "AB1234"], [None, "Client Name", "Asha Ku
                [None, "RELIANCE", 15, 38600, 42000, 3400], [None, "TCS", 3, 11400, 12300, 900]]
 
 
-def zerodha_tax_zip(summary: list[list] | None = None) -> bytes:
+def zerodha_tax_zip(summary: list[list] | None = None, deriv: bool = True) -> bytes:
     """The whole ZIP, the way Console gives it (fixed dates inside, so only the workbook's own stamp varies)."""
     folder = "taxpnl-AB1234-2024_2025-Q1-Q4/"
     exits = "Tradewise Exits from 2024-04-01 to 2025-03-31-"
     files = [(f"{exits}Commodity.csv", _csv(TAX_COMMODITY).encode()), (f"{exits}Non Equity.csv", _csv(TAX_NON_EQUITY).encode()),
-             ("taxpnl-2024_2025-Q1-Q4.xlsx", make_xlsx(summary or TAX_SUMMARY, "Equity and Non Equity")),
+             ("taxpnl-2024_2025-Q1-Q4.xlsx", make_workbook([("Equity and Non Equity", summary or TAX_SUMMARY), ("Mutual Funds", [[]])]
+                                                          + (DERIV_SHEETS if deriv else []))),
              (f"{exits}Equity - Short Term.csv", _csv(TAX_SHORT).encode()), (f"{exits}Equity - Long Term.csv", _csv(TAX_LONG).encode()),
              (f"{exits}Equity - Intraday.csv", _csv(TAX_INTRADAY).encode()), (f"{exits}F&O.csv", _csv(TAX_FNO).encode()),
              (f"{exits}Currency.csv", _csv(TAX_CURRENCY).encode())]

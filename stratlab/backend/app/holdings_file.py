@@ -21,6 +21,7 @@ MAX_COLS = 60
 MAX_XML = 20 * 1024 * 1024         # one sheet inside an .xlsx, unpacked (a zip bomb stops here)
 MAX_NODES = 400_000                # elements in one sheet: a big portfolio has a few thousand (each costs server time)
 NODES_A_ROW = 80                   # the element cap grows with the row cap: a tradebook's rows are allowed more
+MAX_SHEETS = 20                    # sheets read from one workbook (a tax P&L workbook has ten)
 HEADER_SCAN = 60                   # the column names are within the first rows, after the broker's account lines
 
 # column names, lower case with everything but letters and digits removed ("Avg. cost" -> "avgcost")
@@ -198,7 +199,33 @@ def _shared(zf: zipfile.ZipFile, limit: int = MAX_ROWS) -> list[str]:
     return out
 
 
-def _xlsx(data: bytes, limit: int = MAX_ROWS) -> list[list[str]]:
+def _sheet_list(zf: zipfile.ZipFile) -> list[tuple[str, str]]:
+    """(name, path) of each sheet in the workbook, in order, through the workbook's relationships file."""
+    names, rels, out = [], {}, []
+
+    def sheet(tag, attrs):
+        if tag == "sheet" and len(names) < MAX_SHEETS:
+            names.append((attrs.get("name") or "", attrs.get("id")))
+
+    def rel(tag, attrs):
+        if tag == "Relationship" and len(rels) < 500:
+            rels[attrs.get("Id")] = attrs.get("Target", "")
+    try:
+        _stream(zf, "xl/workbook.xml", start=sheet)
+        _stream(zf, "xl/_rels/workbook.xml.rels", start=rel)
+    except (KeyError, expat.ExpatError):
+        return []
+    have = set(zf.namelist())
+    for name, rid in names:
+        target = rels.get(rid) or ""
+        path = target.lstrip("/") if target.startswith("/") else "xl/" + target
+        if target and path in have:
+            out.append((name[:80], path))
+    return out
+
+
+def _xlsx(data: bytes, limit: int = MAX_ROWS, sheet: str | None = None) -> list[list[str]]:
+    """The rows of the workbook's first sheet, or of the sheet at `sheet` (its path inside the file)."""
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
@@ -247,8 +274,17 @@ def _xlsx(data: bytes, limit: int = MAX_ROWS) -> list[list[str]]:
     def text(data):
         if st["in"] and st["cell"] is not None:
             st["cell"][st["in"]].append(data)
-    _stream(zf, _first_sheet(zf), start, end, text, nodes=max(MAX_NODES, limit * NODES_A_ROW))
+    _stream(zf, sheet or _first_sheet(zf), start, end, text, nodes=max(MAX_NODES, limit * NODES_A_ROW))
     return rows
+
+
+def sheets(data: bytes, limit: int = MAX_ROWS) -> list[tuple[str, list[list[str]]]]:
+    """(name, rows) for every sheet in a workbook, each read with the same caps as one sheet."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise FileError("That file looks like Excel but couldn't be opened. Save it again as .xlsx or CSV.") from None
+    return [(name, _xlsx(data, limit, path)) for name, path in _sheet_list(zf)]
 
 
 class _Tables(HTMLParser):
@@ -592,8 +628,9 @@ def _read_trades(rows: list[list[str]], filename: str = "") -> dict:
         if not text or re.match(r"(?i)^(total|grand total|sub ?total)\b", sym or nm or ""):
             continue
         seg = _cell(row, cols.get("segment"))
-        if seg and NOT_EQUITY.match(seg):
-            problems.append({"line": n, "text": text, "reason": "Futures, options and other non-equity trades are left out (F&O is business income, not capital gains)."})
+        if (seg and NOT_EQUITY.match(seg)) or (not ISIN.match(isin) and DERIVATIVE.search(sym.upper())):
+            problems.append({"line": n, "text": text, "reason": "Futures, options and other non-equity trades are left out of a tradebook (F&O is "
+                             "business income, read from the F&O tax P&L file instead)."})
             continue
         status = _cell(row, cols.get("status"))
         if status and not DONE.match(status):
@@ -660,25 +697,32 @@ def _read_trades(rows: list[list[str]], filename: str = "") -> dict:
 
 def parse_trades(data: bytes, filename: str = "") -> dict:
     """A tradebook (each buy and sale), a tax P&L export (each sale with its buy), or the ZIP of tax P&L files a
-    broker gives, from any of the brokers or a plain CSV with date, symbol or ISIN, buy/sell, quantity and price.
+    broker gives, from any of the brokers or a plain CSV with date, symbol or ISIN, buy/sell, quantity and price. An
+    F&O, commodity or currency P&L file is read as business income: totals per year, not trades.
 
-    {"broker", "kind": "trades"|"pnl", "trades": [{line, d, t, side, qty, price, charges, isin, symbol, name, exchange,
-    tid, fmv, src, text}], "problems": [{line, text, reason}], "skipped": [{name, reason}], "check": [{section, file,
-    summary, ok}], "files": [{name, section, lines}]}. Raises FileError when there are no trades at all."""
+    {"broker", "kind": "trades"|"pnl"|"business", "trades": [{line, d, t, side, qty, price, charges, isin, symbol, name,
+    exchange, tid, fmv, src, text}], "problems": [{line, text, reason}], "skipped": [{name, reason}], "check": [{section,
+    file, summary, ok}], "files": [{name, section, lines}], "business": [per segment and year, see _Business]}. Raises
+    FileError when there are no trades and no F&O lines at all."""
     if data[:4] == b"PK\x03\x04" and not _is_xlsx(data):
         return parse_tax_zip(data, filename)
     k = _skipped_kind(filename) if re.search(r"(?i)tradewise|taxpnl|tax[\s_-]*p\s*&?\s*l", filename or "") else None
     if k:
         raise FileError(f"That is the {k[0]} file of a tax P&L: {k[1]}, so the tax report leaves it out. "
-                        "Upload the equity files (short term, long term and intraday) instead.")
+                        "Upload the equity, F&O, commodity or currency files instead.")
+    seg = business_kind(filename)
+    if seg:
+        return parse_business(data, filename, seg)
     try:
         rows = table(data, TAX_MAX_BYTES, MAX_TRADE_ROWS, TOO_BIG)
     except FileError:
         raise
     except Exception:
         raise FileError("We couldn't read that file. Export the tradebook again as CSV or Excel and upload that.") from None
+    if looks_derivative(rows):
+        return parse_business(data, filename, None)
     got = _read_trades(rows, filename)
-    return {**got, "problems": got["problems"][:500], "skipped": [], "check": [], "files": []}
+    return {**got, "problems": got["problems"][:500], "skipped": [], "check": [], "files": [], "business": []}
 
 
 # ---------- a broker's ZIP of tax P&L files ----------
@@ -690,12 +734,9 @@ ZIP_MAX_UNPACKED = 40 * 1024 * 1024     # everything read from one ZIP, unpacked
 ZIP_MAX_ENTRIES = 200                   # a broker's ZIP has a dozen, with the Mac's __MACOSX copies
 TABLE_EXT = re.compile(r"(?i)\.(csv|txt|tsv|xlsx|xls)$")
 ARCHIVE_EXT = re.compile(r"(?i)\.(zip|jar|7z|rar|gz|tgz|bz2|xz|tar)$")
-# (file name, what it is, why it's left out): F&O, commodity, currency and non-equity sit beside the equity files
+# (file name, what it is, why it's left out): non-equity and mutual funds sit beside the equity and F&O files
 TAX_SKIP = [
     (re.compile(r"(?i)non[\s_-]*equity"), "Non-equity", "gold, debt and other ETFs, bonds and the like are taxed under other rules, not covered yet"),
-    (re.compile(r"(?i)f\s*&\s*o|(^|[^a-z])fno([^a-z]|$)|futures|options|derivative"), "F&O", "futures and options are business income, not capital gains"),
-    (re.compile(r"(?i)commodit"), "Commodity", "commodity trades are business income, not capital gains"),
-    (re.compile(r"(?i)currenc"), "Currency", "currency trades are business income, not capital gains"),
     (re.compile(r"(?i)mutual[\s_-]*funds?"), "Mutual funds", "mutual funds aren't covered yet"),
 ]
 # the equity files read, by name, and which line of the summary sheet each one adds up to
@@ -755,15 +796,16 @@ def _base(name: str) -> str:
     return re.split(r"[\\/]", name.rstrip("/\\"))[-1][:120]
 
 
-def _unpack(zf: zipfile.ZipFile, info: zipfile.ZipInfo, budget: list[int]) -> bytes:
+def _unpack(zf: zipfile.ZipFile, info: zipfile.ZipInfo, budget: list[int], cap: int | None = None) -> bytes:
     """One file from the ZIP, read in pieces and stopped as soon as it passes the size caps, whatever its header
     claims (a zip bomb gets no further than that)."""
+    cap = cap or TAX_MAX_BYTES
     out = bytearray()
     with zf.open(info) as f:
         while chunk := f.read(1 << 16):
             out += chunk
-            if len(out) > TAX_MAX_BYTES:
-                raise FileError(f"{_base(info.filename)} is larger than {TAX_MAX_BYTES // (1024 * 1024)} MB unpacked. {TOO_BIG}")
+            if len(out) > cap:
+                raise FileError(f"{_base(info.filename)} is larger than {cap // (1024 * 1024)} MB unpacked. {TOO_BIG}")
             if len(out) > budget[0]:
                 raise FileError(f"That ZIP unpacks to more than {ZIP_MAX_UNPACKED // (1024 * 1024)} MB. Upload the equity files from it on their own.")
     budget[0] -= len(out)
@@ -772,8 +814,9 @@ def _unpack(zf: zipfile.ZipFile, info: zipfile.ZipInfo, budget: list[int]) -> by
 
 def parse_tax_zip(data: bytes, filename: str = "") -> dict:
     """The ZIP a broker gives for its tax P&L: a CSV per segment and a summary workbook. The equity files are read
-    (short term, long term and intraday); F&O, commodity, currency and non-equity are left out by name, unread, and
-    listed with the reason. The summary's totals are checked against what was read.
+    (short term, long term and intraday) as trades; F&O, commodity and currency as business income, streamed and added
+    up per year (the F&O file runs to many MB); non-equity and mutual funds are left out by name, unread, and listed
+    with the reason. The summary's totals are checked against what was read.
 
     The ZIP is untrusted: its size, number of files and what they unpack to are capped, paths that climb out of it
     and ZIPs inside it are refused, and nothing is written to disk."""
@@ -794,6 +837,7 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
     budget = [ZIP_MAX_UNPACKED]
     trades, problems, skipped, read, sums, brokers = [], [], [], [], {}, []
     sheet: dict[str, float] = {}
+    biz, biz_sheet, biz_files = _Business(), {}, set()
     try:
         for info in infos:
             if _junk(info.filename):
@@ -803,11 +847,31 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
                 skipped.append({"name": base, "reason": "Not a CSV or Excel file."})
                 continue
             k = _skipped_kind(base)
-            if k:                            # left out by its name, never unpacked (an F&O file runs to many MB)
+            if k:                            # left out by its name, never unpacked
                 skipped.append({"name": base, "reason": f"{k[0]}: {k[1]}."})
                 continue
             if info.flag_bits & 0x1:
                 raise FileError("That ZIP is password-protected. Unzip it on your computer and upload the CSV files in it.")
+            seg = business_kind(base)
+            if seg:                          # F&O, commodity, currency: streamed and added up, never held whole
+                label = SEGMENT_NAMES[seg]
+                try:
+                    if re.search(r"(?i)\.(csv|txt|tsv)$", base):
+                        with zf.open(info) as f:
+                            capped = _Capped(f, base, FNO_MAX_BYTES, budget)
+                            try:
+                                n, probs = _biz_rows(_csv_stream(capped), base, seg, biz, label)
+                            finally:
+                                budget[0] -= capped.seen
+                    else:
+                        n, probs = _biz_rows(business_rows(_unpack(zf, info, budget, FNO_MAX_BYTES)), base, seg, biz, label)
+                except FileError as e:
+                    skipped.append({"name": base, "reason": str(e)})
+                    continue
+                read.append({"name": base, "section": label, "lines": n})
+                biz_files.add(seg)
+                problems += probs
+                continue
             raw = _unpack(zf, info, budget)
             if raw[:4] == b"PK\x03\x04" and not _is_xlsx(raw):
                 raise FileError("That ZIP has another ZIP inside it. Unzip it and upload the files in it instead.")
@@ -817,7 +881,13 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
             except FileError as e:
                 skipped.append({"name": base, "reason": str(e)})
                 continue
-            if not section and (totals := summary(rows)):
+            totals = summary(rows) if not section else {}
+            if not section and _is_xlsx(raw) and raw[:4] == b"PK\x03\x04":
+                for name, srows in sheets(raw):      # the workbook's F&O, commodity and currency sheets
+                    s_seg = business_kind(name)
+                    if s_seg and (got_ := business_summary(srows)) and s_seg not in biz_sheet:
+                        biz_sheet[s_seg] = got_
+            if not section and (totals or biz_sheet):
                 sheet.update({k_: v for k_, v in totals.items() if k_ not in sheet})
                 continue                     # the summary workbook: its totals check the files read
             try:
@@ -840,9 +910,10 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
         raise
     except Exception:                        # a damaged entry of any kind: one plain answer
         raise FileError("That ZIP file is damaged. Download it again from your broker.") from None
-    if not trades:
+    business = biz.result()
+    if not trades and not business:
         left = "; ".join(f"{s['name']} ({s['reason'].rstrip('.')})" for s in skipped[:6])
-        raise FileError("No equity trades were found in that ZIP." + (f" Left out: {left}." if left else ""))
+        raise FileError("No equity, F&O, commodity or currency trades were found in that ZIP." + (f" Left out: {left}." if left else ""))
     check = []
     for kind in ("short", "long", "intraday") if sheet else ():
         both, theirs = sums.get(kind), sheet.get(kind)
@@ -851,7 +922,312 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
         near = [v for v in both or () if theirs is not None and abs(v - theirs) <= max(1.0, abs(theirs) * 1e-6)]
         mine, ok = (near[0] if near else both[0] if both else None), bool(near)
         check.append({"section": SECTION_NAMES[kind], "file": None if mine is None else round(mine, 2), "summary": theirs, "ok": ok})
+    check += business_check(business, biz_sheet, biz_files)
     zerodha = any(re.match(r"(?i)(tradewise exits|taxpnl)", _base(i.filename)) for i in infos)
     broker = "Zerodha" if zerodha else next((b for b in brokers if b != "CSV"), "CSV")
-    return {"broker": broker, "kind": "pnl" if all(t["src"] == "pnl" for t in trades) else "trades",
-            "trades": trades[:MAX_TRADES], "problems": problems[:500], "skipped": skipped[:50], "check": check, "files": read}
+    kind = "business" if not trades else "pnl" if all(t["src"] == "pnl" for t in trades) else "trades"
+    return {"broker": broker, "kind": kind, "trades": trades[:MAX_TRADES], "problems": problems[:500], "skipped": skipped[:50],
+            "check": check, "files": read, "business": business}
+
+
+def business_check(business: list[dict], sheet: dict[str, dict], files: set[str]) -> list[dict]:
+    """The F&O, commodity and currency totals read, against the summary sheet's: the result before charges, and the
+    turnover netted per contract (the way the summary adds it up)."""
+    out = []
+    for seg in ("fno", "commodity", "currency"):
+        theirs = sheet.get(seg) or {}
+        rows = [b for b in business if b["seg"] == seg]
+        if not rows and not any(abs(v) >= 0.005 for v in theirs.values()):
+            continue
+        name = SEGMENT_NAMES[seg]
+        for what, mine_key in (("pnl", "pnl"), ("turnover", "turnover_contract")):
+            if what not in theirs:
+                continue
+            mine = round(sum(b[mine_key] for b in rows), 2) if seg in files else None
+            ok = mine is not None and abs(mine - theirs[what]) <= max(1.0, abs(theirs[what]) * 1e-6)
+            out.append({"section": name if what == "pnl" else f"{name} turnover", "file": mine, "summary": round(theirs[what], 2),
+                        "ok": ok, "what": what})
+    return out
+
+
+# ---------- F&O, commodity and currency: business income, read as totals ----------
+FNO_MAX_BYTES = 20 * 1024 * 1024        # one F&O, commodity or currency file, unpacked (a busy year's F&O runs to ~12 MB)
+FNO_MAX_ROWS = 300_000                  # lines in one such file (a busy year has tens of thousands)
+MAX_CONTRACTS = 200_000                 # contracts netted at once, for the turnover the broker's summary shows
+TOP_UNDERLYINGS = 25                    # per segment and year: the biggest by result, the rest as one line
+# (file name, segment): which tax P&L files are business income, read as totals, not trades
+BUSINESS = [(re.compile(r"(?i)f\s*&\s*o|(^|[^a-z])fno([^a-z]|$)|futures|options|derivative"), "fno"),
+            (re.compile(r"(?i)commodit"), "commodity"),
+            (re.compile(r"(?i)currenc"), "currency")]
+SEGMENT_NAMES = {"fno": "F&O", "commodity": "Commodity", "currency": "Currency"}
+BIZ_COLUMNS = {
+    "symbol": {"contract", "contractname", "instrumentname", "scripname", "contractdescription"},
+    "date": PNL_COLUMNS["sell_date"] | {"closedate", "closingdate", "squareoffdate", "exitdatetime", "selldatetime"},
+    "pnl": {"profit", "pnl", "realisedpnl", "realizedpnl", "realisedprofit", "realizedprofit", "netpnl", "grosspnl",
+            "profitloss", "realisedprofitloss", "realizedprofitloss", "bookedpnl", "bookedprofitloss", "realisedgainloss",
+            "realizedgainloss", "profitorloss"},
+    "buy_value": PNL_COLUMNS["buy_value"],
+    "sell_value": PNL_COLUMNS["sell_value"],
+}
+BIZ_TAX = STT | {"ctt", "commoditiestransactiontax", "commoditytransactiontax"}
+DERIVATIVE = re.compile(r"\d.*(FUT|CE|PE)$")
+COMMODITIES = re.compile(r"^(CRUDEOIL|NATURALGAS|NATGAS|GOLD|SILVER|COPPER|ZINC|LEAD|ALUMINI|ALUMINIUM|NICKEL|COTTON|"
+                         r"MENTHAOIL|CARDAMOM|KAPAS|CASTORSEED|GUARSEED|JEERA|TURMERIC|DHANIYA|STEEL)")
+CURRENCIES = re.compile(r"^(USDINR|EURINR|GBPINR|JPYINR|EURUSD|GBPUSD|USDJPY)")
+SUMMARY_BIZ = {"optionsrealizedprofit": "pnl", "futuresrealizedprofit": "pnl", "optionsrealisedprofit": "pnl",
+               "futuresrealisedprofit": "pnl", "optionsturnover": "turnover", "futuresturnover": "turnover"}
+NOT_SUPPORTED = ("F&O, commodity and currency results are read only from Zerodha's tax P&L for now (the \"Tradewise "
+                 "Exits\" files or the ZIP), or a P&L file of the same shape: a column for the contract, the exit date "
+                 "and the profit.")
+
+
+def business_kind(filename: str) -> str | None:
+    """"fno", "commodity" or "currency" when a tax P&L file's name says it holds that segment."""
+    for rx, seg in BUSINESS:
+        if rx.search(filename or ""):
+            return seg
+    return None
+
+
+def underlying(symbol: str) -> str:
+    """What a contract is on: NIFTY25APR23000CE -> NIFTY, CRUDEOILM25MAYFUT -> CRUDEOILM."""
+    s = str(symbol or "").strip().upper()
+    m = re.match(r"([A-Z&\-]+?)(?=\d)", s)
+    return (m.group(1) if m else s)[:20] or "?"
+
+
+def _segment_of(symbol: str) -> str:
+    u = underlying(symbol)
+    if CURRENCIES.match(u):
+        return "currency"
+    if COMMODITIES.match(u):
+        return "commodity"
+    return "fno"
+
+
+def _biz_columns(row: list[str]) -> dict[str, int]:
+    found = {f: i for f, i in _columns(row).items() if f in ("symbol", "name", "isin")}
+    for i, cell in enumerate(row):
+        k = key(cell)
+        for field, names in BIZ_COLUMNS.items():
+            if k in names and field not in found:
+                found[field] = i
+    return found
+
+
+def _biz_header(row: list[str]) -> dict[str, int] | None:
+    cols = _biz_columns(row)
+    if "symbol" in cols and "date" in cols and ("pnl" in cols or {"buy_value", "sell_value"} <= cols.keys()):
+        return cols
+    return None
+
+
+class _Business:
+    """F&O, commodity and currency lines added up as they are read, per segment and financial year: the result,
+    the turnover (the total of profits and losses, trade by trade, and netted per contract as brokers' summaries
+    show it), the charges, and the biggest underlyings. No line is kept."""
+
+    def __init__(self):
+        self.years: dict[tuple, dict] = {}
+        self.contracts: dict[tuple, float] = {}
+        self.rows = 0
+
+    def add(self, seg: str, d: str, symbol: str, pnl: float, charges: float, tax: float):
+        y, m = int(d[:4]), int(d[5:7])
+        fy = y if m >= 4 else y - 1
+        cur = self.years.get((seg, fy))
+        if cur is None:
+            cur = self.years[(seg, fy)] = {"seg": seg, "fy": fy, "first": d, "last": d, "trades": 0, "pnl": 0.0, "turnover": 0.0,
+                                           "charges": 0.0, "stt": 0.0, "options": {"pnl": 0.0, "turnover": 0.0, "trades": 0},
+                                           "futures": {"pnl": 0.0, "turnover": 0.0, "trades": 0}, "by": {}}
+        cur["first"], cur["last"] = min(cur["first"], d), max(cur["last"], d)
+        cur["trades"] += 1
+        cur["pnl"] += pnl
+        cur["turnover"] += abs(pnl)
+        cur["charges"] += charges
+        cur["stt"] += tax
+        kind = "options" if re.search(r"\d.*(CE|PE)$", symbol) else "futures"
+        cur[kind]["pnl"] += pnl
+        cur[kind]["turnover"] += abs(pnl)
+        cur[kind]["trades"] += 1
+        u = underlying(symbol)
+        if u not in cur["by"] and len(cur["by"]) >= 5000:
+            u = "Others"
+        by = cur["by"].setdefault(u, {"pnl": 0.0, "turnover": 0.0, "trades": 0})
+        by["pnl"] += pnl
+        by["turnover"] += abs(pnl)
+        by["trades"] += 1
+        k = (seg, fy, symbol)
+        if k in self.contracts or len(self.contracts) < MAX_CONTRACTS:
+            self.contracts[k] = self.contracts.get(k, 0.0) + pnl
+        self.rows += 1
+
+    def result(self) -> list[dict]:
+        nets: dict[tuple, float] = {}
+        for (seg, fy, _), v in self.contracts.items():
+            nets[(seg, fy)] = nets.get((seg, fy), 0.0) + abs(v)
+        out = []
+        for (seg, fy), cur in sorted(self.years.items()):
+            by = sorted(cur["by"].items(), key=lambda kv: -abs(kv[1]["pnl"]))
+            top, rest = by[:TOP_UNDERLYINGS], by[TOP_UNDERLYINGS:]
+            lines = [{"u": u, "pnl": round(x["pnl"], 2), "turnover": round(x["turnover"], 2), "trades": x["trades"]} for u, x in top]
+            if rest:
+                lines.append({"u": "Others", "pnl": round(sum(x["pnl"] for _, x in rest), 2),
+                              "turnover": round(sum(x["turnover"] for _, x in rest), 2), "trades": sum(x["trades"] for _, x in rest)})
+            out.append({"seg": seg, "fy": fy, "first": cur["first"], "last": cur["last"], "trades": cur["trades"],
+                        "pnl": round(cur["pnl"], 2), "turnover": round(cur["turnover"], 2),
+                        "turnover_contract": round(nets.get((seg, fy), 0.0), 2), "charges": round(cur["charges"], 2),
+                        "stt": round(cur["stt"], 2), "options": {k: round(v, 2) for k, v in cur["options"].items()},
+                        "futures": {k: round(v, 2) for k, v in cur["futures"].items()}, "by": lines})
+        return out
+
+
+def _biz_rows(rows, filename: str, seg: str | None, acc: _Business, label: str) -> tuple[int, list[dict]]:
+    """Add one table's lines to the running totals: (lines read, problems). `rows` is any iterator of rows, so a
+    big CSV is read as it streams. Raises FileError when the table has no F&O columns."""
+    it = iter(rows)
+    head: list[list[str]] = []
+    cols = None
+    for row in it:
+        head.append(row)
+        cols = _biz_header(row)
+        if cols or len(head) >= HEADER_SCAN:
+            break
+    if not cols:
+        raise FileError(f"{label}: we couldn't find the columns. " + NOT_SUPPORTED)
+    keys = [key(c) for c in head[-1]]
+    total = next((i for i, k in enumerate(keys) if k in CHARGE_TOTAL), None)
+    parts = [i for i, k in enumerate(keys) if k in CHARGE_PARTS]
+    taxes = [i for i, k in enumerate(keys) if k in BIZ_TAX]
+    n, problems, line = 0, [], len(head)
+    for row in it:
+        line += 1
+        if line - len(head) > FNO_MAX_ROWS:
+            raise FileError(f"{label} has more than {FNO_MAX_ROWS:,} lines. Upload it a quarter at a time.")
+        sym = _cell(row, cols.get("symbol")).upper()
+        if not sym or re.match(r"(?i)^(total|grand total|sub ?total)\b", sym):
+            continue
+        d = day(_cell(row, cols.get("date")))
+        if not d:
+            if any(number(c) is not None for c in row):
+                problems.append({"line": line, "text": f"{label} · {sym[:40]}", "reason": "The exit date couldn't be read."})
+            continue
+        if "pnl" in cols:
+            pnl = number(_cell(row, cols["pnl"]))
+        else:
+            b, s_ = number(_cell(row, cols["buy_value"])), number(_cell(row, cols["sell_value"]))
+            pnl = None if b is None or s_ is None else s_ - b
+        if pnl is None or abs(pnl) > 1e11:
+            problems.append({"line": line, "text": f"{label} · {sym[:40]}", "reason": "No profit or loss on this line."})
+            continue
+        tax = min(sum(abs(number(_cell(row, i)) or 0) for i in taxes), 1e10)
+        if total is not None:
+            charges = max(abs(number(_cell(row, total)) or 0), tax)
+        else:
+            charges = sum(abs(number(_cell(row, i)) or 0) for i in parts) + tax
+        acc.add(seg or _segment_of(sym), d, sym[:40], pnl, min(charges, 1e10), tax)
+        n += 1
+    return n, problems[:500]
+
+
+class _Capped(io.RawIOBase):
+    """A file inside the ZIP, read as it unpacks and stopped as soon as it passes the caps, whatever its header says."""
+
+    def __init__(self, f, name: str, cap: int, budget: list[int]):
+        self.f, self.name, self.cap, self.budget, self.seen = f, name, cap, budget, 0
+
+    def readable(self):
+        return True
+
+    def readinto(self, b):
+        n = self.f.readinto(b)
+        self.seen += n or 0
+        if self.seen > self.cap:
+            raise FileError(f"{self.name} is larger than {self.cap // (1024 * 1024)} MB unpacked. Upload it a quarter at a time.")
+        if self.seen > self.budget[0]:
+            raise FileError(f"That ZIP unpacks to more than {ZIP_MAX_UNPACKED // (1024 * 1024)} MB. Upload the files from it on their own.")
+        return n
+
+
+def _csv_stream(raw):
+    """The rows of a CSV read from a binary stream, a piece at a time."""
+    text = io.TextIOWrapper(io.BufferedReader(raw, 1 << 16), encoding="utf-8-sig", errors="replace", newline="")
+    head: list[str] = []
+    for _ in range(HEADER_SCAN):
+        ln = text.readline(20000)
+        if not ln:
+            break
+        head.append(ln)
+        if sum(map(len, head)) > 4000:
+            break
+    sample = "".join(head)
+    if "\x00" in sample:
+        raise FileError("That doesn't look like a CSV or Excel file.")
+    delim = max((",", "\t", ";", "|"), key=lambda d: sample.count(d))
+
+    def rows():
+        import itertools
+        try:
+            for r in csv.reader(itertools.chain(head, text), delimiter=delim):
+                yield [c.strip() for c in r[:MAX_COLS]]
+        except csv.Error:
+            raise FileError("That CSV file is broken (a quote or a very long cell). Export it again from your broker.") from None
+    return rows()
+
+
+def business_rows(data: bytes):
+    """The rows of one F&O, commodity or currency file already in memory: a CSV streams, a workbook is read whole."""
+    if not data:
+        raise FileError("That file is empty.")
+    if len(data) > FNO_MAX_BYTES:
+        raise FileError(f"That file is larger than {FNO_MAX_BYTES // (1024 * 1024)} MB. Upload it a quarter at a time.")
+    if (data[:4] == b"PK\x03\x04" or data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" or data[:5] == b"%PDF-"
+            or re.match(rb"\s*<", data[:200])):
+        return iter(table(data, FNO_MAX_BYTES, FNO_MAX_ROWS))
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return iter(_csv(_text(data), FNO_MAX_ROWS + HEADER_SCAN))
+    return _csv_stream(io.BytesIO(data))
+
+
+def looks_derivative(rows: list[list[str]]) -> bool:
+    """A P&L table of futures and options: F&O columns, no ISIN, and contract names on most lines."""
+    for i, row in enumerate(rows[:HEADER_SCAN]):
+        cols = _biz_header(row)
+        if not cols:
+            continue
+        if "isin" in cols:
+            return False
+        syms = [_cell(r, cols["symbol"]).upper() for r in rows[i + 1:i + 51] if _cell(r, cols["symbol"])]
+        return bool(syms) and sum(1 for s in syms if DERIVATIVE.search(s)) >= max(1, len(syms) * 0.6)
+    return False
+
+
+def business_summary(rows: list[list[str]]) -> dict[str, float]:
+    """The realised result and turnover on a tax P&L workbook's F&O, commodity or currency sheet."""
+    out: dict[str, float] = {}
+    for row in rows[:HEADER_SCAN]:
+        for i, cell in enumerate(row):
+            kind = SUMMARY_BIZ.get(key(cell))
+            if kind:
+                v = next((x for x in (number(c) for c in row[i + 1:]) if x is not None), None)
+                if v is not None:
+                    out[kind] = out.get(kind, 0.0) + v
+                break
+    return out
+
+
+def parse_business(data: bytes, filename: str = "", seg: str | None = None) -> dict:
+    """One F&O, commodity or currency P&L file on its own, as per-year totals."""
+    acc = _Business()
+    label = SEGMENT_NAMES.get(seg or "", "F&O")
+    try:
+        n, problems = _biz_rows(business_rows(data), filename, seg, acc, label)
+    except FileError:
+        raise
+    except Exception:
+        raise FileError("We couldn't read that file. " + NOT_SUPPORTED) from None
+    if not n:
+        raise FileError(f"No {label} lines could be read from that file. " + NOT_SUPPORTED)
+    broker = "Zerodha" if re.match(r"(?i)tradewise exits", filename or "") else trade_broker([], [], filename)
+    return {"broker": broker, "kind": "business", "trades": [], "problems": problems, "skipped": [], "check": [],
+            "files": [{"name": _base(filename or "file"), "section": label, "lines": n}], "business": acc.result()}
