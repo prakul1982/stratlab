@@ -11,7 +11,7 @@ export const LEVELS: [Level, string, string][] = [
 ];
 
 export const FOCUSES: [Focus, string, string][] = [
-  ["invest", "Investing", "Find good companies and hold them: scans, sector rotation, red flags, deep dives and the management report card."],
+  ["invest", "Investing", "Research companies for the long term: scans, sector rotation, red flags, deep dives and the management report card."],
   ["trade", "Trading", "Test trading rules on years of real prices, then run them live with fake money: stocks, F&O, options, crypto."],
   ["both", "Both", "Everything side by side."],
 ];

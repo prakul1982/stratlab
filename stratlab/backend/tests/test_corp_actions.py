@@ -362,3 +362,19 @@ def test_routes_need_sign_in_and_reject_bad_input(w):
     assert c.get("/research/corp-actions/IN/..%2F..", headers=headers("pro-token")).status_code in (400, 404)
     assert c.post("/admin/corp-actions/refresh", headers=headers("pro-token")).status_code == 403
     assert c.post("/admin/corp-actions/refresh", headers=headers("admin-token")).json()["IN"]["rows"] >= 3
+
+
+def test_made_up_tickers_on_the_company_route_store_nothing(w):
+    """Security: anyone signed in can name any ticker. A company with no actions found is remembered in memory only,
+    so looping through made-up tickers can't fill the database; a real one's history is stored as before."""
+    c, h = w["client"], headers("pro-token")
+    for i in range(5):
+        assert c.get(f"/research/corp-actions/IN/ZZFAKE{i}", headers=h).json()["past"] == []
+    assert not [k for k, _ in db.all_settings_with_prefix(C.HIST) if "ZZFAKE" in k]
+    assert c.get("/research/corp-actions/IN/TCS", headers=h).status_code == 200
+    assert C.hist_load("IN", "TCS")["at"]
+    feed = FakeIndia()
+    assert C.company("IN", "NEWCO", {"in": feed}, TODAY)["past"] == [] and feed.asked == ["NEWCO"]
+    C.company("IN", "NEWCO", {"in": feed}, TODAY)
+    assert feed.asked == ["NEWCO"]                     # remembered for a while: not asked again
+    assert C.history("IN", "HELD", {"in": feed}, TODAY) == [] and C.hist_load("IN", "HELD")["at"]   # holdings still store

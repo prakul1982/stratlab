@@ -56,7 +56,8 @@ def region_of(region: str) -> str:
 
 def symbol_of(symbol: str) -> str:
     s = symbol.strip().upper()
-    if not s or len(s) > 20 or not all(ch.isalnum() or ch in "&-._^" for ch in s):
+    # a letter or digit first (or ^ for an index): "..", "-x" and the like never reach a data source's address
+    if not s or len(s) > 20 or not (s[0].isalnum() or s[0] == "^") or not all(ch.isalnum() or ch in "&-._^" for ch in s):
         err(400, "bad_symbol", "That doesn't look like a ticker.")
     return s
 

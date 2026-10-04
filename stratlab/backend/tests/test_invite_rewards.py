@@ -319,6 +319,15 @@ def test_a_paying_referrer_is_told_the_month_is_kept(w, outbox):
     assert "kept for you" in mail["text"]
 
 
+def test_free_months_judge_the_paid_plan_at_the_time_given(w):
+    """A month given at a time when the plan was paid for is banked, whatever today's date (the suite passes on any
+    day, and the daily job's time is the one that counts)."""
+    then = datetime(2020, 1, 10, tzinfo=timezone.utc)
+    p = user("u-old", plan="pro", plan_status="active", current_period_end=(then + 20 * DAY).isoformat())
+    assert plans.effective_plan(p, then) == "pro" and plans.effective_plan(p) == "free"
+    assert plans.add_free_basic(p, 30, then) == {"until": None, "banked": 30}
+
+
 def test_no_email_to_a_referrer_past_the_cap(w, outbox):
     user("u-ref")
     for i in range(13):

@@ -199,3 +199,14 @@ def test_an_invoice_keeps_its_own_policy_so_its_print_button_works():
                           "buyer": {"name": "B", "email": "a@b.c"}, "item": {"description": "StratLab Pro", "sac": "998431", "taxable": 1.0},
                           "taxes": [], "total": 1.0, "currency": "INR", "place_of_supply": "Delhi", "note": "", "supply": "Intra-state"})
     assert invoices.PRINT_HASH in invoices.CSP and invoices.CSP in page
+
+
+@pytest.mark.parametrize("sym", ["..", ".", "-x", "_A", ".HIDDEN"])
+def test_a_ticker_starts_with_a_letter_or_digit(sym):
+    """Tickers go into data sources' addresses (/chart/<symbol>): ".." and the like are refused before they get there."""
+    from fastapi import HTTPException
+    from app.intel import routes as R
+    with pytest.raises(HTTPException):
+        R.symbol_of(sym)
+    for ok in ("M&M", "BAJAJ-AUTO", "BRK.B", "^GSPC", "3MINDIA"):
+        assert R.symbol_of(ok) == ok

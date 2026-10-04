@@ -228,7 +228,10 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     from app import invite_rewards, plans
     plans.forget_free_basic()                   # free Basic time another test gave
     invite_rewards._touched.clear()
-    main._results.clear()                       # shared scan and rotation answers from an earlier test
+    from app import corp_actions
+    corp_actions._empty.clear()                 # company pages another test looked up with nothing found
+    main._corp_tried.clear()                    # a calendar build another test tried a moment ago
+    main._results.clear()                      # shared scan and rotation answers from an earlier test
     main._bse_map.clear()                       # the BSE-only list another test loaded
     from app import stock_pages
     stock_pages._companies.clear()              # public company pages: the list and built pages another test made
