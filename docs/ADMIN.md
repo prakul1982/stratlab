@@ -103,7 +103,7 @@ Off until a key is set: with no key nothing is downloaded and nothing is sent.
 - **Frontend:** `POSTHOG_KEY` (the project API key, `phc_…`, public by design) and `POSTHOG_HOST` in
   `frontend/public/config.js`, or `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` at build time. The production project is on
   PostHog's US cloud (`https://us.i.posthog.com`), which is also the default; for an EU project set the host and change
-  the PostHog host in the CSP in `vercel.json` and `netlify.toml`.
+  the PostHog host in the CSP in `vercel.json`.
 - **Backend:** the same key as `POSTHOG_KEY` (and `POSTHOG_HOST`) on Railway, so a completed payment is counted from the
   server, once per payment, where an ad blocker or a closed tab can't lose it.
 - **What's sent:** page views (addresses with ids, tokens and queries masked) and a fixed list of funnel events, from
