@@ -21,7 +21,7 @@ export const LIMITS: Record<PlanId, Limits> = {
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders"] },
+      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "itr_export", "us_tax"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -56,7 +56,8 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators"], 
   ["networth", "Net worth: unlimited entries and the monthly history"],
   ["mf_gains", "Mutual funds: every scheme, and capital gains by year"],
   ["dividends", "Dividends by company, with TDS and US tax withheld"], ["tax_tools", "Advance tax amounts and long-term exemption facts per lot"],
-  ["money_reminders", "Money calendar reminders by email or phone"]];
+  ["money_reminders", "Money calendar reminders by email or phone"],
+  ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax: gains in rupees, foreign tax credit and Schedule FA"]];
 export const EVERYONE = ["Every market, and your own CSV", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
   "Corporate actions, deals and surveillance lists", "My Holdings and the tax report", "Money calendar and its calendar feed",
   "Weekly Market Brief and My Stocks",

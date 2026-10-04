@@ -51,7 +51,8 @@ PLANS = {
         "networth_items": None,
         "mf_schemes": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
-                     "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders"},
+                     "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
+                     "itr_export", "us_tax"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -60,9 +61,12 @@ PLANS = {
 # (red flags on a single company page are for everyone); networth: unlimited Net worth entries and its history chart; mf_gains: mutual fund capital gains per financial year;
 # dividends: each company's dividends, TDS and US withholding (the year totals are for everyone); tax_tools: advance tax
 # amounts and the lot-by-lot long-term exemption facts (the due dates and the exemption used are for everyone); money_reminders: the money calendar's
-# reminders (the calendar and its feed are for everyone)
+# reminders (the calendar and its feed are for everyone); itr_export: the ITR-ready schedules and the pack for your CA
+# (the preview of what they hold is for everyone); us_tax: US shares' gains in rupees sale by sale, the foreign tax
+# credit and Schedule FA (each year's totals and every lot's long or short term are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
-            "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders")
+            "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
+            "itr_export", "us_tax")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

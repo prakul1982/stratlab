@@ -138,12 +138,12 @@ def to_pdf(y: dict, names: dict, below: dict | None = None) -> bytes:
              Paragraph(escape(DISCLAIMER), small), Spacer(1, 6)]
     if total_lines(y):
         story += [Paragraph("Total tax estimate", h2),
-                  Table([[escape(a), escape(b)] for a, b in total_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
+                  Table([[a, b] for a, b in total_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
         if y["total"].get("steps"):
             story += [Paragraph("How we got here", h2)] + [Paragraph(f"{i}. " + escape(s), body) for i, s in enumerate(y["total"]["steps"], 1)]
         story += [Paragraph("<b>Note:</b> " + escape(n), body) for n in y["total"].get("notes") or []]
     story += [Paragraph("Capital gains and other results", h2),
-              Table([[escape(a), escape(b)] for a, b in summary_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
+              Table([[a, b] for a, b in summary_lines(y)], colWidths=[110 * mm, 66 * mm], style=grid)]
     if y["steps"]:
         story += [Paragraph("How the losses and exemption were applied", h2)] + [Paragraph("• " + escape(s), body) for s in y["steps"]]
     if y["gf_missing"]:
@@ -156,7 +156,7 @@ def to_pdf(y: dict, names: dict, below: dict | None = None) -> bytes:
     if top:
         story += [Paragraph("Largest realised lines", h2),
                   Table([["Stock", "Bought", "Sold", "Qty", "Gain or loss", "Term"]] +
-                        [[escape(_name(names, r["key"]))[:24], r["bought"], r["sold"], f"{r['qty']:g}", money(r["gain"]),
+                        [[_name(names, r["key"])[:24], r["bought"], r["sold"], f"{r['qty']:g}", money(r["gain"]),
                           "Long" if r["term"] == "LT" else "Short"] for r in top],
                         colWidths=[46 * mm, 25 * mm, 25 * mm, 20 * mm, 32 * mm, 18 * mm],
                         style=TableStyle(list(grid.getCommands()) + [("FONT", (0, 0), (-1, 0), "Body-Bold", 9)]))]

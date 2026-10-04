@@ -1093,3 +1093,14 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
   .mc-ev { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
 @media (max-width: 420px) { .mc-form { grid-template-columns: minmax(0, 1fr); } }
+
+/* Money · US stocks tax and the ITR-ready export */
+.us-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+.us-form .field input, .us-form .field select { width: 100%; }
+.itr-downloads { display: flex; flex-wrap: wrap; gap: 10px; }
+.itr-downloads .btn { min-height: 52px; height: auto; padding-top: 8px; padding-bottom: 8px; }
+.itr-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 20px; margin: 0; }
+.itr-summary div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.itr-summary dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.itr-head { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; gap: 10px; align-items: center; text-align: left; }
+@media (max-width: 600px) { .itr-downloads .btn { flex: 1 1 100%; justify-content: flex-start; } }

@@ -244,6 +244,8 @@ def long_term(profile=Depends(current_profile)):
 
 
 def delete_all(uid: str):
-    """Every Money tax-tools figure the user saved: with "Delete my tax data"."""
+    """Every Money tax-tools figure the user saved, and their US trades: with "Delete my tax data"."""
     divs.delete(uid)
     adv.delete(uid)
+    from . import money_us_tax
+    money_us_tax.delete(uid)

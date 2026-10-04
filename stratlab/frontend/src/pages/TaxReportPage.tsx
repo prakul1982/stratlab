@@ -7,6 +7,7 @@ import { AsOf, Empty, Info, Loading } from "../components/ui";
 import { Download, Trash, Upload } from "../components/Icons";
 import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
+import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 
 type Bucket = { key: string; label: string; rate: number; gains: number; after_setoff: number; exempt: number; taxable: number; tax: number; slab?: boolean };
 type Sale = { key: string; bought: string; sold: string; qty: number; cost: number; sale: number; gain: number; term: "ST" | "LT"; bonus: boolean; gf: "applied" | "missing" | null; rate: number | null; mf?: boolean };
@@ -34,6 +35,7 @@ type Year = {
   business: Business; total: Total; inputs: Inputs; other_regime: { regime: "new" | "old"; total: number } | null; filing: string[]; turnover: number;
   mutual_funds?: MfYear | null;
   units?: Units | null;
+  us?: UsYear;
 };
 /** Mutual fund sales from the Money space, already in the rows and buckets above; this is their summary. */
 type MfYear = { count: number; gain: number; equity: number; slab: number; other_lt: number; dividends: number };
@@ -47,6 +49,7 @@ type Report = {
   rules: string[]; notes: string[]; disclaimer: string; files: { name: string; broker: string; kind: string; trades: number; at: string }[];
   updated_at: string | null; trades: number; business_lines: number; prices: boolean; prices_at: string | null; max_trades: number;
   mf?: { allowed: boolean; count: number; plan: string };
+  us_trades?: number;
 };
 type Problem = { line: number | null; text: string; reason: string };
 type Skipped = { name: string; reason: string };
@@ -304,6 +307,7 @@ export function TaxReportPage() {
           <UnitsCard units={y.units} notes={[]} name={name} label={y.label} />
 
           <MutualFundsCard y={y} mf={rep.mf} />
+          <UsTaxCard us={y.us} label={y.label} trades={rep.us_trades} />
 
           {y.filing.length > 0 && (
             <section className="card stack" style={{ gap: 10 }} id="tax-filing">
