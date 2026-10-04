@@ -1153,3 +1153,15 @@ table.j-trades td:first-child { text-align: left; min-width: 150px; }
 .itr-summary dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .itr-head { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; gap: 10px; align-items: center; text-align: left; }
 @media (max-width: 600px) { .itr-downloads .btn { flex: 1 1 100%; justify-content: flex-start; } }
+
+/* options session: orders sent together under one line, the list scrolling inside its card */
+.orders-scroll { display: flex; flex-direction: column; gap: 12px; max-height: min(70vh, 720px); overflow-y: auto; margin-right: -8px; padding-right: 8px; }
+.order-group { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.order-group:last-child { border-bottom: 0; padding-bottom: 0; }
+.order-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+ul.orders li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; flex-wrap: nowrap; }
+.order-sym { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-chip { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+.side-chip.buy { background: var(--blue-soft); color: var(--blue-ink); }
+.side-chip.sell { background: var(--orange-soft); color: var(--orange-ink); }
+.order-num { font-family: var(--sans); font-variant-numeric: tabular-nums; white-space: nowrap; }

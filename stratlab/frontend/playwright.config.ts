@@ -12,6 +12,7 @@ export default defineConfig({
   testDir: "e2e",
   timeout: 60_000,
   retries: 0,
+  workers: process.env.CI ? 2 : undefined,     // GitHub's runner has 2 cores: one worker each (the default is one in all)
   reporter: process.env.GITHUB_ACTIONS ? [["list"], ["github"]] : [["list"]],     // on GitHub, failures also show as annotations
   use: { baseURL: `http://127.0.0.1:${webPort}`, launchOptions: chromium ? { executablePath: chromium } : {}, screenshot: "only-on-failure" },
   projects: [

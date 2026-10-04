@@ -10,6 +10,7 @@ import { InvoiceAdminPanel } from "../components/InvoiceAdminPanel";
 import { PlatformPanel } from "../components/PlatformPanel";
 import { RulesPanel } from "../components/RulesPanel";
 import { BreadthAdminPanel } from "../components/BreadthAdminPanel";
+import { StoragePanel } from "../components/StoragePanel";
 import { LifecycleEmails } from "../components/LifecycleEmails";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
 import { analyticsDashboard } from "../lib/analytics";
@@ -408,6 +409,7 @@ export function AdminPage() {
               <PlatformPanel />
               <RulesPanel />
               <BreadthAdminPanel />
+              <StoragePanel />
               <AuditPanel />
               <MarketAuditPanel />
               <MarketAuditPanel region="US" />

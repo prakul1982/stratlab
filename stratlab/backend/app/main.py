@@ -31,6 +31,7 @@ from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_exp
 from . import money_mf
 from . import money_advance_tax, money_routes
 from . import journal_routes
+from . import market_store, storage
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
 from . import suggest
@@ -2868,6 +2869,22 @@ def admin_breadth(_=Depends(admin.admin_profile)):
     return {"status": breadth.status(), "job": breadth_job.status, "running": breadth_runner.running}
 
 
+@app.get("/admin/storage")
+def admin_storage(_=Depends(admin.admin_profile)):
+    """How full the main database is (and the second one, when it's set up), its biggest tables and settings."""
+    return storage.report()
+
+
+@app.post("/admin/storage/move")
+def admin_storage_move(_=Depends(admin.admin_profile)):
+    """Move the market-wide data to the second database, in the background."""
+    if market_store.store() is None:
+        err(400, "no_market_db", "Add a Postgres on Railway and set MARKET_DATABASE_URL on the backend first.")
+    if not storage.start_move():
+        err(409, "busy", "A move is already running.")
+    return {"started": True}
+
+
 @app.delete("/notebooks/{nid}/experiments/{version}")
 def delete_experiment(nid: str, version: int, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
@@ -3813,6 +3830,7 @@ def platform_checks() -> list:
                ("Company page: AAPL", "Research", lambda: pc.check_company(research_hub, "US", "AAPL")),
                ("News", "Research", lambda: pc.check_news(research_hub)),
                ("Database", "Server", lambda: pc.check_database(db)),
+               ("Database space", "Server", storage.check),
                ("Holiday calendar", "Server", lambda: pc.check_calendar(today)),
                ("Rates and rules last reviewed", "Rules", lambda: pc.check_rules(today, rules_watch.state()))]
     return checks

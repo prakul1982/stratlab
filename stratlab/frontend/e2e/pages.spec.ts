@@ -659,7 +659,7 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   for (const g of ["Research", "Watch"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
   for (const g of ["Notebooks", "Trading", "Money"]) await expect(main.getByRole("button", { name: g, exact: true })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
-  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", "Watchlist", "Alerts"]);
+  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", "Market breadth", "Watchlist", "Alerts"]);
   for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
@@ -1520,7 +1520,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
 
   // the Scans tabs and the Invest home lead here
   await page.goto("/research/rotation");
-  await page.getByRole("link", { name: "Market breadth" }).first().click();
+  await page.getByRole("navigation", { name: "Scans" }).getByRole("link", { name: "Market breadth" }).click();
   await expect(page).toHaveURL(/\/invest\/breadth/);
   await page.goto("/invest");
   await expect(page.getByTestId("breadth-card")).toContainText("Above 50-day average");

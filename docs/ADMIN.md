@@ -120,6 +120,39 @@ ref code users see, plus errors in the paper trading loop and failed broker logi
 `frontend/public/config.js` does the same for browsers; the Sentry code only downloads when a DSN is set. Nothing
 personal is sent.
 
+## Storage
+
+Admin → Checks → **Storage** shows how full the main database is against Supabase's free 500 MB, its biggest tables
+and the biggest kinds of stored data. The daily check warns at 80% and fails at 95%.
+
+- **First time:** the panel shows a short SQL snippet. Paste it into Supabase → SQL Editor → New query and press Run
+  (it only reads sizes; it's also in `stratlab/supabase/schema.sql`).
+- **When it gets near the limit:** add a second database on Railway (New → Database → PostgreSQL), then on the backend
+  service add the variable `MARKET_DATABASE_URL` = `${{Postgres.DATABASE_URL}}`. After the redeploy, new market data
+  (whole-market checks, breadth history, stored company reads, corporate actions, option chains) is saved there, and
+  **Move market data now** moves what's already in Supabase. Users' own data and payments stay in Supabase. Supabase
+  hands the space back after `vacuum full public.option_snapshots, public.app_settings;` in its SQL Editor.
+- With the second database, older option chains can be kept longer: raise `OPTION_SNAPSHOT_KEEP_DAYS` (120 by default).
+
+## Backups
+
+Every night at 02:10 IST a GitHub Action (`.github/workflows/backup.yml`) copies the main database, encrypts it, and
+keeps it on the repository's **Actions** page → *Database backup* → the run → *Artifacts*: 7 days for nightly copies,
+28 days for Sunday's, which also holds the recorded option chains. It can be run by hand there too (*Run workflow*).
+
+Setup, once, in GitHub → Settings → Secrets and variables → Actions → New repository secret:
+
+- `SUPABASE_DB_URL`: Supabase → **Connect** → *Session pooler* connection string, with your database password filled in.
+- `BACKUP_PASSPHRASE`: a long random passphrase. Keep it in your password manager: without it a backup can't be opened.
+
+Restoring (to a new Supabase project, or to check a copy):
+
+```bash
+gpg -d stratlab-db-2026-10-05.tar.gpg | tar -xf -          # asks for BACKUP_PASSPHRASE; gives app.dump and auth.dump
+pg_restore -d "$NEW_DB_URL" --no-owner --clean --if-exists app.dump
+pg_restore -d "$NEW_DB_URL" --no-owner --data-only auth.dump   # the sign-ins
+```
+
 ## Deploys
 
 - **Backend (Railway):** one process (`uvicorn app.main:app --host 0.0.0.0 --port $PORT`, no extra workers). Live

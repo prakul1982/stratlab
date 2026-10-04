@@ -74,6 +74,7 @@ class Query:
     def gt(self, c, v): return self._f(lambda r: r.get(c) is not None and r.get(c) > v)
     def lte(self, c, v): return self._f(lambda r: r.get(c) is not None and r.get(c) <= v)
     def lt(self, c, v): return self._f(lambda r: r.get(c) is not None and r.get(c) < v)
+    def in_(self, c, vs): return self._f(lambda r, vs=set(vs): r.get(c) in vs)
     def like(self, c, p): return self._f(lambda r: fnmatch.fnmatchcase(str(r.get(c) or ""), p.replace("%", "*")))
     def ilike(self, c, p): return self._f(lambda r: fnmatch.fnmatch(str(r.get(c) or "").lower(), p.lower().replace("%", "*")))
 
@@ -175,6 +176,17 @@ class FakeSupabase:
 
     def table(self, name):
         return Query(self, name)
+
+    def rpc(self, name, params=None):
+        """stratlab_db_usage: the sizes in self.usage, or the error PostgREST gives while the function isn't created."""
+        db = self
+
+        class Call:
+            def execute(self):
+                if name == "stratlab_db_usage" and getattr(db, "usage", None) is not None:
+                    return SimpleNamespace(data=copy.deepcopy(db.usage))
+                raise RuntimeError(f"{{'code': 'PGRST202', 'message': 'Could not find the function public.{name} in the schema cache'}}")
+        return Call()
 
 
 def headers(token: str) -> dict:

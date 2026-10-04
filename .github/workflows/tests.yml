@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# Only the newest push to a pull request is tested: a newer push cancels the run still going for the one before it,
+# so each update spends its minutes once (GitHub's free minutes are limited for a private repository).
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -18,8 +24,8 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: stratlab/backend/requirements.txt
-      - run: pip install -r requirements.txt pytest time-machine
-      - run: pytest -q
+      - run: pip install -r requirements.txt pytest time-machine pytest-xdist
+      - run: pytest -q -n auto
 
   frontend:
     runs-on: ubuntu-latest
@@ -37,7 +43,9 @@ jobs:
       - run: npm run build
 
   browser:
-    # every main page on desktop and phone against the fake world, checking what is drawn (e2e/pages.spec.ts)
+    # every main page on desktop and phone against the fake world, checking what is drawn (e2e/pages.spec.ts).
+    # The slowest job, so it starts only once the frontend builds: a build that fails costs no browser minutes.
+    needs: [frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

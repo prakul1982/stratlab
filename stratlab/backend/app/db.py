@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timezone
 from supabase import create_client, Client
 from .config import settings
+from . import market_store
 
 _client: Client | None = None
 
@@ -175,36 +176,83 @@ def json_value(raw, default):
     return v if isinstance(v, type(default)) else default
 
 
+# Market-wide data (market_store.MARKET_PREFIXES and the option chains) goes to the second database once
+# MARKET_DATABASE_URL is set; until it's all been moved, whatever isn't there yet is still read from this one.
+def _market(key: str):
+    ms = market_store.store()
+    return ms if ms is not None and market_store.is_market_key(key) else None
+
+
 def get_setting(key: str) -> str | None:
+    ms = _market(key)
+    if ms is not None:
+        v = ms.get(key)
+        if v is not None:
+            return v
     r = sb().table("app_settings").select("value").eq("key", key).limit(1).execute()
     return r.data[0]["value"] if r.data else None
 
 
 def set_setting(key: str, value: str) -> None:
+    ms = _market(key)
+    if ms is not None:
+        ms.set(key, value)
+        return
     sb().table("app_settings").upsert({"key": key, "value": value, "updated_at": now_iso()}).execute()
 
 
 def delete_setting(key: str) -> None:
+    ms = _market(key)
+    if ms is not None:
+        ms.delete(key)
     sb().table("app_settings").delete().eq("key", key).execute()
 
 
 # ---------- recorded option chains ----------
 def add_option_snapshot(row: dict) -> None:
+    ms = market_store.store()
+    if ms is not None:
+        ms.add_snapshot(row)
+        return
     sb().table("option_snapshots").insert(row).execute()
 
 
 def delete_option_snapshots_before(iso: str) -> None:
+    ms = market_store.store()
+    if ms is not None:
+        ms.delete_snapshots_before(iso)
     sb().table("option_snapshots").delete().lt("taken_at", iso).execute()
 
 
 def option_snapshots(name: str, since: str, until: str, limit: int = 12) -> list[dict]:
     """An underlying's recorded chains taken from `since` to before `until` (ISO times), newest first, at most `limit`."""
+    ms = market_store.store()
+    got = ms.snapshots(name, since, until, limit) if ms is not None else []
+    if len(got) >= limit:
+        return got
     r = (sb().table("option_snapshots").select("taken_at,expiry,spot,chain").eq("name", name)
          .gte("taken_at", since).lt("taken_at", until).order("taken_at", desc=True).limit(limit).execute())
-    return r.data or []
+    if not got:
+        return r.data or []
+    seen = {_instant(x["taken_at"]) for x in got}
+    rows = got + [x for x in (r.data or []) if _instant(x["taken_at"]) not in seen]
+    return sorted(rows, key=lambda x: _instant(x["taken_at"]), reverse=True)[:limit]
+
+
+def _instant(iso: str) -> datetime:
+    t = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
 
 
 def settings_with_prefix(prefix: str, limit: int = 1000) -> list[str]:
+    ms = market_store.store()
+    if ms is not None and market_store.touches_prefix(prefix):
+        r = (sb().table("app_settings").select("key,value,updated_at").like("key", prefix + "%")
+             .order("updated_at", desc=True).limit(limit).execute())
+        rows = {k: (t, v) for k, v, t in ms.with_prefix(prefix, limit)}
+        for x in r.data:
+            rows.setdefault(x["key"], (_instant(x["updated_at"]).isoformat(), x["value"]))
+        return [v for _, v in sorted(rows.values(), key=lambda tv: _instant(tv[0]), reverse=True)[:limit]]
     r = (sb().table("app_settings").select("value").like("key", prefix + "%")
          .order("updated_at", desc=True).limit(limit).execute())
     return [x["value"] for x in r.data]
@@ -220,5 +268,24 @@ def all_settings_with_prefix(prefix: str, page: int = 1000) -> list[tuple[str, s
         rows = q.order("key").limit(page).execute().data
         out += [(r["key"], r["value"]) for r in rows]
         if len(rows) < page:
-            return out
+            break
         after = rows[-1]["key"]
+    ms = market_store.store()
+    if ms is not None and market_store.touches_prefix(prefix):
+        merged = dict(out)
+        merged.update(ms.all_with_prefix(prefix))      # the second database's copy is the newer one
+        out = sorted(merged.items())
+    return out
+
+
+# ---------- size ----------
+def usage() -> dict | None:
+    """The main database's size, its biggest tables and the biggest groups of settings, from the stratlab_db_usage
+    function in supabase/schema.sql; None while that function hasn't been created."""
+    try:
+        r = sb().rpc("stratlab_db_usage").execute()
+    except Exception as e:
+        if "stratlab_db_usage" in str(e) or "PGRST202" in str(e) or "42883" in str(e):
+            return None
+        raise
+    return r.data if isinstance(r.data, dict) else None

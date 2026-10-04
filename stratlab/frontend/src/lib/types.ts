@@ -186,7 +186,8 @@ export interface OptionSnapshot {
     rolls: number; units: number; orders: number; expiry: string; dir?: "long" | "short" | null } | null;
   signal?: { tf: Tf; position: "long" | "short" | null; since: string | null; last_candle: string | null; price: number | null; ok: boolean;
     name: string; short: "mirror" | "none" } | null;
-  events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; slices?: number }[];
+  events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; slices?: number;
+    strike?: number; opt?: "CE" | "PE" }[];
   trades: OptTrade[]; equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; cash: number; realised: number; today: number; halted: boolean; entries_today: number;
     trades: number; wins: number; unrealised: number };
