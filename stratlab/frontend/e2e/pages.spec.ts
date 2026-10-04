@@ -671,6 +671,8 @@ test("the menu: a few short groups, Scans and Watchlist each one entry with tabs
   await expect(side.getByRole("link", { name: "Paper trading" })).toBeHidden();
   await side.locator(".mkt-box > summary").click();
   await expect(side.locator(".mkt-grid")).toBeVisible();
+  // the open state is saved by the toggle event, which fires a moment after the click: wait for it before reloading
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("stratlab.markets.open"))).toBe("1");
   await page.reload();
   side = await menu(page, phone);
   await expect(side.getByRole("button", { name: "Trading", exact: true })).toHaveAttribute("aria-expanded", "false");
