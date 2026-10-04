@@ -21,11 +21,42 @@ class SourceError(Exception):
         self.source, self.busy = source, busy
 
 
+def approx_size(value, _budget: list | None = None) -> int:
+    """A rough byte count of a cached value (strings, bytes, dicts, lists, numbers), cheap enough to run on every
+    set: it walks at most 20,000 nodes and scales up from there. Counted generously, since parsed JSON takes several
+    times its text size in memory."""
+    budget = _budget if _budget is not None else [20000]
+    seen, size, stack = 0, 0, [value]
+    while stack:
+        v = stack.pop()
+        if budget[0] <= 0:
+            return int(size * (1 + len(stack) / max(seen, 1))) + 64 * len(stack)
+        budget[0] -= 1
+        seen += 1
+        if isinstance(v, (str, bytes, bytearray)):
+            size += 50 + len(v)
+        elif isinstance(v, dict):
+            size += 100 + 50 * len(v)
+            stack.extend(v.keys())
+            stack.extend(v.values())
+        elif isinstance(v, (list, tuple, set, frozenset)):
+            size += 60 + 8 * len(v)
+            stack.extend(v)
+        else:
+            size += 32
+    return size
+
+
 class TTLCache:
-    def __init__(self, max_items: int = 3000):
+    """Least-recently-used with a time to live, bounded by both an item count and an approximate memory size, so a
+    long walk over every company (the whole-market audit) can't fill memory with large responses."""
+
+    def __init__(self, max_items: int = 3000, max_bytes: int = 48 * 1024 * 1024):
         self._d: OrderedDict = OrderedDict()
         self._lock = threading.Lock()
         self.max = max_items
+        self.max_bytes = max_bytes
+        self.bytes = 0
 
     def get(self, key):
         with self._lock:
@@ -33,21 +64,84 @@ class TTLCache:
             if not hit:
                 return None
             if hit[0] < time.time():
-                self._d.pop(key, None)
+                self._drop(key)
                 return None
             self._d.move_to_end(key)
             return hit[1]
 
-    def set(self, key, value, ttl: float):
+    def _drop(self, key):
+        old = self._d.pop(key, None)
+        if old:
+            self.bytes -= old[2]
+
+    def set(self, key, value, ttl: float, size: int | None = None):
+        n = approx_size(value) if size is None else int(size)
+        if n > self.max_bytes // 4:          # one value bigger than a quarter of the cache: don't keep it
+            with self._lock:
+                self._drop(key)
+            return
         with self._lock:
-            self._d[key] = (time.time() + ttl, value)
-            self._d.move_to_end(key)
-            while len(self._d) > self.max:
-                self._d.popitem(last=False)
+            self._drop(key)
+            self._d[key] = (time.time() + ttl, value, n)
+            self.bytes += n
+            while self._d and (len(self._d) > self.max or self.bytes > self.max_bytes):
+                _, old = self._d.popitem(last=False)
+                self.bytes -= old[2]
 
     def clear(self):
         with self._lock:
             self._d.clear()
+            self.bytes = 0
+
+
+class SizedDict:
+    """A plain dict-like store (get, [key] = value, pop, len, iter) that drops its oldest entries past a memory size
+    or item count. For caches written as dicts of (time, value)."""
+
+    def __init__(self, max_items: int = 300, max_bytes: int = 64 * 1024 * 1024):
+        self._d: OrderedDict = OrderedDict()
+        self._sizes: dict = {}
+        self._lock = threading.Lock()
+        self.max, self.max_bytes, self.bytes = max_items, max_bytes, 0
+
+    def get(self, key, default=None):
+        with self._lock:
+            return self._d.get(key, default)
+
+    def __setitem__(self, key, value):
+        n = approx_size(value)
+        with self._lock:
+            self.pop(key, None, _locked=True)
+            self._d[key] = value
+            self._sizes[key] = n
+            self.bytes += n
+            while self._d and (len(self._d) > self.max or self.bytes > self.max_bytes):
+                k, _ = self._d.popitem(last=False)
+                self.bytes -= self._sizes.pop(k, 0)
+
+    def pop(self, key, default=None, _locked: bool = False):
+        if not _locked:
+            with self._lock:
+                return self.pop(key, default, _locked=True)
+        if key in self._d:
+            self.bytes -= self._sizes.pop(key, 0)
+            return self._d.pop(key)
+        return default
+
+    def clear(self):
+        with self._lock:
+            self._d.clear()
+            self._sizes.clear()
+            self.bytes = 0
+
+    def __len__(self):
+        return len(self._d)
+
+    def __iter__(self):
+        return iter(list(self._d))
+
+    def __contains__(self, key):
+        return key in self._d
 
 
 class RateLimit:
@@ -115,7 +209,8 @@ class Source:
             self._failed(e.busy)
             raise
         self._failed(False, ok=True)
-        self.cache.set(key, value, ttl)
+        # parsed JSON takes several times its text size in memory
+        self.cache.set(key, value, ttl, size=len(r.content) * (4 if kind == "json" else 1) + 200)
         return value
 
     def _failed(self, outage: bool, ok: bool = False):
