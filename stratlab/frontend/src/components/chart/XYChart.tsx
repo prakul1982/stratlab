@@ -23,6 +23,7 @@ import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
 export interface Series {
   id?: string;                      // stable key; the label when missing
   label: string;
+  tipLabel?: string;                // the words after the value in the tooltip, when they differ from the legend's
   values: (number | null)[];
   color: string;                    // a CSS colour, usually a token: var(--series-1)
   width?: number;                   // line width (2 by default)
@@ -401,6 +402,11 @@ export function XYChart(p: XYChartProps) {
     setView([X[Math.min(n - 1, from)], ext[1]], { range: id });
   };
 
+  // the lines' paths, worked out when the window, the scale or the data change, not on every pointer move
+  const paths = useMemo(() => series.map((s, k) => (hidden.has(key(s)) || s.kind === "bar" ? "" : linePath(X, vals[k], i0, i1, sx, sy))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [series, vals, hidden, i0, i1, a, b, ymin, ymax, padL, plotW, H, X]);
+
   if (!n || !series.some((s) => s.values.some((v) => v != null && Number.isFinite(v)))) {
     return <div ref={wrap}><ChartEmpty height={height} label={ariaLabel}>Nothing to draw yet.</ChartEmpty></div>;
   }
@@ -437,7 +443,7 @@ export function XYChart(p: XYChartProps) {
     return out;
   };
   const areaPath = (k: number, base: number) => {
-    const line = linePath(X, vals[k], i0, i1, sx, sy);
+    const line = paths[k];
     if (!line) return "";
     // close each run of points down to the base
     return line.split("M").filter(Boolean).map((seg) => {
@@ -525,7 +531,7 @@ export function XYChart(p: XYChartProps) {
             })}
             {series.map((s, k) => !hidden.has(key(s)) && s.kind === "bar" ? <g key={`b${k}`}>{bars(k)}</g> : null)}
             {series.map((s, k) => !hidden.has(key(s)) && s.kind !== "bar" ? (
-              <path key={`l${k}`} className="ch-line" d={linePath(X, vals[k], i0, i1, sx, sy)} fill="none" stroke={s.color} strokeWidth={s.width ?? 2}
+              <path key={`l${k}`} className="ch-line" d={paths[k]} fill="none" stroke={s.color} strokeWidth={s.width ?? 2}
                 strokeDasharray={s.dash} strokeLinejoin="round" strokeLinecap="round" />
             ) : null)}
             {!indexed && points.map((m, k) => {
@@ -559,7 +565,7 @@ export function XYChart(p: XYChartProps) {
           ))}
           {/* crosshair */}
           {at != null && at >= i0 && at <= i1 && (
-            <g pointerEvents="none">
+            <g pointerEvents="none" className="ch-cross" data-at={at}>
               {!hasBars && <line x1={hx} x2={hx} y1={padT} y2={H - PAD.b} stroke="var(--ink)" strokeWidth={1} opacity={0.35} />}
               {hasBars && <rect x={hx - Math.max(bw, 3) / 2 - 2} y={padT} width={Math.max(bw, 3) + 4} height={H - PAD.b - padT} fill="var(--ink)" opacity={0.06} />}
               {series.map((s, k) => {
@@ -571,13 +577,13 @@ export function XYChart(p: XYChartProps) {
           )}
           {sel && <rect x={Math.min(...sel)} y={padT} width={Math.abs(sel[1] - sel[0])} height={H - PAD.b - padT} fill="var(--blue)" opacity={0.12} pointerEvents="none" />}
         </svg>
-        {at != null && at >= i0 && at <= i1 && (
+        {hover != null && at === hover && at >= i0 && at <= i1 && (
           <ChartTip left={tipLeft} flip={flip} top={padT} live={kbd} heading={heading(at)}>
             {series.map((s, k) => {
               const v = vals[k][at];
               if (hidden.has(key(s)) || s.inTooltip === false || v == null || !Number.isFinite(v)) return null;
               const raw = s.values[at];
-              return <TipRow key={k} color={s.color} dash={!!s.dash} bar={s.kind === "bar"} value={fmtOf(s)(v)} label={s.label}
+              return <TipRow key={k} color={s.color} dash={!!s.dash} bar={s.kind === "bar"} value={fmtOf(s)(v)} label={s.tipLabel ?? s.label}
                 note={indexed && canIndex && raw != null ? (s.format ?? format)(raw) : undefined} />;
             })}
             {p.tipExtra?.(at)}

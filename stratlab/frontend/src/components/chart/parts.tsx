@@ -32,7 +32,7 @@ export function ChartTip({ left, top = 0, flip, heading, live, children }: { lef
     el.style.visibility = "visible";
   });
   return (
-    <div ref={ref} className="ch-tip" role={live ? "status" : undefined} aria-live={live ? "polite" : undefined}
+    <div ref={ref} className="ch-tip chart-tip" role={live ? "status" : undefined} aria-live={live ? "polite" : undefined}
       style={{ left: `${left}%`, top, visibility: "hidden" }}>
       <div className="ch-tip-h">{heading}</div>
       {children}
@@ -62,7 +62,7 @@ export function LegendToggles({ items, onToggle }: { items: { id: string; label:
   return (
     <div className="ch-legend" role="group" aria-label="Series shown">
       {items.map((i) => (
-        <button key={i.id} type="button" aria-pressed={i.on} onClick={() => onToggle(i.id)} title={i.on ? `Hide ${i.label}` : `Show ${i.label}`}>
+        <button key={i.id} type="button" aria-pressed={i.on} onClick={() => onToggle(i.id)} aria-label={`Series: ${i.label}`} title={i.on ? `Hide ${i.label}` : `Show ${i.label}`}>
           <Key color={i.color} dash={i.dash} bar={i.bar} />{i.label}
         </button>
       ))}

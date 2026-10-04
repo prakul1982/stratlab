@@ -216,7 +216,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           {asOf(`Closing level · last ${last}`)}
         </Panel>
         <Panel title="New 52-week highs and lows" info={help.highs_lows}>
-          <PairBars up={h.highs} down={h.lows} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="New highs" downLabel="New lows" upColor={A} downColor={B}
+          <PairBars up={h.highs} down={h.lows} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="new highs" downLabel="new lows" upName="New highs" downName="New lows" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="New 52-week highs (up) and lows (down) each day" />
           {asOf(`Highs drawn up, lows down · last ${last}`)}
         </Panel>
@@ -231,7 +231,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           {asOf(`Added up from ${since ?? "the first stored day"} · last ${last}`)}
         </Panel>
         <Panel title="Stocks up 4% and down 4%" info={help.moves}>
-          <PairBars up={h.up4} down={h.down4} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="Up 4% or more" downLabel="Down 4% or more" upColor={A} downColor={B}
+          <PairBars up={h.up4} down={h.down4} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="up 4%+" downLabel="down 4%+" upName="Up 4% or more" downName="Down 4% or more" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="Stocks up 4% or more (up) and down 4% or more (down) each day" />
           {asOf(`Last ${last}`)}
         </Panel>

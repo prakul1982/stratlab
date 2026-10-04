@@ -110,8 +110,8 @@ export function SplitBars({ built, unseen, builtLabel, unseenLabel }: { built: n
 
 /* Two counts a day on one scale: the first drawn up from zero, the second down (new highs over new lows, stocks up 4%
  * over those down 4%). Thin columns with a per-day tooltip; zoom, ranges and linked crosshairs come from XYChart. */
-export function PairBars({ up, down, labels, times, upLabel, downLabel, upColor, downColor, ariaLabel, height = 200, format = (v) => String(v), sync, ranges }: {
-  up: number[]; down: number[]; labels: string[]; times?: string[]; upLabel: string; downLabel: string; upColor: string; downColor: string;
+export function PairBars({ up, down, labels, times, upLabel, downLabel, upName, downName, upColor, downColor, ariaLabel, height = 200, format = (v) => String(v), sync, ranges }: {
+  up: number[]; down: number[]; labels: string[]; times?: string[]; upLabel: string; downLabel: string; upName?: string; downName?: string; upColor: string; downColor: string;
   ariaLabel: string; height?: number; format?: (v: number) => string; sync?: string; ranges?: boolean;
 }) {
   const abs = (v: number) => format(Math.abs(v));
@@ -119,8 +119,8 @@ export function PairBars({ up, down, labels, times, upLabel, downLabel, upColor,
     <XYChart ariaLabel={ariaLabel} height={height} times={times} labels={times ? undefined : labels} axisLabels={labels} sync={sync} ranges={ranges}
       format={abs} axisFormat={abs} refs={[{ v: 0, strong: true }]}
       series={[
-        { id: "up", label: upLabel, values: up, color: upColor, kind: "bar" },
-        { id: "down", label: downLabel, values: down.map((v) => (v == null ? v : -v)), color: downColor, kind: "bar" },
+        { id: "up", label: upName ?? upLabel, tipLabel: upLabel, values: up, color: upColor, kind: "bar" },
+        { id: "down", label: downName ?? downLabel, tipLabel: downLabel, values: down.map((v) => (v == null ? v : -v)), color: downColor, kind: "bar" },
       ]} />
   );
 }
