@@ -10,7 +10,7 @@ import { LineChart } from "../components/Charts";
 import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
 import { track } from "../lib/analytics";
-import { PositioningCard, TradeTabs } from "../components/PositioningCard";
+import { PositioningCard } from "../components/PositioningCard";
 import { Earlier } from "../components/Earlier";
 
 const DRAFT = "stratlab.options.draft.v1";
@@ -254,7 +254,6 @@ export function OptionsPage() {
 
   return (
     <div className="stack opt-page" style={{ gap: 20 }}>
-      <TradeTabs />
       <div className="stack" style={{ gap: 6 }}>
         <h1 className="page-title">Options<Info>{HELP.options}</Info></h1>
         <p className="muted" style={{ maxWidth: "62ch" }}>Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask.</p>
