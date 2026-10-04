@@ -2840,10 +2840,14 @@ def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.ad
         err(409, "busy", "A breadth run is already going.")
 
     def work():
+        breadth._set_status(region, started_at=breadth._now(), last_error=None)
         try:
-            breadth_runner.run(region, full=full or None)
+            r = breadth_runner.run(region, full=full or None)
+            if isinstance(r, dict) and r.get("ok") is False:
+                breadth._set_status(region, last_error=str(r.get("error") or "")[:200], failed_at=breadth._now())
         except Exception as e:
             print("breadth run failed:", region, str(e)[:160])
+            breadth._set_status(region, last_error=str(e)[:200], failed_at=breadth._now())
     threading.Thread(target=work, daemon=True, name="breadth-now").start()
     return {"started": True, "region": region, "status": breadth.status()}
 
