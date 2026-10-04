@@ -66,6 +66,7 @@ CARD_WORDS = {
     "mf_costs": "fund costs in rupees",
     "etf_gaps": "ETF gap alerts",
     "fo_alerts": "F&O change alerts",
+    "options_whatif": "what-if sliders",
 }
 
 

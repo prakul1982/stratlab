@@ -207,7 +207,7 @@ test.describe("a visitor in India", () => {
 test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
   const errors = await open(page, "/plans", "Side by side");
   for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
-    "2 company deep dives and 1 slide deck a month", "Indian F&O and options entered on your own rules' signals"]) {
+    "2 company deep dives and 1 slide deck a month", "Indian F&O, options entered on your own rules' signals, and options what-if sliders with a roll preview"]) {
     await expect(page.locator(".grid4 li", { hasText: line })).toBeVisible();
   }
   for (const card of await page.locator(".grid4 > .card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);

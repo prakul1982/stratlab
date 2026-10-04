@@ -44,6 +44,13 @@ BARS = [{"t": f"2024-{1 + i // 28:02d}-{1 + i % 28:02d}", "o": 100 + i % 9, "h":
 HOLDINGS_CSV = base64.b64encode(b"Symbol,ISIN,Quantity,Average price\nRELIANCE,INE002A01018,10,2500\nTCS,,4,3500\n").decode()
 
 
+def held(i: int) -> dict:
+    """A NIFTY short straddle held on the fake feed's i-th expiry, as the session page sends it for its model."""
+    from tests.fake_options_kite import _expiries
+    return {"exchange": "NFO", "underlying": "NIFTY", "expiry": _expiries()[i].isoformat(),
+            "legs": [{"side": "sell", "opt": "CE", "strike": 25000, "qty": 75, "fill": 150}, {"side": "sell", "opt": "PE", "strike": 25000, "qty": 75, "fill": 148}]}
+
+
 def real_requests(ctx: dict) -> dict:
     """(method, path template) -> list of (query params, JSON body). ctx holds ids from the seeded world."""
     nb_bodies = [{"name": s["name"], "strategy": s, "instrument": inst} for s in STRATEGIES for inst in INSTRUMENTS[:4]]
@@ -65,6 +72,8 @@ def real_requests(ctx: dict) -> dict:
                                        ({}, {"strategy": {**OPT, "underlying": "BANKNIFTY", "expiry": "next"}})],
         ("POST", "/options/sessions"): [({}, {"strategy": OPT}), ({}, {"strategy": OPT_SIGNAL})],
         ("GET", "/options/chain"): [({"exchange": "NFO", "underlying": "NIFTY"}, None), ({"exchange": "NFO", "underlying": "BANKNIFTY", "expiry": "next"}, None)],
+        ("POST", "/options/greeks"): [({}, held(0)), ({}, {**held(1), "brokerage": 0, "freeze": 1800})],
+        ("POST", "/options/roll"): [({}, {**held(0), "leg": 0, "strike": 25100}), ({}, {**held(0), "leg": 1, "strike": 24900, "to_expiry": held(1)["expiry"]})],
         ("POST", "/research/scan"): [({}, {"region": r, "set": s}) for r, s in (("IN", "nifty50"), ("IN", "watchlist"), ("US", "us_mega"), ("IN", "banknifty"))],
         ("GET", "/research/rotation"): [({"region": r, "set": s, "interval": i, "tail": 5}, None)
                                         for r, s, i in (("IN", "sectors", "weekly"), ("IN", "size", "daily"), ("US", "sectors", "weekly"), ("IN", "nifty50", "weekly"))],

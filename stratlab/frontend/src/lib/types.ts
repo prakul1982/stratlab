@@ -1,3 +1,5 @@
+import type { GreekModel, ModelLeg, NetGreeks, OptionGreeks } from "./greeks";
+
 export type RefType =
   | "price" | "num" | "sma" | "ema" | "rsi" | "macd" | "macd_signal" | "macd_hist"
   | "bb_upper" | "bb_mid" | "bb_lower" | "vwap" | "supertrend" | "stage"
@@ -168,12 +170,27 @@ export interface OptionStrategy {
 export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: string; lot: number; expiries: string[]; venue: string; popular: boolean; freeze: number; index: boolean }
 export interface OptQuote { ltp: number | null; bid: number | null; ask: number | null; oi?: number | null; volume?: number | null; ts?: string | null }
 export interface OptChain { expiry: string | null; expiries?: string[]; lot?: number; spot: number | null; atm?: number; step?: number;
-  rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null }[]; freeze?: number }
+  rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null; ce_g?: OptionGreeks | null; pe_g?: OptionGreeks | null }[]; freeze?: number;
+  model?: GreekModel | null }       // the inputs every strike's IV and Greeks share (model estimates)
+/** A position's model view (options/greeks.py position): each leg's IV and Greeks per option, the what-if inputs of the
+ * legs that have an IV, and the net Greeks (× quantity, sold legs negative). */
+export interface PositionGreeks { legs: (OptionGreeks | null)[]; model_legs: ModelLeg[]; complete: boolean; net: (NetGreeks & { pnl: number }) | null }
 export interface OptPreview {
   spot: number; atm: number; step: number; expiry: string; lot: number; freeze: number; units: number;
-  margin_one: number | null; margin: number | null; strikes: number[];
+  margin_one: number | null; margin: number | null; strikes: number[]; expiries?: string[];
   legs: { side: "sell" | "buy"; opt: "CE" | "PE"; lots: number; strike: number | null; sym: string | null; quote: OptQuote | null; fill: number | null }[];
   charges?: OptCharges | null;     // opening and closing every leg once at the fills shown; null when a leg has no quote
+  model?: GreekModel | null; greeks?: PositionGreeks | null;     // null once the expiry has passed
+}
+/** /options/greeks: an open position's model on today's quotes, with what closing every leg would cost. */
+export interface HeldGreeks extends PositionGreeks { model: GreekModel; spot: number; close_charges: { total: number; orders: number } | null }
+/** /options/roll: one leg closed and another strike or expiry opened in its place. */
+export interface OptRoll {
+  leg: number; spot: number;
+  close: { opt: "CE" | "PE"; strike: number; expiry: string; side: "buy" | "sell"; px: number; sym: string | null };
+  open: OptionGreeks & { opt: "CE" | "PE"; strike: number; expiry: string; side: "buy" | "sell"; px: number; sym: string | null };
+  premium: number; charges: { total: number; orders: number; items: { key: string; label: string; amount: number }[] }; net: number;
+  before: NetGreeks; after: NetGreeks; complete: boolean; model: GreekModel; model_to: GreekModel;
 }
 /** A structure's round-trip charges, with the breakevens before and after them (options/charges.py). */
 export interface OptCharges {
