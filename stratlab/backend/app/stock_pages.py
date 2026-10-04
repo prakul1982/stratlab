@@ -454,6 +454,36 @@ def _table(f: dict) -> str:
     return f'<h2>Revenue and profit</h2><div class="card"><div class="tbl"><table><tr><th></th>{head}</tr>{body}</table></div>{note}</div>'
 
 
+def surveillance_html(flags: list[dict]) -> str:
+    """The stock's exchange surveillance flags as small badges, each opening to what the exchange's measure is and
+    the date of the list. Inline styles, so pages stored before this existed show it the same way."""
+    if not flags:
+        return ""
+    badge = ("display:inline-block;border:1px solid #b45309;color:#92400e;border-radius:999px;padding:2px 10px;"
+             "font-size:13px;font-weight:600;margin:0 6px 6px 0")
+    items = "".join(
+        f'<details style="margin:6px 0"><summary style="cursor:pointer;min-height:32px;line-height:32px">'
+        f'<span style="{badge}">{e(f["short"])}</span> {e(f["label"])}</summary>'
+        f'<p class="small" style="margin:4px 0 0">{e(f["text"])}'
+        f'{" List as of " + e(_date(f["as_of"])) + "." if f.get("as_of") else ""}</p></details>' for f in flags)
+    return (f'<div class="card" data-surveillance><h2 style="margin-top:0">Exchange surveillance</h2>{items}'
+            '<p class="small muted">From the exchange\'s published surveillance lists: measures the exchange applies '
+            'for a time. They are facts about trading rules, not a view on the company.</p></div>')
+
+
+def with_surveillance(page: str, flags: list[dict]) -> str:
+    """A stored page with today's surveillance flags added under the heading (the lists change daily; the page is
+    kept for a day)."""
+    block = surveillance_html(flags)
+    if not block:
+        return page
+    for anchor in ('<div class="card grid">', '<div class="card"><h2 style="margin-top:0">Go further'):
+        i = page.find(anchor)
+        if i >= 0:
+            return page[:i] + block + page[i:]
+    return page
+
+
 def with_ref(page: str, code: str) -> str:
     """A page whose links into the app (sign up, test, deep dive) carry an invite code, for someone who arrived from
     a shared card. Links to other company pages, and the canonical address, stay as they are."""

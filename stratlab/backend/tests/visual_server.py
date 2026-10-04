@@ -44,7 +44,8 @@ def build():
     mp.setattr(scr, "company", lambda sym: loss_company(real("RELIANCE")) if sym.upper() == LOSS else real(sym))
     from datetime import datetime, timezone
     from app import db
-    for uid in ("u-free", "u-basic"):       # brand-new accounts, for the first-steps checklist on Home
+    # brand-new accounts, for the first-steps checklist on Home (u-load-201 and 204: the new-user walkthrough's own)
+    for uid in ("u-free", "u-basic", "u-load-201", "u-load-204"):
         db.update_profile(uid, created_at=datetime.now(timezone.utc).isoformat())
     # the owner's holdings, imported from a Zerodha Console file, for the My Holdings page
     sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
@@ -57,6 +58,8 @@ def build():
                          json={"filename": name, "data": base64.b64encode(trades.read_bytes()).decode()})
     invite_rewards()
     main.corp_job.refresh("IN")             # the corporate-actions calendar, as the morning job would have built it
+    from app import surveillance
+    surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them
     screen_index()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)

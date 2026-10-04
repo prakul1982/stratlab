@@ -94,6 +94,8 @@ export interface HoldingsActions {
 }
 
 const inr = (v: number) => money(v, "INR", 0);
+/** A dividend a share as announced: ₹11.00, ₹0.50, ₹0.125 (never padded to four places). */
+const perShare = (v: number) => `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
 /** Bonuses and splits since the holdings were saved (offered, never made silently), and dividend income. */
 export function HoldingsActionsPanel<V>({ onHoldings, version }: { onHoldings: (v: V) => void; version: number }) {
@@ -150,6 +152,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version }: { onHoldings: (
             <div className="stat"><span className="tiny muted">Announced, ex-date ahead</span><b className="num">{inr(data.ahead_total)}</b></div>
             <div className="stat"><span className="tiny muted">Last 12 months (estimated)</span><b className="num">{inr(data.received_total)}</b></div>
           </div>
+          {data.ahead.length > 0 && <h3 className="h3" style={{ margin: 0 }}>Ex-date ahead</h3>}
           {data.ahead.length > 0 && (
             <div className="table-wrap">
               <table aria-label="Dividends ahead">
@@ -158,6 +161,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version }: { onHoldings: (
               </table>
             </div>
           )}
+          {received.length > 0 && <h3 className="h3" style={{ margin: 0 }}>Last 12 months (estimated)</h3>}
           {received.length > 0 && (
             <div className="table-wrap">
               <table aria-label="Dividends in the last 12 months">
@@ -180,7 +184,7 @@ function IncomeRow({ d }: { d: IncomeLine }) {
       <td><Link className="link" to={`/research/IN/${encodeURIComponent(d.symbol)}`}><b>{d.symbol}</b></Link></td>
       <td style={{ textAlign: "left" }} className="small">{d.label}</td>
       <td className="small">{exDay(d.ex_date, true)}</td>
-      <td className="num">{price(d.amount, "INR")}</td>
+      <td className="num">{perShare(d.amount)}</td>
       <td className="num">{qtyText(Math.round(d.qty * 10000) / 10000)}</td>
       <td className="num">{inr(d.total)}</td>
     </tr>

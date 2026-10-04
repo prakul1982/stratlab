@@ -3,8 +3,9 @@ import type { Region } from "./research";
 import { track } from "./analytics";
 
 /** Stock alerts the user sets: a price level, a day's move, a moving average, RSI, Stage, a 52-week high or low, and
- * (Indian stocks) an insider trade or a bulk or block deal disclosed to the exchange. */
-export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal";
+ * (Indian stocks) an insider trade or a bulk or block deal disclosed to the exchange, or a stock entering or leaving
+ * an exchange surveillance list. */
+export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal" | "surveillance";
 export type AlertOp = "above" | "below" | "up" | "down" | "either" | null;
 
 export interface StockAlert {
@@ -36,9 +37,11 @@ export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: Aler
   { key: "low52", label: "Makes a new 52-week low", kind: "low52", op: null },
   { key: "insider", label: "A promoter or insider trade is disclosed", kind: "insider", op: null, india: true },
   { key: "deal", label: "A bulk or block deal is reported", kind: "deal", op: null, india: true },
+  { key: "surveillance", label: "Enters or leaves an exchange surveillance list", kind: "surveillance", op: null, india: true },
 ];
-/** Alerts on exchange disclosures, checked once each evening rather than against the live price. */
-export const EVENT_KINDS: AlertKind[] = ["insider", "deal"];
+/** Alerts on exchange disclosures and surveillance lists, checked against the exchange's daily lists rather than the
+ * live price. */
+export const EVENT_KINDS: AlertKind[] = ["insider", "deal", "surveillance"];
 export const MA_PERIODS = [20, 50, 100, 150, 200];
 
 export const conditionKey = (a: { kind: AlertKind; op: AlertOp }) =>

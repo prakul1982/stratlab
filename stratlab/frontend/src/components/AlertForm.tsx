@@ -97,7 +97,9 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
           <option value={0}>Any change of stage</option>
           {[1, 2, 3, 4].map((s) => <option key={s} value={s}>Enters Stage {s}</option>)}
         </select></label>}
-      <span className="hint">{EVENT_KINDS.includes(c.kind)
+      <span className="hint">{c.kind === "surveillance"
+        ? "Checked twice each trading day against the exchange's surveillance lists (ASM, GSM, ESM, trade-to-trade, F&O ban, price bands). The alert says which list, which stage and the list's date."
+        : EVENT_KINDS.includes(c.kind)
         ? "Checked once each evening against that day's exchange disclosures. The alert says who, which way, how many and when."
         : c.kind === "move" || c.kind === "high52" || c.kind === "low52"
         ? "Checked through the trading day with the live price."

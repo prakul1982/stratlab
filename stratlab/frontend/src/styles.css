@@ -319,6 +319,14 @@ table.nums th:not(:first-child), table.nums td:not(:first-child) { text-align: r
 .info-pop.right { right: -8px; }
 .info-pop b { color: var(--on-ink); }
 
+/* ---------- exchange surveillance flags: small, factual, not alarming ---------- */
+.surv { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; vertical-align: middle; max-width: 100%; }
+.surv-badge { font: 600 11.5px/1.5 var(--mono); padding: 0 6px; border-radius: 6px; border: 1px solid var(--line-2);
+  background: var(--chip); color: var(--ink-2); white-space: nowrap; }
+.surv .info { margin-left: 2px; }
+.surv-line { display: block; }
+.surv-line + .surv-line { margin-top: 8px; }
+
 /* ---------- getting-started steps and labels ---------- */
 .label { font-size: 14px; font-weight: 600; color: var(--ink-2); }
 .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }

@@ -6,6 +6,7 @@ import { riskForCurrency } from "../lib/rules";
 import type { GroupMember, Instrument, Market, Notebook } from "../lib/types";
 import { parseCsv, saveUpload, type Candle } from "../lib/upload";
 import { InstrumentSearch } from "../components/InstrumentSearch";
+import { SurvBadges } from "../components/Surveillance";
 import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
@@ -87,7 +88,7 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
         <>
           <div className="chip-row">
             {members.map((m) => (
-              <span key={m.id ?? m.symbol} className="pill">{m.symbol}{pick === "custom" &&
+              <span key={m.id ?? m.symbol} className="pill">{m.symbol}{market.id === "IN" && <> <SurvBadges region="IN" symbol={m.symbol} plain /></>}{pick === "custom" &&
                 <button className="chip-x" aria-label={`Remove ${m.symbol}`} onClick={() => setCustom(custom.filter((x) => x !== m))}>×</button>}</span>
             ))}
           </div>

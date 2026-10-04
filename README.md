@@ -170,6 +170,8 @@ New here? A short tour pops up the first time you sign in. You can reopen it any
 | See the whole watchlist the investor way | **Investing → Watchlist at a glance**: trend, sector rotation, red flags, checklist and report card for each watchlist company, with an India / US switch (Pro) |
 | Filter companies by plain facts | **Research → Screens**: sector, size, 3-year revenue growth, margins, debt to equity, ROE and ROCE, dividend yield, P/E, Stage, price against the 52-week high and recent red-flag filings. Sort by any column; **Save this screen** keeps it, and its weekly email on Saturday morning lists the companies that newly meet it (Free 1 saved screen, Basic 5, Pro 25) |
 | Know when companies report results | **Research → Results**: India's board meetings for results and US results dates, from a week back to four weeks ahead, with a message on results day and when the numbers are out for the companies you follow |
+| See who bought or sold a company's shares | **Deals and insider trades** on any Indian company page or deep dive: promoters', directors' and key staff's own trades and pledges, substantial acquisitions, and bulk and block deals, as filed with the exchange. Facts as filed, never a call on the stock |
+| Know when dividends, bonuses and splits go ex | **Research → Corporate actions**: dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, for your stocks or every company; a panel on each company page; and in **My Holdings**, the dividends ahead and of the last 12 months, and a bonus or split since your holdings were saved offered as a one-click **Apply** (with **Undo**) |
 | Get told when a stock does something | **Set alert** on a company page, the deep dive or the watchlist: a price level, a day's move, crossing a moving average, RSI, a Stage change or a 52-week high or low. All of them are on **Investing → Alerts** (Free 3, Basic 20, Pro 100) |
 | See your own portfolio | **Investing → My Holdings**: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (or any CSV with symbol, quantity and price) for value, P&L, sectors and each stock's trend, filings and results date |
 | Share a company's facts | **Share** on a company page or the deep dive: a card with its price, 1-year range and key numbers, and a public link that previews as the card and opens the company's public page |
@@ -307,6 +309,9 @@ stratlab/
 │   │   ├── stock_alerts.py   price, move, moving average, RSI, Stage and 52-week alerts on single stocks
 │   │   ├── holdings.py       My Holdings: positions, value, P&L and sectors (holdings_file.py reads the brokers' files)
 │   │   ├── results.py        the results calendar and its results-day messages
+│   │   ├── deals.py          deals and insider trades from exchange disclosures, and their evening job
+│   │   ├── corp_actions.py   corporate actions: the ex-date calendar, company histories, holdings income and adjustments
+│   │   ├── product_analytics.py  server-side usage events (a payment going through), off without POSTHOG_KEY
 │   │   ├── lifecycle.py      welcome, trial, offer and what's-new emails (first_steps.py: the Home checklist)
 │   │   ├── mail_tokens.py    signed links in emails: confirm an address, unsubscribe
 │   │   └── alerts.py         phone, Telegram and email alerts

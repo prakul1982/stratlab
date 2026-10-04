@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import type { Instrument, Market } from "../lib/types";
+import { useSurveillance } from "../lib/surveillance";
 import { Search } from "./Icons";
+import { SurvBadges } from "./Surveillance";
 
 let defaultsCache: Instrument[] | null = null;
 
@@ -39,6 +41,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
   const [results, setResults] = useState<Instrument[] | null>(null);
   const timer = useRef<number>(undefined);
   const defaults = useDefaults().filter((d) => d.market === market.id);
+  const surv = useSurveillance(market.id === "IN");
 
   useEffect(() => { setQ(""); setResults(null); }, [market.id]);
   useEffect(() => {
@@ -65,7 +68,8 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
             {results.length === 0 && <p className="small muted" style={{ padding: 14 }}>No matches in {market.name}.</p>}
             {results.map((r) => (
               <button key={r.id} type="button" onClick={() => pick(r)}>
-                <span><b>{r.symbol}</b> <span className="small muted">{r.name !== r.symbol ? r.name : ""}</span></span>
+                <span><b>{r.symbol}</b> <span className="small muted">{r.name !== r.symbol ? r.name : ""}</span>
+                  {market.id === "IN" && <> <SurvBadges region="IN" symbol={r.symbol} plain /></>}</span>
                 <span className="small muted">{instKind(r)}</span>
               </button>
             ))}
@@ -75,9 +79,12 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
       {defaults.length > 0 && (
         <div className="row wrap" style={{ gap: 8 }}>
           <span className="small muted">Popular:</span>
-          {defaults.map((d) => <button key={d.id} type="button" className="btn quiet sm" onClick={() => pick(d)}>{d.symbol}</button>)}
+          {defaults.map((d) => <button key={d.id} type="button" className="btn quiet sm" onClick={() => pick(d)}>{d.symbol}
+            {market.id === "IN" && <> <SurvBadges region="IN" symbol={d.symbol} plain /></>}</button>)}
         </div>
       )}
+      {surv && [...(results ?? []), ...defaults].some((i) => surv.flags[i.symbol]) && <p className="tiny muted" style={{ margin: 0 }}>Small tags such as LT-ASM 2, T2T or F&amp;O ban are the exchange's
+        surveillance lists today; a stock's company page explains each.</p>}
     </div>
   );
 }
