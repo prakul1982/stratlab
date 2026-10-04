@@ -5,7 +5,7 @@ import { track } from "./analytics";
 /** Stock alerts the user sets: a price level, a day's move, a moving average, RSI, Stage, a 52-week high or low, and
  * (Indian stocks) an insider trade or a bulk or block deal disclosed to the exchange, or a stock entering or leaving
  * an exchange surveillance list. */
-export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal" | "surveillance";
+export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal" | "surveillance" | "etfgap";
 export type AlertOp = "above" | "below" | "up" | "down" | "either" | null;
 
 export interface StockAlert {
@@ -38,6 +38,10 @@ export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: Aler
   { key: "insider", label: "A promoter or insider trade is disclosed", kind: "insider", op: null, india: true },
   { key: "deal", label: "A bulk or block deal is reported", kind: "deal", op: null, india: true },
   { key: "surveillance", label: "Enters or leaves an exchange surveillance list", kind: "surveillance", op: null, india: true },
+  // an Indian ETF's price against its NAV (Basic and up)
+  { key: "etfgap_above", label: "ETF trades above its NAV by", kind: "etfgap", op: "above", india: true },
+  { key: "etfgap_below", label: "ETF trades below its NAV by", kind: "etfgap", op: "below", india: true },
+  { key: "etfgap_either", label: "ETF trades away from its NAV, either way, by", kind: "etfgap", op: "either", india: true },
 ];
 /** Alerts on exchange disclosures and surveillance lists, checked against the exchange's daily lists rather than the
  * live price. */

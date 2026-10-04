@@ -68,6 +68,7 @@ def build():
     navs = Path(__file__).parent / "fixtures" / "mf"
     mp.setattr(money_mf_nav, "fetch_text", lambda url: (navs / ("NAVAll.txt" if url == money_mf_nav.DAILY_URL else "nav_2018-01-31.txt")).read_text())
     mp.setattr(money_mf_nav, "MIN_SCHEMES", 1)
+    etf_gaps(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
     fx_rates.seed()
@@ -118,6 +119,19 @@ def breadth(mp):
         for region in ("IN", "US"):
             main.breadth_runner.run(region)
     mp.setattr(main.breadth_job, "start", lambda: None)      # the stored counts stay as they are for the whole run
+def etf_gaps(mp):
+    """ETF prices against their NAV: the exchange's ETF list as the job would have read it (from the fake exchange),
+    the made-up ETFs' NAVs added to the NAV file, and 30 trading days of stored closes."""
+    from datetime import date
+    from app import etf_nav
+    from tests import fake_etf
+    data = fake_etf.navs(date(2026, 10, 3))
+    mp.setattr(etf_nav, "navs", lambda: data)
+    etf_nav.refresh(main.filings_feed)
+    fake_etf.seed_history(date.today())
+    mp.setattr(main.etf_job, "start", lambda: None)          # the stored list stays as it is for the whole run
+
+
 def positioning_history():
     """Derivatives positioning as the evening job would have left it: the exchange's files for about three months (read
     from the fake exchange), and thirty days of recorded NIFTY and BANKNIFTY chains summarised by day."""

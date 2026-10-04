@@ -11,14 +11,15 @@ import { Modal } from "./ui";
 type Saved = AlertsPage & { alert: StockAlert; note: string | null };
 
 /** Create or edit one alert. A stock passed in is fixed; `choices` offers a list (the watchlist) instead. */
-export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved }: {
+export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved, condition }: {
   region?: Region; symbol?: string; editing?: StockAlert; choices?: { region: Region; symbol: string }[]; onSaved: (r: Saved) => void;
+  condition?: string;
 }) {
   const { fail, notify } = useApp();
   const fixed = !editing && !!s0 && !choices;
   const [region, setRegion] = useState<Region>(editing?.region ?? r0);
   const [symbol, setSymbol] = useState(editing?.symbol ?? (s0 || choices?.[0]?.symbol || ""));
-  const [cond, setCond] = useState(editing ? conditionKey(editing) : "price_above");
+  const [cond, setCond] = useState(editing ? conditionKey(editing) : condition ?? "price_above");
   const [value, setValue] = useState(editing?.value != null && editing.kind !== "stage" ? String(editing.value) : "");
   const [period, setPeriod] = useState(editing?.period && editing.kind === "ma" ? editing.period : 50);
   const [stage, setStage] = useState(editing?.kind === "stage" ? editing.value ?? 0 : 0);
@@ -42,9 +43,9 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     const n = Number(value);
-    const needsValue = c.kind === "price" || c.kind === "move" || c.kind === "rsi";
+    const needsValue = c.kind === "price" || c.kind === "move" || c.kind === "rsi" || c.kind === "etfgap";
     if (!sym) { notify("Enter a ticker, like RELIANCE or AAPL."); return; }
-    if (needsValue && (!value.trim() || !Number.isFinite(n) || n <= 0)) { notify(c.kind === "move" ? "Enter the day's move in percent." : "Enter the level."); return; }
+    if (needsValue && (!value.trim() || !Number.isFinite(n) || n <= 0)) { notify(c.kind === "move" ? "Enter the day's move in percent." : c.kind === "etfgap" ? "Enter the gap in percent." : "Enter the level."); return; }
     const body: AlertBody = {
       region, symbol: sym, kind: c.kind, op: c.op, repeat, note: note.trim() || null,
       value: needsValue ? n : c.kind === "stage" ? stage : null, period: c.kind === "ma" ? period : null,
@@ -92,6 +93,8 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={now != null ? String(Math.round(now)) : "3000"} /></label>}
       {c.kind === "move" && <label className="field">Move in a day (%)
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="5" /></label>}
+      {c.kind === "etfgap" && <label className="field">Gap to its NAV (%)
+        <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="2" /></label>}
       {c.kind === "rsi" && <label className="field">RSI level (1 to 99)
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} /></label>}
       {c.kind === "ma" && <label className="field">Moving average
@@ -103,7 +106,9 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
           <option value={0}>Any change of stage</option>
           {[1, 2, 3, 4].map((s) => <option key={s} value={s}>Enters Stage {s}</option>)}
         </select></label>}
-      <span className="hint">{c.kind === "surveillance"
+      <span className="hint">{c.kind === "etfgap"
+        ? "Checked through the trading day: the live price against the exchange's indicative NAV (else the fund's last NAV). On the Basic plan."
+        : c.kind === "surveillance"
         ? "Checked twice each trading day against the exchange's surveillance lists (ASM, GSM, ESM, trade-to-trade, F&O ban, price bands). The alert says which list, which stage and the list's date."
         : EVENT_KINDS.includes(c.kind)
         ? "Checked once each evening against that day's exchange disclosures. The alert says who, which way, how many and when."
@@ -125,8 +130,8 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
 }
 
 /** "Set alert" for a company page, the deep dive or the watchlist: opens the form in a pop-up. */
-export function AlertButton({ region, symbol, choices, label = "Set alert" }: {
-  region: Region; symbol?: string; choices?: { region: Region; symbol: string }[]; label?: string;
+export function AlertButton({ region, symbol, choices, label = "Set alert", condition }: {
+  region: Region; symbol?: string; choices?: { region: Region; symbol: string }[]; label?: string; condition?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -134,7 +139,7 @@ export function AlertButton({ region, symbol, choices, label = "Set alert" }: {
       <button className="btn quiet sm" onClick={() => setOpen(true)} disabled={choices && !choices.length}><Bell size={17} />{label}</button>
       {open && (
         <Modal title={symbol ? `Alert on ${symbol}` : "Set an alert"} onClose={() => setOpen(false)}>
-          <AlertForm region={region} symbol={symbol} choices={choices} onSaved={() => setOpen(false)} />
+          <AlertForm region={region} symbol={symbol} choices={choices} condition={condition} onSaved={() => setOpen(false)} />
           <p className="hint" style={{ marginTop: 12 }}>See and change all your alerts on the <Link className="link" to="/alerts">Alerts page</Link>.</p>
         </Modal>
       )}

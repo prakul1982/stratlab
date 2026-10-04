@@ -219,6 +219,9 @@ def _nse(sw=None):
                       + datetime.now().strftime("%d-%b-%Y") + ",10,INE999N01011", "SOMEBOND,Some Bond,N1,01-Jan-2020,1000,INE888B07019"]
             lines += [f"{s},{n},EQ,01-Jan-2000,1,{isin}" for s, n, isin in ISINS]
             return httpx.Response(200, text="\n".join(lines))
+        if r.url.path == "/api/etf":                  # every ETF's price and iNAV (etf_nav.py)
+            from tests import fake_etf
+            return httpx.Response(200, json=fake_etf.answer())
         if r.url.path == "/api/holiday-master":
             return httpx.Response(200, json={"CM": [{"tradingDate": "26-Jan-2027", "weekDay": "Tuesday", "description": "Republic Day"},
                                                     {"tradingDate": "22-Mar-2027", "weekDay": "Monday", "description": "Holi"}],
@@ -269,6 +272,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     main.trading_calendar._holiday_cache.clear()
     from app import surveillance
     surveillance._cache.clear()                 # the surveillance lists another test stored
+    from app import etf_nav
+    etf_nav.forget()                            # the ETF list and gap history another test stored
     from app import positioning
     positioning.clear_cache()                   # positioning days and live chains another test stored
     from app import auth

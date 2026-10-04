@@ -264,7 +264,7 @@ class StockAlertReq(BaseModel):
     """One stock alert; stock_alerts.clean checks the combination (a price level, an MA length…)."""
     region: Literal["IN", "US"] = "IN"
     symbol: str = Field(..., min_length=1, max_length=20)
-    kind: Literal["price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance"]
+    kind: Literal["price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap"]
     op: Optional[Literal["above", "below", "up", "down", "either"]] = None
     value: Optional[float] = None
     period: Optional[int] = Field(None, ge=1, le=500)

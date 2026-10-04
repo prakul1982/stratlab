@@ -42,7 +42,7 @@ def test_everything_open_during_early_access(monkeypatch):
 
 def test_features_per_plan_once_payments_are_live(paid):
     assert not any(plan_info("free")["features"].values())
-    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal"}
+    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "etf_gaps"}
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
     assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {
@@ -228,3 +228,33 @@ def test_experience_level_is_saved_with_other_prefs(monkeypatch):
         assert main.prefs_of("nobody") == {}
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_etf_gap_alerts_are_basic(paid, monkeypatch):
+    """The gaps, their history and the badges are for everyone; an alert on the gap is Basic and up, and one set
+    before a downgrade isn't checked."""
+    from app import etf_nav
+    from tests import fake_etf
+    rows = etf_nav.parse_exchange(fake_etf.answer())["rows"]
+    monkeypatch.setattr(etf_nav, "load_live", lambda: {"read": None, "as_of": None, "rows": rows})
+    monkeypatch.setattr(etf_nav, "navs", lambda: {"schemes": {}, "isin": {}})
+    monkeypatch.setattr(etf_nav, "_days", lambda: {})
+    monkeypatch.setattr(etf_nav, "table", lambda: {"rows": [], "count": len(rows)})
+    monkeypatch.setattr(main, "alert_quotes", lambda r, s: {x: {"price": 105.2} for x in s})
+    monkeypatch.setattr(main.stock_alerts, "create", lambda uid, body, limit, q: {**body, "id": "abc123", "status": "active"})
+    monkeypatch.setattr(main, "alerts_page", lambda profile: {})
+    body = {"region": "IN", "symbol": "SILVERBEES", "kind": "etfgap", "op": "above", "value": 2}
+    try:
+        c = as_plan("free")
+        assert c.get("/invest/etf-gaps").json()["alerts"] is False and c.get("/invest/etf-gaps").json()["count"] == 5
+        r = c.post("/alerts", json=body)
+        assert r.status_code == 402 and "Basic plan" in r.json()["detail"]["message"]
+        assert c.post("/alerts", json={**body, "kind": "move", "op": "up"}).status_code == 200      # other alerts stay free
+        c = as_plan("basic")
+        assert c.get("/invest/etf-gaps").json()["alerts"] is True
+        assert c.post("/alerts", json=body).status_code == 200
+    finally:
+        main.app.dependency_overrides.clear()
+    monkeypatch.setattr(main.db, "get_setting", lambda k: None)
+    assert not main._alert_kind_ok({"id": "u1", "plan": "free"}, "etfgap") and main._alert_kind_ok({"id": "u1", "plan": "free"}, "price")
+    assert main._alert_kind_ok({"id": "u1", "plan": "basic", "plan_status": "active"}, "etfgap")

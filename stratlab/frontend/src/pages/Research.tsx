@@ -17,6 +17,7 @@ import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { DealsPanel } from "../components/Deals";
 import { SurvBadges } from "../components/Surveillance";
+import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { CompanyActions } from "../components/CorpActions";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
@@ -135,6 +136,7 @@ export function CompanyPage() {
             <h1 className="serif" style={{ fontSize: "clamp(32px, 4.4vw, 50px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.05 }}>{c.name}</h1>
             {c.market_cap != null && <span className="small muted">Market value {bigMoney(c.market_cap, ccy)}</span>}
             <SurvBadges region={region} symbol={c.symbol} />
+            {region === "IN" && <EtfGapBadge symbol={c.symbol} />}
             <AsOf parts={[["Prices", c.as_of], ["Reported numbers", c.numbers_at]]} />
           </div>
           <Change q={c.quote} currency={ccy} />
@@ -157,6 +159,7 @@ export function CompanyPage() {
       </section>
       <SourcesNote sources={c.sources} />
       <section className="card"><PriceChart region={region} symbol={c.symbol} currency={ccy} /></section>
+      {region === "IN" && <EtfGapDetailView symbol={c.symbol} quiet />}
 
       <div className="rs-grid">
         {(wiki || c.about.profile) && (

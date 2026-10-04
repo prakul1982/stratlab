@@ -1247,3 +1247,14 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 /* Options: stop loss and target as two equal halves */
 .opt-grid.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 640px) { .opt-grid.two { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- ETF price against NAV: a factual gap, the same quiet look as the surveillance flags ---------- */
+.etf-gap-badge { display: inline; font: 600 11.5px/1.5 var(--mono); padding: 0 6px; margin-left: 4px; border-radius: 6px; border: 1px solid var(--line-2);
+  background: var(--chip); color: var(--ink-2); white-space: nowrap; text-decoration: none; vertical-align: middle; }
+.etf-gap-badge:hover { border-color: var(--ink-2); color: var(--ink); }
+.etf-gap-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.etf-gap-big { font-size: 26px; line-height: 1.15; }
+.etf-gap-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etf-gap-search { min-height: 40px; flex: 1 1 160px; min-width: 0; max-width: 260px; }
+.etf-gaps tr.on td { background: var(--blue-soft); }
+@media (max-width: 640px) { .etf-gap-figs { grid-template-columns: 1fr 1fr; } .etf-gap-big { font-size: 21px; } .etf-gap-search { max-width: none; } }

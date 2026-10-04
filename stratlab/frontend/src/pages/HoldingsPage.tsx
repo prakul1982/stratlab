@@ -8,6 +8,7 @@ import { Trash, Upload } from "../components/Icons";
 import { track } from "../lib/analytics";
 import { HoldingsActionsPanel } from "../components/CorpActions";
 import { SurvBadges } from "../components/Surveillance";
+import { EtfGapBadge } from "../components/EtfGap";
 import { CompanyCombobox } from "../components/CompanyCombobox";
 
 type Row = {
@@ -228,7 +229,7 @@ export function HoldingsPage() {
                     const f = facts?.rows[r.symbol];
                     return (
                       <tr key={`${r.exchange}:${r.symbol}`}>
-                        <td>{r.kind && r.kind !== "stock" ? <b>{r.symbol}</b> : <Link className="link" to={`/research/${isUS(r) ? "US" : "IN"}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>}{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}{isUS(r) && <span className="tiny muted"> US</span>}{r.kind_label && <> <span className={`badge kind-${r.kind}`} title="Instrument type">{r.kind_label}</span></>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>{!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}</td>
+                        <td>{r.kind && r.kind !== "stock" ? <b>{r.symbol}</b> : <Link className="link" to={`/research/${isUS(r) ? "US" : "IN"}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>}{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}{isUS(r) && <span className="tiny muted"> US</span>}{r.kind_label && <> <span className={`badge kind-${r.kind}`} title="Instrument type">{r.kind_label}</span></>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>{!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} />}</td>
                         <td className="small">{r.sector}</td>
                         <td className="num">{qtyText(r.qty)}</td>
                         <td className="num">{price(r.avg, r.currency ?? "INR")}</td>
