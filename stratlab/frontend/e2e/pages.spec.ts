@@ -272,6 +272,7 @@ test("my holdings: edit by hand and delete them all", async ({ page }, info) => 
 });
 
 const TRADEBOOKS = new URL("../../backend/tests/fixtures/tradebooks/", import.meta.url).pathname;
+const TAXPNL = new URL("../../backend/tests/fixtures/taxpnl/", import.meta.url).pathname;
 
 test("tax report: tradebooks from several brokers, one year's gains, lots below cost, downloads and delete", async ({ page, request }, info) => {
   // each project signs in as its own user and starts with no trades, so the two runs don't share tax data
@@ -283,11 +284,12 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   await expect(page.getByText(/not tax advice/).first()).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
 
-  // three files, two brokers, one pick: the last one's result is shown, with the line it left out
+  // three files, two brokers, one pick: what they added up to, with the line left out
   await page.locator("input[type=file]").setInputFiles(["upstox_tradebook.csv", "zerodha_tax_pnl.xlsx", "zerodha_console_tradebook.csv"].map((f) => TRADEBOOKS + f));
-  await expect(page.getByText(/Read as a Zerodha Console tradebook/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Read 3 files: 15 trades added/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("table", { name: "Lines left out" }).getByText(/Futures, options/)).toBeVisible();
   await expect(page.getByText(/15 trades from 3 files/)).toBeVisible();
+  await expect(page.getByText("Estimate only.")).toHaveCount(1);                                  // once, at the top
 
   await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
@@ -318,6 +320,29 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   await page.getByRole("button", { name: "Delete my tax data" }).click();
   await expect(page.getByText("Your tax data is deleted.")).toBeVisible();
   await expect(page.getByText("No trades yet")).toBeVisible();
+});
+
+test("tax report: the tax P&L ZIP as the broker gives it, checked against its summary, other segments left out", async ({ page, request }, info) => {
+  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
+  expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
+  const errors = await open(page, "/tax-report", "Capital gains on your shares", sessionAs(token, id, email));
+  await settle(page);
+  await expect(page.locator("input[type=file]")).toHaveAttribute("accept", /\.zip/);
+  await page.locator("input[type=file]").setInputFiles(TAXPNL + "zerodha_taxpnl_2024_2025.zip");
+  await expect(page.getByText(/Read as a Zerodha tax P&L: 16 trades added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/From the ZIP: Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\)/)).toBeVisible();
+  const check = page.getByRole("list", { name: "Totals checked against your broker's summary" });
+  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(3);
+  const left = page.getByRole("list", { name: "Files left out" });
+  for (const seg of ["F&O.csv", "Commodity.csv", "Currency.csv", "Non Equity.csv"]) await expect(left.getByText(seg, { exact: false })).toBeVisible();
+  await expect(left.getByText(/business income/).first()).toBeVisible();
+  // the only year with sales opens by itself
+  await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
+  await expect(page.getByText("2 same-day round trips", { exact: false })).toBeVisible();
+  await expect(page.getByText("Estimate only.")).toHaveCount(1);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+  expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
 });
 
 test("tax report: a file that isn't a tradebook gets a plain answer", async ({ page }) => {

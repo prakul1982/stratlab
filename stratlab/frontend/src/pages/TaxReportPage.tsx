@@ -25,21 +25,36 @@ type Report = {
   updated_at: string | null; trades: number; prices: boolean; prices_at: string | null; max_trades: number;
 };
 type Problem = { line: number | null; text: string; reason: string };
-type ImportReply = { broker: string; kind: "trades" | "pnl"; read: number; added: number; duplicates: number; over_limit: number; problems: Problem[]; problem_count: number; not_listed: string[]; report: Report };
+type Skipped = { name: string; reason: string };
+type Check = { section: string; file: number | null; summary: number | null; ok: boolean };
+type ImportReply = {
+  broker: string; kind: "trades" | "pnl"; read: number; added: number; duplicates: number; over_limit: number; problems: Problem[]; problem_count: number;
+  not_listed: string[]; skipped: Skipped[]; check: Check[]; files: { name: string; section: string; lines: number }[]; report: Report;
+  picked?: number;
+};
 
-const MAX_MB = 2;
-const BROKERS = "Zerodha (Console tradebook or tax P&L), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
+const MAX_MB = 10;          // a file, the server's cap too
+const MAX_TOTAL_MB = 25;    // everything picked at once
+const BROKERS = "Zerodha (Console tradebook, or the tax P&L ZIP as it downloads), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
 const inr = (v: number | null | undefined) => money(v, "INR", 0);
 const rate = (r: number) => `${+(r * 100).toFixed(2)}%`;
 
-/** The file as base64, the way the server takes it. */
-function readFile(f: File): Promise<string> {
-  return new Promise((ok, bad) => {
-    const r = new FileReader();
-    r.onload = () => ok(String(r.result));
-    r.onerror = () => bad(new Error("That file couldn't be read. Pick it again."));
-    r.readAsDataURL(f);
-  });
+/** Several files' replies as one: counts added up, lists joined. */
+function combine(a: ImportReply | null, b: ImportReply): ImportReply {
+  if (!a) return b;
+  return {
+    ...b, picked: (a.picked ?? 1) + 1, read: a.read + b.read, added: a.added + b.added, duplicates: a.duplicates + b.duplicates,
+    over_limit: b.over_limit, problems: [...a.problems, ...b.problems].slice(0, 200), problem_count: a.problem_count + b.problem_count,
+    not_listed: [...new Set([...a.not_listed, ...b.not_listed])], skipped: [...a.skipped, ...b.skipped], check: [...a.check, ...b.check], files: [...a.files, ...b.files],
+  };
+}
+
+/** The year to open on: the one already open if it has sales, else the latest with any. */
+function bestYear(r: Report, cur: number | null): number {
+  const busy = (y: Year) => y.count > 0 || y.intraday.count > 0;
+  const open = r.years.find((y) => y.fy === cur);
+  if (open && busy(open)) return open.fy;
+  return r.years.find(busy)?.fy ?? (open ? open.fy : r.current_fy);
 }
 
 function Disclaimer({ text }: { text: string }) {
@@ -57,23 +72,31 @@ export function TaxReportPage() {
   const [getting, setGetting] = useState<"csv" | "pdf" | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
-  const show = useCallback((r: Report) => { setRep(r); setFy((cur) => (cur != null && r.years.some((y) => y.fy === cur) ? cur : r.years.find((y) => y.count || y.intraday.count)?.fy ?? r.current_fy)); }, []);
+  const show = useCallback((r: Report) => { setRep(r); setFy((cur) => bestYear(r, cur)); }, []);
   useEffect(() => { api<Report>("/tax").then(show).catch(fail); }, [show, fail]);
 
   const pick = async (files: FileList | null) => {
-    const list = Array.from(files ?? []);
-    if (!list.length) return;
+    const all = Array.from(files ?? []);
+    if (!all.length) return;
+    if (all.reduce((n, f) => n + f.size, 0) > MAX_TOTAL_MB * 1024 * 1024) {
+      notify(`Those files come to more than ${MAX_TOTAL_MB} MB together. Upload a few at a time.`);
+      if (file.current) file.current.value = "";
+      return;
+    }
+    const list = all.filter((f) => f.size <= MAX_MB * 1024 * 1024);
+    for (const f of all) if (f.size > MAX_MB * 1024 * 1024) notify(`${f.name} is larger than ${MAX_MB} MB. Split the tradebook by year and upload each one.`);
+    if (!list.length) { if (file.current) file.current.value = ""; return; }
     setBusy(true);
     try {
-      let last: ImportReply | null = null;
+      let got: ImportReply | null = null;
       for (const [i, f] of list.entries()) {
-        if (f.size > MAX_MB * 1024 * 1024) { notify(`${f.name} is larger than ${MAX_MB} MB. Split the tradebook by year and upload each one.`); continue; }
-        const data = await readFile(f);
-        // with several files, only the first one replaces: the rest are added to it
-        last = await api<ImportReply>("/tax/import", { method: "POST", body: { filename: f.name, data, mode: i === 0 ? mode : "add" } });
-        track("tax file imported", { rows: last.added, method: mode });
+        // the file itself is the body; with several files, only the first one replaces: the rest are added to it
+        const q = new URLSearchParams({ filename: f.name.slice(0, 200), mode: i === 0 ? mode : "add" });
+        const one = await api<ImportReply>(`/tax/import?${q}`, { method: "POST", file: f });
+        got = combine(got, one);
+        track("tax file imported", { rows: one.added, method: mode, zip: /\.zip$/i.test(f.name) });
       }
-      if (last) { setResult(last); show(last.report); setMode("add"); }
+      if (got) { setResult(got); setRep(got.report); setFy(bestYear(got.report, null)); setMode("add"); }
     } catch (e) { fail(e); } finally {
       setBusy(false);
       if (file.current) file.current.value = "";
@@ -118,12 +141,12 @@ export function TaxReportPage() {
       <section className="card stack" style={{ gap: 14 }}>
         <div className="stack" style={{ gap: 4 }}>
           <h2 className="h2">Upload your trades</h2>
-          <p className="small muted" style={{ margin: 0 }}>Download the equity tradebook (every trade) or the tax P&amp;L as Excel or CSV from {BROKERS}, then upload it here. You can pick several files, from several brokers, at once; trades already uploaded are skipped. Any other CSV works with the columns Date, Symbol (or ISIN), Type (buy or sell), Quantity and Price.</p>
+          <p className="small muted" style={{ margin: 0 }}>Download the equity tradebook (every trade) or the tax P&amp;L as Excel, CSV or ZIP from {BROKERS}, then upload it here. You can pick several files, from several brokers, at once (up to {MAX_MB} MB each); trades already uploaded are skipped. Any other CSV works with the columns Date, Symbol (or ISIN), Type (buy or sell), Quantity and Price.</p>
         </div>
         <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <label className={`btn${busy ? " disabled" : ""}`} style={{ cursor: busy ? "wait" : "pointer" }}>
             <Upload size={18} />{busy ? "Reading…" : "Upload tradebook or tax P&L"}
-            <input ref={file} type="file" multiple accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden disabled={busy}
+            <input ref={file} type="file" multiple accept=".csv,.xlsx,.xls,.txt,.zip,text/csv,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden disabled={busy}
               onChange={(e) => pick(e.target.files)} aria-label="Tradebook or tax P&L file" />
           </label>
           {has && (
@@ -136,11 +159,31 @@ export function TaxReportPage() {
         {result && (
           <div className="stack" style={{ gap: 8 }} role="status">
             <p className="small" style={{ margin: 0 }}>
-              <b>{result.broker === "CSV" ? "Read as a CSV file" : `Read as a ${result.broker} ${result.kind === "pnl" ? "tax P&L" : "tradebook"}`}:</b>{" "}
+              <b>{result.picked ? `Read ${result.picked} files` : result.broker === "CSV" ? "Read as a CSV file" : `Read as a ${result.broker} ${result.kind === "pnl" ? "tax P&L" : "tradebook"}`}:</b>{" "}
               {result.added} trade{result.added === 1 ? "" : "s"} added{result.duplicates > 0 && `, ${result.duplicates} already uploaded (skipped)`}.
               {result.problem_count > 0 && ` ${result.problem_count} line${result.problem_count === 1 ? "" : "s"} left out (below).`}
               {result.over_limit > 0 && ` Only the first ${rep?.max_trades.toLocaleString()} trades are kept.`}
             </p>
+            {result.files.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>From the ZIP: {result.files.map((f) => `${f.section} (${f.lines.toLocaleString()} line${f.lines === 1 ? "" : "s"})`).join(", ")}.</p>}
+            {result.check.length > 0 && (
+              <ul className="tiny" style={{ margin: 0, paddingLeft: 18 }} aria-label="Totals checked against your broker's summary">
+                {result.check.map((c, i) => (
+                  <li key={i}>
+                    {c.ok ? <>{c.section}: {inr(c.file)} before charges, the same as your broker's summary sheet.</>
+                      : c.file == null ? <span className="neg">{c.section}: your broker's summary shows {inr(c.summary)}, but the ZIP has no tradewise file for it, so it isn't included.</span>
+                      : <span className="neg">{c.section}: {inr(c.file)} read, but your broker's summary sheet shows {inr(c.summary)}. Check the file is complete.</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {result.skipped.length > 0 && (
+              <div className="stack" style={{ gap: 2 }}>
+                <p className="tiny muted" style={{ margin: 0 }}>Left out of the tax report (equity delivery and intraday only, for now):</p>
+                <ul className="tiny muted" style={{ margin: 0, paddingLeft: 18 }} aria-label="Files left out">
+                  {result.skipped.map((s, i) => <li key={i}><b>{s.name}</b>: {s.reason}</li>)}
+                </ul>
+              </div>
+            )}
             {result.not_listed.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>No listed company matched {result.not_listed.slice(0, 8).join(", ")}{result.not_listed.length > 8 ? "…" : ""}. Their gains still count, without today's prices or bonus and split data.</p>}
             {result.problems.length > 0 && (
               <div className="table-wrap" style={{ margin: 0 }}>
@@ -307,7 +350,6 @@ export function TaxReportPage() {
           <button className="btn danger" style={{ alignSelf: "flex-start" }} onClick={remove}><Trash size={16} />Delete my tax data</button>
         </section>
       )}
-      <Disclaimer text={rep?.disclaimer ?? "An estimate, not tax advice. Check it with a chartered accountant (CA)."} />
     </div>
   );
 }
