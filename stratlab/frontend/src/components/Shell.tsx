@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Receipt, Shield, Wallet, Moon, Plus, Pulse, Search, Sparkle, Sun, User, Calendar } from "./Icons";
+import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
-import { inWords, marketState } from "../lib/marketHours";
+import { AccountMenu, MarketsNow } from "./SideMenus";
 import { FAMILIES, NAV_GROUPS, familyOf } from "../lib/navGroups";
 import { ALL_GROUPS, SPACE_IDS, SPACES, spaceOf, type GroupId, type SpaceView } from "../lib/spaces";
 
@@ -27,13 +27,10 @@ function readShut(): Partial<Record<GroupId, boolean>> {
 }
 function saveShut(v: Partial<Record<GroupId, boolean>>) { try { localStorage.setItem(SHUT_KEY, JSON.stringify(v)); } catch { /* private mode */ } }
 
-const SHORT: Record<string, string> = { IN: "India", CRYPTO: "Crypto", US: "US", UK: "UK", EU: "Europe", JP: "Japan", FX: "Forex", MCX: "MCX", CDS: "Currency F&O", CMDTY: "Cmdty" };
-
 
 export function Shell({ children }: { children: ReactNode }) {
   const { notebooks, markets, theme, setTheme, me, level, focus, space, setSpace } = useApp();
   const [open, setOpen] = useState(false);
-  const [mktOpen, setMktOpen] = useState(() => { try { return localStorage.getItem("stratlab.markets.open") === "1"; } catch { return false; } });
   const [shut, setShut] = useState(readShut);
   const [tour, setTour] = useState(false);
   const [search, setSearch] = useState(false);
@@ -55,6 +52,13 @@ export function Shell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
+  // Esc closes the drawer on a phone (a pop-up inside it closes first, on its own)
+  useEffect(() => {
+    if (!open) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [open]);
   // a link into another space shows that space's menu, so where you are is always in it ("All" already shows it)
   const here = spaceOf(loc.pathname);
   useEffect(() => { if (here && space !== "all" && here !== space) setSpace(here, false); }, [here]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -63,7 +67,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const openId = loc.pathname.match(/^\/n\/([^/]+)/)?.[1];
   const sideNotebooks = notebooks && [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
     .filter((n, i) => i < SIDE_NOTEBOOKS || n.id === openId);
-  const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
 
   const path = loc.pathname;
   const fam = familyOf(path);
@@ -108,39 +111,41 @@ export function Shell({ children }: { children: ReactNode }) {
       {sideNotebooks?.map((n) => {
         const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : null;
         const count = n.summary?.experiments ?? 0;
+        const verdict = n.summary?.last_verdict ? `last verdict: ${n.summary.last_verdict.replace("_", " ")}` : "no experiments yet";
         return (
-          <NavLink key={n.id} to={`/n/${n.id}`} className={({ isActive }) => `nb-link${isActive || path.startsWith(`/n/${n.id}/`) ? " active" : ""}`}>
-            <b className="row" style={{ gap: 7 }}>
-              <span className={`vdot ${n.summary?.last_verdict ?? "none"}`} title={n.summary?.last_verdict ? `Last verdict: ${n.summary.last_verdict.replace("_", " ")}` : "No experiments yet"} />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>{n.name}</span>
-              {n.pinned && <span className="muted" title="Pinned" style={{ flex: "none", display: "inline-flex" }}><Pin size={14} filled /></span>}
-            </b>
-            <span>{[inst, `${count} experiment${count === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}</span>
+          <NavLink key={n.id} to={`/n/${n.id}`} title={[n.name, inst, `${count} experiment${count === 1 ? "" : "s"}`, verdict].filter(Boolean).join(" · ")}
+            className={({ isActive }) => `nb-link${isActive || path.startsWith(`/n/${n.id}/`) ? " active" : ""}`}>
+            <span className="nb-dot"><span className={`vdot ${n.summary?.last_verdict ?? "none"}`} /></span>
+            <span className="nb-text">{n.name}</span>
+            {n.pinned && <span className="nb-pin" title="Pinned"><Pin size={13} filled /></span>}
           </NavLink>
         );
       })}
-      {!!notebooks?.length && <Link to={allNotebooks} className="nb-more">{notebooks.length > SIDE_NOTEBOOKS ? `All ${notebooks.length} notebooks →` : "All notebooks →"}</Link>}
+      {!!notebooks?.length && <Link to={allNotebooks} className="nb-more">{notebooks.length > SIDE_NOTEBOOKS ? `All ${notebooks.length} notebooks` : "All notebooks"}</Link>}
     </>
   );
-  const openCount = live.filter((m) => marketState(m).open).length;
-
   const sidebar = (
     <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
-      <Link to="/" className="brand" aria-label="StratLab home"><Logo size={54} /></Link>
-      <SpaceSwitch space={space} onPick={(s) => setSpace(s)} />
-      {space === "invest" || (space === "all" && focus === "invest")
-        ? <button className="btn" onClick={() => nav("/research")}><Lens size={18} />Look up a company</button>
-        : space === "money" || (space === "all" && focus === "money")
-        ? <button className="btn" onClick={() => nav("/holdings")}><Book size={18} />Add your holdings</button>
-        : <button className="btn" onClick={() => nav("/new")}><Plus size={18} />New notebook</button>}
-      <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
-        <Sparkle size={17} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
-      </button>
+      <div className="side-top">
+        <div className="side-brand">
+          <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
+          <button className="side-close" aria-label="Close menu" onClick={() => setOpen(false)}><Close size={18} /></button>
+        </div>
+        <SpaceSwitch space={space} onPick={(s) => setSpace(s)} />
+        {space === "invest" || (space === "all" && focus === "invest")
+          ? <button className="side-new" onClick={() => nav("/research")}><Lens size={16} />Look up a company</button>
+          : space === "money" || (space === "all" && focus === "money")
+          ? <button className="side-new" onClick={() => nav("/holdings")}><Book size={16} />Add your holdings</button>
+          : <button className="side-new" onClick={() => nav("/new")}><Plus size={16} />New notebook</button>}
+        <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
+          <Sparkle size={16} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+        </button>
+      </div>
       <nav className="side-groups" aria-label="Main">
         {space !== "all" && (
-          <NavLink to={SPACES[space].home} className={({ isActive }) => `side-home${isActive ? " active" : ""}`}>
-            <Compass size={16} />{SPACES[space].label} home
-          </NavLink>
+          <div className="side-list">
+            <NavLink to={SPACES[space].home} end><Compass size={16} />{SPACES[space].label} home</NavLink>
+          </div>
         )}
         {order.map((g) => {
           const { label, items } = groups[g];
@@ -149,58 +154,20 @@ export function Shell({ children }: { children: ReactNode }) {
             <section key={g} className="side-group" data-group={g}>
               <div className="side-head">
                 <button className="side-toggle" aria-expanded={!shutNow} aria-controls={`side-${g}`} onClick={() => toggle(g)}>
-                  <span className="side-chev" aria-hidden="true">▸</span>{label}
+                  {label}<span className="side-chev" aria-hidden="true"><Chevron size={12} /></span>
                 </button>
-                {g === "notebooks" && <Link to="/new" className="side-act" aria-label="New notebook">+ New</Link>}
+                {g === "notebooks" && <Link to="/new" className="side-act" aria-label="New notebook" title="New notebook"><Plus size={15} /></Link>}
               </div>
-              <div id={`side-${g}`} className={`stack ${g === "notebooks" ? "side-nbs" : "side-nav"}`} hidden={shutNow}>
+              <div id={`side-${g}`} className={`side-list ${g === "notebooks" ? "side-nbs" : "side-nav"}`} hidden={shutNow}>
                 {g === "notebooks" ? notebookList : items}
               </div>
             </section>
           );
         })}
       </nav>
-      <div className="side-bottom">
-        {live.length > 0 && (
-        <details className="mkt-box" open={mktOpen} onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; setMktOpen(o); try { localStorage.setItem("stratlab.markets.open", o ? "1" : "0"); } catch { /* private mode */ } }}>
-          <summary title="Markets open right now">
-            <span className="mkt-dot" style={{ background: openCount ? "var(--blue)" : "transparent" }} />
-            <span>{openCount} of {live.length} markets open</span><span className="side-chev" aria-hidden="true">▸</span>
-          </summary>
-        <div className="mkt-grid">
-          {live.map((m) => {
-            const st = marketState(m);
-            const mins = st.change ? (st.change.getTime() - Date.now()) / 60000 : null;
-            return (
-              <div key={m.id} className="mkt-now" tabIndex={0} aria-label={`${m.name}: ${st.open ? "open" : st.short}`}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", flex: "none", boxSizing: "border-box",
-                  background: st.open ? "var(--blue)" : "transparent", border: `1.5px solid ${st.offline ? "var(--orange)" : st.open ? "var(--blue)" : "var(--muted)"}` }} />
-                {SHORT[m.id] ?? m.name}<span className={st.open ? "" : "muted"} style={{ marginLeft: "auto", fontSize: 11.5, whiteSpace: "nowrap" }}>{st.short}</span>
-                <span className="mkt-tip" role="tooltip">
-                  <b>{m.name}</b>
-                  {st.always ? <span>Trades around the clock, every day.</span>
-                    : st.offline ? <span>Market data is offline right now.</span>
-                    : <>
-                        <span>{st.open ? `Open now · closes in ${inWords(mins!)}` : `${st.closedFor === "holiday" ? "Closed today for an exchange holiday" : st.closedFor === "weekend" ? "Closed for the weekend" : "Closed"} · opens in ${inWords(mins!)}`}</span>
-                        {st.change && <span className="muted">{st.open ? "Closes" : "Opens"} {st.change.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })} your time</span>}
-                        {st.hoursLocal && <span className="muted">Hours: {st.hoursLocal}</span>}
-                        {st.hoursYours && <span className="muted">{st.hoursYours}</span>}
-                      </>}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        </details>
-        )}
-        <nav className="side-account" aria-label="Account">
-          <NavLink to="/account" className={() => (path === "/account" || path === "/plans" ? "active" : "")}><User size={16} />Account{me && <span className="badge skip">{me.plan_info.name}</span>}</NavLink>
-          {me?.is_admin && <NavLink to="/admin"><Shield size={16} />Admin</NavLink>}
-        </nav>
-        <div className="row side-foot" style={{ gap: 14 }}>
-          <button className="link" onClick={() => setTheme(dark ? "light" : "dark")}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? "Light mode" : "Night mode"}</button>
-          <button className="link" onClick={() => { setOpen(false); setTour(true); }} title="A quick tour of what StratLab can do"><Compass size={16} />Tour</button>
-        </div>
+      <div className="side-foot">
+        <MarketsNow markets={markets} />
+        <AccountMenu me={me} dark={dark} onTheme={() => setTheme(dark ? "light" : "dark")} onTour={() => { setOpen(false); setTour(true); }} onGo={() => setOpen(false)} />
       </div>
     </aside>
   );

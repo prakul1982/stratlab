@@ -20,8 +20,8 @@ async function open(page: Page, path: string, ready: string, n: number) {
   });
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, sessionFor(n));
   await page.goto(path);
-  const ask = page.getByText("What brings you to StratLab?");
-  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /Both/ }).first().click()).catch(() => undefined);
+  const ask = page.getByText("What brings you here?");     // the one welcome step: answered like a new user would
+  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
   const level = page.getByRole("dialog", { name: /How much .* have you done/ });
   await level.waitFor({ timeout: 4000 }).then(() => level.getByRole("button", { name: /done a bit/ }).click()).catch(() => undefined);
   await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
