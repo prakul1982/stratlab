@@ -13,7 +13,7 @@ from .models import Strategy
 from .daily_report import Reporter
 from .data.markets import MARKETS
 from .errors import report
-from .plans import PLANS, access_plan, allows, has_pro_features, trial_state
+from .plans import PLANS, access_plan, allows, has_fno, has_indicators, trial_state
 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}
 POLL_SECONDS = 15          # how often polled markets (crypto) are checked for a newly closed candle
@@ -383,10 +383,13 @@ class LiveManager:
             limit = PLANS[plan]["live_limit"]
             for s in sorted(items, key=lambda x: x.started_at)[limit:]:
                 self.stop(s.id, "Plan limit reached after a plan change.")
-            if not has_pro_features(plan):
-                for s in items:
-                    if s.id in self.sessions and isinstance(s, LiveSession) and needs_pro(s.strategy, s.inst):
-                        self.stop(s.id, "This strategy uses Pro features.")
+            for s in items:
+                if s.id not in self.sessions or not isinstance(s, LiveSession):
+                    continue
+                if not has_fno(plan) and needs_fno(s.inst):
+                    self.stop(s.id, "Indian F&O is on Pro.")
+                elif not has_indicators(plan) and needs_indicators(s.strategy):
+                    self.stop(s.id, "This strategy uses Basic indicators.")
             for s in items:
                 missing = session_needs(s, plan)
                 if missing and s.id in self.sessions:
@@ -425,10 +428,14 @@ def market_name(mid: str) -> str:
     return next((m["name"] for m in MARKETS if m["id"] == mid), mid)
 
 
-def needs_pro(strategy: Strategy, inst: dict | None) -> bool:
+def needs_fno(inst: dict | None) -> bool:
+    """The instrument is an Indian future or option (Pro)."""
+    return bool(inst and inst.get("fno"))
+
+
+def needs_indicators(strategy: Strategy) -> bool:
+    """The rules use an indicator beyond price, SMA, EMA and RSI (Basic and up)."""
     from .plans import BASIC_REFS
-    if inst and inst.get("fno"):
-        return True
     return any(r.t not in BASIC_REFS for c in strategy.all_conds() for r in (c.l, c.r))
 
 

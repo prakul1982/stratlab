@@ -234,19 +234,20 @@ def test_saved_screens_through_the_api(w):
     assert c.delete(f"/research/screens/saved/{s['id']}", headers=h).status_code == 404
 
 
-def test_plan_limits_free_1_basic_5_pro_25(w, monkeypatch):
-    assert (PLANS["free"]["screens"], PLANS["basic"]["screens"], PLANS["pro"]["screens"]) == (1, 5, 25)
+def test_plan_limits_free_2_basic_10_pro_25(w, monkeypatch):
+    assert (PLANS["free"]["screens"], PLANS["basic"]["screens"], PLANS["pro"]["screens"]) == (2, 10, 25)
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
     assert plan_info("free")["screens"] == 25                       # open to everyone until payments go live
     paid(monkeypatch)
-    assert [plan_info(p)["screens"] for p in ("free", "basic", "pro")] == [1, 5, 25]
+    assert [plan_info(p)["screens"] for p in ("free", "basic", "pro")] == [2, 10, 25]
     c, h = w["client"], headers("free-token")
     body = {"name": "Mine", "region": "IN", "filters": {}}
-    assert c.post("/research/screens/saved", headers=h, json=body).status_code == 200
+    for _ in range(2):
+        assert c.post("/research/screens/saved", headers=h, json=body).status_code == 200
     r = c.post("/research/screens/saved", headers=h, json=body)
-    assert r.status_code == 402 and "1 saved screen." in r.json()["detail"]["message"] and "Basic" in r.json()["detail"]["message"]
-    assert c.get("/research/screens/saved", headers=h).json()["limit"] == 1
-    assert c.get("/me", headers=h).json()["plan_info"]["screens"] == 1
+    assert r.status_code == 402 and "2 saved screens." in r.json()["detail"]["message"] and "Basic" in r.json()["detail"]["message"]
+    assert c.get("/research/screens/saved", headers=h).json()["limit"] == 2
+    assert c.get("/me", headers=h).json()["plan_info"]["screens"] == 2
 
 
 # ---------- the weekly note ----------

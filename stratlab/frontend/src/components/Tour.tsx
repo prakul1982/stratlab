@@ -21,7 +21,7 @@ const STEPS: Step[] = [
     where: "\"Research\" in the sidebar menu. Press Watch on a company to keep it on your watchlist." },
   { icon: <Pulse size={34} />, title: "Tools for investors",
     body: "Scan a group for Stage 2 stocks with the Supertrend up (ST S2), see which sectors lead or lag the market and click through to their stocks, read your watchlist companies' filings with red flags like a QIP, pledges or resignations, and open any Indian or US company's deep dive: business, the measures its industry is judged on, how it's valued, capex plans, a management report card and an investor checklist. The investor home puts your whole watchlist on one page.",
-    where: "The Investing section of the menu: Investor home, Stage 2 scan, Sector rotation, Red flags. Deep dive is on every Indian and US company page. These are Pro tools." },
+    where: "The Investing section of the menu: Investor home, Stage 2 scan, Sector rotation, Red flags. Deep dive is on every Indian and US company page. Sector rotation and each company's red flags are on every plan; the rest are Basic tools." },
   { icon: <Globe size={34} />, title: "Test on any market",
     body: "The same rules run on Indian stocks, indices and F&O, US, UK, European and Japanese stocks, forex, crypto, or any market you have a CSV for. Prices, hours, currency and costs switch to match.",
     where: "Pick the market first on a new notebook, or press the \"Testing on\" button at the top of any notebook to change it." },

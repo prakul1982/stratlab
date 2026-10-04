@@ -85,7 +85,8 @@ export function NotebookPage() {
   const { id } = useParams();
   const nav = useNavigate();
   const loc = useLocation();
-  const { markets, fail, notify, refreshMe, refreshNotebooks, me, isPro } = useApp();
+  const { markets, fail, notify, refreshMe, refreshNotebooks, me, allIndicators, fno } = useApp();
+  const canExport = !!me?.plan_info.features?.export;
   const { nb, patch, saving, setNb, flush } = useNotebook(id);
   const [gaps, setGaps] = useState<GapInfo | null>((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null);
   const [days, setDays] = useState(365);
@@ -137,7 +138,8 @@ export function NotebookPage() {
     if (running) return;
     if (!inst && !group) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
-    if (!isPro && (usesPro(s) || inst?.fno)) { notify("This uses Pro features (advanced indicators or F&O).", { label: "See plans", run: () => nav("/plans") }); return; }
+    if (!fno && inst?.fno) { notify("Indian F&O is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
+    if (!allIndicators && usesPro(s)) { notify("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them.", { label: "See plans", run: () => nav("/plans") }); return; }
     const body: Record<string, unknown> = { label: label.trim(), days: period };
     if (isUpload) {
       const up = getUpload(nb.id);
@@ -182,7 +184,7 @@ export function NotebookPage() {
   };
 
   const exportStrategy = async () => {
-    if (!isPro) { notify("Strategy export is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
+    if (!canExport) { notify("Strategy export is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
     try {
       const r = await api<Response>("/export/strategy", { method: "POST", body: { strategy: s, instrument: inst?.id ?? null }, raw: true });
       const a = document.createElement("a");
@@ -270,7 +272,7 @@ export function NotebookPage() {
             <button className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
             <MoreMenu items={[
               { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
-              { label: `Export${isPro ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
+              { label: `Export${canExport ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
               { label: "Delete notebook", icon: <Trash size={16} />, run: del, danger: true },
             ]} />
           </div>

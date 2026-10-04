@@ -34,10 +34,10 @@ function Pop({ label, cls = "", children, title }: { label: ReactNode; cls?: str
 const TF_ORDER: Tf[] = ["5m", "15m", "1h", "1d"];
 const HTF_NAME: Record<HigherTf, string> = { "15m": "15-minute candles", "1h": "1-hour candles", "1d": "Daily candles" };
 
-function RefEditor({ value, onChange, allowNum, isPro, tf }: { value: Ref; onChange: (r: Ref) => void; allowNum: boolean; isPro: boolean; tf: Tf }) {
+function RefEditor({ value, onChange, allowNum, allIndicators, tf }: { value: Ref; onChange: (r: Ref) => void; allowNum: boolean; allIndicators: boolean; tf: Tf }) {
   const def = DEFAULTS[value.t];
   const opt = (i: (typeof INDICATORS)[number]) => (
-    <option key={i.t} value={i.t} disabled={i.pro && !isPro && i.t !== value.t}>{i.name}{i.pro && !isPro ? " (Pro)" : ""}</option>
+    <option key={i.t} value={i.t} disabled={i.pro && !allIndicators && i.t !== value.t}>{i.name}{i.pro && !allIndicators ? " (Basic)" : ""}</option>
   );
   const higher = (["15m", "1h", "1d"] as HigherTf[]).filter((h) => TF_ORDER.indexOf(h) > TF_ORDER.indexOf(tf));
   return (
@@ -98,12 +98,12 @@ function RefEditor({ value, onChange, allowNum, isPro, tf }: { value: Ref; onCha
   );
 }
 
-function CondSentence({ c, lead, onChange, onDelete, isPro, tf, scored }: {
-  c: Cond; lead: ReactNode; onChange: (c: Cond) => void; onDelete: () => void; isPro: boolean; tf: Tf; scored?: boolean;
+function CondSentence({ c, lead, onChange, onDelete, allIndicators, tf, scored }: {
+  c: Cond; lead: ReactNode; onChange: (c: Cond) => void; onDelete: () => void; allIndicators: boolean; tf: Tf; scored?: boolean;
 }) {
   const refTok = (side: "l" | "r") => (
     <Pop title={side === "l" ? "Left side" : "Right side"} label={refName(c[side])} cls={c[side].t === "num" ? "plain" : ""}>
-      {() => <RefEditor value={c[side]} allowNum={side === "r"} isPro={isPro} tf={tf} onChange={(r) => onChange({ ...c, [side]: r })} />}
+      {() => <RefEditor value={c[side]} allowNum={side === "r"} allIndicators={allIndicators} tf={tf} onChange={(r) => onChange({ ...c, [side]: r })} />}
     </Pop>
   );
   return (
@@ -196,7 +196,7 @@ const TGT_UNITS: [NonNullable<Risk["tgtType"]>, string, string][] = [
 ];
 
 export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: string; onChange: (s: Strategy) => void }) {
-  const { isPro, refreshMe } = useApp();
+  const { allIndicators, refreshMe } = useApp();
   const [rewrite, setRewrite] = useState<string | null>(null);
   const [rebuilding, setRebuilding] = useState(false);
   const [rewriteNote, setRewriteNote] = useState("");
@@ -242,7 +242,7 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
   );
   const list = (key: "entry" | "exit" | "shortEntry" | "shortExit", conds: Cond[], lead: (i: number) => ReactNode, entry: boolean) =>
     conds.map((c, i) => (
-      <CondSentence key={`${key}${i}`} c={c} lead={lead(i)} isPro={isPro} tf={s.tf} scored={entry && scored}
+      <CondSentence key={`${key}${i}`} c={c} lead={lead(i)} allIndicators={allIndicators} tf={s.tf} scored={entry && scored}
         onChange={(nc) => set({ [key]: conds.map((x, k) => (k === i ? nc : x)) } as Partial<Strategy>)}
         onDelete={() => set({ [key]: conds.filter((_, k) => k !== i) } as Partial<Strategy>)} />
     ));

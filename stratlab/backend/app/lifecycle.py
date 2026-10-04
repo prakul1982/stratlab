@@ -241,10 +241,19 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
                 when += " More free time is kept for you in case your paid plan stops."
         else:
             when = "Your free Basic has started."
-        return _compose("You've got a free month of StratLab Basic", [first, when,
+        return _compose("You've got a free month of StratLab Basic", [first, when, basic_includes(),
                         "Nothing to pay and nothing to set up. Invite more friends from Account."],
                         ("See your account", "/account#invite"), transactional=tx)
     raise ValueError(f"Unknown email: {kind}")
+
+
+def basic_includes() -> str:
+    """What a month of Basic gives, from plans.py's limits, for the invite reward email."""
+    b = PLANS["basic"]
+    return (f"Basic includes {b['backtests_per_month']} backtests and {b['ai_builds_per_month']} AI strategy builds a "
+            f"month, every indicator, {b['live_limit']} paper trading sessions at a time with trade notifications, "
+            f"{b['deepdives_per_month']} company deep dives and {b['decks_per_month']} decks a month, and the daily "
+            "newsletters.")
 
 
 def sample(kind: str, now: datetime | None = None) -> dict:

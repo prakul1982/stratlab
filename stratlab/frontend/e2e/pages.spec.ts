@@ -186,9 +186,31 @@ test.describe("a visitor in India", () => {
   test.use({ locale: "en-US", timezoneId: "Asia/Kolkata" });
   test("sees prices in rupees", async ({ page }) => {
     const errors = await open(page, "/plans", "Plans");
-    await expect(page.getByText("₹999").first()).toBeVisible();
+    await expect(page.getByText("₹499 / month", { exact: true })).toBeVisible();
+    await expect(page.getByText("₹1,499 / month", { exact: true })).toBeVisible();
+    await expect(page.getByText("incl. GST", { exact: true })).toHaveCount(2);        // next to each rupee price
     await sane(page, errors);
   });
+});
+
+test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
+  const errors = await open(page, "/plans", "Side by side");
+  for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
+    "2 company deep dives and 1 slide deck a month", "Indian F&O and options entered on your own rules' signals"]) {
+    await expect(page.locator(".grid4 li", { hasText: line })).toBeVisible();
+  }
+  for (const card of await page.locator(".grid4 > .card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
+  expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
+  const table = page.locator("table.plan-compare");
+  const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
+  await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
+  await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "2", "15", "Unlimited"]);
+  await expect(row("All 20+ indicators")).toHaveText(["All 20+ indicators", "–", "✓", "✓"]);
+  await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
+  await expect(row("Indian F&O")).toHaveText(["Indian F&O", "–", "–", "✓"]);
+  await expect(row("Red flags on every company page")).toHaveText(["Red flags on every company page", "✓", "✓", "✓"]);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
 });
 
 test("invoices: in Account for the customer, with the GST setup in Admin", async ({ page }) => {

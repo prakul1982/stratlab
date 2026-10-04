@@ -210,6 +210,25 @@ def test_plan_gates_in_the_job(w, monkeypatch, outbox, paid):
     assert [subj.split(",")[0] for _, subj, *_ in outbox] == ["Market Brief India"]   # the weekly digest instead
 
 
+def test_my_stocks_weekly_is_free_and_daily_is_basic(w, monkeypatch, outbox, paid):
+    """Weekly editions of both newsletters on every plan; daily ones on Basic and up. A Free reader still set to daily
+    (their plan changed) gets the weekly edition, like the Market Brief."""
+    monkeypatch.setattr(content, "market_facts", lambda *a, **k: {"kind": "market"})
+    monkeypatch.setattr(content, "stock_row", lambda region, sym, day, weekly, since: {
+        "symbol": sym, "region": region, "price": 100.0, "change_pct": 4.2, "stage": 2, "stage_before": 1, "stage_changed": True,
+        "st_s2": False, "filings": [], "headlines": [], "changed": True})
+    assert job.allowed({"plan": "free"}, "my_stocks", "weekly") and not job.allowed({"plan": "free"}, "my_stocks", "daily")
+    assert job.allowed({"plan": "basic", "plan_status": "active"}, "my_stocks", "daily")
+    reader("u-free", "free@example.com", plan="free", my_stocks="daily")
+    reader("u-basic", "basic@example.com", plan="basic", my_stocks="daily")
+    for uid in ("u-free", "u-basic"):
+        db.set_setting(f"watchlist:{uid}", json.dumps({"items": [{"symbol": "RELIANCE", "region": "IN"}]}))
+    job.Job().tick(AFTER_IN_CLOSE)
+    assert [to for to, *_ in outbox] == ["basic@example.com"]                      # daily: Basic only
+    job.Job().tick(SATURDAY)
+    assert [to for to, *_ in outbox[1:]] == ["free@example.com"]                   # weekly: the Free reader's digest
+
+
 # ---------- the API ----------
 def test_my_stocks_issues_are_private(w):
     c = w["client"]
@@ -246,7 +265,7 @@ def test_newsletter_choices(w):
     c = w["client"]
     me = c.get("/me/newsletters", headers=headers("pro-token")).json()
     assert me == {"market_in": "off", "market_us": "off", "my_stocks": "off", "email": "pro@example.com", "confirmed": False,
-                  "allowed": {"market_daily": True, "my_stocks": True}}
+                  "allowed": {"market_daily": True, "my_stocks": True, "my_stocks_daily": True}}
     out = c.put("/me/newsletters", json={"market_in": "daily", "my_stocks": "weekly"}, headers=headers("pro-token")).json()
     assert (out["market_in"], out["market_us"], out["my_stocks"]) == ("daily", "off", "weekly")
     assert c.put("/me/newsletters", json={"market_in": "hourly"}, headers=headers("pro-token")).status_code == 422
@@ -256,15 +275,17 @@ def test_newsletter_choices(w):
 def test_newsletter_plan_gates(w, paid):
     c = w["client"]
     free = c.get("/me/newsletters", headers=headers("free-token")).json()
-    assert free["allowed"] == {"market_daily": False, "my_stocks": False}
+    assert free["allowed"] == {"market_daily": False, "my_stocks": True, "my_stocks_daily": False}
     assert c.put("/me/newsletters", json={"market_in": "weekly"}, headers=headers("free-token")).json()["market_in"] == "weekly"
     r = c.put("/me/newsletters", json={"market_us": "daily"}, headers=headers("free-token"))
     assert r.status_code == 402 and "Basic plan" in r.json()["detail"]["message"]
-    r = c.put("/me/newsletters", json={"my_stocks": "weekly"}, headers=headers("free-token"))
-    assert r.status_code == 402 and "Pro plan" in r.json()["detail"]["message"]
+    assert c.put("/me/newsletters", json={"my_stocks": "weekly"}, headers=headers("free-token")).json()["my_stocks"] == "weekly"
+    r = c.put("/me/newsletters", json={"my_stocks": "daily"}, headers=headers("free-token"))
+    assert r.status_code == 402 and "The daily My Stocks email is on the Basic plan" in r.json()["detail"]["message"]
     assert c.put("/me/newsletters", json={"my_stocks": "off"}, headers=headers("free-token")).status_code == 200
     basic = c.put("/me/newsletters", json={"market_in": "daily"}, headers=headers("basic-token"))
-    assert basic.status_code == 200 and basic.json()["allowed"] == {"market_daily": True, "my_stocks": False}
+    assert basic.status_code == 200 and basic.json()["allowed"] == {"market_daily": True, "my_stocks": True, "my_stocks_daily": True}
+    assert c.put("/me/newsletters", json={"my_stocks": "daily"}, headers=headers("basic-token")).json()["my_stocks"] == "daily"
 
 
 def test_admin_builds_a_preview(w, monkeypatch):

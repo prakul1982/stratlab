@@ -10,17 +10,23 @@ A research notebook for traders: describe a strategy in plain words, test it on 
 
 ## Plans (edit in `backend/app/plans.py`)
 
-| | Free | Basic, ₹999/mo (₹9,990/yr) | Pro, ₹2,999/mo (₹29,990/yr) |
+Rupee prices include 18% GST (the invoice backs it out). US dollars, euros and pounds have their own prices; other currencies follow the rupee price.
+
+| | Free | Basic, ₹499/mo (₹4,990/yr), $8/mo | Pro, ₹1,499/mo (₹14,990/yr), $20/mo |
 |---|---|---|---|
-| Experiments (backtest + verdict; walk-forward and the similar-stocks check count as one each) | 5 per month | 50 per month | Unlimited |
-| AI strategy builds | 10 per month | 100 per month | Unlimited |
+| Backtests (each with a verdict; walk-forward and the similar-stocks check count as one each) | 10 per month | 100 per month | Unlimited |
+| AI strategy builds | 10 per month | 100 per month | Unlimited (200 a day safety cap) |
 | Group size (tests and paper trading) | 10 | 25 | 50 |
 | Live paper trading | 5 market days from first use (holidays don't count), 1 session | 2 at a time | 10 at a time |
-| Feature flags (`features` in plans.py) | – | `group_live`, `options`, `daily_report`, `newsletter` (the daily Market Brief) | all, plus `options_signal`, `fast_entries`, `alerts`, `export`, `pro_features` (indicators, F&O), `scans`, `filings`, `deepdive`, `newsletter_stocks` (My Stocks) |
+| Company deep dives (each company counts once a month; the read, report card and deck of a company already opened are free) | 2 per month | 15 per month | Unlimited (the daily cap on fresh AI reads still applies) |
+| Company decks (PowerPoint or PDF) | 1 per month | 5 per month | Unlimited |
+| Stock alerts on at once / saved screens / holdings kept | 5 / 2 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
+| Feature flags (`features` in plans.py) | – | `indicators` (all 20+), `group_live`, `options`, `alerts` (trade notifications), `daily_report`, `newsletter` (daily editions of both newsletters), `scans`, `filings` (watchlist red flags and alert), `investor_home` | all, plus `fno` (Indian F&O), `options_signal`, `fast_entries`, `export` |
+| For everyone | Sector rotation, red flags on any company page, screens, results calendar, weekly Market Brief and My Stocks, public pages and share cards | same | same |
 
 Monthly counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them.
 
-**Early access:** until Razorpay is fully configured (the keys and both monthly plan IDs), every plan gets every feature and groups of up to 50, because nobody can buy a plan yet. The monthly limits and paper-trading counts still apply. As soon as they're all set, each feature locks to its plan, with no code change. The server checks every gate (`allows()` in plans.py), and a session a plan no longer covers after a downgrade is stopped within a minute.
+**Early access:** until Razorpay is fully configured (the keys and both monthly plan IDs), every plan gets every feature, groups of up to 50 and unlimited deep dives and decks, because nobody can buy a plan yet. The monthly backtest and AI-build limits and the paper-trading counts still apply. As soon as they're all set, each feature locks to its plan, with no code change. The server checks every gate (`allows()` in plans.py), and a session a plan no longer covers after a downgrade is stopped within a minute.
 
 ---
 
@@ -59,7 +65,7 @@ To test the credentials straight away, press **Run the automatic login now** on 
 
 ### 3. Razorpay (optional, for paid plans)
 Leave the Razorpay settings empty and the Plans page shows the paid plans as "Coming soon", with everyone on Free. To take payments:
-1. In the dashboard, create two **monthly plans**, Basic ₹999 and Pro ₹2,999, and put their IDs in `RAZORPAY_PLAN_BASIC` and `RAZORPAY_PLAN_PRO`. For yearly billing (two months free), also create **yearly plans**, Basic ₹9,990 and Pro ₹29,990, in `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`. The Plans page shows the Monthly/Yearly switch only when both yearly IDs are set.
+1. In the dashboard, create two **monthly plans**, Basic ₹499 (49900 paise) and Pro ₹1,499 (149900 paise), and put their IDs in `RAZORPAY_PLAN_BASIC` and `RAZORPAY_PLAN_PRO`. For yearly billing (two months free), also create **yearly plans**, Basic ₹4,990 (499000 paise) and Pro ₹14,990 (1499000 paise), in `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`. The amounts include GST. To charge US dollars directly, create USD plans of $8 and $20 a month ($80 and $200 a year; 800, 2000, 8000 and 20000 cents) and put their IDs on the USD row in Admin → Prices. The Plans page shows the Monthly/Yearly switch only when both yearly IDs are set.
 2. Enable **Subscriptions** on your account.
 3. Add a webhook to `https://YOUR-BACKEND/billing/webhook` with a secret, and put that secret in `.env`. Subscribe to these events:
    - `subscription.activated`
@@ -80,7 +86,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 
    The business name and contact email are set in `frontend/public/config.js` (`BUSINESS_NAME`, `CONTACT_EMAIL`; add `BUSINESS_ADDRESS` if you want one listed). Read the four pages once and adjust the refund terms if you want a different policy.
 2. **Switch to Live mode** in the dashboard, then repeat the Test Mode setup there: live plans cannot see test plans.
-   - Create the plans again: Basic ₹999 and Pro ₹2,999 monthly, plus yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
+   - Create the plans again: Basic ₹499 and Pro ₹1,499 monthly, plus ₹4,990 and ₹14,990 yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
    - Generate live API keys.
    - Add the webhook again with a new secret.
 3. **Set the live values in Railway → Variables:**
@@ -90,6 +96,8 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
    - optionally `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`
 
    Then redeploy.
+
+   **Changing prices later:** a Razorpay plan's amount can't be edited, so create new plans and put their IDs in the variables. A subscription keeps the plan it was made on (renewals match it through the plan name saved with it), so existing subscribers keep paying their old price until they change plan; nobody's price changes silently.
 4. **What changes at that moment:** paid features lock to each plan. Until the keys **and** both monthly plan IDs are set, everyone keeps every feature. Anyone using Pro features on Free loses them. To soften the switch, start the **Launch offer** on the Admin page: every user gets every Pro feature free for the days you choose (10 by default), while payments keep working. When it ends, each user goes back to their own plan within a minute; sessions their plan doesn't cover are stopped with a message. You can also grant individual users Pro by hand (Change plan → 30 or 90 days).
 5. **Check it once for real:** buy Basic with your own account, confirm the Account page shows it and the Admin page lists you as paying, then cancel from Account (you keep it until the period ends). Refund yourself from the Razorpay dashboard if you like.
 

@@ -2,7 +2,9 @@
 who sent it.
 
 When the friend becomes active, both get a free month of Basic: on_referral_joined, the one place a counted referral
-lands, hands it to invite_rewards.py.
+lands, hands it to invite_rewards.py. Free Basic time makes plans.access_plan answer "basic", so it carries whatever
+Basic's limits are in plans.py (100 backtests a month, 15 deep dives, every indicator...), never a copy of them. At
+most 12 free months ever for the one who invites (invite_rewards.REFERRER_CAP).
 
 Kept in app_settings, so no new database columns:
   ref:code:{CODE}   -> the id of the user the code belongs to
