@@ -97,7 +97,7 @@ svg { display: block; }
 .badge { display: inline-flex; align-items: center; font-weight: 600; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .badge.pass, .badge.edge, .badge.live { background: var(--blue); color: var(--on-blue); }
 .badge.fail, .badge.luck, .badge.no_edge { background: var(--orange-soft); color: var(--orange-ink); }
-.badge.warn, .badge.mixed, .badge.not_enough, .badge.skip, .badge.soon, .badge.offline, .badge.stopped { background: var(--chip); color: var(--ink-2); }
+.badge.warn, .badge.mixed, .badge.not_enough, .badge.skip, .badge.fact, .badge.soon, .badge.offline, .badge.stopped { background: var(--chip); color: var(--ink-2); }
 .badge.next, .badge.running { background: var(--blue-soft); color: var(--blue-ink); }
 .badge.paused { background: var(--orange-soft); color: var(--orange-ink); }
 .token {
@@ -461,7 +461,13 @@ table.nums th:not(:first-child), table.nums td:not(:first-child) { text-align: r
 .star-btn.on svg { fill: currentColor; }
 /* AI read */
 .ai-read { border-color: var(--ink); }
-.ai-top { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ai-top { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.fact-rows { margin: 0; display: flex; flex-direction: column; }
+.fact-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 14px; padding: 7px 0; border-top: 1px solid var(--line); }
+.fact-row:first-child { border-top: 0; }
+.fact-row dt, .fact-row dd { margin: 0; }
+.fact-row dd { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+@media (max-width: 560px) { .fact-row { grid-template-columns: minmax(0, 1fr); } }
 .ideas-box { padding: 18px; border-radius: 14px; background: var(--blue-soft); }
 .idea-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
 .idea-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
@@ -539,7 +545,7 @@ a.chip-link:hover { border-color: var(--ink); color: var(--ink); }
 .lp-dots span.on { background: var(--blue); }
 .lp-dots small { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .lp-rmock { display: flex; flex-direction: column; gap: 18px; box-shadow: var(--shadow); padding: 22px; }
-.lp-rscore { display: flex; gap: 20px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.lp-rfacts { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .lp-ridea { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 12px; background: var(--blue-soft); }
 .lp-tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); }
 .lp-tool { display: flex; flex-direction: column; gap: 6px; padding: 22px 22px 22px 0; border-bottom: 1px solid var(--line); }
@@ -884,6 +890,5 @@ label.btn.disabled { opacity: .5; }
 
 /* corporate actions: a quiet tag for each kind, and the bonus/split notice on My Holdings */
 .badge[class*="ca-"] { background: var(--chip); color: var(--ink-2); font-size: 12px; padding: 2px 8px; }
-.badge.ca-dividend { background: var(--blue-soft); color: var(--blue-ink); }
 .banner.ca-notice { margin-bottom: 0; align-items: flex-start; }
 .banner.ca-notice .muted { color: inherit; opacity: 0.85; }

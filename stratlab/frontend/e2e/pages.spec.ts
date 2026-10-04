@@ -110,6 +110,36 @@ test("losses hang below the zero line (deep dive)", async ({ page }) => {
   await sane(page, errors);
 });
 
+test("the company AI read shows plain numbers, never 0-100 scores", async ({ page }) => {
+  // an old stored read can still carry scores: the page must draw the fact rows and none of the scores
+  const read = {
+    summary: "Runs refineries, a telecom network and retail stores.", valuation_note: "P/E 24 against 20-28 over five years.",
+    scores: { moat: 92, growth: 94, momentum: 81, health: 38 }, composite: 77,
+    facts: [
+      { id: "growth", label: "Growth", items: [{ label: "Sales, 3 years", text: "11.6% a year" }, { label: "Net profit, 5 years", text: "15.3% a year" }] },
+      { id: "price", label: "Price trend", items: [{ label: "Price vs 200-day average", text: "1.5% below" }, { label: "Stage (150-day average)", text: "Stage 3 (topping)" }] },
+      { id: "debt", label: "Debt and cash", items: [{ label: "Debt to equity", text: "0.44" }, { label: "Interest cover", text: "6.1x" }] },
+      { id: "margins", label: "Margins and returns", items: [{ label: "Operating margin, 5 years", text: "17% → 16% → 18% (Mar 2023 to Mar 2025)" }, { label: "ROCE", text: "9.7%" }] },
+    ],
+    bull: ["Jio has 470 million users."], bear: ["Refining margins move with crude."], segments: [], position: "", watch: [], ideas: [],
+    generated_at: Date.now() / 1000,
+  };
+  await page.route("**/research/company/IN/RELIANCE/ai*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(read) }));
+  const errors = await open(page, "/research/IN/RELIANCE", "The numbers");
+  const ai = page.locator(".ai-read");
+  for (const t of ["Growth", "Price trend", "Debt and cash", "Margins and returns", "11.6% a year", "1.5% below", "6.1x", "ROCE"])
+    await expect(ai.getByText(t, { exact: false }).first()).toBeVisible();
+  const text = await ai.innerText();
+  expect(text).not.toMatch(/\b(moat|momentum|health|score)\b/i);
+  for (const n of ["92", "94", "81", "38", "77"]) expect(text).not.toMatch(new RegExp(`(^|\\s)${n}(\\s|$)`));
+  expect(await ai.locator(".score-track").count()).toBe(0);
+  // deals: "Bought" and "Sold" in one neutral style, words only
+  const sides = page.locator(".deals-table .badge");
+  const looks = new Set(await sides.evaluateAll((els) => els.map((e) => `${getComputedStyle(e).backgroundColor}|${getComputedStyle(e).color}`)));
+  expect(looks.size).toBeLessThanOrEqual(1);
+  await sane(page, errors);
+});
+
 test("a US deep dive is in dollars, from the SEC's filings", async ({ page }) => {
   const errors = await open(page, "/research/US/AAPL/deep", "Growth and margins");
   await expect(page.getByText("$ billion").first()).toBeVisible();          // a company this size reads in billions

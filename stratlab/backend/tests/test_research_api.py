@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -88,8 +89,8 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
     r = api.get("/research/company/US/NVDA/ai").json()
-    assert r["segments"][1] == {"label": "Gaming", "share": 9} and r["scores"]["moat"] == 90
-    assert r["valuation"] is None and r["composite"] is None and "value" not in r["scores"]   # no ratings: that's advice
+    assert r["segments"][1] == {"label": "Gaming", "share": 9}
+    assert not {"scores", "composite", "valuation"} & set(r)          # the AI's scores are ignored: no ratings
     assert [i["title"] for i in r["ideas"]] == ["Trend rider"]          # blank and malformed ideas dropped
     assert "generated_at" in r and api.usage == ["research_ai"]
     assert "EMA" in api.calls[0] and "MACD" not in api.calls[0]          # free plan: basic indicators only
@@ -142,3 +143,44 @@ def test_an_unreadable_ai_reply_asks_for_a_refresh_not_a_rephrase(api, monkeypat
     monkeypatch.setattr(A, "complete", lambda system, text, **kw: "not json at all")
     r = api.get("/research/company/US/NVDA/ai")
     assert r.status_code == 422 and r.json()["detail"]["message"] == "The AI reply couldn't be read. Press Refresh to try again."
+
+
+SCORE_WORDS = re.compile(r"\b(moat|momentum|health|score|scores|rating|grade)\b", re.I)
+
+
+def _no_scores(read: dict):
+    """No 0-100 score anywhere in a company read: no score fields, and every fact row is a plain number in words."""
+    assert not {"scores", "composite", "valuation", "rating", "grade"} & set(read)
+    for row in read["facts"]:
+        assert not SCORE_WORDS.search(row["label"])
+        for i in row["items"]:
+            assert not SCORE_WORDS.search(i["label"] + " " + i["text"])
+            assert not re.fullmatch(r"\d{1,3}(/100)?", i["text"].strip())     # never a bare 0-100 number
+
+
+def test_company_ai_returns_facts_not_scores(api):
+    """The company AI read carries plain-number rows (growth, price trend, debt and cash, margins and returns) and no
+    0-100 scores, even when the model sends them anyway."""
+    us = api.get("/research/company/US/NVDA/ai").json()
+    _no_scores(us)
+    ids = [r["id"] for r in us["facts"]]
+    assert "price" in ids and "growth" in ids
+    price = next(r for r in us["facts"] if r["id"] == "price")
+    assert "Price vs 50-day average" in [i["label"] for i in price["items"]]
+    assert any(i["text"].endswith(("above", "below")) for i in price["items"])
+    india = api.get("/research/company/IN/RELIANCE/ai").json()
+    _no_scores(india)
+    rows = {r["id"]: {i["label"]: i["text"] for i in r["items"]} for r in india["facts"]}
+    assert "a year" in rows["growth"]["Sales, 3 years"] and "ROCE" in rows["margins"]
+    assert "No scores, ratings or grades" in api.calls[0] and '"scores"' not in api.calls[0]
+
+
+def test_an_old_stored_read_with_scores_shows_none(api):
+    """A read cached before scores were removed still goes out without them."""
+    old = {"summary": "Old read.", "scores": {"moat": 90, "growth": 80}, "composite": 70, "valuation": "rich",
+           "valuation_note": "", "bull": [], "bear": [], "segments": [], "position": "", "watch": [], "ideas": []}
+    key = ("US", "NVDA", routes.has_pro_features("free"), routes.datetime.now(routes.IST).date().isoformat())
+    A._cache.set(A._key("company", *key), dict(old, generated_at=1.0), 3600)
+    r = api.get("/research/company/US/NVDA/ai").json()
+    assert r["summary"] == "Old read." and r["facts"] == [] and not api.calls
+    _no_scores(r)

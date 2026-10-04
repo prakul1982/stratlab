@@ -1,4 +1,4 @@
-"""AI reads for the research pages: a company scorecard (with strategy ideas StratLab
+"""AI reads for the research pages: a company read (with strategy ideas StratLab
 can test), sector maps, the market pulse and head-to-head comparisons.
 
 All of them go through the same free provider chain as the idea builder. Answers are
@@ -55,7 +55,7 @@ def _clip(x, n: int, length: int = 400) -> list:
     return [str(i)[:length] for i in (x or []) if str(i).strip()][:n] if isinstance(x, list) else []
 
 
-def _score(v) -> int | None:
+def _share(v) -> int | None:
     try:
         return max(0, min(100, int(round(float(v)))))
     except (TypeError, ValueError):
@@ -78,27 +78,35 @@ def company_facts(c: dict) -> dict:
     return {k: v for k, v in facts.items() if v not in (None, [], {}, "")}
 
 
-def company(c: dict, ai, pro: bool) -> dict:
+SCORE_FIELDS = ("scores", "composite", "valuation", "rating", "grade")   # never sent, even from an old stored read
+
+
+def company(c: dict, ai, pro: bool, key_facts: list[dict] | None = None) -> dict:
+    """The AI's written read of one company. `key_facts` are the plain-number rows (growth, price trend, debt and
+    cash, margins and returns) worked out without AI: the model reads them, and they go out with the read unchanged.
+    No scores: a 0-100 number or a grade reads as a quality rating, which is advice."""
     system = f"""You are a careful research writer for StratLab, a tool that tests trading ideas honestly.
 Given FACTS about one listed company, return ONLY this JSON:
 {{"summary": "2-3 sentences: what the business is and the single most important thing about it right now",
- "scores": {{"moat": 0, "growth": 0, "momentum": 0, "health": 0}},
  "valuation_note": "one sentence stating its valuation in numbers against its own history (e.g. P/E now vs its usual range), no judgement",
  "bull": ["3-4 specific strengths, as facts"], "bear": ["3-4 specific risks, as facts"],
  "segments": [{{"label": "business segment", "share": 0}}],
  "position": "2 sentences on where it sits in its value chain and who it depends on",
  "watch": ["2-3 upcoming things that could move the stock"],
  "ideas": [{{"title": "3-6 words", "text": "one trading rule in plain English", "why": "one sentence"}}]}}
-Scores are 0-100 and describe the business only (moat: how protected its position is; growth: how fast sales and
-profit have grown; momentum: how the price has trended; health: balance sheet and cash flow), never whether to own it.
+No scores, ratings or grades of any kind: no 0-100 numbers, letter grades or stars, and no "strong", "weak", "good",
+"poor", "healthy" or "excellent" labels on the business, its growth, its price trend or its balance sheet. State the
+numbers instead, e.g. "operating margin has been 18-22% for five years" or "debt is 0.4 times equity".
 Segment shares are estimates that add up to about 100.
 "ideas" are exactly 3 trading ideas a trader could backtest on THIS stock, suited to how it behaves
 (trend, mean reversion, breakout...). Each "text" must use only {PRO if pro else BASICS}, a timeframe
 (daily candles unless intraday clearly suits it) and a stop loss, e.g.
 "Buy {c['symbol']} when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below, 5% stop loss".
 {RULES}"""
-    r = _ask(system, company_facts(c), ai, 2500)
-    scores = r.get("scores") if isinstance(r.get("scores"), dict) else {}
+    facts = company_facts(c)
+    if key_facts:
+        facts["key_facts"] = {r["label"]: {i["label"]: i["text"] for i in r["items"]} for r in key_facts}
+    r = _ask(system, facts, ai, 2500)
     ideas = []
     for i in r.get("ideas") or []:
         if isinstance(i, dict) and str(i.get("text", "")).strip():
@@ -106,17 +114,22 @@ Segment shares are estimates that add up to about 100.
                           "why": str(i.get("why") or "")[:300]})
     segs = []
     for s in r.get("segments") or []:
-        if isinstance(s, dict) and s.get("label") and _score(s.get("share")) is not None:
-            segs.append({"label": str(s["label"])[:50], "share": _score(s["share"])})
-    if not str(r.get("summary") or "").strip() and not r.get("bull") and not r.get("bear") and not any(
-            _score(scores.get(k)) is not None for k in ("moat", "growth", "momentum", "health")):
+        if isinstance(s, dict) and s.get("label") and _share(s.get("share")) is not None:
+            segs.append({"label": str(s["label"])[:50], "share": _share(s["share"])})
+    if not str(r.get("summary") or "").strip() and not r.get("bull") and not r.get("bear"):
         raise AIError("The AI's reply was empty. Press Refresh to try again.")     # never cache a blank read
-    return {"summary": str(r.get("summary") or "")[:700],
-            "scores": {k: _score(scores.get(k)) for k in ("moat", "growth", "momentum", "health")},
-            "composite": None, "valuation": None,          # no overall rating or cheap/rich label: that's advice
+    return {"summary": str(r.get("summary") or "")[:700], "facts": key_facts or [],
             "valuation_note": str(r.get("valuation_note") or "")[:300],
             "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": segs[:8],
             "position": str(r.get("position") or "")[:500], "watch": _clip(r.get("watch"), 4), "ideas": ideas[:3]}
+
+
+def clean_company(read: dict) -> dict:
+    """A company read as it goes out: any score fields dropped (a read stored before scores were removed may
+    still carry them), and an empty list of fact rows when it has none."""
+    out = {k: v for k, v in read.items() if k not in SCORE_FIELDS}
+    out["facts"] = out.get("facts") if isinstance(out.get("facts"), list) else []
+    return out
 
 
 def sector(q: str, region: str, ai) -> dict:
