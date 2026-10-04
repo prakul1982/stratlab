@@ -192,7 +192,7 @@ class CorpActionReq(BaseModel):
 class TaxImportReq(BaseModel):
     """A tradebook or tax P&L file for the tax report: added to the saved trades (duplicates dropped) or replacing them."""
     filename: str = Field("", max_length=200)
-    data: str = Field(..., min_length=1)        # base64 (a data: URL is fine): 2 MB at most, checked once decoded
+    data: str = Field(..., min_length=1)        # base64 (a data: URL is fine): 10 MB at most, checked once decoded
     mode: Literal["replace", "add"] = "add"
 
 

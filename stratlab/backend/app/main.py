@@ -14,12 +14,16 @@ import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from kiteconnect import exceptions as kite_exc
+from pydantic import ValidationError
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
@@ -1908,11 +1912,11 @@ def holdings_delete(profile=Depends(current_profile)):
 FMV_LOOKUPS = 20                 # 31 Jan 2018 prices looked up in one request; the rest on the next visit
 
 
-def upload_bytes(data: str, what: str) -> bytes:
+def upload_bytes(data: str, what: str, limit: int = holdings_file.MAX_BYTES) -> bytes:
     """An uploaded file, from base64 or a data: URL, within the size cap."""
     raw = re.sub(r"^data:[^,]{0,200},", "", data.strip())
-    if len(raw) > holdings_file.MAX_BYTES * 4 // 3 + 8:
-        err(413, "file_too_big", f"That file is larger than {holdings_file.MAX_BYTES // (1024 * 1024)} MB. {what}")
+    if len(raw) > limit * 4 // 3 + 8:
+        err(413, "file_too_big", f"That file is larger than {limit // (1024 * 1024)} MB. {what}")
     try:
         return base64.b64decode(raw, validate=True)
     except (binascii.Error, ValueError):
@@ -1970,10 +1974,13 @@ def tax_inputs(profile) -> dict:
     today = datetime.now(IST).date()
     syms = sorted({t["sym"] for t in trades if t.get("sym")})
     acts: dict[str, list[dict]] = {}
-    if syms:
-        _corp_histories(uid, syms, today)
+    # bonuses and splits only change lots from tradebooks (a tax P&L line already shows them), and the 31 Jan 2018
+    # price of shares held then: a tax P&L of recent years needs no company's history
+    need = sorted({t["sym"] for t in trades if t.get("sym") and (t.get("src") != "pnl" or t["d"] <= tax_lots.GF_DATE)})
+    if need:
+        _corp_histories(uid, need, today)
         cal = corp_actions.load("IN")["rows"]
-        acts = {s: [a for a in corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) if corp_actions.adjusts(a)] for s in syms}
+        acts = {s: [a for a in corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) if corp_actions.adjusts(a)] for s in need}
     fmv, fmv_src = {}, {}
     pre = sorted({tax_lots.lot_key(t) for t in trades if t["side"] == "B" and t["d"] <= tax_lots.GF_DATE})
     looked = 0
@@ -2021,31 +2028,56 @@ def tax_report(profile=Depends(current_profile)):
     return ok(tax_view(profile))
 
 
-@app.post("/tax/import")
-def tax_import(req: TaxImportReq, profile=Depends(current_profile)):
-    """Read a tradebook or tax P&L file from the user's broker (or a plain CSV of trades) and save its trades with
-    the ones already uploaded, duplicates dropped. Lines that can't be read are listed with the reason."""
+TAX_TOO_BIG = "Split the tradebook by year and upload each one."
+
+
+@app.post("/tax/import", openapi_extra={"requestBody": {"content": {
+    "application/json": {"schema": TaxImportReq.model_json_schema()},
+    "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}})
+async def tax_import(request: Request, filename: str = Query("", max_length=200), mode: Literal["replace", "add"] = Query("add"),
+                     profile=Depends(current_profile)):
+    """Read a tradebook, a tax P&L file or the ZIP of them from the user's broker (or a plain CSV of trades) and save
+    its trades with the ones already uploaded, duplicates dropped. Lines that can't be read are listed with the reason.
+
+    The file comes as the request body itself (10 MB at most; the file name and mode in the query), which the page
+    sends, or as base64 in JSON ({filename, data, mode}), the older way."""
+    body = await request.body()             # the guard has already held the body to its size
+    if request.headers.get("content-type", "").split(";")[0].strip().lower() == "application/json":
+        try:
+            req = TaxImportReq.model_validate_json(body)
+        except ValidationError as e:
+            raise RequestValidationError(e.errors(include_url=False, include_context=False)) from None
+        filename, mode = req.filename, req.mode
+        data = upload_bytes(req.data, TAX_TOO_BIG, holdings_file.TAX_MAX_BYTES)
+    else:
+        if len(body) > holdings_file.TAX_MAX_BYTES:
+            err(413, "file_too_big", f"That file is larger than {holdings_file.TAX_MAX_BYTES // (1024 * 1024)} MB. {TAX_TOO_BIG}")
+        data = body
+    return await run_in_threadpool(tax_import_file, profile, data, filename, mode)
+
+
+def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     throttle(profile, "tax_import", 40, 3600, "That's a lot of uploads in an hour. Try again a little later.")
-    data = upload_bytes(req.data, "A tradebook for a few years is much smaller; check it's the right file, or split it by year.")
     try:
-        parsed = holdings_file.parse_trades(data, req.filename)
+        parsed = holdings_file.parse_trades(data, filename)
     except holdings_file.FileError as e:
         err(400, "bad_file", str(e))
     trades, missed = tax_match(parsed["trades"])
     before = tax_lots.load(profile["id"])
-    old = [] if req.mode == "replace" else before["trades"]
+    old = [] if mode == "replace" else before["trades"]
     merged, added, dup = tax_lots.merge(old, trades)
     over = max(0, len(merged) - tax_lots.MAX_TRADES)
-    files = [] if req.mode == "replace" else before["files"]
+    files = [] if mode == "replace" else before["files"]
     if added:
-        files = files + [{"name": (req.filename or "file")[:80], "broker": parsed["broker"], "kind": parsed["kind"], "trades": added,
+        files = files + [{"name": (filename or "file")[:80], "broker": parsed["broker"], "kind": parsed["kind"], "trades": added,
                           "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}]
         tax_lots.save(profile["id"], merged, files, before["fmv"])
-    elif req.mode == "replace":
+    elif mode == "replace":
         tax_lots.save(profile["id"], merged, files, before["fmv"])
     return ok({"broker": parsed["broker"], "kind": parsed["kind"], "read": len(trades), "added": added, "duplicates": dup,
                "over_limit": over, "problems": parsed["problems"][:200], "problem_count": len(parsed["problems"]),
-               "not_listed": missed[:50], "report": tax_view(profile)})
+               "not_listed": missed[:50], "skipped": parsed.get("skipped", []), "check": parsed.get("check", []),
+               "files": parsed.get("files", []), "report": tax_view(profile)})
 
 
 @app.put("/tax/fmv")

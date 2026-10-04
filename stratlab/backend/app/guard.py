@@ -9,7 +9,12 @@ import re
 import threading
 import time
 
+from .holdings_file import TAX_MAX_REQUEST
+
 MAX_BODY = 8 * 1024 * 1024          # uploaded candles (50,000 bars) and share images fit well inside this
+# routes allowed a bigger body: a tradebook or tax P&L ZIP for the tax report (10 MB a file, sent as the body itself,
+# or as base64 in JSON, a third larger), within the 25 MB a request the tax import allows
+BIG_BODY = {("POST", "/tax/import"): TAX_MAX_REQUEST}
 PER_MINUTE_USER = 600
 PER_MINUTE_ANON = 240
 PER_MINUTE_ADDRESS = 1200           # every request from one address, signed in or not: made-up tokens can't dodge the limit
@@ -24,6 +29,11 @@ HEADERS = [
 # the API's own HTML pages (public company pages, share previews, unsubscribe) need no script at all: none may run
 HTML_CSP = (b"content-security-policy", b"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; "
                                          b"form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+
+
+def max_body(scope) -> int:
+    """The biggest request body this route takes."""
+    return BIG_BODY.get((scope.get("method"), scope.get("path", "").rstrip("/") or "/"), MAX_BODY)
 
 
 class Window:
@@ -89,12 +99,13 @@ class Guard:
         headers = dict(scope.get("headers") or [])
         length = headers.get(b"content-length")
         if length is not None:
+            cap = max_body(scope)
             try:
-                too_big = int(length) > MAX_BODY
+                too_big = int(length) > cap
             except ValueError:
                 too_big = True
             if too_big:
-                return await _reply(send, 413, "too_large", "That upload is too large (8 MB at most).")
+                return await _reply(send, 413, "too_large", f"That upload is too large ({cap // (1024 * 1024)} MB at most).")
         elif b"chunked" in headers.get(b"transfer-encoding", b"").lower():
             # browsers and webhooks always say how big the body is; the server (h11) then holds them to it
             return await _reply(send, 411, "length_required", "Send the request with a Content-Length.")

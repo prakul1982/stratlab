@@ -39,7 +39,8 @@ export class ApiError extends Error {
   code?: string;
 }
 
-type Opts = { method?: string; body?: unknown; raw?: boolean };
+/** `file` sends a file as the request body itself (no JSON, no base64), for uploads too big to wrap. */
+type Opts = { method?: string; body?: unknown; raw?: boolean; file?: Blob };
 
 let onUnauthorized: () => void = () => {};
 let onOffline: () => void = () => {};
@@ -48,7 +49,7 @@ export function setApiHandlers(h: { unauthorized: () => void; offline: () => voi
   onOffline = h.offline;
 }
 
-export async function api<T = any>(path: string, { method = "GET", body, raw = false }: Opts = {}): Promise<T> {
+export async function api<T = any>(path: string, { method = "GET", body, raw = false, file }: Opts = {}): Promise<T> {
   if (!CFG.API_BASE) {
     const e = new ApiError("The StratLab server isn't connected yet (API_BASE in config.js).");
     e.code = "no_backend";
@@ -60,8 +61,8 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
   try {
     r = await fetch(CFG.API_BASE + path, {
       method,
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: { "Content-Type": file ? "application/octet-stream" : "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: file ?? (body === undefined ? undefined : JSON.stringify(body)),
     });
   } catch {
     const e = new ApiError("Can't reach the StratLab server. Check your connection and try again.");
