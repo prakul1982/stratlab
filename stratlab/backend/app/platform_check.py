@@ -223,13 +223,17 @@ def check_database(db) -> dict:
 
 
 def check_calendar(today: date) -> dict:
-    until = calendar.known_until("IN")
-    added = sorted(calendar.extra_holidays("IN"))
-    last = max([until.isoformat() if until else ""] + added) or None
-    left = (date.fromisoformat(last) - today).days if last else None
-    state = "pass" if left is not None and left >= 60 else "warn"
-    return _result("Holiday calendar", "Server", state,
-                   f"India's exchange holidays known until {last} ({left} days)." if last else "No holiday calendar loaded.")
+    """Every market with exchange holidays: a warning if any has fewer than 60 days of them known ahead."""
+    rows = [r for r in calendar.all_coverage(today) if r["state"] != "none"]
+    short = [r for r in rows if r["state"] != "ok"]
+    india = next((r for r in rows if r["market"] == "IN"), None)
+    if short:
+        detail = "Fewer than 60 days of holidays known: " + ", ".join(
+            f"{r['name']} ({r['days_left']} days)" if r["days_left"] is not None else f"{r['name']} (none loaded)" for r in short) + "."
+    else:
+        detail = (f"Holidays known at least 60 days ahead in all {len(rows)} markets"
+                  + (f"; India's until {india['known_until']} ({india['days_left']} days)." if india and india["known_until"] else "."))
+    return _result("Holiday calendar", "Server", "warn" if short else "pass", detail)
 
 
 def run_all(checks: list[tuple[str, callable]]) -> dict:

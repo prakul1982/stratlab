@@ -1096,6 +1096,21 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   await sane(page, errors);
 });
 
+test("admin: exchange holidays show every market's source, coverage and next holiday", async ({ page }, info) => {
+  const errors = await open(page, "/admin?tab=checks", "Exchange holidays");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
+  const panel = page.locator("section", { has: page.getByRole("heading", { name: "Exchange holidays" }) });
+  const table = panel.locator("table.holiday-cover");
+  for (const name of ["India (NSE/BSE)", "MCX", "Currency F&O", "US", "UK", "Europe", "Japan", "Commodities", "Crypto", "Forex"])
+    await expect(table.getByRole("cell", { name, exact: true })).toBeVisible();
+  await expect(table.getByText("No exchange holidays (24/7 / weekdays)")).toHaveCount(2);
+  await expect(table.getByText("Built-in calendar rules")).toHaveCount(5);
+  await expect(table.getByText("Exchange's own list, read daily")).toHaveCount(3);
+  await expect(panel.getByRole("button", { name: "Read the exchange's list now" })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});
+
 test("admin: the whole-market audit tells facts and companies not checked yet apart, and re-checks those", async ({ page }, info) => {
   const sent: object[] = [];
   const row = (symbol: string, name: string, level: string, area: string, detail: string) => ({ symbol, name, seconds: 1, issues: [{ level, area, detail }] });

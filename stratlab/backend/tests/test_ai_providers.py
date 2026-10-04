@@ -223,6 +223,79 @@ def test_a_reasoning_model_that_json_mode_stops_is_asked_again_without_it(monkey
     assert P._answer({"message": {"content": "<think>still going"}}) == ""            # cut off mid-thought: nothing
 
 
+def _reply_with(message: dict, finish: str = "stop"):
+    """A provider that sends back this one message for every chat request."""
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "qwen-3.8-27b"}]})
+        return httpx.Response(200, json={"choices": [{"message": message, "finish_reason": finish}]})
+    return httpx.MockTransport(handler)
+
+
+@pytest.mark.parametrize("message", [
+    {"content": GOOD},                                                              # a plain string
+    {"content": [{"type": "text", "text": GOOD[:20]}, {"type": "text", "text": GOOD[20:]}]},   # a list of parts
+    {"content": None, "reasoning": "The user wants JSON. Let me write it.\nFinal answer: " + GOOD},
+    {"content": "", "reasoning_content": "thinking about rules</think>" + GOOD},
+    {"content": None, "reasoning": "hmm <answer>" + GOOD + "</answer>"},
+])
+def test_every_reply_shape_reasoning_models_send_is_read(monkeypatch, message):
+    monkeypatch.setattr(settings, "CEREBRAS_API_KEY", "c")
+    out = P.complete("s", "t", transport=_reply_with(message))
+    assert json.loads(out)["entry"]
+
+
+def test_raw_reasoning_without_a_marked_answer_is_never_used(monkeypatch):
+    # an unmarked trace may hold a draft JSON object: it must not be passed off as the answer
+    monkeypatch.setattr(settings, "CEREBRAS_API_KEY", "c")
+    with pytest.raises(P.AIError, match="empty reply"):
+        P.complete("s", "t", transport=_reply_with({"content": None, "reasoning": "Maybe " + GOOD + " or not."}))
+    assert P._answer({"message": {"content": [{"type": "image_url", "image_url": {}}]}}) == ""
+    assert P._answer({"message": {"content": {"odd": 1}}}) == ""
+
+
+def test_reasoning_models_are_asked_to_think_little_with_room_to_answer():
+    cer = P.OpenAIStyle("cerebras")._body("qwen-3.8-27b", "s", "t", 1500)
+    assert cer["reasoning_effort"] == "none" and cer["max_tokens"] >= 6000
+    assert P.OpenAIStyle("cerebras")._body("gpt-oss-120b", "s", "t", 1500)["reasoning_effort"] == "low"
+    sam = P.OpenAIStyle("sambanova")._body("gemma-4-31B-it", "s", "t", 1500)
+    assert sam["chat_template_kwargs"] == {"enable_thinking": False} and sam["max_tokens"] >= 6000
+    plain = P.OpenAIStyle("sambanova")._body("Meta-Llama-3.3-70B-Instruct", "s", "t", 1500)
+    assert "chat_template_kwargs" not in plain and plain["max_tokens"] == 1500
+
+
+def test_a_provider_that_refuses_the_thinking_switch_is_asked_without_it(monkeypatch):
+    monkeypatch.setattr(settings, "SAMBANOVA_API_KEY", "s")
+    seen = []
+
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "gemma-4-31B-it"}]})
+        body = json.loads(req.content)
+        seen.append(body)
+        if "chat_template_kwargs" in body:
+            return httpx.Response(400, text="unknown field chat_template_kwargs")
+        return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}}]})
+    assert "entry" in P.complete("s", "t", transport=httpx.MockTransport(handler))
+    assert "chat_template_kwargs" not in seen[-1]
+
+
+def test_auto_pick_prefers_models_that_answer_straight_away():
+    assert P.pick_models("sambanova", ["gemma-4-31B-it", "Meta-Llama-3.3-70B-Instruct", "Qwen3-32B"])[0] == "Meta-Llama-3.3-70B-Instruct"
+    assert P.pick_models("cerebras", ["qwen-3.8-27b", "llama3.1-8b"])[0] == "llama3.1-8b"
+
+
+def test_a_used_up_free_quota_reads_as_a_pause_not_a_fault(monkeypatch):
+    monkeypatch.setattr(settings, "MISTRAL_API_KEY", "m")
+    monkeypatch.setattr(settings, "AI_PROVIDERS", "mistral")
+    res = P.test_all(transport=fake(["mistral-small-latest"], status=429))
+    assert res[0]["quota"] and not res[0]["ok"] and res[0]["error"] == "Free quota used up for now; it resets on its own."
+    assert next(h for h in P.health() if h["name"] == "mistral")["quota"]
+    P._status.clear()
+    other = P.test_all(transport=fake(["mistral-small-latest"], status=401))
+    assert not other[0]["quota"] and "rejected" in other[0]["error"]
+
+
 def test_a_short_rate_limit_is_waited_out_instead_of_failing(monkeypatch):
     monkeypatch.setattr(settings, "GROQ_API_KEY", "q")
     calls, slept = [], []

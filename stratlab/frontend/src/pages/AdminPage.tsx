@@ -13,7 +13,7 @@ import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel"
 import { analyticsDashboard } from "../lib/analytics";
 
 type Plan = "free" | "basic" | "pro";
-type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quick_rank?: number | null; research_rank?: number | null };
+type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quota?: boolean; quick_rank?: number | null; research_rank?: number | null };
 interface Overview {
   server: {
     kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number;
@@ -30,7 +30,7 @@ interface UserRow {
   plan_until: string | null; paying: boolean; experiments: number; ai_builds: number; referrals?: number; free_months?: number;
 }
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null }
-type AITest = { label: string; ok: boolean; error: string | null; model: string | null; ms: number };
+type AITest = { label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number };
 
 const PLAN_NAME: Record<Plan, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 const DURATIONS: [string, number | null][] = [["30 days", 30], ["90 days", 90], ["1 year", 365], ["No end date", null]];
@@ -268,8 +268,8 @@ export function AdminPage() {
   if (sv) {
     if (!sv.kite_ready) attention.push({ text: sv.kite_invalid || "The broker isn't logged in today, so Indian prices and paper trading are offline.", tab: "services", bad: true });
     if (sv.auto_login_configured && sv.auto_login.ok === false) attention.push({ text: `The automatic broker login failed: ${sv.auto_login.message}`, tab: "services", bad: true });
-    const aiDown = (aiTest ?? []).filter((a) => !a.ok).map((a) => a.label);
-    if (!aiTest) aiKeys.filter((a) => a.last_error).forEach((a) => aiDown.push(a.label));
+    const aiDown = (aiTest ?? []).filter((a) => !a.ok && !a.quota).map((a) => a.label);
+    if (!aiTest) aiKeys.filter((a) => a.last_error && !a.quota).forEach((a) => aiDown.push(a.label));
     if (!aiKeys.length) attention.push({ text: "No AI keys are set, so the idea builder and research reads are off.", tab: "services", bad: true });
     else if (aiDown.length) attention.push({ text: `AI: ${aiDown.join(", ")} ${aiDown.length > 1 ? "aren't" : "isn't"} answering. The others take over by themselves.`, tab: "services", bad: false });
     if (sv.admin_alerts && !sv.admin_alerts.email_ready) attention.push({ text: "Alert emails can't be sent yet: the server's email (SMTP) settings are missing.", tab: "services", bad: true });
@@ -393,8 +393,8 @@ export function AdminPage() {
                   <button className="btn quiet sm" disabled={busy === "ai" || !aiKeys.length} onClick={testAI}>{busy === "ai" ? "Testing…" : "Test every provider"}</button>
                 </div>
                 {!aiKeys.length && <Status ok={false} label="No AI keys" detail="Add a free GROQ_API_KEY in Railway → Variables, then redeploy." />}
-                {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
-                {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error} label={a.label} detail={a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
+                {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} warn={a.quota} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
+                {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error || a.quota} label={a.label} detail={a.quota ? "Free quota used up for now; it resets on its own." : a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
                 {aiKeys.length > 0 && <AIOrder rows={sv!.ai} />}
               </section>
             </div>

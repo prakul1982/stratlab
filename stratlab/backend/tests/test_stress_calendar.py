@@ -101,6 +101,7 @@ def test_the_exchanges_holiday_list_is_read_by_itself(monkeypatch):
         assert calendar.is_trading_day("IN", date(2027, 3, 22))              # Holi 2027: not known yet
         r = w["client"].post("/admin/holidays/refresh", headers=W.headers("admin-token")).json()
         assert r["auto"]["count"] == 2 and r["auto"]["error"] is None and r["covered_until"] >= "2027-12-31"
+        assert [m["market"] for m in r["markets"]][:3] == ["IN", "MCX", "CDS"] and r["markets"][0]["known_until"] >= "2027-12-31"
         assert not calendar.is_trading_day("IN", date(2027, 3, 22)) and not calendar.is_trading_day("MCX", date(2027, 3, 22))
         w["faults"]["exchange"].mode = "down"                               # the exchange down: the last good list stays
         r = w["client"].post("/admin/holidays/refresh", headers=W.headers("admin-token")).json()
