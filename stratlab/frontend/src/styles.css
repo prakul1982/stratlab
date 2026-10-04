@@ -1247,3 +1247,9 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 /* Options: stop loss and target as two equal halves */
 .opt-grid.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 640px) { .opt-grid.two { grid-template-columns: minmax(0, 1fr); } }
+
+/* Admin: the AI panel */
+.ai-provider { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
+.ai-model, .ai-missing { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px dashed var(--line); }
+.ai-missing { border-top-style: solid; }
+.ai-id { overflow-wrap: anywhere; }

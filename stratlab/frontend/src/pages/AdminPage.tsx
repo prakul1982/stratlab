@@ -13,6 +13,7 @@ import { BreadthAdminPanel } from "../components/BreadthAdminPanel";
 import { StoragePanel } from "../components/StoragePanel";
 import { LifecycleEmails } from "../components/LifecycleEmails";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
+import { AIPanel } from "../components/AIPanel";
 import { analyticsDashboard } from "../lib/analytics";
 
 type Plan = "free" | "basic" | "pro";
@@ -33,7 +34,6 @@ interface UserRow {
   plan_until: string | null; paying: boolean; experiments: number; ai_builds: number; referrals?: number; free_months?: number;
 }
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null }
-type AITest = { label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number };
 
 const PLAN_NAME: Record<Plan, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 const DURATIONS: [string, number | null][] = [["30 days", 30], ["90 days", 90], ["1 year", 365], ["No end date", null]];
@@ -177,7 +177,6 @@ export function AdminPage() {
   const [reported, setReported] = useState<{ entries: ReportedRow[]; reasons: Record<string, string> } | null>(null);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<UserRow | null>(null);
-  const [aiTest, setAiTest] = useState<AITest[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [promoDays, setPromoDays] = useState(10);
   const [billingCheck, setBillingCheck] = useState<BillingCheck | null>(null);
@@ -227,7 +226,6 @@ export function AdminPage() {
     const r = await api<{ subject: string; reached: number }>("/admin/weekly/test", { method: "POST" });
     notify(r.reached ? `"${r.subject}" sent. Check your inbox (and spam).` : "The summary couldn't reach you: set up email or a phone in Account.");
   });
-  const testAI = () => run("ai", async () => { setAiTest((await api<{ providers: AITest[] }>("/admin/ai/test", { method: "POST" })).providers); });
   const stop = (s: SessionRow) => {
     if (!confirm(`Stop "${s.name}" for ${s.email}?`)) return;
     run(`stop-${s.id}`, async () => { await api(`/admin/sessions/${s.id}/stop`, { method: "POST" }); notify("Session stopped."); await loadOverview(); });
@@ -272,8 +270,7 @@ export function AdminPage() {
   if (sv) {
     if (!sv.kite_ready) attention.push({ text: sv.kite_invalid || "The broker isn't logged in today, so Indian prices and paper trading are offline.", tab: "services", bad: true });
     if (sv.auto_login_configured && sv.auto_login.ok === false) attention.push({ text: `The automatic broker login failed: ${sv.auto_login.message}`, tab: "services", bad: true });
-    const aiDown = (aiTest ?? []).filter((a) => !a.ok && !a.quota).map((a) => a.label);
-    if (!aiTest) aiKeys.filter((a) => a.last_error && !a.quota).forEach((a) => aiDown.push(a.label));
+    const aiDown = aiKeys.filter((a) => a.last_error && !a.quota).map((a) => a.label);
     if (!aiKeys.length) attention.push({ text: "No AI keys are set, so the idea builder and research reads are off.", tab: "services", bad: true });
     else if (aiDown.length) attention.push({ text: `AI: ${aiDown.join(", ")} ${aiDown.length > 1 ? "aren't" : "isn't"} answering. The others take over by themselves.`, tab: "services", bad: false });
     if (sv.admin_alerts && !sv.admin_alerts.email_ready) attention.push({ text: "Alert emails can't be sent yet: the server's email (SMTP) settings are missing.", tab: "services", bad: true });
@@ -391,16 +388,7 @@ export function AdminPage() {
                 </div>
               </section>
 
-              <section className="card stack" style={{ gap: 4 }}>
-                <div className="spread" style={{ marginBottom: 6 }}>
-                  <h2 className="h2">AI</h2>
-                  <button className="btn quiet sm" disabled={busy === "ai" || !aiKeys.length} onClick={testAI}>{busy === "ai" ? "Testing…" : "Test every provider"}</button>
-                </div>
-                {!aiKeys.length && <Status ok={false} label="No AI keys" detail="Add a free GROQ_API_KEY in Railway → Variables, then redeploy." />}
-                {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} warn={a.quota} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
-                {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error || a.quota} label={a.label} detail={a.quota ? "Free quota used up for now; it resets on its own." : a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
-                {aiKeys.length > 0 && <AIOrder rows={sv!.ai} />}
-              </section>
+              <AIPanel />
             </div>
           )}
 
@@ -537,16 +525,3 @@ export function AdminPage() {
   );
 }
 
-
-/** Which provider is asked first for each kind of job, and which keys are still missing. */
-function AIOrder({ rows }: { rows: AIRow[] }) {
-  const chain = (k: "quick_rank" | "research_rank") => rows.filter((r) => r[k]).sort((a, b) => a[k]! - b[k]!).map((r) => r.label).join(" → ");
-  const missing = rows.filter((r) => !r.configured).map((r) => r.label);
-  return (
-    <div className="stack small" style={{ gap: 4, padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
-      <span><b>Idea builder asks:</b> <span className="muted">{chain("quick_rank") || "–"}</span></span>
-      <span><b>Research reads ask:</b> <span className="muted">{chain("research_rank") || "–"}</span></span>
-      {missing.length > 0 && <span className="muted">No key yet: {missing.join(", ")}.</span>}
-    </div>
-  );
-}
