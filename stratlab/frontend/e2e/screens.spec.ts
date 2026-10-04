@@ -46,7 +46,7 @@ async function seed(request: import("@playwright/test").APIRequestContext) {
   const app = ["/", "/trade", "/invest", "/money", "/notebooks", "/new", `/n/${nb.id}`, `/n/${nb.id}/market`, `/n/${nb.id}/compare`, `/n/${nb.id}/e/1`, "/import",
     "/library", "/options", "/paper", `/paper/${paper.id}`, "/plans", "/account", "/admin", "/admin?tab=services", "/admin?tab=checks",
     "/admin?tab=users", "/admin?tab=billing", "/news", "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar", "/alerts", "/research", "/research/themes", "/research/pulse",
-    "/research/compare", "/research/watchlist", "/research/scan", "/research/screens", "/research/rotation", "/research/filings",
+    "/research/compare", "/research/watchlist", "/research/scan", "/research/screens", "/research/rotation", "/research/filings", "/invest/breadth",
     "/research/results", "/research/investor", "/research/IN/RELIANCE", "/research/US/AAPL", "/research/IN/RELIANCE/deep",
     "/research/US/AAPL/deep",
     // corporate actions (the calendar, both scopes and the US), a company with a bonus and dividend ahead and deals,

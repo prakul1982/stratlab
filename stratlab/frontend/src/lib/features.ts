@@ -68,6 +68,8 @@ export const FEATURES: Feature[] = [
     words: "scan screener stage 2 stage two supertrend st s2 weinstein signals alert", home: true, goal: "find" },
   { id: "rotation", title: "Sector rotation", what: "Which sectors lead, weaken, lag or improve against the market. Click one to see its stocks.", to: "/research/rotation",
     words: "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors", home: true, goal: "find" },
+  { id: "breadth", title: "Market breadth", what: "How many stocks rose or fell, sit above their 50- and 200-day averages or made 52-week highs and lows, with McClellan and sectors.", to: "/invest/breadth",
+    words: "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average stage 2 trin arms thrust sector breadth nifty 500 midcap smallcap" },
   { id: "filings", title: "Filings and red flags", what: "Fund raises (QIP), pledges, resignations and defaults your watchlist companies filed, with an evening alert.", to: "/research/filings",
     words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true, goal: "find" },
   { id: "deepdive", title: "Company deep dive", what: "Open any Indian or US company, then Deep dive: 10 years of numbers, its business, capex plans and whether management delivered.", to: "/research",

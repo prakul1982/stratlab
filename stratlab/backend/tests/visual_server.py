@@ -61,6 +61,7 @@ def build():
     from app import surveillance
     surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them
     screen_index()
+    breadth(mp)
     # the public NAV files, from the test fixtures, for the mutual funds page
     from app import money_mf_nav
     navs = Path(__file__).parent / "fixtures" / "mf"
@@ -97,6 +98,22 @@ def invite_rewards():
                                                         "referrer_months": 0, "newcomer_months": 0, "given_at": None,
                                                         "referrer_at": None}))
     plans.add_free_basic(db.get_profile("u-load-3"), 30)
+
+
+def breadth(mp):
+    """Market breadth for both markets, as the evening runs would have stored it: the NSE indices' lists are the fake
+    market's sector stocks, read without the sources' pacing (that only slows the start)."""
+    from app import sector_members
+    from app.intel.net import RateLimit
+    stocks = sorted({s for syms in sector_members.IN.values() for s in syms})
+    mp.setattr(main.filings_feed, "index_members", lambda name: stocks[:50] if name == "NIFTY 50" else stocks)
+    with pytest.MonkeyPatch.context() as quick:
+        quick.setattr(main.kite, "_throttle", lambda: None)
+        quick.setattr(main.markets.provider("US").yahoo, "limit", RateLimit(10**7, 10**6))
+        quick.setattr(main.breadth_runner, "gap", 0)
+        for region in ("IN", "US"):
+            main.breadth_runner.run(region)
+    mp.setattr(main.breadth_job, "start", lambda: None)      # the stored counts stay as they are for the whole run
 
 
 def screen_index():

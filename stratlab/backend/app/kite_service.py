@@ -392,9 +392,11 @@ class KiteService:
         return out
 
     # ---------- historical candles ----------
-    def history(self, token: int, tf: str, days: int, continuous: bool | None = None, ttl: float | None = None) -> list[dict]:
+    def history(self, token: int, tf: str, days: int, continuous: bool | None = None, ttl: float | None = None,
+                store: bool = True) -> list[dict]:
         """Candles for a token. Futures on daily candles use Kite's continuous series unless told otherwise;
-        `ttl` overrides how long a cached answer is reused (live polling wants fresh candles)."""
+        `ttl` overrides how long a cached answer is reused (live polling wants fresh candles). `store=False` leaves
+        the answer out of the cache (a whole-market read would push everything else out of it)."""
         self._require()
         interval, chunk, _ = INTERVALS[tf]
         now = datetime.now(IST)
@@ -425,6 +427,8 @@ class KiteService:
         for b in out:
             if b["t"] not in seen:
                 seen.add(b["t"]); dedup.append(b)
+        if not store:
+            return dedup
         self._cache[key] = (time.time(), dedup)
         if len(self._cache) > 300:
             self._cache.pop(next(iter(self._cache)))

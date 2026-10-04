@@ -15,7 +15,8 @@ HOSTILE_STR = ["", " ", "a" * 5000, "../../etc/passwd", "%00", "\x00", "😀📈
                "NaN", "-1", "0", "1e309", "IN:RELIANCE", "CRYPTO:BTC-USD", "US:AAPL", "nope:nope", "{}", "null"]
 HOSTILE_NUM = [0, -1, -10**12, 10**12, 1.5, float("nan"), float("inf"), "12", None, True, [], {}]
 TOKENS = [None, "garbage-token", "free-token", "pro-token", "admin-token"]
-SKIP = {("POST", "/admin/kite/auto-login-now"), ("POST", "/admin/fixture/prices")}   # drive a browser / pull 2 years of data
+SKIP = {("POST", "/admin/kite/auto-login-now"), ("POST", "/admin/fixture/prices"),   # drive a browser / pull 2 years of data
+        ("POST", "/admin/breadth/run")}                                              # reads a whole market in the background
 
 
 def resolve(schema: dict, spec: dict) -> dict:

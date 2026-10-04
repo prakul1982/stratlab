@@ -31,6 +31,8 @@ function intentFor(q: string): Intent | null {
   if (m) return { title: `Compare ${m[1]} and ${m[2]}`, sub: "Side by side, with an AI read", compare: [m[1], m[2]] };
   if (/\bsector(s)?\b.*\b(lead|leading|rotat|strong|weak|lagging|improving)|sector rotation/i.test(t))
     return { title: "Sector rotation", sub: "Which sectors lead, weaken, lag or improve against the market", to: "/research/rotation" };
+  if (/market breadth|advances?.{0,3}declines?|\ba\/?d line\b|mcclellan|new (52.week )?highs (and|vs\.?) lows|stocks above (the |their )?(20|50|200)/i.test(t))
+    return { title: "Market breadth", sub: "How many stocks rose, fell, sit above their averages or made new highs and lows", to: "/invest/breadth" };
   if (/red flags?|\bqip\b|pledge|fund ?raise|auditor resign/i.test(t))
     return { title: "Red flags in your watchlist", sub: "Fund raises, pledges, resignations and defaults filed in the last 3 months", to: "/research/filings" };
   if (/stage ?(2|two)|supertrend|\bst ?s2\b/i.test(t))

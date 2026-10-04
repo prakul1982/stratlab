@@ -11,6 +11,7 @@ import { AsOf, Loading } from "../components/ui";
 import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
+import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Layers, Library, Pulse, Upload } from "../components/Icons";
 import { AskBar, InvestorStart, NotebooksHome } from "./Home";
@@ -85,7 +86,10 @@ export function InvestHome() {
           <WatchPanel />
           <ResultsToday />
         </div>
-        <RedFlags />
+        <div className="grid2 space-panels">
+          <BreadthCard />
+          <RedFlags />
+        </div>
       </InvestorStart>
     </>
   );

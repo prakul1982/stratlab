@@ -210,3 +210,79 @@ export function SplitBars({ built, unseen, builtLabel, unseenLabel }: { built: n
     </div>
   );
 }
+
+/* Two counts a day on one scale: the first drawn up from zero, the second down (new highs over new lows, stocks up 4%
+ * over those down 4%). Thin columns; hovering a day shows both numbers. */
+export function PairBars({ up, down, labels, upLabel, downLabel, upColor, downColor, ariaLabel, height = 200, format = (v) => String(v) }: {
+  up: number[]; down: number[]; labels: string[]; upLabel: string; downLabel: string; upColor: string; downColor: string;
+  ariaLabel: string; height?: number; format?: (v: number) => string;
+}) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(800);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(280, Math.round(e.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const H = W < 560 ? Math.round(height * 0.85) : height;
+  const P = { l: 48, r: 10, t: 12, b: 24 };
+  const n = labels.length;
+  // room below zero only when there is something to draw there (no new lows at all: the bars stand on the floor)
+  const bottom = Math.max(0, ...down), top = Math.max(bottom ? 0 : 1, ...up);
+  const plotH = H - P.t - P.b;
+  const zero = P.t + (top / (top + bottom)) * plotH;
+  const scale = plotH / (top + bottom);
+  const slot = (W - P.l - P.r) / Math.max(1, n);
+  const bw = Math.min(24, slot >= 4 ? slot - 2 : slot);         // a 2px gap between columns once they're wide enough
+  const x = (i: number) => P.l + i * slot + (slot - bw) / 2;
+  const [hover, setHover] = useState<number | null>(null);
+  const ref = useRef<SVGSVGElement>(null);
+  const move = (e: PointerEvent<SVGSVGElement>) => {
+    const box = ref.current?.getBoundingClientRect();
+    if (!box || !n) return;
+    const px = ((e.clientX - box.left) / box.width) * W;
+    setHover(Math.max(0, Math.min(n - 1, Math.floor((px - P.l) / slot))));
+  };
+  const r = bw >= 8 ? 4 : 0;
+  // a column with a rounded data end and a square foot on the zero line
+  const col = (i: number, v: number, dir: 1 | -1) => {
+    const h = v * scale, x0 = x(i), x1 = x0 + bw;
+    if (h <= 0) return "";
+    const rr = Math.min(r, h, bw / 2);
+    const end = zero - dir * h;
+    return dir === 1
+      ? `M${x0},${zero}V${end + rr}Q${x0},${end} ${x0 + rr},${end}H${x1 - rr}Q${x1},${end} ${x1},${end + rr}V${zero}Z`
+      : `M${x0},${zero}V${end - rr}Q${x0},${end} ${x0 + rr},${end}H${x1 - rr}Q${x1},${end} ${x1},${end - rr}V${zero}Z`;
+  };
+  const xTicks = n > 1 ? (W < 560 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map((f) => Math.round(f * (n - 1))) : [0];
+  const hx = hover != null ? x(hover) + bw / 2 : 0;
+  return (
+    <div ref={wrap} style={{ position: "relative" }}>
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={ariaLabel}
+        onPointerMove={move} onPointerLeave={() => setHover(null)} style={{ touchAction: "pan-y", overflow: "visible" }}>
+        {([[P.t, format(top), top > 0], [zero, "0", true], [H - P.b, format(bottom), bottom > 0]] as [number, string, boolean][]).filter(([, , on]) => on).map(([yy, t], k) => (
+          <g key={k}>
+            <line x1={P.l} x2={W - P.r} y1={yy} y2={yy} stroke={yy === zero ? "var(--line-2)" : "var(--line)"} />
+            <text x={P.l - 8} y={yy + 4} textAnchor="end" fontFamily="var(--mono)" fontSize={11} fill="var(--muted)">{t}</text>
+          </g>
+        ))}
+        {up.map((v, i) => <path key={`u${i}`} d={col(i, v, 1)} fill={upColor} opacity={hover == null || hover === i ? 1 : 0.55} />)}
+        {down.map((v, i) => <path key={`d${i}`} d={col(i, v, -1)} fill={downColor} opacity={hover == null || hover === i ? 1 : 0.55} />)}
+        {xTicks.map((i, k) => (
+          <text key={k} x={x(i) + bw / 2} y={H - 6} textAnchor={k === 0 ? "start" : k === xTicks.length - 1 ? "end" : "middle"}
+            fontFamily="var(--mono)" fontSize={11} fill="var(--muted)">{labels[i]}</text>
+        ))}
+        {hover != null && <line x1={hx} x2={hx} y1={P.t} y2={H - P.b} stroke="var(--ink)" strokeWidth={1} opacity={0.25} />}
+      </svg>
+      {hover != null && (
+        <div className="mono chart-tip" style={{ left: `${(hx / W) * 100}%`, transform: `translateX(${hx > W * 0.7 ? "-105%" : "8px"})` }}>
+          <div className="muted">{labels[hover]}</div>
+          <div className="row" style={{ gap: 8 }}><span style={{ width: 10, height: 3, background: upColor, display: "inline-block" }} /><b>{format(up[hover])}</b> {upLabel}</div>
+          <div className="row" style={{ gap: 8 }}><span style={{ width: 10, height: 3, background: downColor, display: "inline-block" }} /><b>{format(down[hover])}</b> {downLabel}</div>
+        </div>
+      )}
+    </div>
+  );
+}
