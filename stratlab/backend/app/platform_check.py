@@ -175,9 +175,23 @@ def check_surveillance(feed) -> dict:
     return _result("Surveillance lists", "Filings", "warn" if bad else "pass", detail)
 
 
+BSE_REFUSING = ("BSE is turning this server's requests away: {why}. Only companies listed on BSE alone are affected: "
+                "companies on both exchanges read their filings from NSE, and the BSE-only ones show their documents as "
+                "not checked yet and are tried again in small batches every hour until BSE answers.")
+
+
 def check_bse_filings(bse) -> dict:
-    """BSE's feed, which serves the companies listed only on BSE; Reliance (500325) files on both exchanges."""
-    items = bse.announcements("500325")
+    """BSE's feed, which serves the companies listed only on BSE; Reliance (500325) files on both exchanges. BSE
+    refusing this server is a warning, not a failure: every company on NSE too reads NSE's filings, and the BSE-only
+    ones wait and are retried."""
+    from .intel.net import SourceError
+    try:
+        items = bse.announcements("500325")
+    except SourceError as e:
+        if not e.busy:
+            raise
+        why = str(e).split(" Try again")[0].rstrip(".")
+        return _result("BSE filings", "Filings", "warn", BSE_REFUSING.format(why=why[:1].lower() + why[1:]))
     if not items:
         return _result("BSE filings", "Filings", "warn", "Reliance has no BSE filings in the window, which is unusual.")
     pdfs = sum(1 for i in items if i.get("url"))

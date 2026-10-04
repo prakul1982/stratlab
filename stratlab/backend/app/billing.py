@@ -53,40 +53,16 @@ def _mask(v: str) -> str:
     return f"{v[:9]}…{v[-4:]}" if len(v) > 14 else ("set" if v else "missing")
 
 
-def _find_international(obj):
-    """The first true/false flag whose name mentions international payments, anywhere in Razorpay's answer."""
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if "international" in str(k).lower() and isinstance(v, bool):
-                return v
-        for v in obj.values():
-            found = _find_international(v)
-            if found is not None:
-                return found
-    elif isinstance(obj, list):
-        for v in obj:
-            found = _find_international(v)
-            if found is not None:
-                return found
-    return None
+INTERNATIONAL_WHERE = "Razorpay Dashboard → Account & Settings → International payments"
 
 
-def international_status(key: str, secret: str, http=None) -> dict:
-    """Whether the account takes cards issued outside India. Razorpay switches this on per account (after review),
-    and its payment-methods answer doesn't always say; when it doesn't, the admin is pointed to the dashboard."""
-    import httpx
-    where = "Razorpay Dashboard → Account & Settings → International payments"
-    try:
-        r = (http or httpx).get("https://api.razorpay.com/v1/methods", auth=(key, secret), timeout=15)
-        r.raise_for_status()
-        flag = _find_international(r.json())
-    except Exception as e:
-        return {"enabled": None, "detail": f"Couldn't ask Razorpay ({e.__class__.__name__}). Check {where}."}
-    if flag is True:
-        return {"enabled": True, "detail": "Cards issued outside India are accepted."}
-    if flag is False:
-        return {"enabled": False, "detail": f"Off: only Indian cards and UPI work. Apply in {where}."}
-    return {"enabled": None, "detail": f"Razorpay's answer doesn't say. Check {where}."}
+def international_status(key: str = "", secret: str = "") -> dict:
+    """Whether the account takes cards issued outside India, as an info row: Razorpay has no public API that reports
+    it. The one call that looked like it would (GET /v1/methods) takes the key ID alone, as checkout does, so with
+    the key and secret it is refused (the HTTPStatusError the admin saw), and its answer lists the methods on offer,
+    not whether international cards are switched on. So the admin is pointed to the dashboard, without a warning."""
+    return {"enabled": None, "info": True,
+            "detail": f"Check in {INTERNATIONAL_WHERE}. Razorpay's API doesn't report this setting."}
 
 
 def check_setup() -> dict:

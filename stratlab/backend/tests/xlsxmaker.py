@@ -27,33 +27,49 @@ def _ref(row: int, col: int) -> str:
 
 def make_xlsx(rows: list[list], sheet: str = "Equity") -> bytes:
     """Text cells go in the shared strings, numbers stay numbers; None leaves a cell out, as Excel does."""
+    return make_workbook([(sheet, rows)])
+
+
+def make_workbook(sheets: list[tuple[str, list[list]]]) -> bytes:
+    """A workbook of several named sheets, sharing one strings table, the way Excel saves it."""
     shared: list[str] = []
     index: dict[str, int] = {}
-    body = []
-    for r, row in enumerate(rows):
-        cells = []
-        for c, v in enumerate(row):
-            if v is None or v == "":
-                continue
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                cells.append(f'<c r="{_ref(r, c)}"><v>{v}</v></c>')
-            else:
-                v = str(v)
-                if v not in index:
-                    index[v] = len(shared)
-                    shared.append(v)
-                cells.append(f'<c r="{_ref(r, c)}" t="s"><v>{index[v]}</v></c>')
-        body.append(f'<row r="{r + 1}">{"".join(cells)}</row>')
+    bodies = []
+    for _, rows in sheets:
+        body = []
+        for r, row in enumerate(rows):
+            cells = []
+            for c, v in enumerate(row):
+                if v is None or v == "":
+                    continue
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    cells.append(f'<c r="{_ref(r, c)}"><v>{v}</v></c>')
+                else:
+                    v = str(v)
+                    if v not in index:
+                        index[v] = len(shared)
+                        shared.append(v)
+                    cells.append(f'<c r="{_ref(r, c)}" t="s"><v>{index[v]}</v></c>')
+            body.append(f'<row r="{r + 1}">{"".join(cells)}</row>')
+        bodies.append(body)
+    n = len(sheets)
+    ct = CT if n == 1 else CT.replace('<Override PartName="/xl/sharedStrings.xml"', "".join(
+        f'<Override PartName="/xl/worksheets/sheet{i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        for i in range(1, n)) + '<Override PartName="/xl/sharedStrings.xml"')
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("[Content_Types].xml", CT)
+        z.writestr("[Content_Types].xml", ct)
         z.writestr("_rels/.rels", RELS)
         z.writestr("xl/workbook.xml", f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook {NS}><sheets>'
-                                      f'<sheet name="{escape(sheet)}" sheetId="1" r:id="rId1"/></sheets></workbook>')
+                                      + "".join(f'<sheet name="{escape(name)}" sheetId="{i + 1}" r:id="rId{1 if i == 0 else i + 2}"/>'
+                                                for i, (name, _) in enumerate(sheets)) + '</sheets></workbook>')
         z.writestr("xl/_rels/workbook.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-                   '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>')
-        z.writestr("xl/worksheets/sheet1.xml", f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet {NS}><sheetData>{"".join(body)}</sheetData></worksheet>')
+                   '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>'
+                   + "".join(f'<Relationship Id="rId{i + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i + 1}.xml"/>'
+                             for i in range(1, n)) + '</Relationships>')
+        for i, body in enumerate(bodies):
+            z.writestr(f"xl/worksheets/sheet{i + 1}.xml", f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet {NS}><sheetData>{"".join(body)}</sheetData></worksheet>')
         z.writestr("xl/sharedStrings.xml", f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<sst {NS} count="{len(shared)}" uniqueCount="{len(shared)}">'
                    + "".join(f"<si><t xml:space=\"preserve\">{escape(s)}</t></si>" for s in shared) + "</sst>")
     return out.getvalue()

@@ -186,8 +186,8 @@ test.describe("a visitor in India", () => {
   test.use({ locale: "en-US", timezoneId: "Asia/Kolkata" });
   test("sees prices in rupees", async ({ page }) => {
     const errors = await open(page, "/plans", "Plans");
-    await expect(page.getByText("₹499 / month", { exact: true })).toBeVisible();
-    await expect(page.getByText("₹1,499 / month", { exact: true })).toBeVisible();
+    await expect(page.getByText("₹699 / month", { exact: true })).toBeVisible();
+    await expect(page.getByText("₹1,999 / month", { exact: true })).toBeVisible();
     await expect(page.getByText("incl. GST", { exact: true })).toHaveCount(2);        // next to each rupee price
     await sane(page, errors);
   });
@@ -438,7 +438,7 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   await expect(page.getByText("No trades yet")).toBeVisible();
 });
 
-test("tax report: the tax P&L ZIP as the broker gives it, checked against its summary, other segments left out", async ({ page, request }, info) => {
+test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked against its summary, and the total tax", async ({ page, request }, info) => {
   const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
   expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
   const errors = await open(page, "/tax-report", "Capital gains on your shares", sessionAs(token, id, email));
@@ -446,18 +446,90 @@ test("tax report: the tax P&L ZIP as the broker gives it, checked against its su
   await expect(page.locator("input[type=file]")).toHaveAttribute("accept", /\.zip/);
   await page.locator("input[type=file]").setInputFiles(TAXPNL + "zerodha_taxpnl_2024_2025.zip");
   await expect(page.getByText(/Read as a Zerodha tax P&L: 16 trades added/)).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByText(/From the ZIP: Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\)/)).toBeVisible();
+  await expect(page.getByText(/7 F&O, commodity and currency lines added up as business income/)).toBeVisible();
+  await expect(page.getByText(/From the ZIP: Commodity \(2 lines\), Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\), F&O \(4 lines\), Currency \(1 line\)/)).toBeVisible();
   const check = page.getByRole("list", { name: "Totals checked against your broker's summary" });
-  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(3);
+  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(9);
+  await expect(check.getByText(/F&O turnover: ₹3,788 netted per contract/)).toBeVisible();
   const left = page.getByRole("list", { name: "Files left out" });
-  for (const seg of ["F&O.csv", "Commodity.csv", "Currency.csv", "Non Equity.csv"]) await expect(left.getByText(seg, { exact: false })).toBeVisible();
-  await expect(left.getByText(/business income/).first()).toBeVisible();
+  await expect(left.getByText("Non Equity.csv", { exact: false })).toBeVisible();
+  await expect(left.getByText("F&O.csv", { exact: false })).toHaveCount(0);
   // the only year with sales opens by itself
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
   await expect(page.getByText("2 same-day round trips", { exact: false })).toBeVisible();
   await expect(page.getByText("Estimate only.")).toHaveCount(1);
+  await expect(page.getByText(/advance tax and TDS already paid aren't included/)).toBeVisible();
+
+  // the total, at the top of the year, with where it comes from
+  const total = page.getByRole("region", { name: "Total tax estimate" });
+  await expect(total.getByRole("heading", { name: "Total tax estimate, FY 2024-25" })).toBeVisible();
+  const chips = total.getByRole("list", { name: "Where the tax comes from" });
+  await expect(chips.getByRole("listitem")).toHaveCount(4);
+  for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("listitem").filter({ hasText: c })).toHaveCount(1);
+  await expect(total.getByText(/no other income entered yet/)).toBeVisible();
+  await expect(total.getByRole("table", { name: "Total tax breakdown" }).getByText("Estimated total tax")).toBeVisible();
+  // F&O by segment, and the return and audit facts
+  const segs = page.getByRole("table", { name: "F&O by segment" });
+  for (const s of ["F&O", "Commodity", "Currency"]) await expect(segs.getByText(s, { exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "F&O by underlying" }).getByText("BANKNIFTY")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Returns and tax audit" }).getByText(/ITR-3/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // other income and the regime: saved, and the estimate follows
+  await total.getByRole("textbox", { name: "Other income", exact: true }).fill("1500000");
+  await total.getByRole("textbox", { name: "Of which salary", exact: true }).fill("1200000");
+  await total.getByRole("radio", { name: "Old" }).click();
+  await expect(total.getByRole("textbox", { name: "Deductions", exact: true })).toBeVisible();
+  await total.getByRole("textbox", { name: "Deductions", exact: true }).fill("150000");
+  if (info.project.name === "phone") await touchable(page);
+  await total.getByRole("button", { name: "Save and update" }).click();
+  await expect(page.getByText("Saved. The estimate is updated.")).toBeVisible();
+  await expect(total.getByText(/^Old regime/)).toBeVisible();
+  await expect(total.getByText(/With the same figures, the new regime works out to/)).toBeVisible();
+  await expect(total.getByText(/Deductions you entered \(80C and the like\): ₹1,50,000/)).toBeVisible();
+  const amount = await total.getByLabel("Estimated total tax").innerText();
+  expect(Number(amount.replace(/[^\d]/g, ""))).toBeGreaterThan(100000);
+  await expect(total.getByText(/Covers only the income you enter or import here/)).toBeVisible();
+  await expect(total.getByText(/Rules for this year not yet confirmed/)).toHaveCount(0);
+  await total.getByRole("link", { name: "Which return and whether a tax audit applies" }).click();
+  await expect(page.getByRole("list", { name: "Returns and tax audit" })).toBeInViewport();
+  await expect(page.locator("#tax-filing").getByRole("link", { name: "incometax.gov.in" })).toHaveAttribute("href", /incometax\.gov\.in/);
+
+  // age and residency: both with their notes, saved per year, and the estimate follows
+  await expect(total.getByRole("radio", { name: "Below 60", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(total.getByRole("radio", { name: "Yes", exact: true })).toHaveAttribute("aria-checked", "true");
+  await total.getByRole("button", { name: "About age" }).click();
+  await expect(page.getByText(/₹3 lakh from 60 to 79 and ₹5 lakh from 80/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await total.getByRole("button", { name: "About residency" }).click();
+  await expect(page.getByText(/A non-resident gets no section 87A rebate/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await total.getByRole("radio", { name: "60–79", exact: true }).click();
+  if (info.project.name === "phone") await touchable(page);
+  await total.getByRole("button", { name: "Save and update" }).click();
+  await expect(total.getByText(/resident, aged 60 to 79/)).toBeVisible();
+  await expect(total.getByText(/the old regime's basic exemption is ₹3,00,000/)).toBeVisible();
+  const senior = Number((await total.getByLabel("Estimated total tax").innerText()).replace(/[^\d]/g, ""));
+  expect(senior).toBeLessThan(Number(amount.replace(/[^\d]/g, "")));
+  await total.getByRole("radio", { name: "No", exact: true }).click();
+  await total.getByRole("button", { name: "Save and update" }).click();
+  await expect(total.getByText(/non-resident, aged 60 to 79/)).toBeVisible();
+  await expect(total.getByText("TDS on NRI sales is deducted by the broker; this estimate does not reconcile TDS.").first()).toBeVisible();
+  await expect(total.getByText(/Non-resident: no section 87A rebate/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await page.reload();
+  await settle(page);
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("textbox", { name: "Other income", exact: true })).toHaveValue("1500000");
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("radio", { name: "60–79", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("radio", { name: "No", exact: true })).toHaveAttribute("aria-checked", "true");
+
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/you should|we suggest|recommend|better off|switch to/i);
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
+  const csv = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  expect((await csv).suggestedFilename()).toBe("stratlab-tax-FY-2024-25.csv");
   expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
 });
 
@@ -559,6 +631,101 @@ test("the tools grid shows one group until asked, and the menu reaches Account w
   await expect(page.getByRole("button", { name: "Paper trade options" })).toBeVisible();
   if (info.project.name === "desktop") await expect(page.getByRole("link", { name: /^Account/ })).toBeInViewport();
   await sane(page, errors);
+});
+
+// ---------- the sidebar menu ----------
+/** On a phone the menu is a drawer: open it. */
+async function menu(page: Page, phone: boolean) {
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 1500 }).catch(() => undefined);   // the experience question
+  if (phone) await page.getByRole("button", { name: "Open menu" }).click();
+  const side = page.locator("aside.sidebar");
+  await expect(side.getByRole("navigation", { name: "Main" })).toBeVisible();
+  return side;
+}
+
+test("the menu: a few short groups, Scans and Watchlist each one entry with tabs, old links still open", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/research", "Companies");
+  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); });
+  let side = await menu(page, phone);
+  const main = side.getByRole("navigation", { name: "Main" });
+  for (const g of ["Research", "Portfolio", "Watch", "Notebooks", "Trading"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
+  // eleven entries in the groups, where there were fifteen flat ones; the old separate entries are gone
+  await expect(main.locator(".side-nav a")).toHaveCount(11);
+  for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance", "My Holdings"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
+  // Account and Admin sit at the bottom, with the markets folded to one line
+  const bottom = side.locator(".side-bottom");
+  await expect(bottom.getByRole("link", { name: /^Account/ })).toBeVisible();
+  await expect(bottom.getByRole("link", { name: "Admin" })).toBeVisible();
+  await expect(bottom.locator(".mkt-box > summary")).toHaveText(/^\d+ of \d+ markets open/);
+  await expect(bottom.locator(".mkt-grid")).toBeHidden();
+  if (phone) for (const el of await side.locator("a, button, summary").all()) {
+    const b = await el.boundingBox();
+    if (b && b.height) expect(b.height, `"${(await el.innerText()).slice(0, 30)}" is too small to tap`).toBeGreaterThanOrEqual(32);
+  }
+
+  // Scans: one entry, four tabs, each tab its own address
+  await main.getByRole("link", { name: "Scans" }).click();
+  await expect(page).toHaveURL(/\/research\/scan$/);
+  const tabs = page.getByRole("navigation", { name: "Scans" });
+  await expect(tabs.getByRole("link")).toHaveText(["Trend scan", "Screener", "Sector rotation", "Red flags"]);
+  await tabs.getByRole("link", { name: "Sector rotation" }).click();
+  await expect(page).toHaveURL(/\/research\/rotation$/);
+  await expect(tabs.getByRole("link", { name: "Sector rotation" })).toHaveAttribute("aria-current", "page");
+  // the entry reopens the tab you left, and the old addresses still work
+  await page.goto("/research/scans");
+  await expect(page).toHaveURL(/\/research\/rotation$/);
+  await page.goto("/research/filings");
+  await expect(page.getByText("Filings and red flags").first()).toBeVisible({ timeout: 30_000 });
+  side = await menu(page, phone);
+  await expect(side.getByRole("link", { name: "Scans" })).toHaveClass(/active/);
+  await expect(side.getByRole("link", { name: "Companies" })).not.toHaveClass(/active/);    // one entry lit at a time
+
+  // Watchlist: the list and "at a glance" are two tabs of one entry
+  await side.getByRole("link", { name: "Watchlist" }).click();
+  await expect(page).toHaveURL(/\/research\/watchlist$/);
+  const views = page.getByRole("navigation", { name: "Watchlist" });
+  await views.getByRole("link", { name: "At a glance" }).click();
+  await expect(page).toHaveURL(/\/research\/investor$/);
+  await page.goto("/watchlist");
+  await expect(page).toHaveURL(/\/research\/watchlist$/);
+  await page.goto("/research/scan");
+  await expect(page.getByText("Stage 2").first()).toBeVisible({ timeout: 30_000 });
+
+  // a group folds, by mouse or keyboard, and stays folded on this device; so do the markets
+  side = await menu(page, phone);
+  const trading = side.getByRole("button", { name: "Trading", exact: true });
+  await expect(trading).toHaveAttribute("aria-expanded", "true");
+  await trading.click();
+  await expect(trading).toHaveAttribute("aria-expanded", "false");
+  await expect(side.getByRole("link", { name: "Paper trading" })).toBeHidden();
+  await side.locator(".mkt-box > summary").click();
+  await expect(side.locator(".mkt-grid")).toBeVisible();
+  // the open state is saved by the toggle event, which fires a moment after the click: wait for it before reloading
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("stratlab.markets.open"))).toBe("1");
+  await page.reload();
+  side = await menu(page, phone);
+  await expect(side.getByRole("button", { name: "Trading", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(side.locator(".mkt-grid")).toBeVisible();
+  // the keyboard: Tab from the search button lands on the first group, with a visible focus ring, and Enter folds it
+  await side.getByRole("button", { name: /Ask or do anything/ }).focus();
+  await page.keyboard.press("Tab");
+  const first = side.locator(".side-toggle").first();
+  await expect(first).toBeFocused();
+  expect(await first.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+  const was = await first.getAttribute("aria-expanded");
+  await page.keyboard.press("Enter");
+  await expect(first).toHaveAttribute("aria-expanded", was === "true" ? "false" : "true");
+  await page.keyboard.press("Enter");
+  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.markets.open"); });
+  await sane(page, errors);
+});
+
+test("the menu shows Admin only to admins", async ({ page }, info) => {
+  await open(page, "/research", "Companies", sessionAs("free-token", "u-free", "free@example.com"));
+  const side = await menu(page, info.project.name === "phone");
+  await expect(side.getByRole("link", { name: /^Account/ })).toBeVisible();
+  await expect(side.getByRole("link", { name: "Admin" })).toHaveCount(0);
 });
 
 // ---------- sharing: company fact cards and invite links ----------
@@ -940,14 +1107,71 @@ test("admin: the whole-market audit tells facts and companies not checked yet ap
   const errors = await open(page, "/admin?tab=checks", "Whole market: India");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
   const india = page.locator("section", { hasText: "Whole market: India" });
-  await expect(india.getByText("1 facts · 2 not checked yet")).toBeVisible();
+  await expect(india.getByText("0 gaps · 0 errors · 1 fact · 2 not checked yet")).toBeVisible();
   await india.getByRole("radio", { name: "Facts" }).click();
   await expect(india.getByText("Only 2 years of annual results so far")).toBeVisible();
   await india.getByRole("radio", { name: "Not checked yet" }).click();
   await expect(india.getByText("Tiny Co Ltd")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
-  await india.getByRole("button", { name: "Re-check 2 not checked yet" }).click();
+  await india.getByRole("button", { name: "Re-check the 2 not checked yet" }).click();
   await expect.poll(() => sent).toEqual([{ region: "IN", retry: true }]);
   await expect(india.getByText("Re-checking companies not checked yet:")).toBeVisible();
+  await sane(page, errors);
+});
+
+test("admin: the whole-market audit starts, pauses, resets, re-checks one company and shows BSE waiting", async ({ page }, info) => {
+  const sent: Record<string, unknown>[] = [];
+  const err = { symbol: "ACME", name: "Acme Ltd", seconds: 2, issues: [{ level: "error", area: "Numbers", detail: "Revenue or profit missing for Mar 2024" }] };
+  const summary = (n: number) => ({ companies: n, clean: 0, mismatches: 1, gaps: 1, errors: n ? 1 : 0, facts: 0, pending: 0, avg_seconds: 2, slowest: [],
+    by_area: n ? { Numbers: { mismatch: 1, gap: 1, error: 1, fact: 0, pending: 0 } } : {} });
+  let s = { enabled: false, paused: "off", listed: 5058, checked: 3844, due: 0, current: null, eta_hours: null, rate_per_hour: 0, list_at: null, list_error: null,
+    full: { running: true, since: new Date(Date.now() - 7 * 3600e3).toISOString(), done_at: null, left: 1214, checked: 3844, everything: true, pending_only: false },
+    monthly: { on: true, last: "2026-10", next: "2026-11-01" }, retry: { waiting: 1868, due: 0, next: new Date(Date.now() + 40 * 60e3).toISOString(), gap_hours: 1, batch: 20 },
+    bse: { refusing: true, waiting: 1868 }, pending: 1911, new_listings: [], rows: [err], summary: summary(1) } as Record<string, unknown>;
+  await page.route((u) => u.pathname === "/admin/audit/market", async (r) => {
+    const req = r.request();
+    const body = req.method() === "POST" ? req.postDataJSON() : null;
+    const us = body ? body.region === "US" : new URL(req.url()).searchParams.get("region") === "US";
+    if (body && !us) {
+      sent.push(body);
+      if ("on" in body) s = { ...s, enabled: body.on, paused: body.on ? null : "off" };
+      if (body.reset) s = { ...s, enabled: true, paused: null, checked: 0, due: 5058, rate_per_hour: 0, rows: [], summary: summary(0),
+        full: { running: true, since: new Date().toISOString(), done_at: null, left: 5058, checked: 0, everything: true, pending_only: false } };
+      if ("monthly" in body) s = { ...s, monthly: { on: body.monthly, last: "2026-10", next: body.monthly ? "2026-11-01" : null } };
+    }
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(us ? { ...s, bse: undefined, rows: [], summary: summary(0), full: { ...(s.full as object), running: false } } : s) });
+  });
+  const errors = await open(page, "/admin?tab=checks", "Whole market: India");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);
+  const india = page.locator("section", { hasText: "Whole market: India" });
+  // paused, and why; a clear Start button
+  await expect(india.getByText("Paused: switched off. Press Start to check companies.")).toBeVisible();
+  await expect(india.getByText(/Full check: 3,844 of 5,058 done/)).toBeVisible();
+  await expect(india.getByRole("progressbar", { name: "Full check India" })).toBeVisible();
+  await expect(india.getByText("1 mismatch", { exact: true })).toBeVisible();
+  await expect(india.getByText("1 gap · 1 error")).toBeVisible();
+  await expect(india.getByText(/BSE is refusing requests from this server; 1,868 companies waiting/)).toBeVisible();
+  await expect(india.getByText("Next full check: 1 Nov")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await india.getByRole("button", { name: "Start the India check" }).click();
+  await expect(india.getByRole("button", { name: "Pause the India check" })).toBeVisible();
+  await expect.poll(() => sent).toEqual([{ region: "IN", on: true }]);
+  // an error row: its reason, and a re-check of that one company
+  await india.getByRole("radio", { name: "Errors" }).click();
+  await expect(india.getByText("Revenue or profit missing for Mar 2024")).toBeVisible();
+  await india.getByRole("button", { name: "Re-check Acme Ltd" }).click();
+  await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", recheck: "ACME" });
+  // the monthly check can be switched off
+  await india.getByRole("checkbox", { name: "Full re-check on the 1st of each month" }).click();
+  await expect(india.getByText("Only new listings, until you reset")).toBeVisible();
+  // reset asks first: dismissed does nothing, accepted clears and starts from 0
+  page.once("dialog", (d) => d.dismiss());
+  await india.getByRole("button", { name: "Reset and check everything again" }).click();
+  expect(sent.some((b) => b.reset)).toBe(false);
+  page.once("dialog", (d) => { expect(d.message()).toContain("Clear every stored result for India"); d.accept(); });
+  await india.getByRole("button", { name: "Reset and check everything again" }).click();
+  await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", reset: true });
+  await expect(india.getByText(/Full check: 0 of 5,058 done/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });

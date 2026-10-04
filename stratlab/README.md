@@ -12,7 +12,7 @@ A research notebook for traders: describe a strategy in plain words, test it on 
 
 Rupee prices include 18% GST (the invoice backs it out). US dollars, euros and pounds have their own prices; other currencies follow the rupee price.
 
-| | Free | Basic, ₹499/mo (₹4,990/yr), $8/mo | Pro, ₹1,499/mo (₹14,990/yr), $20/mo |
+| | Free | Basic, ₹699/mo (₹6,999/yr), $8/mo | Pro, ₹1,999/mo (₹19,999/yr), $20/mo |
 |---|---|---|---|
 | Backtests (each with a verdict; walk-forward and the similar-stocks check count as one each) | 10 per month | 100 per month | Unlimited |
 | AI strategy builds | 10 per month | 100 per month | Unlimited (200 a day safety cap) |
@@ -22,9 +22,9 @@ Rupee prices include 18% GST (the invoice backs it out). US dollars, euros and p
 | Company decks (PowerPoint or PDF) | 1 per month | 5 per month | Unlimited |
 | Stock alerts on at once / saved screens / holdings kept | 5 / 2 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
 | Feature flags (`features` in plans.py) | – | `indicators` (all 20+), `group_live`, `options`, `alerts` (trade notifications), `daily_report`, `newsletter` (daily editions of both newsletters), `scans`, `filings` (watchlist red flags and alert), `investor_home` | all, plus `fno` (Indian F&O), `options_signal`, `fast_entries`, `export` |
-| For everyone | Sector rotation, red flags on any company page, screens, results calendar, weekly Market Brief and My Stocks, public pages and share cards | same | same |
+| For everyone | Every market, company pages, sector rotation, red flags on any company page, screens, results calendar, corporate actions, deals and insider trades, surveillance lists, My Holdings, the tax report, weekly Market Brief and My Stocks, public pages, share cards and invite rewards | same | same |
 
-Monthly counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them.
+Monthly counts reset on the 1st of each month (IST). Limits are enforced on the server; the frontend only mirrors them, from `frontend/src/lib/plans.ts` (the landing page and Plans), and `backend/tests/test_plan_copy.py` fails when that copy drifts from `plans.py`.
 
 **Early access:** until Razorpay is fully configured (the keys and both monthly plan IDs), every plan gets every feature, groups of up to 50 and unlimited deep dives and decks, because nobody can buy a plan yet. The monthly backtest and AI-build limits and the paper-trading counts still apply. As soon as they're all set, each feature locks to its plan, with no code change. The server checks every gate (`allows()` in plans.py), and a session a plan no longer covers after a downgrade is stopped within a minute.
 
@@ -65,7 +65,7 @@ To test the credentials straight away, press **Run the automatic login now** on 
 
 ### 3. Razorpay (optional, for paid plans)
 Leave the Razorpay settings empty and the Plans page shows the paid plans as "Coming soon", with everyone on Free. To take payments:
-1. In the dashboard, create two **monthly plans**, Basic ₹499 (49900 paise) and Pro ₹1,499 (149900 paise), and put their IDs in `RAZORPAY_PLAN_BASIC` and `RAZORPAY_PLAN_PRO`. For yearly billing (two months free), also create **yearly plans**, Basic ₹4,990 (499000 paise) and Pro ₹14,990 (1499000 paise), in `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`. The amounts include GST. To charge US dollars directly, create USD plans of $8 and $20 a month ($80 and $200 a year; 800, 2000, 8000 and 20000 cents) and put their IDs on the USD row in Admin → Prices. The Plans page shows the Monthly/Yearly switch only when both yearly IDs are set.
+1. In the dashboard, create two **monthly plans**, Basic ₹699 (69900 paise) and Pro ₹1,999 (199900 paise), and put their IDs in `RAZORPAY_PLAN_BASIC` and `RAZORPAY_PLAN_PRO`. For yearly billing (two months free), also create **yearly plans**, Basic ₹6,999 (699900 paise) and Pro ₹19,999 (1999900 paise), in `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`. The amounts include GST. To charge US dollars directly, create USD plans of $8 and $20 a month ($80 and $200 a year; 800, 2000, 8000 and 20000 cents) and put their IDs on the USD row in Admin → Prices. The Plans page shows the Monthly/Yearly switch only when both yearly IDs are set.
 2. Enable **Subscriptions** on your account.
 3. Add a webhook to `https://YOUR-BACKEND/billing/webhook` with a secret, and put that secret in `.env`. Subscribe to these events:
    - `subscription.activated`
@@ -86,7 +86,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 
    The business name and contact email are set in `frontend/public/config.js` (`BUSINESS_NAME`, `CONTACT_EMAIL`; add `BUSINESS_ADDRESS` if you want one listed). Read the four pages once and adjust the refund terms if you want a different policy.
 2. **Switch to Live mode** in the dashboard, then repeat the Test Mode setup there: live plans cannot see test plans.
-   - Create the plans again: Basic ₹499 and Pro ₹1,499 monthly, plus ₹4,990 and ₹14,990 yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
+   - Create the plans again: Basic ₹699 and Pro ₹1,999 monthly, plus ₹6,999 and ₹19,999 yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
    - Generate live API keys.
    - Add the webhook again with a new secret.
 3. **Set the live values in Railway → Variables:**
@@ -101,7 +101,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 4. **What changes at that moment:** paid features lock to each plan. Until the keys **and** both monthly plan IDs are set, everyone keeps every feature. Anyone using Pro features on Free loses them. To soften the switch, start the **Launch offer** on the Admin page: every user gets every Pro feature free for the days you choose (10 by default), while payments keep working. When it ends, each user goes back to their own plan within a minute; sessions their plan doesn't cover are stopped with a message. You can also grant individual users Pro by hand (Change plan → 30 or 90 days).
 5. **Check it once for real:** buy Basic with your own account, confirm the Account page shows it and the Admin page lists you as paying, then cancel from Account (you keep it until the period ends). Refund yourself from the Razorpay dashboard if you like.
 
-### 4. AI builder (all plans) and alerts (Pro)
+### 4. AI builder (all plans) and alerts (Basic and Pro)
 - **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order until one answers, so a rate limit or outage at one moves on to the next (the order for each kind of job is below). All but Anthropic have free tiers. Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
   - `GROQ_API_KEY` from console.groq.com: free and the fastest. A good first choice.
   - `CEREBRAS_API_KEY` from cloud.cerebras.ai: free and very fast.
@@ -184,11 +184,7 @@ Set `ADMIN_EMAILS` to your Google email (several can be comma-separated) and red
 - Frontend: add `SENTRY_DSN: "…"` to `public/config.js` for errors in people's browsers. You can use a second Sentry project (platform: Browser JavaScript). The Sentry code only downloads when a DSN is set.
 - Nothing personal is sent: no emails, IP addresses or request bodies.
 
-**Usage analytics by PostHog (optional, free tier):** sign up at posthog.com and pick the **EU** cloud. In the project's settings, copy the **Project API key** (starts `phc_`, public by design; not a personal API key), and turn on "Discard client IP data".
-- Frontend: set `POSTHOG_KEY: "phc_…"` in `public/config.js`, or `VITE_POSTHOG_KEY` in Vercel's environment variables and redeploy. With no key nothing downloads and nothing is sent. `POSTHOG_HOST` defaults to `https://eu.i.posthog.com`; for a US project set it to `https://us.i.posthog.com` and change that host in the CSP in `vercel.json` and `netlify.toml`.
-- Backend: set `POSTHOG_KEY` (the same key) in Railway, so "payment completed" is counted from the server. `POSTHOG_HOST` likewise.
-- What's sent: page views (addresses without queries or ids) and funnel events (signed up, onboarding answered, first backtest run, backtest run, paper trading started, watchlist add, deep dive opened, alert created, holdings imported, screen run, screen saved, newsletter subscribed, card shared, invite link shared, upgrade clicked, checkout started, payment completed), tied to the internal user id. No recordings, no autocapture, no emails, names, symbols held or amounts. Browsers sending Do Not Track are skipped. All events go through `track()` in `frontend/src/lib/analytics.ts`.
-- Admin → Overview links to the PostHog dashboard once a key is set.
+**Usage analytics by PostHog (optional, free tier)** and the rest of running the site (the Admin tabs, **Check every feature**, the data audits, email, invite-reward reviews, prices and invoices) are in [docs/ADMIN.md](../docs/ADMIN.md). In short: the project API key (`phc_…`) goes in `public/config.js` as `POSTHOG_KEY` with `POSTHOG_HOST` (the production project is on the US cloud, `https://us.i.posthog.com`, the default), and the same key as `POSTHOG_KEY` on Railway counts completed payments from the server. With no key nothing is downloaded or sent.
 
 Everyone else gets a 403 from the `/admin` API and never sees the link. The email must be verified, which Google sign-in always is.
 

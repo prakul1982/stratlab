@@ -305,7 +305,7 @@ def test_every_broker_combined_into_one_report(w):
     rep = c.get("/tax", headers=PRO).json()
     assert rep["trades"] == 27 and len(rep["files"]) == 8 and rep["disclaimer"].startswith("An estimate")
     y = next(y for y in rep["years"] if y["fy"] == 2024)
-    assert y["intraday"] == {"count": 1, "buy": 36000.0, "sell": 36300.0, "pnl": 300.0}         # INFY bought and sold the same day
+    assert y["intraday"] == {"count": 1, "buy": 36000.0, "sell": 36300.0, "pnl": 300.0, "turnover": 300.0}       # INFY bought and sold the same day
     rel = [r for r in y["rows"] if r["key"] == "RELIANCE"]
     assert [(r["qty"], r["term"], r["rate"]) for r in rel] == [(8, "LT", 0.10), (2, "LT", 0.125), (5, "LT", 0.125)]
     wipro = next(r for r in y["rows"] if r["key"] == "WIPRO")

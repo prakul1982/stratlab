@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import holdings, holdings_file, tax_export, tax_lots
+from . import holdings, holdings_file, tax_export, tax_lots, tax_total
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
@@ -65,7 +65,7 @@ from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
-from .models import CorpActionReq, TaxFmvReq, TaxImportReq
+from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
@@ -1488,12 +1488,16 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
         p["insider"] = None
     cut = (datetime.now(IST).date() - timedelta(days=366 * years)).isoformat()
     docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
-    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": price_trend(sym, "US")}
+    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": price_trend(sym, "US"),
+            "quote": {"price": m.get("price"), "prev_close": m.get("prev_close")} if m.get("price") else None}
 
 
 def deep_years(years: int) -> int:
     lo, hi = report_card.YEARS
     return max(lo, min(hi, int(years or 2)))
+
+
+BSE_WAIT = "Documents are not available from BSE right now (it is turning requests away). Try again later."
 
 
 def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True) -> dict:
@@ -1511,7 +1515,9 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
         items = filings_feed.announcements(sym, max(deepdive.DOC_DAYS, 366 * years))
         doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:
-        items, doc_note, fsum = [], public_text(str(e)), None
+        # a company listed only on BSE, and BSE turning this server away: its documents wait, they aren't missing
+        note = BSE_WAIT if code and getattr(e, "busy", False) else str(e)
+        items, doc_note, fsum = [], public_text(note), None
     insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
     trend, why = price_status(sym)
     cut = (datetime.now(IST) - timedelta(days=366 * years)).strftime("%Y-%m-%dT%H:%M")
@@ -2115,13 +2121,15 @@ def tax_inputs(profile) -> dict:
         except Exception:
             live = False
     return {"data": data, "trades": trades, "acts": acts, "fmv": fmv, "fmv_src": fmv_src, "pre": pre, "quotes": quotes,
-            "live": live, "items": holdings.indian(holdings.load(uid)["items"]), "today": today.isoformat()}
+            "live": live, "items": holdings.indian(holdings.load(uid)["items"]), "today": today.isoformat(), "business": data["business"],
+            "income": tax_total.load_inputs(uid)}
 
 
 def tax_view(profile) -> dict:
     i = tax_inputs(profile)
-    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"])
+    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"])
     return {**rep, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
+            "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
             "max_trades": tax_lots.MAX_TRADES}
@@ -2145,8 +2153,8 @@ async def tax_import(request: Request, filename: str = Query("", max_length=200)
     """Read a tradebook, a tax P&L file or the ZIP of them from the user's broker (or a plain CSV of trades) and save
     its trades with the ones already uploaded, duplicates dropped. Lines that can't be read are listed with the reason.
 
-    The file comes as the request body itself (10 MB at most; the file name and mode in the query), which the page
-    sends, or as base64 in JSON ({filename, data, mode}), the older way."""
+    The file comes as the request body itself (10 MB at most, 20 MB for an F&O, commodity or currency file; the file
+    name and mode in the query), which the page sends, or as base64 in JSON ({filename, data, mode}), the older way."""
     body = await request.body()             # the guard has already held the body to its size
     if request.headers.get("content-type", "").split(";")[0].strip().lower() == "application/json":
         try:
@@ -2154,12 +2162,18 @@ async def tax_import(request: Request, filename: str = Query("", max_length=200)
         except ValidationError as e:
             raise RequestValidationError(e.errors(include_url=False, include_context=False)) from None
         filename, mode = req.filename, req.mode
-        data = upload_bytes(req.data, TAX_TOO_BIG, holdings_file.TAX_MAX_BYTES)
+        data = upload_bytes(req.data, TAX_TOO_BIG, tax_cap(filename))
     else:
-        if len(body) > holdings_file.TAX_MAX_BYTES:
-            err(413, "file_too_big", f"That file is larger than {holdings_file.TAX_MAX_BYTES // (1024 * 1024)} MB. {TAX_TOO_BIG}")
+        cap = tax_cap(filename)
+        if len(body) > cap:
+            err(413, "file_too_big", f"That file is larger than {cap // (1024 * 1024)} MB. {TAX_TOO_BIG}")
         data = body
     return await run_in_threadpool(tax_import_file, profile, data, filename, mode)
+
+
+def tax_cap(filename: str) -> int:
+    """The biggest file the tax import takes: an F&O, commodity or currency file (by its name) runs larger."""
+    return holdings_file.FNO_MAX_BYTES if holdings_file.business_kind(filename) and not re.search(r"(?i)\.zip$", filename or "") else holdings_file.TAX_MAX_BYTES
 
 
 def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
@@ -2174,13 +2188,19 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     merged, added, dup = tax_lots.merge(old, trades)
     over = max(0, len(merged) - tax_lots.MAX_TRADES)
     files = [] if mode == "replace" else before["files"]
-    if added:
+    business, b_added, b_replaced, b_same = tax_lots.merge_business([] if mode == "replace" else before["business"],
+                                                                   parsed.get("business") or [])
+    lines = sum(f["lines"] for f in parsed.get("files", []) if f["section"] in holdings_file.SEGMENT_NAMES.values()) or \
+        sum(b["trades"] for b in parsed.get("business") or [])
+    if added or b_added or b_replaced:
         files = files + [{"name": (filename or "file")[:80], "broker": parsed["broker"], "kind": parsed["kind"], "trades": added,
-                          "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}]
-        tax_lots.save(profile["id"], merged, files, before["fmv"])
+                          "fno_lines": lines if (b_added or b_replaced) else 0, "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}]
+        tax_lots.save(profile["id"], merged, files, before["fmv"], business)
     elif mode == "replace":
-        tax_lots.save(profile["id"], merged, files, before["fmv"])
+        tax_lots.save(profile["id"], merged, files, before["fmv"], business)
     return ok({"broker": parsed["broker"], "kind": parsed["kind"], "read": len(trades), "added": added, "duplicates": dup,
+               "business": {"lines": lines, "added": b_added, "replaced": b_replaced, "same": b_same,
+                            "years": sorted({b["fy"] for b in parsed.get("business") or []})},
                "over_limit": over, "problems": parsed["problems"][:200], "problem_count": len(parsed["problems"]),
                "not_listed": missed[:50], "skipped": parsed.get("skipped", []), "check": parsed.get("check", []),
                "files": parsed.get("files", []), "report": tax_view(profile)})
@@ -2197,14 +2217,25 @@ def tax_fmv(req: TaxFmvReq, profile=Depends(current_profile)):
     fmv = {k: v for k, v in data["fmv"].items() if k != key}
     if req.fmv:
         fmv[key] = round(float(req.fmv), 4)
-    tax_lots.save(profile["id"], data["trades"], data["files"], fmv)
+    tax_lots.save(profile["id"], data["trades"], data["files"], fmv, data["business"])
+    return ok(tax_view(profile))
+
+
+@app.put("/tax/inputs")
+def tax_income(req: TaxInputsReq, profile=Depends(current_profile)):
+    """Save what the total tax estimate needs for one financial year: the regime, other income (and how much of it
+    is salary), deductions under the old regime, the age band and residency. Kept with the user's tax data and
+    deleted with it."""
+    throttle(profile, "tax_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
+    tax_total.save_inputs(profile["id"], req.fy, req.model_dump(exclude={"fy"}))
     return ok(tax_view(profile))
 
 
 @app.delete("/tax")
 def tax_delete(profile=Depends(current_profile)):
-    """Delete my tax data: every uploaded trade and file, at once."""
+    """Delete my tax data: every uploaded trade and file, and the income entered for the estimate, at once."""
     tax_lots.delete(profile["id"])
+    tax_total.delete_inputs(profile["id"])
     return {"deleted": True}
 
 
@@ -2215,7 +2246,7 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
     c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
-    y = tax_lots.year(fy, c["realised"], c["intraday"], limit=None)
+    y = tax_lots.with_total(tax_lots.year(fy, c["realised"], c["intraday"], limit=None), i["business"], i["income"].get(fy))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":
         below = tax_lots.below_cost(c["open"], i["quotes"], i["today"]) if fy == tax_lots.fy_of(i["today"]) else None
@@ -3329,12 +3360,14 @@ market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: b
 def _sec_companies() -> list[dict]:
     """Every operating company that files with the SEC, once each: its main ticker, not its preferred shares,
     warrants, rights or units (the SEC lists those too, under the same company: ACON's warrant is ACONW, its preferred
-    ACON-PA). Funds, ETFs, commodity trusts and blank-check companies (SPACs) are left out, as BSE's debt and ETF
-    codes are in India: they have no business to check."""
+    ACON-PA). A company whose only tickers are preferred shares and the like (AHL-PD, once its common stock left the
+    exchange) is left out too: there's no common stock to check. Funds, ETFs, commodity trusts and blank-check
+    companies (SPACs) are left out, as BSE's debt and ETF codes are in India: they have no business to check."""
     names = sec_feed.tickers()
     by_cik: dict[int, list[str]] = {}
     for t, v in names.items():
-        by_cik.setdefault(v["cik"], []).append(t)
+        if not sec.non_common(t):
+            by_cik.setdefault(v["cik"], []).append(t)
     out = []
     for tickers in by_cik.values():
         if sec.not_operating(names[tickers[0]]["name"]):
@@ -3355,22 +3388,50 @@ def market_for(region: str):
 def admin_market_audit(region: str = "IN", _=Depends(admin.admin_profile)):
     """The whole-market audit: new listings in India, NSE and BSE-only (or new SEC filers), checked in the background
     while switched on."""
-    return market_for(deep_region(region)).status()
+    return market_status(deep_region(region))
+
+
+def bse_waiting(rows: list[dict]) -> int:
+    """Companies listed only on BSE whose documents are waiting because BSE turned the request away."""
+    return sum(1 for r in rows if str(r.get("symbol") or "").startswith("BSE:")
+               and any(i.get("level") == "pending" and i.get("area") == "Documents" for i in r.get("issues") or []))
+
+
+def market_status(region: str) -> dict:
+    """The whole-market audit's state, and for India whether BSE is turning this server away and how many companies
+    listed only there are waiting for their documents."""
+    out = market_for(region).status()
+    if region == "IN":
+        bse = getattr(filings_feed, "bse", None)
+        live = bse.state() if hasattr(bse, "state") else {}
+        out["bse"] = {**live, "waiting": bse_waiting(out.get("rows") or [])}
+    return out
 
 
 @app.post("/admin/audit/market")
 def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
-    """Switch the whole-market audit on or off, re-read the exchange's list now, or check every company once."""
+    """Start or pause the whole-market audit, reset it and check every company again from nothing, re-read the
+    exchange's list now, re-check the companies not checked yet or one company, or switch the monthly check."""
     m = market_for(req.region)
     if req.on is not None:
         m.set_enabled(req.on)
-    if req.full:
+    if req.monthly is not None:
+        m.set_monthly(req.monthly)
+    if req.reset:                     # every result cleared; the list read again so it starts from today's market
+        m.reset()
+        threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()
+    elif req.full:
         m.start_full()
     if req.retry:                     # only the companies a source turned away last time (the exchange refusing filings)
         m.start_full(pending=True)
-    if req.read_list:
+    if req.read_list and not req.reset:
         threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()
-    return m.status()
+    if req.recheck:
+        try:
+            m.recheck(req.recheck.strip())
+        except KeyError:
+            err(404, "not_listed", "That company isn't on the market's list.")
+    return market_status(req.region)
 
 
 @app.get("/admin/audit")

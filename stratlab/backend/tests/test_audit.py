@@ -321,12 +321,16 @@ def test_whole_market_audit_retries_a_company_whose_source_was_down(monkeypatch)
         a.set_enabled(True)
         assert [a.step(), a.step(), a.step()] == ["AAA", "BBB", None]          # AAA failed: not straight away again
         old = (datetime.now(timezone.utc) - timedelta(hours=audit.RETRY_HOURS + 1)).isoformat()
-        a.rows["AAA"]["at"] = old                                               # six hours on
+        a.rows["AAA"]["at"] = old                                               # an hour on
         assert a.queue() == ["AAA"] and a.step() == "AAA" and a.rows["AAA"]["tries"] == 2
         a.rows["AAA"]["at"] = old
+        assert a.queue() == []                                                  # the batch is through: it rests
+        assert a.state["retry"]["gap"] == 2 and a.state["retry"]["last"] == {"tried": 1, "refused": 1}   # all refused: twice as long
+        a.state["retry"]["next"] = old                                          # the rest is over
         assert a.step() == "AAA" and a.rows["AAA"]["tries"] == 3
         a.rows["AAA"]["at"] = old
-        assert a.queue() == []                                                  # three tries: left as it is
+        a.state["retry"]["next"] = old
+        assert a.queue() == []                                                  # three tries of an error: left as it is
         assert audit._transient({"issues": [{"level": "mismatch", "area": "Numbers"}]}) is False   # wrong data isn't retried
     finally:
         w["close"]()

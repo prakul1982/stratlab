@@ -1,4 +1,5 @@
-"""The ZIP a broker gives for its tax P&L: the equity files read and checked against the summary sheet, the other
+"""The ZIP a broker gives for its tax P&L: the equity files read and checked against the summary sheet, F&O,
+commodity and currency streamed into per-year totals and checked against the workbook's sheets for them, the other
 segments left out by name and unread, each tax P&L line kept with its own buy, the bigger upload limits, and hostile
 ZIPs (bombs, ZIPs inside ZIPs, paths that climb out, too many files, password-protected, damaged)."""
 import base64
@@ -54,13 +55,17 @@ def send(c, data: bytes, name: str = "taxpnl.zip", mode: str = "add", headers=PR
 def test_the_zip_is_read_and_checked_against_the_summary():
     got = hf.parse_trades(ZIP.read_bytes(), ZIP.name)
     assert (got["broker"], got["kind"], len(got["trades"]), got["problems"]) == ("Zerodha", "pnl", 16, [])
-    assert [(f["section"], f["lines"]) for f in got["files"]] == [("Equity short term", 3), ("Equity long term", 2), ("Equity intraday", 3)]
-    assert got["check"] == [{"section": "Equity short term", "file": 4300.0, "summary": 4300, "ok": True},
-                            {"section": "Equity long term", "file": 13000.0, "summary": 13000, "ok": True},
-                            {"section": "Equity intraday", "file": 80.0, "summary": 80, "ok": True}]
+    assert [(f["section"], f["lines"]) for f in got["files"]] == [("Commodity", 2), ("Equity short term", 3), ("Equity long term", 2),
+                                                                  ("Equity intraday", 3), ("F&O", 4), ("Currency", 1)]
+    assert got["check"][:3] == [{"section": "Equity short term", "file": 4300.0, "summary": 4300, "ok": True},
+                                {"section": "Equity long term", "file": 13000.0, "summary": 13000, "ok": True},
+                                {"section": "Equity intraday", "file": 80.0, "summary": 80, "ok": True}]
+    assert [(c["section"], c["file"], c["ok"]) for c in got["check"][3:]] == [
+        ("F&O", -1212.5, True), ("F&O turnover", 3787.5, True), ("Commodity", 1500.0, True), ("Commodity turnover", 2500.0, True),
+        ("Currency", 100.0, True), ("Currency turnover", 100.0, True)]
     skipped = {s["name"].rsplit("-", 1)[-1]: s["reason"] for s in got["skipped"]}
-    assert set(skipped) == {"Commodity.csv", "Non Equity.csv", "F&O.csv", "Currency.csv"}       # no __MACOSX junk listed
-    assert "business income" in skipped["F&O.csv"] and "other rules" in skipped["Non Equity.csv"]
+    assert set(skipped) == {"Non Equity.csv"}                                                    # no __MACOSX junk listed
+    assert "other rules" in skipped["Non Equity.csv"]
     assert not any(t["symbol"] in ("NIFTY24SEP25000CE", "GOLDBEES", "CRUDEOIL24AUGFUT") for t in got["trades"])
     wipro = next(t for t in got["trades"] if t["symbol"] == "WIPRO" and t["side"] == "B")
     assert wipro["fmv"] == 310 and wipro["d"] == "2017-06-12"                                   # 15,500 for 50 shares
@@ -70,12 +75,84 @@ def test_the_sample_zip_is_what_the_maker_writes():
     assert hf.parse_trades(M.zerodha_tax_zip(), "z.zip") == hf.parse_trades(ZIP.read_bytes(), "z.zip")
 
 
-def test_other_segments_are_never_unpacked(monkeypatch):
+def test_fno_is_streamed_and_other_segments_never_unpacked(monkeypatch):
     opened = []
     real = hf._unpack
-    monkeypatch.setattr(hf, "_unpack", lambda zf, info, budget: opened.append(info.filename) or real(zf, info, budget))
+    monkeypatch.setattr(hf, "_unpack", lambda zf, info, budget, cap=None: opened.append(info.filename) or real(zf, info, budget, cap))
     hf.parse_trades(ZIP.read_bytes())
+    # the three equity files and the workbook are unpacked; F&O, commodity and currency stream; the rest stay shut
     assert len(opened) == 4 and not any(k in n for n in opened for k in ("F&O", "Commodity", "Currency", "Non Equity", "__MACOSX"))
+
+
+# ---------- F&O, commodity and currency ----------
+def test_fno_totals_per_segment_and_year():
+    biz = {b["seg"]: b for b in hf.parse_trades(ZIP.read_bytes())["business"]}
+    f = biz["fno"]
+    assert (f["fy"], f["trades"], f["pnl"], f["turnover"], f["turnover_contract"]) == (2024, 4, -1212.5, 4587.5, 3787.5)
+    assert f["charges"] == pytest.approx(220) and f["stt"] == pytest.approx(22.5)
+    assert f["options"] == {"pnl": 1287.5, "turnover": 2087.5, "trades": 3} and f["futures"] == {"pnl": -2500, "turnover": 2500, "trades": 1}
+    assert [b["u"] for b in f["by"]] == ["BANKNIFTY", "NIFTY", "RELIANCE"]
+    assert (biz["commodity"]["pnl"], biz["commodity"]["charges"]) == (1500, pytest.approx(71.2))
+    assert biz["currency"]["pnl"] == 100
+    assert (f["first"], f["last"]) == ("2024-09-12", "2024-11-06")
+
+
+def test_fno_alone_and_other_brokers_shapes():
+    alone = hf.parse_trades(M._csv(M.TAX_FNO).encode(), EXITS + "F&O.csv")
+    assert (alone["broker"], alone["kind"], alone["trades"]) == ("Zerodha", "business", [])
+    assert alone["business"][0]["pnl"] == -1212.5
+    # another broker's F&O P&L of the obvious shape, named or not: contract, exit date, buy and sell values
+    other = M._csv([["Contract", "Buy Date", "Sell Date", "Qty", "Buy Amount", "Sell Amount", "Total Charges"],
+                    ["NIFTY24DEC24000PE", "02/12/2024", "05/12/2024", 75, "7,500", "9,000", 45],
+                    ["USDINR24DECFUT", "02/12/2024", "05/12/2024", 1000, 85000, 84900, 12]]).encode()
+    for name in ("fno_pnl.csv", "pnl.csv"):
+        got = hf.parse_trades(other, name)
+        segs = {b["seg"]: b for b in got["business"]}
+        if name == "pnl.csv":                                          # told apart by the contract
+            assert got["kind"] == "business" and segs["fno"]["pnl"] == 1500 and segs["fno"]["charges"] == 45
+            assert segs["currency"]["pnl"] == -100
+        else:                                                          # the file's name says F&O: all of it
+            assert list(segs) == ["fno"] and segs["fno"]["pnl"] == 1400
+    # an F&O tradebook (each buy and sale) isn't a P&L: said plainly
+    tradebook = M._csv([["trade_date", "tradingsymbol", "trade_type", "quantity", "price"], ["2024-12-02", "NIFTY24DEC24000PE", "buy", 75, 100]]).encode()
+    with pytest.raises(hf.FileError, match="only from Zerodha's tax P&L for now"):
+        hf.parse_trades(tradebook, "fno_tradebook.csv")
+    with pytest.raises(hf.FileError, match="Futures, options and other non-equity trades are left out"):
+        hf.parse_trades(tradebook, "tradebook.csv")                  # not named: its contracts aren't taken for shares
+    # an equity tax P&L (it has ISINs) is still read as equity
+    assert hf.parse_trades(M._csv(M.TAX_SHORT).encode(), "pnl.csv")["kind"] == "pnl"
+
+
+def test_fno_lines_that_cant_be_read_are_listed():
+    rows = M.TAX_FNO + [["NIFTY24SEP25000PE", "2024-09-10", "someday", 1, 1, 1, 5, 5] + [0] * 9,
+                        ["NIFTY24SEP25000PE", "2024-09-10", "2024-09-11", 1, 1, 1, "", ""] + [0] * 9,
+                        ["Total", "", "", "", "", "", -1212.5]]
+    got = hf.parse_trades(M._csv(rows).encode(), EXITS + "F&O.csv")
+    assert got["business"][0]["trades"] == 4 and [p["reason"] for p in got["problems"]] == [
+        "The exit date couldn't be read.", "No profit or loss on this line."]
+
+
+def test_a_big_fno_file_streams_within_its_own_cap():
+    line = ["NIFTY24SEP25000CE", "2024-09-10T10:00:00", "2024-09-12T14:00:00", 25, 3012.5, 4100, 1087.5, 1087.5] + [1] * 9
+    n = 70000                                                        # more lines than a tradebook may have, ~7 MB
+    data = M._csv([M.DERIV_HEAD] + [line] * n).encode()
+    got = hf.parse_trades(make_zip([(EXITS + "F&O.csv", data)]))
+    assert got["business"][0]["trades"] == n and got["business"][0]["pnl"] == pytest.approx(1087.5 * n)
+    # over its 20 MB: left out with the reason, the rest of the ZIP still read
+    huge = b"x" * (hf.FNO_MAX_BYTES + 10)
+    got = hf.parse_trades(make_zip([(EXITS + "F&O.csv", huge), (EXITS + "Equity - Short Term.csv", short_csv())]))
+    assert "larger than 20 MB unpacked" in got["skipped"][0]["reason"] and got["trades"]
+    with pytest.raises(hf.FileError, match="larger than 20 MB"):
+        hf.parse_trades(huge, EXITS + "F&O.csv")
+
+
+def test_fno_summary_that_differs_or_a_missing_file_is_flagged():
+    sheets = [("Equity and Non Equity", M.TAX_SUMMARY), ("F&O", M.deriv_summary("F&O", (1287.5, 1287.5), (-2400, 2400)))]
+    got = hf.parse_trades(make_zip([(EXITS + "F&O.csv", M._csv(M.TAX_FNO).encode()), ("taxpnl.xlsx", M.make_workbook(sheets))]))
+    fno = {c["section"]: c for c in got["check"]}
+    assert fno["F&O"]["ok"] is False and fno["F&O"]["summary"] == -1112.5 and fno["F&O turnover"]["ok"] is False
+    no_file = hf.parse_trades(make_zip([(EXITS + "Equity - Short Term.csv", short_csv()), ("taxpnl.xlsx", M.make_workbook(sheets))]))
+    assert {"section": "F&O", "file": None, "summary": -1112.5, "ok": False, "what": "pnl"} in no_file["check"]
 
 
 def test_a_summary_that_differs_is_flagged():
@@ -92,10 +169,13 @@ def test_a_summary_that_differs_is_flagged():
 def test_the_summary_or_another_segment_alone_gets_a_plain_answer():
     with pytest.raises(hf.FileError, match="summary page of a tax P&L"):
         hf.parse_trades(M.make_xlsx(M.TAX_SUMMARY), "taxpnl-2024_2025-Q1-Q4.xlsx")
-    with pytest.raises(hf.FileError, match="F&O file of a tax P&L"):
-        hf.parse_trades(M._csv(M.TAX_FNO).encode(), EXITS + "F&O.csv")
-    with pytest.raises(hf.FileError, match="No equity trades were found in that ZIP.*F&O"):
-        hf.parse_trades(make_zip([(EXITS + "F&O.csv", M._csv(M.TAX_FNO).encode()), ("notes.pdf", b"%PDF-1.4")]))
+    with pytest.raises(hf.FileError, match="Non-equity file of a tax P&L"):
+        hf.parse_trades(M._csv(M.TAX_NON_EQUITY).encode(), EXITS + "Non Equity.csv")
+    with pytest.raises(hf.FileError, match="No equity, F&O, commodity or currency trades were found in that ZIP.*Non Equity"):
+        hf.parse_trades(make_zip([(EXITS + "Non Equity.csv", M._csv(M.TAX_NON_EQUITY).encode()), ("notes.pdf", b"%PDF-1.4")]))
+    # a ZIP of F&O only is fine: business income, no trades
+    only = hf.parse_trades(make_zip([(EXITS + "F&O.csv", M._csv(M.TAX_FNO).encode())]))
+    assert only["kind"] == "business" and only["trades"] == [] and only["business"][0]["pnl"] == -1212.5
 
 
 def test_a_big_tax_pnl_file_is_read_whole():
@@ -177,7 +257,7 @@ def test_too_many_files_password_and_damage():
     with pytest.raises(hf.FileError):
         hf.parse_trades(whole[:len(whole) // 2])
     junk_only = make_zip([("__MACOSX/._x.csv", b"\x00\x05"), (".DS_Store", b"\x00"), ("folder/", b"")])
-    with pytest.raises(hf.FileError, match="No equity trades"):
+    with pytest.raises(hf.FileError, match="No equity, F&O"):
         hf.parse_trades(junk_only)
 
 
@@ -206,10 +286,15 @@ def test_upload_the_zip_as_the_body(w):
     assert r.status_code == 200, r.text
     j = r.json()
     assert (j["broker"], j["kind"], j["added"]) == ("Zerodha", "pnl", 16)
-    assert all(x["ok"] for x in j["check"]) and len(j["skipped"]) == 4 and len(j["files"]) == 3
+    assert all(x["ok"] for x in j["check"]) and len(j["skipped"]) == 1 and len(j["files"]) == 6
+    assert j["business"] == {"lines": 7, "added": 3, "replaced": 0, "same": 0, "years": [2024]}
     y = next(y for y in j["report"]["years"] if y["fy"] == 2024)
     assert y["intraday"]["count"] == 2 and y["stcg"]["net"] < 4300 and y["ltcg"]["net"] < 13000      # less charges and grandfathering
-    assert send(c, ZIP.read_bytes()).json()["added"] == 0                                             # the same ZIP again
+    assert [s["seg"] for s in y["business"]["segments"]] == ["fno", "commodity", "currency"]
+    assert y["business"]["net"] == pytest.approx(-1212.5 - 220 + 1500 - 71.2 + 100 - 47.61)
+    again = send(c, ZIP.read_bytes()).json()                                                          # the same ZIP again
+    assert again["added"] == 0 and again["business"]["same"] == 3 and again["business"]["added"] == 0
+    assert again["report"]["business_lines"] == 7
     # the older way, base64 in JSON, still works and gives the same
     old = c.post("/tax/import", headers=PRO, json={"filename": "z.zip", "data": base64.b64encode(ZIP.read_bytes()).decode(), "mode": "replace"})
     assert old.status_code == 200 and old.json()["added"] == 16

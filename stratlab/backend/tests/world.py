@@ -172,7 +172,7 @@ def surveillance_answers(today=None) -> dict:
     sec += ["RELIANCE,EQ,Reliance Industries Limited,No Band,", "INFY,EQ,Infosys Limited,20,", "TCS,EQ,Tata Consultancy,No Band,",
             "ITC,BE,ITC Limited,5,", "TATASTEEL,EQ,Tata Steel Limited,10,", "GOVTBOND,GS,Some Bond,No Band,"]
     return {"/api/reportASM": asm, "/api/reportGSM": gsm, "/api/reportESM": {"data": []},
-            "/archives/fo/sec_ban/fo_secban.csv": ban, "/content/equities/sec_list.csv": "\n".join(sec)}
+            "/content/fo/fo_secban.csv": ban, "/content/equities/sec_list.csv": "\n".join(sec)}
 
 
 def _nse(sw=None):

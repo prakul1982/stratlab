@@ -10,10 +10,27 @@ import { track } from "../lib/analytics";
 type Bucket = { key: string; label: string; rate: number; gains: number; after_setoff: number; exempt: number; taxable: number; tax: number };
 type Sale = { key: string; bought: string; sold: string; qty: number; cost: number; sale: number; gain: number; term: "ST" | "LT"; bonus: boolean; gf: "applied" | "missing" | null; rate: number };
 type Side = { gains: number; losses: number; net: number; sales: number };
+type Leg = { pnl: number; turnover: number; trades: number };
+type Segment = {
+  seg: "fno" | "commodity" | "currency"; label: string; trades: number; pnl: number; charges: number; stt: number; net: number;
+  turnover: number; turnover_contract: number; first: string; last: string; options: Leg; futures: Leg; by: ({ u: string } & Leg)[];
+};
+type Business = { segments: Segment[]; pnl: number; charges: number; net: number; turnover: number; turnover_contract: number; trades: number };
+type Age = "below60" | "60to79" | "80plus";
+type Inputs = { regime: "new" | "old"; other: number; salary: number | null; deductions: number; age: Age; resident: boolean; saved: boolean };
+type Total = {
+  available: boolean; reason?: string; regime: "new" | "old"; inputs: Inputs; total: number;
+  parts: { capital_gains: number; intraday: number; fno: number; other: number };
+  slab_tax: number; special_tax: number; rebate: number; surcharge: number; surcharge_rate: number; cess: number;
+  income: { normal: number; special: number; total: number; salary: number; standard_deduction: number; deductions: number };
+  carry_forward: { speculative: number; business: number }; steps: string[]; lines: { label: string; amount: number; kind: string }[];
+  notes?: string[]; confirmed?: boolean; source?: string | null;
+};
 type Year = {
   fy: number; label: string; stcg: Side; ltcg: Side; exempt_old: number | null; exemption: { limit: number; used: number; left: number };
   buckets: Bucket[]; steps: string[]; tax: number; tax_with_cess: number; carry_forward: { st: number; lt: number };
-  intraday: { count: number; buy: number; sell: number; pnl: number }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
+  intraday: { count: number; buy: number; sell: number; pnl: number; turnover: number }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
+  business: Business; total: Total; inputs: Inputs; other_regime: { regime: "new" | "old"; total: number } | null; filing: string[]; turnover: number;
 };
 type Lot = { key: string; bought: string; qty: number; cost: number; cost_each: number | null; price: number; value: number; loss: number; loss_pct: number | null; days: number; term: "ST" | "LT"; long_from: string | null; bonus: boolean };
 type Report = {
@@ -22,19 +39,23 @@ type Report = {
   unmatched_sales: { key: string; qty: number; first: string }[]; holdings_check: { key: string; files: number; holdings: number }[];
   pre_2018: string[]; fmv: Record<string, { value: number | null; source: "yours" | "your file" | "looked up" | null }>;
   rules: string[]; notes: string[]; disclaimer: string; files: { name: string; broker: string; kind: string; trades: number; at: string }[];
-  updated_at: string | null; trades: number; prices: boolean; prices_at: string | null; max_trades: number;
+  updated_at: string | null; trades: number; business_lines: number; prices: boolean; prices_at: string | null; max_trades: number;
 };
 type Problem = { line: number | null; text: string; reason: string };
 type Skipped = { name: string; reason: string };
-type Check = { section: string; file: number | null; summary: number | null; ok: boolean };
+type Check = { section: string; file: number | null; summary: number | null; ok: boolean; what?: "pnl" | "turnover" };
+type BizReply = { lines: number; added: number; replaced: number; same: number; years: number[] };
 type ImportReply = {
-  broker: string; kind: "trades" | "pnl"; read: number; added: number; duplicates: number; over_limit: number; problems: Problem[]; problem_count: number;
+  broker: string; kind: "trades" | "pnl" | "business"; read: number; added: number; duplicates: number; over_limit: number; problems: Problem[]; problem_count: number;
   not_listed: string[]; skipped: Skipped[]; check: Check[]; files: { name: string; section: string; lines: number }[]; report: Report;
-  picked?: number;
+  business: BizReply; picked?: number;
 };
 
 const MAX_MB = 10;          // a file, the server's cap too
+const FNO_MB = 20;          // an F&O, commodity or currency file on its own (by its name), the server's cap too
 const MAX_TOTAL_MB = 25;    // everything picked at once
+const isBusiness = (name: string) => !/\.zip$/i.test(name) && /f\s*&\s*o|(^|[^a-z])fno([^a-z]|$)|futures|options|derivative|commodit|currenc/i.test(name);
+const capMb = (name: string) => (isBusiness(name) ? FNO_MB : MAX_MB);
 const BROKERS = "Zerodha (Console tradebook, or the tax P&L ZIP as it downloads), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
 const inr = (v: number | null | undefined) => money(v, "INR", 0);
 const rate = (r: number) => `${+(r * 100).toFixed(2)}%`;
@@ -46,12 +67,16 @@ function combine(a: ImportReply | null, b: ImportReply): ImportReply {
     ...b, picked: (a.picked ?? 1) + 1, read: a.read + b.read, added: a.added + b.added, duplicates: a.duplicates + b.duplicates,
     over_limit: b.over_limit, problems: [...a.problems, ...b.problems].slice(0, 200), problem_count: a.problem_count + b.problem_count,
     not_listed: [...new Set([...a.not_listed, ...b.not_listed])], skipped: [...a.skipped, ...b.skipped], check: [...a.check, ...b.check], files: [...a.files, ...b.files],
+    business: {
+      lines: a.business.lines + b.business.lines, added: a.business.added + b.business.added, replaced: a.business.replaced + b.business.replaced,
+      same: a.business.same + b.business.same, years: [...new Set([...a.business.years, ...b.business.years])].sort(),
+    },
   };
 }
 
 /** The year to open on: the one already open if it has sales, else the latest with any. */
 function bestYear(r: Report, cur: number | null): number {
-  const busy = (y: Year) => y.count > 0 || y.intraday.count > 0;
+  const busy = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0;
   const open = r.years.find((y) => y.fy === cur);
   if (open && busy(open)) return open.fy;
   return r.years.find(busy)?.fy ?? (open ? open.fy : r.current_fy);
@@ -83,8 +108,8 @@ export function TaxReportPage() {
       if (file.current) file.current.value = "";
       return;
     }
-    const list = all.filter((f) => f.size <= MAX_MB * 1024 * 1024);
-    for (const f of all) if (f.size > MAX_MB * 1024 * 1024) notify(`${f.name} is larger than ${MAX_MB} MB. Split the tradebook by year and upload each one.`);
+    const list = all.filter((f) => f.size <= capMb(f.name) * 1024 * 1024);
+    for (const f of all) if (f.size > capMb(f.name) * 1024 * 1024) notify(`${f.name} is larger than ${capMb(f.name)} MB. Split it by year (or quarter) and upload each one.`);
     if (!list.length) { if (file.current) file.current.value = ""; return; }
     setBusy(true);
     try {
@@ -125,23 +150,28 @@ export function TaxReportPage() {
     catch (e) { fail(e); }
   };
 
+  const saveInputs = async (year: number, v: Omit<Inputs, "saved">) => {
+    try { show(await api<Report>("/tax/inputs", { method: "PUT", body: { fy: year, ...v } })); notify("Saved. The estimate is updated."); track("tax inputs saved", { regime: v.regime, age: v.age, resident: v.resident }); }
+    catch (e) { fail(e); }
+  };
+
   const y = useMemo(() => rep?.years.find((x) => x.fy === fy) ?? null, [rep, fy]);
   const name = (k: string) => rep?.names[k]?.symbol ?? k;
-  const has = !!rep && rep.trades > 0;
+  const has = !!rep && (rep.trades > 0 || rep.business_lines > 0);
 
   return (
     <div className="stack" style={{ gap: 24 }}>
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Tax report</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Capital gains on your shares</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Upload your tradebooks or tax P&amp;L files from every broker you use. StratLab matches each sale to its purchase, first in first out, and works out short- and long-term gains for each financial year at the rates that applied, the exemption used, and the set-off. Only you can see your trades, and you can delete them at any time.</p>
+        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Upload your tradebooks or tax P&amp;L files from every broker you use. StratLab matches each sale to its purchase, first in first out, and works out short- and long-term gains for each financial year at the rates that applied, the exemption used, and the set-off. Add your F&amp;O, commodity and currency results and your other income, and it estimates the year's total tax. Only you can see your trades, and you can delete them at any time.</p>
       </div>
-      <Disclaimer text={rep?.disclaimer ?? "An estimate from the files you uploaded, not tax advice. Check it with a chartered accountant (CA) before you file or pay tax."} />
+      <Disclaimer text={rep?.disclaimer ?? "An estimate from the files you uploaded and the income you entered, not tax advice. It covers only the income you enter or import here, for an individual of the age band and residency you choose. Slab tax depends on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered accountant (CA) before you file or pay tax."} />
 
       <section className="card stack" style={{ gap: 14 }}>
         <div className="stack" style={{ gap: 4 }}>
           <h2 className="h2">Upload your trades</h2>
-          <p className="small muted" style={{ margin: 0 }}>Download the equity tradebook (every trade) or the tax P&amp;L as Excel, CSV or ZIP from {BROKERS}, then upload it here. You can pick several files, from several brokers, at once (up to {MAX_MB} MB each); trades already uploaded are skipped. Any other CSV works with the columns Date, Symbol (or ISIN), Type (buy or sell), Quantity and Price.</p>
+          <p className="small muted" style={{ margin: 0 }}>Download the equity tradebook (every trade) or the tax P&amp;L as Excel, CSV or ZIP from {BROKERS}, then upload it here. You can pick several files, from several brokers, at once (up to {MAX_MB} MB each, {FNO_MB} MB for an F&amp;O file on its own); trades already uploaded are skipped. Any other CSV works with the columns Date, Symbol (or ISIN), Type (buy or sell), Quantity and Price. F&amp;O, commodity and currency results are read from Zerodha's tax P&amp;L for now (the ZIP, or its "Tradewise Exits" files), or a P&amp;L file with the contract, exit date and profit.</p>
         </div>
         <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <label className={`btn${busy ? " disabled" : ""}`} style={{ cursor: busy ? "wait" : "pointer" }}>
@@ -159,8 +189,9 @@ export function TaxReportPage() {
         {result && (
           <div className="stack" style={{ gap: 8 }} role="status">
             <p className="small" style={{ margin: 0 }}>
-              <b>{result.picked ? `Read ${result.picked} files` : result.broker === "CSV" ? "Read as a CSV file" : `Read as a ${result.broker} ${result.kind === "pnl" ? "tax P&L" : "tradebook"}`}:</b>{" "}
+              <b>{result.picked ? `Read ${result.picked} files` : result.broker === "CSV" ? "Read as a CSV file" : `Read as a ${result.broker} ${result.kind === "trades" ? "tradebook" : "tax P&L"}`}:</b>{" "}
               {result.added} trade{result.added === 1 ? "" : "s"} added{result.duplicates > 0 && `, ${result.duplicates} already uploaded (skipped)`}.
+              {result.business.lines > 0 && ` ${result.business.lines.toLocaleString()} F&O, commodity and currency line${result.business.lines === 1 ? "" : "s"} added up as business income${result.business.same && !result.business.added && !result.business.replaced ? " (already uploaded, unchanged)" : result.business.replaced ? " (in place of the figures from an earlier file for the same dates)" : ""}.`}
               {result.problem_count > 0 && ` ${result.problem_count} line${result.problem_count === 1 ? "" : "s"} left out (below).`}
               {result.over_limit > 0 && ` Only the first ${rep?.max_trades.toLocaleString()} trades are kept.`}
             </p>
@@ -169,7 +200,7 @@ export function TaxReportPage() {
               <ul className="tiny" style={{ margin: 0, paddingLeft: 18 }} aria-label="Totals checked against your broker's summary">
                 {result.check.map((c, i) => (
                   <li key={i}>
-                    {c.ok ? <>{c.section}: {inr(c.file)} before charges, the same as your broker's summary sheet.</>
+                    {c.ok ? <>{c.section}: {inr(c.file)} {c.what === "turnover" ? "netted per contract" : "before charges"}, the same as your broker's summary sheet.</>
                       : c.file == null ? <span className="neg">{c.section}: your broker's summary shows {inr(c.summary)}, but the ZIP has no tradewise file for it, so it isn't included.</span>
                       : <span className="neg">{c.section}: {inr(c.file)} read, but your broker's summary sheet shows {inr(c.summary)}. Check the file is complete.</span>}
                   </li>
@@ -178,7 +209,7 @@ export function TaxReportPage() {
             )}
             {result.skipped.length > 0 && (
               <div className="stack" style={{ gap: 2 }}>
-                <p className="tiny muted" style={{ margin: 0 }}>Left out of the tax report (equity delivery and intraday only, for now):</p>
+                <p className="tiny muted" style={{ margin: 0 }}>Left out of the tax report:</p>
                 <ul className="tiny muted" style={{ margin: 0, paddingLeft: 18 }} aria-label="Files left out">
                   {result.skipped.map((s, i) => <li key={i}><b>{s.name}</b>: {s.reason}</li>)}
                 </ul>
@@ -197,7 +228,7 @@ export function TaxReportPage() {
         )}
         {has && rep && rep.files.length > 0 && (
           <p className="tiny muted" style={{ margin: 0 }}>
-            {rep.trades.toLocaleString()} trades from {rep.files.length} file{rep.files.length === 1 ? "" : "s"}: {rep.files.map((f) => `${f.name} (${f.broker})`).join(", ")}{rep.updated_at ? ` · updated ${ago(rep.updated_at)}` : ""}
+            {rep.trades.toLocaleString()} trades{rep.business_lines > 0 && ` and ${rep.business_lines.toLocaleString()} F&O lines`} from {rep.files.length} file{rep.files.length === 1 ? "" : "s"}: {rep.files.map((f) => `${f.name} (${f.broker})`).join(", ")}{rep.updated_at ? ` · updated ${ago(rep.updated_at)}` : ""}
           </p>
         )}
       </section>
@@ -223,6 +254,8 @@ export function TaxReportPage() {
             </div>
           </div>
 
+          <TotalCard y={y} onSave={saveInputs} filing={y.filing.length > 0} />
+
           <div className="stat-row">
             <div className="stat"><span className="tiny muted">Short-term gains (net)</span><b className={`num ${signClass(y.stcg.net)}`}>{inr(y.stcg.net)}</b><span className="tiny muted">{inr(y.stcg.gains)} gains · {inr(y.stcg.losses)} losses</span></div>
             <div className="stat"><span className="tiny muted">Long-term gains (net)</span><b className={`num ${signClass(y.ltcg.net)}`}>{inr(y.ltcg.net)}</b><span className="tiny muted">{inr(y.ltcg.gains)} gains · {inr(y.ltcg.losses)} losses</span></div>
@@ -230,7 +263,7 @@ export function TaxReportPage() {
               <span className="tiny muted">of {inr(y.exemption.limit)}{y.exemption.limit ? ` · ${inr(y.exemption.left)} left` : ""}</span>
               {y.exemption.limit > 0 && <div className="seg-bar" aria-hidden><i style={{ width: `${Math.max(0, Math.min(100, (y.exemption.used / y.exemption.limit) * 100))}%` }} /></div>}
             </div>
-            <div className="stat"><span className="tiny muted">Estimated tax <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Shown before the 4% cess and any surcharge.</Info></span>
+            <div className="stat"><span className="tiny muted">Tax on share gains <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Shown before the 4% cess and any surcharge.</Info></span>
               <b className="num">{inr(y.tax)}</b><span className="tiny muted">{inr(y.tax_with_cess)} with 4% cess</span></div>
           </div>
 
@@ -256,8 +289,18 @@ export function TaxReportPage() {
           <section className="card stack" style={{ gap: 10 }}>
             <h2 className="h2">Intraday trades, kept apart</h2>
             <p className="small" style={{ margin: 0 }}>{y.intraday.count ? <>{y.intraday.count} same-day round trip{y.intraday.count === 1 ? "" : "s"}: purchases {inr(y.intraday.buy)}, sales {inr(y.intraday.sell)}, result <b className={signClass(y.intraday.pnl)}>{inr(y.intraday.pnl)}</b>.</> : `No intraday trades in ${y.label}.`}</p>
-            <p className="tiny muted" style={{ margin: 0 }}>Shares bought and sold on the same day are speculative business income, taxed at your slab rate, not capital gains. They aren't in the numbers above.</p>
+            <p className="tiny muted" style={{ margin: 0 }}>Shares bought and sold on the same day are speculative business income, taxed at your slab rate, not capital gains. They aren't in the capital gains above; they are in the total tax estimate.</p>
           </section>
+
+          <BusinessCard y={y} />
+
+          {y.filing.length > 0 && (
+            <section className="card stack" style={{ gap: 10 }} id="tax-filing">
+              <h2 className="h2">Returns and tax audit</h2>
+              <ul className="small" style={{ margin: 0, paddingLeft: 20 }} aria-label="Returns and tax audit">{y.filing.map((f, i) => <li key={i}>{f}</li>)}</ul>
+              <p className="tiny muted" style={{ margin: 0 }}>The Income Tax Department's own page on returns for business income (ITR-3) and audit: <a className="link" href={ITR3_URL} target="_blank" rel="noopener noreferrer">incometax.gov.in</a>.</p>
+            </section>
+          )}
 
           {y.count > 0 && (
             <section className="card stack" style={{ gap: 12 }}>
@@ -351,6 +394,175 @@ export function TaxReportPage() {
         </section>
       )}
     </div>
+  );
+}
+
+const REGIME = { new: "New regime", old: "Old regime" } as const;
+const AGES: [Age, string][] = [["below60", "Below 60"], ["60to79", "60–79"], ["80plus", "80+"]];
+const AGE_TEXT: Record<Age, string> = { below60: "below 60", "60to79": "60 to 79", "80plus": "80 or more" };
+const ITR3_URL = "https://www.incometax.gov.in/iec/foportal/help/individual-business-profession";
+
+/** The year's total tax, where it comes from, the inputs it needs and, below, how it was worked out. */
+function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void>; filing: boolean }) {
+  const t = y.total;
+  const chips: [string, number, string][] = [
+    ["Capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares, at the special rates (sections 111A and 112A), with its share of surcharge and cess."],
+    ["Intraday", t.parts?.intraday ?? 0, "Intraday results are speculative business income, taxed at your slab rate. Slab tax is split between your incomes in proportion to each."],
+    ["F&O", t.parts?.fno ?? 0, "F&O, commodity and currency results, after the charges in your files, are non-speculative business income, taxed at your slab rate."],
+    ["Other income", t.parts?.other ?? 0, "Your salary, interest and other income as you entered it, after the standard deduction on salary."],
+  ];
+  return (
+    <section className="card stack tax-total" style={{ gap: 14 }} aria-label="Total tax estimate">
+      <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <h2 className="h2">Total tax estimate, {y.label}</h2>
+        <Info label="What the total covers">Slab tax on your other income, intraday and F&amp;O results, plus tax on share gains at the special rates, less the section 87A rebate where it applies, plus surcharge and 4% cess. It is worked out for an individual of the age band and residency you choose below. Advance tax and TDS already paid aren't taken off.</Info>
+      </div>
+      <p className="small muted" style={{ margin: 0 }}>Covers only the income you enter or import here: the trades in your files and the other income you type below. House property, foreign income, other capital assets and anything else left out aren't counted.{filing && <> <a className="link" href="#tax-filing">Which return and whether a tax audit applies</a>.</>}</p>
+      {t.confirmed === false && <p className="small neg" style={{ margin: 0 }} role="note"><b>Rules for this year not yet confirmed.</b> The figures repeat the year before until they are checked against the Finance Act.</p>}
+      {t.available ? (
+        <>
+          <div className="stack" style={{ gap: 2 }}>
+            <b className="num tax-big" aria-label="Estimated total tax">{inr(t.total)}</b>
+            <span className="tiny muted">{REGIME[t.regime]} · {y.inputs.resident ? "resident" : "non-resident"}, aged {AGE_TEXT[y.inputs.age ?? "below60"]}{t.rebate > 0 ? ` · 87A rebate ${inr(t.rebate)}` : ""}{t.surcharge > 0 ? ` · surcharge ${inr(t.surcharge)}` : ""} · cess {inr(t.cess)}{!y.inputs.saved ? " · no other income entered yet" : ""}</span>
+          </div>
+          <div className="tax-chips" role="list" aria-label="Where the tax comes from">
+            {chips.map(([label, v, info]) => (
+              <div key={label} role="listitem" className="tax-chip"><span className="tiny muted">{label} <Info label={`About ${label}`}>{info}</Info></span><b className="num">{inr(v)}</b></div>
+            ))}
+          </div>
+          {y.other_regime && <p className="tiny muted" style={{ margin: 0 }}>With the same figures, the {REGIME[y.other_regime.regime].toLowerCase()} works out to {inr(y.other_regime.total)}{y.other_regime.regime === "old" ? " (with the deductions entered, if any)" : ""}.</p>}
+          {(t.notes ?? []).filter((n) => !/not yet confirmed/.test(n)).map((n) => <p key={n} className="small" style={{ margin: 0 }} role="note"><b>Note:</b> {n}</p>)}
+          {(t.carry_forward.speculative > 0 || t.carry_forward.business > 0) && (
+            <p className="small" style={{ margin: 0 }}>To carry forward:{t.carry_forward.speculative > 0 && <> intraday (speculative) loss <b className="neg">{inr(t.carry_forward.speculative)}</b> (4 years, against speculative income only)</>}{t.carry_forward.speculative > 0 && t.carry_forward.business > 0 && ";"}{t.carry_forward.business > 0 && <> business loss <b className="neg">{inr(t.carry_forward.business)}</b> (8 years, against business income)</>}. Only if the return is filed by its due date.</p>
+          )}
+        </>
+      ) : <p className="small muted" style={{ margin: 0 }}>{t.reason}</p>}
+      <InputsPanel key={y.fy} y={y} onSave={onSave} />
+      {t.available && (
+        <details className="tax-how" open>
+          <summary>How we got here</summary>
+          <ol className="small" style={{ margin: "8px 0 0", paddingLeft: 20 }}>{t.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+          {(t.notes ?? []).length > 0 && <ul className="tiny muted" style={{ margin: "6px 0 0", paddingLeft: 20 }} aria-label="Notes on the estimate">{t.notes!.map((n) => <li key={n}>{n}</li>)}</ul>}
+          <div className="table-wrap" style={{ marginTop: 10 }}>
+            <table aria-label="Total tax breakdown">
+              <tbody>{t.lines.map((l, i) => (
+                <tr key={i} className={l.kind === "total" ? "tax-line-total" : l.kind === "subtotal" ? "tax-line-sub" : undefined}>
+                  <td style={{ textAlign: "left", whiteSpace: "normal" }} className={l.kind === "note" ? "muted" : undefined}>{l.label}</td>
+                  <td className={`num ${l.kind === "amount" ? signClass(l.amount) : ""}`}>{inr(l.amount)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </details>
+      )}
+    </section>
+  );
+}
+
+const amount = (s: string) => { const n = Number(s.replace(/[,\s₹]/g, "")); return s.trim() === "" ? null : Number.isFinite(n) && n >= 0 ? n : NaN; };
+
+/** Regime, other income (and how much of it is salary), the old regime's deductions, age band and residency, saved per year. */
+function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void> }) {
+  const v = y.inputs;
+  const [regime, setRegime] = useState<"new" | "old">(v.regime);
+  const [other, setOther] = useState(v.saved && v.other ? String(v.other) : "");
+  const [salary, setSalary] = useState(v.salary != null ? String(v.salary) : "");
+  const [ded, setDed] = useState(v.deductions ? String(v.deductions) : "");
+  const [age, setAge] = useState<Age>(v.age ?? "below60");
+  const [resident, setResident] = useState(v.resident ?? true);
+  const [saving, setSaving] = useState(false);
+  const o = amount(other), s = amount(salary), d = amount(ded);
+  const bad = Number.isNaN(o) || Number.isNaN(s) || Number.isNaN(d) || (s != null && o != null && s > o);
+  const save = async () => {
+    setSaving(true);
+    try { await onSave(y.fy, { regime, other: o ?? 0, salary: s, deductions: regime === "old" ? d ?? 0 : 0, age, resident }); } finally { setSaving(false); }
+  };
+  return (
+    <div className="tax-inputs stack" style={{ gap: 10 }}>
+      <b className="small">Your inputs for {y.label}</b>
+      <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small muted" style={{ fontWeight: 600 }}>Tax regime <Info label="About the tax regime">The new regime is the default from FY 2023-24: lower slab rates, a higher standard deduction and almost no deductions. The old regime keeps deductions such as 80C and 80D. Each year's return says which one applies.</Info></span>
+          <div className="seg" role="radiogroup" aria-label="Tax regime">
+            {(["new", "old"] as const).map((r) => <button key={r} role="radio" aria-checked={regime === r} aria-pressed={regime === r} onClick={() => setRegime(r)}>{r === "new" ? "New (default)" : "Old"}</button>)}
+          </div>
+        </div>
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small muted" style={{ fontWeight: 600 }}>Age <Info label="About age">Your age during the year. Under the old regime, the income not taxed is ₹2.5 lakh below 60, ₹3 lakh from 60 to 79 and ₹5 lakh from 80, for residents. The new regime's slabs are the same at every age.</Info></span>
+          <div className="seg" role="radiogroup" aria-label="Age band">
+            {AGES.map(([k, label]) => <button key={k} role="radio" aria-checked={age === k} aria-pressed={age === k} onClick={() => setAge(k)}>{label}</button>)}
+          </div>
+        </div>
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small muted" style={{ fontWeight: 600 }}>Resident in India? <Info label="About residency">Residency for tax depends mainly on the days spent in India in the year. A non-resident gets no section 87A rebate, can't set the unused basic exemption against share gains (sections 111A and 112A), and has the ₹2.5 lakh old-regime limit at any age. Surcharge and cess apply as usual. TDS on NRI sales is deducted by the broker; this estimate does not reconcile TDS.</Info></span>
+          <div className="seg" role="radiogroup" aria-label="Resident in India">
+            {([true, false] as const).map((r) => <button key={String(r)} role="radio" aria-checked={resident === r} aria-pressed={resident === r} onClick={() => setResident(r)}>{r ? "Yes" : "No"}</button>)}
+          </div>
+        </div>
+        <label className="field" style={{ width: 200 }}>
+          <span>Other income (₹) <Info label="About other income">Salary, pension, interest, rent and the like for the year, before deductions, as one number. Not the trades in your files: those are added from the files.</Info></span>
+          <input value={other} inputMode="decimal" placeholder="e.g. 1200000" onChange={(e) => setOther(e.target.value)} aria-label="Other income" />
+        </label>
+        <label className="field" style={{ width: 200 }}>
+          <span>Of which salary (₹) <Info label="About salary">Used for the standard deduction, which is only for salary and pension, and because business losses can't be set off against salary. Leave it blank if all of it is salary.</Info></span>
+          <input value={salary} inputMode="decimal" placeholder="all of it" onChange={(e) => setSalary(e.target.value)} aria-label="Of which salary" />
+        </label>
+        {regime === "old" && (
+          <label className="field" style={{ width: 200 }}>
+            <span>Deductions (₹) <Info label="About deductions">80C, 80D, home-loan interest and the like, as one total. They reduce income taxed at slab rates, not share gains taxed at special rates.</Info></span>
+            <input value={ded} inputMode="decimal" placeholder="e.g. 150000" onChange={(e) => setDed(e.target.value)} aria-label="Deductions" />
+          </label>
+        )}
+        <button className="btn sm" disabled={bad || saving} onClick={save}>{saving ? "Saving…" : "Save and update"}</button>
+      </div>
+      {bad && <p className="tiny neg" style={{ margin: 0 }}>Enter amounts in rupees, 0 or more; the salary part can't be more than the other income.</p>}
+    </div>
+  );
+}
+
+/** F&O, commodity and currency for the year: the result, charges, turnover and the biggest underlyings. */
+function BusinessCard({ y }: { y: Year }) {
+  const [all, setAll] = useState(false);
+  const b = y.business;
+  if (!b.segments.length) return (
+    <section className="card stack" style={{ gap: 8 }}>
+      <h2 className="h2">F&amp;O, commodity and currency</h2>
+      <p className="small muted" style={{ margin: 0 }}>None in your files for {y.label}. Upload the tax P&amp;L ZIP from Zerodha (or its F&amp;O, commodity and currency files) to include them in the total.</p>
+    </section>
+  );
+  const top = b.segments.flatMap((s) => s.by.map((u) => ({ ...u, seg: s.label })));
+  return (
+    <section className="card stack" style={{ gap: 12 }}>
+      <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <h2 className="h2">F&amp;O, commodity and currency</h2>
+        <Info label="How F&O is taxed">Futures and options on shares and indices, and exchange-traded commodity and currency derivatives, are non-speculative business income, taxed at your slab rate. The charges in your files (brokerage, exchange charges, GST, stamp duty, STT and CTT) are business expenses and come off the result.</Info>
+      </div>
+      <div className="table-wrap">
+        <table aria-label="F&O by segment">
+          <thead><tr><th style={{ textAlign: "left" }}>Segment</th><th>Trades</th><th>Result</th><th>Charges</th><th>After charges</th><th>Turnover</th></tr></thead>
+          <tbody>{b.segments.map((s) => (
+            <tr key={s.seg}><td style={{ textAlign: "left" }}><b>{s.label}</b><div className="tiny muted">{dateOnly(s.first)} to {dateOnly(s.last)}</div></td>
+              <td className="num">{s.trades.toLocaleString()}</td><td className={`num ${signClass(s.pnl)}`}>{inr(s.pnl)}</td><td className="num">{inr(s.charges)}</td>
+              <td className={`num ${signClass(s.net)}`}>{inr(s.net)}</td><td className="num">{inr(s.turnover)}</td></tr>
+          ))}</tbody>
+          {b.segments.length > 1 && <tfoot><tr><td style={{ textAlign: "left" }}><b>Total</b></td><td className="num">{b.trades.toLocaleString()}</td><td className={`num ${signClass(b.pnl)}`}>{inr(b.pnl)}</td><td className="num">{inr(b.charges)}</td><td className={`num ${signClass(b.net)}`}><b>{inr(b.net)}</b></td><td className="num">{inr(b.turnover)}</td></tr></tfoot>}
+        </table>
+      </div>
+      <p className="tiny muted" style={{ margin: 0 }}>Turnover is the total of profits and losses, trade by trade ({inr(b.turnover)}). Netted per contract first, as broker summaries often show it, it is {inr(b.turnover_contract)}. Your files' lines aren't kept, only these totals.</p>
+      {top.length > 0 && (
+        <>
+          <div className="table-wrap">
+            <table aria-label="F&O by underlying">
+              <thead><tr><th style={{ textAlign: "left" }}>Underlying</th><th>Segment</th><th>Trades</th><th>Result</th></tr></thead>
+              <tbody>{(all ? top : top.slice(0, 8)).map((u, i) => (
+                <tr key={i}><td style={{ textAlign: "left" }}>{u.u}</td><td className="small">{u.seg}</td><td className="num">{u.trades.toLocaleString()}</td><td className={`num ${signClass(u.pnl)}`}>{inr(u.pnl)}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+          {top.length > 8 && !all && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setAll(true)}>Show all {top.length}</button>}
+        </>
+      )}
+    </section>
   );
 }
 
