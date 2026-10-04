@@ -189,6 +189,19 @@ class CorpActionReq(BaseModel):
     action: Literal["apply", "dismiss", "undo"] = "apply"
 
 
+class TaxImportReq(BaseModel):
+    """A tradebook or tax P&L file for the tax report: added to the saved trades (duplicates dropped) or replacing them."""
+    filename: str = Field("", max_length=200)
+    data: str = Field(..., min_length=1)        # base64 (a data: URL is fine): 2 MB at most, checked once decoded
+    mode: Literal["replace", "add"] = "add"
+
+
+class TaxFmvReq(BaseModel):
+    """The user's own 31 Jan 2018 price a share for one company (grandfathering); none clears it."""
+    symbol: str = Field(min_length=1, max_length=40)
+    fmv: Optional[float] = Field(None, gt=0, le=1e7)
+
+
 class ExperimentReq(DataReq):
     label: str = Field("", max_length=120)
 

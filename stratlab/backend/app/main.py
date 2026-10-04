@@ -23,7 +23,7 @@ from kiteconnect import exceptions as kite_exc
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import holdings, holdings_file
+from . import holdings, holdings_file, tax_export, tax_lots
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
 from . import ai_writer
@@ -59,7 +59,7 @@ from .newsletter import job as news
 from . import results as results_calendar
 from . import corp_actions
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
-from .models import CorpActionReq
+from .models import CorpActionReq, TaxFmvReq, TaxImportReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
@@ -1848,6 +1848,189 @@ def holdings_delete(profile=Depends(current_profile)):
     """Delete my holdings: every saved position, at once."""
     holdings.delete(profile["id"])
     return {"deleted": True}
+
+
+# ---------- Tax report: capital gains from the user's own tradebooks (everyone) ----------
+FMV_LOOKUPS = 20                 # 31 Jan 2018 prices looked up in one request; the rest on the next visit
+
+
+def upload_bytes(data: str, what: str) -> bytes:
+    """An uploaded file, from base64 or a data: URL, within the size cap."""
+    raw = re.sub(r"^data:[^,]{0,200},", "", data.strip())
+    if len(raw) > holdings_file.MAX_BYTES * 4 // 3 + 8:
+        err(413, "file_too_big", f"That file is larger than {holdings_file.MAX_BYTES // (1024 * 1024)} MB. {what}")
+    try:
+        return base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError):
+        err(400, "bad_upload", "The file didn't arrive whole. Pick it again.")
+
+
+def tax_match(trades: list[dict]) -> tuple[list[dict], list[str]]:
+    """Each trade with its listed company's symbol (`sym`) when one matches; the ones that don't keep what the file
+    called them, so their gains still count, without prices or corporate actions."""
+    matcher, seen, missed = holdings_matcher(), {}, []
+    for t in trades:
+        k = (t.get("isin") or "", t.get("symbol") or "", t.get("name") or "")
+        if k not in seen:
+            hit, _ = matcher.match({"isin": k[0], "symbol": k[1], "name": k[2]})
+            seen[k] = hit["symbol"] if hit else None
+            if not hit:
+                missed.append(t.get("text") or " · ".join(x for x in k if x))
+        if seen[k]:
+            t["sym"] = seen[k]
+    return trades, missed
+
+
+def fmv_2018(symbol: str) -> float | None:
+    """The highest price on 31 Jan 2018 (or the last trading day before it), in today's share units, from the stored
+    price history: kept once found. None when it isn't known."""
+    got = db.json_value(db.get_setting(f"{tax_lots.FMV_KEY}{symbol}"), {})
+    if isinstance(got, dict) and isinstance(got.get("v"), (int, float)) and got["v"] > 0:
+        return float(got["v"])
+    if not kite.ready():
+        return None
+    try:
+        inst = kite.equity(symbol)
+        if not inst:
+            return None
+        kite._throttle()
+        rows = kite.kite.historical_data(inst["token"], datetime(2018, 1, 22), datetime(2018, 1, 31, 23, 59), "day")
+        rows = [r for r in rows if str(r["date"])[:10] <= tax_lots.GF_DATE]
+        if not rows:
+            return None
+        v = float(rows[-1]["high"])
+    except Exception as e:
+        print("31 Jan 2018 price:", symbol, str(e)[:120])
+        return None
+    db.set_setting(f"{tax_lots.FMV_KEY}{symbol}", json.dumps({"v": v, "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}))
+    return v
+
+
+def tax_inputs(profile) -> dict:
+    """What the tax report is worked out from: the saved trades, each company's bonuses and splits, 31 Jan 2018
+    prices, today's prices and the holdings."""
+    uid = profile["id"]
+    data = tax_lots.load(uid)
+    # a price the user typed in wins over the one in a broker's file
+    trades = [{**t, "fmv": None} if t.get("fmv") and tax_lots.lot_key(t) in data["fmv"] else t for t in data["trades"]]
+    today = datetime.now(IST).date()
+    syms = sorted({t["sym"] for t in trades if t.get("sym")})
+    acts: dict[str, list[dict]] = {}
+    if syms:
+        _corp_histories(uid, syms, today)
+        cal = corp_actions.load("IN")["rows"]
+        acts = {s: [a for a in corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) if corp_actions.adjusts(a)] for s in syms}
+    fmv, fmv_src = {}, {}
+    pre = sorted({tax_lots.lot_key(t) for t in trades if t["side"] == "B" and t["d"] <= tax_lots.GF_DATE})
+    looked = 0
+    in_file = {k for k in pre if all(t.get("fmv") for t in trades if tax_lots.lot_key(t) == k and t["side"] == "B" and t["d"] <= tax_lots.GF_DATE)}
+    for k in pre:
+        if k in data["fmv"]:
+            fmv[k], fmv_src[k] = data["fmv"][k], "yours"
+            continue
+        if k in in_file:
+            fmv_src[k] = "your file"
+            continue
+        if k not in syms or looked >= FMV_LOOKUPS:
+            continue
+        looked += 1
+        v = fmv_2018(k)
+        if v:
+            after = 1.0                  # the stored prices are in today's shares: back to the shares of 2018
+            for a in acts.get(k, []):
+                if a["ex_date"] > tax_lots.GF_DATE:
+                    after *= a["factor"]
+            fmv[k], fmv_src[k] = round(v * after, 4), "looked up"
+    quotes, live = {}, bool(syms) and kite.ready()
+    if live:
+        try:
+            quotes = kite.quote(syms[:500])
+        except Exception:
+            live = False
+    return {"data": data, "trades": trades, "acts": acts, "fmv": fmv, "fmv_src": fmv_src, "pre": pre, "quotes": quotes,
+            "live": live, "items": holdings.load(uid)["items"], "today": today.isoformat()}
+
+
+def tax_view(profile) -> dict:
+    i = tax_inputs(profile)
+    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"])
+    return {**rep, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
+            "prices": i["live"], "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if i["live"] else None,
+            "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
+            "max_trades": tax_lots.MAX_TRADES}
+
+
+@app.get("/tax")
+def tax_report(profile=Depends(current_profile)):
+    """The tax report: realised capital gains per financial year with the estimated tax, the exemption used, the
+    set-off, intraday kept apart, and open lots below cost at today's prices. An estimate, not tax advice."""
+    return ok(tax_view(profile))
+
+
+@app.post("/tax/import")
+def tax_import(req: TaxImportReq, profile=Depends(current_profile)):
+    """Read a tradebook or tax P&L file from the user's broker (or a plain CSV of trades) and save its trades with
+    the ones already uploaded, duplicates dropped. Lines that can't be read are listed with the reason."""
+    throttle(profile, "tax_import", 40, 3600, "That's a lot of uploads in an hour. Try again a little later.")
+    data = upload_bytes(req.data, "A tradebook for a few years is much smaller; check it's the right file, or split it by year.")
+    try:
+        parsed = holdings_file.parse_trades(data, req.filename)
+    except holdings_file.FileError as e:
+        err(400, "bad_file", str(e))
+    trades, missed = tax_match(parsed["trades"])
+    before = tax_lots.load(profile["id"])
+    old = [] if req.mode == "replace" else before["trades"]
+    merged, added, dup = tax_lots.merge(old, trades)
+    over = max(0, len(merged) - tax_lots.MAX_TRADES)
+    files = [] if req.mode == "replace" else before["files"]
+    if added:
+        files = files + [{"name": (req.filename or "file")[:80], "broker": parsed["broker"], "kind": parsed["kind"], "trades": added,
+                          "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}]
+        tax_lots.save(profile["id"], merged, files, before["fmv"])
+    elif req.mode == "replace":
+        tax_lots.save(profile["id"], merged, files, before["fmv"])
+    return ok({"broker": parsed["broker"], "kind": parsed["kind"], "read": len(trades), "added": added, "duplicates": dup,
+               "over_limit": over, "problems": parsed["problems"][:200], "problem_count": len(parsed["problems"]),
+               "not_listed": missed[:50], "report": tax_view(profile)})
+
+
+@app.put("/tax/fmv")
+def tax_fmv(req: TaxFmvReq, profile=Depends(current_profile)):
+    """Set (or clear) the 31 Jan 2018 price a share used to grandfather one company's lots bought before 1 Feb 2018."""
+    throttle(profile, "tax_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
+    data = tax_lots.load(profile["id"])
+    key = req.symbol.strip().upper()
+    if not any(tax_lots.lot_key(t) == key and t["d"] <= tax_lots.GF_DATE for t in data["trades"]):
+        err(404, "no_lots", f"Your files have no {key} shares bought before 1 Feb 2018.")
+    fmv = {k: v for k, v in data["fmv"].items() if k != key}
+    if req.fmv:
+        fmv[key] = round(float(req.fmv), 4)
+    tax_lots.save(profile["id"], data["trades"], data["files"], fmv)
+    return ok(tax_view(profile))
+
+
+@app.delete("/tax")
+def tax_delete(profile=Depends(current_profile)):
+    """Delete my tax data: every uploaded trade and file, at once."""
+    tax_lots.delete(profile["id"])
+    return {"deleted": True}
+
+
+@app.get("/tax/export")
+def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query("csv", pattern="^(csv|pdf)$"),
+                    profile=Depends(current_profile)):
+    """One financial year's report as a CSV (every realised line) or a PDF summary."""
+    throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
+    i = tax_inputs(profile)
+    c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
+    y = tax_lots.year(fy, c["realised"], c["intraday"], limit=None)
+    name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
+    if format == "pdf":
+        below = tax_lots.below_cost(c["open"], i["quotes"], i["today"]) if fy == tax_lots.fy_of(i["today"]) else None
+        return Response(tax_export.to_pdf(y, c["names"], below), media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'})
+    return Response(tax_export.to_csv(y, y["rows"], c["names"]), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.csv"'})
 
 
 @app.get("/research/deep/{symbol}/deck")
