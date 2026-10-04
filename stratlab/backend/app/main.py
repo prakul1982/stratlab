@@ -72,6 +72,7 @@ from .newsletter import job as news
 from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
+from . import etf_nav
 from . import positioning
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
@@ -156,7 +157,14 @@ def _alert_limit(profile: dict) -> int:
     return stock_alert_limit(access_plan(profile))
 
 
-stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit)
+def _alert_kind_ok(profile: dict, kind: str) -> bool:
+    """Alerts on an ETF's price against its NAV are Basic and up; after a downgrade they wait."""
+    from .plans import access_plan
+    return kind != "etfgap" or allows(access_plan(profile), "etf_gaps")
+
+
+stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit,
+                                     gaps=lambda s, p: etf_nav.gap_now(s, p), kind_ok=_alert_kind_ok)
 scan_alerts_job = scan.Alerts(markets, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                               can_alert=_scan_alert_ok, checks=[lambda now: stock_checker.tick(now)])
 
@@ -186,6 +194,8 @@ invite_job = invite_rewards.Job()
 # derivatives positioning: the exchange's evening files, read through the exchange client (tests swap filings_feed)
 positioning_runner = positioning.Runner(lambda: filings_feed)
 positioning_job = positioning.Job(positioning_runner)
+etf_nav.setup(lambda: filings_feed)              # ETF prices against their NAV: the exchange's ETF list
+etf_job = etf_nav.Job(lambda: filings_feed)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
 
 
@@ -230,6 +240,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start()
     screen_job.start()
     breadth_job.start()
+    etf_job.start()
     yield
 
 
@@ -251,6 +262,7 @@ app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
+app.include_router(etf_nav.router)             # /invest/etf-gaps
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -1278,6 +1290,10 @@ def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
         body = stock_alerts.clean(req.model_dump())
     except stock_alerts.AlertError as e:
         err(400, "bad_alert", str(e))
+    if body["kind"] == "etfgap":                    # an ETF's price against its NAV: Basic and up, on a listed ETF
+        need(profile, "etf_gaps", "ETF gap alerts")
+        if not etf_nav.known(body["symbol"]):
+            err(400, "not_etf", f"{body['symbol']} isn't on the exchange's ETF list.")
     q = alert_seed(body["region"], body["symbol"])
     try:
         a = (stock_alerts.update(profile["id"], aid, body, limit, q) if aid else stock_alerts.create(profile["id"], body, limit, q))

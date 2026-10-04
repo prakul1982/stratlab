@@ -37,7 +37,7 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
                      "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal",
-                     "mf_costs"},
+                     "mf_costs", "etf_gaps"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -56,7 +56,7 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs"},
+                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -72,10 +72,11 @@ PLANS = {
 # (the preview of what they hold is for everyone); us_tax: US shares' gains in rupees sale by sale, the foreign tax
 # credit and Schedule FA (each year's totals and every lot's long or short term are for everyone); mf_costs: each fund's TER
 # parts, rupees a year per fund, the other plan beside it, TER changes since purchase and category changes (each fund's
-# TER and the year's total in rupees are for everyone)
+# TER and the year's total in rupees are for everyone); etf_gaps: alerts on
+# an ETF's price against its NAV (the gaps, their 30-day history and the badges are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-            "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs")
+            "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
