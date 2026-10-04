@@ -10,6 +10,7 @@ import {
 import { ResearchNav } from "../components/Research";
 import { AsOf, Info, Loading } from "../components/ui";
 import { Trash } from "../components/Icons";
+import { SurvBadges } from "../components/Surveillance";
 
 type Draft = Partial<Record<RangeId, { min: string; max: string }>>;
 type Col = { id: keyof ScreenRow; label: string; short?: string; help?: string; cell: (r: ScreenRow, region: Region) => string; india?: boolean };
@@ -232,6 +233,24 @@ export function ScreensPage() {
                   </select></label>
               </Group>
             )}
+            {meta.surveillance && (
+              <Group title="Exchange surveillance" help={help.surveillance}>
+                <div className="seg" role="radiogroup" aria-label="Exchange surveillance">
+                  {([[null, "Either"], ["on", "On a list"], ["off", "On none"]] as const).map(([v, label]) => (
+                    <button key={label} role="radio" aria-checked={(filters.surveillance ?? null) === v} aria-pressed={(filters.surveillance ?? null) === v}
+                      onClick={() => setFilters((f) => ({ ...f, surveillance: v }))}>{label}</button>
+                  ))}
+                </div>
+                {filters.surveillance && <>
+                  <span className="hint">Which lists (none picked means any)</span>
+                  <div className="chips">{meta.surveillance.lists.map((l) => {
+                    const on = (filters.surv_lists ?? []).includes(l.id);
+                    return <button key={l.id} className="chip-btn" aria-pressed={on} onClick={() => setFilters((f) => ({
+                      ...f, surv_lists: on ? (f.surv_lists ?? []).filter((x) => x !== l.id) : [...(f.surv_lists ?? []), l.id] }))}>{l.label}</button>;
+                  })}</div>
+                </>}
+              </Group>
+            )}
           </>}
         </section>
 
@@ -262,7 +281,8 @@ export function ScreensPage() {
                     </th>))}</tr></thead>
                   <tbody>{rows.map((r) => (
                     <tr key={r.symbol}>{cols.map((c) => c.id === "name"
-                      ? <td key={c.id}><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link> <span className="tiny muted">{r.symbol}</span></td>
+                      ? <td key={c.id}><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link> <span className="tiny muted">{r.symbol}</span>
+                        {r.surveillance && r.surveillance.length > 0 && <> <SurvBadges region={region} symbol={r.symbol} codes={r.surveillance} /></>}</td>
                       : <td key={c.id} className={c.id === "sector" ? "" : "num"}>{c.cell(r, region)}</td>)}</tr>))}
                   </tbody>
                 </table>

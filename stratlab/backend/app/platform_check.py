@@ -157,6 +157,24 @@ def check_insider_trades(feed) -> dict:
     return _result("Insider trades", "Filings", "pass", f"{len(items)} Reliance insider-trading disclosures; newest {items[0]['date']}.")
 
 
+def check_surveillance(feed) -> dict:
+    """The exchange's surveillance lists (ASM, GSM, ESM, the F&O ban file and the price-band file), which the badges,
+    the screens' filter and the surveillance alerts read. These addresses can't be tried from a test machine, so this
+    is where a changed address or shape shows first. Each list is read on its own; any that fails is named."""
+    got, bad = [], []
+    for name, fn, count in (("ASM", feed.asm_list, lambda x: len(x.get("lt") or {}) + len(x.get("st") or {})),
+                            ("GSM", feed.gsm_list, len), ("ESM", feed.esm_list, len),
+                            ("F&O ban", feed.fo_ban, lambda x: len(x[1])), ("price bands", feed.security_bands, len)):
+        try:
+            got.append(f"{name} {count(fn())}")
+        except Exception as e:
+            bad.append(f"{name}: {str(e)[:100]}")
+    if not got:
+        return _result("Surveillance lists", "Filings", "fail", "No list answered. " + " · ".join(bad))
+    detail = "Read: " + ", ".join(got) + "." + (" Failed: " + " · ".join(bad) if bad else "")
+    return _result("Surveillance lists", "Filings", "warn" if bad else "pass", detail)
+
+
 def check_bse_filings(bse) -> dict:
     """BSE's feed, which serves the companies listed only on BSE; Reliance (500325) files on both exchanges."""
     items = bse.announcements("500325")

@@ -159,6 +159,22 @@ def _deals_answer(r: httpx.Request):
     return httpx.Response(200, json={"data": got})
 
 
+def surveillance_answers(today=None) -> dict:
+    """The exchange's surveillance lists as it publishes them: RELIANCE on long-term ASM Stage II, TATASTEEL on
+    short-term ASM Stage I, ITC on GSM Stage II and trade-to-trade (BE series, 5% band), INFY in the F&O ban."""
+    t = today or date.today()
+    asm = {"longterm": {"data": [{"symbol": "RELIANCE", "companyName": "Reliance Industries Limited", "isin": "INE002A01018",
+                                  "asmSurvIndicator": "LTASM Stage II"}]},
+           "shortterm": {"data": [{"symbol": "TATASTEEL", "companyName": "Tata Steel Limited", "asmSurvIndicator": "Stage I"}]}}
+    gsm = {"data": [{"symbol": "ITC", "companyName": "ITC Limited", "gsmStage": "II"}]}
+    ban = f"Securities in Ban For Trade Date {t.strftime('%d-%b-%Y').upper()}:\n1,INFY\n"
+    sec = ["Symbol,Series,Security Name,Band,Remarks"] + [f"CO{i},EQ,Company {i} Limited,20," for i in range(400)]
+    sec += ["RELIANCE,EQ,Reliance Industries Limited,No Band,", "INFY,EQ,Infosys Limited,20,", "TCS,EQ,Tata Consultancy,No Band,",
+            "ITC,BE,ITC Limited,5,", "TATASTEEL,EQ,Tata Steel Limited,10,", "GOVTBOND,GS,Some Bond,No Band,"]
+    return {"/api/reportASM": asm, "/api/reportGSM": gsm, "/api/reportESM": {"data": []},
+            "/archives/fo/sec_ban/fo_secban.csv": ban, "/content/equities/sec_list.csv": "\n".join(sec)}
+
+
 def _nse(sw=None):
     rows = [{"symbol": "RELIANCE", "desc": "Investor Presentation", "attchmntText": "Investor presentation for Q1 FY27",
              "sort_date": "2026-08-01 18:10:05", "seq_id": "1", "attchmntFile": "https://nsearchives.nseindia.com/p.pdf"},
@@ -176,6 +192,9 @@ def _nse(sw=None):
             return httpx.Response(200, json=rows)
         if r.url.path in ("/api/corporates-pit", "/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
             return _deals_answer(r)
+        surv = surveillance_answers().get(r.url.path)
+        if surv is not None:
+            return httpx.Response(200, text=surv) if isinstance(surv, str) else httpx.Response(200, json=surv)
         if r.url.path == "/api/corporate-board-meetings":
             return httpx.Response(200, json=board_meetings())
         if r.url.path == "/api/corporates-corporateActions":
@@ -238,6 +257,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     from app import scan as _scan
     _scan._cache.clear()                        # daily bars another test cached under the same instrument id
     main.trading_calendar._holiday_cache.clear()
+    from app import surveillance
+    surveillance._cache.clear()                 # the surveillance lists another test stored
     from app import auth
     auth._cache.clear()
     auth._rejected.clear()

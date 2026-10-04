@@ -611,6 +611,68 @@ test("screens: promoter or insider bought in the last N days", async ({ page }, 
   await sane(page, errors);
 });
 
+test("surveillance flags: badges with what each measure is on the company page, holdings and screens; facts only", async ({ page, request }, info) => {
+  // the fake exchange: RELIANCE on long-term ASM Stage II, TATASTEEL short-term ASM Stage I, ITC GSM Stage II and T2T, INFY in the F&O ban
+  let errors = await open(page, "/research/IN/RELIANCE", "Sales and profit, by year");
+  await answerLevel(page);
+  const flags = page.locator("[data-surveillance=RELIANCE]").first();
+  await expect(flags.getByText("LT-ASM 2")).toBeVisible({ timeout: 30_000 });
+  await flags.getByRole("button", { name: "What RELIANCE's exchange surveillance flags mean" }).click();
+  const note = page.getByRole("note");
+  await expect(note).toContainText("Stage 2: 100% margin");
+  await expect(note).toContainText("List as of");
+  const said = await note.innerText();
+  expect(said).not.toMatch(/\b(buy|sell|avoid|risky|danger|warning)\b/i);
+  expect(said).not.toMatch(/nseindia|kite|zerodha|yahoo|screener|finnhub/i);
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+
+  errors = await open(page, "/holdings", "By sector");
+  const table = page.getByRole("table", { name: "Positions" });
+  await expect(table.locator("[data-surveillance=RELIANCE]").getByText("LT-ASM 2")).toBeVisible({ timeout: 30_000 });
+  await sane(page, errors);
+
+  errors = await open(page, "/research/screens?region=IN", "Filter companies by plain facts");
+  await answerLevel(page);
+  await expect(page.getByText(/20 of 20 companies match/)).toBeVisible({ timeout: 30_000 });
+  if (info.project.name === "phone") await page.getByRole("button", { name: /Show filters/ }).click();
+  await page.getByRole("radiogroup", { name: "Exchange surveillance" }).getByRole("radio", { name: "On a list" }).click();
+  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await page.getByRole("button", { name: "ASM (long or short term)", exact: true }).click();
+  await expect(page.getByText(/2 of 20 companies match/)).toBeVisible();
+  const rows = page.locator(".screens-table");
+  await expect(rows.getByText("ST-ASM 1")).toBeVisible();
+  await page.getByRole("radiogroup", { name: "Exchange surveillance" }).getByRole("radio", { name: "On none" }).click();
+  await expect(page.getByText(/18 of 20 companies match/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+
+  const pub = await (await request.get(`${API}/stocks/in/RELIANCE`)).text();
+  expect(pub).toContain("Exchange surveillance");
+  expect(pub).toContain("LT-ASM 2");
+});
+
+test("alerts: one on a stock entering or leaving a surveillance list, India only", async ({ page }, info) => {
+  const tag = `e2e-surv ${info.project.name} ${Date.now()}`;
+  const errors = await open(page, "/alerts", "Your stock alerts");
+  await answerLevel(page);
+  await page.getByRole("button", { name: "New alert" }).click();
+  await page.getByLabel("Stock").fill("INFY");
+  await page.getByLabel("Alert me when").selectOption("surveillance");
+  await expect(page.getByText("Checked twice each trading day against the exchange's surveillance lists", { exact: false })).toBeVisible();
+  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  if (info.project.name === "phone") await touchable(page);
+  await page.getByRole("button", { name: "Set alert" }).click();
+  const row = page.locator(".alert-row", { hasText: tag });
+  await expect(row).toContainText("Enters or leaves an exchange surveillance list");
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
+  await page.getByRole("button", { name: "New alert" }).click();
+  await page.getByLabel("Market").selectOption("US");
+  await expect(page.getByLabel("Alert me when").locator("option", { hasText: "surveillance list" })).toHaveCount(0);
+  await sane(page, errors);
+});
+
 test("corporate actions: the calendar, a company's actions, and a bonus applied (and undone) in My Holdings", async ({ page, request }, info) => {
   // each project signs in as its own user, so the two runs don't adjust the same holdings at once
   const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];

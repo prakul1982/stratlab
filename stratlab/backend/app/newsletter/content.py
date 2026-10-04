@@ -194,13 +194,23 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
             if n.get("headline") and (not n.get("at") or str(n["at"])[:10] >= since[:10])][:2]
     trades = [{"text": deals.describe(d), "url": d.get("url"), "filed": d["filed"]}
               for d in (_safe(lambda: deals.recent_for(sym, since)) or [] if region == "IN" else [])][:4]
+    surv = _safe(lambda: surveillance_lines(sym, since)) if region == "IN" else None
     stage_before = before["stage"] if before else None
     signal = now["signal"] == "fresh" and now["st_days"] <= (5 if weekly else 1)
     stage_moved = now["stage"] is not None and stage_before is not None and now["stage"] != stage_before
-    changed = bool(stage_moved or signal or flags or trades or (change is not None and abs(change) >= MOVE[weekly]))
+    changed = bool(stage_moved or signal or flags or trades or (surv or {}).get("changes") or (change is not None and abs(change) >= MOVE[weekly]))
     return {"symbol": sym, "region": region, "price": round(now["price"], 2), "change_pct": change, "stage": now["stage"],
-            "stage_before": stage_before, "stage_changed": stage_moved, "st_s2": signal, "filings": flags, "deals": trades, "headlines": news,
+            "stage_before": stage_before, "stage_changed": stage_moved, "st_s2": signal, "filings": flags, "deals": trades, "surveillance": surv, "headlines": news,
             "changed": changed}
+
+
+def surveillance_lines(sym: str, since: str) -> dict | None:
+    """The stock's exchange surveillance news since `since`: the lists it entered, left or moved stage on (with the
+    list's date), and the lists it is on now. None when there is neither."""
+    from .. import surveillance
+    changes = [{"text": surveillance.change_text(c), "day": c.get("day")} for c in surveillance.changes_for(sym, since)][-4:]
+    now = [f["label"] for f in surveillance.flags_for(sym)]
+    return {"changes": changes, "now": now} if changes or now else None
 
 
 def paper_lines(uid: str, day: date) -> list[dict]:
