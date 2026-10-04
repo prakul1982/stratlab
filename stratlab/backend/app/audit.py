@@ -537,6 +537,10 @@ def _fresh_retry() -> dict:
     return {"next": None, "gap": RETRY_GAP, "left": RETRY_BATCH, "tried": 0, "refused": 0}
 
 
+class AuditNotLoaded(RuntimeError):
+    """The stored audit couldn't be read; nothing is checked or saved until it can be."""
+
+
 class MarketAudit:
     """Every listed company, checked in the background. The exchange's list is read once a day; a company that listed
     (or first showed up on the list) in the last NEW_DAYS days is checked once, a delisted company is dropped, and a
@@ -562,16 +566,22 @@ class MarketAudit:
         if self.loaded:
             return
         import json
+        # read everything first and only then take it: a read that fails (the database busy right after a restart)
+        # must not leave an empty audit that then saves over the stored results and starts again from nothing
         try:
-            self.state.update(json.loads(db.get_setting(self.key) or "{}"))
-            self.listing = json.loads(db.get_setting(f"{self.key}:list") or "{}")
+            state = json.loads(db.get_setting(self.key) or "{}")
+            listing = json.loads(db.get_setting(f"{self.key}:list") or "{}")
+            rows: dict = {}
             for c in SHARDS:
-                self.rows.update(json.loads(db.get_setting(f"{self.key}:rows:{c}") or "{}"))
-            us = self.key.endswith("-us")
-            for row in self.rows.values():          # older checks, read with today's rules
-                row["issues"] = restate_row(row, us)
+                rows.update(json.loads(db.get_setting(f"{self.key}:rows:{c}") or "{}"))
         except Exception as e:
-            print("could not load the market audit:", e)
+            print("could not load the market audit (will try again):", e)
+            raise AuditNotLoaded(str(e)[:200]) from None
+        us = self.key.endswith("-us")
+        for row in rows.values():                   # older checks, read with today's rules
+            row["issues"] = restate_row(row, us)
+        self.state.update(state)
+        self.listing, self.rows = listing, rows
         self.loaded = True
 
     def _save(self, *what: str):
@@ -822,10 +832,13 @@ class MarketAudit:
             return self.rows.get(sym) or row
 
     def loop(self):
-        try:
-            self.full_once()
-        except Exception as e:
-            print("market audit: couldn't start the first full check:", e)
+        while True:                           # until the stored audit can be read (the database may be busy at boot)
+            try:
+                self.full_once()
+                break
+            except Exception as e:
+                print("market audit: couldn't start the first full check:", e)
+                time.sleep(60)
         while True:
             try:
                 did = self.step()
@@ -846,7 +859,11 @@ class MarketAudit:
         checks), or None (running). The rate is companies checked in the last hour; the time left follows from it."""
         busy = bool(self.busy_fn())
         with self.lock:
-            self._load()
+            try:
+                self._load()
+            except AuditNotLoaded as e:
+                return {"loading": True, "error": f"The stored results couldn't be read yet ({e}); trying again.",
+                        "enabled": self.state.get("enabled"), "paused": "loading"}
             now = datetime.now(timezone.utc)
             due = self.queue()
             today = now.date()
