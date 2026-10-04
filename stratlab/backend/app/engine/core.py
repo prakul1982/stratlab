@@ -80,7 +80,7 @@ class Engine:
     targets, trailing stops, time exits and optional intraday session rules."""
 
     def __init__(self, strategy, lot: float = 1, state: dict | None = None, cost_kind: str = "flat"):
-        # `lot` is the quantity step: 1 share, an F&O lot of 75, or 0.0001 of a coin
+        # `lot` is the quantity step: 1 share, an F&O lot of 65, or 0.0001 of a coin
         self.s, self.r = strategy, strategy.risk
         side = getattr(strategy, "side", "long")
         self.sides = [1, -1] if side == "both" else [-1] if side == "short" else [1]

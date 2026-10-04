@@ -466,7 +466,7 @@ def test_every_year_is_confirmed_with_a_source_and_an_unconfirmed_one_says_so(mo
     for fy in range(X.FIRST_FY, X.LAST_FY + 1):
         r = X.rules(fy, "new")
         assert r["confirmed"] and r["source"].startswith("https://")
-        assert est(fy=fy, other=10 * L)["notes"] == []
+        assert est(fy=fy, other=10 * L)["notes"] == ([X.NEW_ACT_NOTE] if fy >= 2026 else [])
     monkeypatch.delitem(X.YEAR_SOURCES, 2026)
     e = est(fy=2026, other=10 * L)
     assert e["confirmed"] is False and "Rules for this year not yet confirmed" in e["notes"][0]

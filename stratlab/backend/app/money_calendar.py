@@ -125,6 +125,7 @@ def tax_dates(fy: int) -> list[dict]:
     31 Dec, or by 31 Mar from FY 2025-26 (Finance Act 2026). Sources, checked 4 Oct 2026:
     https://cleartax.in/s/due-date-tax-filing and the Budget 2026 summaries on the ITR due dates."""
     lab, ay = fy_label(fy), fy + 1
+    sec = "263" if fy >= 2026 else "139"     # the Income-tax Act, 2025 renumbers section 139 from tax year 2026-27
     out = []
     for (m, d, pct, when) in ((6, 15, 15, "first"), (9, 15, 45, "second"), (12, 15, 75, "third"), (3, 15, 100, "last")):
         day = date(fy + (1 if m == 3 else 0), m, d)
@@ -149,10 +150,10 @@ def tax_dates(fy: int) -> list[dict]:
                    "Return due date when the accounts need a tax audit (section 44AB).", ref=lab + " audit"))
     if fy >= 2025:
         out.append(_ev(date(ay, 12, 31), f"Last day for a belated {lab} return", "tax", "itr_late",
-                       "A return filed after its due date (section 139(4)), with the late fee. Losses can't be carried forward "
+                       f"A return filed after its due date (section {sec}(4)), with the late fee. Losses can't be carried forward "
                        "from a late return.", ref=lab))
         out.append(_ev(date(ay + 1, 3, 31), f"Last day to revise the {lab} return", "tax", "itr_revise",
-                       "A revised return (section 139(5)) can be filed until 31 March from FY 2025-26.", ref=lab))
+                       f"A revised return (section {sec}(5)) can be filed until 31 March from FY 2025-26.", ref=lab))
     else:
         out.append(_ev(date(ay, 12, 31), f"Last day for a belated or revised {lab} return", "tax", "itr_late",
                        "A late return (section 139(4)) or a revised one (139(5)). Losses can't be carried forward from a "

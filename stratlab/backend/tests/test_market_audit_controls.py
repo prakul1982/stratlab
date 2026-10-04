@@ -279,3 +279,25 @@ def test_us_price_check_accepts_the_page_quotes_previous_close():
     found = audit.check_prices({"price": 1.23}, trend, None, None, (1.23, 1.20))
     assert found[0]["level"] == "mismatch" and "previous close 1.20" in found[0]["detail"]
     assert audit.check_prices({"price": 1.23}, trend, None)[0]["level"] == "mismatch"   # no quote: as before
+
+
+def test_a_failed_load_after_a_restart_never_wipes_the_stored_results(w, monkeypatch):
+    """The database busy right after a restart: the audit must wait and read again, not start over and save an empty
+    audit over the stored results (which is how a crash restarted a half-done full check from zero)."""
+    listing = _old("AAA", "BBB")
+    a = audit.MarketAudit(lambda: listing, _clean, pause=0)
+    a.refresh_list(force=True)
+    a.start_full()
+    a.set_enabled(True)
+    while a.step():
+        pass
+    assert a.status()["checked"] == 2
+    real = audit.db.get_setting
+    monkeypatch.setattr(audit.db, "get_setting", lambda k: (_ for _ in ()).throw(RuntimeError("database busy")))
+    b = audit.MarketAudit(lambda: listing, _clean, pause=0)          # the restarted server
+    assert b.status()["loading"] is True
+    with pytest.raises(audit.AuditNotLoaded):
+        b.step()
+    monkeypatch.setattr(audit.db, "get_setting", real)                # the database answers again
+    assert b.status()["checked"] == 2                                 # every result still there
+    assert audit.MarketAudit(lambda: listing, _clean).status()["checked"] == 2

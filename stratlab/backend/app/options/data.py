@@ -14,9 +14,18 @@ INDEX_SPOT = {
 }
 POPULAR = [("NFO", "NIFTY"), ("NFO", "BANKNIFTY"), ("BFO", "SENSEX"), ("NFO", "FINNIFTY"), ("NFO", "MIDCPNIFTY"),
            ("BFO", "BANKEX"), ("MCX", "CRUDEOIL"), ("MCX", "NATURALGAS"), ("MCX", "GOLDM"), ("MCX", "SILVERM"), ("CDS", "USDINR")]
-# most units allowed in one order; check your broker, these change
-FREEZE = {"NIFTY": 1800, "BANKNIFTY": 900, "FINNIFTY": 1800, "MIDCPNIFTY": 2800, "NIFTYNXT50": 600,
-          "SENSEX": 1000, "BANKEX": 900}
+# most units allowed in one order (the exchange's quantity freeze limit); check your broker, these change. NSE
+# revises its index limits every few months (rules.py lists the circular and the day it was checked).
+FREEZE_BEFORE = {"NIFTY": 1800, "BANKNIFTY": 900, "FINNIFTY": 1800, "MIDCPNIFTY": 2800, "NIFTYNXT50": 600,
+                 "SENSEX": 1000, "BANKEX": 900}
+FREEZE_FROM = "2026-10-05"           # NSE's revised index limits apply from this day
+FREEZE = {**FREEZE_BEFORE, "NIFTY": 3510, "BANKNIFTY": 1440, "FINNIFTY": 3240, "MIDCPNIFTY": 5760, "NIFTYNXT50": 1125}
+
+
+def freeze(name: str, day: str | None = None) -> int:
+    """The freeze limit for an underlying on a day (today in India by default); 0 when none is known."""
+    table = FREEZE if (day or ist_date().isoformat()) >= FREEZE_FROM else FREEZE_BEFORE
+    return table.get(name, 0)
 EXCHANGE_NAME = {"NFO": "NSE", "BFO": "BSE", "MCX": "MCX", "CDS": "NSE currency"}
 CDS_UNITS = 1000     # currency contracts are 1,000 units (JPYINR: 100,000 yen, quoted per 100); Kite lists the lot as 1
 FRESH_SECONDS = 120
@@ -83,7 +92,7 @@ class OptionsData:
         for k, u in seen.items():
             ex = sorted(u["expiries"])
             out.append({"exchange": u["exchange"], "name": u["name"], "lot": u["lot"], "expiries": ex[:6],
-                        "venue": EXCHANGE_NAME[u["exchange"]], "popular": k in rank, "freeze": FREEZE.get(u["name"], 0),
+                        "venue": EXCHANGE_NAME[u["exchange"]], "popular": k in rank, "freeze": freeze(u["name"]),
                         "index": k in INDEX_SPOT})
         out.sort(key=lambda u: (rank.get((u["exchange"], u["name"]), 99), u["exchange"] != "NFO", u["name"]))
         return out
@@ -205,7 +214,7 @@ class OptionsData:
         rows = [{"strike": k, "ce": q.get(c.key("CE", k)), "pe": q.get(c.key("PE", k))} for k in strikes]
         return {"expiry": c.expiry, "expiries": self.expiries(exchange, name)[:6], "lot": c.lot, "spot": spot,
                 "atm": mid, "step": c.step(mid), "rows": rows, "spot_ts": spot_q.get("ts") if spot_q else None,
-                "freeze": FREEZE.get(name, 0)}
+                "freeze": freeze(name)}
 
     # ---------- margin ----------
     def margin(self, legs: list[dict]) -> float | None:

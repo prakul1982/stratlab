@@ -125,7 +125,8 @@ class KiteService:
         self._inst_day: str | None = None
         self._idx: dict = {}
         self._idx_of: list | None = None
-        self._cache: dict = {}
+        from .intel.net import SizedDict
+        self._cache = SizedDict(max_items=300, max_bytes=96 * 1024 * 1024)   # candles: bounded, the market audit reads every company
         self.login_state: str | None = None
 
     # ---------- auth ----------

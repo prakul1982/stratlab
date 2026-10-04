@@ -30,6 +30,7 @@ from razorpay.errors import SignatureVerificationError
 from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
 from . import money_mf
 from . import money_advance_tax, money_routes
+from . import rules, rules_watch
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
@@ -57,7 +58,7 @@ from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_confi
 from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators
 from .options import importer as opt_importer
-from .options.data import FREEZE, OptionsData
+from .options.data import OptionsData, freeze as freeze_limit
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
@@ -175,6 +176,7 @@ surv_job = surveillance.Job(lambda: filings_feed, lambda changes, now: stock_ale
 lifecycle_job = lifecycle.Job()
 advance_tax_job = money_advance_tax.Job()       # advance tax reminders, for those who turned them on
 invite_job = invite_rewards.Job()
+rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
 
 
 @asynccontextmanager
@@ -209,6 +211,7 @@ async def lifespan(app: FastAPI):
     lifecycle_job.start()
     advance_tax_job.start()
     invite_job.start()
+    rules_watch_job.start()
     networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
@@ -2972,7 +2975,7 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
         l["quote"] = q.get(l["key"]) if l["key"] else None
         l["fill"] = fill_price(l["quote"], l["side"], s.costs.slippageTicks)
         l["sym"] = l["key"].split(":", 1)[1] if l["key"] else None
-    freeze = s.costs.freeze or FREEZE.get(s.underlying, 0)
+    freeze = s.costs.freeze or freeze_limit(s.underlying)
     units = s.sizing.lots
     margin_one = margin_all = None
     if all(l["key"] for l in legs):
@@ -3570,6 +3573,31 @@ def admin_platform_check(_=Depends(admin.admin_profile)):
     return run_platform_check(retry_after=0)
 
 
+@app.get("/admin/rules")
+def admin_rules(_=Depends(admin.admin_profile)):
+    """Every hard-coded rate and rule with its source, when each area was last reviewed, and what the daily watch of
+    the official sources last read (with any change waiting to be looked at)."""
+    today = datetime.now(IST).date()
+    watch = rules_watch.state()
+    return {"rules": rules.registry(), "areas": rules.review_status(today), "stale_days": rules.STALE_DAYS,
+            "watch": watch, "check": rules.check(today, watch=watch), "job": rules_watch_job.status}
+
+
+@app.post("/admin/rules/watch/run")
+def admin_rules_watch_run(_=Depends(admin.admin_profile)):
+    """Read the official sources now (changes are emailed as on the daily run)."""
+    rules_watch_job.run_now()
+    return admin_rules()
+
+
+@app.post("/admin/rules/watch/{source_id}/seen")
+def admin_rules_watch_seen(source_id: str, _=Depends(admin.admin_profile)):
+    """Mark a source's change as looked at; the same value won't alert again."""
+    if not rules_watch.mark_seen(source_id[:40]):
+        err(404, "not_found", "Nothing waiting for that source.")
+    return admin_rules()
+
+
 @app.get("/admin/platform/last")
 def admin_platform_last(_=Depends(admin.admin_profile)):
     """The latest check, automatic or by hand, and the last two weeks' tallies."""
@@ -3602,7 +3630,8 @@ def platform_checks() -> list:
                ("Company page: AAPL", "Research", lambda: pc.check_company(research_hub, "US", "AAPL")),
                ("News", "Research", lambda: pc.check_news(research_hub)),
                ("Database", "Server", lambda: pc.check_database(db)),
-               ("Holiday calendar", "Server", lambda: pc.check_calendar(today))]
+               ("Holiday calendar", "Server", lambda: pc.check_calendar(today)),
+               ("Rates and rules last reviewed", "Rules", lambda: pc.check_rules(today, rules_watch.state()))]
     return checks
 
 

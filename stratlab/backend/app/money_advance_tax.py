@@ -35,6 +35,7 @@ TOLERANCE = {0: 0.12, 1: 0.36}    # paid at least this share by June and Septemb
 RATE = 0.01                       # a month, for 234B and 234C
 MONTHS_234C = (3, 3, 3, 1)
 RETURN_BY = (7, 31)               # 234B is shown as if the rest is paid with the return, by 31 July
+RETURN_BY_BUSINESS = (8, 31)      # with business income and no audit, by 31 August from FY 2025-26 (Finance Act 2026)
 MAX_AMOUNT = 1e11
 MAX_PAYMENTS = 24
 REMIND_DAYS = (7, 1)
@@ -48,6 +49,8 @@ ASSUMPTIONS = [
     "(salary, interest, intraday and F&O results) is counted for the whole year at every date.",
     "Interest is shown on whole ₹100 of shortfall, the way rule 119A rounds it. Interest under section 234A (a late "
     "return) isn't included.",
+    "Section 234B interest is counted to the return's due date: 31 July, or 31 August with intraday or F&O income from "
+    "FY 2025-26 (Finance Act 2026).",
 ]
 
 
@@ -73,10 +76,18 @@ def months_234b(fy: int, pay_day: date) -> int:
     return max(0, (pay_day.year - (fy + 1)) * 12 + pay_day.month - 3)
 
 
-def schedule(fy: int, tax: float, tax_upto: list[float], tds: float, payments: list[dict], today: date) -> dict:
+def return_due(fy: int, business: bool = False) -> date:
+    """The return's due date without an audit: 31 July, or 31 August with business income (intraday, F&O) from
+    FY 2025-26."""
+    return date(fy + 1, *(RETURN_BY_BUSINESS if business and fy >= 2025 else RETURN_BY))
+
+
+def schedule(fy: int, tax: float, tax_upto: list[float], tds: float, payments: list[dict], today: date,
+             business: bool = False) -> dict:
     """The year's instalments. `tax` is the year's total tax; `tax_upto[i]` the same with only the share gains and
     dividends that had arisen by due date i (the last is the whole year). `tds` is the TDS for the year and
-    `payments` the advance tax paid ({d, amount})."""
+    `payments` the advance tax paid ({d, amount}); `business` whether the year has business income, which moves the
+    return's due date (and so 234B's months) to 31 August."""
     payments = sorted(payments, key=lambda p: p["d"])
     net = max(0.0, tax - tds)
     due = net >= THRESHOLD
@@ -103,7 +114,7 @@ def schedule(fy: int, tax: float, tax_upto: list[float], tds: float, payments: l
                      "tolerated": tolerated, "status": status})
     paid_year = paid_by(payments, f"{fy + 1}-03-31")
     year_over = today_s > f"{fy + 1}-03-31"
-    pay_day = max(today, date(fy + 1, *RETURN_BY)) if year_over else date(fy + 1, *RETURN_BY)
+    pay_day = max(today, return_due(fy, business)) if year_over else return_due(fy, business)
     b_short = max(0.0, net - paid_year)
     b_applies = due and paid_year < 0.9 * net
     b_months = months_234b(fy, pay_day)

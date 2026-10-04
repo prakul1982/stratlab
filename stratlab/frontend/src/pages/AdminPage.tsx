@@ -8,6 +8,7 @@ import { AuditPanel, MarketAuditPanel } from "../components/AuditPanel";
 import { PricesPanel } from "../components/PricesPanel";
 import { InvoiceAdminPanel } from "../components/InvoiceAdminPanel";
 import { PlatformPanel } from "../components/PlatformPanel";
+import { RulesPanel } from "../components/RulesPanel";
 import { LifecycleEmails } from "../components/LifecycleEmails";
 import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel";
 import { analyticsDashboard } from "../lib/analytics";
@@ -404,6 +405,7 @@ export function AdminPage() {
           {tab === "checks" && (
             <>
               <PlatformPanel />
+              <RulesPanel />
               <AuditPanel />
               <MarketAuditPanel />
               <MarketAuditPanel region="US" />

@@ -11,7 +11,7 @@ from datetime import date, datetime
 
 import httpx
 
-from .net import Source, SourceError
+from .net import SizedDict, Source, SourceError
 
 # the SEC asks automated users to say who they are; 10 requests a second at most
 UA = "StratLab research (contact@stratlab.studio)"
@@ -370,7 +370,7 @@ class SEC(Source):
     def __init__(self, transport: httpx.BaseTransport | None = None):
         super().__init__("https://data.sec.gov", per_minute=300, burst=8, transport=transport, timeout=30,
                          headers={"User-Agent": UA, "Accept": "application/json"})
-        self._built: dict[str, tuple[float, dict]] = {}
+        self._built = SizedDict(max_items=300, max_bytes=64 * 1024 * 1024)   # built companies, bounded in memory
         self._build_lock = threading.Lock()
 
     def _json(self, url: str) -> dict:

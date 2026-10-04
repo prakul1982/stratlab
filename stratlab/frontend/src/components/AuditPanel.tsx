@@ -92,9 +92,11 @@ export function AuditPanel() {
 }
 
 interface MarketState {
+  /** the stored results couldn't be read yet (just after a restart): nothing else is filled in */
+  loading?: boolean; error?: string;
   enabled: boolean; listed: number; checked: number; due: number; current: string | null; eta_hours: number | null;
   /** why nothing is being checked: switched off, an audit above is running, or a source is turning every company away */
-  paused?: "off" | "busy" | "cooling" | null; cool_minutes?: number; rate_per_hour?: number;
+  paused?: "off" | "busy" | "cooling" | "loading" | null; cool_minutes?: number; rate_per_hour?: number;
   list_at: string | null; list_error: string | null; reset_at?: string | null;
   full?: { running: boolean; since: string | null; done_at: string | null; left: number; checked: number | null; everything?: boolean; pending_only?: boolean };
   monthly?: { on: boolean; last: string | null; next: string | null };
@@ -113,7 +115,8 @@ const until = (iso: string) => {
   return s < 60 ? "any minute" : s < 3600 ? `in ${Math.round(s / 60)} min` : `in ${Math.round(s / 3600)} h`;
 };
 const hoursText = (h: number) => (h < 1 ? "under an hour" : h < 48 ? `about ${Math.round(h)} hours` : `about ${Math.round(h / 24)} days`);
-const PAUSED: Record<"off" | "busy" | "cooling", string> = {
+const PAUSED: Record<"off" | "busy" | "cooling" | "loading", string> = {
+  loading: "Reading the stored results; nothing is checked or changed until they are.",
   off: "Paused: switched off. Press Start to check companies.",
   busy: "Paused: an audit above is running. It carries on by itself when that finishes.",
   cooling: "Slowed down: a source is turning every company away, so it waits between companies until it answers again.",
@@ -163,7 +166,9 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
         ? "Every company that files with the SEC (common stock only: preferred shares, warrants, units and rights are left out). The SEC's list is read once a day; new companies are checked as they appear."
         : "Every company listed in India: all of NSE, plus those listed only on BSE (shown as BSE: and their code). The lists are read once a day; new listings are checked as they appear and delisted companies drop off."}
         {" "}A full check of every company runs on the 1st of each month; between those, only new listings. A check a source turned away is tried again in small batches every hour.</p>
-      {!m ? <p className="small muted">Loading…</p> : (
+      {!m ? <p className="small muted">Loading…</p> : m.loading ? (
+        <p className="small muted" role="status">{m.error || "The stored results are being read. Nothing is checked or changed until they are."}</p>
+      ) : (
         <>
           <p className="small" style={{ margin: 0 }}>
             <b>{m.paused ? PAUSED[m.paused] : m.due ? `Running · ${m.due.toLocaleString("en-IN")} to check` : "Running · up to date"}</b>
