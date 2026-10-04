@@ -5,7 +5,7 @@ import { cleanProps, maskPath, track } from "../src/lib/analytics";
 // Usage analytics (PostHog): completely off without a key, nothing personal when on, and the CSP lets in only its host.
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
   refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
-const HOST = "https://eu.i.posthog.com";
+const HOST = "https://us.i.posthog.com";
 
 /** Open a page signed in, optionally with a PostHog key in config.js; returns every request the page made. */
 async function open(page: Page, path: string, ready: string, key = "") {
@@ -112,6 +112,6 @@ test.describe("analytics in the app", () => {
     expect(sent).not.toMatch(/\$snapshot|\$autocapture|\$rageclick/);
     // the owner's way in, on Admin → Overview
     await page.goto("/admin");
-    await expect(page.getByTestId("posthog-dashboard")).toHaveAttribute("href", "https://eu.posthog.com");
+    await expect(page.getByTestId("posthog-dashboard")).toHaveAttribute("href", "https://us.posthog.com");
   });
 });

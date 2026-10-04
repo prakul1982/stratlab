@@ -71,7 +71,7 @@ function Privacy() {
         <li>Razorpay processes payments.</li>
         <li>AI providers (such as Groq, Google Gemini, Cerebras, Mistral, OpenRouter or Anthropic) receive the text you type into AI features, like an idea to turn into rules, but not your email.</li>
         <li>Telegram and our email provider deliver alerts you turn on. Sentry receives error reports without personal details.</li>
-        <li>PostHog (hosted in the EU) receives the usage analytics described above.</li>
+        <li>PostHog (hosted in the US) receives the usage analytics described above.</li>
       </ul>
       <p>Some of these providers store data outside India, under their own security and privacy commitments.</p>
       <h2 className="h3">Cookies and storage</h2>

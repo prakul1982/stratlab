@@ -98,7 +98,7 @@ class Settings:
     SENTRY_ENV = _env("SENTRY_ENV", "production")
     # optional usage analytics: the PostHog project key (phc_…) sends "payment completed" from the server
     POSTHOG_KEY = _env("POSTHOG_KEY")
-    POSTHOG_HOST = _env("POSTHOG_HOST", "https://eu.i.posthog.com").rstrip("/")
+    POSTHOG_HOST = _env("POSTHOG_HOST", "https://us.i.posthog.com").rstrip("/")
 
 
 settings = Settings()

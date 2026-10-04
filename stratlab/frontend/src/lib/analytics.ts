@@ -60,7 +60,7 @@ export function analyticsConfig(): Cfg | null {
   try { env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {}; } catch { /* not built by Vite */ }
   const key = (w?.POSTHOG_KEY || env.VITE_POSTHOG_KEY || "").trim();
   if (!key) return null;
-  const host = (w?.POSTHOG_HOST || env.VITE_POSTHOG_HOST || "https://eu.i.posthog.com").trim().replace(/\/+$/, "");
+  const host = (w?.POSTHOG_HOST || env.VITE_POSTHOG_HOST || "https://us.i.posthog.com").trim().replace(/\/+$/, "");
   return { key, host };
 }
 

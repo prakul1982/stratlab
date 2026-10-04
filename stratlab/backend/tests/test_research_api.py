@@ -179,7 +179,7 @@ def test_an_old_stored_read_with_scores_shows_none(api):
     """A read cached before scores were removed still goes out without them."""
     old = {"summary": "Old read.", "scores": {"moat": 90, "growth": 80}, "composite": 70, "valuation": "rich",
            "valuation_note": "", "bull": [], "bear": [], "segments": [], "position": "", "watch": [], "ideas": []}
-    key = ("US", "NVDA", routes.has_pro_features("free"), routes.datetime.now(routes.IST).date().isoformat())
+    key = ("US", "NVDA", routes.has_indicators("free"), routes.datetime.now(routes.IST).date().isoformat())
     A._cache.set(A._key("company", *key), dict(old, generated_at=1.0), 3600)
     r = api.get("/research/company/US/NVDA/ai").json()
     assert r["summary"] == "Old read." and r["facts"] == [] and not api.calls
