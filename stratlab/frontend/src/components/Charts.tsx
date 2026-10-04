@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useState } from "react";
+import { XYChart, type XYChartProps } from "./chart/XYChart";
+import { ChartTip } from "./chart/parts";
 
-/* Hand-drawn-feeling SVG charts in the notebook style. Colors come from CSS variables so both themes work. */
+/* The app's charts. Everything that plots values over time or across prices is drawn by chart/XYChart (crosshair and
+ * tooltip, zoom and pan, ranges, legends, linked charts, table view); this file keeps the older entry points and the
+ * small one-off figures. Colours come from CSS variables, so both themes work. */
+
+export { XYChart } from "./chart/XYChart";
+export type { Series, RefLine, XMarker, PointMark, XYChartProps } from "./chart/XYChart";
+export { PayoffChart } from "./chart/PayoffChart";
+export type { PayoffCurve, PayoffMarker } from "./chart/PayoffChart";
+export { ChartEmpty, Legend } from "./chart/parts";
 
 export interface Line {
   values: (number | null)[];
@@ -11,168 +21,55 @@ export interface Line {
 }
 export interface Marker { i: number; side: "buy" | "sell" }
 
-interface LineChartProps {
+interface LineChartProps extends Partial<Omit<XYChartProps, "series" | "format" | "ariaLabel" | "labels">> {
   lines: Line[];
   labels: string[];                 // tooltip label per point
-  axisLabels?: string[];            // x-axis labels at evenly spaced points
   height?: number;
   format: (v: number) => string;
-  axisFormat?: (v: number) => string;   // shorter numbers for the y axis
-  split?: number | null;            // index where "unseen data" starts
-  splitNotes?: [string, string];    // annotations either side of the split
   markers?: Marker[];
   baseline?: number | null;
   ariaLabel: string;
   levels?: { v: number; color: string; label: string }[];
 }
 
-const PAD = { l: 58, r: 12, t: 30, b: 26 };
-
-export function LineChart({ lines, labels, axisLabels, height = 250, format, axisFormat, split, splitNotes, markers = [], baseline,
-  ariaLabel, levels = [] }: LineChartProps) {
-  // draw at the real width, so text stays readable on phones
-  const wrap = useRef<HTMLDivElement>(null);
-  const [W, setW] = useState(800);
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(300, Math.round(e.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const H = W < 560 ? Math.round(height * 0.8) : height;
-  const yFmt = axisFormat ?? format;
-  const n = labels.length;
-  const [hover, setHover] = useState<number | null>(null);
-  const ref = useRef<SVGSVGElement>(null);
-
-  const { min, max } = useMemo(() => {
-    let lo = Infinity, hi = -Infinity;
-    for (const l of lines) for (const v of l.values) if (v != null && Number.isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
-    for (const lv of levels) { lo = Math.min(lo, lv.v); hi = Math.max(hi, lv.v); }
-    if (baseline != null) { lo = Math.min(lo, baseline); hi = Math.max(hi, baseline); }
-    if (!Number.isFinite(lo)) { lo = 0; hi = 1; }
-    if (lo === hi) { lo -= 1; hi += 1; }
-    const pad = (hi - lo) * 0.08;
-    return { min: lo - pad, max: hi + pad };
-  }, [lines, levels, baseline]);
-
-  const x = (i: number) => PAD.l + (n <= 1 ? 0 : (i / (n - 1)) * (W - PAD.l - PAD.r));
-  const y = (v: number) => PAD.t + (1 - (v - min) / (max - min)) * (H - PAD.t - PAD.b);
-  const path = (vals: (number | null)[]) => {
-    let d = "", pen = false;
-    vals.forEach((v, i) => {
-      if (v == null || !Number.isFinite(v)) { pen = false; return; }
-      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
-      pen = true;
-    });
-    return d;
-  };
-  const ticks = [0, 1, 2, 3].map((k) => min + ((max - min) * (k + 0.5)) / 4);
-  const axis = axisLabels ?? labels;
-  const xTicks = n > 1 ? (W < 560 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map((f) => Math.round(f * (n - 1))) : [0];
-
-  const move = (e: PointerEvent<SVGSVGElement>) => {
-    const box = ref.current?.getBoundingClientRect();
-    if (!box || n < 2) return;
-    const px = ((e.clientX - box.left) / box.width) * W;
-    const i = Math.round(((px - PAD.l) / (W - PAD.l - PAD.r)) * (n - 1));
-    setHover(Math.max(0, Math.min(n - 1, i)));
-  };
-
-  const hx = hover != null ? x(hover) : 0;
-  const first = lines[0]?.values[hover ?? 0];
-
+/** The older line-chart entry point: lines, a label per point and optional baseline, levels and buy/sell marks, drawn by
+ * XYChart. Pages that render their own legend keep it (legend off by default here). */
+export function LineChart({ lines, baseline, levels = [], markers = [], legend = false, refs = [], ...rest }: LineChartProps) {
   return (
-    <div ref={wrap} style={{ position: "relative" }}>
-      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={ariaLabel}
-        onPointerMove={move} onPointerLeave={() => setHover(null)} style={{ touchAction: "pan-y", overflow: "visible" }}>
-        {split != null && split > 0 && split < n && (
-          <>
-            <rect x={x(split)} y={PAD.t - 22} width={W - PAD.r - x(split)} height={H - PAD.b - PAD.t + 22} fill="var(--orange-soft)" opacity={0.6} />
-            <line x1={x(split)} x2={x(split)} y1={PAD.t - 22} y2={H - PAD.b} stroke="var(--ink)" strokeDasharray="3 4" />
-            {splitNotes && (
-              <>
-                <text x={x(split) - 8} y={PAD.t - 8} textAnchor="end" fontFamily="var(--serif)" fontStyle="italic" fontSize={W < 560 ? 12 : 15} fill="var(--ink)">{splitNotes[0]}</text>
-                <text x={Math.min(x(split) + 8, W - PAD.r - 4)} y={PAD.t - 8} textAnchor={x(split) > W * 0.8 ? "end" : "start"} fontFamily="var(--serif)" fontStyle="italic" fontSize={W < 560 ? 12 : 15} fill="var(--orange-ink)">{splitNotes[1]}</text>
-              </>
-            )}
-          </>
-        )}
-        {ticks.map((t, k) => (
-          <g key={k}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} stroke="var(--line)" />
-            <text x={PAD.l - 8} y={y(t) + 4} textAnchor="end" fontFamily="var(--mono)" fontSize={11} fill="var(--muted)">{yFmt(t)}</text>
-          </g>
-        ))}
-        {baseline != null && <line x1={PAD.l} x2={W - PAD.r} y1={y(baseline)} y2={y(baseline)} stroke="var(--dash)" strokeDasharray="4 4" />}
-        {levels.map((lv) => (
-          <line key={lv.label} x1={PAD.l} x2={W - PAD.r} y1={y(lv.v)} y2={y(lv.v)} stroke={lv.color} strokeDasharray="5 4" strokeWidth={1.2} />
-        ))}
-        {lines.map((l) => (
-          <path key={l.label} d={path(l.values)} fill="none" stroke={l.color} strokeWidth={l.width ?? 1.8} strokeDasharray={l.dash} strokeLinejoin="round" />
-        ))}
-        {markers.map((m, k) => {
-          const v = lines[0]?.values[m.i];
-          if (v == null) return null;
-          const cx = x(m.i), cy = y(v);
-          return m.side === "buy"
-            ? <path key={k} d={`M${cx},${cy + 7} l6,10 h-12z`} fill="var(--blue)" />
-            : <path key={k} d={`M${cx},${cy - 7} l6,-10 h-12z`} fill="var(--orange)" />;
-        })}
-        {xTicks.map((i, k) => (
-          <text key={k} x={x(i)} y={H - 6} textAnchor={k === 0 ? "start" : k === xTicks.length - 1 ? "end" : "middle"}
-            fontFamily="var(--mono)" fontSize={11} fill="var(--muted)">{axis[i]}</text>
-        ))}
-        {hover != null && <line x1={hx} x2={hx} y1={PAD.t} y2={H - PAD.b} stroke="var(--ink)" strokeWidth={1} opacity={0.35} />}
-        {hover != null && first != null && <circle cx={hx} cy={y(first)} r={4} fill="var(--ink)" />}
-      </svg>
-      {hover != null && (
-        <div className="mono" style={{
-          position: "absolute", top: 0, left: `${(hx / W) * 100}%`, transform: `translateX(${hx > W * 0.7 ? "-105%" : "8px"})`,
-          background: "var(--card)", border: "1px solid var(--line-2)", borderRadius: 8, padding: "6px 10px", fontSize: 12.5,
-          pointerEvents: "none", whiteSpace: "nowrap", boxShadow: "var(--shadow)",
-        }}>
-          <div className="muted">{labels[hover]}</div>
-          {lines.map((l) => l.values[hover] != null && (
-            <div key={l.label} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ width: 10, height: 3, background: l.color, display: "inline-block" }} />{l.label}: {format(l.values[hover] as number)}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <XYChart {...rest} legend={legend}
+      series={lines.map((l) => ({ label: l.label, values: l.values, color: l.color, width: l.width ?? 2, dash: l.dash }))}
+      refs={[...(baseline != null ? [{ v: baseline, strong: baseline === 0 }] : []), ...levels.map((lv) => ({ v: lv.v, color: lv.color, dash: true, label: lv.label })), ...refs]}
+      points={markers.map((m) => ({ i: m.i, kind: m.side }))} />
   );
 }
 
-export function Legend({ items }: { items: { label: string; color: string; dash?: boolean }[] }) {
-  return (
-    <div className="row wrap small muted" style={{ gap: 16 }}>
-      {items.map((i) => (
-        <span key={i.label} className="row" style={{ gap: 6 }}>
-          <span style={{ width: 16, height: 0, borderTop: `2px ${i.dash ? "dashed" : "solid"} ${i.color}`, display: "inline-block" }} />{i.label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-/* 5×5 grid of returns for nearby indicator settings; yours outlined. */
+/* 5×5 grid of returns for nearby indicator settings; yours outlined. Each cell shows its return on hover or focus. */
 export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [number, number]; label: string }) {
   const cols = grid[0]?.length ?? 0;
+  const [on, setOn] = useState<[number, number] | null>(null);
+  const fmt = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%`;
+  const v = on ? grid[on[0]]?.[on[1]] : null;
   return (
-    <div role="img" aria-label={label} style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 3 }}>
-      {grid.flatMap((row, r) => row.map((v, c) => {
-        const a = Math.min(1, 0.25 + Math.abs(v) / 20).toFixed(2);
-        const mine = r === yours[0] && c === yours[1];
-        return (
-          <span key={`${r}-${c}`} title={`${v > 0 ? "+" : ""}${v.toFixed(1)}%`} style={{
-            height: 28, borderRadius: 4,
-            background: v > 0 ? `color-mix(in srgb, var(--blue) ${+a * 100}%, transparent)` : `color-mix(in srgb, var(--orange) ${+a * 100}%, transparent)`,
-            outline: mine ? "2.5px solid var(--ink)" : undefined, outlineOffset: 1,
-          }} />
-        );
-      }))}
+    <div style={{ position: "relative" }} onPointerLeave={() => setOn(null)}>
+      <div role="grid" aria-label={label} style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 2 }}>
+        {grid.flatMap((row, r) => row.map((val, c) => {
+          const a = Math.min(1, 0.25 + Math.abs(val) / 20).toFixed(2);
+          const mine = r === yours[0] && c === yours[1];
+          return (
+            <span key={`${r}-${c}`} role="gridcell" tabIndex={0} aria-label={`${fmt(val)}${mine ? ", your settings" : ""}`}
+              onPointerEnter={() => setOn([r, c])} onFocus={() => setOn([r, c])} onBlur={() => setOn(null)} style={{
+                height: 28, borderRadius: 4, cursor: "default",
+                background: val > 0 ? `color-mix(in srgb, var(--series-1) ${+a * 100}%, transparent)` : `color-mix(in srgb, var(--series-2) ${+a * 100}%, transparent)`,
+                outline: mine ? "2.5px solid var(--ink)" : on && on[0] === r && on[1] === c ? "1.5px solid var(--ink-2)" : undefined, outlineOffset: 1,
+              }} />
+          );
+        }))}
+      </div>
+      {on && v != null && (
+        <ChartTip left={((on[1] + 0.5) / cols) * 100} top={(on[0] + 1) * 30} flip={on[1] >= cols / 2} heading={on[0] === yours[0] && on[1] === yours[1] ? "Your settings" : "Nearby setting"}>
+          <div className="ch-tip-row"><b>{fmt(v)}</b><span className="muted">return</span></div>
+        </ChartTip>
+      )}
     </div>
   );
 }
@@ -182,14 +79,14 @@ export function DrawdownBand({ yours, p95, worst }: { yours: number; p95: number
   const max = Math.max(worst, yours, 1) * 1.05;
   const X = (v: number) => 8 + (v / max) * 264;
   return (
-    <svg viewBox="0 0 280 64" width="100%" role="img" aria-label={`Your drawdown ${yours.toFixed(0)}%, 95% of reshuffles under ${p95.toFixed(0)}%, worst ${worst.toFixed(0)}%`}>
+    <svg className="ch-svg" viewBox="0 0 280 64" width="100%" role="img" aria-label={`Your drawdown ${yours.toFixed(0)}%, 95% of reshuffles under ${p95.toFixed(0)}%, worst ${worst.toFixed(0)}%`}>
       <line x1={8} y1={30} x2={272} y2={30} stroke="var(--line)" strokeWidth={10} strokeLinecap="round" />
       <line x1={X(yours)} y1={30} x2={X(p95)} y2={30} stroke="var(--orange-soft)" strokeWidth={10} />
       <line x1={X(yours)} y1={16} x2={X(yours)} y2={44} stroke="var(--ink)" strokeWidth={2} />
-      <circle cx={X(worst)} cy={30} r={5} fill="var(--orange)" />
-      <text x={Math.max(30, X(yours))} y={60} textAnchor="middle" fontFamily="var(--mono)" fontSize={11} fill="var(--ink)">yours −{yours.toFixed(0)}%</text>
-      <text x={272} y={12} textAnchor="end" fontFamily="var(--mono)" fontSize={11} fill="var(--orange-ink)">worst −{worst.toFixed(0)}%</text>
-      <text x={8} y={12} fontFamily="var(--mono)" fontSize={11} fill="var(--muted)">0%</text>
+      <circle cx={X(worst)} cy={30} r={5} fill="var(--orange)" stroke="var(--card)" strokeWidth={2} />
+      <text className="ch-tick strong" x={Math.max(30, X(yours))} y={60} textAnchor="middle">yours −{yours.toFixed(0)}%</text>
+      <text className="ch-tick strong" x={272} y={12} textAnchor="end">worst −{worst.toFixed(0)}%</text>
+      <text className="ch-tick" x={8} y={12}>0%</text>
     </svg>
   );
 }
@@ -199,8 +96,8 @@ export function SplitBars({ built, unseen, builtLabel, unseenLabel }: { built: n
   const max = Math.max(Math.abs(built), Math.abs(unseen), 1);
   const bar = (v: number) => (
     <div className="row" style={{ gap: 8 }}>
-      <span style={{ height: 14, width: `${Math.max(4, (Math.abs(v) / max) * 150)}px`, borderRadius: 3, background: v >= 0 ? "var(--blue)" : "var(--orange)" }} />
-      <span className="mono" style={{ fontSize: 14 }}>{v > 0 ? "+" : v < 0 ? "−" : ""}{Math.abs(v).toFixed(1)}%</span>
+      <span style={{ height: 14, width: `${Math.max(4, (Math.abs(v) / max) * 150)}px`, borderRadius: "0 4px 4px 0", background: v >= 0 ? "var(--series-1)" : "var(--series-2)" }} />
+      <span className="ch-num" style={{ fontSize: 14, fontWeight: 600 }}>{v > 0 ? "+" : v < 0 ? "−" : ""}{Math.abs(v).toFixed(1)}%</span>
     </div>
   );
   return (
@@ -212,77 +109,19 @@ export function SplitBars({ built, unseen, builtLabel, unseenLabel }: { built: n
 }
 
 /* Two counts a day on one scale: the first drawn up from zero, the second down (new highs over new lows, stocks up 4%
- * over those down 4%). Thin columns; hovering a day shows both numbers. */
-export function PairBars({ up, down, labels, upLabel, downLabel, upColor, downColor, ariaLabel, height = 200, format = (v) => String(v) }: {
-  up: number[]; down: number[]; labels: string[]; upLabel: string; downLabel: string; upColor: string; downColor: string;
-  ariaLabel: string; height?: number; format?: (v: number) => string;
+ * over those down 4%). Thin columns with a per-day tooltip; zoom, ranges and linked crosshairs come from XYChart. */
+export function PairBars({ up, down, labels, times, upLabel, downLabel, upColor, downColor, ariaLabel, height = 200, format = (v) => String(v), sync, ranges }: {
+  up: number[]; down: number[]; labels: string[]; times?: string[]; upLabel: string; downLabel: string; upColor: string; downColor: string;
+  ariaLabel: string; height?: number; format?: (v: number) => string; sync?: string; ranges?: boolean;
 }) {
-  const wrap = useRef<HTMLDivElement>(null);
-  const [W, setW] = useState(800);
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(280, Math.round(e.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const H = W < 560 ? Math.round(height * 0.85) : height;
-  const P = { l: 48, r: 10, t: 12, b: 24 };
-  const n = labels.length;
-  // room below zero only when there is something to draw there (no new lows at all: the bars stand on the floor)
-  const bottom = Math.max(0, ...down), top = Math.max(bottom ? 0 : 1, ...up);
-  const plotH = H - P.t - P.b;
-  const zero = P.t + (top / (top + bottom)) * plotH;
-  const scale = plotH / (top + bottom);
-  const slot = (W - P.l - P.r) / Math.max(1, n);
-  const bw = Math.min(24, slot >= 4 ? slot - 2 : slot);         // a 2px gap between columns once they're wide enough
-  const x = (i: number) => P.l + i * slot + (slot - bw) / 2;
-  const [hover, setHover] = useState<number | null>(null);
-  const ref = useRef<SVGSVGElement>(null);
-  const move = (e: PointerEvent<SVGSVGElement>) => {
-    const box = ref.current?.getBoundingClientRect();
-    if (!box || !n) return;
-    const px = ((e.clientX - box.left) / box.width) * W;
-    setHover(Math.max(0, Math.min(n - 1, Math.floor((px - P.l) / slot))));
-  };
-  const r = bw >= 8 ? 4 : 0;
-  // a column with a rounded data end and a square foot on the zero line
-  const col = (i: number, v: number, dir: 1 | -1) => {
-    const h = v * scale, x0 = x(i), x1 = x0 + bw;
-    if (h <= 0) return "";
-    const rr = Math.min(r, h, bw / 2);
-    const end = zero - dir * h;
-    return dir === 1
-      ? `M${x0},${zero}V${end + rr}Q${x0},${end} ${x0 + rr},${end}H${x1 - rr}Q${x1},${end} ${x1},${end + rr}V${zero}Z`
-      : `M${x0},${zero}V${end - rr}Q${x0},${end} ${x0 + rr},${end}H${x1 - rr}Q${x1},${end} ${x1},${end - rr}V${zero}Z`;
-  };
-  const xTicks = n > 1 ? (W < 560 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map((f) => Math.round(f * (n - 1))) : [0];
-  const hx = hover != null ? x(hover) + bw / 2 : 0;
+  const abs = (v: number) => format(Math.abs(v));
   return (
-    <div ref={wrap} style={{ position: "relative" }}>
-      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={ariaLabel}
-        onPointerMove={move} onPointerLeave={() => setHover(null)} style={{ touchAction: "pan-y", overflow: "visible" }}>
-        {([[P.t, format(top), top > 0], [zero, "0", true], [H - P.b, format(bottom), bottom > 0]] as [number, string, boolean][]).filter(([, , on]) => on).map(([yy, t], k) => (
-          <g key={k}>
-            <line x1={P.l} x2={W - P.r} y1={yy} y2={yy} stroke={yy === zero ? "var(--line-2)" : "var(--line)"} />
-            <text x={P.l - 8} y={yy + 4} textAnchor="end" fontFamily="var(--mono)" fontSize={11} fill="var(--muted)">{t}</text>
-          </g>
-        ))}
-        {up.map((v, i) => <path key={`u${i}`} d={col(i, v, 1)} fill={upColor} opacity={hover == null || hover === i ? 1 : 0.55} />)}
-        {down.map((v, i) => <path key={`d${i}`} d={col(i, v, -1)} fill={downColor} opacity={hover == null || hover === i ? 1 : 0.55} />)}
-        {xTicks.map((i, k) => (
-          <text key={k} x={x(i) + bw / 2} y={H - 6} textAnchor={k === 0 ? "start" : k === xTicks.length - 1 ? "end" : "middle"}
-            fontFamily="var(--mono)" fontSize={11} fill="var(--muted)">{labels[i]}</text>
-        ))}
-        {hover != null && <line x1={hx} x2={hx} y1={P.t} y2={H - P.b} stroke="var(--ink)" strokeWidth={1} opacity={0.25} />}
-      </svg>
-      {hover != null && (
-        <div className="mono chart-tip" style={{ left: `${(hx / W) * 100}%`, transform: `translateX(${hx > W * 0.7 ? "-105%" : "8px"})` }}>
-          <div className="muted">{labels[hover]}</div>
-          <div className="row" style={{ gap: 8 }}><span style={{ width: 10, height: 3, background: upColor, display: "inline-block" }} /><b>{format(up[hover])}</b> {upLabel}</div>
-          <div className="row" style={{ gap: 8 }}><span style={{ width: 10, height: 3, background: downColor, display: "inline-block" }} /><b>{format(down[hover])}</b> {downLabel}</div>
-        </div>
-      )}
-    </div>
+    <XYChart ariaLabel={ariaLabel} height={height} times={times} labels={times ? undefined : labels} axisLabels={labels} sync={sync} ranges={ranges}
+      format={abs} axisFormat={abs} refs={[{ v: 0, strong: true }]}
+      series={[
+        { id: "up", label: upLabel, values: up, color: upColor, kind: "bar" },
+        { id: "down", label: downLabel, values: down.map((v) => (v == null ? v : -v)), color: downColor, kind: "bar" },
+      ]} />
   );
 }
+

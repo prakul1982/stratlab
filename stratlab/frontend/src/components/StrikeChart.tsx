@@ -62,14 +62,14 @@ export function StrikeChart({ rows, mode, spot, label }: { rows: StrikeRow[]; mo
                 if (v == null || v === 0) return null;
                 return <path key={s} d={barPath(zero[s], reach(s, v), at + (ROW - BAR) / 2, BAR)} fill={`var(--pos-${s})`} opacity={v < 0 ? 0.55 : 1} />;
               })}
-              <text x={(cx0 + cx1) / 2} y={at + ROW / 2 + 4} textAnchor="middle" fontFamily="var(--mono)" fontSize={11.5}
+              <text x={(cx0 + cx1) / 2} y={at + ROW / 2 + 4} textAnchor="middle" fontFamily="var(--sans)" fontSize={11.5} style={{ fontVariantNumeric: "tabular-nums" }}
                 fill={r.strike === nearest ? "var(--ink)" : "var(--muted)"} fontWeight={r.strike === nearest ? 600 : 400}>{strikeText(r.strike)}</text>
             </g>
           );
         })}
       </svg>
       {h && (
-        <div className="mono strike-tip" role="status" style={{ top: Math.min(y(hover!) + ROW + 4, H - 70), left: "50%" }}>
+        <div className="strike-tip ch-num" role="status" style={{ top: Math.min(y(hover!) + ROW + 4, H - 70), left: "50%" }}>
           <div className="muted">Strike {strikeText(h.strike)}{h.strike === nearest ? " · nearest the spot" : ""}</div>
           <div className="row" style={{ gap: 6 }}><span className="key-line" style={{ background: "var(--pos-call)" }} /><b>{contracts(h.call_oi)}</b> calls <span className="muted">({signed(h.call_chg)})</span></div>
           <div className="row" style={{ gap: 6 }}><span className="key-line" style={{ background: "var(--pos-put)" }} /><b>{contracts(h.put_oi)}</b> puts <span className="muted">({signed(h.put_chg)})</span></div>

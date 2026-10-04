@@ -26,7 +26,8 @@ export function niceTicks(lo: number, hi: number, count = 5): number[] {
 export function niceDomain(lo: number, hi: number, count = 5, includeZero = false): { min: number; max: number; ticks: number[] } {
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) { lo = 0; hi = 1; }
   if (includeZero) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
-  if (lo === hi) { const d = Math.abs(lo) * 0.05 || 1; lo -= d; hi += d; }
+  if (lo === hi && lo === 0) hi = 1;                   // all zeros: draw them on the floor, not mid-air between −1 and 1
+  else if (lo === hi) { const d = Math.abs(lo) * 0.05 || 1; lo -= d; hi += d; }
   const pad = (hi - lo) * 0.06;
   const min = includeZero && lo === 0 ? 0 : lo - pad, max = includeZero && hi === 0 ? 0 : hi + pad;
   return { min, max, ticks: niceTicks(min, max, count).filter((t) => t >= min && t <= max) };
