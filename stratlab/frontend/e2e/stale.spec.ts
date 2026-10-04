@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Finished things never look current: on the paper trading pages, the options sessions list and the alerts page,
-// what is running or happened today comes first, and what is over (stopped sessions, earlier orders, alerts that fired
-// before today) folds under one "Earlier"-style line with a count, closed until opened and never deleted.
+// Finished things never look current: on the paper trading pages, the options sessions list, the alerts page and the
+// results, corporate actions and money calendars, what is running or happened today comes first, and what is over
+// (stopped sessions, earlier orders, alerts that fired before today, dates gone by) folds under one "Earlier"-style
+// line with a count, closed until opened and never deleted.
 // Every page here is drawn from saved answers at a fixed moment: Monday 5 Oct 2026, 13:00 in India.
 const NOW = "2026-10-05T07:30:00+00:00";
 test.use({ timezoneId: "Asia/Kolkata" });
@@ -169,4 +170,63 @@ test("alerts: the ones on first, today's fired ones next, the ones that fired be
   await fold.locator("summary").click();
   await expect(fold.getByRole("link", { name: "INFY" })).toBeVisible();
   await expect(fold.getByRole("link", { name: "WIPRO" })).toBeVisible();
+});
+
+// ---------- calendars: the days gone by fold below the ones ahead ----------
+test("results calendar: days gone by this week fold into one line", async ({ page }, info) => {
+  const r = (symbol: string, date: string) => ({ region: "IN", symbol, name: `${symbol} Ltd`, date, when: null, purpose: "Financial Results", url: null, mine: false, out: null });
+  const view = { region: "IN", scope: "all", today: "2026-10-07", updated_at: null, more: 0, mine_count: 0, alerts: false, note: "Dates as the companies announced them.",
+    weeks: [{ label: "This week", from: "2026-10-05", to: "2026-10-11", rows: [r("TCS", "2026-10-05"), r("INFY", "2026-10-06"), r("WIPRO", "2026-10-08")] },
+      { label: "Next week", from: "2026-10-12", to: "2026-10-18", rows: [r("HDFCBANK", "2026-10-13")] }] };
+  const errors = await open(page, "/research/results?region=IN&scope=all", { "/research/results": view }, "Results this week and next");
+  const week = page.locator("section", { has: page.getByRole("heading", { name: "This week" }) });
+  await expect(week.getByText("WIPRO", { exact: true })).toBeVisible();
+  await expect(week.locator("details.earlier summary")).toContainText("Earlier this week (2)");
+  await expect(week.getByText("TCS", { exact: true })).toHaveCount(0);
+  await sane(page, errors, info.project.name === "phone");
+  await shot(page, "results-calendar-mock", info.project.name);
+  await week.locator("details.earlier summary").click();
+  await expect(week.getByText("TCS", { exact: true })).toBeVisible();
+});
+
+test("corporate actions: the last two weeks fold below what's coming up", async ({ page }, info) => {
+  const a = (id: string, symbol: string, ex: string) => ({ id, region: "IN", symbol, name: `${symbol} Ltd`, kind: "dividend", label: "Dividend ₹5 a share",
+    text: "Dividend ₹5 a share", amount: 5, ratio: null, factor: null, currency: "INR", ex_date: ex, record_date: ex, purpose: "Dividend", src: "x" });
+  const view = { region: "IN", scope: "all", kind: "", today: "2026-10-05", updated_at: null, ahead: [a("1", "TCS", "2026-10-09")],
+    recent: [a("2", "INFY", "2026-09-30"), a("3", "WIPRO", "2026-09-25")], more: 0, mine_count: 0, alerts: false,
+    kinds: ["dividend", "bonus", "split"], ahead_known: true, note: "" };
+  const errors = await open(page, "/research/corporate-actions?region=IN&scope=all", { "/research/corp-actions": view }, "Coming up");
+  await expect(page.getByText("TCS", { exact: true })).toBeVisible();
+  const fold = page.locator("details.earlier", { hasText: "Last two weeks" });
+  await expect(fold.locator("summary")).toContainText("Last two weeks (2)");
+  await expect(page.getByText("INFY", { exact: true })).toHaveCount(0);
+  await sane(page, errors, info.project.name === "phone");
+  await shot(page, "corporate-actions-mock", info.project.name);
+  await fold.locator("summary").click();
+  await expect(page.getByText("INFY", { exact: true })).toBeVisible();
+});
+
+test("money calendar: the next 90 days in view, the past week and passed one-off dates folded", async ({ page }, info) => {
+  const e = (id: string, date: string, title: string) => ({ id, date, title, cat: "tax", kind: "tax", detail: "", amount: null, symbol: null, url: null });
+  const own = (id: string, date: string, title: string, repeat: string) => ({ id, date, title, note: "", amount: null, repeat });
+  const view = { events: [e("1", "2026-10-01", "Old tax date"), e("2", "2026-10-03", "Another old one"), e("3", "2026-10-31", "ITR due date")],
+    start: "2026-09-28", end: "2027-01-03", today: "2026-10-05", as_of: NOW, cats: [{ id: "tax", label: "Tax" }, { id: "custom", label: "Your events" }],
+    own: [own("o1", "2026-09-20", "FD matured", "none"), own("o2", "2026-11-01", "Rent goes up", "none"), own("o3", "2026-01-10", "Insurance", "yearly")],
+    own_max: 50, feed: null, reminders: { on: false, days: 3, channel: "email", cats: ["tax"] }, reminders_allowed: true, reminders_plan: "basic",
+    remind_days: [1, 3, 7], notes: [] };
+  const errors = await open(page, "/money/calendar", { "/money/calendar": view }, "Money calendar");
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
+  const card = page.locator("section", { has: page.getByRole("group", { name: "View" }) });
+  await expect(card.getByText("ITR due date")).toBeVisible();
+  await expect(card.getByText("Old tax date")).toHaveCount(0);
+  await expect(card.locator("details.earlier summary")).toContainText("The past week (2)");
+  const mine = page.getByRole("list", { name: "Your dates" });
+  await expect(mine.getByText("Rent goes up")).toBeVisible();
+  await expect(mine.getByText("Insurance")).toBeVisible();                       // repeats, so it comes round again
+  await expect(page.getByText("FD matured")).toHaveCount(0);
+  await expect(page.locator("details.earlier summary", { hasText: "Past dates" })).toContainText("(1)");
+  await sane(page, errors, info.project.name === "phone");
+  await shot(page, "money-calendar-mock", info.project.name);
+  await card.locator("details.earlier summary").click();
+  await expect(card.getByText("Old tax date")).toBeVisible();
 });
