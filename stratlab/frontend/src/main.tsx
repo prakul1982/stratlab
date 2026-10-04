@@ -84,6 +84,8 @@ const CompanyPage = page(research, "CompanyPage");
 const AlertsPage = page(() => import("./pages/AlertsPage"), "AlertsPage");
 const screensPage = () => import("./pages/Screens");
 const ScreensPage = page(screensPage, "ScreensPage");
+const breadthPage = () => import("./pages/BreadthPage");
+const BreadthPage = page(breadthPage, "BreadthPage");
 const netWorth = () => import("./pages/money/NetWorthPage");
 const NetWorthPage = page(netWorth, "NetWorthPage");
 
@@ -209,6 +211,7 @@ function Routed() {
         <Route path="/watchlist" element={<Navigate to="/research/watchlist" replace />} />
         <Route path="/research/screens" element={<ScreensPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />
+        <Route path="/invest/breadth" element={<BreadthPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />
