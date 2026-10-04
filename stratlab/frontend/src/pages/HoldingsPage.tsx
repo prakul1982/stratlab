@@ -46,8 +46,8 @@ function Trend({ f }: { f?: Facts }) {
   return <>Stage {f.stage} · ST {f.st_up ? "up" : "down"}</>;
 }
 
-function FilingsCell({ f, allowed }: { f?: Facts; allowed: boolean }) {
-  if (!allowed) return <span className="muted">Pro</span>;
+function FilingsCell({ f, allowed, plan }: { f?: Facts; allowed: boolean; plan?: string }) {
+  if (!allowed) return <span className="muted">{plan ?? "Basic"}</span>;
   if (!f || f.red == null) return <span className="muted">–</span>;
   if (f.red) return <span className="neg">{f.red} red flag{f.red === 1 ? "" : "s"}</span>;
   return <>{f.amber ? `${f.amber} to look at` : "No red flags"}</>;
@@ -66,7 +66,7 @@ export function HoldingsPage() {
 
   const loadFacts = useCallback((v: View) => {
     setFacts(null);
-    if (v.rows.length) api<FactsReply>("/holdings/facts").then(setFacts).catch(() => setFacts({ rows: {}, filings: true, filings_plan: "Pro", checked: 0, count: 0 }));
+    if (v.rows.length) api<FactsReply>("/holdings/facts").then(setFacts).catch(() => setFacts({ rows: {}, filings: true, filings_plan: "Basic", checked: 0, count: 0 }));
   }, []);
   const [actionsAt, setActionsAt] = useState(0);         // reload the corporate actions whenever the holdings change
   const show = useCallback((v: View) => { setView(v); loadFacts(v); setActionsAt((n) => n + 1); }, [loadFacts]);
@@ -232,7 +232,7 @@ export function HoldingsPage() {
                         <td className={`num ${signClass(r.day)}`}>{r.day == null ? "–" : <>{inr(r.day)} <span className="tiny">{pct(r.day_pct, 2)}</span></>}</td>
                         <td className="num">{r.weight == null ? "–" : `${r.weight.toFixed(1)}%`}</td>
                         <td style={{ textAlign: "left" }} className="small"><Trend f={f} /></td>
-                        <td style={{ textAlign: "left" }} className="small"><FilingsCell f={f} allowed={facts?.filings !== false} /></td>
+                        <td style={{ textAlign: "left" }} className="small"><FilingsCell f={f} allowed={facts?.filings !== false} plan={facts?.filings_plan} /></td>
                         <td style={{ textAlign: "left" }} className="small">{f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="muted">–</span>}</td>
                         <td><button className="btn quiet sm" onClick={() => setEdit(r)} aria-label={`Edit ${r.symbol}`}>Edit</button></td>
                       </tr>

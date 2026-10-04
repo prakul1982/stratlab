@@ -316,11 +316,11 @@ def test_email_goes_only_to_a_confirmed_address(monkeypatch):
 
 # ---------- plans ----------
 def test_plan_limits(monkeypatch):
-    assert (PLANS["free"]["stock_alerts"], PLANS["basic"]["stock_alerts"], PLANS["pro"]["stock_alerts"]) == (3, 20, 100)
+    assert (PLANS["free"]["stock_alerts"], PLANS["basic"]["stock_alerts"], PLANS["pro"]["stock_alerts"]) == (5, 25, 100)
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
     assert plan_info("free")["stock_alerts"] == 100                          # open to everyone until payments go live
     paid(monkeypatch)
-    assert [plan_info(p)["stock_alerts"] for p in ("free", "basic", "pro")] == [3, 20, 100]
+    assert [plan_info(p)["stock_alerts"] for p in ("free", "basic", "pro")] == [5, 25, 100]
 
 
 def paid(monkeypatch):
@@ -358,16 +358,16 @@ def test_create_edit_delete_through_the_api(w):
     assert c.get("/alerts").status_code == 401
 
 
-def test_the_free_plan_has_three_alerts(w, monkeypatch):
+def test_the_free_plan_has_five_alerts(w, monkeypatch):
     paid(monkeypatch)
     c, h = w["client"], headers("free-token")
     body = {"region": "IN", "symbol": "TCS", "kind": "move", "op": "either", "value": 5}
-    for _ in range(3):
+    for _ in range(5):
         assert c.post("/alerts", headers=h, json=body).status_code == 200
     r = c.post("/alerts", headers=h, json=body)
-    assert r.status_code == 402 and "3 active alerts" in r.json()["detail"]["message"] and "Basic" in r.json()["detail"]["message"]
-    assert c.get("/alerts", headers=h).json()["limit"] == 3
-    assert c.get("/me", headers=h).json()["plan_info"]["stock_alerts"] == 3
+    assert r.status_code == 402 and "5 active alerts" in r.json()["detail"]["message"] and "Basic" in r.json()["detail"]["message"]
+    assert c.get("/alerts", headers=h).json()["limit"] == 5
+    assert c.get("/me", headers=h).json()["plan_info"]["stock_alerts"] == 5
 
 
 def test_the_watchlist_job_runs_the_stock_alert_check(monkeypatch):

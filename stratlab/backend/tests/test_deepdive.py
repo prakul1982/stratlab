@@ -127,7 +127,7 @@ def api(monkeypatch):
     kv, usage = {}, []
     monkeypatch.setattr(db, "set_setting", lambda k, v: kv.__setitem__(k, v))
     monkeypatch.setattr(db, "get_setting", lambda k: kv.get(k))
-    monkeypatch.setattr(db, "count_usage", lambda uid, kind, since: len(usage))
+    monkeypatch.setattr(db, "count_usage", lambda uid, kind, since: usage.count(kind))
     monkeypatch.setattr(db, "add_usage", lambda uid, kind: usage.append(kind))
     for k, v in (("RAZORPAY_KEY_ID", "rzp_test_x"), ("RAZORPAY_KEY_SECRET", "s"), ("RAZORPAY_PLAN_BASIC", "b"), ("RAZORPAY_PLAN_PRO", "p")):
         monkeypatch.setattr(settings, k, v)
@@ -155,21 +155,26 @@ def api(monkeypatch):
     main.app.dependency_overrides.clear()
 
 
-def test_endpoints_are_pro_store_reads_and_respect_the_daily_limit(api):
+def ai_reads(usage):
+    return [u for u in usage if u == "research_ai"]
+
+
+def test_endpoints_store_reads_and_respect_the_daily_limit(api):
     c, who, calls, usage = api
-    assert c.get("/research/deep/ACME").status_code == 402
+    assert c.get("/research/deep/ACME").status_code == 200          # Free opens 2 companies a month
+    assert usage == ["deepdive", "deepdive:IN:ACME"]
     who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
     v = c.get("/research/deep/ACME").json()
     assert v["numbers"]["years"][-1]["capex"] == 23 and v["reads"] is None and len(v["documents"]) == 3
     err = c.get("/research/deep/NOPE").json()["detail"]["message"]
     assert "Screener" not in err                                    # the data source isn't named
     r = c.post("/research/deep/ACME/read").json()
-    assert r["reads"]["business"]["summary"] == "Acme sells pumps." and not r["reads_stale"] and len(calls) == 2 and usage == ["research_ai"]
+    assert r["reads"]["business"]["summary"] == "Acme sells pumps." and not r["reads_stale"] and len(calls) == 2 and ai_reads(usage) == ["research_ai"]
     c.post("/research/deep/ACME/read")                              # stored and fresh: no new AI call, nothing counted
-    assert len(calls) == 2 and usage == ["research_ai"]
+    assert len(calls) == 2 and ai_reads(usage) == ["research_ai"]
     assert c.get("/research/deep/ACME").json()["reads"]["plans"]["capex"][0]["amount"] == "Rs 500 crore"
     c.post("/research/deep/ACME/read?refresh=true")
-    assert len(usage) == 2
+    assert len(ai_reads(usage)) == 2 and usage.count("deepdive") == 1      # the same company counts once a month
     assert c.post("/research/deep/ACME/read?refresh=true").status_code == 429
 
 
@@ -297,7 +302,7 @@ def test_no_readable_call_is_not_charged(api):
     main.deep_docs.texts = {}                       # every transcript fails to download
     who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
     r = c.post("/research/deep/ACME/card")
-    assert r.status_code == 422 and r.json()["detail"]["code"] == "no_readable_calls" and usage == []
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "no_readable_calls" and ai_reads(usage) == []
 
 
 def test_capex_amounts_need_a_unit_and_outlook_is_the_future():
@@ -449,3 +454,46 @@ def test_a_read_saved_before_the_unit_fix_shows_billions(monkeypatch):
     got = deepdive.stored("US:NVDA")
     assert got["business"]["measures"][0]["value"] == "$215.9 billion"
     assert got["plans"]["capex"][0]["amount"] == "₹1.25 lakh crore" and got["plans"]["capex"][0]["size"] is None
+
+
+def test_monthly_deep_dives_and_decks_count_each_company_once(api, monkeypatch):
+    """Free: 2 companies a month in the deep dive and 1 deck; Basic 15 and 5; Pro unlimited. Opening a company again
+    in the same month (or its read, report card or deck) doesn't count again, and an unknown company never counts."""
+    from app import main
+    c, who, _calls, usage = api
+    monkeypatch.setattr(main, "deep_base", lambda sym, region="IN", years=2, trades=True: {"sym": sym})
+    monkeypatch.setattr(main, "deep_view", lambda sym, base: {"symbol": sym})
+    monkeypatch.setattr(main.deck, "build", lambda view: b"PK")
+    assert c.get("/research/deep/AAA").status_code == 200 and c.get("/research/deep/AAA").status_code == 200
+    assert c.get("/research/deep/AAA?region=US").status_code == 200              # another market: another company
+    r = c.get("/research/deep/CCC")
+    assert r.status_code == 402 and r.json()["detail"]["code"] == "deepdive_limit"
+    msg = r.json()["detail"]["message"]
+    assert "You've opened 2 companies in the deep dive this month" in msg and msg.endswith("Basic gives 15.")
+    assert c.get("/research/deep/AAA").status_code == 200                        # already opened: still opens
+    assert c.post("/research/deep/CCC/card").status_code == 402                  # the report card counts the same way
+    assert c.get("/research/deep/AAA/deck").status_code == 200
+    r = c.get("/research/deep/AAA/deck?region=US")
+    assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
+    assert r.json()["detail"]["message"] == "You've made 1 company deck this month. Basic gives 5."
+    assert usage.count("deepdive") == 2 and usage.count("deck") == 1
+    who["p"] = {"id": "u1", "plan": "basic", "_plan": "basic"}
+    for i in range(13):
+        assert c.get(f"/research/deep/B{i:02d}").status_code == 200
+    r = c.get("/research/deep/ZZZ")
+    assert r.status_code == 402 and r.json()["detail"]["message"].endswith("Pro has no limit on deep dives.")
+    me = c.get("/me").json()["usage"]
+    assert (me["deepdive_used"], me["deepdive_limit"], me["deck_used"], me["deck_limit"]) == (15, 15, 1, 5)
+    who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
+    assert c.get("/research/deep/ZZZ").status_code == 200 and c.get("/me").json()["usage"]["deepdive_limit"] is None
+
+
+def test_deep_dive_is_unlimited_until_payments_go_live(api, monkeypatch):
+    from app import main
+    from app.config import settings
+    c, who, _calls, usage = api
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
+    monkeypatch.setattr(main, "deep_base", lambda sym, region="IN", years=2, trades=True: {"sym": sym})
+    monkeypatch.setattr(main, "deep_view", lambda sym, base: {"symbol": sym})
+    assert all(c.get(f"/research/deep/S{i}").status_code == 200 for i in range(5))   # Free, early access: no cap
+    assert usage.count("deepdive") == 5                                              # still counted, for usage

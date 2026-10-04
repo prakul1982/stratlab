@@ -107,8 +107,13 @@ export interface Notebook extends NotebookItem {
 
 export interface PlanInfo {
   name: string; price: number; backtests_per_month: number | null; ai_builds_per_month: number | null;
-  live_limit: number; live_trial_days: number | null; pro_features: boolean;
-  price_year?: number; group_size?: number; stock_alerts?: number; screens?: number; features?: Record<string, boolean>;
+  live_limit: number; live_trial_days: number | null;
+  /** every indicator beyond price, SMA, EMA and RSI (Basic and up) */
+  indicators: boolean;
+  /** Indian futures and options (Pro) */
+  fno: boolean;
+  price_year?: number; group_size?: number; holdings?: number; stock_alerts?: number; screens?: number;
+  deepdives_per_month?: number | null; decks_per_month?: number | null; features?: Record<string, boolean>;
 }
 /** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
 export type Level = "new" | "some" | "pro";
@@ -117,13 +122,14 @@ export type Focus = "invest" | "trade" | "both";
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
   billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean };
-  usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null };
+  usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null;
+    deepdive_used?: number; deepdive_limit?: number | null; deck_used?: number; deck_limit?: number | null };
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
   alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
   data_online: boolean;
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
-  plans?: Record<string, { price: number; price_year: number }>;
+  plans?: Record<string, { price: number; price_year: number } & Record<string, unknown>>;
   paid_plan?: "free" | "basic" | "pro"; promo?: { until: string } | null; free_basic_until?: string | null;
   prefs?: { level: Level | null; focus?: Focus | null };
 }

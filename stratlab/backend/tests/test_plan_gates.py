@@ -6,7 +6,9 @@ from fastapi.testclient import TestClient
 
 from app import alerts, billing, live, main
 from app.config import settings
-from app.plans import PLANS, allows, group_size, plan_info
+from app.models import Strategy
+from app.plans import (FEATURE_PLAN, FEATURES, PLANS, allows, bigger_plan, decks, deepdives, group_size, has_fno, has_indicators,
+                       plan_info)
 
 
 @pytest.fixture
@@ -23,10 +25,14 @@ def as_plan(plan):
 
 
 def test_prices_and_limits():
-    assert (PLANS["basic"]["price"], PLANS["pro"]["price"]) == (999, 2999)
-    assert (PLANS["basic"]["price_year"], PLANS["pro"]["price_year"]) == (9990, 29990)
-    assert [PLANS[p]["live_limit"] for p in ("free", "basic", "pro")] == [1, 2, 10]
-    assert [PLANS[p]["group_size"] for p in ("free", "basic", "pro")] == [10, 25, 50]
+    assert (PLANS["basic"]["price"], PLANS["pro"]["price"]) == (499, 1499)            # rupees, GST included
+    assert (PLANS["basic"]["price_year"], PLANS["pro"]["price_year"]) == (4990, 14990)    # ten months: two free
+    row = lambda k: [PLANS[p][k] for p in ("free", "basic", "pro")]  # noqa: E731
+    assert row("backtests_per_month") == [10, 100, None] and row("ai_builds_per_month") == [10, 100, None]
+    assert row("live_limit") == [1, 2, 10] and row("group_size") == [10, 25, 50]
+    assert row("holdings") == [30, 100, 300] and row("stock_alerts") == [5, 25, 100] and row("screens") == [2, 10, 25]
+    assert row("deepdives_per_month") == [2, 15, None] and row("decks_per_month") == [1, 5, None]
+    assert PLANS["free"]["live_trial_days"] == 5
 
 
 def test_everything_open_during_early_access(monkeypatch):
@@ -35,14 +41,30 @@ def test_everything_open_during_early_access(monkeypatch):
 
 
 def test_features_per_plan_once_payments_are_live(paid):
-    assert not any(allows("free", f) for f in ("group_live", "options", "daily_report", "alerts", "export"))
-    assert allows("basic", "group_live") and allows("basic", "options") and allows("basic", "daily_report")
-    assert not allows("basic", "options_signal") and not allows("basic", "fast_entries") and not allows("basic", "alerts")
-    assert all(plan_info("pro")["features"].values())
+    assert not any(plan_info("free")["features"].values())
+    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home"}
+    assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
+    assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export"}
+    assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {
+        "indicators": "basic", "alerts": "basic", "scans": "basic", "fno": "pro", "export": "pro"}
     assert group_size("free") == 10 and group_size("basic") == 25
+    assert (has_indicators("free"), has_indicators("basic"), has_fno("basic"), has_fno("pro")) == (False, True, False, True)
+    assert [deepdives(p) for p in ("free", "basic", "pro")] == [2, 15, None] and [decks(p) for p in ("free", "basic", "pro")] == [1, 5, None]
+    info = plan_info("free")
+    assert (info["indicators"], info["fno"], info["deepdives_per_month"], info["decks_per_month"]) == (False, False, 2, 1)
+    assert "pro_features" not in info
 
 
-def test_server_refuses_what_the_plan_lacks(paid):
+def test_which_plan_lifts_each_limit():
+    assert bigger_plan("free", "backtests_per_month") == "Basic" and bigger_plan("basic", "backtests_per_month") == "Pro"
+    assert bigger_plan("pro", "backtests_per_month") is None and bigger_plan("basic", "live_limit") == "Pro"
+    assert main.lift("free", "backtests_per_month", "backtests") == " Basic gives 100."
+    assert main.lift("basic", "deepdives_per_month", "deep dives") == " Pro has no limit on deep dives."
+    assert main.lift("pro", "stock_alerts", "alerts") == ""
+
+
+def test_server_refuses_what_the_plan_lacks(paid, monkeypatch):
+    monkeypatch.setattr(main.db, "update_profile", lambda *a, **k: None)
     try:
         c = as_plan("free")
         r = c.post("/export/strategy", json={"strategy": {"name": "x", "tf": "1d", "entry": [], "exit": []}})
@@ -52,8 +74,9 @@ def test_server_refuses_what_the_plan_lacks(paid):
         opt = {"strategy": {"underlying": "NIFTY", "legs": [{"side": "buy", "opt": "CE"}]}}
         assert c.post("/options/sessions", json=opt).status_code == 402
         c = as_plan("basic")
-        r = c.put("/me/alerts", json={"alerts_enabled": True, "alert_email": "a@b.co"})
-        assert r.status_code == 402 and "Trade alerts are on the Pro plan" in r.json()["detail"]["message"]
+        assert c.put("/me/alerts", json={"alerts_enabled": True, "alert_email": "a@b.co"}).status_code == 200   # Basic has them
+        r = c.post("/export/strategy", json={"strategy": {"name": "x", "tf": "1d", "entry": [], "exit": []}})
+        assert r.status_code == 402 and "Pro plan" in r.json()["detail"]["message"]
         sig = {"strategy": {**opt["strategy"], "signal": {"rules": {"name": "e", "tf": "5m", "entry": [], "exit": []}}}}
         r = c.post("/options/sessions", json=sig)
         assert r.status_code == 402 and "signal" in r.json()["detail"]["message"]
@@ -66,6 +89,93 @@ def test_group_size_is_checked_before_counting_an_experiment(paid):
         main.check_group_size({"_plan": "free"}, 11)
     assert "up to 10" in str(e.value.detail["message"]) and "Basic goes up to 25" in str(e.value.detail["message"])
     main.check_group_size({"_plan": "basic"}, 25)
+
+
+MACD = Strategy(name="m", entry=[{"l": {"t": "macd"}, "op": "gt", "r": {"t": "num", "v": 0}}])
+SMA = Strategy(name="s", entry=[{"l": {"t": "price"}, "op": "gt", "r": {"t": "sma", "p": 50}}])
+FNO = {"id": "IN:1", "fno": True}
+
+
+def stop_reason(e) -> str:
+    return e.value.detail["message"]
+
+
+def test_indicators_are_basic_and_fno_is_pro(paid):
+    assert live.needs_indicators(MACD) and not live.needs_indicators(SMA)
+    assert live.needs_fno(FNO) and not live.needs_fno({"id": "IN:2"}) and not live.needs_fno(None)
+    with pytest.raises(Exception) as e:
+        main.check_features({"_plan": "free"}, MACD, None)
+    assert "Basic unlocks all of them" in stop_reason(e)
+    main.check_features({"_plan": "free"}, SMA, None)
+    main.check_features({"_plan": "basic"}, MACD, None)                 # every indicator on Basic
+    with pytest.raises(Exception) as e:
+        main.check_features({"_plan": "basic"}, SMA, FNO)
+    assert stop_reason(e) == "Indian F&O is on the Pro plan."
+    main.check_features({"_plan": "pro"}, MACD, FNO)
+    assert main.all_indicators({"_plan": "basic"}) and not main.fno({"_plan": "basic"}) and main.fno({"_plan": "pro"})
+
+
+def test_downgrade_stops_only_what_the_new_plan_lacks(paid, monkeypatch):
+    """After a plan change: F&O sessions stop below Pro, Basic-indicator sessions stop on Free, the rest keep running."""
+    class Sess:
+        def __init__(self, sid, strategy, inst):
+            self.id, self.user_id, self.strategy, self.inst, self.kind = sid, "u1", strategy, inst, "single"
+            self.started_at = sid
+    monkeypatch.setattr(live, "LiveSession", Sess)
+    monkeypatch.setattr(live, "trial_state", lambda profile: {"active": True, "started": True})
+    stopped = {}
+    m = live.LiveManager.__new__(live.LiveManager)
+    m.sessions = {}
+    m.stop = lambda sid, why: stopped.__setitem__(sid, why) or m.sessions.pop(sid, None)
+
+    def run(plan, *sessions):
+        stopped.clear()
+        m.sessions = {s.id: s for s in sessions}
+        monkeypatch.setattr(live.db, "get_profile", lambda uid: {"id": uid, "plan": plan, "plan_status": "active"})
+        m._enforce_plans(list(sessions))
+        return dict(stopped)
+
+    a, b = Sess("1", MACD, None), Sess("2", SMA, FNO)
+    assert run("basic", a, b) == {"2": "Indian F&O is on Pro."}
+    assert run("free", Sess("1", MACD, None)) == {"1": "This strategy uses Basic indicators."}
+    assert run("pro", Sess("1", MACD, None), Sess("2", SMA, FNO)) == {}
+
+
+def test_research_open_to_every_plan(paid, monkeypatch):
+    """Sector rotation and the red flags on a company page are for everyone; the scan, the watchlist's red flags and
+    Watchlist at a glance are Basic."""
+    try:
+        c = as_plan("free")
+        assert c.get("/research/rotation").status_code != 402
+        assert c.post("/research/scan", json={"region": "IN", "set": "watchlist"}).status_code == 402
+        assert c.put("/research/scan/alerts", json={"on": True}).status_code == 402
+        assert c.get("/research/investor").status_code == 402
+        r = c.put("/me/alerts", json={"alerts_enabled": True, "alert_email": "a@b.co"})
+        assert r.status_code == 402 and "Basic plan" in r.json()["detail"]["message"]
+    finally:
+        main.app.dependency_overrides.clear()
+
+
+def test_each_limit_says_which_plan_lifts_it(paid, monkeypatch):
+    used = {"n": 0}
+    monkeypatch.setattr(main.db, "count_usage", lambda uid, kind, since: used["n"])
+    used["n"] = 10
+    with pytest.raises(Exception) as e:
+        main.ai_allowance({"id": "u1", "_plan": "free"})
+    assert stop_reason(e) == "You've used all 10 AI builds this month. Basic gives 100."
+    used["n"] = 100
+    with pytest.raises(Exception) as e:
+        main.use_backtest({"id": "u1", "_plan": "basic"})
+    assert stop_reason(e) == "You've used all 100 backtests for this month. Pro has no limit on backtests."
+    assert main.lift("free", "holdings", "holdings") == " Basic gives 100." and main.lift("basic", "screens", "screens") == " Pro gives 25."
+    assert main.lift("free", "live_limit", "paper sessions") == " Basic gives 2." and main.lift("free", "stock_alerts", "x") == " Basic gives 25."
+    monkeypatch.setattr(main.db, "update_profile", lambda *a, **k: None)
+    try:
+        c = as_plan("free")
+        r = c.put("/holdings", json={"items": [{"symbol": f"S{i}", "qty": 1} for i in range(31)]})
+        assert r.status_code == 402 and r.json()["detail"]["message"] == "Your plan keeps up to 30 stocks in My Holdings. Basic gives 100."
+    finally:
+        main.app.dependency_overrides.clear()
 
 
 def test_downgrade_stops_sessions_the_plan_no_longer_covers(paid):
@@ -83,7 +193,8 @@ def test_alerts_and_report_follow_the_plan(paid, monkeypatch):
     p = lambda plan, **kw: {"plan": plan, "plan_status": "active", **kw}
     assert not live.report_on(p("basic", alert_email="a@b.c"))       # an address nobody confirmed isn't a channel
     monkeypatch.setattr(alerts, "email_confirmed", lambda profile: True)
-    assert live.report_on(p("basic", alert_email="a@b.c")) and not live.alerts_on(p("basic", alerts_enabled=True, alert_email="a@b.c"))
+    assert live.report_on(p("basic", alert_email="a@b.c")) and live.alerts_on(p("basic", alerts_enabled=True, alert_email="a@b.c"))
+    assert not live.alerts_on({"plan": "free", "alerts_enabled": True, "alert_email": "a@b.c"})     # trade notifications: Basic and up
     assert live.alerts_on(p("pro", alerts_enabled=True)) and not live.report_on(p("pro"))       # no channel set
     assert not live.report_on({"plan": "free", "alert_email": "a@b.c"})
     monkeypatch.setattr(settings, "SMTP_HOST", "")

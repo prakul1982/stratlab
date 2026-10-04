@@ -36,17 +36,22 @@ def test_trial_counts_market_days():
     assert trial_end(datetime(2025, 9, 22, 23, 0, tzinfo=IST), 5) == datetime(2025, 9, 27, tzinfo=IST)
 
 
-def test_pro_features_are_open_until_payments_go_live(monkeypatch):
+def test_everything_is_open_until_payments_go_live(monkeypatch):
+    """Everyone gets every feature and Pro's counts (deep dives, decks) until a plan can actually be bought."""
     from app.config import settings
-    from app.plans import has_pro_features, plan_info
+    from app.plans import decks, deepdives, has_fno, has_indicators, plan_info
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
     monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "")
-    assert has_pro_features("free") and plan_info("free")["pro_features"] and plan_info("free")["backtests_per_month"] == 5
+    info = plan_info("free")
+    assert has_indicators("free") and has_fno("free") and info["indicators"] and info["fno"] and all(info["features"].values())
+    assert deepdives("free") is None and decks("free") is None and info["deepdives_per_month"] is None
+    assert info["backtests_per_month"] == 10          # the monthly backtest count is the Free plan's all along
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_live_x")
     monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "secret")
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "")
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "")
-    assert has_pro_features("free")          # keys alone: nothing can be bought yet, so nothing is locked
+    assert has_fno("free") and deepdives("free") is None    # keys alone: nothing can be bought yet, so nothing is locked
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
-    assert not has_pro_features("free") and not has_pro_features("basic") and has_pro_features("pro")
+    assert not has_indicators("free") and has_indicators("basic") and not has_fno("basic") and has_fno("pro")
+    assert (deepdives("free"), decks("free"), deepdives("basic"), decks("basic")) == (2, 1, 15, 5)

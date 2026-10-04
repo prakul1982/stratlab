@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct, safeHref, signClass } from "../lib/format";
 import { scaleFor } from "../lib/research";
@@ -151,10 +151,11 @@ export function DeepDivePage() {
   const sym = symbol.toUpperCase();
   const us = region === "US";
   const q = (extra = "") => (us ? `?region=US${extra ? `&${extra}` : ""}` : extra ? `?${extra}` : "");
-  const { me, fail, notify } = useApp();
-  const pro = !!me?.plan_info?.features?.deepdive;
+  const { me, fail, notify, refreshMe } = useApp();
   const [v, setV] = useState<DeepView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [limited, setLimited] = useState(false);         // the plan's monthly deep dives are used up
+  const u = me?.usage;
   const [reading, setReading] = useState(false);
   const [carding, setCarding] = useState(false);
   const [decking, setDecking] = useState<"pptx" | "pdf" | null>(null);
@@ -167,18 +168,20 @@ export function DeepDivePage() {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(await r.blob()); a.download = `${sym}-deep-dive.${format}`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      void refreshMe();                               // the deck count in Account
     } catch (e) { fail(e); } finally { setDecking(null); }
   };
 
   useEffect(() => { track("deep dive opened", { region }); }, [sym, region]);
 
   useEffect(() => {
-    if (!pro) return;
     let live = true;
-    setV(null); setError(null);
-    api<DeepView>(`/research/deep/${encodeURIComponent(sym)}${q()}`).then((x) => live && setV(x)).catch((e) => live && setError((e as Error).message));
+    setV(null); setError(null); setLimited(false);
+    api<DeepView>(`/research/deep/${encodeURIComponent(sym)}${q()}`)
+      .then((x) => { if (live) { setV(x); void refreshMe(); } })
+      .catch((e) => { if (live) { setError((e as Error).message); setLimited(e instanceof ApiError && e.status === 402); } });
     return () => { live = false; };
-  }, [sym, pro, region]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sym, region]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const readDocs = async (refresh = false) => {
     setReading(true);
@@ -226,9 +229,13 @@ export function DeepDivePage() {
           {v && <Link className="btn quiet sm" to="/research/investor">Watchlist at a glance →</Link>}
         </div>
       </div>
-      {!pro && <div className="banner"><span>The deep dive is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
-      {pro && error && <div className="card"><p className="muted">{error}</p></div>}
-      {pro && !v && !error && <Loading label="Reading the reported numbers" />}
+      {limited && <div className="banner"><span>{error}</span><Link to="/plans" className="btn sm">See plans</Link></div>}
+      {!limited && error && <div className="card"><p className="muted">{error}</p></div>}
+      {!v && !error && <Loading label="Reading the reported numbers" />}
+      {v && u?.deepdive_limit != null && (
+        <p className="tiny muted" style={{ margin: 0 }}>{u.deepdive_used ?? 0} of {u.deepdive_limit} companies opened this month
+          {u.deck_limit != null ? `, ${u.deck_used ?? 0} of ${u.deck_limit} decks` : ""}. Opening a company again this month doesn't count. <Link className="link" to="/plans">Plans</Link></p>
+      )}
       {v && n && (
         <>
           <Panel title="Growth and margins" span="full" info="Compound annual growth from the reported annual sales and net profit. OPM is operating profit as a share of sales.">

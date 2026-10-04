@@ -224,6 +224,10 @@ th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: l
 th { font-size: 12.5px; font-weight: 600; color: var(--muted); background: var(--paper-2); }
 td.num, .num { font-family: var(--mono); }
 table.nums th:not(:first-child), table.nums td:not(:first-child) { text-align: right; }
+/* Plans → Compare: the feature wraps, each plan's column is centred */
+table.plan-compare td:first-child { white-space: normal; min-width: 150px; }
+table.plan-compare th:not(:first-child), table.plan-compare td:not(:first-child) { text-align: center; }
+@media (max-width: 640px) { table.plan-compare th, table.plan-compare td { padding: 8px 8px; font-size: 13px; } }
 .pos { color: var(--blue-ink); }
 .neg { color: var(--orange-ink); }
 

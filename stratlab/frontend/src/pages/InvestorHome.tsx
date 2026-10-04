@@ -24,7 +24,7 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 
 export function InvestorHomePage() {
   const { me, fail } = useApp();
-  const pro = !!me?.plan_info?.features?.deepdive;
+  const pro = !!me?.plan_info?.features?.investor_home;
   const [rows, setRows] = useState<Row[] | null>(null);
   const [at, setAt] = useState<string | null>(null);
   const [order, setOrder] = useState<"list" | "attention">("attention");
@@ -53,7 +53,7 @@ export function InvestorHomePage() {
         <p className="page-sub">For each {place} watchlist company: the price trend, where its sector sits in the rotation, {us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. A place to see what needs a closer look, not advice.</p>
         {rows && <AsOf parts={[["Checked", at]]} />}
       </div>
-      {!pro && <div className="banner"><span>The investor home is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
+      {!pro && <div className="banner"><span>Watchlist at a glance is on the Basic plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       {pro && !rows && <Loading label="Checking each watchlist company" />}
       {rows && rows.length === 0 && (
         <div className="card dashed stack" style={{ gap: 10, alignItems: "flex-start" }}>

@@ -48,7 +48,7 @@ from .docs import Docs
 from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
-from .live import LimitError, LiveManager, describe, needs_pro
+from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators
 from .options import importer as opt_importer
 from .options.data import FREEZE, OptionsData
 from .options.engine import fill_price
@@ -64,9 +64,10 @@ from .models import CorpActionReq, TaxFmvReq, TaxImportReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
-from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_pro_features, plan_info, public_plans, trial_state
+from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
-from .plans import access_plan, free_basic_until, screens as screens_limit
+from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
+from .plans import decks as decks_limit, deepdives as deepdives_limit
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -341,8 +342,23 @@ def backtests_used(profile) -> int:
     return db.count_usage(profile["id"], "backtest", month_start_iso())
 
 
-def is_pro(profile) -> bool:
-    return has_pro_features(profile["_plan"])
+def all_indicators(profile) -> bool:
+    """Every indicator, not just price, SMA, EMA and RSI (Basic and up)."""
+    return has_indicators(profile["_plan"])
+
+
+def fno(profile) -> bool:
+    """Indian futures and options (Pro)."""
+    return has_fno(profile["_plan"])
+
+
+def lift(plan: str, key: str, what: str) -> str:
+    """The end of an upgrade message: which plan lifts a count limit, and to what (" Basic gives 100 a month.")."""
+    nxt = bigger_plan(plan, key)
+    if not nxt:
+        return ""
+    cap = PLANS[nxt.lower()][key]
+    return f" {nxt} has no limit on {what}." if cap is None else f" {nxt} gives {cap}."
 
 
 def check_id(sid: str) -> str:
@@ -365,8 +381,11 @@ def get_instrument(inst_id: str) -> tuple:
 
 
 def check_features(profile, strategy: Strategy, inst: dict | None):
-    if not is_pro(profile) and needs_pro(strategy, inst):
-        upgrade("Advanced indicators (MACD, Bollinger Bands, VWAP, Supertrend, ADX, Stochastic, Donchian and more) and F&O are on the Pro plan.")
+    if not fno(profile) and needs_fno(inst):
+        upgrade("Indian F&O is on the Pro plan.")
+    if not all_indicators(profile) and needs_indicators(strategy):
+        upgrade("This strategy uses indicators beyond price, SMA, EMA and RSI (MACD, Bollinger Bands, VWAP, Supertrend, ADX, "
+                "Stochastic, Donchian and more). Basic unlocks all of them.")
 
 
 @app.exception_handler(KiteNotReady)
@@ -476,7 +495,9 @@ def me(profile=Depends(current_profile)):
                     "renews_or_ends": profile.get("current_period_end"),
                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
         "usage": {"backtests_used": backtests_used(profile), "backtests_limit": info["backtests_per_month"],
-                  "ai_used": db.count_usage(profile["id"], "ai", month_start_iso()), "ai_limit": info["ai_builds_per_month"]},
+                  "ai_used": db.count_usage(profile["id"], "ai", month_start_iso()), "ai_limit": info["ai_builds_per_month"],
+                  "deepdive_used": deep_used(profile, "deepdive"), "deepdive_limit": info["deepdives_per_month"],
+                  "deck_used": deep_used(profile, "deck"), "deck_limit": info["decks_per_month"]},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
@@ -698,7 +719,7 @@ def instrument_defaults(profile=Depends(current_profile)):
 @app.get("/instruments/search")
 def instrument_search(q: str = Query(..., min_length=2, max_length=40), market: str | None = Query(None, max_length=10),
                       profile=Depends(current_profile)):
-    return markets.search(q, market.upper() if market else None, allow_fno=is_pro(profile))
+    return markets.search(q, market.upper() if market else None, allow_fno=fno(profile))
 
 
 @app.get("/instruments/{inst_id}")
@@ -723,7 +744,7 @@ def ai_allowance(profile) -> tuple[int, int | None]:
     limit = PLANS[profile["_plan"]]["ai_builds_per_month"]
     used = db.count_usage(profile["id"], "ai", month_start_iso())
     if limit is not None and used >= limit:
-        err(429, "ai_limit", f"You've used all {limit} AI builds this month.")
+        err(429, "ai_limit", f"You've used all {limit} AI builds this month." + lift(profile["_plan"], "ai_builds_per_month", "AI builds"))
     since = (datetime.now(IST) - timedelta(days=1)).isoformat()
     if db.count_usage(profile["id"], "ai", since) >= 200:
         err(429, "ai_daily_limit", "You've used the AI builder 200 times today. Try again tomorrow.")
@@ -774,7 +795,7 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
             # a config from another system: the AI reads it as a strategy spec
     used, limit = ai_allowance(profile)
     try:
-        out = write_strategy(importer.ai_prompt(fmt, req.text), pro=is_pro(profile))
+        out = write_strategy(importer.ai_prompt(fmt, req.text), pro=all_indicators(profile))
         db.add_usage(profile["id"], "ai")
         used_ai, usage = True, {"ai_used": used + 1, "ai_limit": limit}
         if not out["entry"] and fmt == "pine":
@@ -795,7 +816,7 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
 def ai_strategy(req: AIReq, profile=Depends(current_profile)):
     used, limit = ai_allowance(profile)
     try:
-        out = write_strategy(req.text, pro=is_pro(profile))
+        out = write_strategy(req.text, pro=all_indicators(profile))
     except AIBusy as e:
         err(503, "ai_busy", str(e))
     except AIError as e:
@@ -827,7 +848,8 @@ def use_backtest(profile) -> int | None:
     """Check the monthly backtest limit before running one; returns the limit."""
     limit = PLANS[profile["_plan"]]["backtests_per_month"]
     if limit is not None and backtests_used(profile) >= limit:
-        upgrade(f"You've used all {limit} backtests for this month.", "backtest_limit")
+        upgrade(f"You've used all {limit} backtests for this month." + lift(profile["_plan"], "backtests_per_month", "backtests"),
+                "backtest_limit")
     return limit
 
 
@@ -1090,7 +1112,7 @@ def share_experiment(nid: str, version: int, req: ShareReq, profile=Depends(curr
     return {"token": token, "url": public.url(token)}
 
 
-# ---------- Stage 2 + Supertrend scans (Pro) ----------
+# ---------- Stage 2 + Supertrend scans (Basic and up) ----------
 def scan_members(profile, region: str, set_id: str) -> tuple[str, list[dict]]:
     if set_id == "watchlist":
         return "Your watchlist", scan.watchlist_members(profile["id"], region)
@@ -1140,7 +1162,6 @@ def _member_key(m) -> str:
 def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "weekly", tail: int = 5,
                     profile=Depends(current_profile)):
     """Where each sector (or stock in a group) sits against the benchmark: relative strength and its momentum."""
-    need(profile, "scans", "Sector rotation")
     region = "US" if region.upper() == "US" else "IN"
     interval = "daily" if interval == "daily" else "weekly"
     prov = markets.provider(region)
@@ -1284,7 +1305,7 @@ def filing_call(fn):
 @app.get("/research/filings")
 def filings_watchlist(profile=Depends(current_profile)):
     """Red flags in the last 3 months for each India watchlist stock."""
-    need(profile, "filings", "Filings and red flags")
+    need(profile, "filings", "Watchlist red flags")
     syms = filings.watchlist_symbols(profile["id"])
     out = filings.overview(filings_feed, syms) if syms else {"rows": [], "problems": [], "days": filings.WINDOW_DAYS}
     out["problems"] = [public_text(x) for x in out["problems"]]
@@ -1294,8 +1315,7 @@ def filings_watchlist(profile=Depends(current_profile)):
 @app.get("/research/filings/{symbol}")
 def filings_company(symbol: str, profile=Depends(current_profile)):
     """One Indian company's filings for the last year (NSE, or BSE for a company listed only there), with red flags
-    and the 3-month summary."""
-    need(profile, "filings", "Filings and red flags")
+    and the 3-month summary. For everyone: the watchlist view and its alert are the paid part."""
     sym = research_routes.symbol_of(symbol)
     return ok(filing_call(lambda: filings.report(filings_feed, sym)))
 
@@ -1535,6 +1555,32 @@ def deep_ai_allowed(profile) -> None:
         err(429, "research_ai_limit", f"You've used {settings.RESEARCH_AI_PER_DAY} fresh AI reads today. Stored reads still work; try again tomorrow.")
 
 
+DEEP_KINDS = {"deepdive": ("deepdives_per_month", deepdives_limit), "deck": ("decks_per_month", decks_limit)}
+
+
+def deep_used(profile, kind: str) -> int:
+    """Companies opened in the deep dive (kind "deepdive") or decks made ("deck") this month."""
+    return db.count_usage(profile["id"], kind, month_start_iso())
+
+
+def use_deep(profile, kind: str, sym: str, region: str) -> None:
+    """Count a company against the plan's monthly deep dives or decks. Only the first time in a month counts: opening
+    the same company again (or its deck in the other format) is free. Stops with an upgrade message at the limit."""
+    key, limit_of = DEEP_KINDS[kind]
+    mark, since = f"{kind}:{region}:{sym}", month_start_iso()
+    if db.count_usage(profile["id"], mark, since):
+        return
+    limit = limit_of(profile["_plan"])
+    if limit is not None and deep_used(profile, kind) >= limit:
+        more = lift(profile["_plan"], key, "deep dives" if kind == "deepdive" else "decks")
+        if kind == "deepdive":
+            upgrade(f"You've opened {limit} compan{'y' if limit == 1 else 'ies'} in the deep dive this month. Companies "
+                    f"you've already opened this month still open.{more}", "deepdive_limit")
+        upgrade(f"You've made {limit} company deck{'' if limit == 1 else 's'} this month.{more}", "deck_limit")
+    db.add_usage(profile["id"], kind)
+    db.add_usage(profile["id"], mark)
+
+
 def deep_symbol(symbol: str, region: str) -> str:
     if region != "IN":
         return re.sub(r"[^A-Z0-9.\-]", "", symbol.upper())[:12]
@@ -1547,10 +1593,11 @@ def deep_symbol(symbol: str, region: str) -> str:
 def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile)):
     """Growth, margins, capex and cash flow from the reported numbers, plus any stored read of the company's documents.
     India from the company pages and NSE filings; the US from the SEC's filings."""
-    need(profile, "deepdive", "The company deep dive")
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
-    out = ok(deep_view(sym, deep_base(sym, region)))
+    base = deep_base(sym, region)          # an unknown company stops here, before it's counted
+    use_deep(profile, "deepdive", sym, region)
+    out = ok(deep_view(sym, base))
     try:
         first_steps.mark(profile["id"], "deepdive")
     except Exception as e:
@@ -1563,12 +1610,12 @@ def deep_dive(symbol: str, region: str = "IN", profile=Depends(current_profile))
 def deep_dive_read(symbol: str, refresh: bool = False, region: str = "IN", years: int = 2, profile=Depends(current_profile)):
     """Read the company's own documents with AI: business model, capex and growth plans. India: the latest investor
     presentation and call transcripts. US: the latest 10-K and earnings releases."""
-    need(profile, "deepdive", "The company deep dive")
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
     key = f"US:{sym}" if region == "US" else sym
     years = deep_years(years)
     base = deep_base(sym, region, years)
+    use_deep(profile, "deepdive", sym, region)
     have = deepdive.stored(key)
     if deepdive.fresh(have) and not refresh:
         return ok(deep_view(sym, base))
@@ -1602,7 +1649,7 @@ _investor_pool = ThreadPoolExecutor(max_workers=4)
 def investor_home(region: str = "IN", profile=Depends(current_profile)):
     """Every watchlist company in one market (India or US): trend, sector rotation, red flags (India), checklist and
     report card on one page."""
-    need(profile, "deepdive", "The investor home")
+    need(profile, "investor_home", "Watchlist at a glance")
     region = "US" if region.upper() == "US" else "IN"
     us = region == "US"
     syms = filings.watchlist_symbols(profile["id"], region)[:investor.MAX]
@@ -1778,7 +1825,7 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     throttle(profile, "holdings_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
     limit = holdings_limit(profile["_plan"])
     if len(req.items) > limit:
-        upgrade(f"Your plan keeps up to {limit} stocks in My Holdings.", "holdings_limit")
+        upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
     before = holdings.load(profile["id"])
     saved = {i["symbol"]: i for i in before["items"]}
     kept, rows = [], []
@@ -2061,10 +2108,12 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
 def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
     """The deep dive as a deck, PowerPoint or PDF (the same slides): numbers, business, plans, report card and
     checklist, with sources."""
-    need(profile, "deepdive", "The company deck")
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
-    view = deep_view(sym, deep_base(sym, region))
+    base = deep_base(sym, region)
+    use_deep(profile, "deepdive", sym, region)
+    use_deep(profile, "deck", sym, region)
+    view = deep_view(sym, base)
     if format == "pdf":
         return Response(deck.build_pdf(view), media_type="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="{sym}-deep-dive.pdf"'})
@@ -2076,13 +2125,13 @@ def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profil
 def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", years: int = 2, profile=Depends(current_profile)):
     """The management report card: targets management gave (India: on earnings calls; US: in earnings releases),
     checked against the reported numbers."""
-    need(profile, "deepdive", "The company deep dive")
     region = deep_region(region)
     us = region == "US"
     sym = deep_symbol(symbol, region)
     key = f"US:{sym}" if us else sym
     years = deep_years(years)
     base = deep_base(sym, region, years)
+    use_deep(profile, "deepdive", sym, region)
     if deepdive.fresh(report_card.stored(key)) and not refresh:
         return ok(deep_view(sym, base))
     kind = "earnings_release" if us else "transcript"
@@ -2490,7 +2539,7 @@ def start_session(profile, s, inst):
         if start_trial:  # the session never ran, so don't use up the free trial
             db.update_profile(profile["id"], live_trial_started_at=None)
         if isinstance(e, LimitError):
-            upgrade(str(e), "live_limit")
+            upgrade(str(e) + lift(profile["_plan"], "live_limit", "paper sessions"), "live_limit")
         if isinstance(e, ValueError):
             err(400, "cannot_start", str(e))
         if not isinstance(e, HTTPException):     # the price feed failed while loading the warm-up candles
@@ -3525,7 +3574,8 @@ def news_issue(iid: str, profile=Depends(current_profile)):
 def newsletters_view(profile: dict) -> dict:
     to = news.address(profile)
     return {**newsletter_prefs.get(profile["id"]), "email": to, "confirmed": bool(to) and news.confirmed(profile),
-            "allowed": {"market_daily": allows(profile["_plan"], "newsletter"), "my_stocks": allows(profile["_plan"], "newsletter_stocks")}}
+            "allowed": {"market_daily": allows(profile["_plan"], "newsletter"), "my_stocks": True,
+                        "my_stocks_daily": allows(profile["_plan"], "newsletter")}}
 
 
 @app.get("/me/newsletters")
@@ -3535,11 +3585,11 @@ def my_newsletters(profile=Depends(current_profile)):
 
 @app.put("/me/newsletters")
 def set_newsletters(req: NewsletterReq, profile=Depends(current_profile)):
-    """Choose daily, weekly or off for each newsletter. The weekly Market Brief is for everyone."""
+    """Choose daily, weekly or off for each newsletter. Weekly editions are for everyone; daily ones are Basic and up."""
     if "daily" in (req.market_in, req.market_us):
         need(profile, "newsletter", "The daily Market Brief")
-    if req.my_stocks in ("daily", "weekly"):
-        need(profile, "newsletter_stocks", "The My Stocks newsletter")
+    if req.my_stocks == "daily":
+        need(profile, "newsletter", "The daily My Stocks email")
     newsletter_prefs.set(profile["id"], **req.model_dump(exclude_none=True))
     return newsletters_view(profile)
 

@@ -1,8 +1,9 @@
 """Tax invoices for subscription payments, under India's GST rules, one per payment.
 
 - The seller's details (legal name, address, state, GSTIN, LUT ARN) are set in Admin → Invoices.
-- Plan prices include GST. In India the 18% is split CGST 9% + SGST 9% when the buyer is in the seller's state (or
-  hasn't given a state: the seller's location is then the place of supply), and IGST 18% otherwise.
+- Rupee plan prices include GST, so the 18% is backed out of the amount paid (₹499 is ₹422.88 + ₹76.12 GST). In India
+  it is split CGST 9% + SGST 9% when the buyer is in the seller's state (or hasn't given a state: the seller's location
+  is then the place of supply), and IGST 18% otherwise.
 - A buyer outside India (a card issued abroad, or a billing country other than India) is an export of services:
   zero-rated under a Letter of Undertaking when an LUT ARN is set, otherwise IGST 18% is shown as included.
 - A seller without a GSTIN issues a plain invoice that says it isn't registered under GST.
@@ -68,6 +69,19 @@ def fy(d: datetime) -> str:
     return f"{start}-{str(start + 1)[2:]}"
 
 
+def _paise(v) -> float:
+    """Rupees rounded to the paisa, halves up (as on a bill), without float drift: 380.595 is 380.60."""
+    from decimal import ROUND_HALF_UP, Decimal
+    return float(Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def backed_out(total: float) -> tuple[float, float]:
+    """(taxable value, GST) inside a GST-inclusive price at 18%: ₹499 is ₹422.88 + ₹76.12. The two always add up to
+    the price, to the paisa."""
+    taxable = _paise(total / 1.18)
+    return taxable, _paise(total - taxable)
+
+
 def tax_lines(total: float, s: dict, buyer: dict) -> tuple[list[dict], str, str]:
     """(tax lines, the kind of supply, the note printed on the invoice) for a tax-inclusive total."""
     export = buyer.get("country", "IN") != "IN"
@@ -76,13 +90,12 @@ def tax_lines(total: float, s: dict, buyer: dict) -> tuple[list[dict], str, str]
     if export and s.get("lut_arn"):
         return ([{"name": "IGST 0%", "rate": 0, "amount": 0.0}], "Export (zero-rated)",
                 f"Supply meant for export under LUT without payment of IGST (LUT ARN {s['lut_arn']}).")
-    taxable = round(total / 1.18, 2)
-    gst = round(total - taxable, 2)
+    taxable, gst = backed_out(total)
     if export or (buyer.get("state") and buyer["state"] != s.get("state")):
         return ([{"name": "IGST 18%", "rate": 18, "amount": gst}], "Export (IGST paid)" if export else "Inter-state",
                 "IGST included in the price." if not export else "Export of services with payment of IGST (included in the price).")
-    half = round(gst / 2, 2)
-    return ([{"name": "CGST 9%", "rate": 9, "amount": half}, {"name": "SGST 9%", "rate": 9, "amount": round(gst - half, 2)}],
+    cgst = _paise(gst / 2)
+    return ([{"name": "CGST 9%", "rate": 9, "amount": cgst}, {"name": "SGST 9%", "rate": 9, "amount": round(gst - cgst, 2)}],
             "Intra-state", "GST included in the price.")
 
 

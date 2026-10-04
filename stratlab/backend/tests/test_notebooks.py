@@ -153,10 +153,11 @@ def test_old_saved_strategy_opens_as_notebook(api):
 
 def test_backtest_limit(api):
     api.profile["_plan"] = "free"
-    api.usage.extend(["backtest"] * 5)
+    api.usage.extend(["backtest"] * 10)
     nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
     r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
     assert r.status_code == 402 and r.json()["detail"]["code"] == "backtest_limit"
+    assert r.json()["detail"]["message"] == "You've used all 10 backtests for this month. Basic gives 100."
 
 
 def test_needs_an_instrument(api):

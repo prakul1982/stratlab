@@ -253,7 +253,7 @@ def write_strategy(text: str, pro: bool) -> dict:
             except (ValidationError, TypeError):
                 continue
             if allowed and (cond.l.t not in allowed or cond.r.t not in allowed):
-                out["notes"].append("Advanced indicators (MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian, volume) need the Pro plan, so that part was left out.")
+                out["notes"].append("Advanced indicators (MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian, volume) need the Basic plan or above, so that part was left out.")
                 continue
             res.append(cond.model_dump(exclude_none=True))
         return res[:10]

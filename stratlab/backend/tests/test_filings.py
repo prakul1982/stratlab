@@ -116,7 +116,7 @@ def recent(days_ago, hour=19):
     return (F.ist_now() - timedelta(days=days_ago)).replace(hour=hour, minute=0, second=0).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def test_endpoints_are_pro_and_cover_the_watchlist(monkeypatch, store):
+def test_company_red_flags_are_for_everyone_and_the_watchlist_is_basic(monkeypatch, store):
     from fastapi.testclient import TestClient
     from app import main
     from app.config import settings
@@ -131,8 +131,11 @@ def test_endpoints_are_pro_and_cover_the_watchlist(monkeypatch, store):
     main.app.dependency_overrides[main.current_profile] = lambda: who["p"]
     c = TestClient(main.app)
     try:
-        assert c.get("/research/filings/ABC").status_code == 402
-        who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
+        assert c.get("/research/filings/ABC").status_code == 200          # a company page's red flags: every plan
+        r = c.get("/research/filings")
+        assert r.status_code == 402 and "Watchlist red flags are on the Basic plan" in r.json()["detail"]["message"]
+        assert c.put("/research/filings/alerts", json={"on": True}).status_code == 402
+        who["p"] = {"id": "u1", "plan": "basic", "_plan": "basic"}
         one = c.get("/research/filings/ABC").json()
         assert one["summary"]["fund_raise"] and one["items"][0]["category"] == "dividend"
         assert c.get("/research/filings/NOPE").status_code == 502

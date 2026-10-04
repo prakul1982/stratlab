@@ -352,26 +352,30 @@ The **[setup guide](stratlab/README.md)** covers Supabase, the broker data API (
 
 Paid plans switch on once Razorpay's keys and plan IDs are set; until then every feature is open to everyone, with the Free plan's monthly limits. The site owner can also start a **launch offer** from the Admin page: every user gets Pro free for a set number of days.
 
-| | Free | Basic · ₹999/mo | Pro · ₹2,999/mo |
+| | Free | Basic · ₹499/mo · $8 | Pro · ₹1,499/mo · $20 |
 |---|---|---|---|
-| Yearly (two months free) | – | ₹9,990 | ₹29,990 |
-| Experiments (each with a full verdict) | 5 / month | 50 / month | Unlimited |
+| Yearly (two months free) | – | ₹4,990 · $80 | ₹14,990 · $200 |
+| Who it's for | Try every tool | Investors and part-time traders | Active traders and heavy research |
+| Backtests (each with a full verdict) | 10 / month | 100 / month | Unlimited |
 | AI strategy builds | 10 / month | 100 / month | Unlimited |
 | Group tests | Up to 10 instruments | Up to 25 | Up to 50 |
 | Paper trading | 5-market-day trial, 1 session | 2 at a time | 10 at a time |
 | Group paper trading | – | ✓ | ✓ with faster entries and a spread limit |
 | Options paper trading | – | At set times | At set times or on a notebook's signal |
-| Daily report after the close | – | ✓ | ✓ |
-| Newsletters | Weekly Market Brief | + the daily Market Brief | + My Stocks |
-| Phone, Telegram and email alerts for every trade | – | – | ✓ |
-| Indicators | Price, SMA, EMA, RSI | Price, SMA, EMA, RSI | All 20+ |
+| Indicators | Price, SMA, EMA, RSI | All 20+ | All 20+ |
 | Markets | All, except Indian F&O | same | + Indian F&O |
+| Trade notifications (phone, Telegram, email) and the daily report | – | ✓ | ✓ |
+| Company deep dive (business, capex plans, management report card, investor checklist), counted once per company a month | 2 / month | 15 / month | Unlimited |
+| Slide decks (PowerPoint and PDF) | 1 / month | 5 / month | Unlimited |
+| Stage 2 + Supertrend scan, watchlist red flags, Watchlist at a glance, with alerts | – | ✓ | ✓ |
+| Sector rotation, red flags on every company page, screens, results calendar | ✓ | ✓ | ✓ |
+| Stock alerts / saved screens / holdings | 5 / 2 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
+| Newsletters (Market Brief and My Stocks) | Weekly | Daily or weekly | Daily or weekly |
 | Export rules and trades | – | – | ✓ |
-| ST S2 scan, sector rotation, filings and red flags, company deep dive (India and US), management report card, investor checklist, investor home, slides (PowerPoint and PDF) | – | – | ✓ |
 | Research AI reads | 60 / day | 60 / day | 60 / day |
 | Share cards and public links | ✓ | ✓ | ✓ |
 
-Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server. Visitors outside India see prices in their own currency (18 currencies, following the rupee price at the day's exchange rate). Every payment gets a GST invoice: CGST and SGST within the state, IGST across states, and exports zero-rated under the LUT.
+Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on the server. Rupee prices include 18% GST. Visitors outside India see prices in their own currency (US dollars, euros and pounds have their own prices; the other 15 follow the rupee price at the day's exchange rate). Every payment gets a GST invoice: CGST and SGST within the state, IGST across states, and exports zero-rated under the LUT.
 
 ## How it's checked
 

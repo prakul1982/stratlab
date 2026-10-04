@@ -4,30 +4,36 @@ from datetime import datetime, timedelta, timezone
 PLANS = {
     "free": {
         "name": "Free", "price": 0, "price_year": 0,
-        "backtests_per_month": 5,
+        "backtests_per_month": 10,
         "ai_builds_per_month": 10,
         "live_limit": 1,              # only during the trial
         "live_trial_days": 5,         # Indian trading days (no weekends or holidays), counted from the first start
         "group_size": 10,             # instruments in one group test
         "holdings": 30,               # stocks in My Holdings
-        "stock_alerts": 3,            # active price and indicator alerts on stocks
-        "screens": 1,                 # saved stock screens
+        "stock_alerts": 5,            # active price and indicator alerts on stocks
+        "screens": 2,                 # saved stock screens
+        "deepdives_per_month": 2,     # companies opened in the deep dive (each counted once a month)
+        "decks_per_month": 1,         # company slide decks (PowerPoint or PDF)
         "features": set(),
     },
     "basic": {
-        "name": "Basic", "price": 999, "price_year": 9990,
-        "backtests_per_month": 50,
+        # rupee prices include GST (invoices.py backs the 18% out)
+        "name": "Basic", "price": 499, "price_year": 4990,
+        "backtests_per_month": 100,
         "ai_builds_per_month": 100,
         "live_limit": 2,
         "live_trial_days": None,
         "group_size": 25,
         "holdings": 100,
-        "stock_alerts": 20,
-        "screens": 5,
-        "features": {"group_live", "options", "daily_report", "newsletter"},
+        "stock_alerts": 25,
+        "screens": 10,
+        "deepdives_per_month": 15,
+        "decks_per_month": 5,
+        "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
+                     "investor_home"},
     },
     "pro": {
-        "name": "Pro", "price": 2999, "price_year": 29990,
+        "name": "Pro", "price": 1499, "price_year": 14990,
         "backtests_per_month": None,  # unlimited
         "ai_builds_per_month": None,  # unlimited (a daily safety cap still applies)
         "live_limit": 10,
@@ -36,18 +42,22 @@ PLANS = {
         "holdings": 300,
         "stock_alerts": 100,
         "screens": 25,
-        # pro_features: advanced indicators and Indian F&O
-        "features": {"group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features",
-                     "scans", "filings", "deepdive", "newsletter", "newsletter_stocks"},
+        "deepdives_per_month": None,  # unlimited (the daily cap on fresh AI reads still applies)
+        "decks_per_month": None,
+        "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
+                     "export", "newsletter", "scans", "filings", "investor_home"},
     },
 }
-# newsletter: the daily Market Brief (the weekly one is for everyone); newsletter_stocks: the My Stocks newsletter
-FEATURES = ("group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "pro_features",
-            "scans", "filings", "deepdive", "newsletter", "newsletter_stocks")
+# indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
+# newsletter: the daily editions of both newsletters (the weekly ones are for everyone);
+# scans: the Stage 2 + Supertrend scan and its alert; filings: red flags for the whole watchlist and the evening alert
+# (red flags on a single company page are for everyone)
+FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
+            "newsletter", "scans", "filings", "investor_home")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
-BASIC_REFS = {"price", "sma", "ema", "rsi", "num"}      # every other indicator (MACD, Bollinger, VWAP…) is Pro
+BASIC_REFS = {"price", "sma", "ema", "rsi", "num"}      # every other indicator (MACD, Bollinger, VWAP…) is Basic and up
 
 GRACE = timedelta(days=1)
 
@@ -65,9 +75,25 @@ def allows(plan: str, feature: str) -> bool:
     return feature in PLANS[plan]["features"] or not payments_live()
 
 
-def has_pro_features(plan: str) -> bool:
-    """Advanced indicators and Indian F&O."""
-    return allows(plan, "pro_features")
+def has_indicators(plan: str) -> bool:
+    """Every indicator beyond price, SMA, EMA and RSI (Basic and up)."""
+    return allows(plan, "indicators")
+
+
+def has_fno(plan: str) -> bool:
+    """Indian futures and options (Pro)."""
+    return allows(plan, "fno")
+
+
+def bigger_plan(plan: str, key: str) -> str | None:
+    """The name of the next plan up with a higher count limit `key` (None counts as unlimited), for upgrade messages;
+    None when no plan goes higher."""
+    have, order = PLANS[plan][key], ("free", "basic", "pro")
+    for p in order[order.index(plan) + 1:]:
+        cap = PLANS[p][key]
+        if have is not None and (cap is None or cap > have):
+            return PLANS[p]["name"]
+    return None
 
 
 def group_size(plan: str) -> int:
@@ -89,10 +115,21 @@ def screens(plan: str) -> int:
     return PLANS[plan]["screens"] if payments_live() else PLANS["pro"]["screens"]
 
 
+def deepdives(plan: str) -> int | None:
+    """How many companies a month the deep dive opens (None: unlimited). Each company counts once a month."""
+    return PLANS[plan]["deepdives_per_month"] if payments_live() else PLANS["pro"]["deepdives_per_month"]
+
+
+def decks(plan: str) -> int | None:
+    """How many company decks a month (None: unlimited)."""
+    return PLANS[plan]["decks_per_month"] if payments_live() else PLANS["pro"]["decks_per_month"]
+
+
 def plan_info(plan: str) -> dict:
     info = {k: v for k, v in PLANS[plan].items() if k != "features"}
     return {**info, "group_size": group_size(plan), "holdings": holdings_limit(plan), "stock_alerts": stock_alerts(plan),
-            "screens": screens(plan), "pro_features": has_pro_features(plan),
+            "screens": screens(plan), "deepdives_per_month": deepdives(plan), "decks_per_month": decks(plan),
+            "indicators": has_indicators(plan), "fno": has_fno(plan),
             "features": {f: allows(plan, f) for f in FEATURES}}
 
 

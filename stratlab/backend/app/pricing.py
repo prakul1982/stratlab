@@ -1,6 +1,7 @@
 """Prices by currency for visitors outside India. Rupee prices live in plans.py; every other currency follows them
-automatically: the rupee price at today's exchange rate, rounded to a tidy amount (rates are read once a day). The
-admin can fix any price in Admin → Prices instead, and clear it to go back to automatic.
+automatically: the rupee price at today's exchange rate, rounded to a tidy amount (rates are read once a day). US
+dollars, euros and pounds have their own built-in prices instead ($8 and $20 a month). The admin can change any price
+in Admin → Prices, and clear it to go back to the default.
 
 Charging: a currency is charged in that currency when its Razorpay plan IDs are set in Admin (plans are created in
 the Razorpay dashboard, one per currency, plan and period). Until then visitors see the local price for reference
@@ -13,28 +14,31 @@ from .plans import PLANS
 KEY = "prices"
 RATES = "fx-rates"             # app_settings: {"at": ISO, "rates": {"USD": 88.2, ...}} rupees per unit, read daily
 
-# code: (symbol, name, monthly Basic, monthly Pro); yearly is ten months (two free), as in rupees
+# code: (symbol, name, monthly Basic, monthly Pro); yearly is ten months (two free), as in rupees. These amounts are
+# used until the first exchange rate is read; after that the rupee price at today's rate, except for FIXED below.
 CURRENCIES = {
     "INR": ("₹", "Indian rupee", None, None),
-    "USD": ("$", "US dollar", 12, 35),
-    "EUR": ("€", "Euro", 11, 32),
-    "GBP": ("£", "British pound", 9, 27),
-    "AUD": ("A$", "Australian dollar", 18, 54),
-    "CAD": ("C$", "Canadian dollar", 16, 48),
-    "SGD": ("S$", "Singapore dollar", 15, 45),
-    "AED": ("AED ", "UAE dirham", 45, 129),
-    "SAR": ("SAR ", "Saudi riyal", 45, 129),
-    "CHF": ("CHF ", "Swiss franc", 10, 29),
-    "JPY": ("¥", "Japanese yen", 1800, 5300),
-    "HKD": ("HK$", "Hong Kong dollar", 95, 275),
-    "NZD": ("NZ$", "New Zealand dollar", 20, 59),
-    "SEK": ("SEK ", "Swedish krona", 125, 369),
-    "NOK": ("NOK ", "Norwegian krone", 129, 379),
-    "DKK": ("DKK ", "Danish krone", 85, 249),
-    "ZAR": ("R", "South African rand", 219, 649),
-    "MYR": ("RM", "Malaysian ringgit", 55, 159),
-    "QAR": ("QAR ", "Qatari riyal", 45, 129),
+    "USD": ("$", "US dollar", 8, 20),
+    "EUR": ("€", "Euro", 8, 19),
+    "GBP": ("£", "British pound", 7, 16),
+    "AUD": ("A$", "Australian dollar", 9, 27),
+    "CAD": ("C$", "Canadian dollar", 8, 24),
+    "SGD": ("S$", "Singapore dollar", 7, 22),
+    "AED": ("AED ", "UAE dirham", 22, 64),
+    "SAR": ("SAR ", "Saudi riyal", 22, 64),
+    "CHF": ("CHF ", "Swiss franc", 5, 14),
+    "JPY": ("¥", "Japanese yen", 900, 2650),
+    "HKD": ("HK$", "Hong Kong dollar", 47, 135),
+    "NZD": ("NZ$", "New Zealand dollar", 10, 29),
+    "SEK": ("SEK ", "Swedish krona", 62, 185),
+    "NOK": ("NOK ", "Norwegian krone", 64, 190),
+    "DKK": ("DKK ", "Danish krone", 42, 125),
+    "ZAR": ("R", "South African rand", 110, 325),
+    "MYR": ("RM", "Malaysian ringgit", 27, 79),
+    "QAR": ("QAR ", "Qatari riyal", 22, 64),
 }
+# priced on their own, like comparable apps abroad, instead of following the rupee price (the admin can still change them)
+FIXED = {"USD", "EUR", "GBP"}
 
 # countries that use each currency (ISO 3166 codes); anywhere else outside India sees US dollars
 COUNTRIES = {
@@ -94,13 +98,14 @@ def refresh_rates(fetch) -> dict:
 
 
 def defaults() -> dict:
-    """Automatic prices: the rupee price at today's rate, tidied; the built-in amounts until a rate has been read."""
+    """Default prices: the rupee price at today's rate, tidied; the built-in amounts for FIXED currencies, and for the
+    rest until a rate has been read."""
     out, fx = {}, rates()
     inr = {f: PLANS[f.split("_")[0]]["price" + ("_year" if f.endswith("_year") else "")] for f in FIELDS}
     for code, (_, _, basic, pro) in CURRENCIES.items():
         if code == "INR":
             row = dict(inr)
-        elif fx.get(code):
+        elif fx.get(code) and code not in FIXED:
             row = {f: nice(inr[f] / fx[code]) for f in ("basic", "pro")}
             row.update(basic_year=row["basic"] * 10, pro_year=row["pro"] * 10)
         else:

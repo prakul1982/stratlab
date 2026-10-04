@@ -14,7 +14,8 @@ const CHOICES: [Cadence, string][] = [["daily", "Daily"], ["weekly", "Weekly"], 
 /** Which plan a choice needs, or null when this plan allows it. */
 function needs(p: NewsletterPrefs, key: Key, c: Cadence): string | null {
   if (c === "off") return null;
-  if (key === "my_stocks") return p.allowed?.my_stocks === false ? "Pro" : null;
+  // weekly editions are for everyone; daily ones are Basic and up
+  if (key === "my_stocks") return c === "daily" && p.allowed?.my_stocks_daily === false ? "Basic" : null;
   return c === "daily" && p.allowed?.market_daily === false ? "Basic" : null;
 }
 

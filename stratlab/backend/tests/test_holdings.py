@@ -227,7 +227,7 @@ def test_facts_per_stock_and_the_plan_gate_on_filings(w, monkeypatch):
         monkeypatch.setattr(settings, k, v)
     upload(c, "icici_direct_portfolio.csv", headers=FREE)
     f = c.get("/holdings/facts", headers=FREE).json()
-    assert f["filings"] is False and f["filings_plan"] == "Pro" and f["rows"]["RELIANCE"]["red"] is None
+    assert f["filings"] is False and f["filings_plan"] == "Basic" and f["rows"]["RELIANCE"]["red"] is None
     assert f["rows"]["RELIANCE"]["stage"] is not None
 
 
