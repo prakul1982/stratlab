@@ -36,16 +36,15 @@ import io
 import json
 import math
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from . import db, money_mf_nav as navs, tax_lots
 from .auth import current_profile
-from .branding import public_text
+from .responses import err, ok
 from .kite_service import IST
 from .plans import FEATURE_PLAN, PLANS, allows, mf_limit
 
@@ -78,10 +77,6 @@ IN_TYPES = {"purchase", "sip", "switch_in", "merger_in", "div_reinvest", "gift_i
 OUT_TYPES = {"redeem", "switch_out", "merger_out", "gift_out"}
 INFO_TYPES = {"stamp", "stt", "tds", "div_payout", "reversal"}
 TYPES = IN_TYPES | OUT_TYPES | INFO_TYPES
-TYPE_NAMES = {"purchase": "Purchase", "sip": "SIP", "switch_in": "Switch in", "merger_in": "Merger in", "div_reinvest": "Dividend reinvested",
-              "gift_in": "Gift in", "segregation": "Segregated units", "opening": "Opening balance", "redeem": "Redemption",
-              "switch_out": "Switch out", "merger_out": "Merger out", "gift_out": "Gift out", "stamp": "Stamp duty", "stt": "STT",
-              "tds": "TDS", "div_payout": "Dividend paid", "reversal": "Reversal"}
 PRIORITY = {"opening": 0, "merger_out": 0, "reversal": 3, "stamp": 2}      # same-day order: buys, charges, then sales
 
 DISCLAIMER = ("Facts and arithmetic from your own statement, valued at the latest published NAV. Not investment or tax "
@@ -880,24 +875,6 @@ def setup(throttle):
     """The app's per-user action limit, shared with the other routes."""
     global _throttle
     _throttle = throttle
-
-
-def err(status: int, code: str, message: str):
-    raise HTTPException(status, {"code": code, "message": public_text(message)})
-
-
-def _safe(o):
-    if isinstance(o, float):
-        return o if math.isfinite(o) else None
-    if isinstance(o, dict):
-        return {k: _safe(v) for k, v in o.items()}
-    if isinstance(o, (list, tuple)):
-        return [_safe(v) for v in o]
-    return o
-
-
-def ok(data) -> JSONResponse:
-    return JSONResponse(content=_safe(data))
 
 
 def _limit(profile, what: str, times: int, message: str):

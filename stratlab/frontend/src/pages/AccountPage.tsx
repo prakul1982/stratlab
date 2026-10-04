@@ -94,7 +94,7 @@ export function AccountPage() {
 
   const paid = me.paid_plan ?? me.plan;   // what they pay for; me.plan is Pro for everyone during the launch offer
   return (
-    <div className="stack" style={{ gap: 26, maxWidth: 820 }}>
+    <div className="stack page-narrow" style={{ gap: 26 }}>
       <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
         <div className="stack" style={{ gap: 6, minWidth: 0 }}>
           <span className="eyebrow" style={{ overflowWrap: "anywhere" }}>{me.email}</span>

@@ -153,11 +153,6 @@ def sgb_maturity(symbol) -> str | None:
     return f"20{m.group(2)}-{months.index(m.group(1)) + 1:02d}"
 
 
-def _months_held(buy: str, sell: str) -> float:
-    b, s = date.fromisoformat(buy), date.fromisoformat(sell)
-    return (s.year - b.year) * 12 + (s.month - b.month) + (s.day - b.day) / 31
-
-
 def _after_months(buy: str, sell: str, months: int) -> bool:
     """Held for more than `months` months: sold after that anniversary of the buy."""
     b = date.fromisoformat(buy)

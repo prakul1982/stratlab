@@ -4,6 +4,49 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 4–5 October 2026: three spaces, the Money space, positioning, breadth and the trade journal
+
+**Three spaces**
+- **Trade, Invest and Money:** a switcher at the top of the menu picks which space's menu shows (or **All**, every group folded). Each space has a home page: Trade with Options first, paper sessions, the journal, the library, import, today's positioning and your notebooks; Invest with company search, your watchlist, today's results, market breadth and red flags; Money with your holdings, this year's capital gains tax estimate and a card per Money tool. The welcome question now asks what brings you here, and your answer picks the space you start in.
+- **A slimmer sidebar:** one scrolling menu in short groups, Scans and the watchlist as tabbed pages, and a two-line footer: "N of M markets open" opens the markets list, and your initials open Account, Admin, dark mode, the tour and sign-out.
+- **Current first, the past folded:** running paper sessions first and stopped ones under one line; today's orders first and earlier ones folded; alerts fired today, then earlier; the money calendar's next 90 days, with the past week folded; results days gone by this week and corporate actions of the last two weeks folded. Nothing is deleted.
+- **Tidier pages:** numbers right-aligned in tables, figures in a row sharing one line, centred empty states, one content width for every space home.
+
+**Trade**
+- **Positioning** (beside Options): the exchange's participant-wise open interest and volume for clients, DIIs, FIIs and proprietary traders, in index or stock futures and options, with each side's long and short share and the change from the day before; FII and DII cash market flows; the put-call ratio of NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX; and one index's chain facts (max pain, open interest by strike, ATM IV). Each section says where its numbers come from and how much history is stored, and a missing number says why. Today's numbers for everyone; the history and the IV percentile on Basic.
+- **FINNIFTY and MIDCPNIFTY** chains are recorded every 5 minutes too, so options backtesting and the positioning history have five indices to draw on.
+- **Trade journal:** bring your broker's tradebook or tax P&L, equity and F&O. Every trade is paired into round trips after charges, with your notes, tags, feelings and mistakes; breakdowns by day, hour, setup and more; and the verdict's honesty checks run on what you really did, with paper vs real per setup. Free keeps your last 50 trades with the basic stats; Basic keeps everything.
+- **Options sessions read today first:** the open trade with its orders folded under it, then the trades closed today (or one line such as "No trades today. Next entry 09:30."), then the earlier trades under one line with their total after costs. Tap a trade to see its orders, grouped by the moment they were sent, with readable contract names.
+- **Rates:** F&O STT at the Finance Act 2026 levels from 1 April 2026 (futures 0.05%, options 0.15% of premium on sells), NSE charges with the IPFT contribution, BSE index options at their own rate, the 2026 SEC and FINRA fees, and NSE's new freeze limits from 5 October.
+
+**Invest**
+- **Market breadth:** for all NSE stocks, the NIFTY 50, NIFTY 500, Midcap 150, Smallcap 250 or US large caps, how many stocks rose or fell, sit above their 20, 50 and 200-day averages and made new highs or lows each day, with the A/D line, McClellan, breadth thrust and TRIN, a table by sector, and an alert when the share above the 50-day average crosses your level. Today's numbers for everyone; the history and charts on Basic.
+- **Company suggestions while you type** a symbol, in My Holdings and the alert form.
+
+**Money**
+- **Net worth:** your holdings and funds plus PF, PPF, NPS, deposits, gold, property, cash and the rest, minus loans, each valued with its rule and date; EMIs, interest this year and what a prepayment would change; an insurance register; a monthly history on Basic.
+- **Mutual funds** from the CAMS or KFintech CAS PDF (read once, never stored, nor its password): each scheme's value, XIRR, mix by category and capital gains per year (Basic). Fund sales join the tax report.
+- **Tax tools:** dividends with the TDS on them, advance tax due by each date with the interest if it falls short (Pro) and reminders a week and a day before (everyone), and how much of the long-term exemption is used, lot by lot on Pro.
+- **The year's total tax estimate** in the tax report: F&O, commodity and currency results from the tax P&L ZIP, other income, the regime, your age band and residency, with the rebate, surcharge, cess and set-off.
+- **US stocks in Indian tax:** each sale in rupees at the rate the Income-tax Rules use, the 24-month rule, US dividends with the foreign tax credit, and Schedule FA. Year totals for everyone; the workings on Pro.
+- **ITR-ready export:** your year laid out like the ITR-2 and ITR-3 schedules, as a spreadsheet or one PDF for your CA (Pro). Not a filed return.
+- **Money calendar:** tax due dates, results and dividends for your stocks, maturities, premiums, EMIs and your own dates, with a private link for Google or Apple Calendar and reminders on Basic.
+- **My Holdings** keeps US stocks (valued in dollars and counted in the rupee total) and labels ETFs, REITs, InvITs and gold bonds, which the tax report puts under their own heads.
+
+**Plans and invites**
+- Basic ₹699 a month or ₹6,999 a year, Pro ₹1,999 a month or ₹19,999 a year, GST included. The plan cards and the Plans grid name every new tool on the plan that adds it.
+- **Invite rewards:** you earn a month of Basic for each of your first 2 friends a year who become active, and for each of your first 2 who subscribe; after that, every friend who subscribes adds 25% of a month. A refunded payment takes its reward back.
+
+**Running StratLab**
+- **Admin → Data checks:** a **Storage** panel (how full the database is, the biggest tables, and a one-click move of the bulky market data to an optional second database), **Market breadth** with **Run now** per market, **Rates and rules** (every hard-coded rate with its source and review date, and a daily read of the official sources), exchange holidays for every market, and a whole-market audit with start, pause, reset, a monthly full check and a re-check per company.
+- **A nightly encrypted copy of the database**, kept 7 days (the weekly full copy 28 days), with restore steps in the admin guide.
+- **Steadier server:** data caches are bounded by memory size, which stops the whole-market audit from running the server out of memory, and a failed read after a restart no longer wipes the audit's stored results.
+- **Behind the scenes:** the site deploys on Vercel only (the unused Netlify config is gone); tests run on Node 22, in parallel, and a newer push cancels the run before it; shared helpers and dead code cleaned up.
+
+**Landing page and docs**
+- The landing page lists everything above in its space, the plan cards match the server's plans line for line (a test fails if a paid tool is missing from its card), and the FAQ covers files you can import, the total tax estimate, the ITR export, who can see your money data, the five recorded option chains and the Positioning page. The README, feature guide, admin guide and setup guide match, with new screenshots of the space homes, Positioning and an options session.
+- **Fix:** on Positioning, the long/short bar no longer draws over the change line under it.
+
 ### Landing page and docs brought up to date
 - **The landing page is grouped the way the product is:** Research, Portfolio and tax, Strategy testing and Alerts, each listing what ships today (results calendar, corporate actions, deals, surveillance lists, holdings import, the tax report, share cards and invites among them), then the plans and a refreshed FAQ. The separate "problem", "beyond one chart" and "for investors" sections are folded in; the markets list adds Indian currency futures.
 - **Plans on the landing page match the server exactly:** Free, Basic and Pro come from one shared file (`frontend/src/lib/plans.ts`, also used by Plans), priced in the visitor's currency; a backend test fails if it drifts from `plans.py`, and a browser test checks the cards against the server's plans.

@@ -51,6 +51,16 @@ async function touchable(page: Page) {
   expect(small, "controls too small to tap").toEqual([]);
 }
 
+/** Opens every "Earlier ..." fold on the page (past dates and finished things sit folded under one line). */
+async function openEarlier(page: Page) {
+  for (const fold of await page.locator("details.earlier:not([open]) > summary").all()) await fold.click();
+}
+
+/** Waits for something that may sit in a fold, opening folds as the page fills in. */
+async function seeUnfolded(page: Page, what: ReturnType<Page["locator"]>) {
+  await expect(async () => { await openEarlier(page); await expect(what).toBeVisible({ timeout: 1000 }); }).toPass({ timeout: 30_000 });
+}
+
 /** Bars for gains end at the zero line from above; bars for losses start at it and hang below. */
 async function barsAroundZero(page: Page) {
   const charts = page.locator(".tbars");
@@ -87,7 +97,8 @@ for (const [path, ready] of PAGES) {
 
 test("results calendar: every company's dates, and the company page links to it", async ({ page }, info) => {
   await sane(page, await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called"));
-  await expect(page.getByRole("link", { name: "RELIANCE" }).first()).toBeVisible({ timeout: 30_000 });
+  // results days earlier this week sit folded in their week
+  await seeUnfolded(page, page.getByRole("link", { name: "RELIANCE" }).first());
   await expect(page.getByText("Financial Results").first()).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await expect(page.getByRole("link", { name: "RELIANCE" }).first()).toHaveAttribute("href", "/research/IN/RELIANCE");
@@ -205,6 +216,7 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
   await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "2", "15", "Unlimited"]);
+  await expect(row("Trades the journal keeps")).toHaveText(["Trades the journal keeps", "50", "Unlimited", "Unlimited"]);
   await expect(row("All 20+ indicators")).toHaveText(["All 20+ indicators", "–", "✓", "✓"]);
   await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
   await expect(row("Indian F&O")).toHaveText(["Indian F&O", "–", "–", "✓"]);
@@ -1188,15 +1200,18 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
 
   let errors = await open(page, "/research/corporate-actions?region=IN&scope=all", "Dividends, bonuses and splits", who);
   await settle(page);
-  await expect(page.getByRole("link", { name: "TCS" }).first()).toBeVisible({ timeout: 30_000 });
+  // ex-dates gone by sit under "Last two weeks", folded below the ones coming up
+  const past = page.locator("details.earlier", { hasText: "Last two weeks" });
+  if (await past.count()) await expect(past).not.toHaveAttribute("open", "");
+  await seeUnfolded(page, page.getByRole("link", { name: "TCS" }).first());
   await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
   await expect(page.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible();
   await expect(page.getByText("Annual General Meeting")).toHaveCount(0);           // a meeting isn't an action
   await page.getByRole("combobox", { name: "Kind of action" }).selectOption("bonus");
   await expect(page.getByText(/Dividend - Rs|₹5.50 a share/)).toHaveCount(0);
-  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
+  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));
   await page.getByRole("radio", { name: "My stocks" }).click();
-  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();      // TCS is in the holdings
+  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));      // TCS is in the holdings
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
   expect(await page.locator("main").innerText()).not.toMatch(/yahoo|finnhub|kite|screener/i);
@@ -1546,8 +1561,33 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByTestId("part-status")).toContainText("As of");
   for (const who of ["client", "dii", "fii", "pro", "total"]) await expect(main.locator(`tr[data-participant="${who}"]`)).toBeVisible();
   await expect(main.getByText("FII index futures, net")).toBeVisible();
+  // both sides of the futures: the long and the short share, adding up to 100
+  await expect(main.getByText("FII index futures, long · short")).toBeVisible();
+  const split = await main.getByTestId("split-fii").innerText();
+  const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
+  expect(lo + sh).toBeCloseTo(100, 1);
+  await expect(main.getByTestId("sides-fig")).toContainText(/[\d.]+% long\s*[\d.]+% short/);
+  await expect(main.getByTestId("sides-fig")).toContainText(/Long share [+−][\d.]+ pts from the day before/);
+  // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
+  const overlaps = await main.locator(".space-fig").evaluateAll((figs) => figs.flatMap((f) => {
+    const rows = Array.from(f.children).map((c) => c.getBoundingClientRect()).filter((b) => b.height > 0);
+    return rows.slice(1).flatMap((b, i) => (b.top < rows[i].bottom - 1 ? [`${(f.textContent ?? "").slice(0, 40)}: row ${i + 2} over row ${i + 1}`] : []));
+  }));
+  expect(overlaps, "figures drawn over themselves").toEqual([]);
+  // where the numbers come from and how much is stored, in a line per section
+  await expect(main.getByTestId("part-source")).toContainText("end-of-day participant-wise file");
+  await expect(main.getByTestId("part-source")).toContainText(/\d+ trading days since/);
+  await expect(main.getByTestId("cash-source")).toContainText("provisional FII/DII figures");
+  await expect(main.getByTestId("pcr-source")).toBeVisible();
+  // stock futures and options from the same file
+  await main.getByRole("button", { name: "Stock F&O", exact: true }).click();
+  await expect(main.getByTestId("part-table")).toHaveAttribute("data-segment", "stk");
+  await expect(main.getByText("FII stock futures, net")).toBeVisible();
+  await expect(main.getByRole("columnheader", { name: "Stock F&O" })).toBeVisible();
+  await main.getByRole("button", { name: "Index F&O", exact: true }).click();
   await main.getByRole("button", { name: "Volume", exact: true }).click();
-  await expect(main.getByRole("columnheader", { name: "Futures bought" })).toBeVisible();
+  await expect(main.getByRole("columnheader", { name: "Futures bought", exact: true })).toBeVisible();
+  await expect(main.getByRole("columnheader", { name: "Futures bought / sold" })).toBeVisible();
   await expect(main.getByText("FII/FPI net")).toBeVisible();
   const pcr = main.getByTestId("pcr-table");
   for (const n of ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]) await expect(pcr.locator(`tr[data-pcr="${n}"]`)).toBeVisible({ timeout: 30_000 });
@@ -1564,9 +1604,17 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByRole("columnheader", { name: "Call OI" })).toBeVisible();
   // the history (the owner is on Pro): each participant's positions and each index's PCR and IV by day
   await expect(main.getByText("FII: index futures, net (contracts)")).toBeVisible({ timeout: 30_000 });
+  await expect(main.getByText("FII: index futures, long share (% of long + short)")).toBeVisible();
+  await expect(main.getByTestId("history-source")).toContainText("Participant files:");
   await expect(main.getByText("NIFTY ATM implied volatility (%)")).toBeVisible();
+  await expect(main.getByTestId("chain-history-source")).toContainText("recorded NIFTY's chain since");
   await main.getByRole("group", { name: "Participant" }).getByRole("button", { name: "Client" }).click();
   await expect(main.getByText("Client: index futures, net (contracts)")).toBeVisible();
+  await main.getByRole("group", { name: "Long share of" }).getByRole("button", { name: "Stock futures" }).click();
+  await expect(main.getByText("Client: stock futures, long share (% of long + short)")).toBeVisible();
+  // an index with nothing recorded yet says so instead of an empty chart
+  await main.getByRole("group", { name: "Index for the chain history" }).getByRole("button", { name: "MIDCPNIFTY" }).click();
+  await expect(main.getByTestId("chain-history-source")).toContainText(/MIDCPNIFTY/);
   const text = await main.innerText();
   expect(text).not.toMatch(/kite|zerodha|yahoo|screener|finnhub|nseindia/i);
   expect(text).not.toMatch(/\b(bullish|bearish|support|resistance|you should|buy now|sell now)\b/i);
@@ -1574,11 +1622,25 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   if (info.project.name === "phone") await touchable(page);
 });
 
+test("positioning: a missing cash number says why instead of a dash", async ({ page }) => {
+  const reason = "The last try (4 Oct 2026, 21:04 IST) didn't get them: The exchange feed refused the request (403). Try again later.";
+  await page.route("**/trade/positioning?*", async (r) => {
+    const res = await r.fetch();
+    const body = await res.json();
+    await r.fulfill({ response: res, json: { ...body, cash: { status: "none", as_of: null, expected: "2026-10-01", reason } } });
+  });
+  await sane(page, await open(page, "/trade", "Straddles, strangles"));
+  await expect(page.getByTestId("pos-card-cash-reason")).toContainText("refused the request (403)", { timeout: 30_000 });
+  await page.goto("/trade/positioning");
+  await expect(page.getByTestId("cash-status")).toContainText("No cash numbers stored yet. The last try");
+});
+
 test("positioning: a card on the Trade home and the Options tab, and the tabs between Options and Positioning", async ({ page }, info) => {
   await sane(page, await open(page, "/trade", "Straddles, strangles"));
   const card = page.getByTestId("positioning-card");
   await expect(card.getByText("FII index futures, net")).toBeVisible({ timeout: 30_000 });
   await expect(card.getByText("NIFTY PCR (open interest)")).toBeVisible();
+  await expect(card.getByTestId("pos-card-sides")).toContainText(/% long · [\d.]+% short/);
   await page.goto("/options");
   await expect(page.getByTestId("positioning-card").getByText("FII/FPI cash, net")).toBeVisible({ timeout: 30_000 });
   const tabs = page.getByRole("navigation", { name: "Options" });

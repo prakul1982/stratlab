@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../../lib/api";
+import { api, dataUrl } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, money, pct, price, qty as qtyText, signClass } from "../../lib/format";
 import { AsOf, Empty, Info, Loading } from "../../components/ui";
@@ -39,16 +39,6 @@ const rate = (r: number | null, slab?: boolean) => (r == null || slab ? "Slab" :
 const xirrText = (x: number | null) => (x == null ? "–" : pct(x * 100));
 const KIND_SHORT: Record<Kind, string> = { equity: "Equity-oriented", debt: "Debt", hybrid: "Other (35–65% equity)", other: "Other (under 35% equity)" };
 
-/** The file as base64, the way the server takes it. */
-function readFile(f: File): Promise<string> {
-  return new Promise((ok, bad) => {
-    const r = new FileReader();
-    r.onload = () => ok(String(r.result));
-    r.onerror = () => bad(new Error("That file couldn't be read. Pick it again."));
-    r.readAsDataURL(f);
-  });
-}
-
 export function MutualFundsPage() {
   const { fail, notify } = useApp();
   const [view, setView] = useState<View | null>(null);
@@ -73,7 +63,7 @@ export function MutualFundsPage() {
     if (picked.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A CAS is usually much smaller.`); return; }
     setBusy(true);
     try {
-      const data = await readFile(picked);
+      const data = await dataUrl(picked);
       const r = await api<ImportReply>("/money/mutual-funds/import", { method: "POST", body: { filename: picked.name, data, password: isPdf ? password : "", mode } });
       track("mutual funds imported", { kind: r.kind, added: r.added });
       setResult(r);
@@ -112,7 +102,7 @@ export function MutualFundsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money · Mutual funds</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your mutual funds, in one place</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Upload your Consolidated Account Statement to see every scheme's value at the latest NAV, what you put in, the gain, XIRR, your mix by category, and capital gains for each financial year. Facts and arithmetic only, never advice. Only you can see your funds, and you can delete them at any time.</p>
+        <p className="page-sub">Upload your Consolidated Account Statement to see every scheme's value at the latest NAV, what you put in, the gain, XIRR, your mix by category, and capital gains for each financial year. Facts and arithmetic only, never advice. Only you can see your funds, and you can delete them at any time.</p>
       </div>
       <div className="banner" role="note"><span>{view?.disclaimer ?? "Facts and arithmetic from your own statement, valued at the latest published NAV. Not investment or tax advice."}</span></div>
 
@@ -166,7 +156,7 @@ export function MutualFundsPage() {
       {!view && <Loading label="Opening your mutual funds" />}
       {view && schemes.length === 0 && (
         <Empty title="No funds yet">
-          <p className="muted" style={{ maxWidth: 520 }}>Upload your CAS above to see your schemes, their value and your gains.</p>
+          <p className="muted">Upload your CAS above to see your schemes, their value and your gains.</p>
         </Empty>
       )}
 

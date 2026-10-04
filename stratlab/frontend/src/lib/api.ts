@@ -106,6 +106,16 @@ function invalidMessage(items: { loc?: (string | number)[] }[]): string {
   return "Some settings are out of range. Check the numbers and try again.";
 }
 
+/** A file or a drawn image as a base64 data URL, the way the server takes uploads in a JSON body. */
+export function dataUrl(blob: Blob): Promise<string> {
+  return new Promise((ok, bad) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result));
+    r.onerror = () => bad(new Error("That file couldn't be read. Pick it again."));
+    r.readAsDataURL(blob);
+  });
+}
+
 export async function loadRazorpay(): Promise<void> {
   if (window.Razorpay) return;
   await new Promise<void>((resolve, reject) => {

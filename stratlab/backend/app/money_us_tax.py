@@ -22,7 +22,7 @@ logged, and deleted with the tax data. Arithmetic on the user's own trades; neve
 import json
 import math
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from . import db, holdings_file as hf, money_fx as fx
 from .money_mf import CII, held_over

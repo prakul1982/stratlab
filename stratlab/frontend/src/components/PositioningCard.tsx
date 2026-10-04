@@ -3,7 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { FAMILIES } from "../lib/navGroups";
 import { signClass } from "../lib/format";
-import { crore, dayName, ratio, signed, type Summary } from "../lib/positioning";
+import { crore, dayName, missingWhy, ratio, sides, signed, type Summary } from "../lib/positioning";
+import { Fig } from "./ui";
 
 /** Options and Positioning switch with tabs, like the Scans: each keeps its own URL. */
 export function TradeTabs() {
@@ -34,21 +35,16 @@ export function PositioningCard() {
         : s === "error" ? <p className="small muted">The positioning numbers couldn't be read just now. <Link className="link" to="/trade/positioning">Open the page</Link>.</p>
         : (
           <div className="space-figs">
-            <div className="space-fig">
-              <span className="tiny muted">FII index futures, net</span>
-              <b className="num">{fii ? signed(fii.fut_idx_net as number | null) : "–"}</b>
-              {fii?.fut_idx_net_chg != null && <span className={`tiny ${signClass(fii.fut_idx_net_chg as number)}`}>{signed(fii.fut_idx_net_chg as number)} from the day before</span>}
-            </div>
-            <div className="space-fig">
-              <span className="tiny muted">FII/FPI cash, net</span>
-              <b className="num">{crore(s.cash.fii?.net, true)}</b>
-              <span className="tiny muted">DII {crore(s.cash.dii?.net, true)}</span>
-            </div>
-            <div className="space-fig">
-              <span className="tiny muted">NIFTY PCR (open interest)</span>
-              <b className="num">{ratio(nifty?.pcr_oi)}</b>
-              {nifty?.expiry && <span className="tiny muted">Expiry {dayName(nifty.expiry)}</span>}
-            </div>
+            <Fig label="FII index futures, net" value={fii?.fut_idx_net != null ? signed(fii.fut_idx_net as number) : null} missing={missingWhy(s.participants)} noteTone=""
+              note={(fii?.fut_idx_net_chg != null || fii?.fut_idx_long_pct != null) && <>
+                {fii?.fut_idx_net_chg != null && <span className={signClass(fii.fut_idx_net_chg as number)}>{signed(fii.fut_idx_net_chg as number)} from the day before</span>}
+                {fii?.fut_idx_net_chg != null && fii?.fut_idx_long_pct != null && <br />}
+                {fii?.fut_idx_long_pct != null && <span className="muted" data-testid="pos-card-sides">{sides(fii.fut_idx_long_pct as number, fii.fut_idx_short_pct as number)}</span>}
+              </>} />
+            <Fig label="FII/FPI cash, net" value={s.cash.fii?.net != null ? crore(s.cash.fii.net, true) : null} missing={missingWhy(s.cash)} missingId="pos-card-cash-reason"
+              note={s.cash.dii?.net != null && `DII ${crore(s.cash.dii.net, true)}`} />
+            <Fig label="NIFTY PCR (open interest)" value={nifty?.pcr_oi != null ? ratio(nifty.pcr_oi) : null} missing="Not recorded yet"
+              note={nifty?.expiry && `Expiry ${dayName(nifty.expiry)}`} />
           </div>
         )}
       {s && s !== "error" && (

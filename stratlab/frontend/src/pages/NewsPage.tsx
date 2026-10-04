@@ -56,15 +56,15 @@ export function NewsPage() {
       </div>
 
       {listError ? (
-        <div className="card dashed stack" style={{ alignItems: "center", textAlign: "center", padding: 32, gap: 12 }}>
+        <div className="card dashed stack empty" style={{ gap: 12 }}>
           <h2 className="h2">Couldn't load the news</h2>
           <p className="muted">{listError} Check your connection and try again; your newsletter settings are safe.</p>
           <button className="btn outline" onClick={() => setTries((n) => n + 1)}>Try again</button>
         </div>
       ) : !rows ? <Loading label="Loading the issues" />
         : !rows.length ? (
-          <div className="card dashed stack" style={{ alignItems: "center", textAlign: "center", padding: 32, gap: 14 }}>
-            <p style={{ fontSize: 17, maxWidth: 520 }}>No issues yet — the first one arrives after the next market close.</p>
+          <div className="card dashed stack empty" style={{ gap: 14 }}>
+            <p style={{ fontSize: 17 }}>No issues yet — the first one arrives after the next market close.</p>
             <Link to="/account#newsletters" className="btn outline">Newsletter settings</Link>
           </div>
         ) : (

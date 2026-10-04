@@ -124,7 +124,7 @@ export function JournalPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Trade journal</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your real trades, judged honestly</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Bring your broker's tradebook or tax P&amp;L, equity and F&amp;O. StratLab pairs every purchase and sale into round trips with their charges, keeps your notes on each, and runs the same checks a backtest's verdict uses on what you really did: enough trades, luck or edge, bad-luck drawdown and charges. Facts about past trades; only you can see them.</p>
+        <p className="page-sub">Bring your broker's tradebook or tax P&amp;L, equity and F&amp;O. StratLab pairs every purchase and sale into round trips with their charges, keeps your notes on each, and runs the same checks a backtest's verdict uses on what you really did: enough trades, luck or edge, bad-luck drawdown and charges. Facts about past trades; only you can see them.</p>
       </div>
 
       <section className="card stack" style={{ gap: 14 }} aria-labelledby="j-import">
@@ -170,7 +170,7 @@ export function JournalPage() {
 
       {!has ? (
         <Empty title="No trades yet">
-          <p className="muted" style={{ maxWidth: 520 }}>Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.</p>
+          <p className="muted">Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.</p>
         </Empty>
       ) : (
         <>

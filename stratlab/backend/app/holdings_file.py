@@ -757,7 +757,7 @@ def _units_only(got: dict) -> dict:
     """A non-equity file's trades without the ones that are neither an ETF, a REIT or InvIT nor a gold bond (a
     company's bond or debenture), which are listed as left out. The ones kept carry their kind."""
     from .instrument_kinds import classify
-    keep, dropped, gross, taxable = [], {}, 0.0, 0.0
+    keep, dropped, gross = [], {}, 0.0
     for t in got["trades"]:
         code = classify(t.get("symbol"), t.get("isin"), t.get("name"))
         if code == "stock":

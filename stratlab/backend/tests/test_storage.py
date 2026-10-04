@@ -1,5 +1,4 @@
 """The databases' size readout, the second database for market data, and moving the data across."""
-import json
 import os
 import socket
 from pathlib import Path

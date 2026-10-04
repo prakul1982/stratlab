@@ -8,8 +8,9 @@ something couldn't be read.
 
 ### Options backtesting
 Options are paper traded live today. Backtesting them needs real past prices for every strike, which nobody keeps for
-expired options, and StratLab won't stand in a pricing model. So it records the NIFTY, BANKNIFTY and SENSEX option
-chains every 5 minutes. Backtesting opens once enough of that history has built up.
+expired options, and StratLab won't stand in a pricing model. So it records the NIFTY, BANKNIFTY, FINNIFTY,
+MIDCPNIFTY and SENSEX option chains every 5 minutes (the Positioning page's chain history is read from the same
+recordings). Backtesting opens once enough of that history has built up.
 
 ### Indian currency derivatives (CDS)
 Futures on USDINR, EURINR, GBPINR, JPYINR and the cross pairs EURUSD, GBPUSD and USDJPY, and options on USDINR,
@@ -28,8 +29,8 @@ Still to do:
 
 ### Checking everything StratLab offers
 The goal: nobody needs to open another site to check something StratLab already covers. The tests on every change, the
-daily **Check every feature**, the whole-market audit and the load test are in place (see "How it's checked" in the
-README). Still open:
+daily **Check every feature**, the whole-market audit and the load test are in place (see "Tests" in the README).
+Still open:
 - **Every feature on real data at scale:** the AI reads (business model, plans, industry measures, report card) on
   the Nifty 500 and every industry, not just a few names; options on every underlying.
 - **Compare against the source of truth:** costs against a broker's contract note, and filings against the exchange's
@@ -54,6 +55,15 @@ Found while checking live companies. Each shows a note on the page today instead
 ## Done recently
 Moved here from the plan above; details in the [changelog](../CHANGELOG.md).
 
+- **Three spaces:** Trade, Invest and Money, each with its own menu and home page, and a switcher at the top of the
+  menu.
+- **Money:** net worth with loans and policies, mutual funds from the CAS, tax tools (dividends, advance tax, the
+  long-term exemption), the year's total tax estimate, US stocks in Indian tax, an ITR-ready export, a money calendar
+  with a private feed, and ETFs, REITs, InvITs, gold bonds and US stocks in My Holdings.
+- **Trade:** derivatives positioning (participants, FII/DII flows, PCR, max pain, OI by strike, ATM IV) and a journal of
+  real trades judged by the verdict's checks. **Invest:** market breadth by group and sector.
+- **Running it:** a storage panel with an optional second database for market data, a nightly encrypted database
+  backup, a daily watch of the official sources for rates and rules, and the whole-market audit's monthly full check.
 - **US company deep dive** from the SEC's filings: ten years of numbers, the AI read of the 10-K and earnings
   releases, the management report card from earnings releases in the company's own fiscal year, and insiders'
   open-market buying and selling in the checklist instead of promoter holding.
@@ -72,6 +82,9 @@ Moved here from the plan above; details in the [changelog](../CHANGELOG.md).
 
 ## Waiting on the owner
 Things only the account owner can do:
+- Backups: the secrets are set and the nightly backup runs (first copy 4 Oct 2026); do one test restore some time
+  ([ADMIN.md → Backups](ADMIN.md#backups)).
+- Storage: add the second database (`MARKET_DATABASE_URL`) when Admin → Data checks → Storage nears its limit.
 - Vercel Pro before taking real payments.
 - The launch offer (Admin → launch offer) when ready.
 - Invoices: fill the seller's details in Admin → Invoices, file the yearly LUT on the GST portal, and have the

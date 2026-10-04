@@ -6,6 +6,7 @@ import { CHANNEL_NAME, alertsApi, type AlertsPage as Page, type StockAlert } fro
 import { AlertForm } from "../components/AlertForm";
 import { Bell, Pencil, Trash } from "../components/Icons";
 import { Empty, Info, Loading, Modal } from "../components/ui";
+import { Earlier, LOCAL_TZ, splitToday } from "../components/Earlier";
 
 /** The alerts the user set on stocks: the ones on, the ones that fired, and a form for a new one. */
 export function AlertsPage() {
@@ -28,13 +29,15 @@ export function AlertsPage() {
     try { setPage(await alertsApi.clearTriggered()); } catch (e) { fail(e); } finally { setBusy(null); }
   };
   const full = !!page && page.count >= page.limit;
+  // fired today in view; the ones that fired before today folded under one line (one with no time counts as earlier)
+  const fired = splitToday(page?.triggered ?? [], (a) => a.triggered_at || "", LOCAL_TZ);
 
   return (
     <div className="stack" style={{ gap: 22 }}>
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Watch · Alerts</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your stock alerts</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>A message when a stock crosses a price, moves a lot in a day, crosses a moving average or an RSI level, changes Stage, or makes a new 52-week high or low. Checked every minute while its market is open. Facts about the price, not advice.</p>
+        <p className="page-sub">A message when a stock crosses a price, moves a lot in a day, crosses a moving average or an RSI level, changes Stage, or makes a new 52-week high or low. Checked every minute while its market is open. Facts about the price, not advice.</p>
       </div>
       {error && <div className="card"><p className="muted">{error}</p></div>}
       {!page && !error && <Loading label="Opening your alerts" />}
@@ -62,12 +65,16 @@ export function AlertsPage() {
         </section>
 
         {page.triggered.length > 0 && (
-          <section className="stack" style={{ gap: 10 }}>
+          <section className="stack" style={{ gap: 10 }} aria-labelledby="a-fired">
             <div className="spread" style={{ gap: 10 }}>
-              <h2 className="h2">Fired</h2>
+              <h2 id="a-fired" className="h2">Fired today</h2>
               <button className="btn quiet sm" disabled={busy === "clear"} onClick={clear}>Clear the list</button>
             </div>
-            {page.triggered.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}
+            {fired.today.length === 0 ? <p className="small muted">None today.</p>
+              : fired.today.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}
+            <Earlier label="Fired earlier" count={fired.earlier.length}>
+              {fired.earlier.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}
+            </Earlier>
           </section>
         )}
       </>}

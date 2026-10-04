@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { pct, price } from "../lib/format";
-import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/research";
+import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import {
   NO_FILTERS, conditionCount, screensApi, type Bound, type Filters, type RangeId, type SavedPage, type SavedScreen,
   type ScreenMeta, type ScreenResult, type ScreenRow,
@@ -39,16 +39,6 @@ const COLS: Col[] = [
   { id: "stage", label: "Stage", cell: (r) => (r.stage == null ? "–" : String(r.stage)) },
   { id: "red_flags", label: "Red-flag filings (3 months)", short: "Red flags", cell: (r) => (r.red_flags == null ? "–" : String(r.red_flags)), india: true },
 ];
-
-function useRegion(): [Region, (r: Region) => void] {
-  const [params, setParams] = useSearchParams();
-  const fromUrl = params.get("region")?.toUpperCase();
-  const [region, setState] = useState<Region>(fromUrl === "US" || fromUrl === "IN" ? fromUrl : savedRegion());
-  return [region, (r: Region) => {
-    setState(r); saveRegion(r);
-    const p = new URLSearchParams(params); p.set("region", r); setParams(p, { replace: true });
-  }];
-}
 
 const toDraft = (f: Filters): Draft => Object.fromEntries(Object.entries(f.ranges).map(([k, b]) =>
   [k, { min: b?.min == null ? "" : String(b.min), max: b?.max == null ? "" : String(b.max) }]));

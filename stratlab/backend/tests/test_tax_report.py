@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app import db, holdings_file as hf, main, tax_export, tax_lots as T
+from app import db, holdings_file as hf, tax_export, tax_lots as T
 from app.engine.costs import IN_LTCG, IN_LTCG_EXEMPT, IN_STCG
 from tests import tradebook_maker, world
 

@@ -191,10 +191,6 @@ def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = Non
     return out
 
 
-HISTORY_CHECKS = ("Sales growth", "Profit growth", "Latest quarter", "Operating margin holding up", "Profit turning into cash",
-                  "Free cash flow")
-
-
 def _explained(label: str, years: list[dict], quarters: list[dict]) -> bool:
     """A check that couldn't be judged because of a fact about the company, not a missing number: too few years or
     quarters of results to measure growth over, losses to grow from or turn into cash, no insider trades filed, or

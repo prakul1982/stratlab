@@ -253,13 +253,12 @@ def with_total(y: dict, business: list[dict], inputs: dict | None, dividends: fl
     the user included (from Tax tools). `units` is the year's gold, silver, international and debt ETFs and gold bonds
     (instrument_kinds.other_year), taxed under their own heads."""
     biz = business_year(y["fy"], business)
-    parts = {s["seg"]: s["net"] for s in biz["segments"]}
     v = tax_total.clean(inputs) if inputs else tax_total.default_inputs()
     extra = [{"key": "lt_112", "rate": instrument_kinds.LT_RATE, "taxable": units["lt"]["taxable"], "exempt": 0.0}] if units and units["lt"]["taxable"] else []
     slab = (units or {}).get("slab", {}).get("taxable") or 0.0
-    total = tax_total.estimate(y["fy"], v, y["buckets"] + extra, y["intraday"]["pnl"], biz["net"], parts, dividends=dividends, slab_gains=slab)
+    total = tax_total.estimate(y["fy"], v, y["buckets"] + extra, y["intraday"]["pnl"], biz["net"], dividends=dividends, slab_gains=slab)
     other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"] + extra,
-                               y["intraday"]["pnl"], biz["net"], parts, dividends=dividends, slab_gains=slab)
+                               y["intraday"]["pnl"], biz["net"], dividends=dividends, slab_gains=slab)
     turnover = (y["intraday"].get("turnover") or 0) + biz["turnover"]
     return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)}, "units": units,
             "other_regime": {"regime": other["regime"], "total": other.get("total")} if other.get("available") else None,

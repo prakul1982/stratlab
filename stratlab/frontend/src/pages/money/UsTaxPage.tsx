@@ -108,7 +108,7 @@ export function UsTaxPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money · US stocks</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>US stocks in Indian tax</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Your US share sales in rupees the way the Income-tax Rules convert them, long or short term under the 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the calendar-year Schedule FA table. Only you can see these figures.</p>
+        <p className="page-sub">Your US share sales in rupees the way the Income-tax Rules convert them, long or short term under the 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the calendar-year Schedule FA table. Only you can see these figures.</p>
       </div>
       <div className="banner tax-note" role="note"><span><b>Estimate only.</b> Arithmetic on your own trades, not tax advice, for a resident individual. Check it with a chartered accountant (CA) before you file.</span></div>
 
@@ -171,7 +171,7 @@ export function UsTaxPage() {
       {!v && <Loading label="Opening your US stocks" />}
       {v && v.trades.length === 0 && (
         <Empty title="No US trades yet">
-          <p className="muted" style={{ maxWidth: 560 }}>Add your US purchases and sales above to see each sale's gain in rupees, which lots are long term, and the Schedule FA table.</p>
+          <p className="muted">Add your US purchases and sales above to see each sale's gain in rupees, which lots are long term, and the Schedule FA table.</p>
         </Empty>
       )}
 

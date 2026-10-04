@@ -29,13 +29,14 @@ from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import db
 from .auth import current_profile
 from .branding import public_text
+from .responses import err as _err
 from .plans import FEATURE_PLAN, PLANS, access_plan, allows
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -526,10 +527,6 @@ class Job:
 router = APIRouter(prefix="/money/calendar", tags=["money"])
 _hits: dict[str, list[float]] = {}
 _hits_lock = threading.Lock()
-
-
-def _err(status: int, code: str, message: str):
-    raise HTTPException(status, {"code": code, "message": public_text(message)})
 
 
 def _limit(key: str, times: int, per: float, message: str):

@@ -43,7 +43,7 @@ export function maskPath(path: string): string {
 
 /** A full address the same way: the origin and a masked path; anything else (a referrer from another site) is cut
  *  to its origin. */
-export function maskUrl(url: unknown): unknown {
+function maskUrl(url: unknown): unknown {
   if (typeof url !== "string" || !url) return url;
   try {
     const u = new URL(url);
@@ -54,7 +54,7 @@ export function maskUrl(url: unknown): unknown {
 type Cfg = { key: string; host: string };
 
 /** The key and host from config.js, else from the build; null when analytics is off. */
-export function analyticsConfig(): Cfg | null {
+function analyticsConfig(): Cfg | null {
   const w = typeof window === "undefined" ? undefined : window.STRATLAB_CONFIG;
   let env: Record<string, string | undefined> = {};
   try { env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {}; } catch { /* not built by Vite */ }
@@ -72,7 +72,7 @@ export function analyticsDashboard(): string | null {
 }
 
 /** The browser asks not to be tracked (Do Not Track, or Global Privacy Control). */
-export function doNotTrack(): boolean {
+function doNotTrack(): boolean {
   if (typeof navigator === "undefined") return false;
   const n = navigator as Navigator & { msDoNotTrack?: string; globalPrivacyControl?: boolean };
   const w = typeof window === "undefined" ? undefined : (window as Window & { doNotTrack?: string });

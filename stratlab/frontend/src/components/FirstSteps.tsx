@@ -27,7 +27,7 @@ export function FirstSteps() {
   };
   const total = view.steps.length;
   return (
-    <section className="card stack first-steps" style={{ gap: 12, marginBottom: 24 }} aria-labelledby="first-steps-h">
+    <section className="card stack first-steps" style={{ gap: 12 }} aria-labelledby="first-steps-h">
       <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
         <div className="stack" style={{ gap: 2 }}>
           <h2 id="first-steps-h" className="h2">Your first steps</h2>

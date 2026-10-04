@@ -6,6 +6,7 @@ import { money } from "../../lib/format";
 import { AsOf, Info, Loading } from "../../components/ui";
 import { Copy, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
+import { Earlier } from "../../components/Earlier";
 
 type Cat = "tax" | "holdings" | "money" | "custom";
 type Ev = { id: string; date: string; title: string; cat: Cat; kind: string; detail: string; amount: number | null; symbol: string | null;
@@ -49,7 +50,7 @@ function EventRow({ e, past }: { e: Ev; past: boolean }) {
   );
 }
 
-function DayList({ events, today }: { events: Ev[]; today: string }) {
+function DayList({ events, today, label = "Money dates" }: { events: Ev[]; today: string; label?: string }) {
   const days = useMemo(() => {
     const by = new Map<string, Ev[]>();
     for (const e of events) by.set(e.date, [...(by.get(e.date) ?? []), e]);
@@ -57,7 +58,7 @@ function DayList({ events, today }: { events: Ev[]; today: string }) {
   }, [events]);
   if (!days.length) return <p className="small muted" style={{ margin: 0 }}>Nothing in these dates.</p>;
   return (
-    <ol className="mc-days" aria-label="Money dates">
+    <ol className="mc-days" aria-label={label}>
       {days.map(([d, evs]) => (
         <li key={d} className="mc-day">
           <div className={`mc-date${d === today ? " today" : ""}`}><b>{longDay(d)}</b>{d === today && <span className="tiny"> · today</span>}</div>
@@ -65,6 +66,23 @@ function DayList({ events, today }: { events: Ev[]; today: string }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+/** The person's own dates, each with Change and Delete. */
+function OwnDates({ rows, edit, remove }: { rows: Own[]; edit: (o: Own) => void; remove: (o: Own) => void }) {
+  return (
+    <ul className="mc-own" aria-label="Your dates">
+      {rows.map((o) => (
+        <li key={o.id} className="spread" style={{ gap: 8 }}>
+          <span className="small"><b>{o.title}</b> · {longDay(o.date)}{o.repeat !== "none" && <span className="muted"> · {REPEAT[o.repeat].toLowerCase()}</span>}{o.amount != null && <span className="num"> · {inr(o.amount)}</span>}</span>
+          <span className="row" style={{ gap: 6, flex: "none" }}>
+            <button className="btn quiet sm" onClick={() => edit(o)} aria-label={`Change ${o.title}`}>Change</button>
+            <button className="btn quiet sm" onClick={() => remove(o)} aria-label={`Delete ${o.title}`}><Trash size={16} /></button>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -124,6 +142,9 @@ export function MoneyCalendarPage() {
 
   const shown = (view?.events ?? []).filter((e) => cats.includes(e.cat));
   const today = view?.today ?? iso(new Date());
+  // a one-off date that has passed folds away; repeating ones come round again, so they stay
+  const ownPast = (view?.own ?? []).filter((o) => o.repeat === "none" && o.date < today);
+  const ownNow = (view?.own ?? []).filter((o) => !ownPast.includes(o));
   const toggleCat = (c: Cat) => setCats((x) => (x.includes(c) ? (x.length > 1 ? x.filter((y) => y !== c) : x) : [...x, c]));
   const step = (n: number) => { setPicked(null); setCursor(({ y, m }) => { const d = new Date(y, m + n, 1); return { y: d.getFullYear(), m: d.getMonth() }; }); };
 
@@ -196,7 +217,7 @@ export function MoneyCalendarPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Money calendar</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Tax due dates, results and dividends for your holdings and watchlist, and your own dates, in one place. Subscribe from Google Calendar or Apple Calendar with a private link. Dates only, not advice.</p>
+        <p className="page-sub">Tax due dates, results and dividends for your holdings and watchlist, and your own dates, in one place. Subscribe from Google Calendar or Apple Calendar with a private link. Dates only, not advice.</p>
       </div>
 
       <section className="card stack" style={{ gap: 14 }}>
@@ -221,8 +242,11 @@ export function MoneyCalendarPage() {
           </div>
         ) : (
           <>
-            <p className="tiny muted" style={{ margin: 0 }}>The past week and the next 90 days.</p>
-            <DayList events={shown} today={today} />
+            <p className="tiny muted" style={{ margin: 0 }}>The next 90 days.</p>
+            <DayList events={shown.filter((e) => e.date >= today)} today={today} />
+            <Earlier label="The past week" count={shown.filter((e) => e.date < today).length}>
+              <DayList events={shown.filter((e) => e.date < today)} today={today} label="The past week's dates" />
+            </Earlier>
           </>
         )}
         <AsOf parts={[["Dates", view.as_of]]} />
@@ -244,19 +268,10 @@ export function MoneyCalendarPage() {
             <button className="btn" disabled={busy} onClick={saveEvent}>{form.id ? "Save changes" : "Add to calendar"}</button>
             {form.id && <button className="btn quiet" onClick={() => setForm(blank)}>Cancel</button>}
           </div>
-          {view.own.length > 0 && (
-            <ul className="mc-own" aria-label="Your dates">
-              {view.own.map((o) => (
-                <li key={o.id} className="spread" style={{ gap: 8 }}>
-                  <span className="small"><b>{o.title}</b> · {longDay(o.date)}{o.repeat !== "none" && <span className="muted"> · {REPEAT[o.repeat].toLowerCase()}</span>}{o.amount != null && <span className="num"> · {inr(o.amount)}</span>}</span>
-                  <span className="row" style={{ gap: 6, flex: "none" }}>
-                    <button className="btn quiet sm" onClick={() => setForm({ id: o.id, date: o.date, title: o.title, note: o.note, amount: o.amount == null ? "" : String(o.amount), repeat: o.repeat })} aria-label={`Change ${o.title}`}>Change</button>
-                    <button className="btn quiet sm" onClick={() => removeEvent(o)} aria-label={`Delete ${o.title}`}><Trash size={16} /></button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          {ownNow.length > 0 && <OwnDates rows={ownNow} edit={(o) => setForm({ id: o.id, date: o.date, title: o.title, note: o.note, amount: o.amount == null ? "" : String(o.amount), repeat: o.repeat })} remove={removeEvent} />}
+          <Earlier label="Past dates" count={ownPast.length}>
+            <OwnDates rows={ownPast} edit={(o) => setForm({ id: o.id, date: o.date, title: o.title, note: o.note, amount: o.amount == null ? "" : String(o.amount), repeat: o.repeat })} remove={removeEvent} />
+          </Earlier>
         </section>
 
         <div className="stack" style={{ gap: 16 }}>

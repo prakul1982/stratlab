@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly, money, pct, price, qty as qtyText, safeHref, signClass } from "../lib/format";
 import { AsOf, Empty, Loading, Modal } from "../components/ui";
@@ -38,16 +38,6 @@ const inr = (v: number | null | undefined) => money(v, "INR", 0);
 const usd = (v: number | null | undefined) => money(v, "USD", 0);
 const isUS = (r: Row) => r.market === "US";
 
-/** The file as base64, the way the server takes it. */
-function readFile(f: File): Promise<string> {
-  return new Promise((ok, bad) => {
-    const r = new FileReader();
-    r.onload = () => ok(String(r.result));
-    r.onerror = () => bad(new Error("That file couldn't be read. Pick it again."));
-    r.readAsDataURL(f);
-  });
-}
-
 function Trend({ f }: { f?: Facts }) {
   if (!f || f.stage == null) return <span className="muted">–</span>;
   return <>Stage {f.stage} · ST {f.st_up ? "up" : "down"}</>;
@@ -84,7 +74,7 @@ export function HoldingsPage() {
     if (f.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); return; }
     setBusy(true);
     try {
-      const data = await readFile(f);
+      const data = await dataUrl(f);
       const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode } });
       track("holdings imported", { rows: r.imported, method: mode });
       setResult(r);
@@ -131,7 +121,7 @@ export function HoldingsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">My Holdings</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your stocks, at today's prices</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Upload the holdings file from your broker to see what each position is worth, its gain or loss, today's change, your mix by sector, and what each company has filed. Facts only, not advice. Only you can see your holdings, and you can delete them at any time.</p>
+        <p className="page-sub">Upload the holdings file from your broker to see what each position is worth, its gain or loss, today's change, your mix by sector, and what each company has filed. Facts only, not advice. Only you can see your holdings, and you can delete them at any time.</p>
       </div>
 
       <section className="card stack" style={{ gap: 14 }}>
@@ -182,7 +172,7 @@ export function HoldingsPage() {
       {!view && <Loading label="Opening your holdings" />}
       {view && rows.length === 0 && (
         <Empty title="No holdings yet">
-          <p className="muted" style={{ maxWidth: 520 }}>Upload your broker's holdings file above, or add stocks one at a time below.</p>
+          <p className="muted">Upload your broker's holdings file above, or add stocks one at a time below.</p>
         </Empty>
       )}
 

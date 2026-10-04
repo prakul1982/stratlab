@@ -299,6 +299,9 @@ def test_job_runs_after_publication_retries_and_keeps_its_marker(w, monkeypatch)
             runs.append(day)
             return {"participants": "missing" if len(runs) == 1 else "ok", "cash": "ok", "chains": 0}
 
+        def catch_up(self, now=None):
+            return {}
+
         def backfill(self, today):
             return {"done": True}
     job = P.Job(R())
@@ -323,6 +326,9 @@ def test_job_waits_while_an_admin_run_is_going(w):
 
         def run_day(self, day, now=None):
             raise AssertionError("ran twice at once")
+
+        def catch_up(self, now=None):
+            return {}
 
         def backfill(self, today):
             raise AssertionError("ran twice at once")
@@ -350,6 +356,9 @@ def test_job_gives_up_for_the_day_at_the_end_of_the_window(w):
         def run_day(self, day, now=None):
             return {"participants": "missing", "cash": "missing", "chains": 0}
 
+        def catch_up(self, now=None):
+            return {}
+
         def backfill(self, today):
             return {"done": True}
     job = P.Job(R())
@@ -363,6 +372,9 @@ def test_job_skips_a_holiday(w):
 
         def run_day(self, day, now=None):
             raise AssertionError("ran on a holiday")
+
+        def catch_up(self, now=None):
+            return {}
 
         def backfill(self, today):
             return {"done": True}
@@ -474,3 +486,167 @@ def test_stored_numbers_are_finite_json(w):
         for _, raw in db.all_settings_with_prefix(key):
             assert all(isinstance(v, (int, float, dict, type(None), str)) for v in json.loads(raw).values())
     assert math.isfinite(P.black76(100, 100, 0.1, 0.2, "CE"))
+
+
+# ---------- both sides, the stock segments and how much is stored ----------
+def test_long_and_short_shares_add_up_to_a_hundred():
+    assert P.shares({"a": 8, "b": 92}, "a", "b") == (8.0, 92.0)
+    assert P.shares({"a": 41052, "b": 147218}, "a", "b") == (21.8, 78.2)
+    assert P.shares({"a": 1, "b": 2}, "a", "b") == (33.3, 66.7)
+    for row in ({"a": 0, "b": 0}, {"a": None, "b": 5}, {"a": 5}, {"a": -1, "b": 3}):
+        assert P.shares(row, "a", "b") == (None, None)
+
+
+def test_the_view_has_both_sides_of_index_and_stock_futures_and_options(w):
+    for d in (date(2026, 9, 30), date(2026, 10, 1)):
+        main.positioning_runner.run_day(d)
+    view = P.participants_today(datetime(2026, 10, 1, 20, 0, tzinfo=IST))
+    fii = next(r for r in view["oi"] if r["id"] == "fii")
+    a = P.participant_rows(FP.participant_csv(date(2026, 10, 1)))["rows"]["fii"]
+    for seg, lo, sh in P.SEGMENTS:
+        assert fii[seg + "_net"] == a[lo] - a[sh]
+        assert fii[seg + "_long_pct"] + fii[seg + "_short_pct"] == pytest.approx(100)
+        assert fii[seg + "_long_pct"] == round(100 * a[lo] / (a[lo] + a[sh]), 1)
+        assert isinstance(fii[seg + "_long_pct_chg"], float)
+    dii = next(r for r in view["oi"] if r["id"] == "dii")
+    assert dii["opt_idx_call_long_pct"] is None                  # DIIs hold no index options in the file: no share, no 0/0
+    assert next(r for r in view["vol"] if r["id"] == "fii")["fut_stk_short_pct"] is not None
+
+
+def test_coverage_counts_the_stored_days_and_the_recorded_chains(w):
+    r = P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0)
+    r.backfill(date(2026, 10, 5), step=10, days=30)
+    FP.record_days(db.add_option_snapshot, "NIFTY", [date(2026, 9, 29), date(2026, 9, 30)])
+    r.chain_backfill(date(2026, 10, 1), days=5)
+    cov = P.coverage()
+    assert cov["participants"]["days"] == 10 and cov["participants"]["last"] == "2026-10-01"
+    assert cov["participants"]["backfill_done"] is False and cov["participants"]["backfill_target"] == P.BACKFILL_DAYS
+    assert cov["chains"]["NIFTY"] == {"days": 2, "first": "2026-09-29", "last": "2026-09-30"}
+    assert cov["chains"]["FINNIFTY"] == {"days": 0, "first": None, "last": None}       # not recorded yet: said, not hidden
+    assert P.chain_view(main.options_data, "FINNIFTY")["recorded"]["days"] == 0
+    h = P.history_view("participants", None, "all", datetime(2026, 10, 5, 12, 0, tzinfo=IST))
+    pt = h["points"][-1]["fii"]
+    assert h["stored"]["days"] == 10 and 0 < pt["fut_idx_long_pct"] < 100 and pt["fut_stk_net"] is not None
+    assert P.history_view("chain", "NIFTY", "all", datetime(2026, 10, 5, 12, 0, tzinfo=IST))["recorded"]["days"] == 2
+
+
+def test_the_default_records_every_index_the_page_shows(monkeypatch):
+    from app import config
+    from app.options.recorder import parse_targets
+    monkeypatch.delenv("OPTION_SNAPSHOTS", raising=False)
+    assert set(parse_targets(config.Settings().OPTION_SNAPSHOTS)) == set(P.UNDERLYINGS)
+
+
+# ---------- catching up: a server started on a Sunday, after a holiday ----------
+SUNDAY = datetime(2026, 10, 4, 21, 4, tzinfo=IST)            # the owner's screenshot: the 2nd a holiday, the 3rd a Saturday
+
+
+@pytest.fixture
+def sunday(w, monkeypatch):
+    real = FP.answer
+    monkeypatch.setattr(FP, "answer", lambda path, today=None: real(path, date(2026, 10, 4)))
+    return w
+
+
+def test_cash_numbers_read_on_a_weekend_when_none_are_stored(sunday):
+    r = P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0)
+    r.backfill(date(2026, 10, 4), step=10, days=30)              # the archive walk reads the files, never the cash numbers
+    before = P.cash_today(SUNDAY)
+    assert before["status"] == "none" and "Not read yet" in before["reason"]
+    assert P.participants_today(SUNDAY)["status"] == "ok" and P.participants_today(SUNDAY)["reason"] is None
+    res = r.catch_up(SUNDAY)
+    assert res == {"cash": "ok"}                                 # the files were there already: only the cash is read
+    cash = P.cash_today(SUNDAY)
+    assert cash["status"] == "ok" and cash["as_of"] == "2026-10-01" and cash["fii"]["net"] is not None and cash["reason"] is None
+    assert r.catch_up(SUNDAY) == {}                              # nothing behind: nothing asked
+
+
+def test_catch_up_reads_recent_files_the_evening_run_missed(sunday):
+    r = P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0)
+    res = r.catch_up(SUNDAY)
+    assert res["participants"] == {"2026-10-01": "ok", "2026-09-30": "ok", "2026-09-29": "ok", "2026-09-28": "ok",
+                                   "2026-09-25": "ok", "2026-09-24": "ok", "2026-09-23": "ok", "2026-09-22": "ok"}
+    assert res["cash"] == "ok"
+    assert P.participants_today(SUNDAY)["as_of"] == "2026-10-01"
+
+
+def test_catch_up_gives_a_missing_recent_day_three_tries(sunday, monkeypatch):
+    monkeypatch.setattr(FP, "published", lambda d, today: d != date(2026, 10, 1) and FP.trading(d))
+    r = P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0)
+    for _ in range(P.CATCH_UP_TRIES):
+        assert r.catch_up(SUNDAY).get("participants", {}).get("2026-10-01") == "missing"
+    assert "2026-10-01" not in r.catch_up(SUNDAY).get("participants", {})
+    st = P.participants_today(SUNDAY)
+    assert st["status"] == "pending" and st["reason"] == "The exchange hasn't published 1 Oct 2026's participant files yet."
+
+
+def test_a_refused_cash_read_says_why(sunday, monkeypatch):
+    def refuse(*a, **k):
+        raise SourceError("the exchange", "The exchange feed refused the request (403). Try again later.", busy=True)
+    monkeypatch.setattr(P.Feed, "cash", refuse)
+    P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0).catch_up(SUNDAY)
+    c = P.cash_today(SUNDAY)
+    assert c["status"] == "none" and c["reason"].startswith("The last try (4 Oct 2026, 21:04 IST) didn't get them: ")
+    assert "403" in c["reason"]
+
+
+def test_the_job_catches_up_on_a_sunday_every_twenty_minutes(sunday):
+    job = P.Job(P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0))
+    utc = SUNDAY.astimezone(timezone.utc)
+    job.tick(utc)
+    assert job.status["catch_up"]["cash"] == "ok" and P.cash_today(SUNDAY)["as_of"] == "2026-10-01"
+    calls = []
+    job.runner.catch_up = lambda now=None: calls.append(now) or {}
+    job.tick(utc + timedelta(minutes=5))
+    assert calls == []                                           # caught up: the job walks the archive instead
+
+
+def test_the_job_leaves_the_evening_window_to_the_evening_run(w):
+    class R:
+        running = False
+        caught = 0
+
+        def run_day(self, day, now=None):
+            return {"participants": "missing", "cash": "missing", "chains": 0}
+
+        def catch_up(self, now=None):
+            R.caught += 1
+            return {}
+
+        def backfill(self, today):
+            return {"done": True}
+    job = P.Job(R())
+    job.tick(datetime(2026, 10, 1, 19, 0, tzinfo=IST).astimezone(timezone.utc))
+    job.tick(datetime(2026, 10, 1, 19, 5, tzinfo=IST).astimezone(timezone.utc))
+    assert R.caught == 0
+
+
+GAP = {date(2026, 9, d) for d in (14, 15, 16, 17, 18, 21, 22)}
+
+
+def test_backfill_does_not_pass_by_days_the_archive_turned_away(w, monkeypatch):
+    monkeypatch.setattr(FP, "published", lambda d, today: d not in GAP and FP.trading(d))
+    r = P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0)
+    bf = r.backfill(date(2026, 10, 5), step=40, days=40)
+    assert bf["next"] == "2026-09-22" and "none of 5 trading days" in bf["error"] and not bf.get("done")
+    monkeypatch.setattr(FP, "published", lambda d, today: FP.trading(d))     # the archive answers again
+    bf = r.backfill(date(2026, 10, 5), step=40, days=40)
+    assert bf["done"] and {d.isoformat() for d in GAP if FP.trading(d)} <= {d for d, _ in P.history("part")}
+
+
+def test_backfill_takes_a_real_gap_after_three_tries(w, monkeypatch):
+    monkeypatch.setattr(FP, "published", lambda d, today: d not in GAP and FP.trading(d))
+    r = P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0)
+    for _ in range(3):
+        assert r.backfill(date(2026, 10, 5), step=40, days=40)["next"] == "2026-09-22"
+    assert r.backfill(date(2026, 10, 5), step=40, days=40)["done"]
+
+
+def test_api_says_how_much_is_stored_and_why_a_number_is_missing(sunday):
+    c = sunday["client"]
+    P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0).backfill(date(2026, 10, 4), step=3, days=30)
+    d = c.get("/trade/positioning", params={"pcr": "false"}, headers=headers("pro-token")).json()
+    assert d["coverage"]["participants"]["days"] == 3 and set(d["coverage"]["chains"]) == set(P.NAMES)
+    assert d["cash"]["reason"] and "fii" not in d["cash"]
+    brief = c.get("/trade/positioning", params={"brief": 1}, headers=headers("free-token")).json()
+    assert brief["cash"]["reason"] and "coverage" not in brief

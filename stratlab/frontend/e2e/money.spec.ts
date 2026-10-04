@@ -62,7 +62,16 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   expect((await request.post(`${API}/money/calendar/events`, { headers: auth, data: { date: day(3), title: "Rent goes up", amount: 52000, repeat: "none" } })).ok()).toBeTruthy();
   const errors = await open(page, "/money/calendar", "Tax due dates, results and dividends", n);
   const list = page.getByRole("list", { name: "Money dates" });
-  await expect(list.getByText(/Advance tax, .* instalment/).first()).toBeVisible();             // one falls in any 97 days
+  // the next 90 days in view; the past week's dates folded under one line below them
+  const card = page.locator("section", { has: page.getByRole("group", { name: "View" }) });
+  const past = card.locator("details.earlier", { hasText: "The past week" });
+  if (await past.count()) {
+    await expect(past).not.toHaveAttribute("open", "");
+    await expect(card.getByRole("list", { name: "The past week's dates" })).toHaveCount(0);
+    await past.locator("summary").click();
+    await expect(card.getByRole("list", { name: "The past week's dates" })).toBeVisible();
+  }
+  await expect(card.getByText(/Advance tax, .* instalment/).first()).toBeVisible();             // one falls in any 97 days
   await expect(list.getByText("Rent goes up")).toBeVisible();
   await expect(list.getByText("₹52,000")).toBeVisible();
 

@@ -49,13 +49,13 @@ def client(monkeypatch):
     main.app.dependency_overrides.clear()
 
 
-def test_admin_emails_are_case_insensitive():
-    settings.ADMIN_EMAILS = " Owner@X.com ,"
+def test_admin_emails_are_case_insensitive(monkeypatch):
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", " Owner@X.com ,")
     assert admin.is_admin({"email": "owner@x.com", "_email_verified": True})
     assert not admin.is_admin({"email": "owner@x.com"})            # an unverified address is never trusted
     assert not admin.is_admin({"email": "someone@x.com", "_email_verified": True})
     assert not admin.is_admin({"email": None, "_email_verified": True})
-    settings.ADMIN_EMAILS = ""
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "")
     assert not admin.is_admin({"email": "", "_email_verified": True})
 
 

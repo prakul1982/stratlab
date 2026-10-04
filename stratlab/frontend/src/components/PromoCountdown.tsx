@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 
 /** "3 days 4 hours", "5 hours 10 minutes" or "12 minutes": the two largest units left. */
-export function timeLeft(ms: number): string {
+function timeLeft(ms: number): string {
   const min = Math.max(0, Math.floor(ms / 60000));
   const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60;
   const unit = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
