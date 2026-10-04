@@ -2,6 +2,8 @@ import { money, price, qty, signClass, TF_NAME, tzOf, when } from "../lib/format
 import { HELP } from "../lib/help";
 import { LineChart } from "./Charts";
 import { Info } from "./ui";
+import { Earlier, splitToday } from "./Earlier";
+import { OrderList } from "./OrderList";
 
 export interface GroupSnapshot {
   id: string; name: string; kind: "group"; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
@@ -22,6 +24,8 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
   const tz = tzOf(snap.instrument as never);
   const a = snap.account;
   const holding = snap.members.filter((m) => m.position);
+  const { today, earlier } = splitToday(snap.events, (e) => e.t, tz);     // today's orders in view, the earlier ones folded
+  const closedPnl = earlier.reduce((n, e) => n + (e.pnl ?? 0), 0);
   const feed = !running ? "" : snap.feed_connected ? (snap.last_tick_at ? "Live prices" : "Waiting for the market to open") : "Reconnecting to prices";
   const stats: [string, string, number | null][] = [
     ["Open positions", `${a.open} of ${a.max_open}`, null],
@@ -94,15 +98,14 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
             </details>
           )}
         </div>
-        <section className="card stack" style={{ gap: 8, alignSelf: "start" }}>
-          <h3 className="h3">Orders</h3>
-          {snap.events.length === 0 ? <p className="muted small">None yet.</p> : (
-            <ul className="orders">{[...snap.events].reverse().slice(0, 80).map((e, i) => (
-              <li key={i}><span className={`badge ${e.side === "buy" ? "running" : "stopped"}`}>{e.side}</span>
-                <span className="mono small">{qty(e.qty)} {e.sym} @ {price(e.px, cur)}</span>
-                <span className="small muted">{e.why} · {when(e.t, tz, true)}{e.pnl != null ? ` · ${money(e.pnl, cur)}` : ""}</span></li>
-            ))}</ul>
-          )}
+        <section className="card stack" style={{ gap: 10, alignSelf: "start" }} aria-labelledby="g-orders">
+          <h3 id="g-orders" className="h3">Orders today</h3>
+          {today.length ? <OrderList events={today} cur={cur} tz={tz} newest />
+            : <p className="muted small">{snap.events.length ? "No orders today." : "None yet."}</p>}
+          <Earlier label="Earlier orders" count={earlier.length} className="in-card"
+            note={<><span className={signClass(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
+            <OrderList events={earlier} cur={cur} tz={tz} newest />
+          </Earlier>
         </section>
       </div>
     </div>

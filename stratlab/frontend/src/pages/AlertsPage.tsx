@@ -6,6 +6,7 @@ import { CHANNEL_NAME, alertsApi, type AlertsPage as Page, type StockAlert } fro
 import { AlertForm } from "../components/AlertForm";
 import { Bell, Pencil, Trash } from "../components/Icons";
 import { Empty, Info, Loading, Modal } from "../components/ui";
+import { Earlier, LOCAL_TZ, splitToday } from "../components/Earlier";
 
 /** The alerts the user set on stocks: the ones on, the ones that fired, and a form for a new one. */
 export function AlertsPage() {
@@ -28,6 +29,8 @@ export function AlertsPage() {
     try { setPage(await alertsApi.clearTriggered()); } catch (e) { fail(e); } finally { setBusy(null); }
   };
   const full = !!page && page.count >= page.limit;
+  // fired today in view; the ones that fired before today folded under one line (one with no time counts as earlier)
+  const fired = splitToday(page?.triggered ?? [], (a) => a.triggered_at || "", LOCAL_TZ);
 
   return (
     <div className="stack" style={{ gap: 22 }}>
@@ -62,12 +65,16 @@ export function AlertsPage() {
         </section>
 
         {page.triggered.length > 0 && (
-          <section className="stack" style={{ gap: 10 }}>
+          <section className="stack" style={{ gap: 10 }} aria-labelledby="a-fired">
             <div className="spread" style={{ gap: 10 }}>
-              <h2 className="h2">Fired</h2>
+              <h2 id="a-fired" className="h2">Fired today</h2>
               <button className="btn quiet sm" disabled={busy === "clear"} onClick={clear}>Clear the list</button>
             </div>
-            {page.triggered.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}
+            {fired.today.length === 0 ? <p className="small muted">None today.</p>
+              : fired.today.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}
+            <Earlier label="Fired earlier" count={fired.earlier.length}>
+              {fired.earlier.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}
+            </Earlier>
           </section>
         )}
       </>}

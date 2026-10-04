@@ -51,6 +51,16 @@ async function touchable(page: Page) {
   expect(small, "controls too small to tap").toEqual([]);
 }
 
+/** Opens every "Earlier ..." fold on the page (past dates and finished things sit folded under one line). */
+async function openEarlier(page: Page) {
+  for (const fold of await page.locator("details.earlier:not([open]) > summary").all()) await fold.click();
+}
+
+/** Waits for something that may sit in a fold, opening folds as the page fills in. */
+async function seeUnfolded(page: Page, what: ReturnType<Page["locator"]>) {
+  await expect(async () => { await openEarlier(page); await expect(what).toBeVisible({ timeout: 1000 }); }).toPass({ timeout: 30_000 });
+}
+
 /** Bars for gains end at the zero line from above; bars for losses start at it and hang below. */
 async function barsAroundZero(page: Page) {
   const charts = page.locator(".tbars");
@@ -87,7 +97,8 @@ for (const [path, ready] of PAGES) {
 
 test("results calendar: every company's dates, and the company page links to it", async ({ page }, info) => {
   await sane(page, await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called"));
-  await expect(page.getByRole("link", { name: "RELIANCE" }).first()).toBeVisible({ timeout: 30_000 });
+  // results days earlier this week sit folded in their week
+  await seeUnfolded(page, page.getByRole("link", { name: "RELIANCE" }).first());
   await expect(page.getByText("Financial Results").first()).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await expect(page.getByRole("link", { name: "RELIANCE" }).first()).toHaveAttribute("href", "/research/IN/RELIANCE");
@@ -1188,15 +1199,18 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
 
   let errors = await open(page, "/research/corporate-actions?region=IN&scope=all", "Dividends, bonuses and splits", who);
   await settle(page);
-  await expect(page.getByRole("link", { name: "TCS" }).first()).toBeVisible({ timeout: 30_000 });
+  // ex-dates gone by sit under "Last two weeks", folded below the ones coming up
+  const past = page.locator("details.earlier", { hasText: "Last two weeks" });
+  if (await past.count()) await expect(past).not.toHaveAttribute("open", "");
+  await seeUnfolded(page, page.getByRole("link", { name: "TCS" }).first());
   await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
   await expect(page.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible();
   await expect(page.getByText("Annual General Meeting")).toHaveCount(0);           // a meeting isn't an action
   await page.getByRole("combobox", { name: "Kind of action" }).selectOption("bonus");
   await expect(page.getByText(/Dividend - Rs|₹5.50 a share/)).toHaveCount(0);
-  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
+  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));
   await page.getByRole("radio", { name: "My stocks" }).click();
-  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();      // TCS is in the holdings
+  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));      // TCS is in the holdings
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
   expect(await page.locator("main").innerText()).not.toMatch(/yahoo|finnhub|kite|screener/i);

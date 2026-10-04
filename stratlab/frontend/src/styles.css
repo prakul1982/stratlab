@@ -1185,7 +1185,7 @@ ul.trade-lines > li:first-child { border-top: 0; }
 .trade-orders { margin: 0 0 12px 22px; padding: 12px 14px; border-radius: 10px; background: var(--paper-2); }
 @media (max-width: 640px) { .trade-orders { margin-left: 0; } }
 /* orders sent together under one line, each order a row: side, contract, quantity x price */
-.order-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 24px; }
+.order-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 12px 24px; }
 .order-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .order-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 ul.order-rows li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
