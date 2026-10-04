@@ -1635,7 +1635,7 @@ test("positioning: a missing cash number says why instead of a dash", async ({ p
   await expect(page.getByTestId("cash-status")).toContainText("No cash numbers stored yet. The last try");
 });
 
-test("positioning: a card on the Trade home and the Options tab, and the tabs between Options and Positioning", async ({ page }, info) => {
+test("positioning: a card on the Trade home and the Options page, its own page with no tabs back to Options", async ({ page }, info) => {
   await sane(page, await open(page, "/trade", "Straddles, strangles"));
   const card = page.getByTestId("positioning-card");
   await expect(card.getByText("FII index futures, net")).toBeVisible({ timeout: 30_000 });
@@ -1643,10 +1643,9 @@ test("positioning: a card on the Trade home and the Options tab, and the tabs be
   await expect(card.getByTestId("pos-card-sides")).toContainText(/% long · [\d.]+% short/);
   await page.goto("/options");
   await expect(page.getByTestId("positioning-card").getByText("FII/FPI cash, net")).toBeVisible({ timeout: 30_000 });
-  const tabs = page.getByRole("navigation", { name: "Options" });
-  await expect(tabs.getByRole("link", { name: "Options" })).toHaveAttribute("aria-current", "page");
-  await tabs.getByRole("link", { name: "Positioning" }).click();
+  await page.getByTestId("positioning-card").getByRole("link", { name: /Participants, flows and PCR/ }).click();
   await expect(page).toHaveURL(/\/trade\/positioning$/);
   await expect(page.getByRole("heading", { name: "Positioning", level: 1 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Options" })).toHaveCount(0);       // its own menu entry, no tabs
   if (info.project.name === "phone") await touchable(page);
 });
