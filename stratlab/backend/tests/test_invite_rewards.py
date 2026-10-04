@@ -191,6 +191,23 @@ def test_free_basic_lifts_a_free_account_and_ends(w):
     assert plan_now("u-a", datetime.now(timezone.utc) + timedelta(days=31)) == "free"
 
 
+def test_the_free_month_carries_basics_current_limits(w, monkeypatch):
+    """The reward is Basic as plans.py has it now (100 backtests, 15 deep dives, every indicator, trade notifications),
+    and the email says so from the same numbers."""
+    from app.config import settings
+    for k, v in (("RAZORPAY_KEY_ID", "rzp_live_x"), ("RAZORPAY_KEY_SECRET", "s"), ("RAZORPAY_PLAN_BASIC", "b"), ("RAZORPAY_PLAN_PRO", "p")):
+        monkeypatch.setattr(settings, k, v)
+    p = user("u-a")
+    plans.add_free_basic(p, R.MONTH_DAYS)
+    plan = plans.access_plan(referrals._profile("u-a"))
+    info = plans.plan_info(plan)
+    assert plan == "basic" and info["backtests_per_month"] == 100 and info["deepdives_per_month"] == 15 and info["decks_per_month"] == 5
+    assert info["indicators"] and not info["fno"] and info["features"]["alerts"] and info["stock_alerts"] == 25
+    text = lifecycle.basic_includes()
+    assert "100 backtests and 100 AI strategy builds" in text and "15 company deep dives and 5 decks" in text
+    assert R.REFERRER_CAP == 12                                     # the owner kept 12 months, ever
+
+
 def test_rewards_stack_onto_free_time_left(w):
     p = user("u-a")
     plans.add_free_basic(p, 30, NOW)

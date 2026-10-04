@@ -23,7 +23,7 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-Frame-Options = "DENY"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://stratlab-production-ca25.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io https://eu.i.posthog.com; frame-src https://*.razorpay.com; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://stratlab-production-ca25.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io https://us.i.posthog.com; frame-src https://*.razorpay.com; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
 

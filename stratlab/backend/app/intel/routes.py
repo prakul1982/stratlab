@@ -14,8 +14,9 @@ from ..ai_providers import AIBusy, AIError
 from ..auth import current_profile
 from ..config import settings
 from ..kite_service import IST
-from ..plans import has_pro_features
+from ..plans import has_indicators
 from . import ai as A
+from . import key_facts
 from .company import Research
 from .net import SourceError
 
@@ -127,12 +128,29 @@ def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile))
 @router.get("/company/{region}/{symbol}/ai")
 def company_ai(region: str, symbol: str, refresh: bool = False, profile=Depends(current_profile)):
     r, s = region_of(region), symbol_of(symbol)
-    pro = has_pro_features(profile["_plan"])
+    pro = has_indicators(profile["_plan"])       # which indicators the read may mention; the facts are the same
 
     def build():
         c = source_call(lambda: hub.company(r, s))
-        return A.company(c, _ai, pro)
-    return ok(ai_call(profile, "company", (r, s, pro, datetime.now(IST).date().isoformat()), 12 * 3600, refresh, build))
+        return A.company(c, _ai, pro, company_key_facts(r, c))
+    read = ai_call(profile, "company", (r, s, pro, datetime.now(IST).date().isoformat()), 12 * 3600, refresh, build)
+    return ok(A.clean_company(read))
+
+
+def company_key_facts(region: str, c: dict) -> list[dict]:
+    """The plain-number rows next to the AI read, from the reported results (India) or the page's own numbers (US)
+    and a year of daily prices. A source that's down only leaves its lines out."""
+    reported = bars = None
+    if region == "IN":
+        try:
+            reported = hub.screener.company(c.get("bse_code") or c["symbol"])
+        except Exception:
+            reported = None
+    try:
+        bars = hub.chart(region, c["symbol"], "1y").get("candles")
+    except Exception:
+        bars = None
+    return key_facts.build(c, reported, bars)
 
 
 @router.get("/pulse/ai")

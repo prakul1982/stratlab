@@ -242,7 +242,7 @@ export function CompanyPage() {
         {c.peers.length > 0 && <Panel title="Similar companies" info="Companies in the same industry. Tap one to open it."><QuoteGrid region={region} symbols={c.peers} /></Panel>}
         <Panel title="Latest news"><NewsList items={c.news} /></Panel>
       </div>
-      <p className="hint">Scores and AI text are estimates, not advice.</p>
+      <p className="hint">AI text is written from the numbers above and may contain mistakes. Facts, not advice.</p>
     </div>
   );
 }
@@ -512,7 +512,7 @@ export function WatchlistPage() {
   );
 }
 
-/* ---------- Stage 2 + Supertrend scan (Pro) ---------- */
+/* ---------- Stage 2 + Supertrend scan (Basic and up) ---------- */
 interface ScanRow {
   id: string; symbol: string; name: string | null; currency: string | null; price: number; chg: number | null;
   stage: number | null; stage_days: number | null; st_up: boolean; st_days: number; signal: "fresh" | "st_s2" | "stage2" | null;
@@ -576,7 +576,7 @@ export function ScanPage() {
       <ResearchNav region={region} setRegion={setRegion} />
       <Header eyebrow={`Scan · ${REGION_NAME[region]}`} title="Stage 2 + Supertrend"
         sub="Which stocks are in Stage 2 (the price above a rising 150-day average) and have the Supertrend pointing up (a line that follows the price and flips when the trend turns). Both together are called ST S2 here. Facts from the charts, not advice." />
-      {!pro && <div className="banner"><span>Scans and ST S2 alerts are on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
+      {!pro && <div className="banner"><span>The Stage 2 + Supertrend scan and its alert are on the Basic plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       <div className="row wrap" style={{ gap: 10, alignItems: "center" }}>
         <span className="chip-select"><select aria-label="Group to scan" value={setId} onChange={(e) => { setSetId(e.target.value); setOut(null); }}>
           {(sets?.sets ?? []).map((s) => <option key={s.id} value={s.id} disabled={s.id === "watchlist" && !s.count}>{s.name} ({s.count})</option>)}
@@ -634,7 +634,7 @@ const ARROW = (deg: number | null) => deg == null ? "–" : ["→", "↗", "↑"
 
 export function RotationPage() {
   const [region, setRegion] = useRegion();
-  const { fail, me } = useApp();
+  const { fail } = useApp();
   const [sets, setSets] = useState<ScanSets | null>(null);
   const [setId, setSetId] = useState("sectors");
   const [backTo, setBackTo] = useState<string | null>(null);        // the set a sector's stocks were opened from
@@ -645,7 +645,6 @@ export function RotationPage() {
   const [focus, setFocus] = useState<string | null>(null);          // the slider settles before it asks the server
   const [out, setOut] = useState<RotationOut | null>(null);
   const [busy, setBusy] = useState(false);
-  const pro = !!me?.plan_info?.features?.scans;
   const [step, animate] = useAnimate(out?.tail ?? tail);
 
   useEffect(() => {
@@ -658,14 +657,13 @@ export function RotationPage() {
   }, [tail]);
 
   useEffect(() => {
-    if (!pro) return;
     let live = true;
     setBusy(true);
     api<RotationOut>(`/research/rotation?region=${region}&set=${encodeURIComponent(setId)}&interval=${interval}&tail=${askTail}`)
       .then((r) => { if (live) setOut(r); }).catch((e) => { if (live) { setOut(null); fail(e); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
-  }, [region, setId, interval, askTail, pro, fail]);
+  }, [region, setId, interval, askTail, fail]);
 
   useEffect(() => { setPicked(null); setFocus(null); }, [region, setId]);
 
@@ -691,7 +689,6 @@ export function RotationPage() {
       <ResearchNav region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} />
       <Header eyebrow={`Rotation · ${REGION_NAME[region]}`} title="Sector rotation"
         sub="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
-      {!pro && <div className="banner"><span>Sector rotation is on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       <div className="row wrap" style={{ gap: 10, alignItems: "center" }}>
         <span className="chip-select"><select aria-label="What to compare" value={setId} onChange={(e) => { setSetId(e.target.value); setBackTo(null); }}>
           <optgroup label="Indices">{indexSets.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>
@@ -922,7 +919,7 @@ export function FilingsPage() {
       <ResearchNav region="IN" />
       <Header eyebrow="Red flags · India" title="Filings and red flags"
         sub="What your watchlist companies told the exchange in the last 3 months: fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades." />
-      {!pro && <div className="banner"><span>Filings and red flags are on the Pro plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
+      {!pro && <div className="banner"><span>Red flags for your whole watchlist, with an evening alert, are on the Basic plan. Each company's own page shows its red flags on every plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
       {data && (
         <label className="row small" style={{ gap: 8 }}>
           <input type="checkbox" checked={data.alerts} onChange={toggleAlerts} />

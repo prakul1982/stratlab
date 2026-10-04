@@ -110,6 +110,36 @@ test("losses hang below the zero line (deep dive)", async ({ page }) => {
   await sane(page, errors);
 });
 
+test("the company AI read shows plain numbers, never 0-100 scores", async ({ page }) => {
+  // an old stored read can still carry scores: the page must draw the fact rows and none of the scores
+  const read = {
+    summary: "Runs refineries, a telecom network and retail stores.", valuation_note: "P/E 24 against 20-28 over five years.",
+    scores: { moat: 92, growth: 94, momentum: 81, health: 38 }, composite: 77,
+    facts: [
+      { id: "growth", label: "Growth", items: [{ label: "Sales, 3 years", text: "11.6% a year" }, { label: "Net profit, 5 years", text: "15.3% a year" }] },
+      { id: "price", label: "Price trend", items: [{ label: "Price vs 200-day average", text: "1.5% below" }, { label: "Stage (150-day average)", text: "Stage 3 (topping)" }] },
+      { id: "debt", label: "Debt and cash", items: [{ label: "Debt to equity", text: "0.44" }, { label: "Interest cover", text: "6.1x" }] },
+      { id: "margins", label: "Margins and returns", items: [{ label: "Operating margin, 5 years", text: "17% → 16% → 18% (Mar 2023 to Mar 2025)" }, { label: "ROCE", text: "9.7%" }] },
+    ],
+    bull: ["Jio has 470 million users."], bear: ["Refining margins move with crude."], segments: [], position: "", watch: [], ideas: [],
+    generated_at: Date.now() / 1000,
+  };
+  await page.route("**/research/company/IN/RELIANCE/ai*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(read) }));
+  const errors = await open(page, "/research/IN/RELIANCE", "The numbers");
+  const ai = page.locator(".ai-read");
+  for (const t of ["Growth", "Price trend", "Debt and cash", "Margins and returns", "11.6% a year", "1.5% below", "6.1x", "ROCE"])
+    await expect(ai.getByText(t, { exact: false }).first()).toBeVisible();
+  const text = await ai.innerText();
+  expect(text).not.toMatch(/\b(moat|momentum|health|score)\b/i);
+  for (const n of ["92", "94", "81", "38", "77"]) expect(text).not.toMatch(new RegExp(`(^|\\s)${n}(\\s|$)`));
+  expect(await ai.locator(".score-track").count()).toBe(0);
+  // deals: "Bought" and "Sold" in one neutral style, words only
+  const sides = page.locator(".deals-table .badge");
+  const looks = new Set(await sides.evaluateAll((els) => els.map((e) => `${getComputedStyle(e).backgroundColor}|${getComputedStyle(e).color}`)));
+  expect(looks.size).toBeLessThanOrEqual(1);
+  await sane(page, errors);
+});
+
 test("a US deep dive is in dollars, from the SEC's filings", async ({ page }) => {
   const errors = await open(page, "/research/US/AAPL/deep", "Growth and margins");
   await expect(page.getByText("$ billion").first()).toBeVisible();          // a company this size reads in billions
@@ -156,9 +186,31 @@ test.describe("a visitor in India", () => {
   test.use({ locale: "en-US", timezoneId: "Asia/Kolkata" });
   test("sees prices in rupees", async ({ page }) => {
     const errors = await open(page, "/plans", "Plans");
-    await expect(page.getByText("₹999").first()).toBeVisible();
+    await expect(page.getByText("₹499 / month", { exact: true })).toBeVisible();
+    await expect(page.getByText("₹1,499 / month", { exact: true })).toBeVisible();
+    await expect(page.getByText("incl. GST", { exact: true })).toHaveCount(2);        // next to each rupee price
     await sane(page, errors);
   });
+});
+
+test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
+  const errors = await open(page, "/plans", "Side by side");
+  for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
+    "2 company deep dives and 1 slide deck a month", "Indian F&O and options entered on your own rules' signals"]) {
+    await expect(page.locator(".grid4 li", { hasText: line })).toBeVisible();
+  }
+  for (const card of await page.locator(".grid4 > .card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
+  expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
+  const table = page.locator("table.plan-compare");
+  const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
+  await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
+  await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "2", "15", "Unlimited"]);
+  await expect(row("All 20+ indicators")).toHaveText(["All 20+ indicators", "–", "✓", "✓"]);
+  await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
+  await expect(row("Indian F&O")).toHaveText(["Indian F&O", "–", "–", "✓"]);
+  await expect(row("Red flags on every company page")).toHaveText(["Red flags on every company page", "✓", "✓", "✓"]);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
 });
 
 test("invoices: in Account for the customer, with the GST setup in Admin", async ({ page }) => {
@@ -272,6 +324,7 @@ test("my holdings: edit by hand and delete them all", async ({ page }, info) => 
 });
 
 const TRADEBOOKS = new URL("../../backend/tests/fixtures/tradebooks/", import.meta.url).pathname;
+const TAXPNL = new URL("../../backend/tests/fixtures/taxpnl/", import.meta.url).pathname;
 
 test("tax report: tradebooks from several brokers, one year's gains, lots below cost, downloads and delete", async ({ page, request }, info) => {
   // each project signs in as its own user and starts with no trades, so the two runs don't share tax data
@@ -283,11 +336,12 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   await expect(page.getByText(/not tax advice/).first()).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
 
-  // three files, two brokers, one pick: the last one's result is shown, with the line it left out
+  // three files, two brokers, one pick: what they added up to, with the line left out
   await page.locator("input[type=file]").setInputFiles(["upstox_tradebook.csv", "zerodha_tax_pnl.xlsx", "zerodha_console_tradebook.csv"].map((f) => TRADEBOOKS + f));
-  await expect(page.getByText(/Read as a Zerodha Console tradebook/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Read 3 files: 15 trades added/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("table", { name: "Lines left out" }).getByText(/Futures, options/)).toBeVisible();
   await expect(page.getByText(/15 trades from 3 files/)).toBeVisible();
+  await expect(page.getByText("Estimate only.")).toHaveCount(1);                                  // once, at the top
 
   await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
@@ -318,6 +372,29 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   await page.getByRole("button", { name: "Delete my tax data" }).click();
   await expect(page.getByText("Your tax data is deleted.")).toBeVisible();
   await expect(page.getByText("No trades yet")).toBeVisible();
+});
+
+test("tax report: the tax P&L ZIP as the broker gives it, checked against its summary, other segments left out", async ({ page, request }, info) => {
+  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
+  expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
+  const errors = await open(page, "/tax-report", "Capital gains on your shares", sessionAs(token, id, email));
+  await settle(page);
+  await expect(page.locator("input[type=file]")).toHaveAttribute("accept", /\.zip/);
+  await page.locator("input[type=file]").setInputFiles(TAXPNL + "zerodha_taxpnl_2024_2025.zip");
+  await expect(page.getByText(/Read as a Zerodha tax P&L: 16 trades added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/From the ZIP: Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\)/)).toBeVisible();
+  const check = page.getByRole("list", { name: "Totals checked against your broker's summary" });
+  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(3);
+  const left = page.getByRole("list", { name: "Files left out" });
+  for (const seg of ["F&O.csv", "Commodity.csv", "Currency.csv", "Non Equity.csv"]) await expect(left.getByText(seg, { exact: false })).toBeVisible();
+  await expect(left.getByText(/business income/).first()).toBeVisible();
+  // the only year with sales opens by itself
+  await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
+  await expect(page.getByText("2 same-day round trips", { exact: false })).toBeVisible();
+  await expect(page.getByText("Estimate only.")).toHaveCount(1);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+  expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
 });
 
 test("tax report: a file that isn't a tradebook gets a plain answer", async ({ page }) => {
@@ -774,5 +851,39 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText("TCS is back to 12 shares.")).toBeVisible();
   await expect(notice).toBeVisible();
+  await sane(page, errors);
+});
+
+test("admin: the whole-market audit tells facts and companies not checked yet apart, and re-checks those", async ({ page }, info) => {
+  const sent: object[] = [];
+  const row = (symbol: string, name: string, level: string, area: string, detail: string) => ({ symbol, name, seconds: 1, issues: [{ level, area, detail }] });
+  const refused = "Not checked yet: the exchange feed refused the request (403). It is checked again later.";
+  const rows = [row("BSE:543210", "Tiny Co Ltd", "pending", "Documents", refused), row("BSE:543211", "Small Co Ltd", "pending", "Documents", refused),
+    row("NEWCO", "New Co Ltd", "fact", "Numbers", "Only 2 years of annual results so far: listed, demerged or first reporting recently")];
+  const summary = { companies: 3, clean: 1, mismatches: 0, gaps: 0, errors: 0, facts: 1, pending: 2, avg_seconds: 1, slowest: [],
+    by_area: { Documents: { mismatch: 0, gap: 0, error: 0, fact: 0, pending: 2 }, Numbers: { mismatch: 0, gap: 0, error: 0, fact: 1, pending: 0 } } };
+  const state = (retrying: boolean, india: boolean) => ({ enabled: true, listed: 3, checked: 3, due: retrying ? 2 : 0, current: null, eta_hours: null,
+    list_at: null, list_error: null, new_listings: [], pending: india ? 2 : 0, rows: india ? rows : [], summary: india ? summary : { ...summary, companies: 0 },
+    full: { running: retrying, since: retrying ? new Date().toISOString() : null, done_at: null, left: retrying ? 2 : 0, checked: null, pending_only: retrying } });
+  let retrying = false;
+  await page.route((u) => u.pathname === "/admin/audit/market", async (r) => {
+    const req = r.request();
+    const body = req.method() === "POST" ? req.postDataJSON() : null;
+    if (body) { sent.push(body); retrying = true; }
+    const india = body ? (body.region ?? "IN") === "IN" : new URL(req.url()).searchParams.get("region") !== "US";
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state(retrying && india, india)) });
+  });
+  const errors = await open(page, "/admin?tab=checks", "Whole market: India");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
+  const india = page.locator("section", { hasText: "Whole market: India" });
+  await expect(india.getByText("1 facts · 2 not checked yet")).toBeVisible();
+  await india.getByRole("radio", { name: "Facts" }).click();
+  await expect(india.getByText("Only 2 years of annual results so far")).toBeVisible();
+  await india.getByRole("radio", { name: "Not checked yet" }).click();
+  await expect(india.getByText("Tiny Co Ltd")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await india.getByRole("button", { name: "Re-check 2 not checked yet" }).click();
+  await expect.poll(() => sent).toEqual([{ region: "IN", retry: true }]);
+  await expect(india.getByText("Re-checking companies not checked yet:")).toBeVisible();
   await sane(page, errors);
 });

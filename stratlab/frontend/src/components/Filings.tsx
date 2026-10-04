@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { useApp } from "../lib/app";
 import { safeHref } from "../lib/format";
 import { Loading } from "./ui";
 
@@ -49,24 +47,20 @@ export function FilingRow({ i }: { i: FilingItem }) {
 
 /** A company's exchange filings: the 3-month red-flag summary, then the timeline. India only. */
 export function FilingsPanel({ symbol }: { symbol: string }) {
-  const { me } = useApp();
-  const pro = !!me?.plan_info?.features?.filings;
   const [rep, setRep] = useState<FilingReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const [more, setMore] = useState(false);
 
   useEffect(() => {
-    if (!pro) return;
     let live = true;
     setRep(null); setError(null);
     api<FilingReport>(`/research/filings/${encodeURIComponent(symbol)}`)
       .then((r) => live && setRep(r))
       .catch((e) => live && setError(e instanceof Error ? e.message : "Couldn't load the filings."));
     return () => { live = false; };
-  }, [symbol, pro]);
+  }, [symbol]);
 
-  if (!pro) return <p className="small muted">Filings and red flags (QIP and other fund raises, pledges, resignations, defaults) are on the Pro plan. <Link className="link" to="/plans">See plans</Link></p>;
   if (error) return <p className="small muted">{error}</p>;
   if (!rep) return <Loading label="Reading the exchange filings" />;
   const shown = rep.items.filter((i) => all || i.severity !== "info");

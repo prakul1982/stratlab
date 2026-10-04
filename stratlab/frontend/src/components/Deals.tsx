@@ -74,7 +74,7 @@ export function DealsPanel({ symbol }: { symbol: string }) {
             <tbody>{list.map((d) => (
               <tr key={d.id}>
                 <td><span className="deal-who">{d.who}</span>{d.relation && <span className="tiny muted"> {RELATION[d.relation]}</span>}</td>
-                <td><span className={`badge ${d.side === "bought" ? "next" : "skip"}`}>{SIDE[d.side] ?? d.side}</span></td>
+                <td><span className="badge fact">{SIDE[d.side] ?? d.side}</span></td>
                 <td className="num">{d.qty == null ? "–" : Math.round(d.qty).toLocaleString("en-IN")}</td>
                 <td className="num">{rupees(d.value)}{d.kind !== "insider" && d.kind !== "sast" && d.price != null && <span className="tiny muted"> at ₹{d.price.toLocaleString("en-IN")}</span>}</td>
                 <td className="mono small">{day(d.date)}</td>

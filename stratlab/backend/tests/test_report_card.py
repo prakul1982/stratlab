@@ -88,10 +88,10 @@ def test_endpoint_reads_calls_once_and_counts_toward_the_limit(api, monkeypatch)
     assert c.get("/research/deep/ACME").json()["card"] is None
     v = c.post("/research/deep/ACME/card").json()
     row = v["card"]["rows"][0]
-    assert row["result"] == "pending" and row["source"]["title"] == "Q1 FY27 call transcript" and usage == ["research_ai"]
+    assert row["result"] == "pending" and row["source"]["title"] == "Q1 FY27 call transcript" and usage.count("research_ai") == 1
     assert v["card"]["problems"] and not v["card_stale"] and v["calls"] == 2
     c.post("/research/deep/ACME/card")                       # fresh: no new AI call
-    assert len(seen) == 1 and len(usage) == 1
+    assert len(seen) == 1 and usage.count("research_ai") == 1
     c.post("/research/deep/ACME/card?refresh=true")
     assert c.post("/research/deep/ACME/card?refresh=true").status_code == 429
 

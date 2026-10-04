@@ -19,34 +19,81 @@ M = 1_000_000
 
 # each line: the row in the company table, then the XBRL concepts that report it, best first. Companies change the
 # concept they use over the years (revenue moved to the ASC 606 names in 2018), so each period takes the first that
-# has a value for it.
+# has a value for it. Foreign companies filing a 20-F or 40-F under IFRS use that taxonomy's names (Revenue,
+# ProfitLoss...), listed after the US ones.
 # Total revenue can sit under any of these, and a company may also tag just a part with one of them (contract revenue
 # without the lease income a REIT or tower company earns), so for each period the largest is the top line.
 TOP_LINE = ("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "RevenueFromContractWithCustomerIncludingAssessedTax",
-            "SalesRevenueNet")
-# ...and when none of those is filed: narrower lines that are the revenue for some kinds of company
-REVENUE_ELSE = ("SalesRevenueGoodsNet", "SalesRevenueServicesNet", "OperatingLeaseLeaseIncome", "RevenuesNetOfInterestExpense",
-                "InterestAndDividendIncomeOperating")
-NET_INCOME = ("NetIncomeLoss", "NetIncomeLossAvailableToCommonStockholdersBasic", "ProfitLoss")
-OPERATING = ("OperatingIncomeLoss",)
+            "SalesRevenueNet", "Revenue", "RevenueFromContractsWithCustomers")
+# ...and when none of those is filed: narrower lines that are the revenue for some kinds of company (utilities,
+# REITs, insurers, brokers, business development companies, miners, IFRS banks)
+REVENUE_ELSE = ("SalesRevenueGoodsNet", "SalesRevenueServicesNet", "RegulatedAndUnregulatedOperatingRevenue",
+                "ElectricUtilityRevenue", "RealEstateRevenueNet", "OperatingLeaseLeaseIncome",
+                "OperatingLeasesIncomeStatementLeaseRevenue", "PremiumsEarnedNet", "RevenuesNetOfInterestExpense",
+                "RevenuesExcludingInterestAndDividends", "GrossInvestmentIncomeOperating", "InvestmentIncomeInterestAndDividend",
+                "OilAndGasRevenue", "RevenueMineralSales", "HealthCareOrganizationRevenue", "ContractsRevenue",
+                "FinancialServicesRevenue", "RevenueFromSaleOfGoods", "RevenueFromRenderingOfServices",
+                "InterestRevenueCalculatedUsingEffectiveInterestMethod")
+# a bank's revenue when it files no total: interest and dividend income plus everything else it earns (fees)
+BANK_INTEREST = ("InterestAndDividendIncomeOperating", "InterestAndFeeIncomeLoansAndLeases")
+BANK_OTHER = ("NoninterestIncome",)
+NET_INCOME = ("NetIncomeLoss", "ProfitLossAttributableToOwnersOfParent", "NetIncomeLossAvailableToCommonStockholdersBasic",
+              "ProfitLoss", "IncomeLossFromContinuingOperations",
+              "IncomeLossFromContinuingOperationsIncludingPortionAttributableToNoncontrollingInterest",
+              "NetIncomeLossAvailableToCommonStockholdersDiluted")
+OPERATING = ("OperatingIncomeLoss", "ProfitLossFromOperatingActivities")
 DEPRECIATION = ("DepreciationDepletionAndAmortization", "DepreciationAmortizationAndAccretionNet",
-                "DepreciationAndAmortization", "Depreciation")
-EPS = ("EarningsPerShareDiluted", "EarningsPerShareBasic")
+                "DepreciationAndAmortization", "CostDepreciationAmortizationAndDepletion", "Depreciation",
+                "DepreciationAndAmortisationExpense", "AdjustmentsForDepreciationAndAmortisationExpense")
+EPS = ("EarningsPerShareDiluted", "EarningsPerShareBasic", "DilutedEarningsLossPerShare", "BasicEarningsLossPerShare")
 PPE = ("PropertyPlantAndEquipmentNet",
-       "PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization")
-EQUITY = ("StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest")
-CASH = ("CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents")
-CFO = ("NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations")
-CFI = ("NetCashProvidedByUsedInInvestingActivities", "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations")
-CAPEX = ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets",
-         "PaymentsForCapitalImprovements")
-DIVIDENDS = ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock")
+       "PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization",
+       "PropertyPlantAndEquipment")
+EQUITY = ("StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+          "PartnersCapital", "MembersEquity", "EquityAttributableToOwnersOfParent", "Equity")
+CASH = ("CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents", "Cash",
+        "CashAndCashEquivalents")
+CFO = ("NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+       "CashFlowsFromUsedInOperatingActivities")
+CFI = ("NetCashProvidedByUsedInInvestingActivities", "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations",
+       "CashFlowsFromUsedInInvestingActivities")
+# capex: plant and equipment, or what a REIT, an oil and gas producer or a miner spends on its own kind of asset
+CAPEX = ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets", "PaymentsForCapitalImprovements",
+         "PaymentsToAcquireOtherPropertyPlantAndEquipment", "PaymentsToAcquireAndDevelopRealEstate",
+         "PaymentsToDevelopRealEstateAssets", "PaymentsToAcquireRealEstate", "PaymentsToAcquireOilAndGasPropertyAndEquipment",
+         "PaymentsToAcquireOilAndGasProperty", "PaymentsToExploreAndDevelopOilAndGasProperties", "PaymentsToAcquireMiningAssets",
+         "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities", "PurchaseOfPropertyPlantAndEquipment")
+DIVIDENDS = ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock", "DividendsPaidClassifiedAsFinancingActivities",
+             "DividendsPaid")
 # debt: long-term debt including the part due within a year, or its two halves, plus short-term borrowings
-DEBT_TOTAL = ("LongTermDebt", "DebtLongtermAndShorttermCombinedAmount")
+DEBT_TOTAL = ("LongTermDebt", "DebtLongtermAndShorttermCombinedAmount", "Borrowings")
 DEBT_PARTS = (("LongTermDebtNoncurrent",), ("LongTermDebtCurrent", "DebtCurrent"))
 DEBT_SHORT = ("ShortTermBorrowings", "CommercialPaper")
+# the share count when a report's cover page doesn't give one the facts can read (companies with two classes of shares
+# give a count per class): the balance sheet's, else the year's diluted average
+SHARES = ("CommonStockSharesOutstanding", "WeightedAverageNumberOfDilutedSharesOutstanding",
+          "WeightedAverageNumberOfSharesOutstandingBasic")
 
-ANNUAL = ("10-K", "10-K/A", "20-F", "20-F/A", "40-F")
+ANNUAL = ("10-K", "10-K/A", "20-F", "20-F/A", "40-F", "40-F/A")
+
+# names of what the SEC lists that isn't an operating company: funds, ETFs and ETNs, commodity and crypto trusts, and
+# blank-check companies (SPACs) still looking for a business
+NOT_OPERATING = re.compile(r"\bETFs?\b|\bETNs?\b|\bfunds?\b|ishares|\bspdr\b|proshares|municipal|closed[- ]end|"
+                           r"\btrust\b.*\b(?:income|bond|treasury|bitcoin|ether(?:eum)?|gold|silver|currency|commodit\w*)\b|"
+                           r"\b(?:bitcoin|ether(?:eum)?|gold|silver|commodity)\b.*\btrust\b|"
+                           r"\bacquisition (?:corp|co|company|inc|ltd|limited)\b|blank check", re.I)
+
+
+def not_operating(name: str | None) -> bool:
+    return bool(NOT_OPERATING.search(str(name or "")))
+
+
+def derived_ticker(t: str, siblings: list[str]) -> bool:
+    """A preferred share, warrant, right or unit of a company whose main ticker is also listed: AHL-PD beside AHL,
+    ACONW beside ACON, ALFUU beside ALFU."""
+    if "-" in t or "." in t:
+        return True
+    return len(t) == 5 and t[-1] in "WUR" and t[:4] in siblings
 
 
 def _days(a: str, b: str) -> int:
@@ -149,7 +196,23 @@ def revenue(facts: dict, kind: str) -> dict[str, float]:
                 out[end] = v
     for end, v in (flows(facts, REVENUE_ELSE, "annual") if kind == "annual" else quarterly(facts, REVENUE_ELSE)).items():
         out.setdefault(end, v)
+    read = (lambda cs: flows(facts, cs, "annual")) if kind == "annual" else (lambda cs: quarterly(facts, cs))   # noqa: E731
+    interest, other = read(BANK_INTEREST), read(BANK_OTHER)
+    for end, v in interest.items():           # a bank: interest income plus fees and other income
+        out.setdefault(end, v + other.get(end, 0))
     return out
+
+
+def currency(facts: dict) -> str | None:
+    """The currency a company's results are filed in, when it isn't US dollars (a foreign filer under IFRS): read
+    from the units its revenue or profit is reported in."""
+    for ns in ("ifrs-full", "us-gaap"):
+        for concept in TOP_LINE + NET_INCOME:
+            units = ((facts.get(ns) or {}).get(concept) or {}).get("units") or {}
+            other = [u for u in units if re.fullmatch(r"[A-Z]{3}", u) and u != "USD"]
+            if units and "USD" not in units and other:
+                return other[0]
+    return None
 
 
 def _debt(facts: dict) -> dict[str, float]:
@@ -197,6 +260,9 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12) -> dict:
 
     ends = sorted(set(rev_a) | set(ni_a))[-years:]
     if not ends:
+        cur = currency(facts)
+        if cur:
+            raise SourceError("SEC EDGAR", f"This company reports its results in {cur}, not US dollars, so they aren't shown here yet.")
         raise SourceError("SEC EDGAR", "The SEC has no annual results filed in XBRL for this company.")
     cols = [_label(e) for e in ends]
     margin = lambda op, rev: round(op / rev * 100, 1) if op is not None and rev else None   # noqa: E731
@@ -232,6 +298,12 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12) -> dict:
     for f in ((facts.get("dei") or {}).get("EntityCommonStockSharesOutstanding") or {}).get("units", {}).get("shares", []):
         if f.get("val") and (shares is None or f["end"] >= shares[0]):
             shares = (f["end"], float(f["val"]))
+    for concept in SHARES if shares is None else ():
+        got = [f for f in _facts(facts, concept, "shares") if f.get("val") and f.get("end")]
+        if got:
+            f = max(got, key=lambda f: (f["end"], f.get("filed") or ""))
+            shares = (f["end"], float(f["val"]))
+            break
     out = {"name": subs.get("name") or facts_json.get("entityName") or "", "ratios": {}, "growth": {}, "pros": [], "cons": [],
            "pl": {"cols": pl_cols, "rows": pl_rows}, "balance": bal, "cashflow": cf, "quarters": quarters,
            "basis": "consolidated", "unit": "$ million", "currency": "USD", "region": "US",

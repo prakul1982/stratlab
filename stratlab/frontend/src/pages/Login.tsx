@@ -89,7 +89,7 @@ const FAQ: [string, string][] = [
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
   ["Can I bring a strategy I already have?", "Yes. Import a StratLab export, a config file from your own bot, TradingView Pine Script, Python code (Backtrader, backtesting.py and similar), MetaTrader, AmiBroker, or just describe it. StratLab translates it into rules you can read, sets up a group if it trades a list of stocks, opens option structures in the Options tab, and lists anything it couldn't translate."],
   ["Can I test options strategies?", "You can paper trade them live today on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask. You can also let a notebook's rules decide when: long signals buy your structure and short signals its mirror. Backtesting options needs real historical prices for every strike, which nobody keeps for expired options, so StratLab is recording the NIFTY, BANKNIFTY and SENSEX chains every 5 minutes to build that history. We won't stand in a pricing model."],
-  ["What does it cost?", "It's free to start: experiments every month, AI strategy builds, and 5 market days of paper trading. Basic (₹999 a month, or the same in your currency) adds group and options paper trading and a daily report; Pro (₹2,999) adds options on your own signals, faster group entries, alerts for every trade, every indicator and F&O, and the investor tools: the ST S2 scan, sector rotation, and filings and red flags."],
+  ["What does it cost?", "It's free to start: 10 backtests and 10 AI strategy builds a month, 5 market days of paper trading, 2 company deep dives a month, screens, sector rotation and red flags on every company. Basic (₹499 a month including GST, or $8) adds every indicator, 100 backtests a month, group and options paper trading, trade notifications, 15 deep dives, the Stage 2 scan and daily newsletters. Pro (₹1,499, or $20) adds unlimited backtests and deep dives, 10 paper sessions at once, Indian F&O, options on your own signals and export."],
   ["Can I test commodities?", "Yes, as two separate markets. Indian commodities are MCX futures in rupees (gold, silver, crude oil, natural gas, copper, zinc, aluminium, lead, and their mini contracts), sized in whole lots with MCX costs, on years of daily history stitched across expiries. Global commodities are COMEX, NYMEX and ICE futures in dollars (gold, silver, oil, gas, copper, grains, coffee, sugar, cocoa, cotton), sized per ounce or barrel."],
   ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon, and sends paper trades and the daily report as notifications."],
   ["Does it know market holidays?", "Yes. Exchange holidays in India, the US, UK, Europe and Japan are built in: the markets panel shows weekends and holidays, the daily report skips them, and they don't count toward the free trial."],
@@ -159,7 +159,7 @@ export function Login() {
           <div className="stack" style={{ gap: 14 }}>
             <span className="eyebrow">Research</span>
             <h2 className="serif lp-h2">Start with any company, Indian or US.</h2>
-            <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, insider trades and deals, dividends and other corporate actions, and news. An AI read gives its opinion, lays out the bull and bear case, and ends with three ideas you can test in one click.</p>
+            <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, insider trades and deals, dividends and other corporate actions, and news. An AI read describes the business next to its growth, price trend, debt and margins in plain numbers (no scores or ratings), lists strengths and risks as facts, and ends with three ideas you can test in one click.</p>
             <ul className="bullets lp-p" style={{ fontSize: 16 }}>
               <li><b>Themes:</b> map a sector and see the listed companies linked to it.</li>
               <li><b>Market pulse:</b> index levels, headlines and today's mood.</li>
@@ -291,7 +291,7 @@ export function Login() {
           <div className="stack" style={{ gap: 14 }}>
             <span className="eyebrow">Questions</span>
             <h2 className="serif lp-h2">Good to know.</h2>
-            <p className="lp-p">Free to start, with every market. Paid plans add more tests, more live sessions and the Pro tools.</p>
+            <p className="lp-p">Free to start, with every market. Paid plans add more backtests, every indicator, more paper sessions and more research.</p>
           </div>
           <div className="lp-faq">
             {FAQ.map(([q, a]) => <details key={q}><summary>{q}</summary><p className="muted">{a}</p></details>)}
@@ -359,21 +359,20 @@ function HeroDemo() {
 }
 
 function ResearchMock() {
-  // the company page's AI read: its four opinion scores, with no overall score and no valuation score
-  const scores: [string, number, boolean][] = [["Moat", 92, true], ["Growth", 94, true], ["Momentum", 81, true], ["Health", 38, false]];
+  // the company page's AI read: plain numbers from reported results and prices, never scores (sample figures)
+  const facts: [string, string][] = [["Growth", "Sales, 3 years 68.2% a year · Net profit, 3 years 91.4% a year"],
+    ["Price trend", "6.1% above the 200-day average · 1-year change +32.5% · Stage 2 (advancing)"],
+    ["Debt and cash", "Debt to equity 0.11 · Cash from operations 94% of net profit"],
+    ["Margins and returns", "Operating margin 33% → 62% over 5 years · ROE 91.9%"]];
   return (
     <div className="card lp-rmock" aria-label="Example company research page">
       <div className="spread" style={{ alignItems: "flex-start" }}>
         <div className="stack" style={{ gap: 2 }}><span className="eyebrow">NASDAQ · NVDA</span><b className="serif" style={{ fontSize: 26 }}>NVIDIA Corp</b></div>
         <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}><b className="serif" style={{ fontSize: 26 }}>$183.20</b><span className="badge next">▲ +1.33% today</span></div>
       </div>
-      <div className="lp-rscore">
-        <div className="stack" style={{ gap: 7, flex: 1 }}>
-          {scores.map(([l, v, good]) => (
-            <div key={l} className="score-row"><span className="small">{l}</span><div className="score-track"><div style={{ width: `${v}%`, background: good ? "var(--blue)" : "var(--orange)" }} /></div><span className="small mono">{v}</span></div>
-          ))}
-          <span className="tiny muted">AI read: opinions, not advice</span>
-        </div>
+      <div className="lp-rfacts">
+        {facts.map(([l, t]) => <div key={l} className="stack" style={{ gap: 1 }}><b className="small">{l}</b><span className="small muted">{t}</span></div>)}
+        <span className="tiny muted">Sample figures. Facts from reported results and prices, not advice.</span>
       </div>
       <div className="lp-ridea">
         <b className="small">Ideas to test on NVDA</b>

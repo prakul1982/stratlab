@@ -18,7 +18,7 @@ export interface Issue {
 
 export interface NewsletterPrefs {
   market_in: Cadence; market_us: Cadence; my_stocks: Cadence;
-  email: string | null; confirmed: boolean; allowed: { market_daily: boolean; my_stocks: boolean };
+  email: string | null; confirmed: boolean; allowed: { market_daily: boolean; my_stocks: boolean; my_stocks_daily?: boolean };
 }
 
 /** "2026-10-02" as a date in words, read as a calendar day (not midnight UTC, which is the day before in the Americas). */

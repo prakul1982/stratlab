@@ -47,6 +47,36 @@ def test_other_states_exports_and_unregistered_sellers(store):
     assert plain["taxes"] == [] and "not registered" in plain["note"] and "Tax invoice" not in invoices.html(plain)
 
 
+def test_gst_is_backed_out_of_the_new_inclusive_prices(store):
+    """Rupee prices include GST: the invoice shows the taxable value and the 18% inside the amount paid, and they add
+    up to it to the paisa (CGST and SGST split it, halves rounding up)."""
+    assert invoices.backed_out(499) == (422.88, 76.12) and invoices.backed_out(1499) == (1270.34, 228.66)
+    assert invoices.backed_out(4990) == (4228.81, 761.19) and invoices.backed_out(14990) == (12703.39, 2286.61)
+    invoices.save_seller(SELLER)
+    rows = {}
+    for n, rupees in enumerate((499, 1499, 4990, 14990)):
+        inv = invoices.make({**PAY, "id": f"pn{n}", "amount": rupees * 100}, {"id": "u1"}, "basic", "month")
+        taxes = [t["amount"] for t in inv["taxes"]]
+        assert inv["total"] == rupees and round(inv["item"]["taxable"] + sum(taxes), 2) == rupees
+        rows[rupees] = (inv["item"]["taxable"], taxes)
+    assert rows[499] == (422.88, [38.06, 38.06]) and rows[1499] == (1270.34, [114.33, 114.33])
+    assert rows[4990] == (4228.81, [380.6, 380.59])                  # 761.19 split: the odd paisa goes to CGST
+    assert rows[14990] == (12703.39, [1143.31, 1143.3])
+    invoices.save_billing("u2", {"state": "29", "country": "IN"})        # another state: one IGST line, the same 18%
+    other = invoices.make({**PAY, "id": "pn9", "amount": 149900}, {"id": "u2"}, "pro", "month")
+    assert other["taxes"] == [{"name": "IGST 18%", "rate": 18, "amount": 228.66}] and other["item"]["taxable"] == 1270.34
+    old = invoices.make({**PAY, "id": "pn10"}, {"id": "u1"}, "basic", "month")   # an old ₹999 subscription renewing
+    assert old["item"]["taxable"] == 846.61 and sum(t["amount"] for t in old["taxes"]) == 152.39
+
+
+def test_export_invoices_are_unchanged(store):
+    """Abroad: zero-rated under the LUT (no GST in the amount), whatever the currency."""
+    invoices.save_seller({**SELLER, "lut_arn": "AD270326012345X"})
+    usd = invoices.make({**PAY, "id": "px1", "amount": 800, "currency": "USD", "international": True}, {"id": "u3"}, "basic", "month")
+    assert usd["supply"] == "Export (zero-rated)" and usd["total"] == 8 and usd["item"]["taxable"] == 8
+    assert usd["taxes"] == [{"name": "IGST 0%", "rate": 0, "amount": 0.0}] and "$8.00" in invoices.html(usd)
+
+
 def test_details_are_checked(store):
     with pytest.raises(ValueError, match="GSTIN"):
         invoices.save_seller({**SELLER, "gstin": "123"})

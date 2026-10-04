@@ -189,9 +189,15 @@ def profit_note(p: dict) -> str | None:
 # ---------- which documents to read ----------
 # what companies call the quarterly deck: TCS and HCL file a "fact sheet", Bharti a "quarterly report", others an
 # "investor release" or "earnings update"
-PRESENTATION = re.compile(r"investor presentation|earnings presentation|results presentation|analyst presentation|"
-                          r"fact ?sheet|quarterly report|investor (?:release|update)|earnings (?:release|update)|"
-                          r"performance (?:update|review) presentation|corporate presentation", re.I)
+PRESENTATION = re.compile(r"investors?'?s? presentation|earnings presentation|results presentation|analysts?'? presentation|"
+                          r"fact ?sheet|quarterly report|investors?'? (?:release|update|deck)|earnings (?:release|update)|"
+                          r"performance (?:update|review) presentation|corporate presentation|"
+                          r"(?:earnings|conference|con\.?) ?call presentation|analysts?(?:/institutional investors?)? meet presentation|"
+                          r"presentation (?:made )?(?:to|for) (?:the )?(?:analysts?|investors?|institutional)", re.I)
+# "Transcript", and the misspellings companies file it under ("Transcipt", "Trancript")
+TRANSCRIPT = re.compile(r"\btran?scr?i?pts?\b", re.I)
+# NSE's subject for analyst meets and calls: a deck filed under it is a presentation even when it's only called one
+MEET = re.compile(r"analysts?/institutional investor meet|con\.? ?call|earnings call|conference call", re.I)
 
 
 def documents(items: list[dict]) -> list[dict]:
@@ -201,9 +207,10 @@ def documents(items: list[dict]) -> list[dict]:
         if not i.get("url"):
             continue
         hay = f"{i.get('subject', '')} {i.get('text', '')}".lower()
-        if "transcript" in hay:
+        if TRANSCRIPT.search(hay):
             kind = "transcript"
-        elif i.get("category") == "presentation" or PRESENTATION.search(hay):
+        elif (i.get("category") == "presentation" or PRESENTATION.search(hay)
+              or ((i.get("category") == "concall" or MEET.search(hay)) and "presentation" in hay)):
             kind = "presentation"
         elif "annual report" in hay:
             kind = "annual_report"

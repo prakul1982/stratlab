@@ -1,11 +1,12 @@
 """Sample tradebooks and tax P&L files, laid out the way each broker exports them, for the tax report's tests.
 
-    python -m tests.tradebook_maker      # rebuilds tests/fixtures/tradebooks
+    python -m tests.tradebook_maker      # rebuilds tests/fixtures/tradebooks and tests/fixtures/taxpnl
 
 One story runs through them, so files from several brokers can be combined: RELIANCE bought in 2023 and sold on both
 sides of the 23 July 2024 rate change, an intraday INFY round trip, a pre-2018 lot, bonus-free names elsewhere."""
 import csv
 import io
+import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -82,7 +83,63 @@ ZERODHA_PNL = [[], [None, "Client ID", "AB1234"], [None, "Tradewise Exits from 2
 GENERIC = "Date,Symbol,Type,Quantity,Price\n2024-04-10,ICICIBANK,BUY,25,1080\n2025-02-03,ICICIBANK,SELL,10,1250\n2024-10-01,NOTASTOCK,BUY,5,10\n"
 
 
+# Console › Reports › Tax P&L › Download: a ZIP of one CSV per segment and the summary workbook, in a folder, with the
+# __MACOSX copies a Mac adds. Made-up trades in the real column layout. The F&O file is the big one in real life.
+ZIP_DIR = Path(__file__).parent / "fixtures" / "taxpnl"
+PNL_HEAD = ["Symbol", "ISIN", "Entry Date", "Exit Date", "Quantity", "Buy Value", "Sell Value", "Profit", "Period of Holding",
+            "Fair Market Value", "Taxable Profit", "Turnover", "Brokerage", "Exchange Transaction Charges", "IPFT", "SEBI Charges",
+            "CGST", "SGST", "IGST", "Stamp Duty", "STT"]
+DERIV_HEAD = ["Symbol", "Entry Date", "Exit Date", "Quantity", "Buy Value", "Sell Value", "Profit", "Turnover", "Brokerage",
+              "Exchange Transaction Charges", "IPFT", "SEBI Charges", "CGST", "SGST", "IGST", "Stamp Duty", "STT"]
+TAX_SHORT = [PNL_HEAD,
+             # RELIANCE: the second line was bought the day the first was sold, which is not an intraday trade
+             ["RELIANCE", "INE002A01018", "2024-05-10", "2024-09-16", 10, 24000, 29000, 5000, 129, 0, 5000, 0, 0, 0.9, 0.03, 0.03, 0, 0, 0.17, 0, 29],
+             ["RELIANCE", "INE002A01018", "2024-09-16", "2024-12-02", 5, 14600, 13000, -1600, 77, 0, -1600, 0, 0, 0.42, 0.01, 0.01, 0, 0, 0.08, 2.19, 13],
+             ["TCS", "INE467B01029", "2024-06-03", "2025-01-15", 3, 11400, 12300, 900, 226, 0, 900, 0, 0, 0.38, 0.01, 0.01, 0, 0, 0.07, 0, 12.3]]
+TAX_LONG = [PNL_HEAD,
+            ["WIPRO", "INE075A01022", "2017-06-12", "2024-12-16", 50, 13000, 15000, 2000, 2744, 15500, 0, 0, 0, 0.6, 0.02, 0.02, 0, 0, 0.11, 0, 15],
+            ["ITC", "INE154A01025", "2023-04-10", "2024-10-21", 100, 38000, 49000, 11000, 560, 0, 11000, 0, 0, 1.6, 0.05, 0.05, 0, 0, 0.3, 0, 49]]
+TAX_INTRADAY = [PNL_HEAD,
+                ["INFY", "INE009A01021", "2024-09-02", "2024-09-02", 20, 36000, 36300, 300, 0, 0, 300, 300, 20, 2.1, 0.07, 0.07, 0, 0, 4.0, 1.08, 9.07],
+                ["INFY", "INE009A01021", "2024-09-02", "2024-09-02", 10, 18010, 17990, -20, 0, 0, -20, 20, 10, 1.05, 0.04, 0.04, 0, 0, 2.0, 0.54, 4.5],
+                ["SBIN", "INE062A01020", "2024-11-05", "2024-11-05", 50, 41000, 40800, -200, 0, 0, -200, 200, 20, 2.4, 0.08, 0.08, 0, 0, 4.4, 1.23, 10.2]]
+TAX_FNO = [DERIV_HEAD, ["NIFTY24SEP25000CE", "2024-09-10T10:00:00", "2024-09-12T14:00:00", 25, 3012.5, 4100, 1087.5, 1087.5, 40, 1.4, 0.01, 0.01, 0, 0, 7.4, 0.1, 2.6]]
+TAX_COMMODITY = [DERIV_HEAD, ["CRUDEOIL24AUGFUT", "2024-08-01T10:00:00", "2024-08-02T10:00:00", 1, 650000, 652000, 2000, 2000, 40, 3, 0, 0.1, 0, 0, 7.9, 0.2, 0]]
+TAX_CURRENCY = [DERIV_HEAD, ["USDINR24AUGFUT", "2024-08-01T10:00:00", "2024-08-05T10:00:00", 1000, 83500, 83600, 100, 100, 40, 0.3, 0, 0, 0, 0, 7.3, 0.01, 0]]
+TAX_NON_EQUITY = [PNL_HEAD, ["GOLDBEES", "INF204KB17I5", "2024-04-15", "2024-11-20", 100, 6100, 6600, 500, 219, 0, 500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+TAX_SUMMARY = [[], [None, "Client ID", "AB1234"], [None, "Client Name", "Asha Kumar"], [None, "PAN", "ABCDE1234F"], [],
+               [None, "Taxpnl Statement for Equity from 2024-04-01 to 2025-03-31"], [], [None, "Realized Profit Breakdown"], [],
+               [None, "Intraday/Speculative profit", 80], [None, "Short Term profit", 4300], [None, "Long Term profit", 13000],
+               [None, "Non Equity profit", 500], [], [None, "Intraday"], [],
+               [None, "Symbol", "Quantity", "Buy Value", "Sell Value", "Realized P&L"],
+               [None, "INFY", 30, 54010, 54290, 280], [None, "SBIN", 50, 41000, 40800, -200], [],
+               [None, "Short Term Trades"], [], [None, "Symbol", "Quantity", "Buy Value", "Sell Value", "Realized P&L"],
+               [None, "RELIANCE", 15, 38600, 42000, 3400], [None, "TCS", 3, 11400, 12300, 900]]
+
+
+def zerodha_tax_zip(summary: list[list] | None = None) -> bytes:
+    """The whole ZIP, the way Console gives it (fixed dates inside, so only the workbook's own stamp varies)."""
+    folder = "taxpnl-AB1234-2024_2025-Q1-Q4/"
+    exits = "Tradewise Exits from 2024-04-01 to 2025-03-31-"
+    files = [(f"{exits}Commodity.csv", _csv(TAX_COMMODITY).encode()), (f"{exits}Non Equity.csv", _csv(TAX_NON_EQUITY).encode()),
+             ("taxpnl-2024_2025-Q1-Q4.xlsx", make_xlsx(summary or TAX_SUMMARY, "Equity and Non Equity")),
+             (f"{exits}Equity - Short Term.csv", _csv(TAX_SHORT).encode()), (f"{exits}Equity - Long Term.csv", _csv(TAX_LONG).encode()),
+             (f"{exits}Equity - Intraday.csv", _csv(TAX_INTRADAY).encode()), (f"{exits}F&O.csv", _csv(TAX_FNO).encode()),
+             (f"{exits}Currency.csv", _csv(TAX_CURRENCY).encode())]
+    out = io.BytesIO()
+    stamp = (2025, 6, 23, 9, 46, 0)
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(zipfile.ZipInfo(folder, stamp), b"")
+        z.writestr(zipfile.ZipInfo("__MACOSX/._" + folder.rstrip("/"), stamp), b"\x00\x05\x16\x07\x00\x02\x00\x00Mac OS X        ")
+        for name, data in files:
+            z.writestr(zipfile.ZipInfo(folder + name, stamp), data, zipfile.ZIP_DEFLATED)
+            z.writestr(zipfile.ZipInfo(f"__MACOSX/{folder}._{name}", stamp), b"\x00\x05\x16\x07\x00\x02\x00\x00Mac OS X        ")
+    return out.getvalue()
+
+
 def write():
+    ZIP_DIR.mkdir(parents=True, exist_ok=True)
+    (ZIP_DIR / "zerodha_taxpnl_2024_2025.zip").write_bytes(zerodha_tax_zip())
     DIR.mkdir(parents=True, exist_ok=True)
     (DIR / "zerodha_console_tradebook.csv").write_text(_csv(ZERODHA))
     (DIR / "groww_order_history.xlsx").write_bytes(make_xlsx(GROWW, "Orders"))

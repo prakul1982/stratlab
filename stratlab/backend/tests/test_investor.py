@@ -84,8 +84,14 @@ def test_sector_of_prefers_main_sectors():
 
 
 def test_deep_view_has_checklist_and_deck_and_investor_home(api):  # noqa: F811
-    c, who, _calls, _usage = api
-    assert c.get("/research/investor").status_code == 402 and c.get("/research/deep/ACME/deck").status_code == 402
+    c, who, _calls, usage = api
+    r = c.get("/research/investor")
+    assert r.status_code == 402 and "Watchlist at a glance is on the Basic plan" in r.json()["detail"]["message"]
+    assert c.get("/research/deep/ACME/deck").status_code == 200                  # Free: 1 deck a month
+    assert c.get("/research/deep/ACME/deck?format=pdf").status_code == 200       # the same company again doesn't count
+    assert usage.count("deck") == 1 and usage.count("deepdive") == 1
+    who["p"] = {"id": "u1", "plan": "basic", "_plan": "basic"}
+    assert c.get("/research/investor").status_code == 200
     who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
     v = c.get("/research/deep/ACME").json()
     assert v["checklist"]["counts"]["pass"] >= 3 and v["filings"]["red"] == 0 and "snapshot" in v

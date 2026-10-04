@@ -130,11 +130,8 @@ def confirmed(profile: dict) -> bool:
 
 
 def allowed(profile: dict, what: str, how: str) -> bool:
-    """The plan allows this choice: the weekly Market Brief for everyone, the daily one on Basic and up, My Stocks on Pro."""
-    plan = access_plan(profile)
-    if what == "my_stocks":
-        return allows(plan, "newsletter_stocks")
-    return how != "daily" or allows(plan, "newsletter")
+    """The plan allows this choice: the weekly editions of both newsletters for everyone, the daily ones on Basic and up."""
+    return how != "daily" or allows(access_plan(profile), "newsletter")
 
 
 def subscribers() -> list[dict]:
@@ -253,12 +250,15 @@ class Job:
         return sent
 
     def run_stocks(self, day: date, weekly: bool) -> int:
-        sent, how = 0, "weekly" if weekly else "daily"
+        sent = 0
         for sub in subscribers():
-            if sub.get("my_stocks") != how:
+            how = sub.get("my_stocks")
+            if how not in ("daily", "weekly") or (not weekly and how != "daily"):
                 continue
             profile = db.get_profile(sub["uid"])
-            if not allowed(profile, "my_stocks", how):
+            daily_ok = allowed(profile, "my_stocks", "daily")
+            # as with the Market Brief: a daily reader whose plan no longer has daily editions gets the weekly one
+            if (not weekly and not daily_ok) or (weekly and how == "daily" and daily_ok):
                 continue
             try:
                 issue = build_stocks(sub["uid"], day, weekly)

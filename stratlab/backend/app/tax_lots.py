@@ -1,7 +1,8 @@
 """Tax report: capital gains on listed Indian shares, from the user's own tradebooks and tax P&L files, worked out
 the way the Income Tax Act does it, as an estimate.
 
-Buys and sales are matched first in, first out, per company. A sale more than 12 months after its buy is long term.
+Buys and sales are matched first in, first out, per company; a tax P&L line, a sale already with its own buy, stays
+as the broker matched it. A sale more than 12 months after its buy is long term.
 Sales from 23 July 2024 pay the new rates (STCG 20%, LTCG 12.5%); earlier ones the old (15%, 10%). Long-term gains
 are exempt up to ₹1.25 lakh a financial year from FY 2024-25 (₹1 lakh before). Shares held on 31 Jan 2018 cost at
 least their price that day (grandfathering), and before 1 April 2018 long-term gains were exempt. Buying and selling
@@ -192,8 +193,53 @@ def _apply(lots: list[Lot], a: dict):
             l["qty"] = round(l["qty"] * f, 6)
 
 
+def _pairs(trades: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict]]:
+    """(pairs, the rest): a tax P&L line is a sale with its own buy (their ids end ":b" and ":s"), so the two are kept
+    together rather than matched first in, first out against other files' lots."""
+    groups: dict[str, dict[str, list[dict]]] = {}
+    rest: list[dict] = []
+    for t in trades:
+        tid = str(t.get("tid") or "")
+        if t.get("src") == "pnl" and tid.startswith("pnl:") and tid[-2:] in (":b", ":s"):
+            groups.setdefault(tid[:-2], {"B": [], "S": []})[t["side"]].append(t)
+        else:
+            rest.append(t)
+    pairs = []
+    for g in groups.values():
+        n = min(len(g["B"]), len(g["S"]))
+        pairs += list(zip(g["B"][:n], g["S"][:n]))
+        rest += g["B"][n:] + g["S"][n:]      # half a line (an edited file): matched the usual way
+    return pairs, rest
+
+
+def _pair(key: str, buy: dict, sale: dict, fmv: float | None, out: dict):
+    """One tax P&L line: intraday when bought and sold the same day, else a realised gain as the broker matched it,
+    grandfathered like any other lot."""
+    q = min(buy["qty"], sale["qty"])
+    cost = q * buy["price"] + (buy.get("charges") or 0) * q / buy["qty"]
+    gross = q * sale["price"]
+    net = gross - (sale.get("charges") or 0) * q / sale["qty"]
+    d, bd = sale["d"], buy["d"]
+    if d == bd:
+        out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": q, "buy": cost, "sell": net, "pnl": net - cost})
+        return
+    lt = long_term(bd, d)
+    gf = None
+    if lt and bd <= GF_DATE and d >= LTCG_START:
+        each = buy.get("fmv") or fmv
+        if each:
+            gf = "applied"
+            cost = max(cost, min(each * q, gross))
+        else:
+            gf = "missing"
+    out["realised"].append({"key": key, "bought": bd, "sold": d, "fy": fy_of(d), "qty": q, "cost": cost, "sale": net,
+                            "gain": net - cost, "term": "LT" if lt else "ST", "bonus": False, "gf": gf})
+
+
 def _one(key: str, trades: list[dict], actions: list[dict], fmv: float | None, today: str, out: dict):
     """Every buy and sale of one company, in date order, with its bonuses and splits in between."""
+    if not trades:
+        return
     days: dict[str, list[dict]] = {}
     for t in trades:
         days.setdefault(t["d"], []).append(t)
@@ -290,9 +336,26 @@ def compute(trades: list[dict], actions: dict[str, list[dict]] | None = None, fm
         n["isin"] = n["isin"] or t.get("isin") or ""
     out = {"realised": [], "intraday": [], "open": [], "unmatched": [], "names": names}
     for k, ts in by.items():
-        ts.sort(key=lambda t: (t["d"], t.get("t") or ""))
-        _one(k, ts, (actions or {}).get(k) or [], (fmv or {}).get(k), today, out)
+        pairs, rest = _pairs(ts)
+        for b, s in pairs:
+            _pair(k, b, s, (fmv or {}).get(k), out)
+        rest.sort(key=lambda t: (t["d"], t.get("t") or ""))
+        _one(k, rest, (actions or {}).get(k) or [], (fmv or {}).get(k), today, out)
+    out["intraday"] = _by_day(out["intraday"])
     return out
+
+
+def _by_day(rows: list[dict]) -> list[dict]:
+    """Intraday results as one line per company and day, however many files and lines they came from."""
+    days: dict[tuple, dict] = {}
+    for r in rows:
+        cur = days.get((r["key"], r["d"]))
+        if cur is None:
+            days[(r["key"], r["d"])] = dict(r)
+        else:
+            for f in ("qty", "buy", "sell", "pnl"):
+                cur[f] += r[f]
+    return list(days.values())
 
 
 # ---------- one financial year ----------

@@ -244,8 +244,9 @@ def test_every_sample_tradebook_is_read():
 
 def test_the_sample_files_are_what_the_maker_writes(tmp_path, monkeypatch):
     monkeypatch.setattr(tradebook_maker, "DIR", tmp_path)
+    monkeypatch.setattr(tradebook_maker, "ZIP_DIR", tmp_path / "taxpnl")      # checked in test_tax_zip
     tradebook_maker.write()
-    for p in tmp_path.iterdir():
+    for p in (p for p in tmp_path.iterdir() if p.is_file()):
         assert hf.parse_trades(p.read_bytes(), p.name) == hf.parse_trades((FIX / p.name).read_bytes(), p.name), p.name
 
 
@@ -271,7 +272,7 @@ def test_files_we_cant_use_get_a_plain_answer():
                         (b"Date,Symbol,Type,Quantity,Price\n2024-01-01,X,HOLD,1,10\n", "buy or a sale"),
                         (b"Date,Symbol,Type,Quantity,Price\nsoon,X,BUY,1,10\n", "date couldn't be read"),
                         (b"Date,Symbol,Type,Quantity,Price\n2024-01-01,X,BUY,1,\n", "No price"),
-                        (b"x" * (hf.MAX_BYTES + 1), "larger than")):
+                        (b"x" * (hf.TAX_MAX_BYTES + 1), "larger than")):
         with pytest.raises(hf.FileError) as e:
             hf.parse_trades(data)
         assert words in str(e.value), words

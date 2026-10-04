@@ -33,8 +33,11 @@ export interface Company {
 }
 
 export interface Idea { title: string; text: string; why: string }
+/** One line of plain numbers next to the AI read (growth, price trend, debt and cash, margins and returns): worked
+ *  out from reported results and prices, never from AI, and never a score. */
+export interface FactRow { id: string; label: string; items: { label: string; text: string }[] }
 export interface CompanyAI {
-  summary: string; scores: Record<"moat" | "growth" | "value" | "momentum" | "health", number | null>;
+  summary: string; facts: FactRow[];
   valuation_note: string;
   bull: string[]; bear: string[]; segments: { label: string; share: number }[]; position: string; watch: string[];
   ideas: Idea[]; generated_at: number;

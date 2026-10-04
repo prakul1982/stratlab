@@ -114,6 +114,8 @@ export function AccountPage() {
             ...(paid !== "free" ? [[b.cancel_at_period_end ? "Ends on" : "Renews on", dateOnly(b.renews_or_ends)]] : []),
             ["Experiments this month", u.backtests_limit == null ? `${u.backtests_used} (unlimited)` : `${u.backtests_used} of ${u.backtests_limit}`],
             ["AI builds this month", u.ai_limit == null ? `${u.ai_used} (unlimited)` : `${u.ai_used} of ${u.ai_limit}`],
+            ...(u.deepdive_used != null ? [["Companies in the deep dive this month", u.deepdive_limit == null ? `${u.deepdive_used} (unlimited)` : `${u.deepdive_used} of ${u.deepdive_limit}`]] : []),
+            ...(u.deck_used != null ? [["Company decks this month", u.deck_limit == null ? `${u.deck_used} (unlimited)` : `${u.deck_used} of ${u.deck_limit}`]] : []),
             ["Paper sessions running", `${me.live_running} of ${me.live_limit}`],
           ].map(([k, v]) => (
             <div key={k} className="spread" style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}><span className="muted">{k}</span><b>{v}</b></div>

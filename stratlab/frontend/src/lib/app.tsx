@@ -20,7 +20,10 @@ interface AppState {
   fail: (e: unknown) => void;
   refreshMe: () => Promise<void>;
   refreshNotebooks: () => Promise<void>;
-  isPro: boolean;
+  /** every indicator beyond price, SMA, EMA and RSI (Basic and up) */
+  allIndicators: boolean;
+  /** Indian futures and options (Pro) */
+  fno: boolean;
   level: Level | null;
   setLevel: (l: Level) => Promise<void>;
   /** What the user came for. Orders the menu, the home page and the examples; never hides anything. */
@@ -124,7 +127,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
 
   const value = useMemo<AppState>(() => ({
     session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
-    isPro: !!me?.plan_info.pro_features, level: me?.prefs?.level ?? null, setLevel,
+    allIndicators: !!me?.plan_info.indicators, fno: !!me?.plan_info.fno, level: me?.prefs?.level ?? null, setLevel,
     focus: me?.prefs?.focus ?? null, setFocus, theme, setTheme,
   }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, theme, setTheme]);
 
