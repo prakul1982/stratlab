@@ -15,7 +15,7 @@ type Cost = {
   category?: string; category_changes?: { date: string; from: string; to: string; recat_2026: boolean }[];
 };
 type Costs = {
-  full: boolean; plan: string; schemes: Cost[]; unmatched: { key: string; name: string }[];
+  state: "ok" | "reading" | "unavailable"; full: boolean; plan: string; schemes: Cost[]; unmatched: { key: string; name: string }[];
   total: { cost_year: number; value: number; weighted_ter: number | null; funds: number; held: number } | null;
   read_at: string | null; assumptions: string[]; disclaimer: string; as_of: string;
 };
@@ -27,13 +27,23 @@ const PLAN: Record<string, string> = { direct: "Direct plan", regular: "Regular 
 export function FundCosts({ version }: { version: string }) {
   const [c, setC] = useState<Costs | null>(null);
   const [failed, setFailed] = useState(false);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
     api<Costs>("/money/mutual-funds/costs").then((r) => { if (live) { setC(r); setFailed(false); } }).catch(() => { if (live) setFailed(true); });
     return () => { live = false; };
-  }, [version]);
+  }, [version, tick]);
+  // the very first read of the TER disclosure runs in the background: look again every few seconds, for a while
+  useEffect(() => {
+    if (c?.state !== "reading" || tick >= 40) return;
+    const t = window.setTimeout(() => setTick((n) => n + 1), 5000);
+    return () => window.clearTimeout(t);
+  }, [c, tick]);
 
-  if (failed) return <section className="card" aria-label="Fund costs"><p className="small muted" style={{ margin: 0 }}>Fund costs couldn't be loaded just now. Reload the page to try again.</p></section>;
+  const note = (text: string) => <section className="card stack" style={{ gap: 6 }} aria-label="Fund costs"><h2 className="h2">What your funds cost</h2><p className="small muted" style={{ margin: 0 }} role="status">{text}</p></section>;
+  if (failed) return note("Fund costs couldn't be loaded just now. Reload the page to try again.");
+  if (c?.state === "reading") return note("Costs are being read; check back shortly.");
+  if (c?.state === "unavailable") return note("Fund costs aren't available right now. They are read again every few hours.");
   if (!c || !c.total) return null;
   const t = c.total;
   return (

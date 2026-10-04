@@ -25,12 +25,14 @@ from . import money_mf as mf
 from . import money_mf_nav as navs
 from .auth import current_profile
 from .plans import FEATURE_PLAN, PLANS, allows
-from .responses import ok
+from .admin import admin_profile
+from .responses import err, ok
 
 URL = "https://www.amfiindia.com/modules/LoadTERData"
 LATEST_KEY = "mfter:latest"        # {"at", "parts", "s": {scheme name: [date, category, type, regular parts, direct parts]}}
 HIST_KEY = "mfter:hist"            # {scheme name: {"t": [[date, regular total, direct total]], "c": [[date, category]]}}
 MONTHS_KEY = "mfter:months"        # {"YYYY-MM": unix time read}, so older months are read once
+STATUS_KEY = "mfter:status"        # how the last read went, for the platform check
 MAX_AGE = 12 * 3600                # re-read the current month after this long
 RETRY = 3600                       # after a failed read, wait this long
 PAUSE = 2.0                        # seconds between requests in one run
@@ -40,6 +42,8 @@ TIMEOUT = 40.0
 MAX_BYTES = 30 * 1024 * 1024
 MIN_ROWS = 50                      # fewer in the current and previous month together means the read went wrong
 BACKGROUND = True                  # refresh in a thread when a copy exists (tests turn it off)
+CHECK_SCHEMES = 500                # the platform check wants at least this many schemes in a read
+CHECK_DAYS = 45                    # and the last good read no older than this
 RECAT_FROM = "2026-02-26"          # SEBI's circular recategorising schemes
 
 DISCLAIMER = ("Facts and arithmetic: each fund's published expense ratio applied to your current value. Not investment "
@@ -58,7 +62,7 @@ PART_LABEL = {"base": "Base expense", "b30": "Extra for inflows from smaller cit
               "levies": "Statutory levies", "gst": "GST", "total": "Total"}
 
 _lock = threading.Lock()
-_mem: dict = {"latest": None, "hist": None, "months": None, "tried": 0.0, "running": False, "index": None}
+_mem: dict = {"latest": None, "hist": None, "months": None, "tried": 0.0, "running": False, "index": None, "status": None}
 
 
 # ---------- reading the disclosure ----------
@@ -224,7 +228,7 @@ def parse(text: str) -> dict:
 def forget():
     """Drop the copies in memory (between tests)."""
     with _lock:
-        _mem.update(latest=None, hist=None, months=None, tried=0.0, running=False, index=None)
+        _mem.update(latest=None, hist=None, months=None, tried=0.0, running=False, index=None, status=None)
 
 
 def _load():
@@ -302,12 +306,42 @@ def _month_back(d: date, n: int) -> tuple[int, int]:
     return m % 12 + 1, m // 12
 
 
+def _status_note(**kw):
+    """Record how the last read went (kept for the platform check and the admin panel)."""
+    with _lock:
+        st = _mem["status"] = {**(_mem["status"] or {}), **kw}
+        raw = json.dumps(st, separators=(",", ":"))
+    try:
+        db.set_setting(STATUS_KEY, raw)
+    except Exception as e:
+        print("TER status not saved:", type(e).__name__)
+
+
+def status() -> dict:
+    """How the last reads went: {"last_try", "last_ok" (unix times), "error" (the last failure, or None), "schemes"
+    (schemes in the last good read's two months), "month" ("YYYY-MM" read last)}, whether a read is running, and
+    what is stored."""
+    _load()
+    if _mem["status"] is None:
+        got = db.json_value(db.get_setting(STATUS_KEY), {})
+        with _lock:
+            if _mem["status"] is None:
+                _mem["status"] = got
+    with _lock:
+        latest = _mem["latest"] or {}
+        return {**_mem["status"], "running": _mem["running"], "stored": len(latest.get("s") or {}),
+                "months": len(_mem["months"] or {}),
+                "newest": max((v[0] for v in (latest.get("s") or {}).values()), default=None)}
+
+
 def refresh(today: date | None = None) -> bool:
     """Read the previous and the current month (TERs are published on the day they change, so a scheme unchanged
     this month is in an earlier one), then one older month not yet read, back to BACKFILL months. True when read."""
     today = today or datetime.now(timezone.utc).date()
     _load()
-    got, n_rows = [], 0
+    status()
+    got, names = [], set()
+    tried = time.time()
     try:
         for n in (1, 0):
             m, y = _month_back(today, n)
@@ -315,11 +349,12 @@ def refresh(today: date | None = None) -> bool:
                 time.sleep(PAUSE)
             p = parse(fetch_month(m, y))
             got.append((f"{y}-{m:02d}", p))
-            n_rows += len(p["rows"])
-        if n_rows < MIN_ROWS:
-            raise ValueError("too few rows")
+            names |= {r["name"] for r in p["rows"]}
+        if len(names) < MIN_ROWS:
+            raise ValueError(f"only {len(names)} schemes in {got[0][0]} and {got[-1][0]}")
     except Exception as e:                      # keep what is stored
         print("TER disclosure unavailable:", type(e).__name__)
+        _status_note(last_try=tried, error=f"{type(e).__name__}: {str(e)[:200]}")
         return False
     now = time.time()
     for ym, p in got:
@@ -343,6 +378,7 @@ def refresh(today: date | None = None) -> bool:
             print("older TER month unavailable:", type(e).__name__)
         break
     _save()
+    _status_note(last_try=tried, last_ok=now, error=None, schemes=len(names), month=got[-1][0])
     return True
 
 
@@ -354,23 +390,58 @@ def _run():
             _mem["running"] = False
 
 
-def ensure() -> dict:
-    """The stored TERs, refreshed when older than MAX_AGE: in the background when a copy exists, else here."""
+def start(force: bool = False) -> bool:
+    """Start a read: in a thread (or here, when BACKGROUND is off). Without `force`, only when the copy is older than
+    MAX_AGE and no read was tried in the last RETRY seconds. True when a read started."""
     _load()
     now = time.time()
     with _lock:
-        latest = _mem["latest"]
-        stale = now - float(latest.get("at") or 0) >= MAX_AGE
-        if not stale or _mem["running"] or now - _mem["tried"] < RETRY:
-            return latest
+        stale = now - float(_mem["latest"].get("at") or 0) >= MAX_AGE
+        if _mem["running"] or not force and (not stale or now - _mem["tried"] < RETRY):
+            return False
         _mem["tried"] = now
-        have = bool(latest["s"])
-        if have and BACKGROUND:
-            _mem["running"] = True
-            threading.Thread(target=_run, daemon=True).start()
-            return latest
-    refresh()
+        _mem["running"] = True
+    if BACKGROUND:
+        threading.Thread(target=_run, daemon=True).start()
+    else:
+        _run()
+    return True
+
+
+def ensure() -> dict:
+    """The stored TERs, with a read started in the background when they are older than MAX_AGE."""
+    start()
     return _mem["latest"]
+
+
+def reading() -> bool:
+    """True while the very first read is under way (nothing stored yet)."""
+    with _lock:
+        return bool(_mem["running"]) and not (_mem["latest"] or {}).get("s")
+
+
+def check(now: float | None = None) -> dict:
+    """Platform check "Fund costs (TER)": pass when the last good read had at least CHECK_SCHEMES schemes and is at
+    most CHECK_DAYS old; a warning when it is older or smaller; a failure when nothing has ever been read. Starts a
+    read in the background when the copy is due one, so the next check sees it."""
+    from .platform_check import _result
+    try:
+        start()
+    except Exception as e:
+        print("TER read not started:", type(e).__name__)
+    st, now = status(), now or time.time()
+    err = f" Last error: {st['error']}" if st.get("error") else ""
+    name, area = "Fund costs (TER)", "Money"
+    if not st["stored"] or not st.get("last_ok"):
+        return _result(name, area, "fail", "Nothing has been read from the TER disclosure yet." + (err or " A first read has started."))
+    days = (now - float(st["last_ok"])) / 86400
+    what = (f"{st.get('schemes') or 0} schemes read for {st.get('month')}, {days:.0f} days ago; "
+            f"{st['stored']} stored over {st['months']} months.")
+    if days > CHECK_DAYS:
+        return _result(name, area, "warn", f"Stale: {what}{err}")
+    if (st.get("schemes") or 0) < CHECK_SCHEMES:
+        return _result(name, area, "warn", f"Fewer than {CHECK_SCHEMES} schemes: {what}{err}")
+    return _result(name, area, "pass", what + (f" The last try failed.{err}" if err else ""))
 
 
 # ---------- finding a fund ----------
@@ -500,8 +571,11 @@ def costs(uid: str, plan: str) -> dict:
     base = {"full": full, "plan": PLANS[FEATURE_PLAN["mf_costs"]]["name"], "assumptions": ASSUMPTIONS,
             "disclaimer": DISCLAIMER, "as_of": mf.today_ist()}
     if not data["txns"]:
-        return {**base, "schemes": [], "unmatched": [], "total": None, "read_at": None}
+        return {**base, "state": "ok", "schemes": [], "unmatched": [], "total": None, "read_at": None}
     latest = ensure()
+    if not latest["s"]:     # nothing read yet: say so, rather than "not found" for every fund
+        return {**base, "state": "reading" if reading() else "unavailable", "schemes": [], "unmatched": [], "total": None,
+                "read_at": None}
     w = mf.worked(data)
     h = mf.holdings(data, w, mf.today_ist())
     with _lock:
@@ -511,7 +585,7 @@ def costs(uid: str, plan: str) -> dict:
         if (r["units"] or 0) <= mf.EPS:
             continue
         rec = w["info"][r["key"]]["rec"] or {}
-        ter_name = match(rec.get("name") or "", r["name"]) if latest["s"] else None
+        ter_name = match(rec.get("name") or "", r["name"])
         if not ter_name:
             unmatched.append({"key": r["key"], "name": r["name"]})
             continue
@@ -524,7 +598,7 @@ def costs(uid: str, plan: str) -> dict:
     total = {"cost_year": round(year, 2), "value": round(value, 2), "weighted_ter": round(year / value * 100, 4) if value else None,
              "funds": len(priced), "held": len(rows) + len(unmatched)}
     read = latest.get("at")
-    return {**base, "schemes": rows, "unmatched": unmatched, "total": total,
+    return {**base, "state": "ok", "schemes": rows, "unmatched": unmatched, "total": total,
             "read_at": datetime.fromtimestamp(read, timezone.utc).isoformat(timespec="minutes") if read else None}
 
 
@@ -536,3 +610,22 @@ def mf_costs(profile=Depends(current_profile)):
     """What each fund held costs a year: its TER and the rupees on the current value (everyone), with the parts, the
     other plan beside it, changes since purchase and category changes (Basic and up)."""
     return ok(costs(profile["id"], profile["_plan"]))
+
+
+# ---------- admin ----------
+admin_router = APIRouter(prefix="/admin/ter", tags=["admin"])
+
+
+@admin_router.get("")
+def admin_ter(_=Depends(admin_profile)):
+    """How the TER disclosure reads have gone, and the platform check's verdict on them."""
+    verdict = check()          # first: it may start a read
+    return {"status": status(), "check": verdict}
+
+
+@admin_router.post("/read")
+def admin_ter_read(_=Depends(admin_profile)):
+    """Read the TER disclosure now, in the background, whatever the age of the stored copy."""
+    if not start(force=True):
+        err(409, "busy", "A read is already running.")
+    return {"started": True, "status": status()}

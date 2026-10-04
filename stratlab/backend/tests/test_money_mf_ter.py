@@ -1,6 +1,7 @@
 """Fund costs (Money: mutual funds): reading the TER disclosure (synthetic tables in each shape it can come in), the
 stored latest TERs and history, matching funds by name, the rupee arithmetic, the plan gate and the page's route."""
 import json
+import time
 from datetime import date
 from pathlib import Path
 
@@ -241,7 +242,89 @@ def test_no_funds_and_no_disclosure(w, ter, monkeypatch):
     T.forget()
     assert upload(c, statement(flexi())).status_code == 200
     d = c.get("/money/mutual-funds/costs", headers=PRO).json()
-    assert d["schemes"] == [] and len(d["unmatched"]) == 1 and d["total"]["cost_year"] == 0
+    # nothing could be read: "unavailable", not "not found" for every fund
+    assert d["state"] == "unavailable" and d["schemes"] == [] and d["unmatched"] == [] and d["total"] is None
+
+
+def test_a_fund_not_in_the_disclosure_is_listed(w, ter):
+    c = w["client"]
+    assert upload(c, statement({**flexi(), "name": "Other House Gilt Fund - Direct Plan - Growth", "isin": "INF999Z01AA1", "code": "Z1"})).status_code == 200
+    d = c.get("/money/mutual-funds/costs", headers=PRO).json()
+    assert d["state"] == "ok" and [u["name"] for u in d["unmatched"]] == ["Other House Gilt Fund - Direct Plan - Growth"]
+
+
+def test_the_first_read_shows_as_reading(w, ter, monkeypatch):
+    import threading
+    go, asked = threading.Event(), threading.Event()
+
+    def slow(m, y):
+        asked.set()
+        go.wait(10)
+        return HTML
+    monkeypatch.setattr(T, "fetch_month", slow)
+    monkeypatch.setattr(T, "BACKGROUND", True)
+    T.forget()
+    c = w["client"]
+    assert upload(c, statement(flexi())).status_code == 200
+    d = c.get("/money/mutual-funds/costs", headers=PRO).json()
+    assert d["state"] == "reading" and d["schemes"] == [] and d["unmatched"] == []
+    assert asked.wait(5)
+    go.set()
+    for _ in range(100):
+        if not T._mem["running"]:
+            break
+        time.sleep(0.05)
+    d = c.get("/money/mutual-funds/costs", headers=PRO).json()
+    assert d["state"] == "ok" and d["schemes"][0]["matched"] == "Example Flexi Cap Fund"
+
+
+# ---------- the platform check and the admin button ----------
+def test_check_fails_when_nothing_was_read_and_shows_the_error(w, ter, monkeypatch):
+    def down(m, y):
+        raise OSError("blocked by proxy 403")
+    monkeypatch.setattr(T, "fetch_month", down)
+    r = T.check()
+    assert r["name"] == "Fund costs (TER)" and r["state"] == "fail" and "OSError: blocked by proxy 403" in r["detail"]
+
+
+def test_check_passes_warns_when_stale_or_small(w, ter, monkeypatch):
+    monkeypatch.setattr(T, "CHECK_SCHEMES", 3)
+    r = T.check()                                      # the check starts the first read itself
+    assert r["state"] == "pass" and "3 schemes read for" in r["detail"], r
+    st = T.status()
+    assert st["error"] is None and st["schemes"] == 3 and st["stored"] == 3 and st["month"]
+    assert T.check(now=st["last_ok"] + 46 * 86400)["state"] == "warn"
+    assert "Stale" in T.check(now=st["last_ok"] + 46 * 86400)["detail"]
+    monkeypatch.setattr(T, "CHECK_SCHEMES", 500)
+    r = T.check()
+    assert r["state"] == "warn" and "Fewer than 500" in r["detail"]
+    monkeypatch.setattr(T, "CHECK_SCHEMES", 3)       # a later failed try: still a pass on the stored copy, error shown
+    monkeypatch.setattr(T, "fetch_month", lambda m, y: (_ for _ in ()).throw(OSError("down")))
+    assert T.start(force=True)
+    r = T.check()
+    assert r["state"] == "pass" and "Last error: OSError: down" in r["detail"]
+    T.forget()                                         # the status survives a restart
+    assert T.status()["error"] == "OSError: down" and T.status()["last_ok"] == st["last_ok"]
+
+
+def test_platform_check_lists_fund_costs(w, ter):
+    from app import main
+    assert ("Fund costs (TER)", "Money") in [(n, a) for n, a, _ in main.platform_checks()]
+    r = w["client"].post("/admin/platform/check", headers=world.headers("admin-token"))
+    row = next(x for x in r.json()["checks"] if x["name"] == "Fund costs (TER)")
+    assert row["area"] == "Money" and row["state"] in ("pass", "warn", "fail")
+
+
+def test_admin_can_force_a_read(w, ter):
+    c, admin = w["client"], world.headers("admin-token")
+    assert c.get("/admin/ter", headers=PRO).status_code == 403 and c.post("/admin/ter/read", headers=PRO).status_code == 403
+    assert c.get("/admin/ter", headers=admin).json()["status"]["stored"] == 3        # the GET's check did the first read
+    n = len(ter)
+    r = c.post("/admin/ter/read", headers=admin)
+    assert r.status_code == 200 and r.json()["started"] and len(ter) > n            # fresh copy, read again anyway
+    T._mem["running"] = True
+    assert c.post("/admin/ter/read", headers=admin).status_code == 409
+    T._mem["running"] = False
 
 
 def test_signed_out_is_refused(w):

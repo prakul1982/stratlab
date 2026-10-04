@@ -1269,6 +1269,19 @@ test("admin: rates and rules show each area's review, the source watch and every
   await sane(page, errors);
 });
 
+test("admin: fund costs (TER) shows the last read and reads again on request", async ({ page }, info) => {
+  let reads = 0;
+  await page.route((u) => u.pathname === "/admin/ter/read", (r) => { reads++; return r.fallback(); });
+  const errors = await open(page, "/admin?tab=checks", "Fund costs (TER)");
+  const panel = page.getByRole("region", { name: "Fund costs (TER)" });
+  await expect(panel.getByText(/Last good read .* · 3 schemes for/)).toBeVisible({ timeout: 30_000 });
+  await panel.getByRole("button", { name: "Read now" }).click();
+  await expect.poll(() => reads).toBe(1);
+  await expect(panel.getByRole("button", { name: "Read now" })).toBeEnabled({ timeout: 30_000 });
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});
+
 test("admin: the whole-market audit tells facts and companies not checked yet apart, and re-checks those", async ({ page }, info) => {
   const sent: object[] = [];
   const row = (symbol: string, name: string, level: string, area: string, detail: string) => ({ symbol, name, seconds: 1, issues: [{ level, area, detail }] });
@@ -1371,6 +1384,12 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByText("No funds yet")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
 
+  // the first time the costs are asked for, the TER disclosure is still being read: the card says so, then fills in
+  let costCalls = 0;
+  await page.route((u) => u.pathname === "/money/mutual-funds/costs", (r) => (costCalls++ === 0
+    ? r.fulfill({ json: { state: "reading", full: true, plan: "Basic", schemes: [], unmatched: [], total: null, read_at: null, assumptions: [], disclaimer: "", as_of: "2026-10-04" } })
+    : r.fallback()));
+
   // a synthetic statement (made-up investor and funds), locked with a password: first the wrong one
   await page.locator("input[type=file]").setInputFiles(MF + "synthetic_cas.pdf");
   await page.getByLabel("PDF password").fill("WRONG");
@@ -1379,6 +1398,7 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await page.getByLabel("PDF password").fill("ABCDE1234F");
   await page.getByRole("button", { name: "Read my funds" }).click();
   await expect(page.getByText(/7 transactions added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("Costs are being read; check back shortly.")).toBeVisible();
   await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
 
   const schemes = page.getByRole("table", { name: "Schemes" });

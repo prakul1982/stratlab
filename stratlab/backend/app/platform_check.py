@@ -244,6 +244,12 @@ def check_rules(today: date, watch: dict | None = None) -> dict:
     return rules.check(today, watch=watch)
 
 
+def check_fund_costs(ter) -> dict:
+    """Fund costs (TER): the last good read of the TER disclosure had enough schemes and is recent (money_mf_ter.check
+    says how much and how recent); a failure when nothing has ever been read, with the last error."""
+    return ter.check()
+
+
 def run_all(checks: list[tuple[str, callable]]) -> dict:
     """Run every check in parallel, each with a time limit; a check that raises or runs out of time is a failure,
     never the end of the run."""
