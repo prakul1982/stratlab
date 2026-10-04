@@ -82,12 +82,9 @@ Moved here from the plan above; details in the [changelog](../CHANGELOG.md).
 
 ## Waiting on the owner
 Things only the account owner can do:
-- Backups: add the `SUPABASE_DB_URL` and `BACKUP_PASSPHRASE` repository secrets, then run *Database backup* once by
-  hand and check a restore ([ADMIN.md → Backups](ADMIN.md#backups)).
-- Storage: paste the size SQL from Admin → Data checks → Storage into Supabase once; add the second database
-  (`MARKET_DATABASE_URL`) when the main one nears its limit.
-- Razorpay: tick `refund.created`, `refund.processed` and `payment.dispute.created` in the webhook's events, so a
-  refunded payment takes its invite reward back.
+- Backups: the secrets are set and the nightly backup runs (first copy 4 Oct 2026); do one test restore some time
+  ([ADMIN.md → Backups](ADMIN.md#backups)).
+- Storage: add the second database (`MARKET_DATABASE_URL`) when Admin → Data checks → Storage nears its limit.
 - Vercel Pro before taking real payments.
 - The launch offer (Admin → launch offer) when ready.
 - Invoices: fill the seller's details in Admin → Invoices, file the yearly LUT on the GST portal, and have the
