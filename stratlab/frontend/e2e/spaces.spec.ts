@@ -268,7 +268,7 @@ test("space homes line up: one content width, a tool strip without holes, each t
       if (path === "/trade") {
         for (const r of l.rows) {
           expect(r.right, `${at}: each row of the tool strip reaches its right edge`).toBeGreaterThanOrEqual(l.stripRight - 1);
-          expect(Math.max(...r.heights, 0) - Math.min(...r.heights, 0), `${at}: cards in a row are the same height`).toBeLessThanOrEqual(1);
+          if (r.heights.length) expect(Math.max(...r.heights) - Math.min(...r.heights), `${at}: cards in a row are the same height`).toBeLessThanOrEqual(1);
         }
         // each tool once: the strip's card, not again as a card, a button or a "what you can do" entry
         await expect(page.locator('main a[href="/trade/positioning"]')).toHaveCount(1);

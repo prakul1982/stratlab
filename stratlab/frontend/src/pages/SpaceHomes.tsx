@@ -61,7 +61,7 @@ function TradeStrip() {
     <section className="space-strip" aria-label="Trade">
       <Link to="/options" className="card space-card space-card-lead">
         <span className="row" style={{ gap: 8 }}><Layers size={20} /><b>Options</b></span>
-        <span className="small muted">Straddles, condors or any structure up to eight legs, paper traded at the live bid and ask, at a set time or on your own signal.</span>
+        <span className="small muted">Straddles, strangles, condors or any structure up to eight legs, paper traded at the live bid and ask.</span>
         <span className="small space-card-foot">{options.length > 0 ? `${options.length} option session${options.length === 1 ? "" : "s"} running · ` : ""}Build a structure →</span>
       </Link>
       <Link to="/paper" className="card space-card">
