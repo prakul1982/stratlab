@@ -2,6 +2,7 @@ import os
 import sys
 
 os.environ.setdefault("BACKTEST_PROCESSES", "0")      # backtests in the test process, where fakes are patched in
+os.environ["AI_AUTO_PROBE"] = "0"                     # no background AI model measuring (it would use the network)
 
 import pytest
 
@@ -21,6 +22,16 @@ def fresh_rate_limit():
         if isinstance(node, Guard):
             node.window._d.clear()
         node = getattr(node, "app", None)
+
+
+@pytest.fixture(autouse=True)
+def fresh_ai():
+    """What the AI layer learnt about models, and the answers it cached, don't carry over from one test to the next;
+    it keeps them in memory instead of the database."""
+    from app import ai_providers, ai_rank
+    ai_rank.STORE = ai_rank.MemoryStore()
+    ai_providers.reset()
+    yield
 
 
 def pytest_runtest_logreport(report):
