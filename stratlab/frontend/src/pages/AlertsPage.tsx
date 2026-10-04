@@ -34,7 +34,7 @@ export function AlertsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Watch · Alerts</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your stock alerts</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>A message when a stock crosses a price, moves a lot in a day, crosses a moving average or an RSI level, changes Stage, or makes a new 52-week high or low. Checked every minute while its market is open. Facts about the price, not advice.</p>
+        <p className="page-sub">A message when a stock crosses a price, moves a lot in a day, crosses a moving average or an RSI level, changes Stage, or makes a new 52-week high or low. Checked every minute while its market is open. Facts about the price, not advice.</p>
       </div>
       {error && <div className="card"><p className="muted">{error}</p></div>}
       {!page && !error && <Loading label="Opening your alerts" />}

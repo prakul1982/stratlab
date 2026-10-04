@@ -51,7 +51,7 @@ export function Loading({ label = "Loading" }: { label?: string }) {
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="card dashed stack" style={{ alignItems: "center", textAlign: "center", padding: 40 }}>
+    <div className="card dashed stack empty">
       <h2 className="h2">{title}</h2>
       {children}
     </div>
@@ -110,7 +110,7 @@ export function Fig({ label, value, note, noteTone = "muted", tone = "", missing
     <div className="space-fig">
       <span className="tiny muted">{label}</span>
       {none ? <span className="small muted fig-missing">{missing}</span> : <b className={`num ${tone}`.trim()}>{value}</b>}
-      {note ? <span className={`tiny ${noteTone}`}>{note}</span> : <span className="fig-note-none" />}
+      {note ? <span className={`tiny ${noteTone}`}>{note}</span> : null}
     </div>
   );
 }

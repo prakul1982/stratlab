@@ -107,9 +107,9 @@ function Starters({ where }: { where?: Where | null }) {
     });
   };
   return (
-    <div className="grid4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
+    <div className="explore-grid">
       {STARTERS.map((st, i) => (
-        <button key={st.title} className="card" style={{ textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }} onClick={() => start(i)}>
+        <button key={st.title} className="card explore-card" onClick={() => start(i)}>
           <span className={`badge ${i < 2 ? "next" : "warn"}`} style={{ alignSelf: "flex-start" }}>{st.level}</span>
           <b style={{ fontSize: 16 }}>{st.title}</b>
           <span className="small muted">{st.why}</span>

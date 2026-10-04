@@ -52,7 +52,7 @@ export function ItrExportPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money · ITR-ready export</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your year, laid out for the return</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>The figures from your <Link className="link" to="/tax-report">tax report</Link>, <Link className="link" to="/money/tax-tools">tax tools</Link> and <Link className="link" to="/money/us-tax">US stocks</Link>, shaped like the ITR-2 and ITR-3 schedules: Schedule 112A scrip by scrip, Schedule CG, dividends, intraday and F&amp;O turnover, tax paid, foreign income and Schedule FA. Download them as a spreadsheet or one PDF for your CA.</p>
+        <p className="page-sub">The figures from your <Link className="link" to="/tax-report">tax report</Link>, <Link className="link" to="/money/tax-tools">tax tools</Link> and <Link className="link" to="/money/us-tax">US stocks</Link>, shaped like the ITR-2 and ITR-3 schedules: Schedule 112A scrip by scrip, Schedule CG, dividends, intraday and F&amp;O turnover, tax paid, foreign income and Schedule FA. Download them as a spreadsheet or one PDF for your CA.</p>
       </div>
       <div className="banner tax-note" role="note"><span><b>Not a filed return.</b> {v?.label_text ?? "Prepared by StratLab from your files to help you or your CA fill the return. This is not a filed return, and StratLab files nothing for you."} {v?.check}</span></div>
 

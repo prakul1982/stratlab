@@ -1042,7 +1042,8 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 /* A row of figures: each is label, number, note on a shared subgrid, so a label that wraps to two lines doesn't push
    its number below its neighbours'. */
 .space-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px 18px; }
-.space-fig { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 2px; align-content: start; min-width: 0; }
+.space-fig { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; min-width: 0; }
+.space-fig > * + * { margin-top: 2px; }
 .space-fig > :first-child { align-self: end; }
 .space-fig b { font-size: 20px; font-weight: 600; }
 .space-fig .fig-missing { align-self: center; }
@@ -1176,3 +1177,37 @@ ul.orders li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; g
 .side-chip.buy { background: var(--blue-soft); color: var(--blue-ink); }
 .side-chip.sell { background: var(--orange-soft); color: var(--orange-ink); }
 .order-num { font-family: var(--sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- alignment pass: shared rules so rows, columns and edges line up on every page ----------
+   Later in the file than the rules they refine, so they win at equal specificity. */
+/* The lead paragraph under a page title: one size and one reading width everywhere (pages used 62ch or 760px inline) */
+.page-sub { max-width: 72ch; }
+/* Empty states: centred in their card, at one reading width */
+.empty { align-items: center; text-align: center; padding: 40px 24px; }
+.empty > p { max-width: 560px; }
+/* Numbers line up on the right in every column but the first, and a number column's header lines up with it, also in
+   the second column (which tables default to the left, for names) */
+table td.num:not(:first-child) { text-align: right; }
+table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
+/* Comparison tables: the compared columns share the width equally */
+.cmp-table th:not(:first-child) { width: 25%; }
+table.plan-compare th:not(:first-child) { width: 16%; }
+/* Rows of stat tiles: label, number and up to two notes on a shared subgrid, so a label that wraps to two lines
+   doesn't push its number below its neighbours'. The ITR summary's label/value pairs too. */
+.stat-row > .stat { display: grid; grid-row: span 4; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
+.stat-row > .stat > :first-child { align-self: end; }
+.stat-row > .stat > * + * { margin-top: 2px; }   /* a gap only between parts that exist: tiles with fewer parts end flush */
+.itr-summary > div { display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 2px; }
+.itr-summary dt { align-self: end; }
+/* A notebook's experiment rows: the verdict badge gets a fixed slot, so the return figures line up row to row */
+.exp-row { grid-template-columns: 44px minmax(0, 1fr) auto 168px; }
+.exp-row .badge { justify-self: end; }
+@media (max-width: 640px) { .exp-row { grid-template-columns: 36px minmax(0, 1fr); } .exp-row .badge { justify-self: start; } }
+/* Screener: the unit after a range gets a fixed slot, so every filter's two boxes line up; the symbol sits under the name */
+.range-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; }
+.screens-table td:first-child > .tiny.muted { display: block; }
+/* Checklist rows: the value lines up on the right; a check without data says so in its badge alone, not with a dash too */
+.check-row > .num { text-align: right; }
+/* Options: stop loss and target as two equal halves */
+.opt-grid.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 640px) { .opt-grid.two { grid-template-columns: minmax(0, 1fr); } }

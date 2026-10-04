@@ -112,7 +112,7 @@ export function MutualFundsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money · Mutual funds</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your mutual funds, in one place</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Upload your Consolidated Account Statement to see every scheme's value at the latest NAV, what you put in, the gain, XIRR, your mix by category, and capital gains for each financial year. Facts and arithmetic only, never advice. Only you can see your funds, and you can delete them at any time.</p>
+        <p className="page-sub">Upload your Consolidated Account Statement to see every scheme's value at the latest NAV, what you put in, the gain, XIRR, your mix by category, and capital gains for each financial year. Facts and arithmetic only, never advice. Only you can see your funds, and you can delete them at any time.</p>
       </div>
       <div className="banner" role="note"><span>{view?.disclaimer ?? "Facts and arithmetic from your own statement, valued at the latest published NAV. Not investment or tax advice."}</span></div>
 
@@ -166,7 +166,7 @@ export function MutualFundsPage() {
       {!view && <Loading label="Opening your mutual funds" />}
       {view && schemes.length === 0 && (
         <Empty title="No funds yet">
-          <p className="muted" style={{ maxWidth: 520 }}>Upload your CAS above to see your schemes, their value and your gains.</p>
+          <p className="muted">Upload your CAS above to see your schemes, their value and your gains.</p>
         </Empty>
       )}
 

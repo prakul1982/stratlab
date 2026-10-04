@@ -233,7 +233,7 @@ export function NetWorthPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Net worth</h1>
-        <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>What you own minus what you owe: your stocks from My Holdings, plus deposits, provident funds, gold, property and loans you add here. Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time.</p>
+        <p className="page-sub">What you own minus what you owe: your stocks from My Holdings, plus deposits, provident funds, gold, property and loans you add here. Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time.</p>
       </div>
 
       {!view && <Loading label="Adding up your net worth" />}
@@ -248,7 +248,7 @@ export function NetWorthPage() {
 
           {empty && (
             <Empty title="Nothing added yet">
-              <p className="muted" style={{ maxWidth: 520 }}>Add your savings, deposits, EPF or a loan below. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are counted on their own.</p>
+              <p className="muted">Add your savings, deposits, EPF or a loan below. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are counted on their own.</p>
             </Empty>
           )}
 

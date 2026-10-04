@@ -133,7 +133,7 @@ function ChecklistPanel({ c }: { c: Checklist }) {
           {c.checks.filter((x) => x.group === g).map((x) => (
             <div key={x.label} className="check-row">
               <div className="stack" style={{ gap: 2, minWidth: 0 }}><span className="small">{x.label}</span><span className="tiny muted">{x.rule}</span></div>
-              <span className="small num" style={{ textAlign: "right" }}>{x.value}</span>
+              <span className="small num">{x.state === "na" && /^[-–—]?$/.test(x.value.trim()) ? "" : x.value}</span>
               <span className={`badge ${CHECK[x.state][1]}`}>{CHECK[x.state][0]}</span>
             </div>))}
         </div>))}</div>
