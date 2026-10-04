@@ -3157,19 +3157,19 @@ def server_status() -> dict:
 
 
 def calendar_status() -> dict:
-    """How far ahead India's exchange holidays are known: the installed calendar, the exchange's own list (fetched
-    daily) and anything the admin pasted."""
+    """How far ahead exchange holidays are known. India in detail (the installed calendar, the exchange's own list,
+    fetched daily, and anything the admin pasted), and a row for every market."""
     until = trading_calendar.known_until("IN")
     added = sorted(trading_calendar.extra_holidays("IN"))
     auto = trading_calendar.auto_status("IN")
-    # the exchange's list covers its whole year: holidays known to the end of the latest year it lists
-    latest_year = max([int(d[:4]) for d in auto.get("days") or []] + [0])
-    ends = [until.isoformat() if until else "", f"{latest_year}-12-31" if latest_year else ""]
-    last = max(ends) or None
-    days_left = (date.fromisoformat(last) - datetime.now(IST).date()).days if last else None
+    today = datetime.now(IST).date()
+    covered = trading_calendar.covered_until("IN")
+    last = covered.isoformat() if covered else None
+    days_left = (covered - today).days if covered else None
     return {"known_until": until.isoformat() if until else None, "added": added, "covered_until": last, "days_left": days_left,
             "auto": {"at": auto.get("at"), "tried_at": auto.get("tried_at"), "error": public_text(auto.get("error")),
-                     "count": len(auto.get("days") or [])}}
+                     "count": len(auto.get("days") or [])},
+            "markets": trading_calendar.all_coverage(today)}
 
 
 def holiday_job():

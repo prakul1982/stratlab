@@ -3,10 +3,36 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly } from "../lib/format";
 
+export type MarketCoverage = { market: string; name: string; source: string; known_until: string | null; days_left: number | null;
+  next: string | null; next_name: string | null; state: "ok" | "warn" | "none"; hint: string | null };
 export type CalendarStatus = { known_until: string | null; added: string[]; covered_until: string | null; days_left: number | null;
-  auto?: { at: string | null; tried_at: string | null; error: string | null; count: number } };
+  auto?: { at: string | null; tried_at: string | null; error: string | null; count: number }; markets?: MarketCoverage[] };
 
-/** India's exchange holidays: how far ahead they're known, and a box to paste the exchange's yearly list. */
+/** Every market's holidays: where they come from, how far ahead they're known and the next one. */
+function CoverageTable({ rows }: { rows: MarketCoverage[] }) {
+  return (
+    <div className="table-wrap"><table className="holiday-cover">
+      <thead><tr><th>Market</th><th>Source</th><th>Known until</th><th>Next holiday</th><th>Status</th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.market}>
+            <td><b>{r.name}</b></td>
+            {r.state === "none" ? <td colSpan={3} className="muted">{r.source}</td> : <>
+              <td className="muted">{r.source}</td>
+              <td>{r.known_until ? dateOnly(r.known_until) : "–"}{r.days_left != null && <span className="muted"> ({r.days_left} days)</span>}</td>
+              <td>{r.next ? <>{dateOnly(r.next)}{r.next_name && <span className="muted"> · {r.next_name}</span>}</> : "–"}</td>
+            </>}
+            <td>{r.state === "none" ? <span className="muted">–</span>
+              : <span className="stack" style={{ gap: 2 }}><span className={`badge ${r.state === "ok" ? "pass" : "warn"}`} style={{ alignSelf: "flex-start" }}>{r.state === "ok" ? "OK" : "Check"}</span>
+                {r.hint && <span className="small muted">{r.hint}</span>}</span>}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table></div>
+  );
+}
+
+/** Exchange holidays: a row per market, then India's controls (read the exchange's list now, or paste it as a backup). */
 export function HolidaysPanel({ status, onSaved }: { status: CalendarStatus; onSaved: (s: CalendarStatus) => void }) {
   const { fail, notify } = useApp();
   const [text, setText] = useState("");
@@ -26,7 +52,9 @@ export function HolidaysPanel({ status, onSaved }: { status: CalendarStatus; onS
   };
   return (
     <section className="card stack" style={{ gap: 10 }}>
-      <h2 className="h2">Exchange holidays (India)</h2>
+      <h2 className="h2">Exchange holidays</h2>
+      {status.markets && status.markets.length > 0 && <CoverageTable rows={status.markets} />}
+      <h3 className="h3" style={{ margin: "6px 0 0" }}>India</h3>
       <p className={`small ${low ? "neg" : "muted"}`} style={{ margin: 0, maxWidth: "80ch" }}>
         {status.covered_until ? <>Known until <b>{dateOnly(status.covered_until)}</b>{status.days_left != null && ` (${status.days_left} days)`}. </> : "No holiday calendar loaded. "}
         The server reads the exchange's own holiday list every day, so next year's holidays arrive by themselves when the exchange

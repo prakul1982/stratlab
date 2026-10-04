@@ -224,6 +224,10 @@ th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: l
 th { font-size: 12.5px; font-weight: 600; color: var(--muted); background: var(--paper-2); }
 td.num, .num { font-family: var(--mono); }
 table.nums th:not(:first-child), table.nums td:not(:first-child) { text-align: right; }
+/* Admin → Exchange holidays: a compact row per market, all left-aligned; a status hint wraps */
+table.holiday-cover { font-size: 13.5px; }
+table.holiday-cover th, table.holiday-cover td { text-align: left; padding: 8px 12px; vertical-align: top; }
+table.holiday-cover td:last-child .small { white-space: normal; min-width: 160px; }
 /* Plans → Compare: the feature wraps, each plan's column is centred */
 table.plan-compare td:first-child { white-space: normal; min-width: 150px; }
 table.plan-compare th:not(:first-child), table.plan-compare td:not(:first-child) { text-align: center; }
