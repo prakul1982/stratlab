@@ -105,15 +105,15 @@ def _dt(v) -> datetime:
     return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
 
 
-def effective_plan(profile: dict) -> str:
-    """A paid plan only counts while the subscription is active and not past its period end."""
+def effective_plan(profile: dict, now: datetime | None = None) -> str:
+    """A paid plan only counts while the subscription is active and not past its period end (at `now`, else now)."""
     plan = profile.get("plan") or "free"
     if plan not in PLANS or plan == "free":
         return "free"
     if profile.get("plan_status") != "active":
         return "free"
     end = profile.get("current_period_end")
-    if end and _dt(end) + GRACE < datetime.now(timezone.utc):
+    if end and _dt(end) + GRACE < (now or datetime.now(timezone.utc)):
         return "free"
     return plan
 
@@ -219,7 +219,7 @@ def add_free_basic(profile: dict, days: int, now: datetime | None = None) -> dic
     uid = profile["id"]
     have = free_basic(uid)
     until, banked = have["until"], have["banked"]
-    if effective_plan(profile) == "free":
+    if effective_plan(profile, now) == "free":
         until = max(until or now, now) + timedelta(days=days)
     else:
         banked += days
@@ -236,7 +236,7 @@ def free_basic_until(profile: dict, now: datetime | None = None) -> datetime | N
         return None
     have = free_basic(uid)
     until = have["until"]
-    if have["banked"] and effective_plan(profile) == "free":
+    if have["banked"] and effective_plan(profile, now) == "free":
         until = max(until or now, now) + timedelta(days=have["banked"])
         try:
             _save_free(uid, until, 0)

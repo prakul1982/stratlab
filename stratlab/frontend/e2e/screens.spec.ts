@@ -8,13 +8,22 @@ const admin = { Authorization: "Bearer admin-token" };
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
   refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
 
-const VIEWPORTS = [
+const SIZES = [
   { name: "small phone 320x568", width: 320, height: 568, touch: true, theme: "light" },
+  { name: "phone 360x780", width: 360, height: 780, touch: true, theme: "dark" },
+  { name: "phone 390x844", width: 390, height: 844, touch: true, theme: "light" },
+  { name: "large phone 414x896", width: 414, height: 896, touch: true, theme: "dark" },
   { name: "phone landscape 844x390", width: 844, height: 390, touch: true, theme: "dark" },
   { name: "tablet 768x1024", width: 768, height: 1024, touch: true, theme: "light" },
+  { name: "tablet landscape 1024x768", width: 1024, height: 768, touch: true, theme: "dark" },
   { name: "laptop 1280x800", width: 1280, height: 800, touch: false, theme: "dark" },
+  { name: "laptop 1440x900", width: 1440, height: 900, touch: false, theme: "light" },
   { name: "desktop 1920x1080", width: 1920, height: 1080, touch: false, theme: "light" },
 ];
+// Five sizes on every run; E2E_ALL_SIZES=1 sweeps all ten, each in light and dark (a release check, ~20 minutes).
+const VIEWPORTS = process.env.E2E_ALL_SIZES
+  ? SIZES.flatMap((s) => (["light", "dark"] as const).map((theme) => ({ ...s, theme })))
+  : SIZES.filter((s) => [320, 844, 768, 1280, 1920].includes(s.width));
 
 const EMA = { name: "Trend follower", tf: "1d", entry: [{ l: { t: "ema", p: 10 }, op: "xa", r: { t: "ema", p: 30 } }],
   exit: [{ l: { t: "ema", p: 10 }, op: "xb", r: { t: "ema", p: 30 } }],
@@ -39,7 +48,11 @@ async function seed(request: import("@playwright/test").APIRequestContext) {
     "/admin?tab=users", "/admin?tab=billing", "/news", "/holdings", "/tax-report", "/alerts", "/research", "/research/themes", "/research/pulse",
     "/research/compare", "/research/watchlist", "/research/scan", "/research/screens", "/research/rotation", "/research/filings",
     "/research/results", "/research/investor", "/research/IN/RELIANCE", "/research/US/AAPL", "/research/IN/RELIANCE/deep",
-    "/research/US/AAPL/deep"].map((p) => ({ url: WEB + p, label: p, signedIn: true }));
+    "/research/US/AAPL/deep",
+    // corporate actions (the calendar, both scopes and the US), a company with a bonus and dividend ahead and deals,
+    // and Admin's Users tab, which holds the invite rewards waiting for review
+    "/research/corporate-actions", "/research/corporate-actions?scope=all", "/research/corporate-actions?region=US&scope=all",
+    "/research/IN/TCS", "/research/IN/TCS/deep", "/account#invite"].map((p) => ({ url: WEB + p, label: p, signedIn: true }));
   const open = ["/terms", "/privacy", "/refunds", "/contact", `/verdict/${verdict.token}`].map((p) => ({ url: WEB + p, label: p, signedIn: false }));
   const landing = { url: WEB + "/", label: "/ (signed out)", signedIn: false };
   const api = ["/stocks/in/RELIANCE", "/stocks/us/AAPL", `/c/${card.token}`].map((p) => ({ url: API + p, label: p, signedIn: false }));

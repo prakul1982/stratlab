@@ -2,6 +2,25 @@
 
 ## October 2026
 
+### QA round: new features at every screen size, and a security pass
+- **Made-up tickers can't fill the database:** a company page's corporate actions for a ticker with nothing on record are remembered in memory only, and a ticker must start with a letter or digit (or ^ for an index), so "..", "-x" and the like never reach a data source's address.
+- **The landing page's research example** shows the AI read's four opinion scores (Moat, Growth, Momentum, Health) with no overall score and no valuation score, and no longer mentions analyst ratings, which the company page doesn't show.
+- **A free month is judged at the time it's given:** whether someone pays (so the month is banked) is read at the reward's own time, not the server's clock, so the daily check and the tests agree on any date.
+- **Wording:** the welcome question's Investing choice reads "Research companies for the long term", not "Find good companies and hold them".
+- **My Holdings' dividends:** the two tables are headed "Ex-date ahead" and "Last 12 months (estimated)", and an amount a share reads ₹0.50, not ₹0.5000.
+- **A new user's first session** is a browser test now: the invite link, the welcome question, first steps, a backtest and paper trading, a company's deals and corporate actions, an alert, holdings with a bonus applied and undone, a screen, newsletters, the invite link and the plans, on desktop and phone.
+- **Every route at every screen size** now includes the corporate-actions calendar (both scopes, India and US), a company with a bonus and dividend ahead and deals, and the invite link in Account; `E2E_ALL_SIZES=1` sweeps ten sizes from 320px to 1920px, each in light and dark.
+
+### Corporate actions and dividends
+- **Research → Corporate actions:** dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, for your stocks or every company, with a message when one of your stocks announces one and the evening before its ex-date. A panel on each company page lists those ahead and the last three years'.
+- **My Holdings:** dividends ahead and of the last 12 months (estimated), and a bonus or split since your holdings were saved offered as a one-click **Apply** or **Already in my file**, with **Undo**. Never changed without you.
+
+### Deals and insider trades (India)
+- **On every Indian company page and deep dive:** promoters', directors' and key staff's own trades and pledges, substantial acquisitions, and bulk and block deals, from exchange disclosures, as filed. The checklist adds promoter and insider open-market buying and selling over six months; screens can filter on a promoter or insider purchase in the last N days; alerts can fire on new disclosures; My Stocks lists them.
+
+### Usage analytics (off until a key is set)
+- **PostHog, only with POSTHOG_KEY in config.js:** page views and a few funnel events by internal user id, with no emails, names, symbols or amounts, no session recording and no autocapture; Do Not Track is respected. The server records a completed payment once per payment.
+
 ### Invite rewards: a free month of Basic for both
 - **When a friend joins through your invite link and becomes active, you both get a free month of Basic.** Active means they used the app on 3 different days in their first 14: a backtest, a watchlist add, a deep dive, starting paper trading or importing holdings.
 - **Caps:** up to 12 free months for the one inviting, ever; once for the friend; nothing when both addresses reach the same mailbox. Free months stack onto free time already running.

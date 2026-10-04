@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from . import db, results
-from .intel.net import SourceError
+from .intel.net import SourceError, TTLCache
 from .results import REGIONS, TZ, dates_in, local_today, parse_day
 
 KEY = "corpact:cal:"                 # corpact:cal:<region> = {"at": ISO time, "rows": [...]}
@@ -38,6 +38,7 @@ NOTE = "Dates and amounts as the companies announced them. Not investment advice
 CUR = {"IN": "₹", "US": "$"}
 KINDS = ("dividend", "bonus", "split", "buyback", "rights", "demerger")
 _lock = threading.Lock()
+_empty = TTLCache(max_items=2000)    # (region, symbol) looked up from a company page with nothing found
 
 
 # ---------- reading what the exchange wrote ----------
@@ -289,15 +290,22 @@ def fetch_history(region: str, symbol: str, sources: dict, today: date) -> list[
     return list({r["id"]: r for r in rows if r["ex_date"] >= frm}.values())
 
 
-def history(region: str, symbol: str, sources: dict | None, today: date | None = None, fetch: bool = True) -> list[dict]:
+def history(region: str, symbol: str, sources: dict | None, today: date | None = None, fetch: bool = True,
+            keep_empty: bool = True) -> list[dict]:
     """One company's stored history, fetched again first when it's older than a day (and fetching is allowed).
-    A feed that fails leaves the stored history as it was."""
+    A feed that fails leaves the stored history as it was. `keep_empty` False (any symbol someone types in): an
+    empty answer is remembered in memory only, so made-up tickers can't fill the database."""
     today = today or local_today(region)
     got = hist_load(region, symbol)
     if fetch and sources is not None and _stale(got["at"]):
+        if not keep_empty and not got["at"] and _empty.get((region, symbol.upper())):
+            return []
         try:
             rows = fetch_history(region, symbol, sources, today)
-            hist_save(region, symbol, rows)
+            if rows or keep_empty or got["at"]:
+                hist_save(region, symbol, rows)
+            else:
+                _empty.set((region, symbol.upper()), True, HIST_MAX_AGE)
             return rows
         except (SourceError, AttributeError, KeyError, TypeError) as e:
             print("corporate actions history:", symbol, str(e)[:120])
@@ -305,10 +313,10 @@ def history(region: str, symbol: str, sources: dict | None, today: date | None =
 
 
 def actions_for(region: str, symbol: str, sources: dict | None = None, today: date | None = None, fetch: bool = True,
-                cal: list[dict] | None = None) -> list[dict]:
+                cal: list[dict] | None = None, keep_empty: bool = True) -> list[dict]:
     """Everything known for one company: its history and the calendar's rows, by ex-date."""
     symbol = symbol.upper()
-    rows = {r["id"]: r for r in history(region, symbol, sources, today, fetch)}
+    rows = {r["id"]: r for r in history(region, symbol, sources, today, fetch, keep_empty)}
     for r in (cal if cal is not None else load(region)["rows"]):
         if r["symbol"] == symbol:
             rows[r["id"]] = r
@@ -695,7 +703,7 @@ def company(region: str, symbol: str, sources: dict | None, today: date | None =
     """One company's actions: those ahead, and the past ones (newest first), with the dividends a share of the
     last twelve months added up."""
     today = today or local_today(region)
-    rows = actions_for(region, symbol, sources, today, fetch)
+    rows = actions_for(region, symbol, sources, today, fetch, keep_empty=False)
     t = today.isoformat()
     year_ago = (today - timedelta(days=365)).isoformat()
     divs = [r for r in rows if r["kind"] == "dividend" and r.get("amount") and year_ago <= r["ex_date"] < t]

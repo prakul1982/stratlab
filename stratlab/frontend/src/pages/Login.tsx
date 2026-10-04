@@ -159,7 +159,7 @@ export function Login() {
           <div className="stack" style={{ gap: 14 }}>
             <span className="eyebrow">Research</span>
             <h2 className="serif lp-h2">Start with any company, Indian or US.</h2>
-            <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, analyst ratings, insider trades and news. An AI read scores it, lays out the bull and bear case, and ends with three ideas you can test in one click.</p>
+            <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, insider trades and deals, dividends and other corporate actions, and news. An AI read gives its opinion, lays out the bull and bear case, and ends with three ideas you can test in one click.</p>
             <ul className="bullets lp-p" style={{ fontSize: 16 }}>
               <li><b>Themes:</b> map a sector and see the listed companies linked to it.</li>
               <li><b>Market pulse:</b> index levels, headlines and today's mood.</li>
@@ -359,7 +359,8 @@ function HeroDemo() {
 }
 
 function ResearchMock() {
-  const scores: [string, number, boolean][] = [["Moat", 92, true], ["Growth", 94, true], ["Value", 28, false], ["Momentum", 81, true]];
+  // the company page's AI read: its four opinion scores, with no overall score and no valuation score
+  const scores: [string, number, boolean][] = [["Moat", 92, true], ["Growth", 94, true], ["Momentum", 81, true], ["Health", 38, false]];
   return (
     <div className="card lp-rmock" aria-label="Example company research page">
       <div className="spread" style={{ alignItems: "flex-start" }}>
@@ -367,11 +368,11 @@ function ResearchMock() {
         <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}><b className="serif" style={{ fontSize: 26 }}>$183.20</b><span className="badge next">▲ +1.33% today</span></div>
       </div>
       <div className="lp-rscore">
-        <div className="stack" style={{ alignItems: "center", gap: 0 }}><b className="serif" style={{ fontSize: 44, color: "var(--blue)", lineHeight: 1 }}>77</b><span className="tiny muted mono">SCORE</span></div>
         <div className="stack" style={{ gap: 7, flex: 1 }}>
           {scores.map(([l, v, good]) => (
             <div key={l} className="score-row"><span className="small">{l}</span><div className="score-track"><div style={{ width: `${v}%`, background: good ? "var(--blue)" : "var(--orange)" }} /></div><span className="small mono">{v}</span></div>
           ))}
+          <span className="tiny muted">AI read: opinions, not advice</span>
         </div>
       </div>
       <div className="lp-ridea">
