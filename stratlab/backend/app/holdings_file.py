@@ -722,6 +722,8 @@ def parse_trades(data: bytes, filename: str = "") -> dict:
     if looks_derivative(rows):
         return parse_business(data, filename, None)
     got = _read_trades(rows, filename)
+    if NON_EQUITY_FILE.search(filename or ""):
+        got = _units_only(got)
     return {**got, "problems": got["problems"][:500], "skipped": [], "check": [], "files": [], "business": []}
 
 
@@ -736,16 +738,44 @@ TABLE_EXT = re.compile(r"(?i)\.(csv|txt|tsv|xlsx|xls)$")
 ARCHIVE_EXT = re.compile(r"(?i)\.(zip|jar|7z|rar|gz|tgz|bz2|xz|tar)$")
 # (file name, what it is, why it's left out): non-equity and mutual funds sit beside the equity and F&O files
 TAX_SKIP = [
-    (re.compile(r"(?i)non[\s_-]*equity"), "Non-equity", "gold, debt and other ETFs, bonds and the like are taxed under other rules, not covered yet"),
     (re.compile(r"(?i)mutual[\s_-]*funds?"), "Mutual funds", "mutual funds aren't covered yet"),
 ]
 # the equity files read, by name, and which line of the summary sheet each one adds up to
-TAX_EQUITY = [(re.compile(r"(?i)intraday|speculative"), "Equity intraday", "intraday"),
+TAX_EQUITY = [(re.compile(r"(?i)non[\s_-]*equity"), "Non-equity", "non_equity"),      # ETFs, gold bonds (instrument_kinds)
+              (re.compile(r"(?i)intraday|speculative"), "Equity intraday", "intraday"),
               (re.compile(r"(?i)short[\s_-]*term"), "Equity short term", "short"),
               (re.compile(r"(?i)long[\s_-]*term"), "Equity long term", "long")]
 SUMMARY = {"intradayspeculativeprofit": "intraday", "intradayprofit": "intraday", "speculativeprofit": "intraday",
-           "shorttermprofit": "short", "longtermprofit": "long"}
-SECTION_NAMES = {"intraday": "Equity intraday", "short": "Equity short term", "long": "Equity long term"}
+           "shorttermprofit": "short", "longtermprofit": "long", "nonequityprofit": "non_equity"}
+SECTION_NAMES = {"intraday": "Equity intraday", "short": "Equity short term", "long": "Equity long term", "non_equity": "Non-equity"}
+NON_EQUITY_FILE = re.compile(r"(?i)non[\s_-]*equity")
+NOT_COVERED = "Bonds, debentures and other non-equity securities aren't covered yet (ETFs, REITs, InvITs and gold bonds are)."
+
+
+def _units_only(got: dict) -> dict:
+    """A non-equity file's trades without the ones that are neither an ETF, a REIT or InvIT nor a gold bond (a
+    company's bond or debenture), which are listed as left out. The ones kept carry their kind."""
+    from .instrument_kinds import classify
+    keep, dropped, gross, taxable = [], {}, 0.0, 0.0
+    for t in got["trades"]:
+        code = classify(t.get("symbol"), t.get("isin"), t.get("name"))
+        if code == "stock":
+            dropped.setdefault(t["line"], t)
+            continue
+        keep.append({**t, "kind": code})
+    for t in dropped.values():
+        got["problems"].append({"line": t["line"], "text": t["text"], "reason": NOT_COVERED})
+    if dropped and got.get("kind") == "pnl":             # the totals checked against the summary: the kept lines only
+        pairs: dict[str, dict] = {}
+        for t in keep:
+            pairs.setdefault(t["tid"][:-2], {})[t["side"]] = t
+        for p in pairs.values():
+            if "B" in p and "S" in p:
+                gross += p["S"]["qty"] * (p["S"]["price"] - p["B"]["price"])
+        got["gross"] = got["taxable"] = gross
+    if not keep:
+        raise FileError(f"Nothing in that file is covered yet. {NOT_COVERED}")
+    return {**got, "trades": keep}
 
 
 def _skipped_kind(filename: str) -> tuple[str, str] | None:
@@ -892,6 +922,8 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
                 continue                     # the summary workbook: its totals check the files read
             try:
                 got = _read_trades(rows, base)
+                if section and section[1] == "non_equity":
+                    got = _units_only(got)
             except FileError as e:
                 skipped.append({"name": base, "reason": str(e)})
                 continue
@@ -915,7 +947,7 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
         left = "; ".join(f"{s['name']} ({s['reason'].rstrip('.')})" for s in skipped[:6])
         raise FileError("No equity, F&O, commodity or currency trades were found in that ZIP." + (f" Left out: {left}." if left else ""))
     check = []
-    for kind in ("short", "long", "intraday") if sheet else ():
+    for kind in ("short", "long", "intraday", "non_equity") if sheet else ():
         both, theirs = sums.get(kind), sheet.get(kind)
         if both is None and (theirs is None or abs(theirs) < 0.005):
             continue                         # nothing of that kind, on either side

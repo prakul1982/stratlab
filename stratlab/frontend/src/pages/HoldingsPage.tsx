@@ -14,6 +14,7 @@ type Row = {
   symbol: string; exchange: string; name: string; sector: string; qty: number; avg: number | null; price: number | null;
   value: number | null; invested: number | null; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null;
   weight: number | null; market?: "IN" | "US"; currency?: string;
+  kind?: "stock" | "etf" | "reit" | "invit" | "sgb"; kind_label?: string | null;   // ETFs, REITs, InvITs and gold bonds get a badge
 };
 type UsTotals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; in_total: boolean };
 type View = {
@@ -237,7 +238,7 @@ export function HoldingsPage() {
                     const f = facts?.rows[r.symbol];
                     return (
                       <tr key={`${r.exchange}:${r.symbol}`}>
-                        <td><Link className="link" to={`/research/${isUS(r) ? "US" : "IN"}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}{isUS(r) && <span className="tiny muted"> US</span>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>{!isUS(r) && <SurvBadges region="IN" symbol={r.symbol} />}</td>
+                        <td>{r.kind && r.kind !== "stock" ? <b>{r.symbol}</b> : <Link className="link" to={`/research/${isUS(r) ? "US" : "IN"}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>}{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}{isUS(r) && <span className="tiny muted"> US</span>}{r.kind_label && <> <span className={`badge kind-${r.kind}`} title="Instrument type">{r.kind_label}</span></>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>{!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}</td>
                         <td className="small">{r.sector}</td>
                         <td className="num">{qtyText(r.qty)}</td>
                         <td className="num">{price(r.avg, r.currency ?? "INR")}</td>

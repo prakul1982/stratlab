@@ -123,12 +123,14 @@ def test_zerodha_console_import_nse_series_and_bse_only(w):
     r = upload(w["client"], "zerodha_console_holdings.xlsx")
     assert r.status_code == 200, r.text
     body, rows = r.json(), held(r)
-    assert body["broker"] == "Zerodha Console" and body["imported"] == 5
+    assert body["broker"] == "Zerodha Console" and body["imported"] == 6
     assert rows["SLOWCO-BE"]["exchange"] == "NSE"                                         # a restricted NSE series
     assert rows["TINYCO"]["exchange"] == "BSE"                                            # listed only on BSE
     assert rows["RELIANCE"]["exchange"] == "NSE"                                          # on both: the NSE one
-    assert [u["text"] for u in body["unmatched"]] == ["NIFTYBEES · INF204KB14I2"]
-    assert "fund" in body["unmatched"][0]["reason"]                                       # an INF ISIN isn't a company
+    assert body["unmatched"] == []
+    # an INF ISIN is a fund: kept as an ETF with its badge, in its own group rather than a sector
+    assert (rows["NIFTYBEES"]["kind"], rows["NIFTYBEES"]["kind_label"], rows["NIFTYBEES"]["sector"]) == ("etf", "Equity ETF", "ETFs")
+    assert rows["RELIANCE"]["kind"] == "stock" and rows["RELIANCE"]["kind_label"] is None
 
 
 def test_groww_matches_by_isin_and_by_name(w):
@@ -145,7 +147,8 @@ def test_icici_codes_match_through_the_isin(w):
 
 def test_each_other_broker(w):
     c = w["client"]
-    assert set(held(upload(c, "zerodha_kite_holdings.csv"))) == {"SBIN", "ICICIBANK", "WIPRO"}
+    kite = held(upload(c, "zerodha_kite_holdings.csv"))
+    assert set(kite) == {"SBIN", "ICICIBANK", "WIPRO", "GOLDBEES"} and kite["GOLDBEES"]["kind_label"] == "Gold ETF"
     assert set(held(upload(c, "upstox_holdings.csv"))) == {"BHARTIARTL", "LT", "TINYCO"}
     angel = held(upload(c, "angel_one_holding_report.xlsx"))
     assert set(angel) == {"ASIANPAINT", "ITC"} and angel["ITC"]["qty"] == 120          # NSE and BSE lines add up

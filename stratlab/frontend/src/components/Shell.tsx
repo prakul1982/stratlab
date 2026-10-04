@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Receipt, Shield, Wallet, Moon, Plus, Pulse, Search, Sparkle, Sun, User } from "./Icons";
+import { Bell, Book, Compass, Layers, Library, News, Upload, Lens, Menu, Pin, Receipt, Shield, Wallet, Moon, Plus, Pulse, Search, Sparkle, Sun, User, Calendar } from "./Icons";
 import { Logo } from "./Logo";
 import { inWords, marketState } from "../lib/marketHours";
 import { FAMILIES, NAV_GROUPS, familyOf } from "../lib/navGroups";
@@ -19,7 +19,7 @@ const tourSeen = () => { try { return localStorage.getItem(TOUR_SEEN) === "1"; }
 const SIDE_NOTEBOOKS = 6;
 
 /** Icons a menu entry kept as data (NAV_GROUPS) can name. */
-const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, bell: Bell, lens: Lens, news: News, pin: Pin, pulse: Pulse, layers: Layers, library: Library, upload: Upload, search: Search, compass: Compass, wallet: Wallet };
+const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, bell: Bell, lens: Lens, news: News, pin: Pin, pulse: Pulse, layers: Layers, library: Library, upload: Upload, search: Search, compass: Compass, wallet: Wallet, calendar: Calendar };
 const SHUT_KEY = "stratlab.side.shut";
 /** Which menu groups you closed, remembered on this device. */
 function readShut(): Partial<Record<GroupId, boolean>> {

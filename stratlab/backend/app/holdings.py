@@ -8,7 +8,7 @@ import json
 import re
 from datetime import datetime, timezone
 
-from . import db
+from . import db, instrument_kinds
 
 KEY = "holdings:"
 SOURCES = ("Zerodha Console", "Zerodha Kite", "Groww", "Upstox", "Angel One", "ICICI Direct", "HDFC Securities", "CSV", "Manual")
@@ -111,6 +111,14 @@ class Matcher:
             return {"symbol": hit["symbol"], "exchange": hit["exchange"], "name": hit.get("name") or hit["symbol"]} if hit else None
         return {"symbol": sym, "exchange": "NSE", "name": self.listed[sym]} if sym in self.listed else None
 
+    def _unit(self, row: dict) -> dict | None:
+        """An ETF, REIT, InvIT or gold bond not in the day's lists: kept as the file names it (by symbol, else its
+        ISIN), without a price until one is found."""
+        if instrument_kinds.base(instrument_kinds.classify(row.get("symbol"), row.get("isin"), row.get("name"))) == "stock":
+            return None
+        sym = clean_symbol(row.get("symbol") or "") or (row.get("isin") or "")
+        return {"symbol": sym, "exchange": "NSE", "name": (row.get("name") or sym)[:80]} if sym else None
+
     def match(self, row: dict) -> tuple[dict | None, str | None]:
         """(the company, None) or (None, why it couldn't be matched)."""
         if row.get("isin"):
@@ -124,6 +132,9 @@ class Matcher:
             got = self.by_name(row["name"])
             if got:
                 return {"symbol": got["symbol"], "exchange": got["exchange"], "name": got.get("name") or got["symbol"]}, None
+        kept = self._unit(row)
+        if kept:
+            return kept, None
         if not self.online:
             return None, "Market data is offline, so only NSE stocks could be checked. Try again later."
         if row.get("isin") and not row["isin"].startswith("INE"):
@@ -177,8 +188,9 @@ def match_all(rows: list[dict], matcher: Matcher) -> tuple[list[dict], list[dict
         if not hit:
             missed.append({"line": r.get("line"), "text": r.get("text") or r.get("symbol") or r.get("name") or "", "reason": why})
             continue
+        kind = instrument_kinds.classify(hit["symbol"], r.get("isin"), r.get("name") or hit.get("name"))
         found.append({**hit, "isin": r.get("isin") or None, "qty": round(float(r["qty"]), 4),
-                      "avg": round(float(r["avg"]), 4) if r.get("avg") else None})
+                      "avg": round(float(r["avg"]), 4) if r.get("avg") else None, **({"kind": kind} if instrument_kinds.base(kind) != "stock" else {})})
     return merge(found), missed
 
 
@@ -213,9 +225,12 @@ def _position(i: dict, q: dict) -> dict:
     pnl = val - inv if val is not None and inv is not None else None
     chg = qty * q["change"] if price and q.get("change") is not None else None
     us = market_of(i) == "US"
+    code = "stock" if us else i.get("kind") or instrument_kinds.classify(i["symbol"], i.get("isin"), i.get("name"))
+    kind = instrument_kinds.base(code)
     return {"symbol": i["symbol"], "exchange": i.get("exchange") or ("US" if us else "NSE"), "name": i.get("name") or i["symbol"],
-            "market": "US" if us else "IN", "currency": "USD" if us else "INR",
-            "sector": i.get("sector") or UNCLASSIFIED, "qty": qty, "avg": _r(avg), "price": _r(price),
+            "market": "US" if us else "IN", "currency": "USD" if us else "INR", "kind": kind,
+            "kind_label": None if kind == "stock" else instrument_kinds.label(code),
+            "sector": instrument_kinds.SECTORS.get(kind) or i.get("sector") or UNCLASSIFIED, "qty": qty, "avg": _r(avg), "price": _r(price),
             "value": _r(val), "invested": _r(inv), "pnl": _r(pnl), "pnl_pct": _r(pnl / inv * 100) if pnl is not None and inv else None,
             "day": _r(chg), "day_pct": _r(q.get("change_pct"))}
 

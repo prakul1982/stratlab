@@ -6,6 +6,7 @@ import { ago, dateOnly, money, price, qty as qtyText, signClass } from "../lib/f
 import { AsOf, Empty, Info, Loading } from "../components/ui";
 import { Download, Trash, Upload } from "../components/Icons";
 import { track } from "../lib/analytics";
+import { UnitsCard, type Units } from "../components/TaxUnits";
 
 type Bucket = { key: string; label: string; rate: number; gains: number; after_setoff: number; exempt: number; taxable: number; tax: number; slab?: boolean };
 type Sale = { key: string; bought: string; sold: string; qty: number; cost: number; sale: number; gain: number; term: "ST" | "LT"; bonus: boolean; gf: "applied" | "missing" | null; rate: number | null; mf?: boolean };
@@ -32,6 +33,7 @@ type Year = {
   intraday: { count: number; buy: number; sell: number; pnl: number; turnover: number }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
   business: Business; total: Total; inputs: Inputs; other_regime: { regime: "new" | "old"; total: number } | null; filing: string[]; turnover: number;
   mutual_funds?: MfYear | null;
+  units?: Units | null;
 };
 /** Mutual fund sales from the Money space, already in the rows and buckets above; this is their summary. */
 type MfYear = { count: number; gain: number; equity: number; slab: number; other_lt: number; dividends: number };
@@ -41,6 +43,7 @@ type Report = {
   below_cost: { rows: Lot[]; unpriced: number; open: number; st: number; lt: number };
   unmatched_sales: { key: string; qty: number; first: string }[]; holdings_check: { key: string; files: number; holdings: number }[];
   pre_2018: string[]; fmv: Record<string, { value: number | null; source: "yours" | "your file" | "looked up" | null }>;
+  kinds?: Record<string, string>; unit_notes?: string[];
   rules: string[]; notes: string[]; disclaimer: string; files: { name: string; broker: string; kind: string; trades: number; at: string }[];
   updated_at: string | null; trades: number; business_lines: number; prices: boolean; prices_at: string | null; max_trades: number;
   mf?: { allowed: boolean; count: number; plan: string };
@@ -80,7 +83,7 @@ function combine(a: ImportReply | null, b: ImportReply): ImportReply {
 
 /** The year to open on: the one already open if it has sales, else the latest with any. */
 function bestYear(r: Report, cur: number | null): number {
-  const busy = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0;
+  const busy = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0 || !!y.units;
   const open = r.years.find((y) => y.fy === cur);
   if (open && busy(open)) return open.fy;
   return r.years.find(busy)?.fy ?? (open ? open.fy : r.current_fy);
@@ -298,6 +301,7 @@ export function TaxReportPage() {
           </section>
 
           <BusinessCard y={y} />
+          <UnitsCard units={y.units} notes={[]} name={name} label={y.label} />
 
           <MutualFundsCard y={y} mf={rep.mf} />
 
@@ -317,7 +321,7 @@ export function TaxReportPage() {
                   <thead><tr><th style={{ textAlign: "left" }}>Stock</th><th>Bought</th><th>Sold</th><th>Qty</th><th>Cost</th><th>Sale</th><th>Gain or loss</th><th>Term</th><th>Rate</th></tr></thead>
                   <tbody>{(allSales ? y.rows : y.rows.slice(0, 30)).map((r, i) => (
                     <tr key={i}>
-                      <td style={{ textAlign: "left" }}><b>{name(r.key)}</b>{r.bonus && <span className="tiny muted"> bonus</span>}{r.gf === "applied" && <span className="tiny muted"> grandfathered</span>}{r.gf === "missing" && <span className="tiny neg"> 31 Jan 2018 price missing</span>}</td>
+                      <td style={{ textAlign: "left" }}><b>{name(r.key)}</b>{rep.kinds?.[r.key] && <> <span className="badge kind-etf">{rep.kinds[r.key]}</span></>}{r.bonus && <span className="tiny muted"> bonus</span>}{r.gf === "applied" && <span className="tiny muted"> grandfathered</span>}{r.gf === "missing" && <span className="tiny neg"> 31 Jan 2018 price missing</span>}</td>
                       <td className="num">{dateOnly(r.bought)}</td><td className="num">{dateOnly(r.sold)}</td><td className="num">{qtyText(r.qty)}</td>
                       <td className="num">{inr(r.cost)}</td><td className="num">{inr(r.sale)}</td><td className={`num ${signClass(r.gain)}`}>{inr(r.gain)}</td>
                       <td>{r.term === "LT" ? "Long" : "Short"}</td><td className="num">{rate(r.rate)}</td>
@@ -390,6 +394,8 @@ export function TaxReportPage() {
             <ul className="small" style={{ margin: 0, paddingLeft: 20 }}>{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
             <h3 className="small" style={{ margin: "6px 0 0" }}>How this report works</h3>
             <ul className="small muted" style={{ margin: 0, paddingLeft: 20 }}>{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul>
+            {!!rep.unit_notes?.length && <><h3 className="small" style={{ margin: "6px 0 0" }}>ETFs, REITs, InvITs and gold bonds</h3>
+              <ul className="small muted" style={{ margin: 0, paddingLeft: 20 }} aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></>}
           </section>
         </>
       )}

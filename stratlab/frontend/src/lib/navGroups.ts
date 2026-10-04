@@ -50,5 +50,7 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Import your CAMS/KFintech statement: each fund's value, XIRR, category mix and capital gains by year." },
     { to: "/money/tax-tools", label: "Tax tools", icon: "receipt", title: "Dividends, advance tax and the long-term gains exemption",
       blurb: "Dividends with TDS, advance tax due on each date with reminders, and how much of the ₹1.25 lakh exemption is left." },
+    { to: "/money/calendar", label: "Money calendar", icon: "calendar", title: "Tax due dates, results, dividends and your own dates in one calendar",
+      blurb: "Advance tax and ITR dates, results and dividends for your stocks, maturities, premiums and EMIs, with a calendar feed." },
   ],
 };

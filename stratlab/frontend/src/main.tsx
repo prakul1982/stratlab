@@ -72,6 +72,8 @@ const mfPage = () => import("./pages/money/MutualFundsPage");
 const MutualFundsPage = page(mfPage, "MutualFundsPage");
 const TaxReportPage = page(taxPage, "TaxReportPage");
 const TaxToolsPage = page(() => import("./pages/money/TaxToolsPage"), "TaxToolsPage");
+const moneyCalendar = () => import("./pages/money/MoneyCalendarPage");
+const MoneyCalendarPage = page(moneyCalendar, "MoneyCalendarPage");
 const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
@@ -103,6 +105,7 @@ function warmFirstPage(path: string) {
     : path === "/tax-report" ? taxPage
     : path === "/money/net-worth" ? netWorth
     : path === "/money/mutual-funds" ? mfPage
+    : path === "/money/calendar" ? moneyCalendar
     : path === "/research/screens" || (path === "/research/scans" && lastView("scans") === "/research/screens") ? screensPage
     : path.startsWith("/research") ? research
     : null;
@@ -193,6 +196,7 @@ function Routed() {
         <Route path="/money/net-worth" element={<NetWorthPage />} />
         <Route path="/money/mutual-funds" element={<MutualFundsPage />} />
         <Route path="/money/tax-tools" element={<TaxToolsPage />} />
+        <Route path="/money/calendar" element={<MoneyCalendarPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />

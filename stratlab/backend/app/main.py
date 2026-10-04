@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import holdings, holdings_file, tax_export, tax_lots, tax_total
+from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
 from . import money_mf
 from . import money_advance_tax, money_routes
 from . import suggest
@@ -167,6 +167,7 @@ newsletter_job = news.Job()
 deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit))
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
 # corporate actions: the exchange's list for India, the price history's dividends and splits for the US
+money_calendar_job = money_calendar.Job()
 corp_job = corp_actions.Job(lambda: {"in": filings_feed, "us": research_hub.yahoo})
 # the exchange's surveillance lists, twice a trading day; stocks entering or leaving one fire the stock alerts
 surv_job = surveillance.Job(lambda: filings_feed, lambda changes, now: stock_alerts.fire_events(
@@ -203,6 +204,7 @@ async def lifespan(app: FastAPI):
     newsletter_job.start()
     results_job.start()
     corp_job.start()
+    money_calendar_job.start()
     surv_job.start()
     lifecycle_job.start()
     advance_tax_job.start()
@@ -228,6 +230,7 @@ research_routes.setup(research_hub, _gemini, _anthropic)
 app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(money_routes.router)
+app.include_router(money_calendar.router)
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -2341,8 +2344,9 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     mf = tax_mf(profile)
     c["realised"] += mf["rows"]
     c["names"].update(mf["names"])
-    y = tax_lots.with_total(tax_lots.year(fy, c["realised"], c["intraday"], limit=None), i["business"], i["income"].get(fy),
-                            money_routes.dividends_for_tax(profile).get(fy, 0.0))
+    equity, units = tax_lots.split_units(c)
+    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy),
+                            money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":
         below = tax_lots.below_cost(c["open"], i["quotes"], i["today"]) if fy == tax_lots.fy_of(i["today"]) else None
