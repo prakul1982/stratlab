@@ -1392,6 +1392,15 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
   await expect(page.getByRole("table", { name: "Redemptions matched to purchases" }).getByText("grandfathered")).toBeVisible();
 
+  // what the funds cost: each TER, rupees a year, both plans side by side, the TER since bought and a category change
+  const costs = page.getByRole("table", { name: "Fund costs" });
+  await expect(costs.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("region", { name: "Fund costs" }).getByText("₹185").first()).toBeVisible();   // 143 + 42 a year
+  await expect(costs.getByText("₹352")).toBeVisible();                       // the 1.28-point plan gap on ₹27,500
+  await expect(costs.getByText(/Category changed on 16 Mar 2026 \(2026 recategorisation\)/)).toBeVisible();
+  await costs.getByText("Parts of the TER").first().click();
+  await expect(costs.getByText("Brokerage and transaction costs: 0.08%")).toBeVisible();
+
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/you should|we suggest|recommend|better fund|switch to|rating/i);
   expect(text).not.toMatch(/yahoo|finnhub|kite|screener/i);

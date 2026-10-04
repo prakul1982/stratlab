@@ -63,6 +63,7 @@ CARD_WORDS = {
     "positioning": "positioning history", "journal": "full trade journal", "fno": "Indian F&O",
     "options_signal": "your own rules' signals", "fast_entries": "faster entries", "export": "Export rules",
     "tax_tools": "Advance tax amounts", "itr_export": "ITR-ready", "us_tax": "US stocks in Indian tax",
+    "mf_costs": "fund costs in rupees",
 }
 
 
