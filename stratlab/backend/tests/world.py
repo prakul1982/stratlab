@@ -244,6 +244,10 @@ def _no_network(self, request):
 def build(monkeypatch, real_clock: bool = False) -> dict:
     """Wire the app to fakes. Returns handles the tests use: the client, the fake AI, the fake database."""
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _no_network)
+    # the sources' pacing waits are politeness towards real servers; against fakes they only make a busy test (the
+    # fuzz) slow by chance, depending on what ran before it, so no source waits for its rate limit here
+    from app.intel.net import RateLimit
+    monkeypatch.setattr(RateLimit, "take", lambda self, max_wait=8.0: True)
     fake_db = FakeSupabase()
     monkeypatch.setattr(db, "_client", fake_db)
     db._profiles.clear()
