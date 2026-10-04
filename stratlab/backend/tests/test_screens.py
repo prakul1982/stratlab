@@ -293,15 +293,16 @@ def test_the_weekly_note_goes_only_to_a_confirmed_address_in_one_message(w, outb
     screens.build_index("IN")
     reader("u-pro", "pro@example.com", confirmed=False)
     for i in range(3):
-        screens.save("u-pro", {"name": f"S{i}", "region": "IN", "filters": {"stage": [1]}, "notify": i < 2}, 25)
+        # names with a space: the random unsubscribe token in the email can never contain one (it once held "S2")
+        screens.save("u-pro", {"name": f"Screen {i}", "region": "IN", "filters": {"stage": [1]}, "notify": i < 2}, 25)
     store_pages(rows=[facts("NEWCO", "New Co", stage=1)])
     screens.build_index("IN")
     assert screens.weekly(SATURDAY, db.get_profile, lambda p: 25) == 0 and outbox == []      # not confirmed: no email
     reader("u-pro", "pro@example.com")
     assert screens.weekly(SATURDAY, db.get_profile, lambda p: 25) == 1                       # still new: sent now
     m = outbox[0]
-    assert "2 companies newly match 2 of your screens" in m["subject"] and "S0" in m["text"] and "S1" in m["text"]
-    assert "S2" not in m["text"]                                                             # its note is off
+    assert "2 companies newly match 2 of your screens" in m["subject"] and "SCREEN 0" in m["text"].upper() and "SCREEN 1" in m["text"].upper()
+    assert "SCREEN 2" not in m["text"].upper()                                               # its note is off
     row = json.loads(db.get_setting(screens.KEY + "u-pro"))
     assert len(row["sent"]) == 1 and all("NEWCO" in s["matched"] for s in row["items"])
     assert screens.weekly(SATURDAY, db.get_profile, lambda p: 25) == 0
