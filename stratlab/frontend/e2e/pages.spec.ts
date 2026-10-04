@@ -1240,6 +1240,20 @@ test("admin: exchange holidays show every market's source, coverage and next hol
   await sane(page, errors);
 });
 
+test("admin: rates and rules show each area's review, the source watch and every rule", async ({ page }, info) => {
+  const errors = await open(page, "/admin?tab=checks", "Rates and rules");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
+  const panel = page.getByTestId("rules-panel");
+  for (const area of ["Trading costs", "Income tax", "Interest rates", "Market rules", "Surveillance lists"])
+    await expect(panel.getByRole("cell", { name: area, exact: true })).toBeVisible();
+  for (const src of ["SEC fee rate", "PPF rate", "NSE quantity freeze limits"]) await expect(panel.getByText(src, { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: /Show all \d+ rules/ }).click();
+  await expect(panel.getByRole("cell", { name: "US SEC fee (Section 31)" })).toBeVisible();
+  await expect(panel.getByText("$20.60 a million on sells")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});
+
 test("admin: the whole-market audit tells facts and companies not checked yet apart, and re-checks those", async ({ page }, info) => {
   const sent: object[] = [];
   const row = (symbol: string, name: string, level: string, area: string, detail: string) => ({ symbol, name, seconds: 1, issues: [{ level, area, detail }] });

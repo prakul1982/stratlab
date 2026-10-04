@@ -236,6 +236,14 @@ def check_calendar(today: date) -> dict:
     return _result("Holiday calendar", "Server", "warn" if short else "pass", detail)
 
 
+def check_rules(today: date, watch: dict | None = None) -> dict:
+    """Rates and rules last reviewed: a warning when an area of rules.py is more than 90 days old, a known change day
+    (1 April, the quarterly small-savings rates, the SEC's fiscal year) has passed since its review, or the daily
+    rules watch found a change nobody has marked seen."""
+    from . import rules
+    return rules.check(today, watch=watch)
+
+
 def run_all(checks: list[tuple[str, callable]]) -> dict:
     """Run every check in parallel, each with a time limit; a check that raises or runs out of time is a failure,
     never the end of the run."""

@@ -44,6 +44,10 @@ NEW_2024 = [(300000, 0.0), (700000, 0.05), (1000000, 0.10), (1200000, 0.15), (15
 NEW_2025 = [(400000, 0.0), (800000, 0.05), (1200000, 0.10), (1600000, 0.15), (2000000, 0.20), (2400000, 0.25), (math.inf, 0.30)]
 SURCHARGE = [(50000000, 0.37), (20000000, 0.25), (10000000, 0.15), (5000000, 0.10)]     # above, rate
 NRI_TDS = "TDS on NRI sales is deducted by the broker; this estimate does not reconcile TDS."
+# the Income-tax Act, 2025 renumbers the sections from tax year 2026-27 (FY 2026-27); the rules themselves are the same
+NEW_SECTIONS = {"111A": "196", "112A": "198", "87A": "156", "115BAC": "202", "139": "263", "234B": "424", "234C": "425"}
+NEW_ACT_NOTE = ("From 1 April 2026 the Income-tax Act, 2025 replaces the 1961 Act and renumbers its sections: "
+                + ", ".join(f"{o} is now {n}" for o, n in NEW_SECTIONS.items()) + ". The rules used here are the same.")
 
 # where each year's rules were checked; a year missing from here shows "rules for this year not yet confirmed"
 YEAR_SOURCES = {
@@ -236,6 +240,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     if not r["confirmed"]:
         notes.append(f"Rules for this year not yet confirmed: the FY {fy}-{str(fy + 1)[2:]} figures repeat the year before "
                      "until they are checked against the Finance Act.")
+    if fy >= 2026:
+        notes.append(NEW_ACT_NOTE)
     who = f"{'Resident' if v['resident'] else 'Non-resident'} individual, aged {AGE_NAMES[v['age']]}"
     bel = basic_exemption(r["slabs"])
     if v["regime"] == "old":
@@ -460,7 +466,12 @@ def filing_facts(fy: int, turnover: float, has_business: bool) -> list[str]:
     out.append("Under the presumptive scheme (section 44AD), a business that declares profit below 6% of turnover, or "
                "a loss, with total income above the basic exemption limit can also need an audit, depending on the "
                "years it opted in or out.")
-    out.append("Due dates for the return: 31 July after the year ends without an audit, 31 October with one, unless extended.")
+    if fy >= 2025:                    # Finance Act 2026 (section 139(1); section 263 of the 2025 Act)
+        out.append("Due dates for the return: 31 August after the year ends for business income without an audit (31 "
+                   "July when there's no business income), 31 October with an audit, unless extended. A revised return "
+                   "can be filed until 31 March after the year ends.")
+    else:
+        out.append("Due dates for the return: 31 July after the year ends without an audit, 31 October with one, unless extended.")
     if fy >= 2026:
-        out.append("From 1 April 2026 the Income-tax Act, 2025 replaces the 1961 Act, so section numbers differ.")
+        out.append(NEW_ACT_NOTE)
     return out
