@@ -21,8 +21,8 @@ async function open(page: Page, path: string, ready: string, who: typeof session
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
   // a first visit asks what the person came for; answer it like a new user would
-  const ask = page.getByText("What brings you to StratLab?");
-  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /Both/ }).first().click()).catch(() => undefined);
+  const ask = page.getByText("What brings you here?");
+  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
   await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(400);
   return errors;
@@ -71,7 +71,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "notebook"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
+  ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
@@ -613,16 +613,24 @@ async function menu(page: Page, phone: boolean) {
   return side;
 }
 
-test("the menu: a few short groups, Scans and Watchlist each one entry with tabs, old links still open", async ({ page }, info) => {
+test("the menu: a space's few short groups, Scans and Watchlist each one entry with tabs, old links still open", async ({ page }, info) => {
   const phone = info.project.name === "phone";
+  // the owner's account is shared with every other test: keep this test's space choices out of it
+  await page.route("**/me/prefs", (r) => (r.request().method() === "PUT" ? r.fulfill({ json: { prefs: {} } }) : r.fallback()));
   const errors = await open(page, "/research", "Companies");
-  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); });
+  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); localStorage.setItem("stratlab.space", "invest"); });
+  await page.reload();
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
-  for (const g of ["Research", "Portfolio", "Watch", "Notebooks", "Trading"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
-  // eleven entries in the groups, where there were fifteen flat ones; the old separate entries are gone
-  await expect(main.locator(".side-nav a")).toHaveCount(11);
-  for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance", "My Holdings"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
+  const space = side.getByRole("radiogroup", { name: "Space" });
+  await expect(space.getByRole("radio")).toHaveText(["Trade", "Invest", "Money", "All"]);
+  await expect(space.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
+  // Invest: its home, then two short groups; the other spaces' groups wait behind the switcher
+  for (const g of ["Research", "Watch"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
+  for (const g of ["Notebooks", "Trading", "Money"]) await expect(main.getByRole("button", { name: g, exact: true })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
+  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", "Watchlist", "Alerts"]);
+  for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // Account and Admin sit at the bottom, with the markets folded to one line
   const bottom = side.locator(".side-bottom");
   await expect(bottom.getByRole("link", { name: /^Account/ })).toBeVisible();
@@ -664,21 +672,24 @@ test("the menu: a few short groups, Scans and Watchlist each one entry with tabs
 
   // a group folds, by mouse or keyboard, and stays folded on this device; so do the markets
   side = await menu(page, phone);
-  const trading = side.getByRole("button", { name: "Trading", exact: true });
-  await expect(trading).toHaveAttribute("aria-expanded", "true");
-  await trading.click();
-  await expect(trading).toHaveAttribute("aria-expanded", "false");
-  await expect(side.getByRole("link", { name: "Paper trading" })).toBeHidden();
+  const watch = side.getByRole("button", { name: "Watch", exact: true });
+  await expect(watch).toHaveAttribute("aria-expanded", "true");
+  await watch.click();
+  await expect(watch).toHaveAttribute("aria-expanded", "false");
+  await expect(side.getByRole("link", { name: "Alerts" })).toBeHidden();
   await side.locator(".mkt-box > summary").click();
   await expect(side.locator(".mkt-grid")).toBeVisible();
   // the open state is saved by the toggle event, which fires a moment after the click: wait for it before reloading
   await expect.poll(() => page.evaluate(() => localStorage.getItem("stratlab.markets.open"))).toBe("1");
   await page.reload();
   side = await menu(page, phone);
-  await expect(side.getByRole("button", { name: "Trading", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(side.getByRole("button", { name: "Watch", exact: true })).toHaveAttribute("aria-expanded", "false");
   await expect(side.locator(".mkt-grid")).toBeVisible();
-  // the keyboard: Tab from the search button lands on the first group, with a visible focus ring, and Enter folds it
+  // the keyboard: Tab from the search button passes the space's home and lands on the first group, with a visible
+  // focus ring, and Enter folds it
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
+  await page.keyboard.press("Tab");
+  await expect(side.getByRole("link", { name: "Invest home" })).toBeFocused();
   await page.keyboard.press("Tab");
   const first = side.locator(".side-toggle").first();
   await expect(first).toBeFocused();

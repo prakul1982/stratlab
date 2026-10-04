@@ -1,5 +1,5 @@
 import { Explore } from "../components/Explore";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -14,8 +14,6 @@ import { Pin, Search, Sparkle, Upload } from "../components/Icons";
 import { Info, Loading, VerdictBadge } from "../components/ui";
 import { CompanySearch } from "../components/CompanySearch";
 import { askExamples, useRotating } from "../lib/rotating";
-import { FirstSteps } from "../components/FirstSteps";
-import { PromoCountdown } from "../components/PromoCountdown";
 
 export type Where = { market: string; instrument: Instrument | null };
 
@@ -46,7 +44,7 @@ export function useCreateNotebook(where?: Where | null) {
 }
 
 /** The big "type anything" bar: opens the search box, which works out what you mean and does it. */
-function AskBar() {
+export function AskBar() {
   const { focus } = useApp();
   const example = useRotating(askExamples(focus));
   return (
@@ -224,7 +222,7 @@ export function NewNotebook() {
 }
 
 /** The home page for someone who came to invest: start from a company or a question, not from a trading rule. */
-function InvestorStart() {
+export function InvestorStart({ children }: { children?: ReactNode }) {
   const { notebooks } = useApp();
   const nav = useNavigate();
   const [region, setRegion] = useState<"IN" | "US">("IN");
@@ -238,7 +236,7 @@ function InvestorStart() {
   return (
     <div className="stack" style={{ gap: 28, maxWidth: 960, margin: "0 auto" }}>
       <div className="stack" style={{ gap: 10 }}>
-        <span className="eyebrow">Your research desk</span>
+        <span className="eyebrow">Invest · your research desk</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
           Which company do you want to look into?
         </h1>
@@ -254,6 +252,7 @@ function InvestorStart() {
           {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}
         </div>
       </section>
+      {children}
       <div className="stack" style={{ gap: 10 }}>
         <h2 className="h2">Or start from a question</h2>
         <div className="explore-grid">
@@ -271,17 +270,6 @@ function InvestorStart() {
 
 const VERDICT_RANK: Record<string, number> = { edge: 0, mixed: 1, not_enough: 2, luck: 3, no_edge: 4 };
 type Sort = "recent" | "name" | "verdict";
-
-export function Home() {
-  const { focus, notebooks } = useApp();
-  return (
-    <>
-      <PromoCountdown />
-      <FirstSteps />
-      {focus === "invest" && notebooks !== null ? <InvestorStart /> : <NotebooksHome />}
-    </>
-  );
-}
 
 export function NotebooksHome() {
   const { notebooks, me, refreshNotebooks, fail } = useApp();

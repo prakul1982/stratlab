@@ -18,6 +18,8 @@ export function askExamples(focus: string | null): string[] {
     "Stage 2 stocks in NIFTY 50", "Compare TCS and Infosys"];
   const trade = ["Test: buy NIFTY when RSI drops below 30", "Paper trade a 20/50 EMA cross on Bitcoin",
     "Short straddle on BANKNIFTY", "What is a walk-forward test?", "Momentum ideas for bank stocks"];
+  const money = ["Import my holdings", "Capital gains tax report", "Dividends and bonuses on my stocks"];
   const mix = (a: string[], b: string[]) => a.flatMap((x, k) => [x, b[k]]).filter(Boolean);
-  return focus === "invest" ? mix(invest, trade.slice(0, 2)) : focus === "trade" ? mix(trade, invest.slice(0, 2)) : mix(invest, trade);
+  return focus === "invest" ? mix(invest, trade.slice(0, 2)) : focus === "trade" ? mix(trade, invest.slice(0, 2))
+    : focus === "money" ? mix(money, invest.slice(0, 3)) : mix(trade, invest);
 }

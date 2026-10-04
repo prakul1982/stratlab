@@ -6,8 +6,8 @@ import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 
-/* The public landing page: what StratLab does, in four groups (research, portfolio and tax, strategy testing, alerts),
- * the plans, and one way in (Google sign-in). */
+/* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
+ * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). */
 
 type Status = "pass" | "warn" | "fail";
 const STATUS: Record<Status, string> = { pass: "Passed", warn: "Warning", fail: "Failed" };
@@ -46,7 +46,7 @@ const CHECKS: { title: string; body: string; art: JSX.Element }[] = [
   { title: "Enough trades", body: "A handful of wins proves nothing. Under 15 trades, luck dominates; 30 or more is a fair sample. We tell you which side you're on.", art: <ArtTrades /> },
 ];
 
-/* What StratLab does today, in the four groups the page is built around. Facts about the product only: nothing here
+/* What StratLab does today, in the spaces the page is built around. Facts about the product only: nothing here
  * says what to buy or sell, rates a company or names a data source. */
 const RESEARCH: [string, string][] = [
   ["Company pages", "Any Indian (NSE or BSE) or US company: price and chart, key numbers, results against estimates, who owns it, news, and an AI read in plain numbers that ends with ideas you can test."],
@@ -130,8 +130,15 @@ function signIn(next?: string) {
   return supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/" } });
 }
 
-const SECTIONS: [string, string][] = [["research", "Research"], ["portfolio", "Portfolio and tax"], ["strategy", "Strategy testing"],
+const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], ["money", "Money"],
   ["alerts", "Alerts"], ["pricing", "Pricing"], ["faq", "FAQ"]];
+
+/** The three spaces, one line each, in the order the page tells them. */
+const SPACES: [string, string, string, string][] = [
+  ["trade", "Trade", "The strategy lab", "Describe a trading idea in plain words, test it on years of real prices after real costs with four honesty checks, then paper trade it or an option structure with fake money."],
+  ["invest", "Invest", "Research", "Any Indian or US company from its own filings: ten years of numbers, results dates, corporate actions, deals, surveillance lists, red flags, screens and your watchlist."],
+  ["money", "Money", "What you own", "Your holdings from your broker's file, dividends, bonuses and splits kept in step, and capital gains by financial year from your tradebooks."],
+];
 
 /** A section's eyebrow, heading and one line under it. */
 function Head({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
@@ -175,12 +182,12 @@ export function Login() {
       <section id="top" className="lp-hero ruled">
         <div className="lp-wrap lp-hero-grid">
           <div className="stack" style={{ gap: 24 }}>
-            <span className="eyebrow">For investors and traders · Indian and US stocks</span>
-            <h1 className="serif lp-h1">Know the company. <em>Test</em> the idea.</h1>
-            <p className="serif lp-lede">Research any Indian or US company from its own filings, keep your holdings and capital gains in one place, hear when something changes, and test a trading idea on years of real prices before your money does.</p>
+            <span className="eyebrow">Trade · Invest · Money · Indian and US stocks</span>
+            <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>
+            <p className="serif lp-lede">Your money in one place. Test a trading idea or an option structure on years of real prices before your money does, research any Indian or US company from its own filings, and keep your holdings and capital gains together.</p>
             <div className="row wrap" style={{ gap: 12 }}>
               {cta()}
-              <a className="btn quiet lp-cta-2" href="#research">See what's inside</a>
+              <a className="btn quiet lp-cta-2" href="#trade">See what's inside</a>
             </div>
             {error && <p className="banner" role="alert">{error}</p>}
             <p className="small muted">Free to start · No card · No code · Facts, never tips · Paper trading only, no real orders</p>
@@ -197,36 +204,22 @@ export function Login() {
         </div>
       </section>
 
-      <section id="research" className="lp-sec">
-        <div className="lp-wrap stack" style={{ gap: 40 }}>
-          <div className="lp-split">
-            <Head eyebrow="Research" title="Start with any company, Indian or US.">
-              Everything comes from reported numbers, exchange filings and the company's own documents. Plain numbers, never scores, ratings or calls on the stock.
-            </Head>
-            <ResearchMock />
-          </div>
-          <div className="lp-tools">
-            {RESEARCH.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
-          </div>
-        </div>
-      </section>
-
-      <section id="portfolio" className="lp-sec lp-alt">
-        <div className="lp-wrap stack" style={{ gap: 32 }}>
-          <Head eyebrow="Portfolio and tax" title="What you own, and what it means at tax time.">
-            Bring the file your broker already gives you. StratLab reads it, keeps it private, and reports facts about your own positions.
-          </Head>
-          <div className="lp-grid2">
-            {PORTFOLIO.map(([t, b, tag]) => (
-              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
+      <section className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
+        <div className="lp-wrap stack" style={{ gap: 24 }}>
+          <h2 id="spaces-h" className="serif lp-h3">Three spaces, one place.</h2>
+          <div className="lp-spaces">
+            {SPACES.map(([id, name, sub, what]) => (
+              <a key={id} href={`#${id}`} className="card lp-space" data-space={id}>
+                <span className="eyebrow">{sub}</span><b className="serif">{name}</b><p className="small muted">{what}</p>
+              </a>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="strategy" className="lp-sec">
+      <section id="trade" className="lp-sec">
         <div className="lp-wrap stack" style={{ gap: 40 }}>
-          <Head eyebrow="Strategy testing" title="From a sentence to an honest verdict.">
+          <Head eyebrow="Trade · the strategy lab" title="From a sentence to an honest verdict.">
             Most backtests are tuned until the curve looks good. StratLab tests the idea on years of real prices after real costs, then asks whether you should believe the result.
           </Head>
           <ol className="lp-steps">
@@ -235,6 +228,15 @@ export function Login() {
             <li className="card"><span className="lp-num">3</span><b>Get the verdict</b><p className="small muted">Years of real prices, real costs and four honesty checks. Every number has an (i) that explains it.</p></li>
             <li className="card"><span className="lp-num">4</span><b>Improve, or paper trade</b><p className="small muted">Change one thing and run again, compare the two, and when it holds up, run it live with fake money.</p></li>
           </ol>
+
+          <div className="card lp-travel lp-options">
+            <div className="stack" style={{ gap: 8 }}>
+              <span className="eyebrow">Options</span>
+              <b className="serif" style={{ fontSize: 24 }}>Paper trade option structures on live prices.</b>
+              <p className="small muted" style={{ maxWidth: "60ch" }}>Straddles, strangles, iron flies, condors, spreads or any structure up to eight legs on NSE, BSE, MCX and NSE currency options, filled at the real bid and ask, at a set time or when a notebook's rules signal. Fake money, real prices.</p>
+            </div>
+            <span className="lp-fix">No real orders, ever</span>
+          </div>
 
           <div id="checks" className="stack lp-anchor" style={{ gap: 20 }}>
             <h3 className="serif lp-h3">Four questions every strategy has to answer.</h3>
@@ -275,6 +277,33 @@ export function Login() {
                 <div key={n} className="card lp-market"><span className="lp-sym serif">{s}</span><div><b>{n}</b><p className="small muted">{d}</p></div></div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="invest" className="lp-sec lp-alt">
+        <div className="lp-wrap stack" style={{ gap: 40 }}>
+          <div className="lp-split">
+            <Head eyebrow="Invest · research" title="Start with any company, Indian or US.">
+              Everything comes from reported numbers, exchange filings and the company's own documents. Plain numbers, never scores, ratings or calls on the stock.
+            </Head>
+            <ResearchMock />
+          </div>
+          <div className="lp-tools">
+            {RESEARCH.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
+          </div>
+        </div>
+      </section>
+
+      <section id="money" className="lp-sec">
+        <div className="lp-wrap stack" style={{ gap: 32 }}>
+          <Head eyebrow="Money" title="What you own, and what it means at tax time.">
+            Bring the file your broker already gives you. StratLab reads it, keeps it private, and reports facts about your own positions.
+          </Head>
+          <div className="lp-grid2">
+            {PORTFOLIO.map(([t, b, tag]) => (
+              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
+            ))}
           </div>
         </div>
       </section>

@@ -55,12 +55,15 @@ test("a new user's first session, from the invite link to the plans", async ({ p
   // (the Pro test user's link: the owner's own invite counts are checked by another test)
   const code = (await (await request.get(`${API}/me/referrals`, { headers: { Authorization: "Bearer pro-token" } })).json()).code;
   await page.goto(`/?ref=${code}`);
-  const welcome = page.getByRole("dialog", { name: "What brings you to StratLab?" });
+  const welcome = page.getByRole("dialog", { name: "What brings you here?" });
   await expect(welcome).toBeVisible({ timeout: 30_000 });
   if (phone) await check(page, errors, phone);
-  await welcome.getByRole("button", { name: /Both/ }).click();
+  // one short step: the experience is asked on the same card, already on the middle answer
+  await expect(welcome.getByRole("radio", { name: "I've done a bit" })).toHaveAttribute("aria-checked", "true");
+  await welcome.getByRole("button", { name: /All of it/ }).click();
   await level(page);
   await expect(page.getByText("Your first steps")).toBeVisible({ timeout: 30_000 });
+  await expect(page, "all of it opens on Trade, the strategy lab").toHaveURL(/\/trade$/);
   await expect.poll(async () => (await (await request.get(`${API}/me/referrals`, { headers: auth })).json()).code, "the newcomer has a link of their own").toBeTruthy();
   expect(new URL(page.url()).search, "the invite code leaves the address").toBe("");
   await check(page, errors, phone);

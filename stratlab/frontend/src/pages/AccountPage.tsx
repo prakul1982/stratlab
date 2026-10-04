@@ -7,6 +7,7 @@ import { LegalLinks } from "../components/LegalLinks";
 import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { FOCUSES, LEVELS } from "../components/LevelPrompt";
+import { viewForFocus } from "../lib/spaces";
 import { PhoneCard } from "../components/PhoneCard";
 import { Block } from "../components/More";
 import { InvoicesCard } from "../components/InvoicesCard";
@@ -17,7 +18,7 @@ import { TipsCard } from "../components/TipsCard";
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
 export function AccountPage() {
-  const { me, fail, notify, refreshMe, level, setLevel, focus, setFocus } = useApp();
+  const { me, fail, notify, refreshMe, level, setLevel, focus, savePrefs } = useApp();
   const feats = me?.plan_info.features;
   const canReport = feats ? !!feats.daily_report : true, canAlert = feats ? !!feats.alerts : true;
   const [alerts, setAlerts] = useState({ enabled: false, tg: "", email: "", daily: true });
@@ -167,11 +168,11 @@ export function AccountPage() {
         <section className="card stack" style={{ gap: 16 }}>
           <div className="stack" style={{ gap: 4 }}>
             <h2 className="h2">What you see first</h2>
-            <p className="small muted">Changes only the order of the menu and home page, and which settings start open. Every tool stays available.</p>
+            <p className="small muted">Changes only which space the menu and home page open in, and which settings start open. Every tool stays available.</p>
           </div>
           <Block title="What you're here for">
             <div className="seg" role="radiogroup" aria-label="What you're here for" style={{ justifySelf: "start" }}>
-              {FOCUSES.map(([f, title]) => <button key={f} role="radio" aria-checked={focus === f} aria-pressed={focus === f} onClick={() => setFocus(f)}>{title}</button>)}
+              {FOCUSES.map(([f, title]) => <button key={f} role="radio" aria-checked={focus === f} aria-pressed={focus === f} onClick={() => savePrefs({ focus: f, space: viewForFocus(f)! })}>{title}</button>)}
             </div>
             {focus && <p className="small muted">{FOCUSES.find(([f]) => f === focus)?.[2]}</p>}
           </Block>

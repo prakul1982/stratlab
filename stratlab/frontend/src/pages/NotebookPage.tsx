@@ -163,7 +163,7 @@ export function NotebookPage() {
 
   const del = async () => {
     if (!confirm(`Delete the notebook "${nb.name}" and all its experiments? This can't be undone.`)) return;
-    try { await api(`/notebooks/${nb.id}`, { method: "DELETE" }); await refreshNotebooks(); nav("/"); } catch (e) { fail(e); }
+    try { await api(`/notebooks/${nb.id}`, { method: "DELETE" }); await refreshNotebooks(); nav("/notebooks"); } catch (e) { fail(e); }
   };
 
   const togglePin = async () => {

@@ -336,7 +336,8 @@ class PushReq(BaseModel):
 
 class PrefsReq(BaseModel):
     level: Literal["new", "some", "pro"] | None = None
-    focus: Literal["invest", "trade", "both"] | None = None     # what the user came for: orders menus and suggestions
+    focus: Literal["invest", "trade", "money", "both"] | None = None     # what the user came for: orders menus and suggestions
+    space: Literal["trade", "invest", "money", "all"] | None = None       # the menu's space last picked in the sidebar
 
 
 class NewsletterReq(BaseModel):

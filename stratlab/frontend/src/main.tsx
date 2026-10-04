@@ -21,12 +21,17 @@ import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
 import { lastView } from "./lib/navGroups";
+import { SPACE_HOMES } from "./lib/spaces";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
   lazy(() => load().then((m) => ({ default: m[name] })));
 const home = () => import("./pages/Home");
-const Home = page(home, "Home");
+const spaceHomes = () => import("./pages/SpaceHomes");
+const SpaceHome = page(spaceHomes, "SpaceHome");
+const TradeHome = page(spaceHomes, "TradeHome");
+const InvestHome = page(spaceHomes, "InvestHome");
+const MoneyHome = page(spaceHomes, "MoneyHome");
 const NotebooksHome = page(home, "NotebooksHome");
 const NewNotebook = page(home, "NewNotebook");
 const login = () => import("./pages/Login");
@@ -82,7 +87,8 @@ function warmFirstPage(path: string) {
   const load = LEGAL_PAGES.some((p) => p.path === path) ? legal
     : path.startsWith("/verdict/") ? verdict
     : !saved ? login
-    : /^\/(notebooks|new)?$/.test(path) ? home
+    : /^\/(trade|invest|money)?$/.test(path) ? spaceHomes
+    : /^\/(notebooks|new)$/.test(path) ? home
     : /^\/n\/[^/]+$/.test(path) ? notebook
     : /^\/n\/[^/]+\/e\//.test(path) ? experiment
     : /^\/research\/(IN|US)\/[^/]+\/deep$/.test(path) ? deep
@@ -152,10 +158,13 @@ function Routed() {
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
-      {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && <PromoBanner until={me.promo.until} />}{/* those two show a countdown */}
+      {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<SpaceHome />} />
+        <Route path="/trade" element={<TradeHome />} />
+        <Route path="/invest" element={<InvestHome />} />
+        <Route path="/money" element={<MoneyHome />} />
         <Route path="/notebooks" element={<NotebooksHome />} />
         <Route path="/new" element={<NewNotebook />} />
         <Route path="/n/:id" element={<NotebookPage />} />

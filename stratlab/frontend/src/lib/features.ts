@@ -16,10 +16,16 @@ export const GOALS: Record<Goal, { title: string; sub: string }> = {
 };
 export const GOAL_ORDER: Record<string, Goal[]> = {
   invest: ["find", "understand", "test", "trade"], trade: ["test", "trade", "find", "understand"],
-  both: ["understand", "test", "find", "trade"],
+  money: ["find", "understand", "test", "trade"], both: ["test", "trade", "understand", "find"],
 };
 
 export const FEATURES: Feature[] = [
+  { id: "trade_home", title: "Trade", what: "The strategy lab: your notebooks, paper trading and options in one place.", to: "/trade",
+    words: "trade trading home strategy lab notebooks paper options overview space" },
+  { id: "invest_home", title: "Invest", what: "Your watchlist at a glance, today's results and red flags, and any company to look up.", to: "/invest",
+    words: "invest investing home research watchlist results red flags overview space" },
+  { id: "money_home", title: "Money", what: "Your holdings, this year's capital gains tax estimate and everything you own.", to: "/money",
+    words: "money personal finance net worth wealth home holdings tax overview space my money" },
   { id: "idea", title: "Test an idea", what: "Describe a strategy in plain words and get an honest verdict on years of real prices.", to: "/new",
     words: "new notebook backtest test idea strategy rules describe plain english build", home: true, goal: "test" },
   { id: "research", title: "Research a company", what: "Price, key numbers, results, news and an AI read that ends with ideas to test.", to: "/research",

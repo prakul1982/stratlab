@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// The public landing page, signed out: the four feature groups, plans that say exactly what the server's plans.py
+// The public landing page, signed out: the three spaces (Trade first), alerts, plans that say exactly what the server's plans.py
 // enforces, the FAQ, and nothing a public page must never say (data sources, advice words).
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 
@@ -14,28 +14,37 @@ async function open(page: Page) {
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Know the company/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /Test it, research it, track it/ })).toBeVisible({ timeout: 30_000 });
   return errors;
 }
 
-test("landing: the four feature groups, plans, FAQ and markets", async ({ page }) => {
+test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets", async ({ page }) => {
   const errors = await open(page);
-  for (const [id, heading] of [["research", /Start with any company/], ["portfolio", /What you own/], ["strategy", /From a sentence/],
+  const order = ["trade", "invest", "money", "alerts", "pricing", "faq"];
+  for (const [id, heading] of [["trade", /From a sentence/], ["invest", /Start with any company/], ["money", /What you own/],
     ["alerts", /Hear about it/], ["pricing", /Free to start/], ["faq", /Good to know/]] as const) {
     const sec = page.locator(`section#${id}`);
     await expect(sec, id).toHaveCount(1);
     await expect(sec.getByRole("heading", { level: 2, name: heading })).toBeVisible();
   }
+  // the sections, and the menu, go Trade, Invest, Money: the strategy lab is where StratLab began
+  expect(await page.locator("main section[id]").evaluateAll((els) => els.map((e) => e.id).filter((id) => id !== "top"))).toEqual(order);
+  await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Pricing", "FAQ"]);
+  await expect(page.locator(".lp-space")).toHaveText([/Trade/, /Invest/, /Money/]);
+  await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
+  // what search engines and link previews show says the same
+  await expect(page).toHaveTitle("StratLab: test it, research it, track it");
+  for (const sel of ['meta[name="description"]', 'meta[property="og:description"]']) await expect(page.locator(sel)).toHaveAttribute("content", /trad/i);
   // what ships today, one line each
-  const research = page.locator("#research");
+  const research = page.locator("#invest");
   for (const t of ["Company pages", "Deep dive", "Results calendar", "Corporate actions", "Deals and insider trades", "Surveillance lists",
     "Filings and red flags", "Screens", "Stage 2 scan", "Sector rotation"]) await expect(research.getByText(t, { exact: true })).toBeVisible();
-  const portfolio = page.locator("#portfolio");
+  const portfolio = page.locator("#money");
   for (const t of ["My Holdings", "Tax report", "Share cards and invites"]) await expect(portfolio.getByText(t, { exact: true })).toBeVisible();
   await expect(portfolio).toContainText("Zerodha");
   await expect(portfolio).toContainText("Groww");
   await expect(portfolio).toContainText("ZIP");
-  for (const t of ["Walk-forward test", "Options, live", "Paper trading", "Strategy library"]) await expect(page.locator("#strategy").getByText(t, { exact: true })).toBeVisible();
+  for (const t of ["Walk-forward test", "Options, live", "Paper trading", "Strategy library"]) await expect(page.locator("#trade").getByText(t, { exact: true })).toBeVisible();
   await expect(page.locator("#markets .lp-market")).toHaveCount(11);
   for (const t of ["Stock alerts", "Results and corporate actions", "Newsletters"]) await expect(page.locator("#alerts").getByText(t, { exact: true })).toBeVisible();
   await expect(page.locator("#faq details")).not.toHaveCount(0);

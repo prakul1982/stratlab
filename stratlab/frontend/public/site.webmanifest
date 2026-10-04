@@ -2,7 +2,7 @@
   "id": "/",
   "name": "StratLab",
   "short_name": "StratLab",
-  "description": "Test your trading idea before your money does.",
+  "description": "Test it, research it, track it: your money in one place.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
