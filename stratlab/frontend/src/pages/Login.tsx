@@ -159,7 +159,7 @@ export function Login() {
           <div className="stack" style={{ gap: 14 }}>
             <span className="eyebrow">Research</span>
             <h2 className="serif lp-h2">Start with any company, Indian or US.</h2>
-            <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, insider trades and deals, dividends and other corporate actions, and news. An AI read gives its opinion, lays out the bull and bear case, and ends with three ideas you can test in one click.</p>
+            <p className="lp-p">Look up any Indian or US company: price, key numbers, results against estimates, insider trades and deals, dividends and other corporate actions, and news. An AI read describes the business next to its growth, price trend, debt and margins in plain numbers (no scores or ratings), lists strengths and risks as facts, and ends with three ideas you can test in one click.</p>
             <ul className="bullets lp-p" style={{ fontSize: 16 }}>
               <li><b>Themes:</b> map a sector and see the listed companies linked to it.</li>
               <li><b>Market pulse:</b> index levels, headlines and today's mood.</li>
@@ -359,21 +359,20 @@ function HeroDemo() {
 }
 
 function ResearchMock() {
-  // the company page's AI read: its four opinion scores, with no overall score and no valuation score
-  const scores: [string, number, boolean][] = [["Moat", 92, true], ["Growth", 94, true], ["Momentum", 81, true], ["Health", 38, false]];
+  // the company page's AI read: plain numbers from reported results and prices, never scores (sample figures)
+  const facts: [string, string][] = [["Growth", "Sales, 3 years 68.2% a year · Net profit, 3 years 91.4% a year"],
+    ["Price trend", "6.1% above the 200-day average · 1-year change +32.5% · Stage 2 (advancing)"],
+    ["Debt and cash", "Debt to equity 0.11 · Cash from operations 94% of net profit"],
+    ["Margins and returns", "Operating margin 33% → 62% over 5 years · ROE 91.9%"]];
   return (
     <div className="card lp-rmock" aria-label="Example company research page">
       <div className="spread" style={{ alignItems: "flex-start" }}>
         <div className="stack" style={{ gap: 2 }}><span className="eyebrow">NASDAQ · NVDA</span><b className="serif" style={{ fontSize: 26 }}>NVIDIA Corp</b></div>
         <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}><b className="serif" style={{ fontSize: 26 }}>$183.20</b><span className="badge next">▲ +1.33% today</span></div>
       </div>
-      <div className="lp-rscore">
-        <div className="stack" style={{ gap: 7, flex: 1 }}>
-          {scores.map(([l, v, good]) => (
-            <div key={l} className="score-row"><span className="small">{l}</span><div className="score-track"><div style={{ width: `${v}%`, background: good ? "var(--blue)" : "var(--orange)" }} /></div><span className="small mono">{v}</span></div>
-          ))}
-          <span className="tiny muted">AI read: opinions, not advice</span>
-        </div>
+      <div className="lp-rfacts">
+        {facts.map(([l, t]) => <div key={l} className="stack" style={{ gap: 1 }}><b className="small">{l}</b><span className="small muted">{t}</span></div>)}
+        <span className="tiny muted">Sample figures. Facts from reported results and prices, not advice.</span>
       </div>
       <div className="lp-ridea">
         <b className="small">Ideas to test on NVDA</b>

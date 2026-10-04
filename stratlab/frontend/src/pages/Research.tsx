@@ -242,7 +242,7 @@ export function CompanyPage() {
         {c.peers.length > 0 && <Panel title="Similar companies" info="Companies in the same industry. Tap one to open it."><QuoteGrid region={region} symbols={c.peers} /></Panel>}
         <Panel title="Latest news"><NewsList items={c.news} /></Panel>
       </div>
-      <p className="hint">Scores and AI text are estimates, not advice.</p>
+      <p className="hint">AI text is written from the numbers above and may contain mistakes. Facts, not advice.</p>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useApp } from "../lib/app";
 import { ago, pct, price, priceAxis, safeHref, signClass } from "../lib/format";
 import {
   bandPosition, metricText, ordinal, researchApi, trendValue, useWatchlist,
-  type Company, type CompanyAI, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
+  type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { LineChart } from "./Charts";
 import { Star } from "./Icons";
@@ -325,14 +325,18 @@ function Donut({ segments }: { segments: { label: string; share: number }[] }) {
   );
 }
 
-function ScoreBar({ label, v }: { label: string; v: number | null }) {
-  if (v == null) return null;
+/** Plain-number lines (growth, price trend, debt and cash, margins and returns), each a label and its facts. No
+ *  bars, grades or colours: the numbers are the whole story. */
+export function FactRows({ rows }: { rows: FactRow[] }) {
   return (
-    <div className="score-row">
-      <span className="small">{label}</span>
-      <div className="score-track"><div style={{ width: `${v}%`, background: v >= 66 ? "var(--blue)" : v >= 40 ? "var(--ink-2)" : "var(--orange)" }} /></div>
-      <span className="num small" style={{ textAlign: "right" }}>{v}</span>
-    </div>
+    <dl className="fact-rows">
+      {rows.map((r) => (
+        <div key={r.id} className="fact-row">
+          <dt className="small"><b>{r.label}</b></dt>
+          <dd className="small">{r.items.map((i) => <span key={i.label} className="fact-item"><span className="muted">{i.label}</span> <span className="num">{i.text}</span></span>)}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -432,7 +436,7 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
   return (
     <section className="card stack ai-read" style={{ gap: 18 }} aria-labelledby="ai-h">
       <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-        <h2 id="ai-h" className="h2 row" style={{ gap: 0 }}>AI read<Info>{"An AI analyst's scored take, written from the live numbers on this page. Treat it as a starting point for ideas, not advice: the scores are opinions, and segment shares are estimates."}</Info></h2>
+        <h2 id="ai-h" className="h2 row" style={{ gap: 0 }}>AI read<Info>{"A written read from the live numbers on this page, with no scores or ratings. \"The numbers\" are worked out from the reported results and daily prices, not by the AI. Segment shares are estimates. A starting point for ideas, not advice."}</Info></h2>
         <span className="row small muted" style={{ gap: 10 }}>{r && `Written ${age}`}
           <button className="btn quiet sm" disabled={busy} onClick={() => load(true)}>{busy ? "Thinking…" : "Refresh"}</button></span>
       </div>
@@ -440,20 +444,19 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
         : !r ? <div className="row muted" style={{ gap: 10 }}><span className="spinner" />Reading the numbers…</div> : (
           <>
             {r.summary && <p className="serif" style={{ fontSize: 19, lineHeight: 1.45 }}>{r.summary}</p>}
-            {(Object.values(r.scores).some((x) => x != null) || r.valuation_note) && <div className="ai-top">
-              <div className="stack" style={{ gap: 6, flex: "1 1 240px" }}>
-                <ScoreBar label="Moat" v={r.scores.moat} /><ScoreBar label="Growth" v={r.scores.growth} />
-                <ScoreBar label="Momentum" v={r.scores.momentum} />
-                <ScoreBar label="Health" v={r.scores.health} />
-              </div>
+            {((r.facts ?? []).length > 0 || r.valuation_note) && <div className="ai-top">
+              {(r.facts ?? []).length > 0 && <div className="stack" style={{ gap: 6, flex: "2 1 320px", minWidth: 0 }}>
+                <span className="eyebrow">The numbers</span>
+                <FactRows rows={r.facts} />
+              </div>}
               {r.valuation_note && <div className="stack" style={{ gap: 8, flex: "1 1 200px" }}>
                 <span className="eyebrow">Valuation</span>
                 <p className="small muted">{r.valuation_note}</p>
               </div>}
             </div>}
             {(r.bull.length > 0 || r.bear.length > 0) && <div className="grid2" style={{ gap: 20 }}>
-              {r.bull.length > 0 && <div className="stack" style={{ gap: 8 }}><b className="pos">Strengths</b><ul className="bullets">{r.bull.map((b) => <li key={b}>{b}</li>)}</ul></div>}
-              {r.bear.length > 0 && <div className="stack" style={{ gap: 8 }}><b className="neg">Risks</b><ul className="bullets">{r.bear.map((b) => <li key={b}>{b}</li>)}</ul></div>}
+              {r.bull.length > 0 && <div className="stack" style={{ gap: 8 }}><b>Strengths</b><ul className="bullets">{r.bull.map((b) => <li key={b}>{b}</li>)}</ul></div>}
+              {r.bear.length > 0 && <div className="stack" style={{ gap: 8 }}><b>Risks</b><ul className="bullets">{r.bear.map((b) => <li key={b}>{b}</li>)}</ul></div>}
             </div>}
             {(r.position || r.watch.length > 0) && (
               <div className="grid2" style={{ gap: 20 }}>

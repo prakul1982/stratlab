@@ -49,7 +49,7 @@ function Trend({ f }: { f?: Facts }) {
 function FilingsCell({ f, allowed }: { f?: Facts; allowed: boolean }) {
   if (!allowed) return <span className="muted">Pro</span>;
   if (!f || f.red == null) return <span className="muted">–</span>;
-  if (f.red) return <span className="neg">{f.red} red flag{f.red === 1 ? "" : "s"}</span>;
+  if (f.red) return <span>{f.red} red flag{f.red === 1 ? "" : "s"}</span>;
   return <>{f.amber ? `${f.amber} to look at` : "No red flags"}</>;
 }
 
@@ -259,7 +259,7 @@ export function HoldingsPage() {
                       {f.recent.map((x, i) => (
                         <div key={i} className="small" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
                           <span className="mono tiny muted">{dateOnly(x.at)}</span>
-                          <span className={`badge ${x.severity === "red" ? "fail" : x.severity === "amber" ? "warn" : "skip"}`}>{x.label}</span>
+                          <span className="badge fact">{x.label}</span>
                           {x.url ? <a className="link" href={safeHref(x.url)} target="_blank" rel="noreferrer" style={{ minWidth: 0, overflowWrap: "anywhere" }}>{x.subject || "Filing"}</a> : <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{x.subject}</span>}
                         </div>
                       ))}
