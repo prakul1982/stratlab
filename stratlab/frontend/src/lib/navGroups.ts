@@ -1,5 +1,5 @@
 /** Pages that share one menu entry and switch between each other with tabs. Every page keeps its own URL. */
-export type Family = "scans" | "watch";
+export type Family = "scans" | "watch" | "options";
 
 export const FAMILIES: Record<Family, { label: string; home: string; views: [string, string][] }> = {
   scans: {
@@ -9,6 +9,11 @@ export const FAMILIES: Record<Family, { label: string; home: string; views: [str
   watch: {
     label: "Watchlist", home: "/research/watchlist",
     views: [["/research/watchlist", "List"], ["/research/investor", "At a glance"]],
+  },
+  /** Trade: the Options menu entry leads to both, switched with tabs at the top of each page. */
+  options: {
+    label: "Options", home: "/options",
+    views: [["/options", "Options"], ["/trade/positioning", "Positioning"]],
   },
 };
 
@@ -39,6 +44,12 @@ export type NavEntry = { to: string; label: string; icon?: string; title?: strin
 /** Menu groups kept as data, by name. "Money" is the Money space's menu, in order: each Money feature adds one line
  * here, and it shows both in the menu and as a card on the Money home, so only what's built ever appears. */
 export const NAV_GROUPS: Record<string, NavEntry[]> = {
+  /** Trade pages beyond the menu's fixed entries, kept as data like Money's. Positioning also opens as a tab beside
+   * Options (FAMILIES.options), so the Options menu entry already leads to it. */
+  Trade: [
+    { to: "/trade/positioning", label: "Positioning", icon: "layers", title: "Participant-wise open interest, FII/DII flows, PCR, max pain and IV",
+      blurb: "Who holds index futures and options, FII and DII cash flows, each index's PCR, OI by strike and ATM IV." },
+  ],
   Money: [
     { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",
       blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings." },

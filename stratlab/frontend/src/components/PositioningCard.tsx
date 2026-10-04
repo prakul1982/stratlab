@@ -1,0 +1,62 @@
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { api } from "../lib/api";
+import { FAMILIES } from "../lib/navGroups";
+import { signClass } from "../lib/format";
+import { crore, dayName, ratio, signed, type Summary } from "../lib/positioning";
+
+/** Options and Positioning switch with tabs, like the Scans: each keeps its own URL. */
+export function TradeTabs() {
+  const { pathname } = useLocation();
+  return (
+    <nav className="seg sub-seg trade-tabs" aria-label={FAMILIES.options.label}>
+      {FAMILIES.options.views.map(([to, label]) => (
+        <Link key={to} to={to} className={`seg-link${pathname === to ? " on" : ""}`} aria-current={pathname === to ? "page" : undefined}>{label}</Link>
+      ))}
+    </nav>
+  );
+}
+
+/** The newest positioning numbers in a few lines (FII index futures, the FII and DII cash flows, NIFTY's PCR), for the
+ * Trade home and the Options tab. */
+export function PositioningCard() {
+  const [s, setS] = useState<Summary | null | "error">(null);
+  useEffect(() => { api<Summary>("/trade/positioning?brief=1").then(setS).catch(() => setS("error")); }, []);
+  const fii = s && s !== "error" ? s.participants.oi.find((r) => r.id === "fii") : undefined;
+  const nifty = s && s !== "error" ? s.pcr?.find((r) => r.name === "NIFTY") : undefined;
+  return (
+    <section className="card stack pos-card" style={{ gap: 10 }} aria-labelledby="pos-card-h" data-testid="positioning-card">
+      <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
+        <h2 id="pos-card-h" className="h3">Positioning</h2>
+        <Link to="/trade/positioning" className="link">Participants, flows and PCR →</Link>
+      </div>
+      {s === null ? <p className="small muted">Reading the newest numbers…</p>
+        : s === "error" ? <p className="small muted">The positioning numbers couldn't be read just now. <Link className="link" to="/trade/positioning">Open the page</Link>.</p>
+        : (
+          <div className="space-figs">
+            <div className="space-fig">
+              <span className="tiny muted">FII index futures, net</span>
+              <b className="num">{fii ? signed(fii.fut_idx_net as number | null) : "–"}</b>
+              {fii?.fut_idx_net_chg != null && <span className={`tiny ${signClass(fii.fut_idx_net_chg as number)}`}>{signed(fii.fut_idx_net_chg as number)} from the day before</span>}
+            </div>
+            <div className="space-fig">
+              <span className="tiny muted">FII/FPI cash, net</span>
+              <b className="num">{crore(s.cash.fii?.net, true)}</b>
+              <span className="tiny muted">DII {crore(s.cash.dii?.net, true)}</span>
+            </div>
+            <div className="space-fig">
+              <span className="tiny muted">NIFTY PCR (open interest)</span>
+              <b className="num">{ratio(nifty?.pcr_oi)}</b>
+              {nifty?.expiry && <span className="tiny muted">Expiry {dayName(nifty.expiry)}</span>}
+            </div>
+          </div>
+        )}
+      {s && s !== "error" && (
+        <p className="tiny muted">
+          {s.participants.as_of ? `Participants as of ${dayName(s.participants.as_of)}` : "Participant numbers not published yet"}
+          {s.cash.as_of ? ` · cash flows as of ${dayName(s.cash.as_of)}` : ""}. Exchange data; facts, not advice.
+        </p>
+      )}
+    </section>
+  );
+}

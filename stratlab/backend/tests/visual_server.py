@@ -61,6 +61,7 @@ def build():
     from app import surveillance
     surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them
     screen_index()
+    positioning_history()
     # the public NAV files, from the test fixtures, for the mutual funds page
     from app import money_mf_nav
     navs = Path(__file__).parent / "fixtures" / "mf"
@@ -97,6 +98,22 @@ def invite_rewards():
                                                         "referrer_months": 0, "newcomer_months": 0, "given_at": None,
                                                         "referrer_at": None}))
     plans.add_free_basic(db.get_profile("u-load-3"), 30)
+
+
+def positioning_history():
+    """Derivatives positioning as the evening job would have left it: the exchange's files for about three months (read
+    from the fake exchange), and thirty days of recorded NIFTY and BANKNIFTY chains summarised by day."""
+    from datetime import date
+    from app import db, positioning
+    from tests import fake_positioning as fp
+    today = date.today()
+    days = fp.weekdays_before(today, 30)
+    fp.record_days(db.add_option_snapshot, "NIFTY", days)
+    fp.record_days(db.add_option_snapshot, "BANKNIFTY", days, spot=55000.0, gap=100)
+    day = positioning.expected_day(positioning.ist_now())
+    if day:
+        main.positioning_runner.run_day(day)
+    main.positioning_runner.backfill(today, step=120, days=100)
 
 
 def screen_index():

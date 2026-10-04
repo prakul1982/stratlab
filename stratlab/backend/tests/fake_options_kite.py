@@ -10,6 +10,8 @@ UNDERLYINGS = {  # (exchange, name): (spot key, spot, strike gap, lot)
     ("BFO", "SENSEX"): ("BSE:SENSEX", 82000.0, 100, 20),
     ("MCX", "CRUDEOIL"): ("MCX:CRUDEOILFUT", 5600.0, 50, 100),
     ("CDS", "USDINR"): ("CDS:USDINRFUT", 88.0, 0.25, 1),      # Kite lists currency lots as 1 (1,000 dollars)
+    ("NFO", "FINNIFTY"): ("NSE:NIFTY FIN SERVICE", 26000.0, 50, 65),
+    ("NFO", "MIDCPNIFTY"): ("NSE:NIFTY MID SELECT", 13000.0, 25, 140),
 }
 TOKENS = {sk: 900001 + i for i, (sk, *_) in enumerate(UNDERLYINGS.values())}
 
@@ -61,7 +63,7 @@ class _Inner:
                 continue
             spread = 0 if self.o.spot(key, now) is not None else max(0.05, round(px * 0.004 / 0.05) * 0.05)
             out[key] = {"last_price": px, "timestamp": now.replace(tzinfo=None) if self.o.live else now.replace(tzinfo=None) - timedelta(days=3),
-                        "oi": 100000, "volume": 5000,
+                        "oi": self.o.open_interest(key), "volume": self.o.open_interest(key) // 20,
                         "depth": {"buy": [{"price": round(px - spread / 2, 2)}], "sell": [{"price": round(px + spread / 2, 2)}]}}
         return out
 
@@ -109,6 +111,18 @@ class FakeOptionsKite:
                 out.append({"t": t.isoformat(), "o": prices[0], "h": max(prices), "l": min(prices), "c": prices[-1], "v": 0})
                 t += timedelta(minutes=step)
         return out
+
+    def open_interest(self, key) -> int:
+        """Open interest that peaks a few strikes out of the money (calls above the spot, puts below), like a real
+        chain's, fixed per contract so the positioning page has a shape to show."""
+        ex, sym = key.split(":", 1)
+        for (uex, name), (_, spot, gap, _) in UNDERLYINGS.items():
+            if uex == ex and sym.startswith(name) and sym[-2:] in ("CE", "PE") and sym[len(name):len(name) + 6].isdigit():
+                k = float(sym[len(name) + 6:-2])
+                peak = spot + (4 if sym.endswith("CE") else -3) * gap
+                bump = math.exp(-((k - peak) / (5 * gap)) ** 2)
+                return int(20000 + (300000 if sym.endswith("CE") else 260000) * bump)
+        return 100000
 
     def spot(self, key, now):
         for (_, _), (sk, spot, gap, _) in UNDERLYINGS.items():

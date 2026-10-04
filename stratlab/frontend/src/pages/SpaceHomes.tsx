@@ -12,6 +12,7 @@ import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { PromoCountdown } from "../components/PromoCountdown";
+import { PositioningCard } from "../components/PositioningCard";
 import { Layers, Library, Pulse, Upload } from "../components/Icons";
 import { AskBar, InvestorStart, NotebooksHome } from "./Home";
 import { resultDay, type ResultRow } from "./Research";
@@ -37,6 +38,7 @@ export function TradeHome() {
     <>
       <Top />
       <TradeStrip />
+      <PositioningCard />
       <NotebooksHome />
     </>
   );

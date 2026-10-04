@@ -197,6 +197,13 @@ def delete_option_snapshots_before(iso: str) -> None:
     sb().table("option_snapshots").delete().lt("taken_at", iso).execute()
 
 
+def option_snapshots(name: str, since: str, until: str, limit: int = 12) -> list[dict]:
+    """An underlying's recorded chains taken from `since` to before `until` (ISO times), newest first, at most `limit`."""
+    r = (sb().table("option_snapshots").select("taken_at,expiry,spot,chain").eq("name", name)
+         .gte("taken_at", since).lt("taken_at", until).order("taken_at", desc=True).limit(limit).execute())
+    return r.data or []
+
+
 def settings_with_prefix(prefix: str, limit: int = 1000) -> list[str]:
     r = (sb().table("app_settings").select("value").like("key", prefix + "%")
          .order("updated_at", desc=True).limit(limit).execute())

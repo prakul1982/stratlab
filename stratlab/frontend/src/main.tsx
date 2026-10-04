@@ -44,6 +44,7 @@ const experiment = () => import("./pages/ExperimentPage");
 const ExperimentPage = page(experiment, "ExperimentPage");
 const MarketPage = page(() => import("./pages/MarketPage"), "MarketPage");
 const OptionsPage = page(() => import("./pages/OptionsPage"), "OptionsPage");
+const PositioningPage = page(() => import("./pages/PositioningPage"), "PositioningPage");
 const ImportPage = page(() => import("./pages/ImportPage"), "ImportPage");
 const verdict = () => import("./pages/PublicVerdict");
 const PublicVerdict = page(verdict, "PublicVerdict");
@@ -184,6 +185,7 @@ function Routed() {
         <Route path="/import" element={<ImportPage />} />
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/options" element={<OptionsPage />} />
+        <Route path="/trade/positioning" element={<PositioningPage />} />
         <Route path="/options/s/:sid" element={<OptionsSession />} />
         <Route path="/paper" element={<PaperPage />} />
         <Route path="/paper/:sid" element={<PaperPage />} />

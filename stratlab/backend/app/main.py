@@ -67,6 +67,7 @@ from .newsletter import job as news
 from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
+from . import positioning
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
@@ -176,6 +177,9 @@ surv_job = surveillance.Job(lambda: filings_feed, lambda changes, now: stock_ale
 lifecycle_job = lifecycle.Job()
 advance_tax_job = money_advance_tax.Job()       # advance tax reminders, for those who turned them on
 invite_job = invite_rewards.Job()
+# derivatives positioning: the exchange's evening files, read through the exchange client (tests swap filings_feed)
+positioning_runner = positioning.Runner(lambda: filings_feed)
+positioning_job = positioning.Job(positioning_runner)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
 
 
@@ -212,6 +216,7 @@ async def lifespan(app: FastAPI):
     advance_tax_job.start()
     invite_job.start()
     rules_watch_job.start()
+    positioning_job.start()
     networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
@@ -2951,6 +2956,74 @@ def options_chain(exchange: str = "NFO", underlying: str = "NIFTY", expiry: str 
             not re.fullmatch(r"current|next|month|\d{4}-\d{2}-\d{2}", expiry):
         err(400, "bad_request", "Pick an exchange, an underlying and an expiry.")
     return options_data.chain(exchange, underlying, expiry)
+
+
+# ---------- derivatives positioning (Trade) ----------
+def _pos_name(name: str) -> str:
+    if name not in positioning.NAMES:
+        err(400, "bad_request", "Pick NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY or SENSEX.")
+    return name
+
+
+@app.get("/trade/positioning")
+def trade_positioning(brief: bool = False, pcr: bool = True, profile=Depends(current_profile)):
+    """The newest participant-wise open interest and volume, FII/DII cash flows and each index's PCR (left out with
+    pcr=false, for the page that asks for them on their own). Today's numbers are on every plan; the history and the
+    IV percentile and rank are on Basic and up."""
+    out = positioning.summary(options_data, allows(profile["_plan"], "positioning"), brief=brief, with_pcr=pcr)
+    out["plan_needed"] = PLANS[FEATURE_PLAN["positioning"]]["name"]
+    return ok(out)
+
+
+@app.get("/trade/positioning/pcr")
+def trade_positioning_pcr(profile=Depends(current_profile)):
+    """Each index's nearest-expiry put-call ratio now: the live chain, else the newest recording."""
+    return ok({"pcr": positioning.pcr_table(options_data)})
+
+
+@app.get("/trade/positioning/chain")
+def trade_positioning_chain(name: str = "NIFTY", expiry: str = "current", profile=Depends(current_profile)):
+    """One index's option chain as facts: open interest and its change by strike, PCR, max pain, ATM IV."""
+    _pos_name(name)
+    if not re.fullmatch(r"current|next|\d{4}-\d{2}-\d{2}", expiry):
+        err(400, "bad_request", "Pick an expiry.")
+    out = positioning.chain_view(options_data, name, expiry, full=allows(profile["_plan"], "positioning"))
+    out["plan_needed"] = PLANS[FEATURE_PLAN["positioning"]]["name"]
+    return ok(out)
+
+
+@app.get("/trade/positioning/history")
+def trade_positioning_history(kind: str = "participants", name: str = "NIFTY", range: str = "6m", profile=Depends(current_profile)):
+    """The stored history behind the charts: participants' positions, cash flows, or an index's PCR, max pain and IV."""
+    need(profile, "positioning", "Positioning history")
+    if kind not in ("participants", "cash", "chain") or range not in positioning.RANGES:
+        err(400, "bad_request", "Pick what to chart and a time range.")
+    return ok(positioning.history_view(kind, _pos_name(name), range))
+
+
+@app.post("/admin/positioning/run")
+def admin_positioning_run(backfill: bool = False, _=Depends(admin.admin_profile)):
+    """Read the newest trading day's files now (or walk the archives back a step), in the background."""
+    if positioning_runner.running:
+        err(409, "busy", "A positioning run is already going.")
+    day = positioning.expected_day(positioning.ist_now())
+
+    def work():
+        try:
+            if backfill:
+                positioning_runner.backfill(positioning.ist_now().date())
+            elif day:
+                positioning_job.status["last_result"] = positioning_runner.run_day(day)
+        except Exception as e:
+            print("positioning run failed:", str(e)[:160])
+    threading.Thread(target=work, daemon=True, name="positioning-now").start()
+    return {"started": True, "day": day.isoformat() if day else None, "state": positioning.state()}
+
+
+@app.get("/admin/positioning")
+def admin_positioning(_=Depends(admin.admin_profile)):
+    """The positioning job's last run, the archive walk and each part's state."""
+    return {"state": positioning.state(), "job": positioning_job.status, "running": positioning_runner.running}
 
 
 @app.post("/options/preview")
