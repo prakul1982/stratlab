@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, moneyShort, pct, periodName, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
+import { money, moneyShort, pct, periodName, price, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import type { Basket, Check, Experiment, Notebook, WalkForward } from "../lib/types";
-import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars, type Marker } from "../components/Charts";
+import { DrawdownBand, Heatmap, Legend, LineChart, SplitBars } from "../components/Charts";
+import { instrumentLoader, PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
 import { Info, Loading, Modal, STATUS_NAME } from "../components/ui";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
@@ -204,21 +205,32 @@ function GroupMembers({ e, cur }: { e: Experiment; cur: string }) {
   );
 }
 
-function markersFor(e: Experiment): Marker[] {
-  const ts = e.series.t.map((t) => new Date(t).getTime());
-  const idx = (iso: string | null) => {
-    if (!iso) return -1;
-    const v = new Date(iso).getTime();
-    let lo = 0, hi = ts.length - 1;
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ts[mid] <= v) lo = mid; else hi = mid - 1; }
-    return lo;
-  };
-  const out: Marker[] = [];
+/** Each trade's entry and exit on the chart: a buy below the candle, a sell above it (a short enters with a sell). */
+function tradeMarks(e: Experiment): { t: string; side: "buy" | "sell" }[] {
+  const out: { t: string; side: "buy" | "sell" }[] = [];
   for (const t of e.trades) {
-    out.push({ i: idx(t.entry_t), side: "buy" });
-    if (t.exit_t) out.push({ i: idx(t.exit_t), side: "sell" });
+    const short = t.side === "short";
+    out.push({ t: t.entry_t, side: short ? "sell" : "buy" });
+    if (t.exit_t) out.push({ t: t.exit_t, side: short ? "buy" : "sell" });
   }
-  return out.filter((m) => m.i >= 0);
+  return out;
+}
+
+/** The instrument's candles with the test's trades and the indicators its rules use. Uploaded data is drawn from
+ *  the closes the experiment kept. */
+function TradesChart({ e, cur }: { e: Experiment; cur: string }) {
+  const csv = !e.instrument.market || e.instrument.market === "CSV" || !e.instrument.id;
+  const load = useMemo(() => (csv ? undefined : instrumentLoader(e.instrument.id)), [csv, e.instrument.id]);
+  const bars = useMemo(() => (csv ? e.series.t.map((t, i) => ({ t, c: e.series.close[i] })) : undefined), [csv, e]);
+  const marks = useMemo(() => tradeMarks(e), [e]);
+  const studies = useMemo(() => strategyStudies([...e.strategy.entry, ...e.strategy.exit, ...(e.strategy.shortEntry ?? []), ...(e.strategy.shortExit ?? [])]), [e]);
+  const tfs: Tf[] = e.tf === "1d" ? ["1d", "1w", "1mo"] : [e.tf as Tf, "1d"];
+  return (
+    <PriceChart symbol={e.instrument.symbol} storageKey={(e.instrument.id || e.instrument.symbol).slice(0, 40)} currency={cur}
+      load={load} bars={bars} tf={e.tf as Tf} timeframes={csv ? [e.tf as Tf] : tfs} range={null} markers={marks} pageStudies={studies} height={380} closesOnly={csv}
+      history={e.days <= 366 ? "1y" : e.days <= 1100 ? "3y" : e.days <= 1830 ? "5y" : "max"}
+      note={csv ? "Your uploaded data: the closes this experiment kept." : "Markers: entries and exits of this test. Lines from your rules are listed in the legend."} />
+  );
 }
 
 function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
@@ -330,13 +342,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           <h2 className="h2 row" style={{ gap: 0 }}>Price and trades<Info>{HELP.priceChart}</Info></h2>
           <span className="small muted">▲ buy &nbsp; ▼ sell</span>
         </div>
-        <LineChart ariaLabel={`${e.instrument.symbol} price with buy and sell points`} labels={labels} axisLabels={years} height={300}
-          format={(x) => price(x, cur)} axisFormat={(x) => priceAxis(x, cur)} markers={markersFor(e)}
-          lines={[
-            { label: "Close", values: e.series.close, color: "var(--ink)", width: 1.6 },
-            ...Object.entries(e.series.overlays).map(([k, vals], i) => ({ label: k, values: vals, color: ["var(--blue)", "var(--orange)", "var(--muted)", "var(--dash)"][i % 4], width: 1.3 })),
-          ]} />
-        <Legend items={[{ label: "Close", color: "var(--ink)" }, ...Object.keys(e.series.overlays).map((k, i) => ({ label: k, color: ["var(--blue)", "var(--orange)", "var(--muted)", "var(--dash)"][i % 4] }))]} />
+        <TradesChart e={e} cur={cur} />
       </section>}
 
       <section className="stats-grid">
