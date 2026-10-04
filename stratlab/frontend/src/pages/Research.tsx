@@ -20,6 +20,7 @@ import { SurvBadges } from "../components/Surveillance";
 import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { CompanyActions } from "../components/CorpActions";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
+import { Earlier } from "../components/Earlier";
 
 function useRegion(): [Region, (r: Region) => void] {
   const [params, setParams] = useSearchParams();
@@ -868,18 +869,24 @@ export function ResultsPage() {
       )}
       {data && !empty && data.weeks.map((w) => {
         const days = [...new Set(w.rows.map((r) => r.date))];
+        const ahead = days.filter((d) => d >= data.today), past = days.filter((d) => d < data.today);     // the days gone by fold away
+        const day = (d: string) => (
+          <div key={d} className="stack" style={{ gap: 8 }}>
+            <span className="eyebrow">{resultDay(d)}{d === data.today ? " · today" : ""}</span>
+            {w.rows.filter((r) => r.date === d).map((r) => <ResultLine key={`${r.symbol}-${r.date}`} r={r} showMine={scope === "all"} />)}
+          </div>
+        );
         return (
           <section key={w.label} className="card stack" style={{ gap: 14 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
               <h2 className="h3">{w.label}</h2>
               <span className="small muted">{resultDay(w.from)} to {resultDay(w.to)}</span>
             </div>
-            {days.length === 0 ? <span className="small muted">Nothing announced for this week yet.</span> : days.map((d) => (
-              <div key={d} className="stack" style={{ gap: 8 }}>
-                <span className="eyebrow">{resultDay(d)}{d === data.today ? " · today" : ""}</span>
-                {w.rows.filter((r) => r.date === d).map((r) => <ResultLine key={`${r.symbol}-${r.date}`} r={r} showMine={scope === "all"} />)}
-              </div>
-            ))}
+            {days.length === 0 ? <span className="small muted">Nothing announced for this week yet.</span>
+              : ahead.length ? ahead.map(day) : <span className="small muted">Nothing left this week.</span>}
+            <Earlier label="Earlier this week" count={w.rows.filter((r) => r.date < data.today).length} className="in-card">
+              {past.map(day)}
+            </Earlier>
           </section>
         );
       })}

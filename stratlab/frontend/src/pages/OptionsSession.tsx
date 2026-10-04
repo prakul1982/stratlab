@@ -1,12 +1,14 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, price, signClass, when } from "../lib/format";
+import { money, moneyShort, price, signClass, when } from "../lib/format";
 import { HELP } from "../lib/help";
 import type { OptionSnapshot } from "../lib/types";
 import { LineChart } from "../components/Charts";
 import { Info, Loading } from "../components/ui";
+import { Earlier, splitToday } from "../components/Earlier";
+import { contract, OrderList, ordersBetween, ordersSince } from "../components/OrderList";
 
 const TZ = "Asia/Kolkata";
 const inr = (v: number | null | undefined) => money(v, "INR");
@@ -33,6 +35,8 @@ export function OptionsSession() {
   if (!snap) return <Loading label="Connecting to the session" />;
   const running = snap.status === "running";
   const a = snap.account, p = snap.position, s = snap.strategy;
+  const { today, earlier } = splitToday(snap.trades, (x) => x.closed, TZ);
+  const openOrders = p ? ordersSince(snap.events, p.opened) : [];
   const feed = !running ? "" : !snap.feed_connected ? "Reconnecting to prices" : snap.fresh ? "Live option prices" : "Waiting for the market to open";
 
   const stop = async () => {
@@ -83,136 +87,124 @@ export function OptionsSession() {
         {stats.map(([k, v, n]) => <div key={k} className="card"><span className="eyebrow">{k}</span><b className={`mono ${signClass(n)}`} style={{ fontSize: 22 }}>{v}</b></div>)}
       </div>
 
-      <div className="nb-grid" style={{ gap: 16 }}>
-        <div className="stack" style={{ gap: 16, minWidth: 0 }}>
-          <section className="card stack" style={{ gap: 10 }}>
-            <div className="spread"><h3 className="h3">Position</h3>
-              {snap.spot != null && <span className="mono small">{snap.instrument.underlying} {price(snap.spot, "INR")}</span>}</div>
-            {!p ? <p className="muted">{running ? `Flat. ${a.entries_today >= s.timing.maxEntries ? "Done for today." : s.signal ? `Enters when ${s.signal.name} signals (from ${s.timing.entry}).` : `Enters at ${s.timing.entry} on market days.`}` : "Nothing open."}</p> : (
-              <>
-                <p className="small muted">Opened {t(p.opened)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"} {inr(Math.abs(p.credit))}.
-                  {" "}Best {inr(p.best)}, worst {inr(p.worst)} so far.{p.rolls ? ` Re-centred ${p.rolls} time${p.rolls === 1 ? "" : "s"}.` : ""} Costs so far {inr(p.costs)} over {p.orders} orders.</p>
-                <div className="table-wrap">
-                  <table>
-                    <thead><tr><th>Leg</th><th>Side</th><th>Qty</th><th>Entry</th><th>Now<Info>{HELP.optMark}</Info></th><th>P&amp;L</th></tr></thead>
-                    <tbody>{snap.legs.map((l, i) => (
-                      <tr key={i} style={{ opacity: l.open ? 1 : 0.55 }}>
-                        <td className="mono">{l.sym}{!l.open && " (closed)"}</td><td>{l.side === "sell" ? "Sold" : "Bought"}</td><td className="mono">{l.qty}</td>
-                        <td className="mono">{price(l.entry, "INR")}</td><td className="mono">{price(l.mark, "INR")}</td>
-                        <td className={`mono ${signClass(l.pnl)}`}>{inr(l.pnl)}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-                {ordersSince(snap.events, p.opened).length > 0 && (
-                  <details className="open-orders">
-                    <summary className="small">Orders in this trade ({ordersSince(snap.events, p.opened).length})</summary>
-                    <OrderList events={ordersSince(snap.events, p.opened)} />
-                  </details>
-                )}
-              </>
-            )}
-          </section>
-          <section className="card stack" style={{ gap: 10 }}>
-            <h3 className="h3">Paper equity</h3>
-            {snap.equity_curve.length > 1 ? (
-              <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((x) => t(x.t))} height={170}
-                format={(v) => inr(v)} axisFormat={(v) => inr(v)} baseline={a.capital}
-                lines={[{ label: "Account", values: snap.equity_curve.map((x) => x.eq), color: "var(--blue)", width: 1.6 }]} />
-            ) : <p className="muted">Fills in minute by minute while the market is open.</p>}
-          </section>
-          <section className="card stack" style={{ gap: 10 }}>
-            <div className="spread"><h3 className="h3">Trades</h3>
-              {snap.trades.length > 0 && <span className="small muted">Tap a trade to see its orders</span>}</div>
-            {snap.trades.length === 0 ? <p className="muted">No closed trades yet.</p> : (
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>Opened</th><th>Closed</th><th>Premium</th><th>Before costs</th><th>Costs</th><th>P&amp;L</th><th>Why it closed</th></tr></thead>
-                  <tbody>{[...snap.trades].reverse().map((x) => {
-                    const key = x.opened + x.closed, open = shown.has(key);
-                    const orders = ordersBetween(snap.events, x.opened, x.closed);
-                    return (
-                      <Fragment key={key}>
-                        <tr className={`trade-row${open ? " open" : ""}`}>
-                          <td><button className="link-btn trade-toggle" aria-expanded={open} disabled={!orders.length}
-                            aria-label={`${open ? "Hide" : "Show"} the orders of the trade opened ${t(x.opened)}`} onClick={() => toggle(key)}>
-                            <span className="chev" aria-hidden>{open ? "▾" : "▸"}</span>{t(x.opened)}</button></td>
-                          <td>{t(x.closed)}</td><td className="mono">{inr(x.credit)}</td><td className={`mono ${signClass(x.gross)}`}>{inr(x.gross)}</td>
-                          <td className="mono">{inr(x.costs)}</td><td className={`mono ${signClass(x.pnl)}`}><b>{inr(x.pnl)}</b></td>
-                          <td>{x.why}{x.rolls ? `, ${x.rolls} roll${x.rolls === 1 ? "" : "s"}` : ""}</td>
-                        </tr>
-                        {open && <tr className="trade-orders-row"><td colSpan={7}><OrderList events={orders} /></td></tr>}
-                      </Fragment>
-                    );
-                  })}</tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </div>
-        <div className="stack" style={{ gap: 16, minWidth: 0 }}>
-          <section className="card stack" style={{ gap: 8 }}>
-            <h3 className="h3">Rules</h3>
-            <ul className="small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-              <li>{s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.offset === 0 ? "ATM" : `${l.offset}${s.offsetUnit === "points" ? " pts" : ""} ${l.offset > 0 ? "OTM" : "ITM"}`} ${l.opt}${l.lots > 1 ? ` × ${l.lots}` : ""}`).join(", ")}</li>
-              <li>Enter {s.timing.entry}–{s.timing.lastEntry}, square off {s.timing.squareoff}, up to {s.timing.maxEntries} a day{s.timing.cooldown ? `, ${s.timing.cooldown} min apart` : ""}</li>
-              {s.risk.stopType !== "none" && <li>Stop at {s.risk.stopType === "amount" ? inr(s.risk.stop) : `${s.risk.stop}% of premium`}</li>}
-              {s.risk.tgtType !== "none" && <li>Target {s.risk.tgtType === "amount" ? inr(s.risk.tgt) : `${s.risk.tgt}% of premium`}</li>}
-              {s.risk.trailAfter > 0 && s.risk.trailBy > 0 && <li>Trail after {inr(s.risk.trailAfter)} by {inr(s.risk.trailBy)}</li>}
-              {s.risk.legStopPct > 0 && <li>Stop a sold leg at +{s.risk.legStopPct}%</li>}
-              {s.risk.dailyLoss > 0 && <li>Daily loss cap {inr(s.risk.dailyLoss)}</li>}
-              {s.recenter.enabled && <li>Re-centre every {s.recenter.every} min after a {s.recenter.threshold}-strike move ({s.recenter.roll === "all" ? "every leg" : "sold legs"})</li>}
-              <li>{s.sizing.mode === "margin" ? `As much as margin allows on ${inr(s.sizing.capital)}` : `${s.sizing.lots} unit${s.sizing.lots === 1 ? "" : "s"}`}</li>
-            </ul>
-          </section>
-        </div>
-      </div>
+      <section className="card rules-strip" aria-label="Rules">
+        <span className="eyebrow">Rules</span>
+        <ul>
+          <li>{s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.offset === 0 ? "ATM" : `${l.offset}${s.offsetUnit === "points" ? " pts" : ""} ${l.offset > 0 ? "OTM" : "ITM"}`} ${l.opt}${l.lots > 1 ? ` × ${l.lots}` : ""}`).join(", ")}</li>
+          <li>Enter {s.timing.entry}–{s.timing.lastEntry}, up to {s.timing.maxEntries} a day{s.timing.cooldown ? `, ${s.timing.cooldown} min apart` : ""}</li>
+          <li>Square off {s.timing.squareoff}</li>
+          {s.risk.stopType !== "none" && <li>Stop at {s.risk.stopType === "amount" ? inr(s.risk.stop) : `${s.risk.stop}% of premium`}</li>}
+          {s.risk.tgtType !== "none" && <li>Target {s.risk.tgtType === "amount" ? inr(s.risk.tgt) : `${s.risk.tgt}% of premium`}</li>}
+          {s.risk.trailAfter > 0 && s.risk.trailBy > 0 && <li>Trail after {inr(s.risk.trailAfter)} by {inr(s.risk.trailBy)}</li>}
+          {s.risk.legStopPct > 0 && <li>Stop a sold leg at +{s.risk.legStopPct}%</li>}
+          {s.risk.dailyLoss > 0 && <li>Daily loss cap {inr(s.risk.dailyLoss)}</li>}
+          {s.recenter.enabled && <li>Re-centre every {s.recenter.every} min after a {s.recenter.threshold}-strike move ({s.recenter.roll === "all" ? "every leg" : "sold legs"})</li>}
+          <li>{s.sizing.mode === "margin" ? `As much as margin allows on ${inr(s.sizing.capital)}` : `${s.sizing.lots} unit${s.sizing.lots === 1 ? "" : "s"}`}</li>
+        </ul>
+      </section>
+
+      <section className="card stack" style={{ gap: 12 }} aria-labelledby="o-today">
+        <div className="spread"><h3 id="o-today" className="h3">Today</h3>
+          {snap.spot != null && <span className="mono small">{snap.instrument.underlying} {price(snap.spot, "INR")}</span>}</div>
+        {!p ? <p className="muted">{flatLine(snap, today.length)}</p> : (
+          <>
+            <p className="small muted">Open since {t(p.opened)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"} {inr(Math.abs(p.credit))}.
+              {" "}Best {inr(p.best)}, worst {inr(p.worst)} so far.{p.rolls ? ` Re-centred ${p.rolls} time${p.rolls === 1 ? "" : "s"}.` : ""} Costs so far {inr(p.costs)} over {p.orders} orders.</p>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Leg</th><th>Side</th><th>Qty</th><th>Entry</th><th>Now<Info>{HELP.optMark}</Info></th><th>P&amp;L</th></tr></thead>
+                <tbody>{snap.legs.map((l, i) => (
+                  <tr key={i} style={{ opacity: l.open ? 1 : 0.55 }}>
+                    <td title={l.sym}>{contract(l)}{!l.open && " (closed)"}</td><td>{l.side === "sell" ? "Sold" : "Bought"}</td><td className="mono">{l.qty.toLocaleString("en-IN")}</td>
+                    <td className="mono">{price(l.entry, "INR")}</td><td className="mono">{price(l.mark, "INR")}</td>
+                    <td className={`mono ${signClass(l.pnl)}`}>{inr(l.pnl)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <Earlier label="Orders in this trade" count={openOrders.length} className="in-card">
+              <OrderList events={openOrders} cur="INR" tz={TZ} />
+            </Earlier>
+          </>
+        )}
+        {today.length > 0 && (
+          <div className="stack" style={{ gap: 6 }}>
+            {p && <span className="eyebrow" style={{ marginTop: 6 }}>Closed today</span>}
+            <TradeList rows={today} events={snap.events} shown={shown} toggle={toggle} />
+          </div>
+        )}
+      </section>
+
+      {earlier.length > 0 && (
+        <section className="card" aria-label="Earlier trades">
+          <Earlier label="Earlier trades" count={earlier.length} note={<Totals rows={earlier} />}>
+            <TradeList rows={earlier} events={snap.events} shown={shown} toggle={toggle} />
+          </Earlier>
+        </section>
+      )}
+
+      <section className="card stack" style={{ gap: 10 }}>
+        <h3 className="h3">Paper equity</h3>
+        {snap.equity_curve.length > 1 ? (
+          <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((x) => t(x.t))} height={170}
+            axisLabels={snap.equity_curve.map((x) => new Date(x.t).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: TZ }))}
+            format={(v) => inr(v)} axisFormat={(v) => moneyShort(v, "INR")} baseline={a.capital}
+            lines={[{ label: "Account", values: snap.equity_curve.map((x) => x.eq), color: "var(--blue)", width: 1.6 }]} />
+        ) : <p className="muted small">Fills in minute by minute while the market is open.</p>}
+      </section>
     </div>
   );
 }
 
+type Trade = OptionSnapshot["trades"][number];
 type OrderEvent = OptionSnapshot["events"][number];
 
-const ms = (iso: string) => new Date(iso).getTime();
-const ordersBetween = (events: OrderEvent[], from: string, to: string) => events.filter((e) => ms(e.t) >= ms(from) && ms(e.t) <= ms(to));
-const ordersSince = (events: OrderEvent[], from: string) => events.filter((e) => ms(e.t) >= ms(from));
+/** "05 Oct, 09:30–11:30", or both dates when a trade was held overnight. */
+function span(x: Trade): string {
+  const a = t(x.opened), b = t(x.closed), [da] = a.split(", "), [db, tb] = b.split(", ");
+  return da === db ? `${a}–${tb}` : `${a} → ${b}`;
+}
 
-/** One trade's orders, in the order they were sent: each moment (entry, re-centre, stop) a line, its legs under it. */
-function OrderList({ events }: { events: OrderEvent[] }) {
+/** Closed trades, newest first, one line each; tapping one opens its orders under it. */
+function TradeList({ rows, events, shown, toggle }: { rows: Trade[]; events: OrderEvent[]; shown: Set<string>; toggle: (k: string) => void }) {
   return (
-    <div className="order-list">{orderGroups(events).map((g) => (
-      <div key={g.key} className="order-group">
-        <div className="order-head small"><span><b>{g.why}</b> <span className="muted">· {t(g.t)}</span></span>
-          {g.pnl != null && <span className={`order-num ${signClass(g.pnl)}`}>{inr(g.pnl)}</span>}</div>
-        <ul className="orders">{g.rows.map((e, i) => (
-          <li key={i} title={e.slices && e.slices > 1 ? `Sent in ${e.slices} slices (the exchange's freeze limit)` : undefined}>
-            <span className={`side-chip ${e.side}`} aria-label={e.side === "buy" ? "Buy" : "Sell"} role="img">{e.side === "buy" ? "B" : "S"}</span>
-            <span className="order-sym">{contract(e)}</span>
-            <span className="order-num small muted">{e.qty.toLocaleString("en-IN")} × {price(e.px, "INR")}</span>
-          </li>
-        ))}</ul>
-      </div>
-    ))}</div>
+    <ul className="trade-lines">{[...rows].reverse().map((x) => {
+      const key = x.opened + x.closed, open = shown.has(key);
+      const orders = ordersBetween(events, x.opened, x.closed);
+      return (
+        <li key={key} className={open ? "open" : undefined}>
+          <button className="trade-line" aria-expanded={open} disabled={!orders.length} onClick={() => toggle(key)}
+            aria-label={`${open ? "Hide" : "Show"} the orders of the trade opened ${t(x.opened)}`}>
+            <span className="chev" aria-hidden>{open ? "▾" : "▸"}</span>
+            <span className="trade-main">
+              <span className="trade-when">{span(x)}</span>
+              <span className="small muted">{x.why}{x.rolls ? `, ${x.rolls} roll${x.rolls === 1 ? "" : "s"}` : ""} · premium {inr(x.credit)} · before costs {inr(x.gross)} · costs {inr(x.costs)}</span>
+            </span>
+            <b className={`trade-pnl mono ${signClass(x.pnl)}`}>{inr(x.pnl)}</b>
+          </button>
+          {open && <div className="trade-orders"><OrderList events={orders} cur="INR" tz={TZ} /></div>}
+        </li>
+      );
+    })}</ul>
   );
 }
 
-/** Orders sent together (same moment, same reason) as one group, oldest first, with their P&L added up. */
-function orderGroups(events: OrderEvent[]) {
-  const out: { key: string; t: string; why: string; pnl: number | null; rows: OrderEvent[] }[] = [];
-  for (const e of events) {
-    const last = out[out.length - 1];
-    if (last && last.t === e.t && last.why === e.why) {
-      last.rows.push(e);
-      if (e.pnl != null) last.pnl = (last.pnl ?? 0) + e.pnl;
-    } else out.push({ key: `${e.t}|${e.why}|${out.length}`, t: e.t, why: e.why, pnl: e.pnl ?? null, rows: [e] });
-  }
-  return out;
+/** "12 trades · −₹56,346 after costs · 4 won": the folded trades added up. */
+function Totals({ rows }: { rows: Trade[] }) {
+  const pnl = rows.reduce((n, x) => n + x.pnl, 0), won = rows.filter((x) => x.pnl > 0).length;
+  return <><span className={signClass(pnl)}>{inr(pnl)}</span> after costs · {won} won</>;
 }
 
-/** "NIFTY 22450 PE" from the order, or read from the exchange's symbol for orders saved before strikes were kept. */
-function contract(e: OrderEvent): string {
-  const name = e.sym.match(/^[A-Z&-]+/)?.[0] ?? e.sym;
-  if (e.strike != null && e.opt) return `${name} ${e.strike} ${e.opt}`;
-  const m = e.sym.match(/^[A-Z&-]+(?:\d{2}[A-Z]{3}|\d{2}[0-9OND]\d{2})(\d+(?:\.\d+)?)(CE|PE)$/);
-  return m ? `${name} ${m[1]} ${m[2]}` : e.sym;
+/** What a flat session is waiting for, in one line: "No trades today. Next entry 09:30." */
+function flatLine(snap: OptionSnapshot, closedToday: number): string {
+  const s = snap.strategy, a = snap.account;
+  const none = closedToday ? "Nothing open." : "No trades today.";
+  if (snap.status !== "running") return none;
+  if (a.halted || a.entries_today >= s.timing.maxEntries) return `${none} Done for today; next entry ${s.timing.entry} on the next market day.`;
+  if (s.signal) return `${none} Enters when ${s.signal.name} signals, from ${s.timing.entry}.`;
+  const now = new Date();
+  const hm = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: TZ });
+  const wd = now.toLocaleDateString("en-GB", { weekday: "short", timeZone: TZ });
+  if (wd === "Sat" || wd === "Sun" || hm > s.timing.lastEntry) return `${none} Next entry ${s.timing.entry} on the next market day.`;
+  return hm < s.timing.entry ? `${none} Next entry ${s.timing.entry}.` : `${none} Entries open until ${s.timing.lastEntry}.`;
 }

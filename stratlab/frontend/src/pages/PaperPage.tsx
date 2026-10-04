@@ -10,6 +10,8 @@ import { Empty, Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
 import { SurvBadges, survRegion } from "../components/Surveillance";
+import { Earlier, splitToday } from "../components/Earlier";
+import { OrderList, type PaperOrder } from "../components/OrderList";
 
 function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
   const { fail, refreshMe } = useApp();
@@ -43,6 +45,10 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   const idx = new Map(snap.bars.map((b, i) => [b.t, i]));
   const markers: Marker[] = snap.events.map((e) => ({ i: idx.get(e.t) ?? -1, side: e.side })).filter((m) => m.i >= 0);
   const alwaysOpen = snap.instrument.market === "CRYPTO";
+  // orders: today's in view, the earlier ones folded
+  const orders: PaperOrder[] = snap.events.map((e) => ({ ...e, sym: snap.instrument.symbol }));
+  const { today, earlier } = splitToday(orders, (e) => e.t, tz);
+  const closedPnl = earlier.reduce((n, e) => n + (e.pnl ?? 0), 0);
   const feed = !running ? "" : snap.feed_connected
     ? (snap.last_tick_at ? "Live prices" : alwaysOpen ? "Fetching the latest prices" : "Waiting for the market to open")
     : "Reconnecting to prices";
@@ -111,21 +117,35 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
               </div>
             ))}
           </section>
-          <section className="card stack" style={{ gap: 8 }}>
-            <h3 className="h3">Orders</h3>
-            {snap.orders.length === 0 && <p className="small muted">No orders yet. They appear when your rules fire on a closed candle.</p>}
-            <div className="stack" style={{ gap: 0, maxHeight: 340, overflowY: "auto" }}>
-              {snap.orders.map((o, k) => (
-                <p key={k} className="small" style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
-                  <b className={o.side === "buy" ? "pos" : "neg"}>{o.side === "buy" ? "Bought" : "Sold"}</b> {qty(o.qty)} at {price(o.price, cur)}
-                  {o.side === "sell" && <>, {(o.reason || "").toLowerCase()}, <span className={signClass(o.pnl)}>{money(o.pnl, cur)}</span></>}
-                  <span className="muted"> · {when(o.ts, tz, true)}</span>
-                </p>
-              ))}
-            </div>
+          <section className="card stack" style={{ gap: 10 }} aria-labelledby="p-orders">
+            <h3 id="p-orders" className="h3">Orders today</h3>
+            {today.length ? <OrderList events={today} cur={cur} tz={tz} newest />
+              : <p className="small muted">{!snap.events.length ? "No orders yet. They appear when your rules fire on a closed candle." : "No orders today."}</p>}
+            <Earlier label="Earlier orders" count={earlier.length} className="in-card"
+              note={<><span className={signClass(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
+              <OrderList events={earlier} cur={cur} tz={tz} newest />
+            </Earlier>
           </section>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Sessions as a row of cards, the open one outlined. */
+function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open: (r: LiveRow) => void }) {
+  return (
+    <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+      {rows.map((r) => (
+        <button key={r.id} className="card" onClick={() => open(r)} aria-current={r.id === sid}
+          style={{ flex: "none", minWidth: 210, textAlign: "left", cursor: "pointer", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4,
+            border: r.id === sid ? "2px solid var(--ink)" : undefined }}>
+          <b>{r.name}</b>
+          <span className="small muted">{r.instrument.symbol} · {new Date(r.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+          <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
+          <span className={`badge ${r.status}`} style={{ alignSelf: "flex-start" }}>{r.status}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -141,6 +161,8 @@ export function PaperPage() {
   useEffect(() => { load(); }, [load, sid]);
 
   const stopped = (rows ?? []).filter((r) => r.status !== "running" && r.status !== "paused");
+  const current = (rows ?? []).filter((r) => !stopped.includes(r));     // running and paused first; the stopped ones folded
+  const open = (r: LiveRow) => nav(r.instrument?.type === "OPTIONS" ? `/options/s/${r.id}` : `/paper/${r.id}`);
   const clearStopped = async () => {
     if (!confirm(`Delete ${stopped.length} stopped session${stopped.length === 1 ? "" : "s"} and their orders? Running ones stay. This can't be undone.`)) return;
     try {
@@ -170,26 +192,14 @@ export function PaperPage() {
           <Link to="/notebooks" className="btn">Go to your notebooks</Link>
         </Empty>
       ) : (
-        <>
-        {stopped.length > 1 && (
-          <div className="spread" style={{ marginBottom: -12 }}>
-            <span className="small muted">{rows.length} session{rows.length === 1 ? "" : "s"} · {stopped.length} stopped</span>
-            <button className="btn quiet sm" onClick={clearStopped}>Clear stopped sessions</button>
-          </div>
-        )}
-        <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-          {rows.map((r) => (
-            <button key={r.id} className="card" onClick={() => nav(r.instrument?.type === "OPTIONS" ? `/options/s/${r.id}` : `/paper/${r.id}`)} aria-current={r.id === sid}
-              style={{ flex: "none", minWidth: 210, textAlign: "left", cursor: "pointer", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4,
-                border: r.id === sid ? "2px solid var(--ink)" : undefined }}>
-              <b>{r.name}</b>
-              <span className="small muted">{r.instrument.symbol} · {new Date(r.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
-              <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
-              <span className={`badge ${r.status}`} style={{ alignSelf: "flex-start" }}>{r.status}</span>
-            </button>
-          ))}
+        <div className="stack" style={{ gap: 12 }}>
+          {current.length ? <SessionCards rows={current} sid={sid} open={open} />
+            : <p className="muted">None running. {stopped.length === 1 ? "The stopped one is" : "Stopped ones are"} below.</p>}
+          <Earlier label="Stopped sessions" count={stopped.length} open={!!sid && stopped.some((r) => r.id === sid)}>
+            <SessionCards rows={stopped} sid={sid} open={open} />
+            <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={clearStopped}>Clear stopped sessions</button>
+          </Earlier>
         </div>
-        </>
       )}
       {!sid && rows && rows.some((r) => r.status === "running") && (
         <RiskOverview onOpen={(id, kind) => nav(kind === "options" ? `/options/s/${id}` : `/paper/${id}`)} />

@@ -1162,20 +1162,44 @@ table.j-trades td:first-child { text-align: left; min-width: 150px; }
 .itr-head { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; gap: 10px; align-items: center; text-align: left; }
 @media (max-width: 600px) { .itr-downloads .btn { flex: 1 1 100%; justify-content: flex-start; } }
 
-/* options session: a trade's orders open under its row; the open trade's under its position */
-.trade-toggle { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
-.trade-toggle:disabled { cursor: default; }
-.trade-toggle .chev { width: 10px; color: var(--muted); font-size: 11px; }
-.trade-toggle:disabled .chev { visibility: hidden; }
-.trade-row.open td { border-bottom-color: transparent; }
-.trade-orders-row > td { background: var(--paper-2); padding: 12px 16px 14px 34px !important; }
-.order-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px 24px; }
-.open-orders summary { cursor: pointer; color: var(--ink-2); margin: 4px 0 10px; }
+/* ---- current first, the past folded (components/Earlier.tsx, components/OrderList.tsx) ---- */
+/* "Earlier trades (12) · ₹4,200 after costs": one quiet line, closed until asked */
+.earlier > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; min-height: 36px; cursor: pointer; list-style: none; color: var(--ink-2); }
+.earlier > summary::-webkit-details-marker { display: none; }
+.earlier > summary::before { content: "▸"; width: 12px; color: var(--muted); font-size: 11px; }
+.earlier[open] > summary::before { content: "▾"; }
+.earlier-label { font-weight: 600; }
+.earlier-note { font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.earlier-body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.earlier.in-card { border-top: 1px solid var(--line); padding-top: 6px; }
+.earlier.in-card > summary { font-size: 14px; }
+/* a session's rules in one wrapped line, so the page is one column with no empty gutter beside it */
+.rules-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding: 14px 18px; }
+.rules-strip ul { display: flex; flex-wrap: wrap; gap: 4px 0; list-style: none; margin: 0; padding: 0; font-size: 14px; color: var(--ink-2); }
+.rules-strip li:not(:last-child)::after { content: "·"; margin: 0 10px; color: var(--muted); }
+@media (max-width: 640px) { .rules-strip ul { flex-direction: column; } .rules-strip li::after { display: none; } }
+/* closed trades, one line each: when, why and the amounts, the P&L at the end; tapping one opens its orders under it */
+ul.trade-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+ul.trade-lines > li { border-top: 1px solid var(--line); }
+ul.trade-lines > li:first-child { border-top: 0; }
+.trade-line { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; width: 100%; min-height: 44px;
+  padding: 10px 2px; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.trade-line:disabled { cursor: default; }
+.trade-line:disabled .chev { visibility: hidden; }
+.trade-line .chev { color: var(--muted); font-size: 11px; }
+.trade-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.trade-when { font-weight: 500; }
+.trade-pnl { font-size: 15px; white-space: nowrap; }
+.trade-orders { margin: 0 0 12px 22px; padding: 12px 14px; border-radius: 10px; background: var(--paper-2); }
+@media (max-width: 640px) { .trade-orders { margin-left: 0; } }
+/* orders sent together under one line, each order a row: side, contract, quantity x price */
+.order-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 12px 24px; }
 .order-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .order-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-ul.orders li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; flex-wrap: nowrap; }
+ul.order-rows li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .order-sym { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .side-chip { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; font-size: 11px; font-weight: 700; }
 .side-chip.buy { background: var(--blue-soft); color: var(--blue-ink); }
 .side-chip.sell { background: var(--orange-soft); color: var(--orange-ink); }
 .order-num { font-family: var(--sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* ---- end current first, the past folded ---- */

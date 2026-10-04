@@ -7,24 +7,30 @@ import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/resear
 import { ResearchNav } from "../components/Research";
 import { ActionLine, KIND_NAME, exDay, type ActionKind, type CorpAction } from "../components/CorpActions";
 import { Info, Loading } from "../components/ui";
+import { Earlier } from "../components/Earlier";
 
 interface CalendarView {
   region: Region; scope: "mine" | "all"; kind: string; today: string; updated_at: string | null; ahead: CorpAction[]; recent: CorpAction[];
   more: number; mine_count: number; alerts: boolean; kinds: ActionKind[]; ahead_known: boolean; note: string;
 }
 
+/** Ex-dates in day groups. */
+function DayGroups({ rows, today }: { rows: CorpAction[]; today: string }) {
+  const days = [...new Set(rows.map((r) => r.ex_date))];
+  return <>{days.map((d) => (
+    <div key={d} className="stack" style={{ gap: 8 }}>
+      <span className="eyebrow">Ex-date {exDay(d)}{d === today ? " · today" : ""}</span>
+      {rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} />)}
+    </div>
+  ))}</>;
+}
+
 /** Ex-dates in day groups, under one heading. */
 function Days({ title, rows, today, empty }: { title: string; rows: CorpAction[]; today: string; empty: string }) {
-  const days = [...new Set(rows.map((r) => r.ex_date))];
   return (
     <section className="card stack" style={{ gap: 14 }}>
       <h2 className="h3">{title}</h2>
-      {days.length === 0 ? <span className="small muted">{empty}</span> : days.map((d) => (
-        <div key={d} className="stack" style={{ gap: 8 }}>
-          <span className="eyebrow">Ex-date {exDay(d)}{d === today ? " · today" : ""}</span>
-          {rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} />)}
-        </div>
-      ))}
+      {rows.length === 0 ? <span className="small muted">{empty}</span> : <DayGroups rows={rows} today={today} />}
     </section>
   );
 }
@@ -104,7 +110,14 @@ export function CorpActionsPage() {
       {data && !empty && (
         <>
           {(data.ahead_known || data.ahead.length > 0) && <Days title="Coming up" rows={data.ahead} today={data.today} empty="Nothing announced with an ex-date ahead." />}
-          <Days title="Last two weeks" rows={data.recent} today={data.today} empty="No ex-dates in the last two weeks." />
+          {/* ex-dates gone by fold under one line, open only when there is nothing ahead to show */}
+          {data.recent.length > 0 && (
+            <section className="card" aria-label="Last two weeks">
+              <Earlier label="Last two weeks" count={data.recent.length} open={!data.ahead_known && !data.ahead.length}>
+                <DayGroups rows={data.recent} today={data.today} />
+              </Earlier>
+            </section>
+          )}
         </>
       )}
       {data && data.more > 0 && <p className="tiny muted">And {data.more} more. Find a company by name to narrow the list.</p>}

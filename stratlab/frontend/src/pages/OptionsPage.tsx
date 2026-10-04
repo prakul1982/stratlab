@@ -11,6 +11,7 @@ import { Block, More } from "../components/More";
 import { Info, Loading } from "../components/ui";
 import { track } from "../lib/analytics";
 import { PositioningCard, TradeTabs } from "../components/PositioningCard";
+import { Earlier } from "../components/Earlier";
 
 const DRAFT = "stratlab.options.draft.v1";
 
@@ -156,6 +157,7 @@ export function OptionsPage() {
   const [starting, setStarting] = useState(false);
   const [rows, setRows] = useState<LiveRow[] | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
+  const live = (rows ?? []).filter((x) => x.status === "running" || x.status === "paused");     // the stopped ones fold away
 
   useEffect(() => {
     api<Underlying[]>("/options/underlyings").then(setUnds).catch((e: ApiError) => { setUnds([]); setOffline(e.message); });
@@ -450,17 +452,27 @@ export function OptionsPage() {
       {rows && rows.length > 0 && (
         <section className="stack" style={{ gap: 10 }} aria-labelledby="o-sess">
           <h2 id="o-sess" className="h3">Your options sessions</h2>
-          <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-            {rows.map((x) => (
-              <Link key={x.id} to={`/options/s/${x.id}`} className="card" style={{ flex: "none", minWidth: 200, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
-                <b>{x.name}</b>
-                <span className="small muted">{new Date(x.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
-                <span className={`badge ${x.status}`} style={{ alignSelf: "flex-start" }}>{x.status}</span>
-              </Link>
-            ))}
-          </div>
+          {live.length ? <OptSessionCards rows={live} /> : <p className="small muted">None running.</p>}
+          <Earlier label="Stopped sessions" count={rows.length - live.length}>
+            <OptSessionCards rows={rows.filter((x) => !live.includes(x))} />
+          </Earlier>
         </section>
       )}
+    </div>
+  );
+}
+
+/** Options sessions as a row of cards, each opening its page. */
+function OptSessionCards({ rows }: { rows: LiveRow[] }) {
+  return (
+    <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+      {rows.map((x) => (
+        <Link key={x.id} to={`/options/s/${x.id}`} className="card" style={{ flex: "none", minWidth: 200, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+          <b>{x.name}</b>
+          <span className="small muted">{new Date(x.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+          <span className={`badge ${x.status}`} style={{ alignSelf: "flex-start" }}>{x.status}</span>
+        </Link>
+      ))}
     </div>
   );
 }
