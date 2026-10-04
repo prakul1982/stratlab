@@ -64,7 +64,11 @@ def resolve(registry, market: str, members: list[dict]) -> tuple[list[str], list
             continue
         sym = str(m.get("symbol") or "").upper()
         if market == "IN":
-            hit = next((r for r in prov.search(sym, allow_fno=False, limit=8)       # NSE, or listed only on BSE
+            # the exact symbol first: a short one ("BI", "AKI") has dozens of longer ones starting with it, and a search's
+            # first eight could leave out the stock itself when it trades as SYMBOL-BE or -BZ
+            exact = prov.equity(sym) if hasattr(prov, "equity") else None
+            hit = exact if exact and exact.get("type") == "EQ" and exact.get("exchange") in ("NSE", "BSE") else None
+            hit = hit or next((r for r in prov.search(sym, allow_fno=False, limit=8)       # NSE, or listed only on BSE
                         if (r["symbol"] in (sym, *(f"{sym}-{x}" for x in NSE_SERIES)) or r.get("bse_code") == sym)
                         and r.get("type") == "EQ" and r.get("exchange") in ("NSE", "BSE")), None)
             iid = hit["id"] if hit else None

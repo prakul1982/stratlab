@@ -4,15 +4,16 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago } from "../lib/format";
 
-type Level = "mismatch" | "gap" | "error";
+/** fact: true of the company (a recent listing, no calls held), not a gap of ours; pending: a source turned the check away, so it runs again. */
+type Level = "mismatch" | "gap" | "error" | "fact" | "pending";
 type Region = "IN" | "US";
 type Issue = { level: Level; area: string; detail: string };
 /** A company's page: BSE-only companies (BSE:543210) open by their BSE code. */
 const pageSymbol = (s: string) => (s.startsWith("BSE:") ? s.slice(4) : s);   // a BSE code opens the same page as its symbol
 
 type Row = { symbol: string; name: string; seconds: number; issues: Issue[] };
-type Summary = { companies: number; clean: number; mismatches: number; gaps: number; errors: number; avg_seconds: number | null;
-  by_area: Record<string, Record<Level, number>>; slowest: { symbol: string; seconds: number }[] };
+type Summary = { companies: number; clean: number; mismatches: number; gaps: number; errors: number; facts?: number; pending?: number; avg_seconds: number | null;
+  by_area: Record<string, Partial<Record<Level, number>>>; slowest: { symbol: string; seconds: number }[] };
 interface AuditState {
   running: boolean; cancelled?: boolean; label?: string; docs?: boolean; region?: Region; total?: number; done?: number; rows?: Row[]; started_at?: string; finished_at?: string | null;
   summary?: Summary;
@@ -20,7 +21,13 @@ interface AuditState {
 }
 
 const SHOWN = 300;
-const LEVEL: Record<Level, [string, string]> = { mismatch: ["Mismatch", "fail"], error: ["Error", "warn"], gap: ["Gap", "next"] };
+const LEVEL: Record<Level, [string, string]> = { mismatch: ["Mismatch", "fail"], error: ["Error", "warn"], gap: ["Gap", "next"],
+  fact: ["Fact", "warn"], pending: ["Not checked yet", "warn"] };
+/** Which areas need a look first: mismatches, then errors, then gaps. */
+const weight = (c: Partial<Record<Level, number>>) => (c.mismatch ?? 0) * 3 + (c.error ?? 0) * 2 + (c.gap ?? 0);
+const SHOWS: Record<Level | "all", string> = { mismatch: "Mismatches", error: "Errors", gap: "Gaps", fact: "Facts", pending: "Not checked yet", all: "All" };
+/** The counts line: facts and companies not checked yet only when there are any. */
+const tally = (sum: Summary) => `${sum.gaps} gaps · ${sum.errors} errors${sum.facts ? ` · ${sum.facts} facts` : ""}${sum.pending ? ` · ${sum.pending.toLocaleString("en-IN")} not checked yet` : ""}`;
 
 /** The data audit: every company in a set checked against its sources, on the live server. */
 export function AuditPanel() {
@@ -72,7 +79,7 @@ export function AuditPanel() {
           {sum && s.label && (
             <>
               <p className="small" style={{ margin: 0 }}><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
-                {" · "}{sum.companies} checked, {sum.clean} clean · <span className="neg">{sum.mismatches} mismatches</span> · {sum.gaps} gaps · {sum.errors} errors
+                {" · "}{sum.companies} checked, {sum.clean} clean · <span className="neg">{sum.mismatches} mismatches</span> · {tally(sum)}
                 {sum.avg_seconds != null && ` · ${sum.avg_seconds}s a company`}</p>
               <Findings rows={s.rows ?? []} sum={sum} running={s.running} file="stratlab-audit.csv" region={s.region ?? "IN"} />
             </>
@@ -86,7 +93,8 @@ export function AuditPanel() {
 interface MarketState {
   enabled: boolean; listed: number; checked: number; due: number; current: string | null; eta_hours: number | null;
   list_at: string | null; list_error: string | null;
-  full?: { running: boolean; since: string | null; done_at: string | null; left: number; checked: number | null };
+  full?: { running: boolean; since: string | null; done_at: string | null; left: number; checked: number | null; pending_only?: boolean };
+  pending?: number;
   new_listings: { symbol: string; name: string; listed: string | null; checked: boolean }[];
   summary: Summary; rows: Row[];
 }
@@ -128,10 +136,13 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
             {m.list_error ? <span className="neg">Couldn't read the exchange's list: {m.list_error}{m.list_at ? ` (using the one from ${ago(m.list_at)})` : ""}. </span>
               : m.list_at ? `List read ${ago(m.list_at)}. ` : ""}
             <button className="btn quiet sm" onClick={() => send({ read_list: true })}>Read the list now</button>{" "}
-            {m.full && !m.full.running && <button className="btn quiet sm" onClick={() => { if (confirm("Check every listed company once more? It takes about a day, then goes back to new listings only.")) send({ full: true }); }}>Check everything once</button>}
+            {m.full && !m.full.running && <button className="btn quiet sm" onClick={() => { if (confirm("Check every listed company once more? It takes about a day, then goes back to new listings only.")) send({ full: true }); }}>Check everything once</button>}{" "}
+            {m.full && !m.full.running && !!m.pending && <button className="btn quiet sm" onClick={() => send({ retry: true })}>Re-check {m.pending.toLocaleString("en-IN")} not checked yet</button>}
           </p>
           {m.full?.running && (
-            <p className="small" style={{ margin: 0 }}><b>Full check:</b> {(m.full.checked ?? 0).toLocaleString("en-IN")} of {m.listed.toLocaleString("en-IN")} companies done
+            <p className="small" style={{ margin: 0 }}>{m.full.pending_only
+              ? <><b>Re-checking companies not checked yet:</b> {m.full.left.toLocaleString("en-IN")} left, paced so the exchange isn't asked too fast</>
+              : <><b>Full check:</b> {(m.full.checked ?? 0).toLocaleString("en-IN")} of {m.listed.toLocaleString("en-IN")} companies done</>}
               {m.full.since ? `, started ${ago(m.full.since)}` : ""}. New listings go first; then it goes back to new listings only.{!m.enabled && " Switch it on to run."}</p>
           )}
           {m.full && !m.full.running && m.full.done_at && <p className="small muted" style={{ margin: 0 }}>Last full check finished {ago(m.full.done_at)}.</p>}
@@ -142,7 +153,7 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
           )}
           {sum && sum.companies > 0 && (
             <>
-              <p className="small" style={{ margin: 0 }}>{sum.companies.toLocaleString("en-IN")} checked, {sum.clean.toLocaleString("en-IN")} clean · <span className="neg">{sum.mismatches} mismatches</span> · {sum.gaps} gaps · {sum.errors} errors</p>
+              <p className="small" style={{ margin: 0 }}>{sum.companies.toLocaleString("en-IN")} checked, {sum.clean.toLocaleString("en-IN")} clean · <span className="neg">{sum.mismatches} mismatches</span> · {tally(sum)}</p>
               <Findings rows={m.rows} sum={sum} running={m.enabled} file={`stratlab-${us ? "us" : "india"}-market-audit.csv`} region={region} />
             </>
           )}
@@ -168,16 +179,16 @@ function Findings({ rows: all, sum, running, file, region }: { rows: Row[]; sum:
     <>
       {Object.keys(sum.by_area).length > 0 && (
         <div className="table-wrap"><table>
-          <thead><tr><th>Area</th><th className="num">Mismatches</th><th className="num">Gaps</th><th className="num">Errors</th></tr></thead>
-          <tbody>{Object.entries(sum.by_area).sort((a, b) => (b[1].mismatch * 3 + b[1].error * 2 + b[1].gap) - (a[1].mismatch * 3 + a[1].error * 2 + a[1].gap)).map(([area, c]) => (
-            <tr key={area}><td>{area}</td><td className="num">{c.mismatch}</td><td className="num">{c.gap}</td><td className="num">{c.error}</td></tr>
+          <thead><tr><th>Area</th><th className="num">Mismatches</th><th className="num">Gaps</th><th className="num">Errors</th><th className="num">Facts</th><th className="num">Not checked</th></tr></thead>
+          <tbody>{Object.entries(sum.by_area).sort((a, b) => weight(b[1]) - weight(a[1])).map(([area, c]) => (
+            <tr key={area}><td>{area}</td><td className="num">{c.mismatch ?? 0}</td><td className="num">{c.gap ?? 0}</td><td className="num">{c.error ?? 0}</td><td className="num">{c.fact ?? 0}</td><td className="num">{c.pending ?? 0}</td></tr>
           ))}</tbody>
         </table></div>
       )}
       <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
         <div className="seg" role="radiogroup" aria-label="Show">
-          {(["mismatch", "error", "gap", "all"] as const).map((k) => (
-            <button key={k} role="radio" aria-checked={show === k} aria-pressed={show === k} onClick={() => setShow(k)}>{k === "all" ? "All" : k === "mismatch" ? "Mismatches" : LEVEL[k][0] + "s"}</button>
+          {(["mismatch", "error", "gap", "fact", "pending", "all"] as const).map((k) => (
+            <button key={k} role="radio" aria-checked={show === k} aria-pressed={show === k} onClick={() => setShow(k)}>{SHOWS[k]}</button>
           ))}
         </div>
         {!!all.length && <button className="btn quiet sm" onClick={csv}>Download CSV</button>}

@@ -139,7 +139,8 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
         if v is None and snap.get("market_cap_cr") and worth > 0:       # no book value on the page: from the balance sheet
             v = snap["market_cap_cr"] / worth
         return {"name": "Price to book", "short": "P/B", "value": round(v, 2) if v is not None else None, "pe": pe,
-                "why": "Lenders, insurers, holding companies and developers are usually valued on their book (net worth)."}
+                "why": "Lenders, insurers, holding companies and developers are usually valued on their book (net worth)."
+                       + (" There's no P/B here: the company's net worth is negative." if v is None and worth < 0 else "")}
     if measure_key in EV_EBITDA or group == "utility":
         ebitda = _last(p.get("pl"), "Operating Profit")          # the latest column is the trailing twelve months
         mcap, debt = snap.get("market_cap_cr"), _last(p.get("balance"), "Borrowings") or 0
@@ -149,7 +150,9 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
                 "why": "Asset-heavy businesses (hospitals, hotels, telecom, cement, metals, power, airlines) are usually valued on "
                        "enterprise value to EBITDA, because depreciation and debt differ so much between them. Here EV is market "
                        + ("value plus borrowings less cash" if cash is not None else "value plus borrowings (cash isn't subtracted)")
-                       + " and EBITDA is the last twelve months' operating profit."}
+                       + " and EBITDA is the last twelve months' operating profit."
+                       + (" There's no EV/EBITDA here: EBITDA was negative over the last 12 months."
+                          if v is None and ebitda is not None and ebitda <= 0 else "")}
     return {"name": "Price to earnings", "short": "P/E", "value": round(pe, 1) if pe is not None else None, "pe": pe,
             "why": "Most businesses are compared on price to earnings."
                    + (" There's no P/E here: the company made a loss over the last 12 months." if pe is None and loss else "")}

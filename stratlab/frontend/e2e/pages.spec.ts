@@ -776,3 +776,37 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   await expect(notice).toBeVisible();
   await sane(page, errors);
 });
+
+test("admin: the whole-market audit tells facts and companies not checked yet apart, and re-checks those", async ({ page }, info) => {
+  const sent: object[] = [];
+  const row = (symbol: string, name: string, level: string, area: string, detail: string) => ({ symbol, name, seconds: 1, issues: [{ level, area, detail }] });
+  const refused = "Not checked yet: the exchange feed refused the request (403). It is checked again later.";
+  const rows = [row("BSE:543210", "Tiny Co Ltd", "pending", "Documents", refused), row("BSE:543211", "Small Co Ltd", "pending", "Documents", refused),
+    row("NEWCO", "New Co Ltd", "fact", "Numbers", "Only 2 years of annual results so far: listed, demerged or first reporting recently")];
+  const summary = { companies: 3, clean: 1, mismatches: 0, gaps: 0, errors: 0, facts: 1, pending: 2, avg_seconds: 1, slowest: [],
+    by_area: { Documents: { mismatch: 0, gap: 0, error: 0, fact: 0, pending: 2 }, Numbers: { mismatch: 0, gap: 0, error: 0, fact: 1, pending: 0 } } };
+  const state = (retrying: boolean, india: boolean) => ({ enabled: true, listed: 3, checked: 3, due: retrying ? 2 : 0, current: null, eta_hours: null,
+    list_at: null, list_error: null, new_listings: [], pending: india ? 2 : 0, rows: india ? rows : [], summary: india ? summary : { ...summary, companies: 0 },
+    full: { running: retrying, since: retrying ? new Date().toISOString() : null, done_at: null, left: retrying ? 2 : 0, checked: null, pending_only: retrying } });
+  let retrying = false;
+  await page.route((u) => u.pathname === "/admin/audit/market", async (r) => {
+    const req = r.request();
+    const body = req.method() === "POST" ? req.postDataJSON() : null;
+    if (body) { sent.push(body); retrying = true; }
+    const india = body ? (body.region ?? "IN") === "IN" : new URL(req.url()).searchParams.get("region") !== "US";
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state(retrying && india, india)) });
+  });
+  const errors = await open(page, "/admin?tab=checks", "Whole market: India");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
+  const india = page.locator("section", { hasText: "Whole market: India" });
+  await expect(india.getByText("1 facts · 2 not checked yet")).toBeVisible();
+  await india.getByRole("radio", { name: "Facts" }).click();
+  await expect(india.getByText("Only 2 years of annual results so far")).toBeVisible();
+  await india.getByRole("radio", { name: "Not checked yet" }).click();
+  await expect(india.getByText("Tiny Co Ltd")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await india.getByRole("button", { name: "Re-check 2 not checked yet" }).click();
+  await expect.poll(() => sent).toEqual([{ region: "IN", retry: true }]);
+  await expect(india.getByText("Re-checking companies not checked yet:")).toBeVisible();
+  await sane(page, errors);
+});

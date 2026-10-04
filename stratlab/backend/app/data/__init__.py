@@ -38,6 +38,10 @@ class KiteProvider:
     def search(self, q: str, allow_fno: bool = True, limit: int = 25) -> list[dict]:
         return self.kite.search(q, allow_fno=allow_fno, limit=limit)
 
+    def equity(self, symbol: str) -> dict | None:
+        """A listed company's stock by its exact symbol (any NSE series) or BSE code."""
+        return self.kite.equity(symbol)
+
     def ltp(self, inst: dict) -> float | None:
         return self.kite.ltp(inst["token"])
 

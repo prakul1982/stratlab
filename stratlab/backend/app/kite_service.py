@@ -45,8 +45,23 @@ def bse_only_rows(raw: list[dict], nse_rows: list[dict]) -> list[dict]:
             continue
         if int(code) >= 600000 or norm_name(x.get("name")) in ("", code):
             continue                            # 6xxxxx-9xxxxx are bonds, bills and other debt, not companies
+        if not_company(x.get("name")):
+            continue                            # ETFs, mutual fund units, REITs and InvITs trade like shares but aren't companies
         out.append(x)
     return out
+
+
+# names of what BSE lists as equity but isn't a company: exchange-traded funds ("Nifty 50 ETF", "...Momen.Quali. 100ETF",
+# "Gold Exchange Traded Fund", "...BeES"), mutual fund units, and real-estate and infrastructure trusts
+NOT_COMPANY = re.compile(r"(?<![a-z])ETFs?\b|exchange traded|\bBeES\b|\bmutual fund\b|\bMF\b|fund of funds|\bFoF\b|"
+                         r"\bInvIT\b|\bREIT\b|investment trust|real estate trust|infrastructure trust|\btrust\s*$", re.I)
+
+
+def not_company(name) -> bool:
+    """A fund or trust by its name; anything named "... Ltd" is a company whatever else it says ("Rajkot Investment
+    Trust Ltd")."""
+    n = str(name or "").strip()
+    return bool(NOT_COMPANY.search(n)) and not re.search(r"\b(?:ltd|limited)\.?$", n, re.I)
 
 
 def today_ist() -> str:
