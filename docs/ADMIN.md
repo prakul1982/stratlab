@@ -147,7 +147,7 @@ The flagged ones add resilience but are asked last.
 
 ### How it picks models
 
-- **Measured, not listed.** Every 6 hours (checked every 10 minutes after boot), when you press **Re-rank models**, and
+- **Measured, not listed.** Every 6 hours (every 12 on Cloudflare, 24 on GitHub and 72 on Hugging Face, where measuring spends scarce credit; Anthropic only on demand), when you press **Re-rank models**, and
   when every model a provider was using stops working, each provider's model list is read and filtered
   (`backend/app/ai_catalog.py`, with a comment per rule): no speech, image, embedding, safety-filter or search models,
   no code or maths specialists, no models built for another language (such as ALLaM, which is Arabic-first), nothing
