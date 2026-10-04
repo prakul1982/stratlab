@@ -962,3 +962,34 @@ label.btn.disabled { opacity: .5; }
 .tax-line-sub td { font-weight: 600; }
 .tax-line-total td { font-weight: 700; border-top: 2px solid var(--line-2); }
 @media (max-width: 560px) { .tax-inputs .field { width: 100% !important; } }
+
+/* ---------- spaces: Trade · Invest · Money, the switcher at the top of the menu and each space's home ---------- */
+.space-switch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; border-radius: 10px; background: var(--chip); }
+.space-switch button { min-height: 34px; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 500; color: var(--ink-2); }
+.space-switch button:hover { color: var(--ink); }
+.space-switch button[aria-checked="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+@media (pointer: coarse) { .space-switch button { min-height: 40px; } }
+.side-home { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 12px; border-radius: 10px; color: var(--ink-2); text-decoration: none; font-weight: 600; }
+.side-home:hover, .side-home.active { background: var(--card); color: var(--ink); }
+@media (pointer: coarse) { .side-home { min-height: 42px; } }
+.space-strip { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 28px; }
+.space-card { display: flex; flex-direction: column; gap: 6px; min-height: 44px; padding: 14px 16px; color: var(--ink); text-decoration: none; }
+.space-card:hover { border-color: var(--ink-2); color: var(--ink); }
+.space-card-lead { border-color: var(--blue); background: var(--blue-soft); }
+.space-card-lead b { font-size: 18px; }
+@media (max-width: 1100px) { .space-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .space-card-lead { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .space-strip { grid-template-columns: minmax(0, 1fr); } }
+.space-panels { align-items: start; }
+a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink); }
+.space-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-height: 32px; color: var(--ink); text-decoration: none; }
+.space-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px 18px; }
+.space-fig { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.space-fig b { font-size: 20px; font-weight: 600; }
+.lp-spaces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lp-space { display: flex; flex-direction: column; gap: 6px; color: var(--ink); text-decoration: none; }
+.lp-space:hover { border-color: var(--ink-2); color: var(--ink); }
+.lp-space b { font-size: 28px; font-weight: 400; letter-spacing: -.02em; }
+.lp-space[data-space="trade"] { border-color: var(--blue); }
+.lp-options { border-color: var(--blue); }
+@media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }
+.space-tag { flex: none; align-self: center; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }

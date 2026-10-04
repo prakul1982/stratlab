@@ -507,7 +507,7 @@ def me(profile=Depends(current_profile)):
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
-        "prefs": {k: prefs_of(profile["id"]).get(k) for k in ("level", "focus")},
+        "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},
         "data_online": kite.ready(),
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
@@ -526,6 +526,9 @@ def data_note() -> dict | None:
     return {"closed": closed, "back_at": back.isoformat() if back else None}
 
 
+PREF_KEYS = ("level", "focus", "space")
+
+
 def prefs_of(uid: str) -> dict:
     try:
         p = json.loads(db.get_setting(daily_report.PREFS + uid) or "{}")
@@ -536,11 +539,13 @@ def prefs_of(uid: str) -> dict:
 
 @app.put("/me/prefs")
 def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
-    """Experience level and what the user came for (investing, trading or both): they only change defaults (what's
-    expanded, what's suggested first, the menu order), never what's allowed."""
-    prefs = {**prefs_of(profile["id"]), **{k: v for k, v in (("level", req.level), ("focus", req.focus)) if v}}
+    """Experience level, what the user came for (trading, investing, their money or all of it) and the space last picked
+    in the menu: they only change defaults (what's expanded, what's suggested first, which menu shows), never what's
+    allowed."""
+    given = {k: getattr(req, k) for k in PREF_KEYS}
+    prefs = {**prefs_of(profile["id"]), **{k: v for k, v in given.items() if v}}
     db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
-    return {"prefs": {k: prefs.get(k) for k in ("level", "focus")}}
+    return {"prefs": {k: prefs.get(k) for k in PREF_KEYS}}
 
 
 @app.get("/push/key")

@@ -8,13 +8,15 @@ import type { Experiment, Instrument, Notebook } from "../lib/types";
 import { buildIdea, findInstrument } from "./IdeaComposer";
 import { track, trackBacktest } from "../lib/analytics";
 import { Book, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
+import { SPACES, spaceOf, type Space } from "../lib/spaces";
 
 interface Idea { title: string; text: string; why: string; market: string; symbol: string | null; tf: string }
-interface Row { key: string; icon: ReactNode; title: string; sub?: string; run: () => void }
+/** `space`: which of Trade, Invest and Money the result opens in, shown as a small label. */
+interface Row { key: string; icon: ReactNode; title: string; sub?: string; space?: Space | null; run: () => void }
 interface Ask { action: string; text?: string; market?: string | null; symbol?: string | null; page?: string | null; answer?: string; title?: string | null; fallback?: boolean }
 
 const PAGES: Record<string, string> = { paper: "/paper", options: "/options", library: "/library", research: "/research", import: "/import",
-  notebooks: "/", new: "/new", account: "/account", plans: "/plans", themes: "/research/themes", pulse: "/research/pulse", watchlist: "/research/watchlist" };
+  notebooks: "/notebooks", new: "/new", trade: "/trade", invest: "/invest", money: "/money", account: "/account", plans: "/plans", themes: "/research/themes", pulse: "/research/pulse", watchlist: "/research/watchlist" };
 const HISTORY = { "1d": 1825, "1h": 365 } as Record<string, number>;
 
 const LAST_MARKET = "stratlab.lastMarket";
@@ -197,22 +199,25 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       act.push({ key: "ideas", icon: <Compass size={18} />, title: thinking ? "Thinking of ideas…" : `Get strategy ideas for “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`,
         sub: "4 testable ideas, each one click from a verdict", run: () => { if (!thinking) getIdeas(); } });
     }
-    if (intent) act.unshift({ key: "intent", icon: <Lens size={18} />, title: intent.title, sub: intent.sub, run: () => { runIntent(intent); } });
+    if (intent) act.unshift({ key: "intent", icon: <Lens size={18} />, title: intent.title, sub: intent.sub, space: intent.to ? spaceOf(intent.to.split("?")[0]) : "invest", run: () => { runIntent(intent); } });
     out.push({ group: "Do", items: act });
     if (ideas && ideasFor === text) out.push({ group: "Ideas", items: ideas.map((i, n) => ({
-      key: `idea${n}`, icon: <Sparkle size={18} />, title: i.title, sub: `${i.symbol ? i.symbol + " · " : ""}${i.text}`, run: () => testIdea(i.text, i.market, i.symbol) })) });
+      key: `idea${n}`, icon: <Sparkle size={18} />, title: i.title, sub: `${i.symbol ? i.symbol + " · " : ""}${i.text}`, space: "trade", run: () => testIdea(i.text, i.market, i.symbol) })) });
     const feats = code ? [] : match(text, 5);
     if (feats.length) {
       const latest = notebooks?.[0] ? { id: notebooks[0].id } : null;
-      out.push({ group: "Features", items: feats.map((f) => ({ key: f.id, icon: <Search size={18} />, title: f.title, sub: f.what, run: () => go(resolve(f.to, loc.pathname, latest)) })) });
+      out.push({ group: "Features", items: feats.map((f) => {
+        const to = resolve(f.to, loc.pathname, latest);
+        return { key: f.id, icon: <Search size={18} />, title: f.title, sub: f.what, space: spaceOf(to.split(/[?#]/)[0]), run: () => go(to) };
+      }) });
     }
     const nbs = (notebooks ?? []).filter((n) => !code && n.name.toLowerCase().includes(text.toLowerCase())).slice(0, 4);
-    if (nbs.length) out.push({ group: "Your notebooks", items: nbs.map((n) => ({ key: n.id, icon: <Book size={18} />, title: n.name, sub: n.question ?? undefined, run: () => go(`/n/${n.id}`) })) });
+    if (nbs.length) out.push({ group: "Your notebooks", items: nbs.map((n) => ({ key: n.id, icon: <Book size={18} />, title: n.name, sub: n.question ?? undefined, space: "trade", run: () => go(`/n/${n.id}`) })) });
     if (insts.length) out.push({ group: "Markets", items: insts.flatMap((i) => {
       const research = (i.market === "IN" || i.market === "US") && !i.fno && i.type !== "INDEX";
       const mk = i.market || "IN";
-      const rows: Row[] = [{ key: `t-${i.id}`, icon: <Sparkle size={18} />, title: `Test an idea on ${i.symbol}`, sub: [i.name, mk].filter(Boolean).join(" · "), run: () => testIdea("", mk, i.symbol) }];
-      if (research) rows.unshift({ key: `r-${i.id}`, icon: <Lens size={18} />, title: `${i.symbol}: research`, sub: i.name, run: () => go(`/research/${mk}/${encodeURIComponent(i.symbol)}`) });
+      const rows: Row[] = [{ key: `t-${i.id}`, icon: <Sparkle size={18} />, title: `Test an idea on ${i.symbol}`, sub: [i.name, mk].filter(Boolean).join(" · "), space: "trade", run: () => testIdea("", mk, i.symbol) }];
+      if (research) rows.unshift({ key: `r-${i.id}`, icon: <Lens size={18} />, title: `${i.symbol}: research`, sub: i.name, space: "invest", run: () => go(`/research/${mk}/${encodeURIComponent(i.symbol)}`) });
       return rows;
     }).slice(0, 8) });
     // a short search that names a feature ("walk forward") should open it on Enter
@@ -267,7 +272,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
                   <button key={r.key} data-i={n} role="option" aria-selected={n === sel} className={`palette-row${n === sel ? " on" : ""}`}
                     onMouseEnter={() => setSel(n)} onClick={r.run}>
                     <span className="palette-icon">{r.icon}</span>
-                    <span className="stack" style={{ gap: 1, minWidth: 0 }}><b>{r.title}</b>{r.sub && <span className="small muted palette-sub">{r.sub}</span>}</span>
+                    <span className="stack" style={{ gap: 1, minWidth: 0, flex: 1 }}><b>{r.title}</b>{r.sub && <span className="small muted palette-sub">{r.sub}</span>}</span>
+                    {r.space && <span className="space-tag" data-space={r.space}>{SPACES[r.space].label}</span>}
                   </button>
                 );
               })}

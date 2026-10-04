@@ -31,3 +31,18 @@ export function rememberView(path: string) {
   const f = familyOf(path);
   if (f) try { localStorage.setItem(KEY(f), path); } catch { /* storage off */ }
 }
+
+/** One menu entry kept as data. `icon` names one of the menu's icons (ICONS in Shell); an unknown name gets a plain
+ * one. `blurb` is the line under it on its space's home page. */
+export type NavEntry = { to: string; label: string; icon?: string; title?: string; blurb?: string };
+
+/** Menu groups kept as data, by name. "Money" is the Money space's menu, in order: each Money feature adds one line
+ * here, and it shows both in the menu and as a card on the Money home, so only what's built ever appears. */
+export const NAV_GROUPS: Record<string, NavEntry[]> = {
+  Money: [
+    { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",
+      blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings." },
+    { to: "/tax-report", label: "Tax report", icon: "receipt", title: "Capital gains by financial year, from your tradebooks",
+      blurb: "Capital gains by financial year from your tradebooks, matched first in, first out. An estimate to check with your CA." },
+  ],
+};
