@@ -130,6 +130,7 @@ HEAVY = [  # (method, path pattern): work that holds the CPU for a second or mor
     ("POST", re.compile(r"^/live/(sessions|groups)$")),
     ("POST", re.compile(r"^/options/sessions$")),
     ("POST", re.compile(r"^/admin/platform/check$")),
+    ("POST", re.compile(r"^/money/mutual-funds/import$")),   # reading a statement PDF
 ]
 
 

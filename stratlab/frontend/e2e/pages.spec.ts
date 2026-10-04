@@ -620,8 +620,8 @@ test("the menu: a few short groups, Scans and Watchlist each one entry with tabs
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
   for (const g of ["Research", "Portfolio", "Watch", "Notebooks", "Trading"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
-  // eleven entries in the groups, where there were fifteen flat ones; the old separate entries are gone
-  await expect(main.locator(".side-nav a")).toHaveCount(11);
+  // eleven entries in the groups, where there were fifteen flat ones, plus one per Money page; the old separate entries are gone
+  await expect(main.locator(".side-nav a")).toHaveCount(12);
   for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance", "My Holdings"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // Account and Admin sit at the bottom, with the markets folded to one line
   const bottom = side.locator(".side-bottom");
@@ -1144,4 +1144,54 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByText(/Full check: 0 of 5,058 done/)).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
+});
+
+const MF = new URL("../../backend/tests/fixtures/mf/", import.meta.url).pathname;
+
+test("mutual funds: a password-protected CAS read, holdings, allocation, gains by year, the tax report, and delete", async ({ page, request }, info) => {
+  // each project signs in as its own user (both on Pro) and starts with no funds
+  const [token, id, email] = info.project.name === "phone" ? ["load-74", "u-load-74", "load74@example.com"] : ["load-71", "u-load-71", "load71@example.com"];
+  expect((await request.delete(`${API}/money/mutual-funds`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
+  const errors = await open(page, "/money/mutual-funds", "Your mutual funds, in one place", sessionAs(token, id, email));
+  await settle(page);
+  await expect(page.getByText("No funds yet")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // a synthetic statement (made-up investor and funds), locked with a password: first the wrong one
+  await page.locator("input[type=file]").setInputFiles(MF + "synthetic_cas.pdf");
+  await page.getByLabel("PDF password").fill("WRONG");
+  await page.getByRole("button", { name: "Read my funds" }).click();
+  await expect(page.getByText(/That password didn't open the PDF/)).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel("PDF password").fill("ABCDE1234F");
+  await page.getByRole("button", { name: "Read my funds" }).click();
+  await expect(page.getByText(/7 transactions added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
+
+  const schemes = page.getByRole("table", { name: "Schemes" });
+  await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible();
+  await expect(schemes.getByText("Sample Short Duration Fund - Direct Plan - Growth")).toBeVisible();
+  await expect(page.getByText("₹42,500").first()).toBeVisible();             // 1,100 units at 25 and 500 at 30
+  await expect(page.getByRole("heading", { name: "By category" })).toBeVisible();
+
+  await page.getByRole("combobox", { name: "Financial year" }).selectOption("2025");
+  await expect(page.getByRole("table", { name: "Gains by rate" }).getByText("Short-term at your slab rate (debt and other funds)")).toBeVisible();
+  await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
+  await expect(page.getByRole("table", { name: "Redemptions matched to purchases" }).getByText("grandfathered")).toBeVisible();
+
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/you should|we suggest|recommend|better fund|switch to|rating/i);
+  expect(text).not.toMatch(/yahoo|finnhub|kite|screener/i);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  // the tax report counts the same gains
+  await page.goto("/tax-report");
+  await expect(page.getByRole("region", { name: "Mutual funds" }).getByText(/redemption/)).toBeVisible({ timeout: 30_000 });
+
+  await page.goto("/money/mutual-funds");
+  await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Delete my mutual fund data" }).click();
+  await expect(page.getByText("Your mutual fund data is deleted.")).toBeVisible();
+  await expect(page.getByText("No funds yet")).toBeVisible();
 });

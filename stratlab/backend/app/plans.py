@@ -14,6 +14,7 @@ PLANS = {
         "screens": 2,                 # saved stock screens
         "deepdives_per_month": 2,     # companies opened in the deep dive (each counted once a month)
         "decks_per_month": 1,         # company slide decks (PowerPoint or PDF)
+        "mf_schemes": 5,              # mutual fund schemes kept (Money: mutual funds)
         "features": set(),
     },
     "basic": {
@@ -29,7 +30,8 @@ PLANS = {
         "screens": 10,
         "deepdives_per_month": 15,
         "decks_per_month": 5,
-        "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
+        "mf_schemes": None,
+        "features": {"mf_gains", "indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
                      "investor_home"},
     },
     "pro": {
@@ -44,16 +46,17 @@ PLANS = {
         "screens": 25,
         "deepdives_per_month": None,  # unlimited (the daily cap on fresh AI reads still applies)
         "decks_per_month": None,
-        "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
+        "mf_schemes": None,
+        "features": {"mf_gains", "indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
 # newsletter: the daily editions of both newsletters (the weekly ones are for everyone);
 # scans: the Stage 2 + Supertrend scan and its alert; filings: red flags for the whole watchlist and the evening alert
-# (red flags on a single company page are for everyone)
+# (red flags on a single company page are for everyone); mf_gains: mutual fund capital gains per financial year
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
-            "newsletter", "scans", "filings", "investor_home")
+            "newsletter", "scans", "filings", "investor_home", "mf_gains")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
@@ -125,10 +128,16 @@ def decks(plan: str) -> int | None:
     return PLANS[plan]["decks_per_month"] if payments_live() else PLANS["pro"]["decks_per_month"]
 
 
+def mf_limit(plan: str) -> int | None:
+    """How many mutual fund schemes are kept (None: no limit)."""
+    return PLANS[plan]["mf_schemes"] if payments_live() else PLANS["pro"]["mf_schemes"]
+
+
 def plan_info(plan: str) -> dict:
     info = {k: v for k, v in PLANS[plan].items() if k != "features"}
     return {**info, "group_size": group_size(plan), "holdings": holdings_limit(plan), "stock_alerts": stock_alerts(plan),
             "screens": screens(plan), "deepdives_per_month": deepdives(plan), "decks_per_month": decks(plan),
+            "mf_schemes": mf_limit(plan),
             "indicators": has_indicators(plan), "fno": has_fno(plan),
             "features": {f: allows(plan, f) for f in FEATURES}}
 

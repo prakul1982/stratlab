@@ -1,0 +1,65 @@
+Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Net Asset Value;Date
+
+Open Ended Schemes(Equity Scheme - Flexi Cap Fund)
+
+Example Mutual Fund
+
+900001;INF000X01AB1;-;Example Flexi Cap Fund - Direct Plan - Growth;25.0000;03-Oct-2026
+900002;INF000X01AC9;INF000X01AD7;Example Flexi Cap Fund - Direct Plan - IDCW;14.5000;03-Oct-2026
+900003;INF000X01AE5;-;Example Flexi Cap Fund - Regular Plan - Growth;23.1000;03-Oct-2026
+
+Open Ended Schemes(Equity Scheme - ELSS)
+
+Example Mutual Fund
+
+900010;INF000X01EL1;-;Example Tax Saver Fund - Direct Plan - Growth;80.0000;03-Oct-2026
+
+Open Ended Schemes(Debt Scheme - Short Duration Fund)
+
+Sample Mutual Fund
+
+900020;INF111Y01SD2;-;Sample Short Duration Fund - Direct Plan - Growth;30.0000;03-Oct-2026
+900021;INF111Y01SD3;-;Sample Short Duration Fund - Direct Plan - Monthly IDCW;N.A.;03-Oct-2026
+
+Open Ended Schemes(Hybrid Scheme - Balanced Advantage)
+
+Sample Mutual Fund
+
+900030;INF111Y01BA4;-;Sample Balanced Advantage Fund - Direct Plan - Growth;40.0000;03-Oct-2026
+
+Open Ended Schemes(Hybrid Scheme - Conservative Hybrid Fund)
+
+Sample Mutual Fund
+
+900031;INF111Y01CH5;-;Sample Conservative Hybrid Fund - Direct Plan - Growth;55.5000;03-Oct-2026
+
+Open Ended Schemes(Hybrid Scheme - Multi Asset Allocation)
+
+Sample Mutual Fund
+
+900032;INF111Y01MA6;-;Sample Multi Asset Allocation Fund - Direct Plan - Growth;20.0000;03-Oct-2026
+
+Open Ended Schemes(Other Scheme - Index Funds)
+
+Sample Mutual Fund
+
+900040;INF111Y01IX7;-;Sample Nifty 50 Index Fund - Direct Plan - Growth;150.2500;03-Oct-2026
+900041;INF111Y01IX8;-;Sample Crisil IBX Gilt Index - Apr 2032 Fund - Direct Plan - Growth;11.2000;03-Oct-2026
+
+Open Ended Schemes(Other Scheme - FoF Overseas)
+
+Sample Mutual Fund
+
+900050;INF111Y01US9;-;Sample US Equity Fund of Fund - Direct Plan - Growth;18.0000;03-Oct-2026
+
+Open Ended Schemes(Other Scheme - Gold ETF)
+
+Sample Mutual Fund
+
+900060;INF111Y01GD0;-;Sample Gold ETF;70.0000;03-Oct-2026
+
+Close Ended Schemes(Income)
+
+Sample Mutual Fund
+
+900070;INF111Y01FM1;-;Sample Fixed Maturity Plan Series 9 - Direct Plan - Growth;12.0000;03-Oct-2026
