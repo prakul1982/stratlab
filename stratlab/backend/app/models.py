@@ -504,3 +504,8 @@ class ShareReq(BaseModel):
 
 class ReferralReq(BaseModel):
     code: Optional[str] = Field(None, max_length=64)            # the invite code from the link the newcomer arrived by
+
+
+class BreadthAlertReq(BaseModel):
+    group: str = Field(..., max_length=40)                      # a market breadth group, e.g. nifty500
+    level: float = Field(..., ge=1, le=99)                      # % of stocks above their 50-day average

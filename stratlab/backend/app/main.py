@@ -62,12 +62,14 @@ from .options.data import OptionsData, freeze as freeze_limit
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
+from . import breadth
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
+from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -218,6 +220,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
     threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start()
     screen_job.start()
+    breadth_job.start()
     yield
 
 
@@ -2751,6 +2754,99 @@ def delete_screen(sid: str, profile=Depends(current_profile)):
     if not screens.valid_id(sid) or not screens.delete(profile["id"], sid):
         err(404, "not_found", "That screen is gone. Reload the page.")
     return ok(screens_page(profile))
+
+
+# ---------- market breadth: how many stocks take part in the market's moves ----------
+def breadth_load(region: str, symbol: str, days: int) -> list[dict]:
+    """A stock's daily candles for the breadth run, kept out of the price cache (a whole market would empty it)."""
+    if region == "IN":
+        inst = kite.equity(symbol)
+        if not inst:
+            raise LookupError("not listed")
+        return kite.history(inst["token"], "1d", days, store=False)
+    return markets.provider(region).history({"token": symbol}, "1d", days)
+
+
+def breadth_index(region: str, symbol: str, days: int) -> list[dict]:
+    if region == "IN":
+        hit = kite.by_symbol(symbol)
+        if not hit:
+            raise LookupError("index not found")
+        return kite.history(hit["token"], "1d", days, store=False)
+    return markets.provider(region).history({"token": symbol}, "1d", days)
+
+
+def breadth_alerts(region: str, groups: list[str], now):
+    breadth.check_alerts(groups, now, lambda uid: db.get_profile(uid), lambda p: allows(access_plan(p), "breadth"))
+
+
+breadth_runner = breadth.Runner(lambda r, s, d: breadth_load(r, s, d), lambda r, s, d: breadth_index(r, s, d),
+                                lambda name: filings_feed.index_members(name), lambda: filings_feed.all_equities(),
+                                after=lambda r, g, now: breadth_alerts(r, g, now))
+breadth_job = breadth.Job(breadth_runner, lambda r: kite.ready() if r == "IN" else True)
+
+
+@app.get("/invest/breadth")
+def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool = False, profile=Depends(current_profile)):
+    """A group of stocks' breadth: today's numbers on every plan; the history, charts and sector table on Basic and up."""
+    if group not in breadth.GROUPS:
+        err(404, "not_found", "Pick a group of stocks from the list.")
+    if range not in breadth.RANGES:
+        err(400, "bad_range", "Pick a time range from the list.")
+    out = breadth.view(group, range, full=allows(profile["_plan"], "breadth"), brief=brief)
+    out["plan_needed"] = PLANS[FEATURE_PLAN["breadth"]]["name"]
+    return ok(out)
+
+
+def breadth_alerts_view(profile) -> dict:
+    return {"items": breadth.alerts_of(profile["id"]), "limit": breadth.MAX_ALERTS, "channels": stock_alerts.channels(profile)}
+
+
+@app.get("/invest/breadth/alerts")
+def breadth_alert_list(profile=Depends(current_profile)):
+    """The user's alerts on a group's share of stocks above the 50-day average, and where they would be sent."""
+    return ok(breadth_alerts_view(profile))
+
+
+@app.post("/invest/breadth/alerts")
+def breadth_alert_add(req: BreadthAlertReq, profile=Depends(current_profile)):
+    need(profile, "breadth", "Market breadth alerts")
+    throttle(profile, "breadth_alert", 30, 3600, "That's a lot of alert changes in an hour. Try again later.")
+    try:
+        breadth.add_alert(profile["id"], req.group, req.level)
+    except breadth.AlertError as e:
+        err(400, "bad_alert", str(e))
+    return ok(breadth_alerts_view(profile))
+
+
+@app.delete("/invest/breadth/alerts/{aid}")
+def breadth_alert_delete(aid: str, profile=Depends(current_profile)):
+    if not breadth.delete_alert(profile["id"], aid[:24]):
+        err(404, "not_found", "That alert is gone. Reload the page.")
+    return ok(breadth_alerts_view(profile))
+
+
+@app.post("/admin/breadth/run")
+def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.admin_profile)):
+    """Work out a market's breadth now, in the background (the whole two years with `full`)."""
+    if region not in breadth.REGIONS:
+        err(400, "bad_region", "India (IN) or the US.")
+    if breadth_runner.running:
+        err(409, "busy", "A breadth run is already going.")
+
+    def work():
+        try:
+            breadth_runner.run(region, full=full or None)
+        except Exception as e:
+            print("breadth run failed:", region, str(e)[:160])
+    threading.Thread(target=work, daemon=True, name="breadth-now").start()
+    return {"started": True, "region": region, "status": breadth.status()}
+
+
+@app.get("/admin/breadth")
+def admin_breadth(_=Depends(admin.admin_profile)):
+    """Each market's last breadth run, and whether one is going now."""
+    return {"status": breadth.status(), "job": breadth_job.status, "running": breadth_runner.running}
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}")

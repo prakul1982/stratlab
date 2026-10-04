@@ -4,7 +4,8 @@ export type Family = "scans" | "watch";
 export const FAMILIES: Record<Family, { label: string; home: string; views: [string, string][] }> = {
   scans: {
     label: "Scans", home: "/research/scans",
-    views: [["/research/scan", "Trend scan"], ["/research/screens", "Screener"], ["/research/rotation", "Sector rotation"], ["/research/filings", "Red flags"]],
+    views: [["/research/scan", "Trend scan"], ["/research/screens", "Screener"], ["/research/rotation", "Sector rotation"], ["/research/filings", "Red flags"],
+      ["/invest/breadth", "Market breadth"]],
   },
   watch: {
     label: "Watchlist", home: "/research/watchlist",
@@ -39,6 +40,12 @@ export type NavEntry = { to: string; label: string; icon?: string; title?: strin
 /** Menu groups kept as data, by name. "Money" is the Money space's menu, in order: each Money feature adds one line
  * here, and it shows both in the menu and as a card on the Money home, so only what's built ever appears. */
 export const NAV_GROUPS: Record<string, NavEntry[]> = {
+  /** Invest pages beyond the menu's fixed entries, kept as data like Money's. Each also opens as a tab among the Scans
+   * (FAMILIES.scans), so the Scans menu entry already leads to it. */
+  Invest: [
+    { to: "/invest/breadth", label: "Market breadth", icon: "pulse", title: "How many stocks rise, fall, sit above their averages or make new highs",
+      blurb: "Advances and declines, stocks above their 20/50/200-day averages, 52-week highs and lows, McClellan and sectors." },
+  ],
   Money: [
     { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",
       blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings." },

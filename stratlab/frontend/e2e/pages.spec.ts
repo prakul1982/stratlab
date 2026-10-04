@@ -73,7 +73,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -677,7 +677,7 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   await main.getByRole("link", { name: "Scans" }).click();
   await expect(page).toHaveURL(/\/research\/scan$/);
   const tabs = page.getByRole("navigation", { name: "Scans" });
-  await expect(tabs.getByRole("link")).toHaveText(["Trend scan", "Screener", "Sector rotation", "Red flags"]);
+  await expect(tabs.getByRole("link")).toHaveText(["Trend scan", "Screener", "Sector rotation", "Red flags", "Market breadth"]);
   await tabs.getByRole("link", { name: "Sector rotation" }).click();
   await expect(page).toHaveURL(/\/research\/rotation$/);
   await expect(tabs.getByRole("link", { name: "Sector rotation" })).toHaveAttribute("aria-current", "page");
@@ -1062,7 +1062,7 @@ test("deals and insider trades: a dated table on the company page and the deep d
   await expect(table).toContainText("Index Fund One");
   await expect(table).not.toContainText("Mukesh Shah Family Trust");
   const text = await panel.innerText();
-  expect(text).not.toMatch(/kite|zerodha|yahoo|screener|finnhub|nseindia/i);
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub|nseindia/i);      // "Screener" alone is the Scans tab
   expect(text).not.toMatch(/\b(signal|smart money|buy|sell|accumulate|avoid)\b/i);
   if (phone) await touchable(page);
   await sane(page, errors);
@@ -1470,4 +1470,72 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await page.getByLabel("Financial year").selectOption(String(fy));
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
+});
+
+test("market breadth: today's numbers, small charts, sectors, groups and ranges; facts only, no provider names", async ({ page }, info) => {
+  const errors = await open(page, "/invest/breadth", "Rose / fell");
+  const today = page.getByTestId("breadth-today");
+  await expect(today.getByText("Above 50-day average")).toBeVisible();
+  await expect(today.getByText(/vs \d+ \w+/).first()).toBeVisible();                     // the change against the day before
+  const charts = page.getByTestId("breadth-charts");
+  await expect(charts.getByRole("heading", { name: "Advance/decline line" })).toBeVisible();
+  for (const name of ["Share above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% and down 4%",
+    "Sectors: share above the 50-day average", "Breadth thrust measure", "TRIN"]) await expect(charts.getByRole("heading", { name })).toBeVisible();
+  // the index is its own small chart: no chart has a second scale
+  await expect(charts.getByRole("heading", { name: /^NIFTY 500/ })).toBeVisible();
+  expect(await charts.locator("svg[role=img]").count()).toBeGreaterThanOrEqual(9);
+  await expect(page.getByText(/Prices as of/).first()).toBeVisible();
+  // each figure and chart explains itself
+  await charts.getByRole("heading", { name: "McClellan oscillator" }).getByRole("button", { name: "What does this mean?" }).click();
+  await expect(page.getByRole("note")).toContainText("39-day");
+  // the sector table and the counts behind the charts
+  await expect(page.locator("table.bx-heat tbody tr").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "The last 20 trading days" })).toBeVisible();
+  // a hover shows the day's numbers on the bars
+  await charts.locator("svg[aria-label^='New 52-week highs']").hover();
+  await expect(page.locator(".chart-tip")).toContainText("new highs");
+  // an alert on the share above the 50-day average: added, listed, deleted
+  const box = page.getByRole("region", { name: "Breadth alerts" });
+  const level = info.project.name === "phone" ? "45" : "55";            // the two projects share one account
+  await box.getByLabel(/crosses$/).fill(level);
+  await box.getByRole("button", { name: "Add alert" }).click();
+  await expect(box.getByText(`NIFTY 500 crosses ${level}%`)).toBeVisible();
+  await box.getByRole("button", { name: `Delete the alert at ${level}% on NIFTY 500` }).click();
+  await expect(box.getByText(`NIFTY 500 crosses ${level}%`)).toHaveCount(0);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  // a shorter range, then another group (the US), keep the page whole
+  const ranges = page.getByRole("radiogroup", { name: "Time range" });
+  await ranges.getByRole("radio", { name: "3M" }).click();
+  await expect(ranges.getByRole("radio", { name: "3M" })).toHaveAttribute("aria-checked", "true");
+  await page.getByLabel("Group of stocks").selectOption("us_large");
+  await expect(page.getByText("Scans · United States")).toBeVisible();
+  await expect(charts.getByRole("heading", { name: /^SPY \(an S&P 500 fund\)/ })).toBeVisible();
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub|nseindia/i);      // "Screener" alone is the Scans tab
+  expect(text).not.toMatch(/\b(buy|sell|bullish|bearish|you should|accumulate|overbought|oversold)\b/i);
+  await sane(page, errors);
+  if (info.project.name === "phone") await touchable(page);
+
+  // the Scans tabs and the Invest home lead here
+  await page.goto("/research/rotation");
+  await page.getByRole("link", { name: "Market breadth" }).first().click();
+  await expect(page).toHaveURL(/\/invest\/breadth/);
+  await page.goto("/invest");
+  await expect(page.getByTestId("breadth-card")).toContainText("Above 50-day average");
+});
+
+test("market breadth on the Free plan: today's numbers, and the charts behind Basic", async ({ page }) => {
+  // as the server answers a Free account once payments are live (the fake world has every feature open)
+  await page.route("**/invest/breadth?*", async (r) => {
+    const res = await r.fetch();
+    const body = await res.json();
+    await r.fulfill({ response: res, json: { ...body, locked: true, history: null, sectors: null, thrusts: null } });
+  });
+  const errors = await open(page, "/invest/breadth", "Rose / fell", sessionAs("free-token", "u-free", "free@example.com"));
+  await expect(page.getByTestId("breadth-locked")).toContainText("on the Basic plan");
+  await expect(page.getByTestId("breadth-charts")).toHaveCount(0);
+  await expect(page.getByRole("radiogroup", { name: "Time range" })).toHaveCount(0);
+  await sane(page, errors);
 });

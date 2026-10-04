@@ -1093,3 +1093,22 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
   .mc-ev { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
 @media (max-width: 420px) { .mc-form { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- market breadth ---------- */
+/* the charts' two series colours, checked for colour-blind separation and contrast on each theme's surface */
+.breadth, .bx-colors { --bx-a: #1F4FB5; --bx-b: #B4500F; }
+:root[data-theme="dark"] .breadth, :root[data-theme="dark"] .bx-colors { --bx-a: #6C8FE8; --bx-b: #D0743A; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) .breadth, :root:not([data-theme]) .bx-colors { --bx-a: #6C8FE8; --bx-b: #D0743A; } }
+.bx-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) and (min-width: 641px) { .bx-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.bx-tile { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; min-width: 0; }
+.bx-value { font-size: 24px; font-weight: 600; line-height: 1.2; }
+.bx-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.bx-scale { width: 120px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bx-a) 45%, transparent)); border: 1px solid var(--line); }
+.bx-heat td.bx-cell { color: var(--ink); }
+.chart-tip { position: absolute; top: 0; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; font-size: 12.5px;
+  pointer-events: none; white-space: nowrap; box-shadow: var(--shadow); }
+@media (max-width: 640px) { .bx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .bx-tile { padding: 12px; } .bx-value { font-size: 20px; } }
+.bx-level { width: 64px; height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); padding: 0 8px; font: inherit; }
+.bx-alert-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bx-alert-list .btn { min-height: 32px; }

@@ -17,11 +17,11 @@ export const LIMITS: Record<PlanId, Limits> = {
     stock_alerts: 5, screens: 2, holdings: 30, features: [] },
   basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
     stock_alerts: 25, screens: 10, holdings: 100,
-    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders"] },
+    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders"] },
+      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -38,7 +38,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     "All 20+ indicators: MACD, Supertrend, Bollinger Bands, VWAP and more",
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times`, "Trade notifications and a daily report after each close",
     `${L.basic.deepdives_per_month} company deep dives (report card and checklist) and ${L.basic.decks_per_month} decks a month`,
-    "Stage 2 scan, watchlist red flags and Watchlist at a glance, with alerts",
+    "Stage 2 scan, watchlist red flags and Watchlist at a glance, with alerts; market breadth charts",
     `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings`, "Daily Market Brief and My Stocks"],
   pro: ["Everything in Basic, plus:", "Unlimited backtests, AI builds, deep dives and decks", `Paper trade ${L.pro.live_limit} strategies at a time`,
     "Indian F&O and options entered on your own rules' signals", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
@@ -56,8 +56,9 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators"], 
   ["networth", "Net worth: unlimited entries and the monthly history"],
   ["mf_gains", "Mutual funds: every scheme, and capital gains by year"],
   ["dividends", "Dividends by company, with TDS and US tax withheld"], ["tax_tools", "Advance tax amounts and long-term exemption facts per lot"],
-  ["money_reminders", "Money calendar reminders by email or phone"]];
+  ["money_reminders", "Money calendar reminders by email or phone"],
+  ["breadth", "Market breadth history, charts and sector table"]];
 export const EVERYONE = ["Every market, and your own CSV", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
-  "Corporate actions, deals and surveillance lists", "My Holdings and the tax report", "Money calendar and its calendar feed",
+  "Corporate actions, deals and surveillance lists", "Today's market breadth numbers", "My Holdings and the tax report", "Money calendar and its calendar feed",
   "Weekly Market Brief and My Stocks",
   "Public company pages, share cards and invite links"];
