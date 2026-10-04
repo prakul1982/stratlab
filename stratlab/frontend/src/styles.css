@@ -1154,10 +1154,16 @@ table.j-trades td:first-child { text-align: left; min-width: 150px; }
 .itr-head { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; gap: 10px; align-items: center; text-align: left; }
 @media (max-width: 600px) { .itr-downloads .btn { flex: 1 1 100%; justify-content: flex-start; } }
 
-/* options session: orders sent together under one line, the list scrolling inside its card */
-.orders-scroll { display: flex; flex-direction: column; gap: 12px; max-height: min(70vh, 720px); overflow-y: auto; margin-right: -8px; padding-right: 8px; }
-.order-group { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-.order-group:last-child { border-bottom: 0; padding-bottom: 0; }
+/* options session: a trade's orders open under its row; the open trade's under its position */
+.trade-toggle { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.trade-toggle:disabled { cursor: default; }
+.trade-toggle .chev { width: 10px; color: var(--muted); font-size: 11px; }
+.trade-toggle:disabled .chev { visibility: hidden; }
+.trade-row.open td { border-bottom-color: transparent; }
+.trade-orders-row > td { background: var(--paper-2); padding: 12px 16px 14px 34px !important; }
+.order-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px 24px; }
+.open-orders summary { cursor: pointer; color: var(--ink-2); margin: 4px 0 10px; }
+.order-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .order-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 ul.orders li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; flex-wrap: nowrap; }
 .order-sym { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
