@@ -1130,3 +1130,16 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .pos-chart { min-width: 0; }
 @media (max-width: 640px) { .trade-tabs { flex-wrap: nowrap; } }
 .space-strip + .pos-card { margin-top: -16px; margin-bottom: 28px; }   /* the Trade home: right under the strip */
+/* ---------- trade journal ---------- */
+.j-bar { position: relative; height: 12px; min-width: 80px; }
+.j-bar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); }
+.j-bar > span { position: absolute; top: 0; height: 12px; border-radius: 4px; }
+.j-rbars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; height: 170px; align-items: end; }
+.j-rcol { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; min-width: 0; text-align: center; }
+.j-rbar { width: 70%; max-width: 44px; border-radius: 4px 4px 0 0; }
+.j-rcol .tiny.muted { line-height: 1.2; min-height: 2.4em; }
+.j-wrap { position: relative; }   /* a hidden heading (sr-only) is placed inside the scroller, so it can't widen the page */
+.j-form > .field { min-width: 0; }
+.j-form input[type=time], .j-form input[type=date] { min-width: 0; max-width: 100%; }
+table.j-trades td { vertical-align: top; }
+table.j-trades td:first-child { text-align: left; min-width: 150px; }

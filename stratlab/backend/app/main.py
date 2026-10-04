@@ -30,6 +30,7 @@ from razorpay.errors import SignatureVerificationError
 from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
 from . import money_mf
 from . import money_advance_tax, money_routes
+from . import journal_routes
 from . import rules, rules_watch
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
@@ -242,6 +243,7 @@ app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
+app.include_router(journal_routes.router)     # /trade/journal
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page

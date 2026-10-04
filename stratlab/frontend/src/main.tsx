@@ -89,6 +89,8 @@ const breadthPage = () => import("./pages/BreadthPage");
 const BreadthPage = page(breadthPage, "BreadthPage");
 const netWorth = () => import("./pages/money/NetWorthPage");
 const NetWorthPage = page(netWorth, "NetWorthPage");
+const journalPage = () => import("./pages/trade/JournalPage");
+const JournalPage = page(journalPage, "JournalPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -109,6 +111,7 @@ function warmFirstPage(path: string) {
     : path === "/money/net-worth" ? netWorth
     : path === "/money/mutual-funds" ? mfPage
     : path === "/money/calendar" ? moneyCalendar
+    : path === "/trade/journal" ? journalPage
     : path === "/research/screens" || (path === "/research/scans" && lastView("scans") === "/research/screens") ? screensPage
     : path.startsWith("/research") ? research
     : null;
@@ -191,6 +194,7 @@ function Routed() {
         <Route path="/options/s/:sid" element={<OptionsSession />} />
         <Route path="/paper" element={<PaperPage />} />
         <Route path="/paper/:sid" element={<PaperPage />} />
+        <Route path="/trade/journal" element={<JournalPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
