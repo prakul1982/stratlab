@@ -1,6 +1,6 @@
 """What each order really costs, per market, plus a rough tax estimate.
 
-Rates are the published ones as of 2025 and change from time to time; they live here
+Rates are the published ones (F&O STT as raised by Budget 2026, from 1 April 2026) and change from time to time; they live here
 only, so updating them is a one-file change. Brokerage is the user's own setting
 (a flat amount per order, in the market's currency); everything else is statutory
 or a typical exchange fee."""
@@ -10,8 +10,8 @@ from datetime import datetime
 # India, per side, as a fraction of the traded value
 IN_EQUITY = {"stt": 0.001, "exchange": 0.0000297, "sebi": 0.000001, "stamp_buy": 0.00015}
 IN_EQUITY_MIS = {"stt_sell": 0.00025, "exchange": 0.0000297, "sebi": 0.000001, "stamp_buy": 0.00003}   # intraday
-IN_FUTURES = {"stt_sell": 0.0002, "exchange": 0.0000173, "sebi": 0.000001, "stamp_buy": 0.00002}
-IN_OPTIONS = {"stt_sell": 0.001, "exchange": 0.0003503, "sebi": 0.000001, "stamp_buy": 0.00003}
+IN_FUTURES = {"stt_sell": 0.0005, "exchange": 0.0000173, "sebi": 0.000001, "stamp_buy": 0.00002}     # STT 0.05% on sells (0.02% before 1 Apr 2026)
+IN_OPTIONS = {"stt_sell": 0.0015, "exchange": 0.0003503, "sebi": 0.000001, "stamp_buy": 0.00003}    # STT 0.15% of premium on sells (0.1% before 1 Apr 2026)
 IN_MCX_OPTIONS = {"stt_sell": 0.0005, "exchange": 0.000418, "sebi": 0.000001, "stamp_buy": 0.00003}   # CTT, not STT
 IN_MCX_FUTURES = {"stt_sell": 0.0001, "exchange": 0.000021, "sebi": 0.000001, "stamp_buy": 0.00002}   # CTT on non-agri sells
 IN_CDS_FUTURES = {"stt_sell": 0.0, "exchange": 0.0000035, "sebi": 0.000001, "stamp_buy": 0.000001}  # no STT on currency

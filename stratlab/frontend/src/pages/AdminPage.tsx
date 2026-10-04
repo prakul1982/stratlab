@@ -13,7 +13,7 @@ import { HolidaysPanel, type CalendarStatus } from "../components/HolidaysPanel"
 import { analyticsDashboard } from "../lib/analytics";
 
 type Plan = "free" | "basic" | "pro";
-type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quick_rank?: number | null; research_rank?: number | null };
+type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quota?: boolean; quick_rank?: number | null; research_rank?: number | null };
 interface Overview {
   server: {
     kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number;
@@ -30,7 +30,7 @@ interface UserRow {
   plan_until: string | null; paying: boolean; experiments: number; ai_builds: number; referrals?: number; free_months?: number;
 }
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null }
-type AITest = { label: string; ok: boolean; error: string | null; model: string | null; ms: number };
+type AITest = { label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number };
 
 const PLAN_NAME: Record<Plan, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 const DURATIONS: [string, number | null][] = [["30 days", 30], ["90 days", 90], ["1 year", 365], ["No end date", null]];
@@ -99,8 +99,9 @@ interface ReportedRow {
 
 type Tab = "overview" | "services" | "checks" | "users" | "billing";
 type RewardRow = { newcomer: string; newcomer_email: string | null; referrer: string; referrer_email: string | null; at: string | null;
-  status: string; given_at: string | null; signups_that_day: number; months: number; capped: boolean };
-type RewardsView = { review: RewardRow[]; given: RewardRow[]; months_given: number; waiting: number };
+  status: string; given_at: string | null; signups_that_day: number; months: number; capped: boolean;
+  reward?: string | null; reward_label?: string };
+type RewardsView = { review: RewardRow[]; given: RewardRow[]; months_given: number; waiting: number; extras_given?: number; waiting_to_subscribe?: number };
 
 /** Users → Invite rewards: rewards waiting for review (a link that brought more than 5 sign-ups in a day), and the
  *  newest given. Approved, a reward is given once the friend is active; rejected, nothing is given. */
@@ -115,7 +116,7 @@ function InviteRewardsPanel({ onChanged }: { onChanged: () => void }) {
       const out = await api<RewardsView & { status: string }>(`/admin/invite-rewards/${encodeURIComponent(r.newcomer)}/${decision}`, { method: "POST" });
       setV(out);
       notify(decision === "reject" ? "Rejected: no free months for this invite."
-        : out.status === "given" ? "Approved and given: both have a free month of Basic."
+        : out.status === "given" ? "Approved and given: the friend has a free month of Basic, and the inviter's reward is counted."
           : out.status === "expired" ? "Approved, but the friend's first 14 days ended without 3 active days, so there's nothing to give."
             : "Approved: given once the friend is active.");
       onChanged();
@@ -126,7 +127,7 @@ function InviteRewardsPanel({ onChanged }: { onChanged: () => void }) {
     <section className="card stack" style={{ gap: 12 }} data-testid="invite-rewards">
       <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
         <h2 className="h2">Invite rewards</h2>
-        <span className="small muted">{v.months_given} free {v.months_given === 1 ? "month" : "months"} given · {v.waiting} waiting for the friend to be active</span>
+        <span className="small muted">{v.months_given} free {v.months_given === 1 ? "month" : "months"} given · {v.extras_given ?? 0} extra credits · {v.waiting} waiting for the friend to be active · {v.waiting_to_subscribe ?? 0} waiting to subscribe</span>
       </div>
       <h3 className="h3" style={{ margin: 0 }}>Waiting for your review ({v.review.length})</h3>
       {v.review.length === 0 ? <p className="small muted" style={{ margin: 0 }}>Nothing to review.</p> : (
@@ -146,16 +147,16 @@ function InviteRewardsPanel({ onChanged }: { onChanged: () => void }) {
       <h3 className="h3" style={{ margin: 0 }}>Given</h3>
       {v.given.length === 0 ? <p className="small muted" style={{ margin: 0 }}>None yet.</p> : (
         <div className="table-wrap"><table>
-          <thead><tr><th>Friend</th><th>Invited by</th><th>Given</th><th>Months</th></tr></thead>
+          <thead><tr><th>Friend</th><th>Invited by</th><th>Given</th><th title="How the inviter earned: the friend's use, or the friend's first payment">Reward</th><th>Months</th></tr></thead>
           <tbody>{v.given.slice(0, 50).map((r) => (
             <tr key={r.newcomer}>
-              <td>{r.newcomer_email ?? r.newcomer}</td><td>{r.referrer_email ?? r.referrer}{r.capped ? <span className="small muted"> (at the 12-month cap)</span> : null}</td>
-              <td>{dateOnly(r.given_at)}</td><td className="num">{r.months}</td>
+              <td>{r.newcomer_email ?? r.newcomer}</td><td>{r.referrer_email ?? r.referrer}</td>
+              <td>{dateOnly(r.given_at)}</td><td data-testid="reward-type">{r.reward_label || "None"}</td><td className="num">{r.months}</td>
             </tr>
           ))}</tbody>
         </table></div>
       )}
-      <p className="hint">A friend who joins through someone's link and uses the app on 3 different days in their first 14 gets a free month of Basic, and so does the person who invited them (up to 12 months each, ever). More than 5 sign-ups through one link in a day wait here; the sign-ups themselves go through.</p>
+      <p className="hint">A friend who joins through someone's link and uses the app on 3 different days in their first 2 weeks gets a free month of Basic. The inviter gets a free month for each of their first 2 such friends in a rolling year (Use), and for each of their first 2 friends whose first real payment comes within 90 days of joining (Payment); after that each paying friend gives them 25% of a month as 8 days of free time, at most 8 a year. One reward per friend; a refund or dispute within 7 days of the payment takes it back. More than 5 sign-ups through one link in a day wait here; the sign-ups themselves go through.</p>
     </section>
   );
 }
@@ -268,8 +269,8 @@ export function AdminPage() {
   if (sv) {
     if (!sv.kite_ready) attention.push({ text: sv.kite_invalid || "The broker isn't logged in today, so Indian prices and paper trading are offline.", tab: "services", bad: true });
     if (sv.auto_login_configured && sv.auto_login.ok === false) attention.push({ text: `The automatic broker login failed: ${sv.auto_login.message}`, tab: "services", bad: true });
-    const aiDown = (aiTest ?? []).filter((a) => !a.ok).map((a) => a.label);
-    if (!aiTest) aiKeys.filter((a) => a.last_error).forEach((a) => aiDown.push(a.label));
+    const aiDown = (aiTest ?? []).filter((a) => !a.ok && !a.quota).map((a) => a.label);
+    if (!aiTest) aiKeys.filter((a) => a.last_error && !a.quota).forEach((a) => aiDown.push(a.label));
     if (!aiKeys.length) attention.push({ text: "No AI keys are set, so the idea builder and research reads are off.", tab: "services", bad: true });
     else if (aiDown.length) attention.push({ text: `AI: ${aiDown.join(", ")} ${aiDown.length > 1 ? "aren't" : "isn't"} answering. The others take over by themselves.`, tab: "services", bad: false });
     if (sv.admin_alerts && !sv.admin_alerts.email_ready) attention.push({ text: "Alert emails can't be sent yet: the server's email (SMTP) settings are missing.", tab: "services", bad: true });
@@ -393,8 +394,8 @@ export function AdminPage() {
                   <button className="btn quiet sm" disabled={busy === "ai" || !aiKeys.length} onClick={testAI}>{busy === "ai" ? "Testing…" : "Test every provider"}</button>
                 </div>
                 {!aiKeys.length && <Status ok={false} label="No AI keys" detail="Add a free GROQ_API_KEY in Railway → Variables, then redeploy." />}
-                {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
-                {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error} label={a.label} detail={a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
+                {(aiTest ?? []).map((a) => <Status key={a.label} ok={a.ok} warn={a.quota} label={a.label} detail={a.ok ? `Working with ${a.model ?? "its default model"}, ${(a.ms / 1000).toFixed(1)}s` : a.error ?? "Failed"} />)}
+                {!aiTest && aiKeys.map((a) => <Status key={a.label} ok={!a.last_error} warn={!a.last_error || a.quota} label={a.label} detail={a.quota ? "Free quota used up for now; it resets on its own." : a.last_error ? `Last try failed: ${a.last_error}` : "Key set. Press Test to check it now."} />)}
                 {aiKeys.length > 0 && <AIOrder rows={sv!.ai} />}
               </section>
             </div>

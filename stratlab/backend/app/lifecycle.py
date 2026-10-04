@@ -42,7 +42,7 @@ EMAILS = {
     "inactive": ("What's new, after 14 quiet days", False),
     "receipt": ("Payment receipt", True),
     "plan_ended": ("Plan changed to Free", True),
-    "invite_reward": ("Invite reward: a free month of Basic", True),
+    "invite_reward": ("Invite reward: free Basic time", True),
 }
 ORDER = ("trial_end", "promo_end", "trial_before", "promo_before", "welcome", "day2", "inactive")   # most urgent first
 
@@ -225,12 +225,22 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             "Your notebooks, backtests and watchlist stay. You can choose a plan again any time."],
             ("See plans", "/plans"), transactional=tx)
     if kind == "invite_reward":
+        how = ctx.get("kind")
         if ctx.get("role") == "newcomer":
-            first = ("You joined StratLab through a friend's invite and have been using it, so you and your friend "
-                     "each get a free month of the Basic plan.")
+            first = ("You joined StratLab through a friend's invite and used it on 3 different days in your first 2 "
+                     "weeks, so you get a free month of the Basic plan.")
+        elif how == "payment":
+            first = "A friend you invited has subscribed to StratLab, so you get a free month of the Basic plan."
+        elif how == "extra":
+            first = (f"A friend you invited has subscribed to StratLab, so you get {ctx.get('days') or 8} extra days "
+                     "of the Basic plan (25% off a month, as free time).")
         else:
             first = ("A friend you invited is now using StratLab, so you and your friend each get a free month of the "
                      "Basic plan.")
+        rule = ("How it works: a friend who joins with your link and uses StratLab on 3 different days in their first "
+                "2 weeks gets a month of Basic free. You get a free month for each of your first 2 friends who do "
+                "this each year, and for each of your first 2 friends who subscribe. After that, every friend who "
+                "subscribes gives you 25% off a month (about a week extra).")
         until = ctx.get("until")
         if ctx.get("banked") and not until:
             when = ("You're on a paid plan, so the free time is kept for you: it starts if your account moves to the "
@@ -241,7 +251,9 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
                 when += " More free time is kept for you in case your paid plan stops."
         else:
             when = "Your free Basic has started."
-        return _compose("You've got a free month of StratLab Basic", [first, when, basic_includes(),
+        title = (f"You've got {ctx.get('days') or 8} extra days of StratLab Basic" if how == "extra"
+                 else "You've got a free month of StratLab Basic")
+        return _compose(title, [first, when, basic_includes(), rule,
                         "Nothing to pay and nothing to set up. Invite more friends from Account."],
                         ("See your account", "/account#invite"), transactional=tx)
     raise ValueError(f"Unknown email: {kind}")

@@ -629,7 +629,7 @@ test("the tools grid shows one group until asked, and the menu reaches Account w
   await expect(page.getByRole("button", { name: "Paper trade options" })).toHaveCount(0);
   await page.getByRole("button", { name: /Show \d+ more tools/ }).click();
   await expect(page.getByRole("button", { name: "Paper trade options" })).toBeVisible();
-  if (info.project.name === "desktop") await expect(page.getByRole("link", { name: /^Account/ })).toBeInViewport();
+  if (info.project.name === "desktop") await expect(page.getByRole("button", { name: /^Account menu/ })).toBeInViewport();
   await sane(page, errors);
 });
 
@@ -661,13 +661,14 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
   await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", "Watchlist", "Alerts"]);
   for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
-  // Account and Admin sit at the bottom, with the markets folded to one line
-  const bottom = side.locator(".side-bottom");
-  await expect(bottom.getByRole("link", { name: /^Account/ })).toBeVisible();
-  await expect(bottom.getByRole("link", { name: "Admin" })).toBeVisible();
-  await expect(bottom.locator(".mkt-box > summary")).toHaveText(/^\d+ of \d+ markets open/);
-  await expect(bottom.locator(".mkt-grid")).toBeHidden();
-  if (phone) for (const el of await side.locator("a, button, summary").all()) {
+  // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
+  const foot = side.locator(".side-foot");
+  await expect(foot.getByRole("button", { name: /^\d+ of \d+ markets open$/ })).toBeVisible();
+  await expect(foot.getByRole("button", { name: "Account menu, Pro plan" })).toBeVisible();
+  expect((await foot.boundingBox())!.height, "the footer stays slim").toBeLessThanOrEqual(100);
+  const scrolls = await side.evaluate((aside) => [aside, ...aside.querySelectorAll("*")].filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY)).map((el) => el.className));
+  expect(scrolls, "one scrolling part in the sidebar").toEqual(["side-groups"]);
+  if (phone) for (const el of await side.locator("a, button").all()) {
     const b = await el.boundingBox();
     if (b && b.height) expect(b.height, `"${(await el.innerText()).slice(0, 30)}" is too small to tap`).toBeGreaterThanOrEqual(32);
   }
@@ -700,21 +701,16 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   await page.goto("/research/scan");
   await expect(page.getByText("Stage 2").first()).toBeVisible({ timeout: 30_000 });
 
-  // a group folds, by mouse or keyboard, and stays folded on this device; so do the markets
+  // a group folds, by mouse or keyboard, and stays folded on this device
   side = await menu(page, phone);
   const watch = side.getByRole("button", { name: "Watch", exact: true });
   await expect(watch).toHaveAttribute("aria-expanded", "true");
   await watch.click();
   await expect(watch).toHaveAttribute("aria-expanded", "false");
   await expect(side.getByRole("link", { name: "Alerts" })).toBeHidden();
-  await side.locator(".mkt-box > summary").click();
-  await expect(side.locator(".mkt-grid")).toBeVisible();
-  // the open state is saved by the toggle event, which fires a moment after the click: wait for it before reloading
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("stratlab.markets.open"))).toBe("1");
   await page.reload();
   side = await menu(page, phone);
   await expect(side.getByRole("button", { name: "Watch", exact: true })).toHaveAttribute("aria-expanded", "false");
-  await expect(side.locator(".mkt-grid")).toBeVisible();
   // the keyboard: Tab from the search button passes the space's home and lands on the first group, with a visible
   // focus ring, and Enter folds it
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
@@ -728,15 +724,135 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   await page.keyboard.press("Enter");
   await expect(first).toHaveAttribute("aria-expanded", was === "true" ? "false" : "true");
   await page.keyboard.press("Enter");
-  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.markets.open"); });
+  await page.evaluate(() => localStorage.removeItem("stratlab.side.shut"));
   await sane(page, errors);
 });
 
 test("the menu shows Admin only to admins", async ({ page }, info) => {
   await open(page, "/research", "Companies", sessionAs("free-token", "u-free", "free@example.com"));
   const side = await menu(page, info.project.name === "phone");
-  await expect(side.getByRole("link", { name: /^Account/ })).toBeVisible();
-  await expect(side.getByRole("link", { name: "Admin" })).toHaveCount(0);
+  await side.getByRole("button", { name: "Account menu, Free plan" }).click();
+  const acct = side.getByRole("menu", { name: "Account" });
+  await expect(acct.getByRole("menuitem", { name: /^Account/ })).toBeVisible();
+  await expect(acct.getByRole("menuitem", { name: "Admin" })).toHaveCount(0);
+});
+
+test("the markets now: one line in the footer that opens the list, by mouse or keyboard, and Esc or a click outside closes it", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/research", "Companies");
+  const side = await menu(page, phone);
+  const btn = side.getByRole("button", { name: /^\d+ of \d+ markets open$/ });
+  const [, open_, total] = (await btn.innerText()).match(/(\d+) of (\d+)/)!.map(Number);
+  await expect(btn).toHaveAttribute("aria-expanded", "false");
+  const footBefore = (await side.locator(".side-foot").boundingBox())!.height;
+  await btn.click();
+  const pop = page.getByRole("dialog", { name: "Markets now" });
+  await expect(pop).toBeVisible();
+  await expect(btn).toHaveAttribute("aria-expanded", "true");
+  // one row per market, each with what it's doing now; as many open as the line said
+  const rows = pop.getByRole("listitem");
+  await expect(rows).toHaveCount(total);
+  for (const r of await rows.all()) await expect(r).toHaveText(/(Open 24\/7|Closes in|Opens in|Holiday|Data offline|Closed)/);
+  await expect(pop.locator(".mkt-dot.on")).toHaveCount(open_);
+  // it floats: the sidebar's footer and menu keep their size
+  expect((await side.locator(".side-foot").boundingBox())!.height).toBe(footBefore);
+  const box = (await pop.boundingBox())!;
+  const vp = page.viewportSize()!;
+  if (phone) {
+    // a sheet from the bottom of the screen, full width, with its own close button
+    expect(Math.round(box.y + box.height)).toBe(vp.height);
+    expect(Math.round(box.width)).toBe(vp.width);
+    await pop.getByRole("button", { name: "Close" }).click();
+    await expect(pop).toHaveCount(0);
+    await btn.click();
+  } else expect(box.y + box.height).toBeLessThanOrEqual((await btn.boundingBox())!.y);
+  // Esc closes it and hands focus back; the drawer on a phone stays open
+  await page.keyboard.press("Escape");
+  await expect(pop).toHaveCount(0);
+  await expect(btn).toBeFocused();
+  await expect(btn).toHaveAttribute("aria-expanded", "false");
+  if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(1);
+  // the keyboard opens it too, with a visible focus ring on the line
+  expect(await btn.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+  await page.keyboard.press("Enter");
+  await expect(pop).toBeVisible();
+  await expect(pop).toBeFocused();
+  // a click anywhere else closes it
+  await page.mouse.click(phone ? 5 : vp.width - 20, 5);
+  await expect(pop).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("the account menu: Account, Admin, the theme, the tour and Sign out, with arrow keys and Esc", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/research", "Companies");
+  let side = await menu(page, phone);
+  const btn = side.getByRole("button", { name: "Account menu, Pro plan" });
+  await expect(btn).toContainText("owner");
+  await expect(btn).toContainText("Pro");
+  await btn.click();
+  const acct = page.getByRole("menu", { name: "Account" });
+  await expect(acct).toBeVisible();
+  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Admin", /^(Dark|Light) mode$/, "Tour", "Sign out"]);
+  if (phone) {
+    for (const el of await acct.getByRole("menuitem").all()) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+    const box = (await acct.boundingBox())!;
+    expect(Math.round(box.y + box.height)).toBe(page.viewportSize()!.height);
+  }
+  // the first item has focus; arrows, Home and End move through the items, and Esc closes the menu
+  const items = acct.getByRole("menuitem");
+  await expect(items.first()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(items.nth(1)).toBeFocused();
+  expect(await items.nth(1).evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+  await page.keyboard.press("End");
+  await expect(items.last()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(items.first()).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(items.last()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(acct).toHaveCount(0);
+  await expect(btn).toBeFocused();
+
+  // the theme flips both ways
+  const theme = () => page.evaluate(() => document.documentElement.dataset.theme ?? "");
+  await btn.click();
+  const first = (await acct.getByRole("menuitem", { name: /mode$/ }).innerText()).trim();
+  await acct.getByRole("menuitem", { name: /mode$/ }).click();
+  await expect(acct).toHaveCount(0);
+  expect(await theme()).toBe(first === "Dark mode" ? "dark" : "light");
+  await btn.click();
+  await expect(acct.getByRole("menuitem", { name: first === "Dark mode" ? "Light mode" : "Dark mode" })).toBeVisible();
+  await acct.getByRole("menuitem", { name: /mode$/ }).click();
+  expect(await theme()).toBe(first === "Dark mode" ? "light" : "dark");
+
+  // the tour opens from it
+  await btn.click();
+  await acct.getByRole("menuitem", { name: "Tour" }).click();
+  await expect(page.getByRole("tablist", { name: "Tour steps" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^(Close|Skip|Done)/ }).first().click({ timeout: 2000 }).catch(() => undefined);
+  await expect(page.getByRole("tablist", { name: "Tour steps" })).toHaveCount(0);
+
+  // Account and Admin open their pages (and close the drawer on a phone)
+  side = await menu(page, phone);
+  await btn.click();
+  await acct.getByRole("menuitem", { name: "Admin" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
+  side = await menu(page, phone);
+  await btn.click();
+  await acct.getByRole("menuitem", { name: /^Account/ }).click();
+  await expect(page).toHaveURL(/\/account$/);
+  await sane(page, errors);
+
+  // Sign out ends the session on this device
+  side = await menu(page, phone);
+  await btn.click();
+  await acct.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("sb-demo-auth-token"))).toBeNull();
+  await expect(page.locator("aside.sidebar")).toHaveCount(0, { timeout: 15_000 });
 });
 
 // ---------- sharing: company fact cards and invite links ----------
@@ -805,8 +921,17 @@ test("account: your invite link, how many friends joined, and sharing it", async
   const phone = info.project.name === "phone";
   await watchSharing(page);
   const errors = await open(page, "/account", "Invite friends");
-  await expect(page.getByTestId("friends-joined")).toHaveText(/^3 friends joined · 1 free month earned$/);
-  await expect(page.getByTestId("invite-reward-line")).toHaveText(/you both get a month of Basic free \(up to 12 months for you\)/);
+  await expect(page.getByTestId("friends-joined")).toHaveText(/^6 friends joined · 3 free months earned$/);
+  await expect(page.getByTestId("invite-reward-line")).toHaveText("Invite friends, both get a month of Basic. When a friend joins with your link and uses "
+    + "StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends "
+    + "who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a "
+    + "month (about a week extra).");
+  await expect(page.getByTestId("invite-status")).toHaveText("Use: 2 of 2 · Subscribed: 1 of 2 · Extra: 0 weeks");
+  await expect(page.getByTestId("invite-waiting")).toHaveText("1 friend waiting to subscribe");
+  for (const id of ["invite-reward-line", "invite-status", "invite-waiting"]) {      // nothing spills past the card
+    const box = (await page.getByTestId(id).boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  }
   await expect(page.getByLabel("Your invite link")).toHaveValue(/\/\?ref=[A-Za-z0-9_-]{12}$/);
   if (phone) await touchable(page);
   await page.getByRole("button", { name: "Share your link" }).click();
@@ -846,6 +971,10 @@ test("admin: invite rewards waiting for review are approved or rejected", async 
   const panel = page.getByTestId("invite-rewards");
   await expect(panel.getByText("Waiting for your review")).toBeVisible();
   await expect(panel.locator("tr", { hasText: "load3@example.com" })).toBeVisible();          // given
+  await expect(panel.locator("th", { hasText: "Reward" })).toBeVisible();
+  await expect(panel.locator("tr", { hasText: "load3@example.com" }).getByTestId("reward-type")).toHaveText("Use");
+  await expect(panel.locator("tr", { hasText: "load6@example.com" }).getByTestId("reward-type")).toHaveText("Payment");
+  await expect(panel.locator("tr", { hasText: "load5@example.com" }).getByTestId("reward-type")).toHaveText("Waiting to subscribe");
   if (phone) await touchable(page);
   // each run decides its own row: desktop rejects one, phone approves the other
   const row = panel.locator("tr", { hasText: phone ? "load2@example.com" : "load1@example.com" }).filter({ has: page.getByRole("button") });
@@ -1093,6 +1222,21 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText("TCS is back to 12 shares.")).toBeVisible();
   await expect(notice).toBeVisible();
+  await sane(page, errors);
+});
+
+test("admin: exchange holidays show every market's source, coverage and next holiday", async ({ page }, info) => {
+  const errors = await open(page, "/admin?tab=checks", "Exchange holidays");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
+  const panel = page.locator("section", { has: page.getByRole("heading", { name: "Exchange holidays" }) });
+  const table = panel.locator("table.holiday-cover");
+  for (const name of ["India (NSE/BSE)", "MCX", "Currency F&O", "US", "UK", "Europe", "Japan", "Commodities", "Crypto", "Forex"])
+    await expect(table.getByRole("cell", { name, exact: true })).toBeVisible();
+  await expect(table.getByText("No exchange holidays (24/7 / weekdays)")).toHaveCount(2);
+  await expect(table.getByText("Built-in calendar rules")).toHaveCount(5);
+  await expect(table.getByText("Exchange's own list, read daily")).toHaveCount(3);
+  await expect(panel.getByRole("button", { name: "Read the exchange's list now" })).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });
 

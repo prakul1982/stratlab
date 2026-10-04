@@ -1,10 +1,11 @@
 """Invite links: every user has a personal link (/?ref=CODE), and a new account that arrived through one remembers
 who sent it.
 
-When the friend becomes active, both get a free month of Basic: on_referral_joined, the one place a counted referral
-lands, hands it to invite_rewards.py. Free Basic time makes plans.access_plan answer "basic", so it carries whatever
-Basic's limits are in plans.py (100 backtests a month, 15 deep dives, every indicator...), never a copy of them. At
-most 12 free months ever for the one who invites (invite_rewards.REFERRER_CAP).
+When the friend becomes active they get a free month of Basic, and the one who invited them earns by the rules in
+invite_rewards.py (2 months a year from friends' use, 2 from friends' first payments, then a share of a month per
+paying friend): on_referral_joined, the one place a counted referral lands, hands it there. Free Basic time makes
+plans.access_plan answer "basic", so it carries whatever Basic's limits are in plans.py (100 backtests a month, 15 deep
+dives, every indicator...), never a copy of them.
 
 Kept in app_settings, so no new database columns:
   ref:code:{CODE}   -> the id of the user the code belongs to
@@ -144,7 +145,7 @@ def record(newcomer: dict, code: str | None, now: datetime | None = None) -> str
 
 
 def on_referral_joined(referrer: dict, newcomer: dict) -> None:
-    """Called once when a new account that came through `referrer`'s invite link is counted. Starts the invite reward:
-    a free month of Basic for both once the newcomer is active (invite_rewards.py)."""
+    """Called once when a new account that came through `referrer`'s invite link is counted. Starts the invite reward
+    (invite_rewards.py): a free month of Basic for the newcomer once active, and the referrer's reward when due."""
     from . import invite_rewards
     invite_rewards.joined(referrer, newcomer)

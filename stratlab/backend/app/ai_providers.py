@@ -54,11 +54,45 @@ class AIConfig(AIError):
 REASONING = ("gptoss", "qwen3", "deepseekr", "magistral", "thinking", "gemma4", "glm4", "kimik2")
 
 
+def _text(content) -> str:
+    """A message's text: a plain string, or the text parts of a list of parts (some models send those)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [p if isinstance(p, str) else p.get("text") if isinstance(p, dict) and p.get("type", "text") in ("text", "output_text") else None
+                 for p in content]
+        return "".join(p for p in parts if isinstance(p, str))
+    return ""
+
+
+# where a reasoning model sometimes leaves its final answer inside the reasoning: only after a clear marker
+_FINAL = re.compile(r"</think>|<answer>|^\s*\**final answer\**\s*:\**", flags=re.I | re.M)
+
+
+def _from_reasoning(text: str) -> str:
+    """The final answer from a reasoning trace, only when it is clearly marked off (after </think>, inside
+    <answer>…</answer>, or after a "Final answer:" line). The reasoning itself is never shown to anyone."""
+    marks = list(_FINAL.finditer(text or ""))
+    if not marks:
+        return ""
+    out = text[marks[-1].end():]
+    return out.split("</answer>")[0].strip()
+
+
 def _answer(choice: dict) -> str:
-    """The reply text without any reasoning a model wrote inline (<think>…</think>, or one left unclosed)."""
-    out = (choice.get("message") or {}).get("content") or ""
+    """The reply text without any reasoning a model wrote inline (<think>…</think>, or one left unclosed). Reasoning
+    models (qwen-3.8, gemma-4) put their thinking in `reasoning` / `reasoning_content` and may leave `content` empty:
+    then only a clearly marked final answer in there counts."""
+    msg = choice.get("message") or {}
+    out = _text(msg.get("content"))
     out = re.sub(r"<think>.*?</think>", "", out, flags=re.S)
-    return "" if "<think>" in out else out
+    out = "" if "<think>" in out else out
+    if not out.strip():
+        for k in ("reasoning_content", "reasoning"):
+            out = _from_reasoning(_text(msg.get(k)))
+            if out.strip():
+                break
+    return out
 
 
 def thinks(model: str) -> bool:
@@ -98,6 +132,7 @@ class Status:
     cooldown_until: float = 0.0
     models: list[str] = field(default_factory=list)
     models_at: float = 0.0
+    quota: bool = False          # the last failure was a rate limit (429): free quota used up for now
 
 
 _status: dict[str, Status] = {}
@@ -145,10 +180,11 @@ def rank(model_id: str) -> int:
 
 
 def pick_models(name: str, ids: list[str]) -> list[str]:
+    """Chat models worth trying, best first: models that answer straight away before ones that reason first."""
     ids = [i for i in ids if not any(s in i.lower() for s in SKIP)]
     if OPENAI_STYLE[name].get("free_only"):
         ids = [i for i in ids if i.endswith(":free")]
-    return sorted(ids, key=lambda i: (rank(i), i))[:4]
+    return sorted(ids, key=lambda i: (thinks(i), rank(i), i))[:4]
 
 
 def extract_json(raw: str) -> dict:
@@ -244,20 +280,34 @@ class OpenAIStyle:
             raise AIConfig(f"{LABELS[self.name]} has no suitable free chat model for this key.")
         return st.models
 
+    def _body(self, model: str, system: str, text: str, max_tokens: int) -> dict:
+        """The request. A reasoning model gets room to think and still answer, and is asked to think little or not at
+        all where the provider allows it: Cerebras takes reasoning_effort ("none" on qwen-3.8 and glm, "low" on
+        gpt-oss), SambaNova turns thinking off through the chat template (enable_thinking)."""
+        reasoning = thinks(model)
+        room = max(max_tokens, 6000 if self.name in ("cerebras", "sambanova") else 4000) if reasoning else max_tokens
+        body = {"model": model, "temperature": 0.1, "max_tokens": room,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
+                "response_format": {"type": "json_object"}}
+        if reasoning and self.name == "cerebras":
+            flat = re.sub(r"[^a-z0-9]", "", model.lower())
+            body["reasoning_effort"] = "none" if ("qwen" in flat or "glm" in flat) else "low"
+        elif reasoning and self.name in ("groq", "openrouter"):
+            body["reasoning_effort"] = "low"          # keep most of the reply for the answer itself
+        elif reasoning and self.name == "sambanova":
+            body["chat_template_kwargs"] = {"enable_thinking": False}
+        return body
+
     def complete(self, system: str, text: str, max_tokens: int = 1500) -> str:
         last: AIError | None = None
         for model in self.models():
-            reasoning = thinks(model)
-            body = {"model": model, "temperature": 0.1, "max_tokens": max(max_tokens, 4000) if reasoning else max_tokens,
-                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
-                    "response_format": {"type": "json_object"}}
-            if reasoning and self.name in ("groq", "cerebras", "openrouter"):
-                body["reasoning_effort"] = "low"      # keep most of the reply for the answer itself
+            body = self._body(model, system, text, max_tokens)
             try:
                 with self._client() as c:
                     r = c.post("/chat/completions", json=body)
-                    if r.status_code == 400 and "reasoning_effort" in r.text:
+                    if r.status_code == 400 and ("reasoning_effort" in r.text or "chat_template_kwargs" in r.text or "enable_thinking" in r.text):
                         body.pop("reasoning_effort", None)
+                        body.pop("chat_template_kwargs", None)
                         r = c.post("/chat/completions", json=body)
                     if r.status_code == 400 and ("response_format" in r.text or "json" in r.text.lower()):
                         body.pop("response_format")   # JSON mode unsupported, or the model's JSON failed validation
@@ -356,18 +406,19 @@ def _try(name, system, text, gemini, anthropic, transport, max_tokens: int = 150
             raw = anthropic(system, text, max_tokens=max_tokens)
         extract_json(raw)  # a reply we can't read counts as a failure: try the next provider
     except AIError as e:
-        st.last_error = str(e)
+        st.last_error, st.quota = str(e), isinstance(e, RateLimited)
         if isinstance(e, AIBusy):                     # the wait the provider asked for, within sensible bounds
             wait = getattr(e, "wait", None)
             st.cooldown_until = time.time() + (min(max(wait, 2.0), COOL_MAX) if wait else COOL_DEFAULT)
         return None, st.last_error
     except Exception as e:  # a provider bug must not break the chain
-        st.last_error = f"Unexpected error: {e.__class__.__name__}"
+        st.last_error, st.quota = f"Unexpected error: {e.__class__.__name__}", False
         return None, st.last_error
-    st.last_ok, st.last_error, st.cooldown_until = time.time(), None, 0.0
+    st.last_ok, st.last_error, st.cooldown_until, st.quota = time.time(), None, 0.0, False
     return raw, None
 
 
+QUOTA_TEXT = "Free quota used up for now; it resets on its own."
 TEST_SYSTEM = 'Reply with ONLY this JSON object and nothing else: {"ok": true}'
 
 
@@ -377,7 +428,10 @@ def test_all(gemini=None, anthropic=None, transport=None) -> list[dict]:
     for name in order():
         t0 = time.time()
         _, error = _try(name, TEST_SYSTEM, "ping", gemini, anthropic, transport)
-        out.append({"name": name, "label": LABELS[name], "ok": error is None, "error": error,
+        quota = error is not None and status(name).quota   # a rate limit is a pause, not a fault
+        if quota:
+            error = QUOTA_TEXT
+        out.append({"name": name, "label": LABELS[name], "ok": error is None, "error": error, "quota": quota,
                     "model": status(name).model if error is None else None, "ms": round((time.time() - t0) * 1000)})
     return out
 
@@ -390,5 +444,5 @@ def health() -> list[dict]:
         out.append({"name": name, "label": LABELS[name], "configured": bool(key_for(name)), "in_use": name in names,
                     "quick_rank": names.index(name) + 1 if name in names else None,
                     "research_rank": research.index(name) + 1 if name in research else None,
-                    "model": st.model, "last_ok": st.last_ok, "last_error": st.last_error})
+                    "model": st.model, "last_ok": st.last_ok, "last_error": st.last_error, "quota": st.quota})
     return out

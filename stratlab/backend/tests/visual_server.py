@@ -74,17 +74,28 @@ def build():
 def invite_rewards():
     """The owner invited friends: one became active (a free month each), and a link with too many sign-ups in a day
     left two rewards waiting for review in Admin (one for the desktop run to reject, one for the phone run to
-    approve)."""
+    approve). This year so far: two friends' use earned the owner a month each (3 and 4), a third became active after
+    that and waits to subscribe (5), and a fourth subscribed (6): "Use: 2 of 2 · Subscribed: 1 of 2 · Extra: 0 weeks".
+    Dated from today, so the rolling year always holds them."""
     import json
+    from datetime import datetime, timedelta, timezone
     from app import db, plans
-    joined = [{"id": f"u-load-{i}", "at": "2026-10-01T10:00:00+00:00"} for i in range(1, 4)]
+    now = datetime.now(timezone.utc)
+    at, on = (now - timedelta(days=3)).isoformat(timespec="seconds"), (now - timedelta(days=1)).isoformat(timespec="seconds")
+    joined = [{"id": f"u-load-{i}", "at": at} for i in range(1, 7)]
     db.set_setting("ref:joined:u-admin", json.dumps(joined))
-    given = {"by": "u-admin", "at": "2026-10-01T10:00:00+00:00", "status": "given", "signups_that_day": 3,
-             "referrer_months": 1, "newcomer_months": 1, "given_at": "2026-10-03T10:00:00+00:00"}
+    given = {"by": "u-admin", "at": at, "status": "given", "signups_that_day": 3,
+             "referrer_months": 1, "newcomer_months": 1, "given_at": on, "kind": "use", "referrer_at": on}
     db.set_setting("reward:u-load-3", json.dumps(given))
+    db.set_setting("reward:u-load-4", json.dumps(given))
+    db.set_setting("reward:u-load-5", json.dumps({**given, "referrer_months": 0, "kind": None, "referrer_at": None,
+                                                  "referrer_pending": True}))
+    db.set_setting("reward:u-load-6", json.dumps({**given, "status": "waiting", "newcomer_months": 0, "given_at": None,
+                                                  "kind": "payment", "paid_at": on, "payment_id": "pay_fixture6"}))
     for i in (1, 2):
-        db.set_setting(f"reward:u-load-{i}", json.dumps({**given, "status": "review", "signups_that_day": 6,
-                                                        "referrer_months": 0, "newcomer_months": 0, "given_at": None}))
+        db.set_setting(f"reward:u-load-{i}", json.dumps({**given, "status": "review", "signups_that_day": 6, "kind": None,
+                                                        "referrer_months": 0, "newcomer_months": 0, "given_at": None,
+                                                        "referrer_at": None}))
     plans.add_free_basic(db.get_profile("u-load-3"), 30)
 
 

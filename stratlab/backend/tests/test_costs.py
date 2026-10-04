@@ -19,7 +19,9 @@ def test_india_equity_buy_and_sell_charges():
 
 def test_india_futures_stt_only_on_sell():
     assert C.order_costs("in_fut", "buy", 75, 20000, 20)["stt"] == 0
-    assert C.order_costs("in_fut", "sell", 75, 20000, 20)["stt"] == pytest.approx(75 * 20000 * 0.0002)
+    assert C.order_costs("in_fut", "sell", 75, 20000, 20)["stt"] == pytest.approx(75 * 20000 * 0.0005)    # Budget 2026: 0.05%
+    assert C.order_costs("in_opt", "sell", 75, 100, 20)["stt"] == pytest.approx(75 * 100 * 0.0015)       # 0.15% of premium
+    assert C.order_costs("in_opt", "buy", 75, 100, 20)["stt"] == 0
 
 
 def test_us_fees_only_on_sell_and_finra_is_capped():

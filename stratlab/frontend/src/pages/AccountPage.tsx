@@ -74,13 +74,13 @@ export function AccountPage() {
         // only the owner tests every provider: each test spends the shared free AI allowance
         add({ t: "AI strategy builder", s: "warn", d: "Testing each provider…" });
         try {
-          const r = await api<{ providers: { label: string; ok: boolean; error: string | null; model: string | null; ms: number }[] }>("/admin/ai/test", { method: "POST" });
+          const r = await api<{ providers: { label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number }[] }>("/admin/ai/test", { method: "POST" });
           rows.pop();
           const working = r.providers.filter((p) => p.ok).length;
           add({ t: "AI strategy builder", s: working ? "pass" : "fail",
             d: working ? `${working} of ${r.providers.length} providers working` : "No provider answered, so the simple converter is used. See the reasons below." });
           for (const p of r.providers) {
-            add({ t: `AI: ${p.label}`, s: p.ok ? "pass" : "fail",
+            add({ t: `AI: ${p.label}`, s: p.ok ? "pass" : p.quota ? "warn" : "fail",
               d: p.ok ? `Working${p.model ? ` with ${p.model}` : ""}, answered in ${(p.ms / 1000).toFixed(1)}s` : p.error || "Failed" });
           }
         } catch (e) {

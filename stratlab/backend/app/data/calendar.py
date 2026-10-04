@@ -3,6 +3,7 @@
 India uses the BSE calendar (NSE closes on the same days). Crypto trades every day and forex every
 weekday, so neither has holidays here. Exchanges publish holidays about a year ahead; beyond what the
 installed calendar knows (or if it can't load), a day counts as a trading day when it's a weekday."""
+import re
 from datetime import date, timedelta
 from functools import lru_cache
 
@@ -174,3 +175,63 @@ def holidays(market: str, start: date, days: int = 60) -> list[str]:
         _holiday_cache.clear()
     _holiday_cache[key] = (time.monotonic(), out)
     return list(out)
+
+
+# Admin → Exchange holidays: every market, where its holidays come from and how far ahead they're known
+LISTED = ("IN", "MCX", "CDS")                 # the exchange's own list, read daily (MCX keeps the NSE/BSE days)
+NAMES = {"IN": "India (NSE/BSE)", "MCX": "MCX", "CDS": "Currency F&O", "US": "US", "UK": "UK", "EU": "Europe",
+         "JP": "Japan", "CMDTY": "Commodities", "CRYPTO": "Crypto", "FX": "Forex"}
+FIXED_IN_NAMES = {(1, 26): "Republic Day", (5, 1): "Maharashtra Day", (8, 15): "Independence Day",
+                  (10, 2): "Gandhi Jayanti", (12, 25): "Christmas"}
+ENOUGH_DAYS = 60                              # fewer days of known holidays than this is worth a look
+
+
+def covered_until(market: str) -> date | None:
+    """The last day this market's holidays are known: what the installed calendar covers, or for India's segments
+    the exchange's list too (it covers its whole year, so to 31 Dec of the latest year it lists) and any pasted day."""
+    until = known_until(market)
+    ends = [until] if until else []
+    if market in LISTED:
+        ends += [date.fromisoformat(d) for d in extra_holidays(market)]
+        years = [int(str(d)[:4]) for k in (("IN", "CDS") if market == "CDS" else ("IN",))
+                 for d in auto_status(k).get("days") or [] if _iso(str(d)[:10])]
+        if years:
+            ends.append(date(max(years), 12, 31))
+    return max(ends) if ends else None
+
+
+def holiday_name(market: str, day: date) -> str | None:
+    """The holiday's name when the calendar has one (built-in rules do; the exchange's list gives dates only)."""
+    if market in LISTED and (day.month, day.day) in FIXED_IN_NAMES:
+        return FIXED_IN_NAMES[(day.month, day.day)]
+    cal = _calendar(CODES[market]) if market in CODES else None
+    try:
+        import pandas as pd
+        names = cal.regular_holidays.holidays(pd.Timestamp(day), pd.Timestamp(day), return_name=True)
+        return re.sub(r"\s*\([^)]*\)$", "", str(names.iloc[0])) if len(names) else None   # "(2022 onwards)"
+    except Exception:
+        return None
+
+
+def coverage(market: str, today: date) -> dict:
+    """One row of the admin's holiday table: source, how far ahead holidays are known, the next one and a status."""
+    row = {"market": market, "name": NAMES.get(market, market), "known_until": None, "days_left": None,
+           "next": None, "next_name": None, "state": "none", "hint": None}
+    if market not in CODES:
+        return {**row, "source": "No exchange holidays (24/7 / weekdays)"}
+    row["source"] = "Exchange's own list, read daily" if market in LISTED else "Built-in calendar rules"
+    until = covered_until(market)
+    if until is None:
+        return {**row, "state": "warn", "hint": "No holiday calendar loaded: update the exchange_calendars package."}
+    left = (until - today).days
+    ahead = holidays(market, today, max(0, min(left + 1, 400)))
+    nxt = date.fromisoformat(ahead[0]) if ahead else None
+    ok = left >= ENOUGH_DAYS
+    hint = None if ok else ("Read the exchange's list now, or paste it below." if market in LISTED
+                            else "Update the exchange_calendars package.")
+    return {**row, "known_until": until.isoformat(), "days_left": left, "next": nxt.isoformat() if nxt else None,
+            "next_name": holiday_name(market, nxt) if nxt else None, "state": "ok" if ok else "warn", "hint": hint}
+
+
+def all_coverage(today: date) -> list[dict]:
+    return [coverage(m, today) for m in NAMES]

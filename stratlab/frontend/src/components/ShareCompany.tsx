@@ -36,11 +36,20 @@ export function ShareCompanyButton({ region, symbol }: { region: "IN" | "US"; sy
   );
 }
 
-type Invites = { code: string; link: string; joined: number; months?: number; cap?: number; free_basic_until?: string | null; banked_days?: number };
+type Invites = { code: string; link: string; joined: number; months?: number; free_basic_until?: string | null; banked_days?: number;
+  use_months?: number; use_cap?: number; paid_months?: number; paid_cap?: number; extras?: number; extra_pct?: number;
+  waiting_to_subscribe?: number };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** Account → Invite friends: the user's own link, how many friends joined through it and the free months earned. */
+/** The invite rule in one place, for Account and anywhere else it's shown. */
+export const INVITE_LEAD = "Invite friends, both get a month of Basic.";
+export const inviteRule = (pct = 25) => "When a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, "
+  + "they get a month of Basic free. You get a free month for each of your first 2 friends who do this each year, and for each of "
+  + `your first 2 friends who subscribe. After that, every friend who subscribes gives you ${pct}% off a month (about a week extra).`;
+
+/** Account → Invite friends: the user's own link, how many friends joined through it, the free months earned and this
+ *  year's rewards against their caps. */
 export function InviteCard() {
   const { notify } = useApp();
   const [v, setV] = useState<Invites | null>(null);
@@ -52,7 +61,7 @@ export function InviteCard() {
   if (!v) return null;
   const link = `${siteUrl()}/?ref=${v.code}`;
   const share = async () => {
-    const r = await shareLink({ url: link, title: "StratLab", text: "I use StratLab to test trading ideas and read company facts. Try it free:" });
+    const r = await shareLink({ url: link, title: "StratLab", text: "I use StratLab to test trading ideas and read company facts. Join with my link and use it on 3 different days in your first 2 weeks to get a month of Basic free:" });
     if (r !== "cancelled") track("invite link shared", { channel: r });
     if (r === "copied") notify("Invite link copied.");
     else if (r === "shown") notify(`Your invite link: ${link}`);
@@ -63,7 +72,11 @@ export function InviteCard() {
         <h2 className="h2">Invite friends</h2>
         <span className="pill" data-testid="friends-joined">{plural(v.joined, "friend", "friends")} joined · {plural(v.months ?? 0, "free month", "free months")} earned</span>
       </div>
-      <p className="small muted" style={{ margin: 0 }} data-testid="invite-reward-line">When a friend joins through your link and uses StratLab on 3 different days in their first two weeks, you both get a month of Basic free (up to {v.cap ?? 12} months for you).</p>
+      <p className="small muted" style={{ margin: 0 }} data-testid="invite-reward-line"><strong>{INVITE_LEAD}</strong> {inviteRule(v.extra_pct)}</p>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <span className="pill" style={{ whiteSpace: "normal", maxWidth: "100%" }} data-testid="invite-status">Use: {v.use_months ?? 0} of {v.use_cap ?? 2} · Subscribed: {v.paid_months ?? 0} of {v.paid_cap ?? 2} · Extra: {plural(v.extras ?? 0, "week", "weeks")}</span>
+        {(v.waiting_to_subscribe ?? 0) > 0 && <span className="pill" style={{ whiteSpace: "normal", maxWidth: "100%" }} data-testid="invite-waiting">{plural(v.waiting_to_subscribe ?? 0, "friend", "friends")} waiting to subscribe</span>}
+      </div>
       {(v.banked_days ?? 0) > 0 && <p className="small muted" style={{ margin: 0 }}>{v.banked_days} days of free Basic are kept for you: they start if your paid plan stops.</p>}
       <div className="row wrap" style={{ gap: 10 }}>
         <input className="input" readOnly value={link} aria-label="Your invite link" style={{ flex: "1 1 260px", minWidth: 0 }} onFocus={(e) => e.target.select()} />
