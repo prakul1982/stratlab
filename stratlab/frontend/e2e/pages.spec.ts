@@ -374,7 +374,7 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   await expect(page.getByText("No trades yet")).toBeVisible();
 });
 
-test("tax report: the tax P&L ZIP as the broker gives it, checked against its summary, other segments left out", async ({ page, request }, info) => {
+test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked against its summary, and the total tax", async ({ page, request }, info) => {
   const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
   expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
   const errors = await open(page, "/tax-report", "Capital gains on your shares", sessionAs(token, id, email));
@@ -382,18 +382,60 @@ test("tax report: the tax P&L ZIP as the broker gives it, checked against its su
   await expect(page.locator("input[type=file]")).toHaveAttribute("accept", /\.zip/);
   await page.locator("input[type=file]").setInputFiles(TAXPNL + "zerodha_taxpnl_2024_2025.zip");
   await expect(page.getByText(/Read as a Zerodha tax P&L: 16 trades added/)).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByText(/From the ZIP: Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\)/)).toBeVisible();
+  await expect(page.getByText(/7 F&O, commodity and currency lines added up as business income/)).toBeVisible();
+  await expect(page.getByText(/From the ZIP: Commodity \(2 lines\), Equity short term \(3 lines\), Equity long term \(2 lines\), Equity intraday \(3 lines\), F&O \(4 lines\), Currency \(1 line\)/)).toBeVisible();
   const check = page.getByRole("list", { name: "Totals checked against your broker's summary" });
-  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(3);
+  await expect(check.getByText(/the same as your broker's summary sheet/)).toHaveCount(9);
+  await expect(check.getByText(/F&O turnover: ₹3,788 netted per contract/)).toBeVisible();
   const left = page.getByRole("list", { name: "Files left out" });
-  for (const seg of ["F&O.csv", "Commodity.csv", "Currency.csv", "Non Equity.csv"]) await expect(left.getByText(seg, { exact: false })).toBeVisible();
-  await expect(left.getByText(/business income/).first()).toBeVisible();
+  await expect(left.getByText("Non Equity.csv", { exact: false })).toBeVisible();
+  await expect(left.getByText("F&O.csv", { exact: false })).toHaveCount(0);
   // the only year with sales opens by itself
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
   await expect(page.getByText("2 same-day round trips", { exact: false })).toBeVisible();
   await expect(page.getByText("Estimate only.")).toHaveCount(1);
+  await expect(page.getByText(/advance tax and TDS already paid aren't included/)).toBeVisible();
+
+  // the total, at the top of the year, with where it comes from
+  const total = page.getByRole("region", { name: "Total tax estimate" });
+  await expect(total.getByRole("heading", { name: "Total tax estimate, FY 2024-25" })).toBeVisible();
+  const chips = total.getByRole("list", { name: "Where the tax comes from" });
+  await expect(chips.getByRole("listitem")).toHaveCount(4);
+  for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("listitem").filter({ hasText: c })).toHaveCount(1);
+  await expect(total.getByText(/no other income entered yet/)).toBeVisible();
+  await expect(total.getByRole("table", { name: "Total tax breakdown" }).getByText("Estimated total tax")).toBeVisible();
+  // F&O by segment, and the return and audit facts
+  const segs = page.getByRole("table", { name: "F&O by segment" });
+  for (const s of ["F&O", "Commodity", "Currency"]) await expect(segs.getByText(s, { exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "F&O by underlying" }).getByText("BANKNIFTY")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Returns and tax audit" }).getByText(/ITR-3/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+
+  // other income and the regime: saved, and the estimate follows
+  await total.getByRole("textbox", { name: "Other income", exact: true }).fill("1500000");
+  await total.getByRole("textbox", { name: "Of which salary", exact: true }).fill("1200000");
+  await total.getByRole("radio", { name: "Old" }).click();
+  await expect(total.getByRole("textbox", { name: "Deductions", exact: true })).toBeVisible();
+  await total.getByRole("textbox", { name: "Deductions", exact: true }).fill("150000");
+  if (info.project.name === "phone") await touchable(page);
+  await total.getByRole("button", { name: "Save and update" }).click();
+  await expect(page.getByText("Saved. The estimate is updated.")).toBeVisible();
+  await expect(total.getByText(/^Old regime/)).toBeVisible();
+  await expect(total.getByText(/With the same figures, the new regime works out to/)).toBeVisible();
+  await expect(total.getByText(/Deductions you entered \(80C and the like\): ₹1,50,000/)).toBeVisible();
+  const amount = await total.getByLabel("Estimated total tax").innerText();
+  expect(Number(amount.replace(/[^\d]/g, ""))).toBeGreaterThan(100000);
+  await page.reload();
+  await settle(page);
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("textbox", { name: "Other income", exact: true })).toHaveValue("1500000");
+
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/you should|we suggest|recommend|better off|switch to/i);
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
+  const csv = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  expect((await csv).suggestedFilename()).toBe("stratlab-tax-FY-2024-25.csv");
   expect((await request.delete(`${API}/tax`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBeTruthy();
 });
 
