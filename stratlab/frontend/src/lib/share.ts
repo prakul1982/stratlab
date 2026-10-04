@@ -2,7 +2,7 @@
 
 /** A touch phone or tablet with a share sheet (a desktop browser may have navigator.share too, but copying is
  *  what people expect there). */
-export const canShareSheet = () => typeof navigator.share === "function" && matchMedia("(pointer: coarse)").matches;
+const canShareSheet = () => typeof navigator.share === "function" && matchMedia("(pointer: coarse)").matches;
 
 export type Shared = "shared" | "copied" | "cancelled" | "shown";
 

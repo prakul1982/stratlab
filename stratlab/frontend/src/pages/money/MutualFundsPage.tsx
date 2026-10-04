@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../../lib/api";
+import { api, dataUrl } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, money, pct, price, qty as qtyText, signClass } from "../../lib/format";
 import { AsOf, Empty, Info, Loading } from "../../components/ui";
@@ -39,16 +39,6 @@ const rate = (r: number | null, slab?: boolean) => (r == null || slab ? "Slab" :
 const xirrText = (x: number | null) => (x == null ? "–" : pct(x * 100));
 const KIND_SHORT: Record<Kind, string> = { equity: "Equity-oriented", debt: "Debt", hybrid: "Other (35–65% equity)", other: "Other (under 35% equity)" };
 
-/** The file as base64, the way the server takes it. */
-function readFile(f: File): Promise<string> {
-  return new Promise((ok, bad) => {
-    const r = new FileReader();
-    r.onload = () => ok(String(r.result));
-    r.onerror = () => bad(new Error("That file couldn't be read. Pick it again."));
-    r.readAsDataURL(f);
-  });
-}
-
 export function MutualFundsPage() {
   const { fail, notify } = useApp();
   const [view, setView] = useState<View | null>(null);
@@ -73,7 +63,7 @@ export function MutualFundsPage() {
     if (picked.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A CAS is usually much smaller.`); return; }
     setBusy(true);
     try {
-      const data = await readFile(picked);
+      const data = await dataUrl(picked);
       const r = await api<ImportReply>("/money/mutual-funds/import", { method: "POST", body: { filename: picked.name, data, password: isPdf ? password : "", mode } });
       track("mutual funds imported", { kind: r.kind, added: r.added });
       setResult(r);

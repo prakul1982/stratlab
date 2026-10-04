@@ -1,7 +1,6 @@
 """/research API: company profiles, charts, quotes, market pulse, sector maps, comparisons,
 AI reads and the watchlist. Every third-party call happens here on the server."""
 import json
-import math
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +8,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .. import db
-from ..branding import public_research, public_text
+from ..branding import public_research
+from ..responses import err, safe
 from ..ai_providers import AIBusy, AIError
 from ..auth import current_profile
 from ..config import settings
@@ -30,22 +30,8 @@ def setup(research: Research, gemini, anthropic):
     hub, _ai = research, (gemini, anthropic)
 
 
-def err(status: int, code: str, message: str):
-    raise HTTPException(status, {"code": code, "message": public_text(message)})
-
-
-def _safe(o):
-    if isinstance(o, float):
-        return o if math.isfinite(o) else None
-    if isinstance(o, dict):
-        return {k: _safe(v) for k, v in o.items()}
-    if isinstance(o, (list, tuple)):
-        return [_safe(v) for v in o]
-    return o
-
-
 def ok(data) -> JSONResponse:
-    return JSONResponse(content=_safe(public_research(data)))
+    return JSONResponse(content=safe(public_research(data)))
 
 
 def region_of(region: str) -> str:

@@ -61,14 +61,10 @@ test.describe("analytics wrapper", () => {
   test("the CSP lets in the PostHog host for sending, and nothing else from it", () => {
     const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
     const csp: string = vercel.headers[0].headers.find((h: { key: string }) => h.key === "Content-Security-Policy").value;
-    const netlify = readFileSync(new URL("../netlify.toml", import.meta.url), "utf8").match(/Content-Security-Policy = "([^"]+)"/)![1];
-    for (const policy of [csp, netlify]) {
-      const dirs = Object.fromEntries(policy.split(";").map((d) => d.trim().split(/\s+/)).map(([k, ...v]) => [k, v]));
-      expect(dirs["connect-src"]).toContain(HOST);
-      for (const d of ["script-src", "img-src", "frame-src", "worker-src", "default-src"]) expect(dirs[d].join(" "), d).not.toMatch(/posthog/);
-      expect(policy.match(/posthog[^ ;]*/g)).toEqual(["posthog.com"]);       // one host, no wildcard
-    }
-    expect(csp).toBe(netlify);
+    const dirs = Object.fromEntries(csp.split(";").map((d) => d.trim().split(/\s+/)).map(([k, ...v]) => [k, v]));
+    expect(dirs["connect-src"]).toContain(HOST);
+    for (const d of ["script-src", "img-src", "frame-src", "worker-src", "default-src"]) expect(dirs[d].join(" "), d).not.toMatch(/posthog/);
+    expect(csp.match(/posthog[^ ;]*/g)).toEqual(["posthog.com"]);       // one host, no wildcard
   });
 });
 

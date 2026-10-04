@@ -54,7 +54,6 @@ LOAN_TYPES = {"home": "Home loan", "car": "Car loan", "personal": "Personal loan
               "credit_card": "Credit card", "other": "Loan"}
 POLICY_TYPES = {"term": "Term", "health": "Health", "life": "Life", "vehicle": "Vehicle", "other": "Other"}
 FREQUENCY = {"yearly": 12, "half-yearly": 6, "quarterly": 3, "monthly": 1, "single": 0}
-PURITY = (24, 22, 18, 14)
 
 
 # ---------- dates ----------

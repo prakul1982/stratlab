@@ -341,7 +341,7 @@ function Donut({ segments }: { segments: { label: string; share: number }[] }) {
 
 /** Plain-number lines (growth, price trend, debt and cash, margins and returns), each a label and its facts. No
  *  bars, grades or colours: the numbers are the whole story. */
-export function FactRows({ rows }: { rows: FactRow[] }) {
+function FactRows({ rows }: { rows: FactRow[] }) {
   return (
     <dl className="fact-rows">
       {rows.map((r) => (

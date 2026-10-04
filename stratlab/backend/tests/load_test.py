@@ -71,21 +71,20 @@ async def user(n, c, tokens, plan, until, results, errors):
     token = tokens[n % len(tokens)]
     hdr = {"Authorization": f"Bearer {token}", "X-Real-IP": f"10.0.{n // 250}.{n % 250}"}
     await asyncio.sleep(rng.uniform(0, 3))                   # people arrive over a few seconds, not in one instant
-    if True:
-        while time.monotonic() < until:
-            _, label, method, path, body = rng.choices(plan, weights)[0]
-            t = time.monotonic()
-            try:
-                r = await c.request(method, path, json=body, headers=hdr)
-                took = time.monotonic() - t
-                results[label].append(took)
-                TIMELINE.append((t, took, label))
-                if r.status_code >= 500 or r.status_code == 429:
-                    errors[label].append(f"{r.status_code} {r.text[:120]}")
-            except Exception as e:
-                results[label].append(time.monotonic() - t)
-                errors[label].append(f"{e.__class__.__name__}: {str(e)[:120]}")
-            await asyncio.sleep(rng.uniform(*THINK))             # think time
+    while time.monotonic() < until:
+        _, label, method, path, body = rng.choices(plan, weights)[0]
+        t = time.monotonic()
+        try:
+            r = await c.request(method, path, json=body, headers=hdr)
+            took = time.monotonic() - t
+            results[label].append(took)
+            TIMELINE.append((t, took, label))
+            if r.status_code >= 500 or r.status_code == 429:
+                errors[label].append(f"{r.status_code} {r.text[:120]}")
+        except Exception as e:
+            results[label].append(time.monotonic() - t)
+            errors[label].append(f"{e.__class__.__name__}: {str(e)[:120]}")
+        await asyncio.sleep(rng.uniform(*THINK))             # think time
 
 
 def report(results, errors, seconds, users) -> dict:

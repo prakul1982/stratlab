@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from app import db, money_fx as fx, money_us_tax as us, tax_lots as T
+from app import db, money_fx as fx, money_us_tax as us
 from app.config import settings
 from tests import fx_rates, world
 

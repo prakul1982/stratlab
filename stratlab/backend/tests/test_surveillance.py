@@ -4,7 +4,7 @@ filter, the alerts, the My Stocks newsletter's lines, the twice-a-day job and th
 import json
 import random
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 
 import httpx
 import pytest

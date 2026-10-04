@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   backup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -57,7 +57,7 @@ jobs:
           echo "NAME=stratlab-db-$day$([ "$full" = 1 ] && echo -full || true)" >> "$GITHUB_ENV"
           echo "KEEP=$([ "$full" = 1 ] && echo 28 || echo 7)" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ env.NAME }}
           path: stratlab-db-*.tar.gpg

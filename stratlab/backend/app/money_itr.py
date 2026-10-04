@@ -358,7 +358,7 @@ def t_tax_paid(g: dict) -> dict:
 
 
 def t_foreign(g: dict) -> dict:
-    ud, y = g["us_div"], g["y"]
+    ud = g["us_div"]
     rows = []
     if ud:
         f = ud["ftc"]

@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, pct, price, safeHref, signClass } from "../lib/format";
 import { HELP } from "../lib/help";
 import {
-  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, researchApi, saveRegion, savedRegion, scaleFor, useWatchlist,
+  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, researchApi, scaleFor, useRegion, useWatchlist,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -21,17 +21,6 @@ import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSumma
 import { CompanyActions } from "../components/CorpActions";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 import { Earlier } from "../components/Earlier";
-
-function useRegion(): [Region, (r: Region) => void] {
-  const [params, setParams] = useSearchParams();
-  const fromUrl = params.get("region")?.toUpperCase();
-  const [region, setRegionState] = useState<Region>(fromUrl === "US" || fromUrl === "IN" ? fromUrl : savedRegion());
-  const setRegion = (r: Region) => {
-    setRegionState(r); saveRegion(r);
-    const p = new URLSearchParams(params); p.set("region", r); setParams(p, { replace: true });
-  };
-  return [region, setRegion];
-}
 
 /** Hand a company (and optionally an idea) to the New notebook page. */
 function useTestOnStratLab() {

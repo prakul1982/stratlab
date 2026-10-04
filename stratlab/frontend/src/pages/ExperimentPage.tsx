@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, moneyShort, pct, periodName, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import type { Basket, Check, Experiment, Notebook, WalkForward } from "../lib/types";
@@ -11,6 +11,7 @@ import { useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
 import { MoreMenu } from "../components/MoreMenu";
 import { track } from "../lib/analytics";
+import { siteUrl } from "../lib/share";
 import { Book, Globe, Layers, Pencil, Pulse, Share, Trash } from "../components/Icons";
 
 const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
@@ -405,8 +406,6 @@ export function ExperimentPage() {
 }
 
 
-const siteUrl = () => (location.hostname === "localhost" ? location.origin : "https://stratlab.studio");
-
 /** Share a verdict: an image for chats and posts, or a public link that previews as the same card. */
 function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
   const { notify, fail, theme } = useApp();
@@ -423,7 +422,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
   const makeLink = async () => {
     try {
       const blob = await renderCard(cardFromExperiment(nb, e), "light");
-      const b64 = await new Promise<string>((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.readAsDataURL(blob); });
+      const b64 = await dataUrl(blob);
       const out = await api<{ token: string }>(`/notebooks/${nb.id}/experiments/${e.v}/share`, { method: "POST", body: { image: b64 } });
       setToken(out.token);
       track("card shared", { kind: "verdict", channel: "link" });

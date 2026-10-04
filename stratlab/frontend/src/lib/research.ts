@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "./api";
 import { currencySymbol } from "./format";
 
@@ -82,6 +83,19 @@ export function savedRegion(): Region {
 }
 export function saveRegion(r: Region) {
   try { localStorage.setItem("stratlab.research.region", r); } catch { /* private window */ }
+}
+
+/** The page's market: ?region= when the address has one, else the last one picked. Picking one saves it and puts it in
+ *  the address, so a shared link opens on the same market. */
+export function useRegion(): [Region, (r: Region) => void] {
+  const [params, setParams] = useSearchParams();
+  const fromUrl = params.get("region")?.toUpperCase();
+  const [region, setRegionState] = useState<Region>(fromUrl === "US" || fromUrl === "IN" ? fromUrl : savedRegion());
+  const setRegion = (r: Region) => {
+    setRegionState(r); saveRegion(r);
+    const p = new URLSearchParams(params); p.set("region", r); setParams(p, { replace: true });
+  };
+  return [region, setRegion];
 }
 
 /* ---------- watchlist, shared across pages ---------- */
