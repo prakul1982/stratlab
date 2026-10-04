@@ -12,7 +12,7 @@ A research notebook for traders: describe a strategy in plain words, test it on 
 
 Rupee prices include 18% GST (the invoice backs it out). US dollars, euros and pounds have their own prices; other currencies follow the rupee price.
 
-| | Free | Basic, ₹699/mo (₹6,990/yr), $8/mo | Pro, ₹1,999/mo (₹19,990/yr), $20/mo |
+| | Free | Basic, ₹699/mo (₹6,999/yr), $8/mo | Pro, ₹1,999/mo (₹19,999/yr), $20/mo |
 |---|---|---|---|
 | Backtests (each with a verdict; walk-forward and the similar-stocks check count as one each) | 10 per month | 100 per month | Unlimited |
 | AI strategy builds | 10 per month | 100 per month | Unlimited (200 a day safety cap) |
@@ -65,7 +65,7 @@ To test the credentials straight away, press **Run the automatic login now** on 
 
 ### 3. Razorpay (optional, for paid plans)
 Leave the Razorpay settings empty and the Plans page shows the paid plans as "Coming soon", with everyone on Free. To take payments:
-1. In the dashboard, create two **monthly plans**, Basic ₹699 (69900 paise) and Pro ₹1,999 (199900 paise), and put their IDs in `RAZORPAY_PLAN_BASIC` and `RAZORPAY_PLAN_PRO`. For yearly billing (two months free), also create **yearly plans**, Basic ₹6,990 (699000 paise) and Pro ₹19,990 (1999000 paise), in `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`. The amounts include GST. To charge US dollars directly, create USD plans of $8 and $20 a month ($80 and $200 a year; 800, 2000, 8000 and 20000 cents) and put their IDs on the USD row in Admin → Prices. The Plans page shows the Monthly/Yearly switch only when both yearly IDs are set.
+1. In the dashboard, create two **monthly plans**, Basic ₹699 (69900 paise) and Pro ₹1,999 (199900 paise), and put their IDs in `RAZORPAY_PLAN_BASIC` and `RAZORPAY_PLAN_PRO`. For yearly billing (two months free), also create **yearly plans**, Basic ₹6,999 (699900 paise) and Pro ₹19,999 (1999900 paise), in `RAZORPAY_PLAN_BASIC_YEAR` and `RAZORPAY_PLAN_PRO_YEAR`. The amounts include GST. To charge US dollars directly, create USD plans of $8 and $20 a month ($80 and $200 a year; 800, 2000, 8000 and 20000 cents) and put their IDs on the USD row in Admin → Prices. The Plans page shows the Monthly/Yearly switch only when both yearly IDs are set.
 2. Enable **Subscriptions** on your account.
 3. Add a webhook to `https://YOUR-BACKEND/billing/webhook` with a secret, and put that secret in `.env`. Subscribe to these events:
    - `subscription.activated`
@@ -86,7 +86,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 
    The business name and contact email are set in `frontend/public/config.js` (`BUSINESS_NAME`, `CONTACT_EMAIL`; add `BUSINESS_ADDRESS` if you want one listed). Read the four pages once and adjust the refund terms if you want a different policy.
 2. **Switch to Live mode** in the dashboard, then repeat the Test Mode setup there: live plans cannot see test plans.
-   - Create the plans again: Basic ₹699 and Pro ₹1,999 monthly, plus ₹6,990 and ₹19,990 yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
+   - Create the plans again: Basic ₹699 and Pro ₹1,999 monthly, plus ₹6,999 and ₹19,999 yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
    - Generate live API keys.
    - Add the webhook again with a new secret.
 3. **Set the live values in Railway → Variables:**

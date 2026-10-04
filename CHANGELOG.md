@@ -19,7 +19,7 @@ What shipped, newest first, grouped by month. Built from the git history.
 - **ASM (long and short term, with stages), GSM, ESM, trade-to-trade, price-band changes and the F&O ban,** read twice a trading day, each list kept with its own date. Badges with a plain explanation on company pages, the watchlist, holdings, screens and paper trading; a block on the public company pages; a Screens filter; a stock alert for entering or leaving a list; and a line in My Stocks.
 
 ### New prices and plan limits
-- **Basic ₹699 and Pro ₹1,999 a month (₹6,990 and ₹19,990 a year), GST included** ($8 and $20; €8 and €19; £7 and £16). All indicators, alerts, scans, watchlist red flags and Watchlist at a glance on Basic; Indian F&O on Pro. Deep dives and decks are counted once per company a month. Sector rotation and red flags on a company page are open to everyone, and the weekly newsletters are free.
+- **Basic ₹699 and Pro ₹1,999 a month (₹6,999 and ₹19,999 a year), GST included** ($8 and $20; €8 and €19; £7 and £16). All indicators, alerts, scans, watchlist red flags and Watchlist at a glance on Basic; Indian F&O on Pro. Deep dives and decks are counted once per company a month. Sector rotation and red flags on a company page are open to everyone, and the weekly newsletters are free.
 
 ### Plain numbers instead of scores
 - **The AI read on a company page shows fact rows, not 0-100 scores:** growth, price trend, debt and cash, margins and returns, worked out from reported results and prices, never by AI. Old cached reads lose their scores too. Deal, corporate-action and holdings badges use one neutral style.

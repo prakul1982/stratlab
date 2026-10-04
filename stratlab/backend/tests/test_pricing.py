@@ -18,7 +18,7 @@ def store(monkeypatch):
 
 def test_every_currency_has_prices_and_is_charged_in_rupees_until_its_plans_exist(store):
     t = pricing.table()
-    assert (t["INR"]["basic"], t["INR"]["pro"], t["INR"]["basic_year"], t["INR"]["pro_year"]) == (699, 1999, 6990, 19990)
+    assert (t["INR"]["basic"], t["INR"]["pro"], t["INR"]["basic_year"], t["INR"]["pro_year"]) == (699, 1999, 6999, 19999)
     assert t["INR"]["charged_in"] == "INR"
     assert (t["USD"]["basic"], t["USD"]["pro"], t["USD"]["basic_year"], t["USD"]["pro_year"]) == (8, 20, 80, 200)
     assert t["USD"]["charged_in"] == "INR"

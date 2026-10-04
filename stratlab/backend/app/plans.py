@@ -18,7 +18,7 @@ PLANS = {
     },
     "basic": {
         # rupee prices include GST (invoices.py backs the 18% out)
-        "name": "Basic", "price": 699, "price_year": 6990,
+        "name": "Basic", "price": 699, "price_year": 6999,
         "backtests_per_month": 100,
         "ai_builds_per_month": 100,
         "live_limit": 2,
@@ -33,7 +33,7 @@ PLANS = {
                      "investor_home"},
     },
     "pro": {
-        "name": "Pro", "price": 1999, "price_year": 19990,
+        "name": "Pro", "price": 1999, "price_year": 19999,
         "backtests_per_month": None,  # unlimited
         "ai_builds_per_month": None,  # unlimited (a daily safety cap still applies)
         "live_limit": 10,

@@ -96,7 +96,7 @@ Limits live in [`plans.py`](stratlab/backend/app/plans.py) and are enforced on t
 
 | | Free | Basic | Pro |
 |---|---|---|---|
-| Price (rupee prices include 18% GST) | ₹0 | ₹699 a month (₹6,990 a year) · $8 | ₹1,999 a month (₹19,990 a year) · $20 |
+| Price (rupee prices include 18% GST) | ₹0 | ₹699 a month (₹6,999 a year) · $8 | ₹1,999 a month (₹19,999 a year) · $20 |
 | Backtests, each with a verdict | 10 a month | 100 a month | Unlimited |
 | AI strategy builds | 10 a month | 100 a month | Unlimited (a daily safety cap applies) |
 | Paper trading | 1 session, for 5 market days | 2 at a time | 10 at a time |

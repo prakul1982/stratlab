@@ -7,7 +7,7 @@ export const PLAN_IDS: PlanId[] = ["free", "basic", "pro"];
 export const PLAN_NAME: Record<PlanId, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 
 /** Rupee prices including GST: [a month, a year]. */
-export const PRICE: Record<PlanId, [number, number]> = { free: [0, 0], basic: [699, 6990], pro: [1999, 19990] };
+export const PRICE: Record<PlanId, [number, number]> = { free: [0, 0], basic: [699, 6999], pro: [1999, 19999] };
 
 export type Limits = { backtests_per_month: number | null; ai_builds_per_month: number | null; live_limit: number; group_size: number;
   deepdives_per_month: number | null; decks_per_month: number | null; stock_alerts: number; screens: number; holdings: number; features: string[] };
