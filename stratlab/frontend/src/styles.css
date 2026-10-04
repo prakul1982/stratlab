@@ -896,6 +896,9 @@ table.legs input[type=number] { width: 72px !important; }
 .promo-countdown .promo-left { white-space: nowrap; }
 .mail-preview { width: 100%; height: 460px; border: 1px solid var(--line); border-radius: 10px; background: #f4f5f7; }
 /* My Holdings */
+/* Money: mutual funds upload (file, password, button) */
+.mf-upload { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.mf-upload .field { flex: 1 1 260px; }
 .holdings-add { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; }
 @media (max-width: 640px) { .holdings-add { grid-template-columns: minmax(0, 1fr); } }
 label.btn.disabled { opacity: .5; }

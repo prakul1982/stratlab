@@ -257,6 +257,13 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     if std:
         steps.append(f"Standard deduction of {money(std)} on salary ({v['regime']} regime, {money(r['std'])} at most).")
 
+    # mutual fund gains taxed at the slab rate (money_mf.py) are slab income, not special-rate gains
+    slab_cg = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab"))
+    buckets = [b for b in buckets if not b.get("slab")]
+    if slab_cg:
+        rest += slab_cg
+        steps.append(f"Mutual fund gains taxed at your slab rate (debt funds and the like, after set-off): {money(slab_cg)}, "
+                     "added to the income taxed at slab rates.")
     g_rates = {b["key"]: b["rate"] for b in buckets}
     lt_exempt = {b["key"]: b.get("exempt") or 0.0 for b in buckets}
     taxable = {b["key"]: max(0.0, b.get("taxable") or 0.0) for b in buckets}
@@ -378,17 +385,21 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     rel_special = relief * (sc_special / total_sc) if total_sc else 0.0
     cg_tax = (special_after + sc_special - rel_special) * (1 + CESS)
     slab_total = max(0.0, final - cg_tax)
-    shares = {"other": max(0.0, salary - std + rest), "intraday": spec, "fno": biz}
+    slab_left = min(slab_cg, rest)        # what's left of the slab-rate fund gains after any business loss set-off
+    shares = {"other": max(0.0, salary - std + rest - slab_left), "intraday": spec, "fno": biz, "slab_gains": slab_left}
     whole = sum(shares.values())
     parts = {"capital_gains": round(cg_tax, 2)}
     for k, s in shares.items():
         parts[k] = round(slab_total * s / whole, 2) if whole > 0 else 0.0
+    parts["capital_gains"] = round(parts["capital_gains"] + parts.pop("slab_gains"), 2)
 
     line("Other income (salary, interest and the like)", v["other"])
     if std:
         line("Less standard deduction", -std)
     line("Intraday (speculative) profit or loss", intraday)
     line("F&O, commodity and currency profit or loss, after charges", business)
+    if slab_cg:
+        line("Mutual fund gains taxed at slab rates", slab_cg)
     if spec_cf:
         line("Intraday loss carried forward (not set off this year)", spec_cf, "note")
     if biz_cf:

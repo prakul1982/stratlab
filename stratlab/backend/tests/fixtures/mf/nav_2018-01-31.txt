@@ -1,0 +1,8 @@
+Scheme Code;Scheme Name;ISIN Div Payout/ISIN Growth;ISIN Div Reinvestment;Net Asset Value;Repurchase Price;Sale Price;Date
+
+Open Ended Schemes ( Growth )
+
+Example Mutual Fund
+
+900001;Example Flexi Cap Fund - Direct Plan - Growth;INF000X01AB1;-;12.0000;;;31-Jan-2018
+900010;Example Tax Saver Fund - Direct Plan - Growth;INF000X01EL1;-;40.0000;;;31-Jan-2018

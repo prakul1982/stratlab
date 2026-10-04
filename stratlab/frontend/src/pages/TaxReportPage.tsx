@@ -7,8 +7,8 @@ import { AsOf, Empty, Info, Loading } from "../components/ui";
 import { Download, Trash, Upload } from "../components/Icons";
 import { track } from "../lib/analytics";
 
-type Bucket = { key: string; label: string; rate: number; gains: number; after_setoff: number; exempt: number; taxable: number; tax: number };
-type Sale = { key: string; bought: string; sold: string; qty: number; cost: number; sale: number; gain: number; term: "ST" | "LT"; bonus: boolean; gf: "applied" | "missing" | null; rate: number };
+type Bucket = { key: string; label: string; rate: number; gains: number; after_setoff: number; exempt: number; taxable: number; tax: number; slab?: boolean };
+type Sale = { key: string; bought: string; sold: string; qty: number; cost: number; sale: number; gain: number; term: "ST" | "LT"; bonus: boolean; gf: "applied" | "missing" | null; rate: number | null; mf?: boolean };
 type Side = { gains: number; losses: number; net: number; sales: number };
 type Leg = { pnl: number; turnover: number; trades: number };
 type Segment = {
@@ -31,7 +31,10 @@ type Year = {
   buckets: Bucket[]; steps: string[]; tax: number; tax_with_cess: number; carry_forward: { st: number; lt: number };
   intraday: { count: number; buy: number; sell: number; pnl: number; turnover: number }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
   business: Business; total: Total; inputs: Inputs; other_regime: { regime: "new" | "old"; total: number } | null; filing: string[]; turnover: number;
+  mutual_funds?: MfYear | null;
 };
+/** Mutual fund sales from the Money space, already in the rows and buckets above; this is their summary. */
+type MfYear = { count: number; gain: number; equity: number; slab: number; other_lt: number; dividends: number };
 type Lot = { key: string; bought: string; qty: number; cost: number; cost_each: number | null; price: number; value: number; loss: number; loss_pct: number | null; days: number; term: "ST" | "LT"; long_from: string | null; bonus: boolean };
 type Report = {
   years: Year[]; current_fy: number; names: Record<string, { symbol: string; name: string; isin: string; listed: boolean }>;
@@ -40,6 +43,7 @@ type Report = {
   pre_2018: string[]; fmv: Record<string, { value: number | null; source: "yours" | "your file" | "looked up" | null }>;
   rules: string[]; notes: string[]; disclaimer: string; files: { name: string; broker: string; kind: string; trades: number; at: string }[];
   updated_at: string | null; trades: number; business_lines: number; prices: boolean; prices_at: string | null; max_trades: number;
+  mf?: { allowed: boolean; count: number; plan: string };
 };
 type Problem = { line: number | null; text: string; reason: string };
 type Skipped = { name: string; reason: string };
@@ -58,7 +62,7 @@ const isBusiness = (name: string) => !/\.zip$/i.test(name) && /f\s*&\s*o|(^|[^a-
 const capMb = (name: string) => (isBusiness(name) ? FNO_MB : MAX_MB);
 const BROKERS = "Zerodha (Console tradebook, or the tax P&L ZIP as it downloads), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
 const inr = (v: number | null | undefined) => money(v, "INR", 0);
-const rate = (r: number) => `${+(r * 100).toFixed(2)}%`;
+const rate = (r: number | null, slab?: boolean) => (r == null || slab ? "Slab" : `${+(r * 100).toFixed(2)}%`);
 
 /** Several files' replies as one: counts added up, lists joined. */
 function combine(a: ImportReply | null, b: ImportReply): ImportReply {
@@ -157,7 +161,7 @@ export function TaxReportPage() {
 
   const y = useMemo(() => rep?.years.find((x) => x.fy === fy) ?? null, [rep, fy]);
   const name = (k: string) => rep?.names[k]?.symbol ?? k;
-  const has = !!rep && (rep.trades > 0 || rep.business_lines > 0);
+  const has = !!rep && (rep.trades > 0 || rep.business_lines > 0 || (rep.mf?.count ?? 0) > 0);
 
   return (
     <div className="stack" style={{ gap: 24 }}>
@@ -274,7 +278,7 @@ export function TaxReportPage() {
                 <table aria-label="Gains by rate">
                   <thead><tr><th style={{ textAlign: "left" }}>Kind</th><th>Rate</th><th>Gains</th><th>After set-off</th><th>Exempt</th><th>Taxable</th><th>Tax</th></tr></thead>
                   <tbody>{y.buckets.map((b) => (
-                    <tr key={b.key}><td style={{ textAlign: "left" }}>{b.label}</td><td className="num">{rate(b.rate)}</td><td className="num">{inr(b.gains)}</td><td className="num">{inr(b.after_setoff)}</td>
+                    <tr key={b.key}><td style={{ textAlign: "left" }}>{b.label}</td><td className="num">{rate(b.rate, b.slab)}</td><td className="num">{inr(b.gains)}</td><td className="num">{inr(b.after_setoff)}</td>
                       <td className="num">{inr(b.exempt)}</td><td className="num">{inr(b.taxable)}</td><td className="num">{inr(b.tax)}</td></tr>
                   ))}</tbody>
                 </table>
@@ -293,6 +297,8 @@ export function TaxReportPage() {
           </section>
 
           <BusinessCard y={y} />
+
+          <MutualFundsCard y={y} mf={rep.mf} />
 
           {y.filing.length > 0 && (
             <section className="card stack" style={{ gap: 10 }} id="tax-filing">
@@ -406,7 +412,7 @@ const ITR3_URL = "https://www.incometax.gov.in/iec/foportal/help/individual-busi
 function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void>; filing: boolean }) {
   const t = y.total;
   const chips: [string, number, string][] = [
-    ["Capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares, at the special rates (sections 111A and 112A), with its share of surcharge and cess."],
+    ["Capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess."],
     ["Intraday", t.parts?.intraday ?? 0, "Intraday results are speculative business income, taxed at your slab rate. Slab tax is split between your incomes in proportion to each."],
     ["F&O", t.parts?.fno ?? 0, "F&O, commodity and currency results, after the charges in your files, are non-speculative business income, taxed at your slab rate."],
     ["Other income", t.parts?.other ?? 0, "Your salary, interest and other income as you entered it, after the standard deduction on salary."],
@@ -521,6 +527,25 @@ function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inpu
 }
 
 /** F&O, commodity and currency for the year: the result, charges, turnover and the biggest underlyings. */
+/** Mutual fund gains from the Money space: already counted above, summarised here. */
+function MutualFundsCard({ y, mf }: { y: Year; mf?: Report["mf"] }) {
+  const m = y.mutual_funds;
+  return (
+    <section className="card stack" style={{ gap: 10 }} aria-label="Mutual funds">
+      <h2 className="h2">Mutual funds</h2>
+      {mf && !mf.allowed ? <p className="small" style={{ margin: 0 }}>Mutual fund capital gains are on the {mf.plan} plan. <Link className="link" to="/plans">See plans</Link></p>
+        : !m ? <p className="small muted" style={{ margin: 0 }}>No mutual fund redemptions or switches in {y.label}. Upload your CAS on the <Link className="link" to="/money/mutual-funds">Mutual funds</Link> page to include them.</p>
+        : (
+          <>
+            <p className="small" style={{ margin: 0 }}>{m.count} redemption{m.count === 1 ? "" : "s"} matched to purchase{m.count === 1 ? "" : "s"}, net <b className={signClass(m.gain)}>{inr(m.gain)}</b>: equity-oriented funds {inr(m.equity)}, gains at your slab rate {inr(m.slab)}, other long-term {inr(m.other_lt)}. They're in the gains, set-off and total tax estimate above.</p>
+            {m.dividends > 0 && <p className="small muted" style={{ margin: 0 }}>Dividends paid out by your funds this year: {inr(m.dividends)}. They're income at your slab rate, not capital gains: include them in your other income above.</p>}
+            <Link className="link small" to="/money/mutual-funds">See each scheme</Link>
+          </>
+        )}
+    </section>
+  );
+}
+
 function BusinessCard({ y }: { y: Year }) {
   const [all, setAll] = useState(false);
   const b = y.business;

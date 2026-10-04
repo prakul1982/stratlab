@@ -46,5 +46,7 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Capital gains by financial year from your tradebooks, matched first in, first out. An estimate to check with your CA." },
     { to: "/money/net-worth", label: "Net worth", icon: "wallet", title: "What you own minus what you owe, with your insurance policies",
       blurb: "Stocks, funds, PF, PPF, NPS, FDs, gold and property, minus loans; with EMIs, prepayment maths and your policies." },
+    { to: "/money/mutual-funds", label: "Mutual funds", icon: "layers", title: "Your funds from your CAS: value, XIRR, allocation and capital gains",
+      blurb: "Import your CAMS/KFintech statement: each fund's value, XIRR, category mix and capital gains by year." },
   ],
 };

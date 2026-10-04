@@ -28,6 +28,7 @@ from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, tax_export, tax_lots, tax_total
+from . import money_mf
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import health as ai_health, test_all as ai_test_all
@@ -222,6 +223,7 @@ if settings.SENTRY_DSN:
 app = FastAPI(title="StratLab API", lifespan=lifespan)
 research_routes.setup(research_hub, _gemini, _anthropic)
 app.include_router(research_routes.router)
+app.include_router(money_mf.router)          # /money/mutual-funds
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -854,6 +856,9 @@ def throttle(profile, what: str, times: int, per_seconds: float, message: str):
         _recent[key] = hits + [now]
         if len(_recent) > 20000:
             _recent.clear()
+
+
+money_mf.setup(throttle)
 
 
 # ---------- backtests and notebooks ----------
@@ -2190,10 +2195,23 @@ def tax_inputs(profile) -> dict:
             "income": tax_total.load_inputs(uid)}
 
 
+def tax_mf(profile) -> dict:
+    """The user's mutual fund sales for the tax report (Basic and up), from the Money space."""
+    if not allows(profile["_plan"], "mf_gains"):
+        return {"rows": [], "names": {}, "years": {}, "allowed": False}
+    return {**money_mf.for_tax(profile["id"]), "allowed": True}
+
+
 def tax_view(profile) -> dict:
     i = tax_inputs(profile)
-    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"])
-    return {**rep, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
+    mf = tax_mf(profile)
+    rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"],
+                          extra=mf["rows"])
+    rep["names"].update(mf["names"])
+    for y in rep["years"]:
+        y["mutual_funds"] = mf["years"].get(y["fy"])
+    return {**rep, "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
+                          "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
@@ -2311,6 +2329,9 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
     c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
+    mf = tax_mf(profile)
+    c["realised"] += mf["rows"]
+    c["names"].update(mf["names"])
     y = tax_lots.with_total(tax_lots.year(fy, c["realised"], c["intraday"], limit=None), i["business"], i["income"].get(fy))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":

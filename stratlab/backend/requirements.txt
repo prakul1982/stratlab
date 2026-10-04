@@ -16,3 +16,4 @@ exchange_calendars>=4.13,<5  # exchange holidays; update yearly for the next yea
 pypdf>=6.19.0,<7                # reads company presentations and call transcripts (deep dive)
 python-pptx>=1.0,<2       # the company deck download
 reportlab>=4.2,<5           # the deck as a PDF (same slides as the PowerPoint)
+casparser>=1.4.1,<2       # reads the mutual fund CAS PDF (MIT; its ISIN list and pypdfium2 come with it)

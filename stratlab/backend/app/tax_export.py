@@ -20,8 +20,8 @@ def _safe(v: str) -> str:
     return "'" + v if v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
 
 
-def _pct(rate: float) -> str:
-    return f"{rate * 100:g}%"
+def _pct(rate: float | None) -> str:
+    return "slab rate" if rate is None else f"{rate * 100:g}%"
 
 
 def summary_lines(y: dict) -> list[tuple[str, str]]:
@@ -30,7 +30,7 @@ def summary_lines(y: dict) -> list[tuple[str, str]]:
            ("Long-term gains", money(y["ltcg"]["gains"])), ("Long-term losses", money(y["ltcg"]["losses"])),
            ("Long-term exemption used", f"{money(y['exemption']['used'])} of {money(y['exemption']['limit'])}")]
     for b in y["buckets"]:
-        out.append((f"{b['label']} at {_pct(b['rate'])}: taxable", f"{money(b['taxable'])} (tax {money(b['tax'])})"))
+        out.append((f"{b['label']} at {_pct(None if b.get('slab') else b['rate'])}: taxable", f"{money(b['taxable'])} (tax {money(b['tax'])})"))
     out += [("Estimated tax (before cess and surcharge)", money(y["tax"])), ("With 4% cess", money(y["tax_with_cess"])),
             ("Short-term loss to carry forward", money(y["carry_forward"]["st"])), ("Long-term loss to carry forward", money(y["carry_forward"]["lt"])),
             ("Intraday (speculative) profit or loss, not in the above", money(y["intraday"]["pnl"]))]
