@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
+import { FAMILIES, NAV_GROUPS } from "../src/lib/navGroups";
 
 // Signed in as the site owner (the fake database's admin-token), with the tour already seen.
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
@@ -8,6 +9,12 @@ const session = { access_token: "admin-token", token_type: "bearer", expires_in:
 /** Signed in as another of the fake database's users instead (free-token, basic-token, ...). */
 function sessionAs(token: string, id: string, email: string) {
   return { ...session, access_token: token, user: { ...session.user, id, email } };
+}
+
+/** A first visit asks what the person came for; answer it like a new user would (if it's asked). */
+async function answerWelcome(page: Page, choice: RegExp = /All of it/) {
+  const ask = page.getByText("What brings you here?");
+  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("dialog").getByRole("button", { name: choice }).first().click()).catch(() => undefined);
 }
 
 async function open(page: Page, path: string, ready: string, who: typeof session = session) {
@@ -20,9 +27,7 @@ async function open(page: Page, path: string, ready: string, who: typeof session
   });
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
-  // a first visit asks what the person came for; answer it like a new user would
-  const ask = page.getByText("What brings you here?");
-  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
+  await answerWelcome(page);
   await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(400);
   return errors;
@@ -659,6 +664,13 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   const phone = info.project.name === "phone";
   // the owner's account is shared with every other test: keep this test's space choices out of it
   await page.route("**/me/prefs", (r) => (r.request().method() === "PUT" ? r.fulfill({ json: { prefs: {} } }) : r.fallback()));
+  // ...and reads them as already answered, so the first-visit question doesn't come back on every page load
+  await page.route(/\/me(\?.*)?$/, async (r) => {
+    if (r.request().method() !== "GET") return r.fallback();
+    const res = await r.fetch();
+    const me = await res.json();
+    await r.fulfill({ response: res, json: { ...me, prefs: { ...(me.prefs || {}), level: me.prefs?.level ?? "some", focus: me.prefs?.focus ?? "invest" } } });
+  });
   const errors = await open(page, "/research", "Companies");
   await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); localStorage.setItem("stratlab.space", "invest"); });
   await page.reload();
@@ -671,7 +683,7 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   for (const g of ["Research", "Watch"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
   for (const g of ["Notebooks", "Trading", "Money"]) await expect(main.getByRole("button", { name: g, exact: true })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
-  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", "Market breadth", "Watchlist", "Alerts"]);
+  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", ...NAV_GROUPS.Invest.map((e) => e.label), "Watchlist", "Alerts"]);
   for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
@@ -689,7 +701,7 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   await main.getByRole("link", { name: "Scans" }).click();
   await expect(page).toHaveURL(/\/research\/scan$/);
   const tabs = page.getByRole("navigation", { name: "Scans" });
-  await expect(tabs.getByRole("link")).toHaveText(["Trend scan", "Screener", "Sector rotation", "Red flags", "Market breadth"]);
+  await expect(tabs.getByRole("link")).toHaveText(FAMILIES.scans.views.map(([, label]) => label));
   await tabs.getByRole("link", { name: "Sector rotation" }).click();
   await expect(page).toHaveURL(/\/research\/rotation$/);
   await expect(tabs.getByRole("link", { name: "Sector rotation" })).toHaveAttribute("aria-current", "page");
