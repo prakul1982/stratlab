@@ -90,6 +90,10 @@ class Settings:
     OPTION_SNAPSHOT_MINUTES = int(_env("OPTION_SNAPSHOT_MINUTES", "5") or 5)
     # days of recorded option chains kept (about 70 MB a month for three underlyings); 120 fits the free database
     OPTION_SNAPSHOT_KEEP_DAYS = int(_env("OPTION_SNAPSHOT_KEEP_DAYS", "120") or 120)
+    # a second Postgres (on Railway) for the bulky market-wide data, so the main database stays small (app/market_store.py)
+    MARKET_DATABASE_URL = _env("MARKET_DATABASE_URL")
+    # the main database's size limit in MB (Supabase's free plan: 500), for the warning in Admin and the daily check
+    DB_LIMIT_MB = int(_env("DB_LIMIT_MB", "500") or 500)
     # phone and browser notifications: generate a pair with `python -m app.push keys`
     VAPID_PUBLIC_KEY = _env("VAPID_PUBLIC_KEY")
     VAPID_PRIVATE_KEY = _env("VAPID_PRIVATE_KEY")

@@ -24,7 +24,7 @@ from app.live import LiveManager
 from app.options.data import OptionsData
 from app.options.session import IST
 from datetime import date, datetime, timedelta
-from tests import fake_kite
+from tests import fake_kite, fake_positioning
 from tests.fake_options_kite import FakeOptionsKite
 from tests.fake_db import FakeSupabase, headers
 from tests.fake_intel import fake_finnhub, fake_news, fake_screener, fake_wiki
@@ -195,6 +195,9 @@ def _nse(sw=None):
         surv = surveillance_answers().get(r.url.path)
         if surv is not None:
             return httpx.Response(200, text=surv) if isinstance(surv, str) else httpx.Response(200, json=surv)
+        pos = fake_positioning.answer(r.url.path)
+        if pos is not None:            # the participant-wise files and the FII/DII numbers
+            return httpx.Response(pos[0], text=pos[1]) if isinstance(pos[1], str) else httpx.Response(pos[0], json=pos[1])
         if r.url.path == "/api/corporate-board-meetings":
             return httpx.Response(200, json=board_meetings())
         if r.url.path == "/api/corporates-corporateActions":
@@ -262,6 +265,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     main.trading_calendar._holiday_cache.clear()
     from app import surveillance
     surveillance._cache.clear()                 # the surveillance lists another test stored
+    from app import positioning
+    positioning.clear_cache()                   # positioning days and live chains another test stored
     from app import auth
     auth._cache.clear()
     auth._rejected.clear()
@@ -294,6 +299,7 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     from tests.fake_intel import fake_bse
     monkeypatch.setattr(main, "filings_feed", IndiaFilings(_nse(sw("exchange")), BSEFilings(transport=sw("bse filings")(fake_bse()), sleep=lambda s: None),
                                                            lambda s: main.bse_code(s)))
+    monkeypatch.setattr(main.positioning_runner, "pace", 0)    # no pause between the fake exchange's files
     monkeypatch.setattr(main, "deep_docs", _docs(sw("documents")))
     from app.intel.sec import SEC
     from tests import fake_sec

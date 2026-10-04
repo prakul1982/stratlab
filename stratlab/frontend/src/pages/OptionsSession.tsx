@@ -149,15 +149,46 @@ export function OptionsSession() {
           <section className="card stack" style={{ gap: 8 }}>
             <h3 className="h3">Orders</h3>
             {snap.events.length === 0 ? <p className="muted small">None yet.</p> : (
-              <ul className="orders">{[...snap.events].reverse().slice(0, 80).map((e, i) => (
-                <li key={i}><span className={`badge ${e.side === "buy" ? "running" : "stopped"}`}>{e.side}</span>
-                  <span className="mono small">{e.qty} {e.sym} @ {price(e.px, "INR")}{e.slices && e.slices > 1 ? ` in ${e.slices} slices` : ""}</span>
-                  <span className="small muted">{e.why} · {t(e.t)}{e.pnl != null ? ` · ${inr(e.pnl)}` : ""}</span></li>
-              ))}</ul>
+              <div className="orders-scroll">{orderGroups(snap.events).map((g) => (
+                <div key={g.key} className="order-group">
+                  <div className="order-head small"><span className="muted">{g.why} · {t(g.t)}</span>
+                    {g.pnl != null && <b className={`order-num ${signClass(g.pnl)}`}>{inr(g.pnl)}</b>}</div>
+                  <ul className="orders">{g.rows.map((e, i) => (
+                    <li key={i} title={e.slices && e.slices > 1 ? `Sent in ${e.slices} slices (the exchange's freeze limit)` : undefined}>
+                      <span className={`side-chip ${e.side}`} aria-label={e.side === "buy" ? "Buy" : "Sell"} role="img">{e.side === "buy" ? "B" : "S"}</span>
+                      <span className="order-sym">{contract(e)}</span>
+                      <span className="order-num small muted">{e.qty.toLocaleString("en-IN")} × {price(e.px, "INR")}</span>
+                    </li>
+                  ))}</ul>
+                </div>
+              ))}</div>
             )}
           </section>
         </div>
       </div>
     </div>
   );
+}
+
+type OrderEvent = OptionSnapshot["events"][number];
+
+/** Orders sent together (same moment, same reason) under one heading, newest first, with their P&L added up. */
+function orderGroups(events: OrderEvent[]) {
+  const out: { key: string; t: string; why: string; pnl: number | null; rows: OrderEvent[] }[] = [];
+  for (const e of [...events].reverse().slice(0, 120)) {
+    const last = out[out.length - 1];
+    if (last && last.t === e.t && last.why === e.why) {
+      last.rows.push(e);
+      if (e.pnl != null) last.pnl = (last.pnl ?? 0) + e.pnl;
+    } else out.push({ key: `${e.t}|${e.why}|${out.length}`, t: e.t, why: e.why, pnl: e.pnl ?? null, rows: [e] });
+  }
+  return out;
+}
+
+/** "NIFTY 22450 PE" from the order, or read from the exchange's symbol for orders saved before strikes were kept. */
+function contract(e: OrderEvent): string {
+  const name = e.sym.match(/^[A-Z&-]+/)?.[0] ?? e.sym;
+  if (e.strike != null && e.opt) return `${name} ${e.strike} ${e.opt}`;
+  const m = e.sym.match(/^[A-Z&-]+(?:\d{2}[A-Z]{3}|\d{2}[0-9OND]\d{2})(\d+(?:\.\d+)?)(CE|PE)$/);
+  return m ? `${name} ${m[1]} ${m[2]}` : e.sym;
 }

@@ -1,5 +1,5 @@
 /** Pages that share one menu entry and switch between each other with tabs. Every page keeps its own URL. */
-export type Family = "scans" | "watch";
+export type Family = "scans" | "watch" | "options";
 
 export const FAMILIES: Record<Family, { label: string; home: string; views: [string, string][] }> = {
   scans: {
@@ -10,6 +10,11 @@ export const FAMILIES: Record<Family, { label: string; home: string; views: [str
   watch: {
     label: "Watchlist", home: "/research/watchlist",
     views: [["/research/watchlist", "List"], ["/research/investor", "At a glance"]],
+  },
+  /** Trade: the Options menu entry leads to both, switched with tabs at the top of each page. */
+  options: {
+    label: "Options", home: "/options",
+    views: [["/options", "Options"], ["/trade/positioning", "Positioning"]],
   },
 };
 
@@ -46,6 +51,14 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
     { to: "/invest/breadth", label: "Market breadth", icon: "pulse", title: "How many stocks rise, fall, sit above their averages or make new highs",
       blurb: "Advances and declines, stocks above their 20/50/200-day averages, 52-week highs and lows, McClellan and sectors." },
   ],
+  /** Trade pages beyond the menu's fixed entries, kept as data like Money's. Positioning also opens as a tab beside
+   * Options (FAMILIES.options), so the Options menu entry already leads to it. */
+  Trade: [
+    { to: "/trade/positioning", label: "Positioning", icon: "layers", title: "Participant-wise open interest, FII/DII flows, PCR, max pain and IV",
+      blurb: "Who holds index futures and options, FII and DII cash flows, each index's PCR, OI by strike and ATM IV." },
+    { to: "/trade/journal", label: "Trade journal", icon: "book", title: "Your real trades paired into round trips, judged by the verdict's checks",
+      blurb: "Import your tradebook or tax P&L, equity and F&O: every round trip with its charges, your notes, and the verdict's honesty checks on your real trades." },
+  ],
   Money: [
     { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",
       blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings." },
@@ -57,6 +70,10 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Import your CAMS/KFintech statement: each fund's value, XIRR, category mix and capital gains by year." },
     { to: "/money/tax-tools", label: "Tax tools", icon: "receipt", title: "Dividends, advance tax and the long-term gains exemption",
       blurb: "Dividends with TDS, advance tax due on each date with reminders, and how much of the ₹1.25 lakh exemption is left." },
+    { to: "/money/us-tax", label: "US stocks tax", icon: "compass", title: "US shares in Indian tax: gains in rupees, foreign tax credit and Schedule FA",
+      blurb: "Your US sales in rupees at SBI's TT buying rate, the 24-month rule, the US tax credit and the calendar-year Schedule FA." },
+    { to: "/money/itr", label: "ITR-ready export", icon: "receipt", title: "Your year laid out like the ITR schedules, and a PDF pack for your CA",
+      blurb: "Schedule 112A, CG, dividends, F&O turnover, tax paid and Schedule FA as a spreadsheet or one PDF for your CA. Not a filed return." },
     { to: "/money/calendar", label: "Money calendar", icon: "calendar", title: "Tax due dates, results, dividends and your own dates in one calendar",
       blurb: "Advance tax and ITR dates, results and dividends for your stocks, maturities, premiums and EMIs, with a calendar feed." },
   ],

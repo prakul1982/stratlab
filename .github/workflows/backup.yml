@@ -1,0 +1,66 @@
+name: Database backup
+
+# A copy of the main database every night, kept as an encrypted download on this repository's Actions page
+# (7 days; Sunday's copy, which also holds the recorded option chains, 28 days). Restoring: docs/ADMIN.md → Backups.
+# Needs two repository secrets: SUPABASE_DB_URL (Supabase → Connect → Session pooler) and BACKUP_PASSPHRASE.
+
+on:
+  schedule:
+    - cron: "40 20 * * *"        # 02:10 in India, when nobody is using the site
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check the secrets are set
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$PASSPHRASE" ]; then
+            echo "::error::Add the repository secrets SUPABASE_DB_URL and BACKUP_PASSPHRASE (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - name: Install pg_dump 17
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -q postgresql-client-17 >/dev/null
+
+      - name: Copy the database
+        run: |
+          set -euo pipefail
+          PG=/usr/lib/postgresql/17/bin
+          day=$(date -u +%F)
+          if [ "$(date -u +%u)" = 7 ] || [ "${{ github.event_name }}" = workflow_dispatch ]; then full=1; else full=0; fi
+          skip=(); [ "$full" = 1 ] || skip=(--exclude-table-data=public.option_snapshots)
+          mkdir out
+          # the app's tables, whole: users' data, payments, settings
+          $PG/pg_dump "$DB_URL" -Fc -Z 6 --no-owner --no-privileges -n public "${skip[@]}" -f out/app.dump
+          # the sign-ins (who has an account), as data to load back into a fresh Supabase project
+          if ! $PG/pg_dump "$DB_URL" -Fc -Z 6 --data-only --no-owner --no-privileges -t auth.users -t auth.identities -f out/auth.dump; then
+            echo "::warning::The sign-ins (auth.users) couldn't be copied; the app's own tables were."
+            rm -f out/auth.dump
+          fi
+          tar -C out -cf - . | gpg --batch --yes --pinentry-mode loopback --passphrase "$PASSPHRASE" \
+            --symmetric --cipher-algo AES256 -o "stratlab-db-$day.tar.gpg"
+          ls -l stratlab-db-*.tar.gpg
+          echo "NAME=stratlab-db-$day$([ "$full" = 1 ] && echo -full || true)" >> "$GITHUB_ENV"
+          echo "KEEP=$([ "$full" = 1 ] && echo 28 || echo 7)" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: stratlab-db-*.tar.gpg
+          retention-days: ${{ env.KEEP }}
+          compression-level: 0
+          if-no-files-found: error

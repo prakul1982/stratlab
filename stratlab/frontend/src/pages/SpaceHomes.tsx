@@ -13,7 +13,8 @@ import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
-import { Layers, Library, Pulse, Upload } from "../components/Icons";
+import { PositioningCard } from "../components/PositioningCard";
+import { Book, Layers, Library, Pulse, Upload } from "../components/Icons";
 import { AskBar, InvestorStart, NotebooksHome } from "./Home";
 import { resultDay, type ResultRow } from "./Research";
 
@@ -38,6 +39,7 @@ export function TradeHome() {
     <>
       <Top />
       <TradeStrip />
+      <PositioningCard />
       <NotebooksHome />
     </>
   );
@@ -47,6 +49,8 @@ export function TradeHome() {
 function TradeStrip() {
   const [rows, setRows] = useState<LiveRow[] | null>(null);
   useEffect(() => { api<LiveRow[]>("/live/sessions").then(setRows).catch(() => setRows([])); }, []);
+  const [journal, setJournal] = useState<{ count: number; net: number; win_rate: number | null } | null>(null);
+  useEffect(() => { api<{ count: number; net: number; win_rate: number | null }>("/trade/journal/brief").then(setJournal).catch(() => setJournal(null)); }, []);
   const running = rows?.filter((r) => r.status === "running") ?? [];
   const options = running.filter((r) => r.instrument?.type === "OPTIONS");
   return (
@@ -64,6 +68,14 @@ function TradeStrip() {
             : rows.length ? `None running · ${rows.length} stopped` : "Run a notebook's rules live with fake money."}
         </span>
       </Link>
+      {NAV_GROUPS.Trade.map((e) => (
+        <Link key={e.to} to={e.to} className="card space-card" data-trade={e.to}>
+          <span className="row" style={{ gap: 8 }}><Book size={18} /><b>{e.label}</b></span>
+          <span className="small muted">{e.to === "/trade/journal" && journal?.count
+            ? `${journal.count} closed trade${journal.count === 1 ? "" : "s"} · ${money(journal.net, "INR")} after charges · ${journal.win_rate}% won`
+            : e.blurb ?? e.title}</span>
+        </Link>
+      ))}
       <Link to="/library" className="card space-card">
         <span className="row" style={{ gap: 8 }}><Library size={18} /><b>Strategy library</b></span>
         <span className="small muted">Rules others published with the verdict they earned.</span>

@@ -73,27 +73,31 @@ export function Shell({ children }: { children: ReactNode }) {
   const item = (to: string, icon: ReactNode, label: string, active?: boolean, title?: string) => (
     <NavLink key={to} to={to} title={title} {...(active === undefined ? {} : { className: () => (active ? "active" : ""), "aria-current": active ? "page" as const : false })}>{icon}{label}</NavLink>
   );
+  // entries kept as data (NAV_GROUPS), each with its named icon
+  const navItems = (entries: typeof NAV_GROUPS.Money) => entries.map((e) => {
+    const Icon = ICONS[e.icon ?? ""] ?? Compass;
+    return item(e.to, <Icon />, e.label, undefined, e.title);
+  });
   // a few short groups instead of one long list; pages that share a section switch with tabs on the page
   const groups: Record<GroupId, { label: string; items: ReactNode[]; on: boolean }> = {
-    research: { label: "Research", on: /^\/(research|news)/.test(path) && fam !== "watch", items: [
+    research: { label: "Research", on: (/^\/(research|news)/.test(path) && fam !== "watch") || NAV_GROUPS.Invest.some((e) => path.startsWith(e.to)), items: [
       item("/research", <Lens />, "Companies", path.startsWith("/research") && !fam),
       item("/news", <News />, "News"),
-      item(FAMILIES.scans.home, <Search />, "Scans", fam === "scans", "Trend scan, screener, sector rotation and red flags"),
+      item(FAMILIES.scans.home, <Search />, "Scans", fam === "scans" && !NAV_GROUPS.Invest.some((e) => path.startsWith(e.to)), "Trend scan, screener, sector rotation and red flags"),
+      ...navItems(NAV_GROUPS.Invest),
     ] },
-    money: { label: "Money", on: SPACES.money.paths.test(path) && path !== SPACES.money.home, items: NAV_GROUPS.Money.map((e) => {
-      const Icon = ICONS[e.icon ?? ""] ?? Compass;
-      return item(e.to, <Icon />, e.label, undefined, e.title);
-    }) },
+    money: { label: "Money", on: SPACES.money.paths.test(path) && path !== SPACES.money.home, items: navItems(NAV_GROUPS.Money) },
     watch: { label: "Watch", on: fam === "watch" || path === "/alerts", items: [
       item(FAMILIES.watch.home, <Pin />, "Watchlist", fam === "watch", "Your watchlist, as a list or every company at a glance"),
       item("/alerts", <Bell />, "Alerts"),
     ] },
     notebooks: { label: "Notebooks", on: path.startsWith("/n/") || path === "/notebooks", items: [] },
-    trading: { label: "Trading", on: /^\/(paper|options|import|library)/.test(path), items: [
+    trading: { label: "Trading", on: /^\/(paper|options|import|library|trade\/)/.test(path), items: [
       item("/options", <Layers />, "Options"),
       item("/paper", <Pulse />, "Paper trading"),
       item("/library", <Library />, "Strategy library"),
       item("/import", <Upload />, "Import a strategy"),
+      ...navItems(NAV_GROUPS.Trade),
     ] },
   };
   // one space's groups, or every group (Trade's first) folded until opened

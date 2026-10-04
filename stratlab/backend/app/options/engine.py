@@ -133,7 +133,7 @@ class OptionsEngine:
         self.pos["costs"] += cost
         self.pos["orders"] += slices
         ev = {"t": now.isoformat(), "side": side, "qty": leg["qty"], "px": px, "why": why, "sym": leg["sym"],
-              "slices": slices}
+              "strike": leg.get("strike"), "opt": leg.get("opt"), "slices": slices}
         if pnl is not None:
             ev["pnl"] = round(pnl, 2)
         self.events.append(ev)

@@ -57,7 +57,7 @@ NOTES = [
     "Rates before 4% cess and any surcharge. Your basic exemption limit and rebate can change the amount.",
     "Buys and sales are matched first in, first out, per company, across every file you uploaded.",
     "Brokerage and other charges in the files are added to the cost or taken off the sale. STT is not deductible.",
-    "A bonus share costs nothing and is held from the bonus date. A split keeps the cost and the buy date.",
+    "A bonus share costs nothing and is held from the bonus date. A split keeps the cost and the purchase date.",
     "Intraday trades (bought and sold the same day) are speculative business income, taxed at your slab rate.",
     "F&O, commodity and currency trades are non-speculative business income, taxed at your slab rate. The charges in "
     "your broker's file (including STT and CTT, which business income can deduct) are taken off the result.",
@@ -331,16 +331,17 @@ def _pair(key: str, buy: dict, sale: dict, fmv: float | None, out: dict):
         out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": q, "buy": cost, "sell": net, "pnl": net - cost})
         return
     lt = long_term(bd, d)
-    gf = None
+    gf, actual, fmv_total = None, cost, None
     if lt and bd <= GF_DATE and d >= LTCG_START:
         each = buy.get("fmv") or fmv
         if each:
-            gf = "applied"
+            gf, fmv_total = "applied", each * q
             cost = max(cost, min(each * q, gross))
         else:
             gf = "missing"
     out["realised"].append({"key": key, "bought": bd, "sold": d, "fy": fy_of(d), "qty": q, "cost": cost, "sale": net,
-                            "gain": net - cost, "term": "LT" if lt else "ST", "bonus": False, "gf": gf})
+                            "gain": net - cost, "term": "LT" if lt else "ST", "bonus": False, "gf": gf,
+                            "actual_cost": actual, "fmv_total": fmv_total, "sale_gross": gross})
 
 
 def _one(key: str, trades: list[dict], actions: list[dict], fmv: float | None, today: str, out: dict):
@@ -414,7 +415,7 @@ def _day(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
         left -= q
         gross, net = q * each, q * (each - chg_each)
         lt = long_term(l["d"], d)
-        gf = None
+        gf, actual = None, cost
         if lt and l["d"] <= GF_DATE and d >= LTCG_START:
             if f is not None:
                 gf = "applied"
@@ -422,7 +423,8 @@ def _day(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
             else:
                 gf = "missing"
         out["realised"].append({"key": key, "bought": l["d"], "sold": d, "fy": fy_of(d), "qty": q, "cost": cost, "sale": net,
-                                "gain": net - cost, "term": "LT" if lt else "ST", "bonus": l.get("bonus", False), "gf": gf})
+                                "gain": net - cost, "term": "LT" if lt else "ST", "bonus": l.get("bonus", False), "gf": gf,
+                                "actual_cost": actual, "fmv_total": f if gf == "applied" else None, "sale_gross": gross})
     if left > EPS:
         out["unmatched"].append({"key": key, "d": d, "qty": left, "sale": left * (each - chg_each)})
 
@@ -471,15 +473,22 @@ BUCKETS = [("st_new", "Short-term, sold from 23 Jul 2024", IN_STCG), ("st_old", 
            # mutual funds that aren't equity-oriented (money_mf.py): no exemption; slab-rate gains go to slab income
            ("st_slab", "Short-term at your slab rate (debt and other funds)", 0.0),
            ("lt_112", "Long-term, other funds, 12.5% without indexation", 0.125),
-           ("lt_112i", "Long-term, other funds, 20% with indexation", 0.20)]
-SLAB = {"st_slab"}
-ST_ORDER, LT_ORDER = ["st_new", "st_old", "st_slab"], ["lt_112i", "lt_new", "lt_112", "lt_old"]
+           ("lt_112i", "Long-term, other funds, 20% with indexation", 0.20),
+           # US and other foreign shares (money_us_tax.py): unlisted in India, so section 112 after 24 months
+           ("st_us", "Short-term, foreign shares, at your slab rate", 0.0),
+           ("lt_us", "Long-term, foreign shares, 12.5% (section 112)", 0.125),
+           ("lt_usi", "Long-term, foreign shares sold before 23 Jul 2024, 20% with indexation", 0.20)]
+SLAB = {"st_slab", "st_us"}
+ST_ORDER, LT_ORDER = ["st_new", "st_old", "st_slab", "st_us"], ["lt_112i", "lt_usi", "lt_new", "lt_112", "lt_us", "lt_old"]
 
 
 STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)", "st_old": "short-term gains taxed at 15% (sold before 23 Jul 2024)",
               "lt_new": "long-term gains taxed at 12.5% (sold from 23 Jul 2024)", "lt_old": "long-term gains taxed at 10% (sold before 23 Jul 2024)",
               "st_slab": "short-term gains taxed at your slab rate (mutual funds)", "lt_112": "long-term fund gains taxed at 12.5% without indexation",
-              "lt_112i": "long-term fund gains taxed at 20% with indexation"}
+              "lt_112i": "long-term fund gains taxed at 20% with indexation",
+              "st_us": "short-term gains on foreign shares taxed at your slab rate",
+              "lt_us": "long-term gains on foreign shares taxed at 12.5%",
+              "lt_usi": "long-term gains on foreign shares taxed at 20% with indexation"}
 
 
 def _bucket(r: dict) -> str | None:
@@ -625,7 +634,7 @@ def holdings_check(open_lots: list[dict], items: list[dict]) -> list[dict]:
 
 def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: list[dict], today: str,
            business: list[dict] | None = None, inputs: dict[int, dict] | None = None, extra: list[dict] | None = None,
-           dividends: dict[int, float] | None = None) -> dict:
+           dividends: dict[int, float] | None = None, more_years: set[int] | None = None) -> dict:
     """The whole page: every financial year with trades or F&O (and the current one), each with its total tax
     estimate, open lots below cost, and the lines that couldn't be worked out."""
     c = compute(trades, actions, fmv, today)
@@ -633,7 +642,7 @@ def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: li
     business, inputs = business or [], inputs or {}
     equity, units = split_units(c)
     fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today)}
-                 | set(dividends or {}),
+                 | set(dividends or {}) | set(more_years or ()),
                  reverse=True)
     unmatched = {}
     for u in c["unmatched"]:

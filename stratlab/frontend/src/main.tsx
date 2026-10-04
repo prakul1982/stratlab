@@ -44,6 +44,7 @@ const experiment = () => import("./pages/ExperimentPage");
 const ExperimentPage = page(experiment, "ExperimentPage");
 const MarketPage = page(() => import("./pages/MarketPage"), "MarketPage");
 const OptionsPage = page(() => import("./pages/OptionsPage"), "OptionsPage");
+const PositioningPage = page(() => import("./pages/PositioningPage"), "PositioningPage");
 const ImportPage = page(() => import("./pages/ImportPage"), "ImportPage");
 const verdict = () => import("./pages/PublicVerdict");
 const PublicVerdict = page(verdict, "PublicVerdict");
@@ -74,6 +75,8 @@ const TaxReportPage = page(taxPage, "TaxReportPage");
 const TaxToolsPage = page(() => import("./pages/money/TaxToolsPage"), "TaxToolsPage");
 const moneyCalendar = () => import("./pages/money/MoneyCalendarPage");
 const MoneyCalendarPage = page(moneyCalendar, "MoneyCalendarPage");
+const UsTaxPage = page(() => import("./pages/money/UsTaxPage"), "UsTaxPage");
+const ItrExportPage = page(() => import("./pages/money/ItrExportPage"), "ItrExportPage");
 const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
@@ -88,6 +91,8 @@ const breadthPage = () => import("./pages/BreadthPage");
 const BreadthPage = page(breadthPage, "BreadthPage");
 const netWorth = () => import("./pages/money/NetWorthPage");
 const NetWorthPage = page(netWorth, "NetWorthPage");
+const journalPage = () => import("./pages/trade/JournalPage");
+const JournalPage = page(journalPage, "JournalPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -108,6 +113,7 @@ function warmFirstPage(path: string) {
     : path === "/money/net-worth" ? netWorth
     : path === "/money/mutual-funds" ? mfPage
     : path === "/money/calendar" ? moneyCalendar
+    : path === "/trade/journal" ? journalPage
     : path === "/research/screens" || (path === "/research/scans" && lastView("scans") === "/research/screens") ? screensPage
     : path.startsWith("/research") ? research
     : null;
@@ -186,9 +192,11 @@ function Routed() {
         <Route path="/import" element={<ImportPage />} />
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/options" element={<OptionsPage />} />
+        <Route path="/trade/positioning" element={<PositioningPage />} />
         <Route path="/options/s/:sid" element={<OptionsSession />} />
         <Route path="/paper" element={<PaperPage />} />
         <Route path="/paper/:sid" element={<PaperPage />} />
+        <Route path="/trade/journal" element={<JournalPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
@@ -199,6 +207,8 @@ function Routed() {
         <Route path="/money/mutual-funds" element={<MutualFundsPage />} />
         <Route path="/money/tax-tools" element={<TaxToolsPage />} />
         <Route path="/money/calendar" element={<MoneyCalendarPage />} />
+        <Route path="/money/us-tax" element={<UsTaxPage />} />
+        <Route path="/money/itr" element={<ItrExportPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />

@@ -18,6 +18,7 @@ from .indicators import params, ref_name
 
 SPLIT = 0.7
 SHUFFLES = 1000
+SHUFFLE_BLOCK = 2_000_000
 PERIOD_TYPES = {"sma", "ema", "rsi", "vwap", "macd", "macd_signal", "macd_hist",
                 "bb_upper", "bb_mid", "bb_lower", "supertrend", "stage",
                 "adx", "stoch_k", "atr_pct", "dc_upper", "dc_lower", "vol_sma"}
@@ -154,23 +155,29 @@ def _trade_dds(orders: np.ndarray, capital: float) -> np.ndarray:
     return np.max((peak - path) / peak, axis=1) * 100
 
 
-def check_shuffle(trades: list[dict], capital: float) -> dict:
+def check_shuffle(trades: list[dict], capital: float, who: str = "Your backtest", whose: str = "your backtest's") -> dict:
+    """Reshuffle the trades' order: how deep a fall the same trades could have had. `who` and `whose` name the trades
+    in the wording (a backtest's, or the user's real trades in the journal)."""
     pnls = np.array([t["pnl"] for t in trades], dtype=float)
     if len(pnls) < 5:
         return {"id": "shuffle", "title": "Bad-luck drawdown", "status": "skip",
                 "detail": "Too few trades to reshuffle.", "data": None}
     rng = np.random.default_rng(42)  # same answer every time for the same trades
-    dds = _trade_dds(np.stack([rng.permutation(pnls) for _ in range(SHUFFLES)]), capital)
+    # in blocks of about two million numbers, so thousands of trades (a real-trade journal) never build one huge array;
+    # the reshuffles come in the same order, so the answer is the same as all at once
+    rows = max(1, SHUFFLE_BLOCK // len(pnls))
+    dds = np.concatenate([_trade_dds(np.stack([rng.permutation(pnls) for _ in range(min(rows, SHUFFLES - i))]), capital)
+                          for i in range(0, SHUFFLES, rows)])
     yours, p95, worst = _trade_dd(pnls, capital), float(np.percentile(dds, 95)), float(dds.max())
     if p95 >= 35:
         status = "fail"
         detail = f"With worse luck the same trades could have fallen {p95:.0f}%. That's hard to sit through."
     elif p95 > max(1.5 * yours, 5):
         status = "warn"
-        detail = f"Your backtest fell {yours:.0f}% at worst, but with worse luck expect up to {p95:.0f}%."
+        detail = f"{who} fell {yours:.0f}% at worst, but with worse luck expect up to {p95:.0f}%."
     else:
         status = "pass"
-        detail = f"Even with worse luck, falls stay around {p95:.0f}%, close to your backtest's {yours:.0f}%."
+        detail = f"Even with worse luck, falls stay around {p95:.0f}%, close to {whose} {yours:.0f}%."
     return {"id": "shuffle", "title": "Bad-luck drawdown", "status": status, "detail": detail,
             "data": {"yours": yours, "p95": p95, "worst": worst, "runs": SHUFFLES}}
 

@@ -30,6 +30,9 @@ from razorpay.errors import SignatureVerificationError
 from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
 from . import money_mf
 from . import money_advance_tax, money_routes
+from . import journal_routes
+from . import market_store, storage
+from . import money_itr, money_us_routes
 from . import rules, rules_watch
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
@@ -68,6 +71,7 @@ from .newsletter import job as news
 from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
+from . import positioning
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
@@ -178,6 +182,9 @@ surv_job = surveillance.Job(lambda: filings_feed, lambda changes, now: stock_ale
 lifecycle_job = lifecycle.Job()
 advance_tax_job = money_advance_tax.Job()       # advance tax reminders, for those who turned them on
 invite_job = invite_rewards.Job()
+# derivatives positioning: the exchange's evening files, read through the exchange client (tests swap filings_feed)
+positioning_runner = positioning.Runner(lambda: filings_feed)
+positioning_job = positioning.Job(positioning_runner)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
 
 
@@ -214,6 +221,7 @@ async def lifespan(app: FastAPI):
     advance_tax_job.start()
     invite_job.start()
     rules_watch_job.start()
+    positioning_job.start()
     networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
@@ -237,6 +245,9 @@ app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
+app.include_router(journal_routes.router)     # /trade/journal
+app.include_router(money_us_routes.router)     # /money/us-tax
+app.include_router(money_itr.router)           # /money/itr
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -2220,12 +2231,15 @@ def tax_mf(profile) -> dict:
 def tax_view(profile) -> dict:
     i = tax_inputs(profile)
     mf = tax_mf(profile)
+    usr = money_us_routes.for_tax(profile)
     rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"],
-                          extra=mf["rows"], dividends=money_routes.dividends_for_tax(profile))
+                          extra=mf["rows"] + usr["rows"], dividends=money_routes.dividends_for_tax(profile), more_years=set(usr["years"]))
     rep["names"].update(mf["names"])
+    rep["names"].update(usr["names"])
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
-    return {**rep, "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
+        y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None
+    return {**rep, "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if i["live"] else None,
@@ -2348,8 +2362,10 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     i = tax_inputs(profile)
     c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
     mf = tax_mf(profile)
-    c["realised"] += mf["rows"]
+    usr = money_us_routes.for_tax(profile)
+    c["realised"] += mf["rows"] + usr["rows"]
     c["names"].update(mf["names"])
+    c["names"].update(usr["names"])
     equity, units = tax_lots.split_units(c)
     y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy),
                             money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))
@@ -2835,10 +2851,14 @@ def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.ad
         err(409, "busy", "A breadth run is already going.")
 
     def work():
+        breadth._set_status(region, started_at=breadth._now(), last_error=None)
         try:
-            breadth_runner.run(region, full=full or None)
+            r = breadth_runner.run(region, full=full or None)
+            if isinstance(r, dict) and r.get("ok") is False:
+                breadth._set_status(region, last_error=str(r.get("error") or "")[:200], failed_at=breadth._now())
         except Exception as e:
             print("breadth run failed:", region, str(e)[:160])
+            breadth._set_status(region, last_error=str(e)[:200], failed_at=breadth._now())
     threading.Thread(target=work, daemon=True, name="breadth-now").start()
     return {"started": True, "region": region, "status": breadth.status()}
 
@@ -2847,6 +2867,22 @@ def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.ad
 def admin_breadth(_=Depends(admin.admin_profile)):
     """Each market's last breadth run, and whether one is going now."""
     return {"status": breadth.status(), "job": breadth_job.status, "running": breadth_runner.running}
+
+
+@app.get("/admin/storage")
+def admin_storage(_=Depends(admin.admin_profile)):
+    """How full the main database is (and the second one, when it's set up), its biggest tables and settings."""
+    return storage.report()
+
+
+@app.post("/admin/storage/move")
+def admin_storage_move(_=Depends(admin.admin_profile)):
+    """Move the market-wide data to the second database, in the background."""
+    if market_store.store() is None:
+        err(400, "no_market_db", "Add a Postgres on Railway and set MARKET_DATABASE_URL on the backend first.")
+    if not storage.start_move():
+        err(409, "busy", "A move is already running.")
+    return {"started": True}
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}")
@@ -3047,6 +3083,74 @@ def options_chain(exchange: str = "NFO", underlying: str = "NIFTY", expiry: str 
             not re.fullmatch(r"current|next|month|\d{4}-\d{2}-\d{2}", expiry):
         err(400, "bad_request", "Pick an exchange, an underlying and an expiry.")
     return options_data.chain(exchange, underlying, expiry)
+
+
+# ---------- derivatives positioning (Trade) ----------
+def _pos_name(name: str) -> str:
+    if name not in positioning.NAMES:
+        err(400, "bad_request", "Pick NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY or SENSEX.")
+    return name
+
+
+@app.get("/trade/positioning")
+def trade_positioning(brief: bool = False, pcr: bool = True, profile=Depends(current_profile)):
+    """The newest participant-wise open interest and volume, FII/DII cash flows and each index's PCR (left out with
+    pcr=false, for the page that asks for them on their own). Today's numbers are on every plan; the history and the
+    IV percentile and rank are on Basic and up."""
+    out = positioning.summary(options_data, allows(profile["_plan"], "positioning"), brief=brief, with_pcr=pcr)
+    out["plan_needed"] = PLANS[FEATURE_PLAN["positioning"]]["name"]
+    return ok(out)
+
+
+@app.get("/trade/positioning/pcr")
+def trade_positioning_pcr(profile=Depends(current_profile)):
+    """Each index's nearest-expiry put-call ratio now: the live chain, else the newest recording."""
+    return ok({"pcr": positioning.pcr_table(options_data)})
+
+
+@app.get("/trade/positioning/chain")
+def trade_positioning_chain(name: str = "NIFTY", expiry: str = "current", profile=Depends(current_profile)):
+    """One index's option chain as facts: open interest and its change by strike, PCR, max pain, ATM IV."""
+    _pos_name(name)
+    if not re.fullmatch(r"current|next|\d{4}-\d{2}-\d{2}", expiry):
+        err(400, "bad_request", "Pick an expiry.")
+    out = positioning.chain_view(options_data, name, expiry, full=allows(profile["_plan"], "positioning"))
+    out["plan_needed"] = PLANS[FEATURE_PLAN["positioning"]]["name"]
+    return ok(out)
+
+
+@app.get("/trade/positioning/history")
+def trade_positioning_history(kind: str = "participants", name: str = "NIFTY", range: str = "6m", profile=Depends(current_profile)):
+    """The stored history behind the charts: participants' positions, cash flows, or an index's PCR, max pain and IV."""
+    need(profile, "positioning", "Positioning history")
+    if kind not in ("participants", "cash", "chain") or range not in positioning.RANGES:
+        err(400, "bad_request", "Pick what to chart and a time range.")
+    return ok(positioning.history_view(kind, _pos_name(name), range))
+
+
+@app.post("/admin/positioning/run")
+def admin_positioning_run(backfill: bool = False, _=Depends(admin.admin_profile)):
+    """Read the newest trading day's files now (or walk the archives back a step), in the background."""
+    if positioning_runner.running:
+        err(409, "busy", "A positioning run is already going.")
+    day = positioning.expected_day(positioning.ist_now())
+
+    def work():
+        try:
+            if backfill:
+                positioning_runner.backfill(positioning.ist_now().date())
+            elif day:
+                positioning_job.status["last_result"] = positioning_runner.run_day(day)
+        except Exception as e:
+            print("positioning run failed:", str(e)[:160])
+    threading.Thread(target=work, daemon=True, name="positioning-now").start()
+    return {"started": True, "day": day.isoformat() if day else None, "state": positioning.state()}
+
+
+@app.get("/admin/positioning")
+def admin_positioning(_=Depends(admin.admin_profile)):
+    """The positioning job's last run, the archive walk and each part's state."""
+    return {"state": positioning.state(), "job": positioning_job.status, "running": positioning_runner.running}
 
 
 @app.post("/options/preview")
@@ -3726,6 +3830,7 @@ def platform_checks() -> list:
                ("Company page: AAPL", "Research", lambda: pc.check_company(research_hub, "US", "AAPL")),
                ("News", "Research", lambda: pc.check_news(research_hub)),
                ("Database", "Server", lambda: pc.check_database(db)),
+               ("Database space", "Server", storage.check),
                ("Holiday calendar", "Server", lambda: pc.check_calendar(today)),
                ("Rates and rules last reviewed", "Rules", lambda: pc.check_rules(today, rules_watch.state()))]
     return checks

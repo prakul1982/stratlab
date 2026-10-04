@@ -74,7 +74,8 @@ create table if not exists public.app_settings (
 );
 
 -- Option chains recorded every few minutes in market hours, for options backtesting later.
--- chain: one [strike, ce bid, ce ask, ce ltp, ce oi, pe bid, pe ask, pe ltp, pe oi] per strike. Server only.
+-- chain: one [strike, ce bid, ce ask, ce ltp, ce oi, pe bid, pe ask, pe ltp, pe oi, ce volume, pe volume] per strike
+-- (recordings before Oct 2026 stop at pe oi). Server only.
 create table if not exists public.option_snapshots (
   id bigserial primary key,
   taken_at timestamptz not null,
@@ -86,6 +87,27 @@ create table if not exists public.option_snapshots (
   chain jsonb not null
 );
 create index if not exists option_snapshots_lookup on public.option_snapshots (name, expiry, taken_at);
+
+-- usage-function:start
+-- The database's size, its biggest tables and the biggest groups of settings, for Admin's storage panel and the
+-- daily check. Server only (the service role); nobody signed in can call it.
+create or replace function public.stratlab_db_usage() returns jsonb
+language sql stable security definer set search_path = public, pg_catalog as $$
+  select jsonb_build_object(
+    'total', pg_database_size(current_database()),
+    'tables', (select coalesce(jsonb_agg(jsonb_build_object('name', t.name, 'bytes', t.bytes) order by t.bytes desc), '[]'::jsonb)
+               from (select n.nspname || '.' || c.relname as name, pg_total_relation_size(c.oid) as bytes
+                     from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                     where c.relkind = 'r' and n.nspname in ('public', 'auth', 'storage')
+                     order by 2 desc limit 12) t),
+    'settings', (select coalesce(jsonb_agg(jsonb_build_object('prefix', s.prefix, 'bytes', s.bytes, 'rows', s.n) order by s.bytes desc), '[]'::jsonb)
+                 from (select split_part(key, ':', 1) as prefix, sum(pg_column_size(value))::bigint as bytes, count(*) as n
+                       from public.app_settings group by 1 order by 2 desc limit 15) s)
+  )
+$$;
+revoke all on function public.stratlab_db_usage() from public, anon, authenticated;
+grant execute on function public.stratlab_db_usage() to service_role;
+-- usage-function:end
 
 -- Create a profile row for every new sign-up
 create or replace function public.handle_new_user() returns trigger

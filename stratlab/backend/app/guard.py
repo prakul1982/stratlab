@@ -14,7 +14,7 @@ from .holdings_file import TAX_MAX_REQUEST
 MAX_BODY = 8 * 1024 * 1024          # uploaded candles (50,000 bars) and share images fit well inside this
 # routes allowed a bigger body: a tradebook or tax P&L ZIP for the tax report (10 MB a file, sent as the body itself,
 # or as base64 in JSON, a third larger), within the 25 MB a request the tax import allows
-BIG_BODY = {("POST", "/tax/import"): TAX_MAX_REQUEST}
+BIG_BODY = {("POST", "/tax/import"): TAX_MAX_REQUEST, ("POST", "/trade/journal/import"): TAX_MAX_REQUEST}
 PER_MINUTE_USER = 600
 PER_MINUTE_ANON = 240
 PER_MINUTE_ADDRESS = 1200           # every request from one address, signed in or not: made-up tokens can't dodge the limit
@@ -131,6 +131,7 @@ HEAVY = [  # (method, path pattern): work that holds the CPU for a second or mor
     ("POST", re.compile(r"^/options/sessions$")),
     ("POST", re.compile(r"^/admin/platform/check$")),
     ("POST", re.compile(r"^/money/mutual-funds/import$")),   # reading a statement PDF
+    ("POST", re.compile(r"^/trade/journal/import$")),        # reading a year's tradebook or tax P&L ZIP
 ]
 
 
