@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from app import db, main, results as R
+from app import db, results as R
 from app.intel.net import SourceError
 from app.newsletter import content, write
 from tests import world as W

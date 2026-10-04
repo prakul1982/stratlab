@@ -220,13 +220,12 @@ def _with_surcharge(b: dict, total: float, special_income: float, cap: float) ->
 
 
 def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, business: float,
-             business_parts: dict[str, float] | None = None, dividends: float = 0.0, slab_gains: float = 0.0) -> dict:
+             dividends: float = 0.0, slab_gains: float = 0.0) -> dict:
     """The year's total tax estimate.
 
     `buckets` are the capital gains year's buckets (key, rate, after_setoff, exempt, taxable); `intraday` the
-    speculative profit or loss; `business` the F&O, commodity and currency profit or loss after charges, with
-    `business_parts` the same by segment; `dividends` the year's dividend income (income from other sources, at slab
-    rates), when the user includes it; `slab_gains` short-term gains taxed at slab rates (gold, debt and other
+    speculative profit or loss; `business` the F&O, commodity and currency profit or loss after charges;
+    `dividends` the year's dividend income (income from other sources, at slab rates), when the user includes it; `slab_gains` short-term gains taxed at slab rates (gold, debt and other
     non-equity ETFs and gold bonds, after their own set-off). Returns the steps in plain words, a breakdown table and
     the total."""
     v = clean(inputs)

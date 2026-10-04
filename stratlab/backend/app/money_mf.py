@@ -36,7 +36,7 @@ import io
 import json
 import math
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -78,10 +78,6 @@ IN_TYPES = {"purchase", "sip", "switch_in", "merger_in", "div_reinvest", "gift_i
 OUT_TYPES = {"redeem", "switch_out", "merger_out", "gift_out"}
 INFO_TYPES = {"stamp", "stt", "tds", "div_payout", "reversal"}
 TYPES = IN_TYPES | OUT_TYPES | INFO_TYPES
-TYPE_NAMES = {"purchase": "Purchase", "sip": "SIP", "switch_in": "Switch in", "merger_in": "Merger in", "div_reinvest": "Dividend reinvested",
-              "gift_in": "Gift in", "segregation": "Segregated units", "opening": "Opening balance", "redeem": "Redemption",
-              "switch_out": "Switch out", "merger_out": "Merger out", "gift_out": "Gift out", "stamp": "Stamp duty", "stt": "STT",
-              "tds": "TDS", "div_payout": "Dividend paid", "reversal": "Reversal"}
 PRIORITY = {"opening": 0, "merger_out": 0, "reversal": 3, "stamp": 2}      # same-day order: buys, charges, then sales
 
 DISCLAIMER = ("Facts and arithmetic from your own statement, valued at the latest published NAV. Not investment or tax "

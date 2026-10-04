@@ -7,7 +7,7 @@ from html import escape
 
 import pytest
 
-from app import alerts, billing, db, first_steps, invoices, lifecycle, mail_tokens, main, newsletter_prefs, plans
+from app import alerts, billing, db, first_steps, lifecycle, mail_tokens, newsletter_prefs, plans
 from app.config import settings
 from app.newsletter import write
 from tests import world as W

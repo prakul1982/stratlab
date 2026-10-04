@@ -1,14 +1,13 @@
 """The real-trade journal: pairing fills into round trips (part fills, scaling in and out, reversals, shorts, F&O and
 expiry), tax P&L lines, charges, the stats, the verdict's checks on real trades, the API, plan limits and deletion."""
 import io
-import math
 import zipfile
 from datetime import date
 from pathlib import Path
 
 import pytest
 
-from app import db, journal as J, journal_routes, main, plans, tax_lots
+from app import db, journal as J, journal_routes, plans, tax_lots
 from app.config import settings
 from app.engine import costs as C
 from tests import world

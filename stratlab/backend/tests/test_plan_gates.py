@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app import alerts, billing, live, main
 from app.config import settings
 from app.models import Strategy
-from app.plans import (FEATURE_PLAN, FEATURES, PLANS, allows, bigger_plan, decks, deepdives, group_size, has_fno, has_indicators,
+from app.plans import (FEATURE_PLAN, FEATURES, PLANS, bigger_plan, decks, deepdives, group_size, has_fno, has_indicators,
                        plan_info)
 
 

@@ -403,10 +403,6 @@ def delete(uid: str):
     db.delete_setting(_key(uid))
 
 
-def has_data(data: dict) -> bool:
-    return bool(data["fills"] or data["lines"] or data["manual"])
-
-
 def _merge(old: list[dict], new: list[dict], key) -> tuple[list[dict], int, int]:
     """(rows, added, duplicates): the new rows beside the saved ones, without any already saved. Two identical lines in
     one file both count (two fills at one price); the same file uploaded again adds nothing."""
