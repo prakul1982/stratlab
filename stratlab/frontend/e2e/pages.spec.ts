@@ -489,9 +489,39 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(total.getByText(/Deductions you entered \(80C and the like\): ₹1,50,000/)).toBeVisible();
   const amount = await total.getByLabel("Estimated total tax").innerText();
   expect(Number(amount.replace(/[^\d]/g, ""))).toBeGreaterThan(100000);
+  await expect(total.getByText(/Covers only the income you enter or import here/)).toBeVisible();
+  await expect(total.getByText(/Rules for this year not yet confirmed/)).toHaveCount(0);
+  await total.getByRole("link", { name: "Which return and whether a tax audit applies" }).click();
+  await expect(page.getByRole("list", { name: "Returns and tax audit" })).toBeInViewport();
+  await expect(page.locator("#tax-filing").getByRole("link", { name: "incometax.gov.in" })).toHaveAttribute("href", /incometax\.gov\.in/);
+
+  // age and residency: both with their notes, saved per year, and the estimate follows
+  await expect(total.getByRole("radio", { name: "Below 60", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(total.getByRole("radio", { name: "Yes", exact: true })).toHaveAttribute("aria-checked", "true");
+  await total.getByRole("button", { name: "About age" }).click();
+  await expect(page.getByText(/₹3 lakh from 60 to 79 and ₹5 lakh from 80/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await total.getByRole("button", { name: "About residency" }).click();
+  await expect(page.getByText(/A non-resident gets no section 87A rebate/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await total.getByRole("radio", { name: "60–79", exact: true }).click();
+  if (info.project.name === "phone") await touchable(page);
+  await total.getByRole("button", { name: "Save and update" }).click();
+  await expect(total.getByText(/resident, aged 60 to 79/)).toBeVisible();
+  await expect(total.getByText(/the old regime's basic exemption is ₹3,00,000/)).toBeVisible();
+  const senior = Number((await total.getByLabel("Estimated total tax").innerText()).replace(/[^\d]/g, ""));
+  expect(senior).toBeLessThan(Number(amount.replace(/[^\d]/g, "")));
+  await total.getByRole("radio", { name: "No", exact: true }).click();
+  await total.getByRole("button", { name: "Save and update" }).click();
+  await expect(total.getByText(/non-resident, aged 60 to 79/)).toBeVisible();
+  await expect(total.getByText("TDS on NRI sales is deducted by the broker; this estimate does not reconcile TDS.").first()).toBeVisible();
+  await expect(total.getByText(/Non-resident: no section 87A rebate/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
   await page.reload();
   await settle(page);
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("textbox", { name: "Other income", exact: true })).toHaveValue("1500000");
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("radio", { name: "60–79", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("radio", { name: "No", exact: true })).toHaveAttribute("aria-checked", "true");
 
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/you should|we suggest|recommend|better off|switch to/i);

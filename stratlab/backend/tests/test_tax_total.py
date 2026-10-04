@@ -22,8 +22,10 @@ def bk(exempt: float = 0, **gains) -> list[dict]:
     return out
 
 
-def est(fy=2025, regime="new", other=0.0, salary=None, deductions=0.0, buckets=None, intraday=0.0, business=0.0):
-    return X.estimate(fy, {"regime": regime, "other": other, "salary": salary, "deductions": deductions}, buckets or [], intraday, business)
+def est(fy=2025, regime="new", other=0.0, salary=None, deductions=0.0, buckets=None, intraday=0.0, business=0.0,
+        age="below60", resident=True):
+    return X.estimate(fy, {"regime": regime, "other": other, "salary": salary, "deductions": deductions, "age": age,
+                           "resident": resident}, buckets or [], intraday, business)
 
 
 # ---------- the slabs ----------
@@ -169,7 +171,10 @@ def test_switching_regime():
 
 def test_inputs_are_cleaned():
     c = X.clean({"regime": "sideways", "other": -5, "salary": float("nan"), "deductions": 1e30})
-    assert c == {"regime": "new", "other": 0.0, "salary": None, "deductions": X.MAX_AMOUNT, "saved": True}
+    assert c == {"regime": "new", "other": 0.0, "salary": None, "deductions": X.MAX_AMOUNT, "age": "below60",
+                 "resident": True, "saved": True}
+    assert X.clean({"age": "70", "resident": "no"})["age"] == "below60" and X.clean({"resident": "no"})["resident"] is True
+    assert X.clean({"age": "80plus", "resident": False})["resident"] is False
     assert X.clean({"other": 100, "salary": 500})["salary"] == 100                  # salary can't be more than the whole
     assert X.clean(None)["regime"] == "new" and X.clean({"other": True})["other"] == 0
 
@@ -268,7 +273,8 @@ def test_inputs_are_saved_per_user_and_year_and_change_the_estimate(w):
     c = w["client"]
     assert send(c, M.zerodha_tax_zip(), "taxpnl.zip").status_code == 200
     y = year_of(c.get("/tax", headers=PRO).json(), 2024)
-    assert y["inputs"] == {"regime": "new", "other": 0.0, "salary": None, "deductions": 0.0, "saved": False}
+    assert y["inputs"] == {"regime": "new", "other": 0.0, "salary": None, "deductions": 0.0, "age": "below60",
+                           "resident": True, "saved": False}
     assert y["total"]["available"] and y["other_regime"]["regime"] == "old"
     assert "ITR-3" in " ".join(y["filing"])
     r = c.put("/tax/inputs", headers=PRO, json={"fy": 2024, "regime": "old", "other": 1500000, "salary": 1200000, "deductions": 150000})
@@ -280,7 +286,12 @@ def test_inputs_are_saved_per_user_and_year_and_change_the_estimate(w):
     this = r.json()["current_fy"]
     assert year_of(r.json(), this)["inputs"]["saved"] is False                         # per year
     assert year_of(c.get("/tax", headers=FREE).json(), this)["inputs"]["saved"] is False  # per user
-    for bad in ({"fy": 2024, "regime": "both"}, {"fy": 2024, "other": -1}, {"fy": 1990}, {"fy": 2024, "other": 1e13}, {}):
+    r = c.put("/tax/inputs", headers=PRO, json={"fy": 2024, "other": 1000000, "salary": 0, "age": "80plus", "resident": False})
+    y = year_of(r.json(), 2024)
+    assert y["inputs"]["age"] == "80plus" and y["inputs"]["resident"] is False and y["total"]["rebate"] == 0
+    assert X.NRI_TDS in y["total"]["notes"]
+    for bad in ({"fy": 2024, "regime": "both"}, {"fy": 2024, "other": -1}, {"fy": 1990}, {"fy": 2024, "other": 1e13}, {},
+                {"fy": 2024, "age": "senior"}, {"fy": 2024, "resident": "maybe"}):
         assert c.put("/tax/inputs", headers=PRO, json=bad).status_code == 422
     assert c.put("/tax/inputs", json={"fy": 2024}).status_code == 401
     assert db.get_setting("taxinputs:u-pro")
@@ -339,13 +350,20 @@ def test_exports_carry_the_total(w):
     c.put("/tax/inputs", headers=PRO, json={"fy": 2024, "other": 900000, "salary": 900000})
     text = c.get("/tax/export?fy=2024&format=csv", headers=PRO).text
     for want in ("Total tax estimate", "How we got here", "Estimated total tax", "Share of the total: F&O", "F&O: charges",
-                 "Regime,New regime", "ITR-3", "advance tax and TDS"):
+                 "Regime,New regime", "Age band,below 60", "Resident in India,Yes", "ITR-3", "advance tax and TDS",
+                 "only the income you enter or import"):
         assert want in text, want
     pdf = c.get("/tax/export?fy=2024&format=pdf", headers=PRO)
     from pypdf import PdfReader
     import io
     words = " ".join(p.extract_text() for p in PdfReader(io.BytesIO(pdf.content)).pages)
     assert "Total tax estimate" in words and "How we got here" in words and "Returns and tax audit" in words
+    c.put("/tax/inputs", headers=PRO, json={"fy": 2024, "other": 900000, "age": "60to79", "resident": False})
+    text = c.get("/tax/export?fy=2024&format=csv", headers=PRO).text
+    assert "Age band,60 to 79" in text and "Resident in India,No" in text and "does not reconcile TDS" in text
+    pdf = c.get("/tax/export?fy=2024&format=pdf", headers=PRO)
+    words = " ".join(p.extract_text() for p in PdfReader(io.BytesIO(pdf.content)).pages)
+    assert "reconcile TDS" in words.replace("\n", " ")
     # a year outside the tables still downloads, saying so
     assert "covers FY 2020-21" in c.get("/tax/export?fy=2010&format=csv", headers=PRO).text
 
@@ -358,3 +376,97 @@ def test_the_page_says_no_advice_and_no_provider(w):
     for bad in ("yahoo", "kite", "screener", "finnhub", "you should", "we suggest", "recommend", "better off", "switch to"):
         assert bad not in text, bad
     assert "advance tax and tds" in text and "slab tax depends on your full income" in text
+
+
+# ---------- age and residency ----------
+@pytest.mark.parametrize("age,old_tax,old_bel", [("below60", 32500, 250000), ("60to79", 30000, 300000), ("80plus", 20000, 500000)])
+def test_age_bands_change_only_the_old_regime(age, old_tax, old_bel):
+    old = est(regime="old", other=6 * L, salary=0, age=age)                     # over the 5L rebate limit
+    assert old["slab_tax"] == old_tax and old["rebate"] == 0 and old["total"] == pytest.approx(old_tax * 1.04)
+    assert X.basic_exemption(X.rules(2025, "old", age)["slabs"]) == old_bel
+    assert any(X.money(old_bel) in st for st in old["steps"])
+    new = est(other=13 * L, salary=0, age=age)                                   # the same at every age
+    assert new["slab_tax"] == 75000 and new["total"] == pytest.approx(78000)
+    for fy in range(2020, 2027):
+        assert X.rules(fy, "new", age)["slabs"] == X.rules(fy, "new")["slabs"]
+        assert X.rules(fy, "old", age)["slabs"] == X.rules(2025, "old", age)["slabs"]
+
+
+@pytest.mark.parametrize("age", ["60to79", "80plus"])
+def test_seniors_old_regime_rebate_and_unused_exemption(age):
+    assert est(regime="old", other=5 * L, salary=0, age=age)["total"] == 0
+    # 2L of interest and 4L of short-term gains: the senior's higher limit is set against the gains
+    e = est(regime="old", other=2 * L, salary=0, age=age, buckets=bk(st_new=4 * L))
+    bel = 3 * L if age == "60to79" else 5 * L
+    assert e["special_tax"] == pytest.approx((6 * L - bel) * 0.20)
+
+
+def test_non_resident_gets_no_rebate_at_any_age_and_the_basic_limit():
+    for fy in (2020, 2023, 2024, 2025, 2026):
+        r = X.rules(fy, "new", resident=False)
+        assert r["rebate_limit"] == 0 and r["bel_on_gains"] is False
+    nri = est(other=10 * L, salary=0, resident=False)                             # FY 2025-26, new: 40,000, no rebate
+    assert nri["rebate"] == 0 and nri["total"] == pytest.approx(41600)
+    assert est(other=10 * L, salary=0)["total"] == 0                                # resident: all rebated
+    # the old regime's higher limits for 60 and over are for residents only
+    for age in ("60to79", "80plus"):
+        assert X.basic_exemption(X.rules(2025, "old", age, resident=False)["slabs"]) == 250000
+        assert est(regime="old", other=6 * L, salary=0, age=age, resident=False)["slab_tax"] == 32500
+    assert est(regime="old", other=5 * L, salary=0, resident=False)["total"] == pytest.approx(12500 * 1.04)
+
+
+def test_non_resident_cant_use_the_unused_limit_against_111a_or_112a():
+    st = est(buckets=bk(st_new=5 * L), resident=False)
+    assert st["special_tax"] == 100000 and st["total"] == pytest.approx(104000)
+    assert any("as a non-resident the unused part" in x for x in st["steps"])
+    lt = est(buckets=bk(exempt=1.25 * L, lt_new=3.25 * L), resident=False)        # the ₹1.25 lakh exemption still applies
+    assert lt["special_tax"] == 25000 and lt["total"] == pytest.approx(26000)
+    assert est(buckets=bk(exempt=1.25 * L, lt_new=3.25 * L))["total"] == 0         # resident: the 4L limit covers it
+
+
+def test_non_resident_surcharge_and_cess_as_usual_and_the_tds_note():
+    nri, res = est(other=60 * L, salary=0, resident=False), est(other=60 * L, salary=0)
+    assert nri["surcharge"] > 0 and nri["total"] == pytest.approx(res["total"]) and nri["surcharge_rate"] == 0.10
+    assert X.NRI_TDS in nri["notes"] and res["notes"] == []
+    assert nri["notes"][0] == "TDS on NRI sales is deducted by the broker; this estimate does not reconcile TDS."
+    big = est(other=3 * CR, salary=0, buckets=bk(st_new=1 * CR), resident=False)  # 15% cap on the gains' surcharge too
+    assert big["surcharge_rate"] == 0.25
+
+
+def test_switching_regime_keeps_age_and_residency():
+    from app import tax_lots as T
+    y = {"fy": 2025, "buckets": [], "intraday": {"pnl": 0, "count": 0, "turnover": 0}}
+    out = T.with_total(y, [], {"regime": "new", "other": 6 * L, "salary": 0, "age": "80plus", "resident": True})
+    assert out["inputs"]["age"] == "80plus" and out["other_regime"]["total"] == pytest.approx(20800)
+
+
+# ---------- the FY 2024-25 split by sale date ----------
+def test_fy2024_split_by_sale_date_flows_into_the_total():
+    from app import tax_lots as T
+
+    def t(d, side, qty, price, sym):
+        return {"d": d, "side": side, "qty": qty, "price": price, "sym": sym}
+    trades = [t("2024-04-02", "B", 2, 100, "S"), t("2024-07-22", "S", 1, 100_100, "S"), t("2024-07-23", "S", 1, 100_100, "S"),
+              t("2022-01-03", "B", 2, 100, "L"), t("2024-07-22", "S", 1, 200_100, "L"), t("2024-07-23", "S", 1, 200_100, "L")]
+    c = T.compute(trades, today="2026-10-04")
+    y = T.year(2024, c["realised"], c["intraday"])
+    got = {b["key"]: b for b in y["buckets"]}
+    # 1,00,000 short-term and 2,00,000 long-term each side of 23 July
+    assert got["lt_old"]["rate"] == 0.10 and got["lt_new"]["rate"] == 0.125
+    assert got["st_old"]["rate"] == 0.15 and got["st_new"]["rate"] == 0.20
+    assert got["st_old"]["taxable"] == 100_000 and got["st_new"]["taxable"] == 100_000
+    assert y["exemption"]["limit"] == 125000                                       # ₹1.25 lakh for the whole year
+    assert got["lt_new"]["exempt"] == 125_000 and got["lt_old"]["exempt"] == 0       # against the 12.5% gains first
+    e = X.estimate(2024, {"regime": "new", "other": 20 * L, "salary": 0}, y["buckets"], 0, 0)
+    want = sum(b["taxable"] * b["rate"] for b in y["buckets"])
+    assert e["special_tax"] == pytest.approx(want)
+
+
+def test_every_year_is_confirmed_with_a_source_and_an_unconfirmed_one_says_so(monkeypatch):
+    for fy in range(X.FIRST_FY, X.LAST_FY + 1):
+        r = X.rules(fy, "new")
+        assert r["confirmed"] and r["source"].startswith("https://")
+        assert est(fy=fy, other=10 * L)["notes"] == []
+    monkeypatch.delitem(X.YEAR_SOURCES, 2026)
+    e = est(fy=2026, other=10 * L)
+    assert e["confirmed"] is False and "Rules for this year not yet confirmed" in e["notes"][0]

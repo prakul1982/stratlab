@@ -16,13 +16,15 @@ type Segment = {
   turnover: number; turnover_contract: number; first: string; last: string; options: Leg; futures: Leg; by: ({ u: string } & Leg)[];
 };
 type Business = { segments: Segment[]; pnl: number; charges: number; net: number; turnover: number; turnover_contract: number; trades: number };
-type Inputs = { regime: "new" | "old"; other: number; salary: number | null; deductions: number; saved: boolean };
+type Age = "below60" | "60to79" | "80plus";
+type Inputs = { regime: "new" | "old"; other: number; salary: number | null; deductions: number; age: Age; resident: boolean; saved: boolean };
 type Total = {
   available: boolean; reason?: string; regime: "new" | "old"; inputs: Inputs; total: number;
   parts: { capital_gains: number; intraday: number; fno: number; other: number };
   slab_tax: number; special_tax: number; rebate: number; surcharge: number; surcharge_rate: number; cess: number;
   income: { normal: number; special: number; total: number; salary: number; standard_deduction: number; deductions: number };
   carry_forward: { speculative: number; business: number }; steps: string[]; lines: { label: string; amount: number; kind: string }[];
+  notes?: string[]; confirmed?: boolean; source?: string | null;
 };
 type Year = {
   fy: number; label: string; stcg: Side; ltcg: Side; exempt_old: number | null; exemption: { limit: number; used: number; left: number };
@@ -149,7 +151,7 @@ export function TaxReportPage() {
   };
 
   const saveInputs = async (year: number, v: Omit<Inputs, "saved">) => {
-    try { show(await api<Report>("/tax/inputs", { method: "PUT", body: { fy: year, ...v } })); notify("Saved. The estimate is updated."); track("tax inputs saved", { regime: v.regime }); }
+    try { show(await api<Report>("/tax/inputs", { method: "PUT", body: { fy: year, ...v } })); notify("Saved. The estimate is updated."); track("tax inputs saved", { regime: v.regime, age: v.age, resident: v.resident }); }
     catch (e) { fail(e); }
   };
 
@@ -164,7 +166,7 @@ export function TaxReportPage() {
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Capital gains on your shares</h1>
         <p className="muted" style={{ fontSize: 17, maxWidth: 760 }}>Upload your tradebooks or tax P&amp;L files from every broker you use. StratLab matches each sale to its purchase, first in first out, and works out short- and long-term gains for each financial year at the rates that applied, the exemption used, and the set-off. Add your F&amp;O, commodity and currency results and your other income, and it estimates the year's total tax. Only you can see your trades, and you can delete them at any time.</p>
       </div>
-      <Disclaimer text={rep?.disclaimer ?? "An estimate from the files you uploaded and the income you entered, not tax advice. Slab tax depends on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered accountant (CA) before you file or pay tax."} />
+      <Disclaimer text={rep?.disclaimer ?? "An estimate from the files you uploaded and the income you entered, not tax advice. It covers only the income you enter or import here, for an individual of the age band and residency you choose. Slab tax depends on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered accountant (CA) before you file or pay tax."} />
 
       <section className="card stack" style={{ gap: 14 }}>
         <div className="stack" style={{ gap: 4 }}>
@@ -252,7 +254,7 @@ export function TaxReportPage() {
             </div>
           </div>
 
-          <TotalCard y={y} onSave={saveInputs} />
+          <TotalCard y={y} onSave={saveInputs} filing={y.filing.length > 0} />
 
           <div className="stat-row">
             <div className="stat"><span className="tiny muted">Short-term gains (net)</span><b className={`num ${signClass(y.stcg.net)}`}>{inr(y.stcg.net)}</b><span className="tiny muted">{inr(y.stcg.gains)} gains · {inr(y.stcg.losses)} losses</span></div>
@@ -293,9 +295,10 @@ export function TaxReportPage() {
           <BusinessCard y={y} />
 
           {y.filing.length > 0 && (
-            <section className="card stack" style={{ gap: 10 }}>
+            <section className="card stack" style={{ gap: 10 }} id="tax-filing">
               <h2 className="h2">Returns and tax audit</h2>
               <ul className="small" style={{ margin: 0, paddingLeft: 20 }} aria-label="Returns and tax audit">{y.filing.map((f, i) => <li key={i}>{f}</li>)}</ul>
+              <p className="tiny muted" style={{ margin: 0 }}>The Income Tax Department's own page on returns for business income (ITR-3) and audit: <a className="link" href={ITR3_URL} target="_blank" rel="noopener noreferrer">incometax.gov.in</a>.</p>
             </section>
           )}
 
@@ -395,9 +398,12 @@ export function TaxReportPage() {
 }
 
 const REGIME = { new: "New regime", old: "Old regime" } as const;
+const AGES: [Age, string][] = [["below60", "Below 60"], ["60to79", "60–79"], ["80plus", "80+"]];
+const AGE_TEXT: Record<Age, string> = { below60: "below 60", "60to79": "60 to 79", "80plus": "80 or more" };
+const ITR3_URL = "https://www.incometax.gov.in/iec/foportal/help/individual-business-profession";
 
 /** The year's total tax, where it comes from, the inputs it needs and, below, how it was worked out. */
-function TotalCard({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void> }) {
+function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void>; filing: boolean }) {
   const t = y.total;
   const chips: [string, number, string][] = [
     ["Capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares, at the special rates (sections 111A and 112A), with its share of surcharge and cess."],
@@ -409,13 +415,15 @@ function TotalCard({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inputs
     <section className="card stack tax-total" style={{ gap: 14 }} aria-label="Total tax estimate">
       <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         <h2 className="h2">Total tax estimate, {y.label}</h2>
-        <Info label="What the total covers">Slab tax on your other income, intraday and F&amp;O results, plus tax on share gains at the special rates, less the section 87A rebate where it applies, plus surcharge and 4% cess. A resident individual under 60 is assumed. Advance tax and TDS already paid aren't taken off.</Info>
+        <Info label="What the total covers">Slab tax on your other income, intraday and F&amp;O results, plus tax on share gains at the special rates, less the section 87A rebate where it applies, plus surcharge and 4% cess. It is worked out for an individual of the age band and residency you choose below. Advance tax and TDS already paid aren't taken off.</Info>
       </div>
+      <p className="small muted" style={{ margin: 0 }}>Covers only the income you enter or import here: the trades in your files and the other income you type below. House property, foreign income, other capital assets and anything else left out aren't counted.{filing && <> <a className="link" href="#tax-filing">Which return and whether a tax audit applies</a>.</>}</p>
+      {t.confirmed === false && <p className="small neg" style={{ margin: 0 }} role="note"><b>Rules for this year not yet confirmed.</b> The figures repeat the year before until they are checked against the Finance Act.</p>}
       {t.available ? (
         <>
           <div className="stack" style={{ gap: 2 }}>
             <b className="num tax-big" aria-label="Estimated total tax">{inr(t.total)}</b>
-            <span className="tiny muted">{REGIME[t.regime]}{t.rebate > 0 ? ` · 87A rebate ${inr(t.rebate)}` : ""}{t.surcharge > 0 ? ` · surcharge ${inr(t.surcharge)}` : ""} · cess {inr(t.cess)}{!y.inputs.saved ? " · no other income entered yet" : ""}</span>
+            <span className="tiny muted">{REGIME[t.regime]} · {y.inputs.resident ? "resident" : "non-resident"}, aged {AGE_TEXT[y.inputs.age ?? "below60"]}{t.rebate > 0 ? ` · 87A rebate ${inr(t.rebate)}` : ""}{t.surcharge > 0 ? ` · surcharge ${inr(t.surcharge)}` : ""} · cess {inr(t.cess)}{!y.inputs.saved ? " · no other income entered yet" : ""}</span>
           </div>
           <div className="tax-chips" role="list" aria-label="Where the tax comes from">
             {chips.map(([label, v, info]) => (
@@ -423,6 +431,7 @@ function TotalCard({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inputs
             ))}
           </div>
           {y.other_regime && <p className="tiny muted" style={{ margin: 0 }}>With the same figures, the {REGIME[y.other_regime.regime].toLowerCase()} works out to {inr(y.other_regime.total)}{y.other_regime.regime === "old" ? " (with the deductions entered, if any)" : ""}.</p>}
+          {(t.notes ?? []).filter((n) => !/not yet confirmed/.test(n)).map((n) => <p key={n} className="small" style={{ margin: 0 }} role="note"><b>Note:</b> {n}</p>)}
           {(t.carry_forward.speculative > 0 || t.carry_forward.business > 0) && (
             <p className="small" style={{ margin: 0 }}>To carry forward:{t.carry_forward.speculative > 0 && <> intraday (speculative) loss <b className="neg">{inr(t.carry_forward.speculative)}</b> (4 years, against speculative income only)</>}{t.carry_forward.speculative > 0 && t.carry_forward.business > 0 && ";"}{t.carry_forward.business > 0 && <> business loss <b className="neg">{inr(t.carry_forward.business)}</b> (8 years, against business income)</>}. Only if the return is filed by its due date.</p>
           )}
@@ -433,6 +442,7 @@ function TotalCard({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inputs
         <details className="tax-how" open>
           <summary>How we got here</summary>
           <ol className="small" style={{ margin: "8px 0 0", paddingLeft: 20 }}>{t.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+          {(t.notes ?? []).length > 0 && <ul className="tiny muted" style={{ margin: "6px 0 0", paddingLeft: 20 }} aria-label="Notes on the estimate">{t.notes!.map((n) => <li key={n}>{n}</li>)}</ul>}
           <div className="table-wrap" style={{ marginTop: 10 }}>
             <table aria-label="Total tax breakdown">
               <tbody>{t.lines.map((l, i) => (
@@ -451,19 +461,21 @@ function TotalCard({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inputs
 
 const amount = (s: string) => { const n = Number(s.replace(/[,\s₹]/g, "")); return s.trim() === "" ? null : Number.isFinite(n) && n >= 0 ? n : NaN; };
 
-/** Regime, other income (and how much of it is salary) and the old regime's deductions, saved per year. */
+/** Regime, other income (and how much of it is salary), the old regime's deductions, age band and residency, saved per year. */
 function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void> }) {
   const v = y.inputs;
   const [regime, setRegime] = useState<"new" | "old">(v.regime);
   const [other, setOther] = useState(v.saved && v.other ? String(v.other) : "");
   const [salary, setSalary] = useState(v.salary != null ? String(v.salary) : "");
   const [ded, setDed] = useState(v.deductions ? String(v.deductions) : "");
+  const [age, setAge] = useState<Age>(v.age ?? "below60");
+  const [resident, setResident] = useState(v.resident ?? true);
   const [saving, setSaving] = useState(false);
   const o = amount(other), s = amount(salary), d = amount(ded);
   const bad = Number.isNaN(o) || Number.isNaN(s) || Number.isNaN(d) || (s != null && o != null && s > o);
   const save = async () => {
     setSaving(true);
-    try { await onSave(y.fy, { regime, other: o ?? 0, salary: s, deductions: regime === "old" ? d ?? 0 : 0 }); } finally { setSaving(false); }
+    try { await onSave(y.fy, { regime, other: o ?? 0, salary: s, deductions: regime === "old" ? d ?? 0 : 0, age, resident }); } finally { setSaving(false); }
   };
   return (
     <div className="tax-inputs stack" style={{ gap: 10 }}>
@@ -473,6 +485,18 @@ function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inpu
           <span className="small muted" style={{ fontWeight: 600 }}>Tax regime <Info label="About the tax regime">The new regime is the default from FY 2023-24: lower slab rates, a higher standard deduction and almost no deductions. The old regime keeps deductions such as 80C and 80D. Each year's return says which one applies.</Info></span>
           <div className="seg" role="radiogroup" aria-label="Tax regime">
             {(["new", "old"] as const).map((r) => <button key={r} role="radio" aria-checked={regime === r} aria-pressed={regime === r} onClick={() => setRegime(r)}>{r === "new" ? "New (default)" : "Old"}</button>)}
+          </div>
+        </div>
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small muted" style={{ fontWeight: 600 }}>Age <Info label="About age">Your age during the year. Under the old regime, the income not taxed is ₹2.5 lakh below 60, ₹3 lakh from 60 to 79 and ₹5 lakh from 80, for residents. The new regime's slabs are the same at every age.</Info></span>
+          <div className="seg" role="radiogroup" aria-label="Age band">
+            {AGES.map(([k, label]) => <button key={k} role="radio" aria-checked={age === k} aria-pressed={age === k} onClick={() => setAge(k)}>{label}</button>)}
+          </div>
+        </div>
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small muted" style={{ fontWeight: 600 }}>Resident in India? <Info label="About residency">Residency for tax depends mainly on the days spent in India in the year. A non-resident gets no section 87A rebate, can't set the unused basic exemption against share gains (sections 111A and 112A), and has the ₹2.5 lakh old-regime limit at any age. Surcharge and cess apply as usual. TDS on NRI sales is deducted by the broker; this estimate does not reconcile TDS.</Info></span>
+          <div className="seg" role="radiogroup" aria-label="Resident in India">
+            {([true, false] as const).map((r) => <button key={String(r)} role="radio" aria-checked={resident === r} aria-pressed={resident === r} onClick={() => setResident(r)}>{r ? "Yes" : "No"}</button>)}
           </div>
         </div>
         <label className="field" style={{ width: 200 }}>
