@@ -338,7 +338,21 @@ SURV_PAGES = {                       # where the exchange publishes each list, f
     "bands": "https://www.nseindia.com/market-data/securities-available-for-trading",
 }
 SEC_LIST = "https://nsearchives.nseindia.com/content/equities/sec_list.csv"
-FO_BAN = "https://nsearchives.nseindia.com/archives/fo/sec_ban/fo_secban.csv"
+# the F&O ban file: today's under /content/fo, the older address under /archives, then the day-stamped copies
+# (fo_secban_05102026.csv) of the last few days, newest first, in case the plain name isn't published
+FO_BAN_URLS = ("https://nsearchives.nseindia.com/content/fo/fo_secban.csv",
+               "https://nsearchives.nseindia.com/archives/fo/sec_ban/fo_secban.csv")
+FO_BAN_DAILY = ("https://nsearchives.nseindia.com/archives/fo/sec_ban/fo_secban_{d}.csv",
+                "https://nsearchives.nseindia.com/content/fo/fo_secban_{d}.csv")
+FO_BAN_DAYS = 4
+FO_BAN = FO_BAN_URLS[0]
+
+
+def fo_ban_urls(today=None) -> list[str]:
+    """Every address the F&O ban file may be at, in the order to try them."""
+    day = today or ist_now().date()
+    dated = [u.format(d=(day - timedelta(days=n)).strftime("%d%m%Y")) for n in range(FO_BAN_DAYS) for u in FO_BAN_DAILY]
+    return [*FO_BAN_URLS, *dated]
 T2T_SERIES = ("BE", "BZ")           # trade-to-trade: every trade settles by delivery
 _ROMAN = {"0": 0, "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6}
 _STAGE = re.compile(r"stage\s*[-:._]?\s*(vi|iv|v|iii|ii|i|[0-6])\b", re.I)
@@ -807,11 +821,22 @@ class NSEFilings:
         return self._surv_json("/api/reportESM", "esm", stage_rows)
 
     def fo_ban(self) -> tuple[str | None, list[str]]:
-        """The securities in the F&O ban period: (the trade date the file is for, [symbols])."""
-        try:
-            return fo_ban_rows(self._surv_text(FO_BAN))
-        except ValueError:
-            raise SourceError(self.name, "The exchange's F&O ban file wasn't in the expected shape.") from None
+        """The securities in the F&O ban period: (the trade date the file is for, [symbols]). The exchange has moved
+        this file before, so each known address is tried in turn: one that isn't there (404, or a page instead of the
+        file) moves on to the next, while the exchange being down or busy stops at once (the breaker counts it)."""
+        missing, shape = None, False
+        for url in fo_ban_urls():
+            try:
+                return fo_ban_rows(self._surv_text(url))
+            except SourceError as e:
+                if e.busy:
+                    raise
+                missing = e
+            except ValueError:
+                shape = True
+        if shape:
+            raise SourceError(self.name, "The exchange's F&O ban file wasn't in the expected shape.")
+        raise SourceError(self.name, f"The exchange's F&O ban file wasn't at any of its known addresses ({str(missing).rstrip('.')}).")
 
     def security_bands(self) -> dict[str, dict]:
         """Every equity's series (EQ, or BE/BZ for trade-to-trade) and daily price band, from the exchange's
@@ -823,6 +848,20 @@ class NSEFilings:
 
 
 BSE_ATTACH = "https://www.bseindia.com/xml-data/corpfiling/"
+# What Chrome sends when bseindia.com's own announcements page asks api.bseindia.com for data (a cross-origin XHR on
+# the same site): a full browser version string with the client hints that match it, the page's origin as both
+# Origin and Referer (Chrome trims a cross-origin referrer to the origin), and the fetch metadata of a CORS call.
+# A bot guard compares these: a short "Chrome/128.0" with no client hints, or an Origin on the page visit itself,
+# looks like a script.
+BSE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+BSE_CLIENT_HINTS = {"sec-ch-ua": '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+                    "sec-ch-ua-mobile": "?0", "sec-ch-ua-platform": '"Windows"'}
+BSE_API_HEADERS = {"Accept": "application/json, text/plain, */*", "Origin": "https://www.bseindia.com",
+                   "Referer": "https://www.bseindia.com/", "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors",
+                   "Sec-Fetch-Site": "same-site"}
+BSE_PAGE_HEADERS = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1", "Upgrade-Insecure-Requests": "1"}
 
 
 def bse_rows(table: list[dict]) -> list[dict]:
@@ -860,23 +899,29 @@ class BSEFilings:
 
     def __init__(self, transport: httpx.BaseTransport | None = None, sleep=time.sleep):
         self.http = httpx.Client(base_url=self.BASE, timeout=15, transport=transport, follow_redirects=True,
-                                 headers={"User-Agent": BROWSER_UA, "Accept": "application/json, text/plain, */*",
-                                          "Accept-Language": "en-US,en;q=0.9", "Referer": self.HOME,
-                                          "Origin": self.HOME.rstrip("/")})
+                                 headers={"User-Agent": BSE_UA, "Accept-Language": "en-US,en;q=0.9", **BSE_CLIENT_HINTS})
         self.limit = RateLimit(30, 5)
         self.cache = TTLCache(max_items=2000)
         self.sleep = sleep
         self._fails, self._down_until = 0, 0.0
         self._primed, self._last = 0.0, 0.0
+        self._refused_at: float | None = None      # when BSE last turned us away through every retry (None: answering)
+        self._ok_at: float | None = None
         self._lock = threading.Lock()
 
+    def state(self) -> dict:
+        """Whether BSE is turning this server away right now, for the admin page: since when, and the last answer."""
+        iso = lambda t: datetime.fromtimestamp(t, IST).isoformat(timespec="minutes") if t else None   # noqa: E731
+        return {"refusing": self._refused_at is not None, "refused_at": iso(self._refused_at), "ok_at": iso(self._ok_at)}
+
     def _prime(self, force: bool = False):
-        """Visit BSE's website for the session cookies its API checks for (kept for ten minutes)."""
+        """Visit BSE's website for the session cookies its API checks for (kept for ten minutes), the way a browser
+        opens the page: a navigation, with no Origin."""
         with self._lock:
             if not force and time.time() - self._primed < 600:
                 return
             try:
-                self.http.get(self.HOME, headers={"Accept": "text/html"})
+                self.http.get(self.HOME, headers=BSE_PAGE_HEADERS)
             except httpx.HTTPError:
                 pass                        # the API call itself says whether BSE is reachable
             self._primed = time.time()
@@ -900,13 +945,14 @@ class BSEFilings:
                 raise SourceError(self.name, "The exchange feed is busy (our rate limit). Try again in a minute.", busy=True)
             self._pace()
             try:
-                r = self.http.get(path, params=params)
+                r = self.http.get(path, params=params, headers=BSE_API_HEADERS)
             except httpx.HTTPError as e:
                 self._failed()
                 raise SourceError(self.name, f"Couldn't reach the exchange ({e.__class__.__name__}).", busy=True) from None
             if r.status_code in (401, 403, 429):
                 if attempt == len(self.BACKOFF):        # turned away every time: rest, and say try again later
                     self._down_until, self._fails = time.time() + self.REST, 0
+                    self._refused_at = self._refused_at or time.time()
                     raise SourceError(self.name, f"The exchange feed refused the request ({r.status_code}). Try again later.", busy=True)
                 wait = self.BACKOFF[attempt]
                 try:                                    # a 429 may say how long to wait
@@ -926,7 +972,7 @@ class BSEFilings:
             except ValueError:
                 self._failed()
                 raise SourceError(self.name, "The exchange sent a page instead of data (it may be blocking us).", busy=True) from None
-            self._fails = 0
+            self._fails, self._refused_at, self._ok_at = 0, None, time.time()
             return data if isinstance(data, dict) else {}
         raise SourceError(self.name, "The exchange feed refused the request. Try again later.", busy=True)   # not reached
 

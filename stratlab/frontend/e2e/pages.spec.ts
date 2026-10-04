@@ -876,14 +876,71 @@ test("admin: the whole-market audit tells facts and companies not checked yet ap
   const errors = await open(page, "/admin?tab=checks", "Whole market: India");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
   const india = page.locator("section", { hasText: "Whole market: India" });
-  await expect(india.getByText("1 facts · 2 not checked yet")).toBeVisible();
+  await expect(india.getByText("0 gaps · 0 errors · 1 fact · 2 not checked yet")).toBeVisible();
   await india.getByRole("radio", { name: "Facts" }).click();
   await expect(india.getByText("Only 2 years of annual results so far")).toBeVisible();
   await india.getByRole("radio", { name: "Not checked yet" }).click();
   await expect(india.getByText("Tiny Co Ltd")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
-  await india.getByRole("button", { name: "Re-check 2 not checked yet" }).click();
+  await india.getByRole("button", { name: "Re-check the 2 not checked yet" }).click();
   await expect.poll(() => sent).toEqual([{ region: "IN", retry: true }]);
   await expect(india.getByText("Re-checking companies not checked yet:")).toBeVisible();
+  await sane(page, errors);
+});
+
+test("admin: the whole-market audit starts, pauses, resets, re-checks one company and shows BSE waiting", async ({ page }, info) => {
+  const sent: Record<string, unknown>[] = [];
+  const err = { symbol: "ACME", name: "Acme Ltd", seconds: 2, issues: [{ level: "error", area: "Numbers", detail: "Revenue or profit missing for Mar 2024" }] };
+  const summary = (n: number) => ({ companies: n, clean: 0, mismatches: 1, gaps: 1, errors: n ? 1 : 0, facts: 0, pending: 0, avg_seconds: 2, slowest: [],
+    by_area: n ? { Numbers: { mismatch: 1, gap: 1, error: 1, fact: 0, pending: 0 } } : {} });
+  let s = { enabled: false, paused: "off", listed: 5058, checked: 3844, due: 0, current: null, eta_hours: null, rate_per_hour: 0, list_at: null, list_error: null,
+    full: { running: true, since: new Date(Date.now() - 7 * 3600e3).toISOString(), done_at: null, left: 1214, checked: 3844, everything: true, pending_only: false },
+    monthly: { on: true, last: "2026-10", next: "2026-11-01" }, retry: { waiting: 1868, due: 0, next: new Date(Date.now() + 40 * 60e3).toISOString(), gap_hours: 1, batch: 20 },
+    bse: { refusing: true, waiting: 1868 }, pending: 1911, new_listings: [], rows: [err], summary: summary(1) } as Record<string, unknown>;
+  await page.route((u) => u.pathname === "/admin/audit/market", async (r) => {
+    const req = r.request();
+    const body = req.method() === "POST" ? req.postDataJSON() : null;
+    const us = body ? body.region === "US" : new URL(req.url()).searchParams.get("region") === "US";
+    if (body && !us) {
+      sent.push(body);
+      if ("on" in body) s = { ...s, enabled: body.on, paused: body.on ? null : "off" };
+      if (body.reset) s = { ...s, enabled: true, paused: null, checked: 0, due: 5058, rate_per_hour: 0, rows: [], summary: summary(0),
+        full: { running: true, since: new Date().toISOString(), done_at: null, left: 5058, checked: 0, everything: true, pending_only: false } };
+      if ("monthly" in body) s = { ...s, monthly: { on: body.monthly, last: "2026-10", next: body.monthly ? "2026-11-01" : null } };
+    }
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(us ? { ...s, bse: undefined, rows: [], summary: summary(0), full: { ...(s.full as object), running: false } } : s) });
+  });
+  const errors = await open(page, "/admin?tab=checks", "Whole market: India");
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);
+  const india = page.locator("section", { hasText: "Whole market: India" });
+  // paused, and why; a clear Start button
+  await expect(india.getByText("Paused: switched off. Press Start to check companies.")).toBeVisible();
+  await expect(india.getByText(/Full check: 3,844 of 5,058 done/)).toBeVisible();
+  await expect(india.getByRole("progressbar", { name: "Full check India" })).toBeVisible();
+  await expect(india.getByText("1 mismatch", { exact: true })).toBeVisible();
+  await expect(india.getByText("1 gap · 1 error")).toBeVisible();
+  await expect(india.getByText(/BSE is refusing requests from this server; 1,868 companies waiting/)).toBeVisible();
+  await expect(india.getByText("Next full check: 1 Nov")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await india.getByRole("button", { name: "Start the India check" }).click();
+  await expect(india.getByRole("button", { name: "Pause the India check" })).toBeVisible();
+  await expect.poll(() => sent).toEqual([{ region: "IN", on: true }]);
+  // an error row: its reason, and a re-check of that one company
+  await india.getByRole("radio", { name: "Errors" }).click();
+  await expect(india.getByText("Revenue or profit missing for Mar 2024")).toBeVisible();
+  await india.getByRole("button", { name: "Re-check Acme Ltd" }).click();
+  await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", recheck: "ACME" });
+  // the monthly check can be switched off
+  await india.getByRole("checkbox", { name: "Full re-check on the 1st of each month" }).click();
+  await expect(india.getByText("Only new listings, until you reset")).toBeVisible();
+  // reset asks first: dismissed does nothing, accepted clears and starts from 0
+  page.once("dialog", (d) => d.dismiss());
+  await india.getByRole("button", { name: "Reset and check everything again" }).click();
+  expect(sent.some((b) => b.reset)).toBe(false);
+  page.once("dialog", (d) => { expect(d.message()).toContain("Clear every stored result for India"); d.accept(); });
+  await india.getByRole("button", { name: "Reset and check everything again" }).click();
+  await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", reset: true });
+  await expect(india.getByText(/Full check: 0 of 5,058 done/)).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });

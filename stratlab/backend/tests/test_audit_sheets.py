@@ -159,11 +159,12 @@ def test_market_audit_slows_down_while_a_source_refuses(monkeypatch):
     w = W.build(monkeypatch)
     try:
         listing = [{"symbol": s, "name": s, "listed": date.today().isoformat()} for s in ("A1", "A2", "A3")]
-        later = lambda s: {"symbol": s, "name": s, "seconds": 0, "issues": [audit._later("Documents", "refused the request")]}  # noqa: E731
+        later = lambda s: {"symbol": s, "name": s, "seconds": 0, "issues": [audit._later("Company page", "refused the request")]}  # noqa: E731
         a = audit.MarketAudit(lambda: listing, later, pause=0)
         a.set_enabled(True)
         a.step()
         first = a.cool
+        assert a.status()["paused"] == "cooling"
         a.step()
         assert first >= 60 and a.cool == first * 2
         a.check_fn = lambda s: {"symbol": s, "name": s, "seconds": 0, "issues": []}
