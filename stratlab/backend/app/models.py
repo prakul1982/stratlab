@@ -264,7 +264,7 @@ class StockAlertReq(BaseModel):
     """One stock alert; stock_alerts.clean checks the combination (a price level, an MA length…)."""
     region: Literal["IN", "US"] = "IN"
     symbol: str = Field(..., min_length=1, max_length=20)
-    kind: Literal["price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance"]
+    kind: Literal["price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap"]
     op: Optional[Literal["above", "below", "up", "down", "either"]] = None
     value: Optional[float] = None
     period: Optional[int] = Field(None, ge=1, le=500)
@@ -483,6 +483,32 @@ class OptionStrategy(BaseModel):
 
 class OptionStartReq(BaseModel):
     strategy: OptionStrategy
+
+
+class OptHeldLeg(BaseModel):
+    """One leg of a priced or open position: its contract, how many units and the price it was filled at."""
+    side: Literal["sell", "buy"]
+    opt: Literal["CE", "PE"]
+    strike: float = Field(..., gt=0, le=1e7)
+    qty: int = Field(..., ge=1, le=10_000_000)
+    fill: float = Field(..., ge=0, le=1e7)
+
+
+class OptGreeksReq(BaseModel):
+    """A position's model Greeks on today's quotes (the session page's open legs)."""
+    exchange: Literal["NFO", "BFO", "MCX", "CDS"] = "NFO"
+    underlying: str = Field(..., pattern=r"^[A-Z0-9&-]{1,30}$")
+    expiry: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    legs: list[OptHeldLeg] = Field(..., min_length=1, max_length=8)
+    brokerage: float = Field(20, ge=0, le=1000)
+    freeze: int = Field(0, ge=0, le=100000)
+
+
+class OptRollReq(OptGreeksReq):
+    """Close one leg and open another strike or expiry in its place: the model's before and after."""
+    leg: int = Field(..., ge=0, le=7)
+    strike: float = Field(..., gt=0, le=1e7)
+    to_expiry: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
 class FastEntry(BaseModel):

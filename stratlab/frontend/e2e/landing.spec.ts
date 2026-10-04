@@ -31,6 +31,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   expect(await page.locator("main section[id]").evaluateAll((els) => els.map((e) => e.id).filter((id) => id !== "top"))).toEqual(order);
   await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Pricing", "FAQ"]);
   await expect(page.locator(".lp-space")).toHaveText([/Trade/, /Invest/, /Money/]);
+  await expect(page.locator(".lp-space .lp-space-art"), "each space shows a picture of itself").toHaveCount(3);
   await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
   // what search engines and link previews show says the same
   await expect(page).toHaveTitle("StratLab: test it, research it, track it");
@@ -54,6 +55,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   expect(await page.locator("#alerts .lp-tool").count() % 3).toBe(0);
   expect(await page.locator("#money .lp-beyond-card").count() % 2).toBe(0);
   await expect(page.locator("#faq details")).not.toHaveCount(0);
+  expect(await page.locator("#faq details").count(), "the FAQ stays short").toBeLessThanOrEqual(10);
   // the option chains StratLab records, as the server records them
   const options = page.locator("#faq details", { hasText: "Can I test options strategies?" });
   await options.locator("summary").click();

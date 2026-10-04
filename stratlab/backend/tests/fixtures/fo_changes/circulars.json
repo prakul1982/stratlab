@@ -1,0 +1,9 @@
+{"data": [
+ {"circDisplayNo": "FAOP/71001", "cirDisplayDate": "October 01, 2026", "sub": "Exclusion of EXIDEIND and NUVAMA from F&O segment", "circFilelink": "https://example.invalid/FAOP71001.pdf", "fileDept": "FAOP"},
+ {"circDisplayNo": "FAOP/71002", "cirDisplayDate": "September 30, 2026", "sub": "Introduction of derivative contracts on JIOFIN", "circFilelink": "https://example.invalid/FAOP71002.pdf"},
+ {"circDisplayNo": "FAOP/71003", "cirDisplayDate": "September 29, 2026", "sub": "Revision in market lot of derivative contracts on indices", "circFilelink": ""},
+ {"circDisplayNo": "FAOP/71004", "cirDisplayDate": "September 26, 2026", "sub": "Change in expiry day of NIFTY weekly options contracts"},
+ {"circDisplayNo": "CMTR/71005", "cirDisplayDate": "September 25, 2026", "sub": "Exclusion of securities from NIFTY 50 index"},
+ {"circDisplayNo": "LIST/71006", "cirDisplayDate": "September 24, 2026", "sub": "Listing of new debentures"},
+ {"circDisplayNo": "FAOP/71007", "cirDisplayDate": "September 23, 2026", "sub": "Quantity freeze limits for derivative contracts"}
+]}

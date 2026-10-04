@@ -1,5 +1,6 @@
-"""Stock alerts people set for themselves: a price crossing a level, a big move in a day, the price crossing a
-moving average, RSI crossing a level, a Stage change, a new 52-week high or low.
+"""Stock alerts people set for themselves: a price crossing a level, a big move in a day, an ETF's price this far
+from its NAV (etf_nav.py), the price crossing a moving average, RSI crossing a level, a Stage change, a new 52-week
+high or low.
 
 Each user's alerts live in one app_settings row (stockalerts:<uid>). The checker runs inside the scan-alert job's
 loop: every minute while India or the US is open, it reads every active alert for that market, fetches each symbol's
@@ -25,7 +26,7 @@ from .engine.indicators import rsi, stage
 
 KEY = "stockalerts:"                 # app_settings: stockalerts:<uid> = {"uid", "items": [...], "sent": [...], "pending": [...]}
 REGIONS = ("IN", "US")
-KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance")
+KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap")
 NEEDS_BARS = {"ma", "rsi", "stage", "high52", "low52"}
 EVENTS = {"insider": ("insider", "sast"), "deal": ("bulk", "block"),   # alerts on exchange disclosures, not on the price
           "surveillance": ("surveillance",)}                   # and on the exchange's surveillance lists
@@ -96,6 +97,9 @@ def describe(a: dict) -> str:
         return "A promoter or insider trade is disclosed"
     if k == "deal":
         return "A bulk or block deal is reported"
+    if k == "etfgap":                   # an ETF's price against its NAV (etf_nav.py)
+        return {"above": f"Trades {_num(v)}% or more above its NAV", "below": f"Trades {_num(v)}% or more below its NAV"}.get(
+            op, f"Trades {_num(v)}% or more away from its NAV, either way")
     if k == "surveillance":
         return "Enters or leaves an exchange surveillance list (ASM, GSM, ESM, trade-to-trade, F&O ban, price band)"
     return "Makes a new 52-week high" if k == "high52" else "Makes a new 52-week low"
@@ -119,6 +123,8 @@ def clean(req: dict) -> dict:
         raise AlertError("Pick what the alert should watch for.")
     if kind in EVENTS and region != "IN":
         raise AlertError("Alerts on exchange disclosures and surveillance lists cover Indian stocks.")
+    if kind == "etfgap" and region != "IN":
+        raise AlertError("Alerts on an ETF's price against its NAV cover Indian ETFs.")
     op, v, period = req.get("op"), req.get("value"), req.get("period")
     out = {"region": region, "symbol": sym, "kind": kind, "op": None, "value": None, "period": None,
            "repeat": bool(req.get("repeat")), "note": str(req.get("note") or "").strip()[:120] or None}
@@ -135,6 +141,12 @@ def clean(req: dict) -> dict:
             raise AlertError("Pick up, down or either way.")
         if not _finite(v) or not 0.1 <= v <= 50:
             raise AlertError("Enter the day's move as a percent between 0.1 and 50.")
+        out.update(op=op, value=round(float(v), 2))
+    elif kind == "etfgap":
+        if op not in ("above", "below", "either"):
+            raise AlertError("Pick above its NAV, below it, or either way.")
+        if not _finite(v) or not 0.1 <= v <= 50:
+            raise AlertError("Enter the gap as a percent between 0.1 and 50.")
         out.update(op=op, value=round(float(v), 2))
     elif kind == "ma":
         if period not in MA_PERIODS:
@@ -304,6 +316,11 @@ def evaluate(a: dict, snap: dict) -> tuple[str | None, dict]:
         chg = snap.get("change_pct")
         if _finite(chg) and ((op == "up" and chg >= v) or (op == "down" and chg <= -v) or (op == "either" and abs(chg) >= v)):
             text = f"{sym} is {'up' if chg > 0 else 'down'} {abs(chg):.1f}% today (now {now})"
+    elif k == "etfgap":
+        g = snap.get("gap") or {}
+        x = g.get("gap")
+        if _finite(x) and ((op == "above" and x >= v) or (op == "below" and x <= -v) or (op == "either" and abs(x) >= v)):
+            text = g.get("text") or f"{sym} is {abs(x):.2f}% {'above' if x > 0 else 'below'} its NAV (now {now})"
     else:
         bars = snap.get("bars") or []
         tz = snap.get("tz") or "UTC"
@@ -429,10 +446,12 @@ class Checker:
 
     quotes(region, symbols) -> {symbol: {"price", "change_pct", ...} | None}, in batches;
     bars(region, symbol) -> daily candles; limit(profile) -> active alerts the user's plan checks;
-    send(profile, subject, text) -> channels reached."""
+    send(profile, subject, text) -> channels reached; gaps(symbol, price) -> an ETF's gap to its NAV (etf_nav.gap_now);
+    kind_ok(profile, kind) -> the user's plan checks that kind of alert."""
 
-    def __init__(self, quotes, bars, limit, send=deliver, profile=None):
+    def __init__(self, quotes, bars, limit, send=deliver, profile=None, gaps=None, kind_ok=None):
         self.quotes, self.bars, self.limit, self.send = quotes, bars, limit, send
+        self.gaps, self.kind_ok = gaps or (lambda s, p: None), kind_ok or (lambda p, k: True)
         self.profile = profile or db.cached_profile
         self.status = {"last_run": None, "checked": 0, "fired": 0, "sent": 0, "last_error": None}
 
@@ -467,7 +486,8 @@ class Checker:
                 profiles[uid] = self.profile(uid)
             except Exception:
                 continue
-            todo[uid] = [a for a in mine[:self.limit(profiles[uid])] if a.get("region") in days and a.get("kind") not in EVENTS]
+            todo[uid] = [a for a in mine[:self.limit(profiles[uid])] if a.get("region") in days and a.get("kind") not in EVENTS
+                         and self.kind_ok(profiles[uid], a.get("kind"))]
         fired: dict[str, dict[str, tuple]] = {}      # uid -> alert id -> (text, new state, rev)
         checked = 0
         for region, today in days.items():
@@ -489,6 +509,8 @@ class Checker:
                 q = quotes.get(a["symbol"]) or {}
                 snap = {"price": q.get("price"), "change_pct": q.get("change_pct"), "bars": bars.get(a["symbol"]),
                         "today": today, "tz": tz}
+                if a["kind"] == "etfgap":
+                    snap["gap"] = self.gaps(a["symbol"], q.get("price"))
                 try:
                     text, st = evaluate(a, snap)
                 except Exception as e:      # odd data for one stock mustn't stop the others

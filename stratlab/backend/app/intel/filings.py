@@ -846,6 +846,11 @@ class NSEFilings:
             raise SourceError(self.name, f"The exchange's price-band file looked wrong ({len(rows)} securities).")
         return rows
 
+    def etf_list(self):
+        """Every ETF's last price, indicative NAV and ISIN, as the exchange's ETF page lists them (etf_nav.py reads
+        it). One call for the whole market, behind a breaker of its own."""
+        return self._get("/api/etf", {}, referer="https://www.nseindia.com/market-data/exchange-traded-funds-etf", circuit="etf")
+
 
 BSE_ATTACH = "https://www.bseindia.com/xml-data/corpfiling/"
 # What Chrome sends when bseindia.com's own announcements page asks api.bseindia.com for data (a cross-origin XHR on

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app import ai_writer, db, main
 from app.main import app
-from app.options.data import OptionsData
+from app.options.data import OptionsData, freeze
 from app.options.session import IST
 
 from .fake_options_kite import FakeOptionsKite
@@ -48,7 +48,7 @@ def test_underlyings_chain_and_preview(monkeypatch):
     try:
         c = TestClient(app)
         us = c.get("/options/underlyings").json()
-        assert [u["name"] for u in us[:3]] == ["NIFTY", "BANKNIFTY", "SENSEX"] and us[0]["freeze"] == 1800
+        assert [u["name"] for u in us[:3]] == ["NIFTY", "BANKNIFTY", "SENSEX"] and us[0]["freeze"] == freeze("NIFTY")
         assert {u["venue"] for u in us} == {"NSE", "BSE", "MCX", "NSE currency"}
         ch = c.get("/options/chain", params={"exchange": "NFO", "underlying": "NIFTY"}).json()
         assert ch["spot"] == 25000 and ch["atm"] == 25000 and ch["step"] == 50 and len(ch["rows"]) == 21
@@ -58,6 +58,12 @@ def test_underlyings_chain_and_preview(monkeypatch):
         pv = c.post("/options/preview", json={"strategy": {**STRAT, "sizing": {"mode": "margin", "capital": 5000000}}}).json()
         assert [l["strike"] for l in pv["legs"]] == [25000, 25000] and all(l["fill"] == l["quote"]["bid"] for l in pv["legs"])
         assert pv["margin_one"] == 150 * 4000 and pv["units"] == int(5000000 * 0.98 // 600000)
+        # the round trip's charges and the breakevens once they're paid, for everyone (Free included)
+        ch = pv["charges"]
+        assert ch["total"] > 0 and ch["credit"] and ch["orders"] >= 4 and ch["rates_as_of"] == "2026-04-01"
+        assert len(ch["breakevens"]) == 2 and len(ch["breakevens_after"]) == 2
+        assert ch["breakevens"][0] < ch["breakevens_after"][0] < 25000 < ch["breakevens_after"][1] < ch["breakevens"][1]
+        assert ch["premium_after"] == round(ch["premium"] - ch["total"], 2)
         mcx = c.get("/options/chain", params={"exchange": "MCX", "underlying": "CRUDEOIL"}).json()
         assert mcx["spot"] == 5600
     finally:

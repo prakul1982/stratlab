@@ -18,11 +18,11 @@ export const LIMITS: Record<PlanId, Limits> = {
     stock_alerts: 5, screens: 2, holdings: 30, networth_items: 5, mf_schemes: 5, journal_trades: 50, features: [] },
   basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
     stock_alerts: 25, screens: 10, holdings: 100, networth_items: null, mf_schemes: null, journal_trades: null,
-    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal"] },
+    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax"] },
+      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -42,13 +42,13 @@ export const FEATURES: Record<PlanId, string[]> = {
   basic: ["Everything in Free, plus:", `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month`,
     "All 20+ indicators: MACD, Supertrend, Bollinger Bands, VWAP and more",
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times, with trade notifications and a daily report`,
-    "The full trade journal, and positioning history with IV percentiles",
+    "The full trade journal, positioning history with IV percentiles, and F&O change alerts",
     `${L.basic.deepdives_per_month} company deep dives (report card and checklist) and ${L.basic.decks_per_month} decks a month`,
     "Stage 2 scan, watchlist red flags, Watchlist at a glance and market breadth charts, with alerts",
-    "Every mutual fund and net worth entry, fund capital gains, dividends with TDS, and money reminders",
-    `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks`],
+    "Every mutual fund and net worth entry, fund capital gains and fund costs in rupees, dividends with TDS, and money reminders",
+    `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks`],
   pro: ["Everything in Basic, plus:", "Unlimited backtests, AI builds, deep dives and decks", `Paper trade ${L.pro.live_limit} strategies at a time`,
-    "Indian F&O and options entered on your own rules' signals", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
+    "Indian F&O, options entered on your own rules' signals, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
     "Export rules and trades", "Advance tax amounts, and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],
@@ -67,12 +67,19 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators"], 
   ["mf_gains", "Mutual funds: every scheme, and capital gains by year"],
   ["dividends", "Dividends by company, with TDS and US tax withheld"], ["tax_tools", "Advance tax amounts and long-term exemption facts per lot"],
   ["money_reminders", "Money calendar reminders by email or phone"],
+  ["mf_costs", "Fund costs: each fund's TER parts in rupees, both plans side by side, and changes since you bought"],
   ["breadth", "Market breadth history, charts and sector table"],
   ["positioning", "Derivatives positioning history and IV percentiles"],
   ["journal", "Trade journal: every trade, the honesty checks, breakdowns and paper vs real"],
-  ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax: gains in rupees, foreign tax credit and Schedule FA"]];
+  ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax: gains in rupees, foreign tax credit and Schedule FA"],
+  ["etf_gaps", "Alerts on an ETF's price against its NAV"],
+
+["fo_alerts", "Alerts when an F&O exit, lot size or expiry change touches your watchlist or paper sessions"],
+  ["options_whatif", "Options what-if: move the underlying, shift IV and pass days, and preview rolling a leg"]];
 export const EVERYONE = ["Every market, and your own CSV", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
   "Corporate actions, deals and surveillance lists", "Today's market breadth numbers", "Derivatives positioning today: participant OI, FII/DII flows, PCR and the option chain facts",
+  "F&O contract changes: stocks entering and leaving F&O, lot sizes and expiry days",
+  "Option Greeks for every strike and your position, and the payoff today beside the one at expiry (model estimates)",
   "A trade journal with the basic stats", "My Holdings, the tax report and the year's total tax estimate", "Money calendar and its calendar feed",
   "Dividend and US share totals for each year, advance tax due dates and the exemption used", "A preview of the ITR-ready export",
-  "Weekly Market Brief and My Stocks", "Public company pages, share cards and invite links"];
+  "Weekly Market Brief and My Stocks", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history"];

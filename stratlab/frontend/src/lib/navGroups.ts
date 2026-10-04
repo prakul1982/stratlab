@@ -1,20 +1,15 @@
 /** Pages that share one menu entry and switch between each other with tabs. Every page keeps its own URL. */
-export type Family = "scans" | "watch" | "options";
+export type Family = "scans" | "watch";
 
 export const FAMILIES: Record<Family, { label: string; home: string; views: [string, string][] }> = {
   scans: {
     label: "Scans", home: "/research/scans",
     views: [["/research/scan", "Trend scan"], ["/research/screens", "Screener"], ["/research/rotation", "Sector rotation"], ["/research/filings", "Red flags"],
-      ["/invest/breadth", "Market breadth"]],
+      ["/invest/breadth", "Market breadth"], ["/invest/etf-gaps", "ETF vs NAV"]],
   },
   watch: {
     label: "Watchlist", home: "/research/watchlist",
     views: [["/research/watchlist", "List"], ["/research/investor", "At a glance"]],
-  },
-  /** Trade: the Options menu entry leads to both, switched with tabs at the top of each page. */
-  options: {
-    label: "Options", home: "/options",
-    views: [["/options", "Options"], ["/trade/positioning", "Positioning"]],
   },
 };
 
@@ -50,14 +45,17 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
   Invest: [
     { to: "/invest/breadth", label: "Market breadth", icon: "pulse", title: "How many stocks rise, fall, sit above their averages or make new highs",
       blurb: "Advances and declines, stocks above their 20/50/200-day averages, 52-week highs and lows, McClellan and sectors." },
+    { to: "/invest/etf-gaps", label: "ETF vs NAV", icon: "lens", title: "Each Indian ETF's price against its indicative NAV and last NAV",
+      blurb: "How far each ETF's price is from what a unit holds, the widest gap first, with 30 days of history and alerts." },
   ],
-  /** Trade pages beyond the menu's fixed entries, kept as data like Money's. Positioning also opens as a tab beside
-   * Options (FAMILIES.options), so the Options menu entry already leads to it. */
+  /** Trade pages beyond the menu's fixed entries, kept as data like Money's. */
   Trade: [
     { to: "/trade/positioning", label: "Positioning", icon: "layers", title: "Participant-wise open interest, FII/DII flows, PCR, max pain and IV",
       blurb: "Who holds index futures and options, FII and DII cash flows, each index's PCR, OI by strike and ATM IV." },
     { to: "/trade/journal", label: "Trade journal", icon: "book", title: "Your real trades paired into round trips, judged by the verdict's checks",
       blurb: "Import your tradebook or tax P&L, equity and F&O: every round trip with its charges, your notes, and the verdict's honesty checks on your real trades." },
+    { to: "/trade/fo-changes", label: "F&O changes", icon: "calendar", title: "Stocks entering and leaving F&O, lot-size revisions and expiry-day changes",
+      blurb: "One dated list from the exchange's contract file and circulars: exits with the last series, old and new lots, expiry days." },
   ],
   Money: [
     { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",

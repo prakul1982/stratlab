@@ -9,8 +9,8 @@ const OPEN_KEY = "stratlab.explore.open";
 /** Everything StratLab can do, grouped by the goal it serves and ordered by what the user came for, so the deeper
  * tools aren't hidden and nobody faces a wall of equal choices. Only the first group shows until "Show everything"
  * is pressed (remembered), so the page under it stays short. `hide` leaves out tools the page above already links to,
- * so a space's home offers each one once. */
-export function Explore({ title = "What you can do here", skip = [], hide = [] }: { title?: string; skip?: Goal[]; hide?: string[] }) {
+ * so a space's home offers each one once. `order`: a space home lists its own space's goals first. */
+export function Explore({ title = "What you can do here", skip = [], hide = [], order }: { title?: string; skip?: Goal[]; hide?: string[]; order?: "trade" | "invest" }) {
   const { notebooks, level, focus } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
@@ -18,7 +18,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [] }
   const [all, setAll] = useState(() => { try { return localStorage.getItem(OPEN_KEY) === "1"; } catch { return false; } });
   const showAll = (on: boolean) => { setAll(on); try { localStorage.setItem(OPEN_KEY, on ? "1" : "0"); } catch { /* storage off */ } };
   const shown = FEATURES.filter((f) => f.home && f.goal && !hide.includes(f.id) && !(level === "new" && f.level === "advanced"));
-  const goals = (GOAL_ORDER[focus ?? "both"] as Goal[]).filter((g) => !skip.includes(g) && shown.some((f) => f.goal === g));
+  const goals = (GOAL_ORDER[order ?? focus ?? "both"] as Goal[]).filter((g) => !skip.includes(g) && shown.some((f) => f.goal === g));
   const open = (to: string) => {
     const dest = resolve(to, loc.pathname, latest);
     if (dest === loc.pathname + loc.search) { const box = document.getElementById("idea"); box?.scrollIntoView({ behavior: "smooth", block: "center" }); box?.focus(); }

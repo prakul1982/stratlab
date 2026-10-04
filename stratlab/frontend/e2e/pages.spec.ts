@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
+import { FAMILIES, NAV_GROUPS } from "../src/lib/navGroups";
 
 // Signed in as the site owner (the fake database's admin-token), with the tour already seen.
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
@@ -8,6 +9,12 @@ const session = { access_token: "admin-token", token_type: "bearer", expires_in:
 /** Signed in as another of the fake database's users instead (free-token, basic-token, ...). */
 function sessionAs(token: string, id: string, email: string) {
   return { ...session, access_token: token, user: { ...session.user, id, email } };
+}
+
+/** A first visit asks what the person came for; answer it like a new user would (if it's asked). */
+async function answerWelcome(page: Page, choice: RegExp = /All of it/) {
+  const ask = page.getByText("What brings you here?");
+  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("dialog").getByRole("button", { name: choice }).first().click()).catch(() => undefined);
 }
 
 async function open(page: Page, path: string, ready: string, who: typeof session = session) {
@@ -20,9 +27,7 @@ async function open(page: Page, path: string, ready: string, who: typeof session
   });
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
-  // a first visit asks what the person came for; answer it like a new user would
-  const ask = page.getByText("What brings you here?");
-  await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
+  await answerWelcome(page);
   await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(400);
   return errors;
@@ -83,7 +88,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
@@ -207,7 +212,7 @@ test.describe("a visitor in India", () => {
 test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
   const errors = await open(page, "/plans", "Side by side");
   for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
-    "2 company deep dives and 1 slide deck a month", "Indian F&O and options entered on your own rules' signals"]) {
+    "2 company deep dives and 1 slide deck a month", "Indian F&O, options entered on your own rules' signals, and options what-if sliders with a roll preview"]) {
     await expect(page.locator(".grid4 li", { hasText: line })).toBeVisible();
   }
   for (const card of await page.locator(".grid4 > .card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
@@ -659,6 +664,13 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   const phone = info.project.name === "phone";
   // the owner's account is shared with every other test: keep this test's space choices out of it
   await page.route("**/me/prefs", (r) => (r.request().method() === "PUT" ? r.fulfill({ json: { prefs: {} } }) : r.fallback()));
+  // ...and reads them as already answered, so the first-visit question doesn't come back on every page load
+  await page.route(/\/me(\?.*)?$/, async (r) => {
+    if (r.request().method() !== "GET") return r.fallback();
+    const res = await r.fetch();
+    const me = await res.json();
+    await r.fulfill({ response: res, json: { ...me, prefs: { ...(me.prefs || {}), level: me.prefs?.level ?? "some", focus: me.prefs?.focus ?? "invest" } } });
+  });
   const errors = await open(page, "/research", "Companies");
   await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); localStorage.setItem("stratlab.space", "invest"); });
   await page.reload();
@@ -671,7 +683,7 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   for (const g of ["Research", "Watch"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
   for (const g of ["Notebooks", "Trading", "Money"]) await expect(main.getByRole("button", { name: g, exact: true })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
-  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", "Market breadth", "Watchlist", "Alerts"]);
+  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", ...NAV_GROUPS.Invest.map((e) => e.label), "Watchlist", "Alerts"]);
   for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
@@ -689,7 +701,7 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   await main.getByRole("link", { name: "Scans" }).click();
   await expect(page).toHaveURL(/\/research\/scan$/);
   const tabs = page.getByRole("navigation", { name: "Scans" });
-  await expect(tabs.getByRole("link")).toHaveText(["Trend scan", "Screener", "Sector rotation", "Red flags", "Market breadth"]);
+  await expect(tabs.getByRole("link")).toHaveText(FAMILIES.scans.views.map(([, label]) => label));
   await tabs.getByRole("link", { name: "Sector rotation" }).click();
   await expect(page).toHaveURL(/\/research\/rotation$/);
   await expect(tabs.getByRole("link", { name: "Sector rotation" })).toHaveAttribute("aria-current", "page");
@@ -1269,6 +1281,19 @@ test("admin: rates and rules show each area's review, the source watch and every
   await sane(page, errors);
 });
 
+test("admin: fund costs (TER) shows the last read and reads again on request", async ({ page }, info) => {
+  let reads = 0;
+  await page.route((u) => u.pathname === "/admin/ter/read", (r) => { reads++; return r.fallback(); });
+  const errors = await open(page, "/admin?tab=checks", "Fund costs (TER)");
+  const panel = page.getByRole("region", { name: "Fund costs (TER)" });
+  await expect(panel.getByText(/Last good read .* · 3 schemes for/)).toBeVisible({ timeout: 30_000 });
+  await panel.getByRole("button", { name: "Read now" }).click();
+  await expect.poll(() => reads).toBe(1);
+  await expect(panel.getByRole("button", { name: "Read now" })).toBeEnabled({ timeout: 30_000 });
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+});
+
 test("admin: the whole-market audit tells facts and companies not checked yet apart, and re-checks those", async ({ page }, info) => {
   const sent: object[] = [];
   const row = (symbol: string, name: string, level: string, area: string, detail: string) => ({ symbol, name, seconds: 1, issues: [{ level, area, detail }] });
@@ -1371,6 +1396,12 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByText("No funds yet")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
 
+  // the first time the costs are asked for, the TER disclosure is still being read: the card says so, then fills in
+  let costCalls = 0;
+  await page.route((u) => u.pathname === "/money/mutual-funds/costs", (r) => (costCalls++ === 0
+    ? r.fulfill({ json: { state: "reading", full: true, plan: "Basic", schemes: [], unmatched: [], total: null, read_at: null, assumptions: [], disclaimer: "", as_of: "2026-10-04" } })
+    : r.fallback()));
+
   // a synthetic statement (made-up investor and funds), locked with a password: first the wrong one
   await page.locator("input[type=file]").setInputFiles(MF + "synthetic_cas.pdf");
   await page.getByLabel("PDF password").fill("WRONG");
@@ -1379,6 +1410,7 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await page.getByLabel("PDF password").fill("ABCDE1234F");
   await page.getByRole("button", { name: "Read my funds" }).click();
   await expect(page.getByText(/7 transactions added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("Costs are being read; check back shortly.")).toBeVisible();
   await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
 
   const schemes = page.getByRole("table", { name: "Schemes" });
@@ -1391,6 +1423,15 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByRole("table", { name: "Gains by rate" }).getByText("Short-term at your slab rate (debt and other funds)")).toBeVisible();
   await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
   await expect(page.getByRole("table", { name: "Redemptions matched to purchases" }).getByText("grandfathered")).toBeVisible();
+
+  // what the funds cost: each TER, rupees a year, both plans side by side, the TER since bought and a category change
+  const costs = page.getByRole("table", { name: "Fund costs" });
+  await expect(costs.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("region", { name: "Fund costs" }).getByText("₹185").first()).toBeVisible();   // 143 + 42 a year
+  await expect(costs.getByText("₹352")).toBeVisible();                       // the 1.28-point plan gap on ₹27,500
+  await expect(costs.getByText(/Category changed on 16 Mar 2026 \(2026 recategorisation\)/)).toBeVisible();
+  await costs.getByText("Parts of the TER").first().click();
+  await expect(costs.getByText("Brokerage and transaction costs: 0.08%")).toBeVisible();
 
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/you should|we suggest|recommend|better fund|switch to|rating/i);
@@ -1635,7 +1676,7 @@ test("positioning: a missing cash number says why instead of a dash", async ({ p
   await expect(page.getByTestId("cash-status")).toContainText("No cash numbers stored yet. The last try");
 });
 
-test("positioning: a card on the Trade home and the Options tab, and the tabs between Options and Positioning", async ({ page }, info) => {
+test("positioning: a card on the Trade home and the Options page, its own page with no tabs back to Options", async ({ page }, info) => {
   await sane(page, await open(page, "/trade", "Straddles, strangles"));
   const card = page.getByTestId("positioning-card");
   await expect(card.getByText("FII index futures, net")).toBeVisible({ timeout: 30_000 });
@@ -1643,10 +1684,9 @@ test("positioning: a card on the Trade home and the Options tab, and the tabs be
   await expect(card.getByTestId("pos-card-sides")).toContainText(/% long · [\d.]+% short/);
   await page.goto("/options");
   await expect(page.getByTestId("positioning-card").getByText("FII/FPI cash, net")).toBeVisible({ timeout: 30_000 });
-  const tabs = page.getByRole("navigation", { name: "Options" });
-  await expect(tabs.getByRole("link", { name: "Options" })).toHaveAttribute("aria-current", "page");
-  await tabs.getByRole("link", { name: "Positioning" }).click();
+  await page.getByTestId("positioning-card").getByRole("link", { name: /Participants, flows and PCR/ }).click();
   await expect(page).toHaveURL(/\/trade\/positioning$/);
   await expect(page.getByRole("heading", { name: "Positioning", level: 1 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Options" })).toHaveCount(0);       // its own menu entry, no tabs
   if (info.project.name === "phone") await touchable(page);
 });

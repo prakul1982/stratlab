@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, moneyShort, price, signClass, when } from "../lib/format";
+import { money, price, signClass, when } from "../lib/format";
 import { HELP } from "../lib/help";
-import type { OptionSnapshot } from "../lib/types";
-import { LineChart } from "../components/Charts";
+import type { HeldGreeks, OptionSnapshot } from "../lib/types";
+import { atExpiry, legName, priceGrid, type HeldLeg } from "../lib/options";
+import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
+import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info, Loading } from "../components/ui";
 import { Earlier, splitToday } from "../components/Earlier";
 import { contract, OrderList, ordersBetween, ordersSince } from "../components/OrderList";
+import { moneyCompact } from "../lib/chartFormat";
 
 const TZ = "Asia/Kolkata";
 const inr = (v: number | null | undefined) => money(v, "INR");
@@ -57,7 +60,7 @@ export function OptionsSession() {
 
   return (
     <div className="stack" style={{ gap: 20 }}>
-      <Link to="/options" className="small muted">← Options</Link>
+      <Link to="/options" className="small muted" style={{ alignSelf: "flex-start", minHeight: 32, display: "inline-flex", alignItems: "center" }}>← Options</Link>
       <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
         <div className="stack" style={{ gap: 6 }}>
           <span className="eyebrow">{snap.instrument.underlying} options · {snap.instrument.exchange}{snap.expiry ? ` · expiry ${snap.expiry}` : ""} · started {t(snap.started_at)}</span>
@@ -135,6 +138,8 @@ export function OptionsSession() {
         )}
       </section>
 
+      {running && p && snap.legs.some((l) => l.open) && <SessionModel snap={snap} />}
+
       {earlier.length > 0 && (
         <section className="card" aria-label="Earlier trades">
           <Earlier label="Earlier trades" count={earlier.length} note={<Totals rows={earlier} />}>
@@ -146,13 +151,70 @@ export function OptionsSession() {
       <section className="card stack" style={{ gap: 10 }}>
         <h3 className="h3">Paper equity</h3>
         {snap.equity_curve.length > 1 ? (
-          <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((x) => t(x.t))} height={170}
-            axisLabels={snap.equity_curve.map((x) => new Date(x.t).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: TZ }))}
-            format={(v) => inr(v)} axisFormat={(v) => moneyShort(v, "INR")} baseline={a.capital}
-            lines={[{ label: "Account", values: snap.equity_curve.map((x) => x.eq), color: "var(--blue)", width: 1.6 }]} />
-        ) : <p className="muted small">Fills in minute by minute while the market is open.</p>}
+          <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((x) => t(x.t))} height={170} times={snap.equity_curve.map((x) => x.t)} tz={TZ}
+            format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} baseline={a.capital}
+            lines={[{ label: "Account", values: snap.equity_curve.map((x) => x.eq), color: "var(--series-1)", width: 2 }]} />
+        ) : <ChartEmpty height={170}>Fills in minute by minute while the market is open.</ChartEmpty>}
       </section>
     </div>
+  );
+}
+
+/** The open trade through the pricing model: its Greeks, its payoff today beside the one at expiry, and (on Pro) the
+ * what-if sliders and the roll preview. Refreshed every 30 seconds from the live quotes; model estimates. */
+function SessionModel({ snap }: { snap: OptionSnapshot }) {
+  const { me } = useApp();
+  const p = snap.position!, s = snap.strategy, inst = snap.instrument;
+  const open = snap.legs.filter((l) => l.open);
+  const held: HeldLeg[] = open.map((l) => ({ side: l.side, opt: l.opt, strike: l.strike, qty: l.qty, fill: l.entry }));
+  const key = JSON.stringify(held);
+  const booked = snap.legs.filter((l) => !l.open).reduce((n, l) => n + l.pnl, 0);     // legs closed earlier in this trade
+  const [g, setG] = useState<HeldGreeks | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [rollOpen, setRollOpen] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const load = () => api<HeldGreeks>("/options/greeks", { method: "POST", body: { exchange: inst.exchange, underlying: inst.underlying, expiry: p.expiry,
+      legs: JSON.parse(key), brokerage: s.costs.brokerage, freeze: s.costs.freeze } })
+      .then((x) => { if (alive) { setG(x); setErr(null); } }).catch((e: ApiError) => { if (alive) setErr(e.message); });
+    load();
+    const h = window.setInterval(() => { if (!document.hidden) load(); }, 30_000);
+    return () => { alive = false; window.clearInterval(h); };
+  }, [key, inst.exchange, inst.underlying, p.expiry, s.costs.brokerage, s.costs.freeze]);
+  const view = useMemo(() => {
+    if (!g) return null;
+    let m = 0;
+    const rows: ModelRow[] = held.map((h, i) => ({ label: legName(h.side, h.strike, h.opt), held: h, g: g.legs[i], m: g.legs[i]?.iv ? g.model_legs[m++] ?? null : null }));
+    const xs = priceGrid(g.spot, held.map((h) => h.strike));
+    const ys = xs.map((x) => booked + atExpiry(held, x));
+    return { rows, xs, ys };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [g, key, booked]);
+  const charges = g?.close_charges ? p.costs + g.close_charges.total : null;
+  return (
+    <section className="card stack" style={{ gap: 12 }} aria-labelledby="o-model" data-testid="session-model">
+      <h3 id="o-model" className="h3">Open trade: Greeks and payoff<span className="small muted" style={{ fontWeight: 400, marginLeft: 8 }}>model estimates</span></h3>
+      {!g || !view ? <p className="small muted">{err ?? "Pricing the open legs…"}</p> : (
+        <>
+          <ModelPanel model={g.model} rows={view.rows} xs={view.xs} base={booked} charges={charges} chargesLabel="the charges paid and to close"
+            whatif={!!me?.plan_info?.features?.options_whatif} plan="Pro" name={inst.underlying} testId="session-model-panel"
+            ariaLabel="The open trade's profit or loss at expiry and today across prices"
+            expiry={[{ id: "expiry", label: "At expiry", values: view.ys },
+              ...(charges != null ? [{ id: "after", label: "After charges", values: view.ys.map((y) => y - charges), dash: "4 4", width: 1.4 }] : [])]}
+            markers={[{ x: g.spot, label: `Spot ${Math.round(g.spot).toLocaleString("en-IN")}`, kind: "spot" }]} />
+          <p className="small muted">From the fills of the open legs{booked ? ", plus the legs already closed in this trade" : ""}. After charges takes off {inr(p.costs)} paid so far
+            {g.close_charges ? ` and about ${inr(g.close_charges.total)} to close what's open` : ""}. The session itself squares off at {s.timing.squareoff}.</p>
+          {me?.plan_info?.features?.options_whatif && (
+            <details className="opt-charge-lines" data-testid="roll-fold" onToggle={(e) => setRollOpen((e.target as HTMLDetailsElement).open)}>
+              <summary className="small">Roll a leg: preview</summary>
+              {rollOpen && <RollPreview legs={view.rows.map(({ label, held: h }) => ({ label, held: h }))} exchange={inst.exchange} underlying={inst.underlying}
+                expiry={p.expiry} brokerage={s.costs.brokerage} freeze={s.costs.freeze} />}
+              <p className="small muted">A preview only: the session keeps trading its own rules.</p>
+            </details>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

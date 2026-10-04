@@ -55,6 +55,20 @@ class Settings:
     OPENROUTER_MODEL = _env("OPENROUTER_MODEL", "auto")  # "auto" uses only models marked :free
     GEMINI_API_KEY = _env("GEMINI_API_KEY")
     GEMINI_MODEL = _env("GEMINI_MODEL", "auto")        # "auto" picks the newest Flash model your key can use
+    # more free providers (each optional; see ai_catalog.py and docs/ADMIN.md for their free limits)
+    CLOUDFLARE_API_TOKEN = _env("CLOUDFLARE_API_TOKEN")             # Workers AI: 10,000 neurons a day free
+    CLOUDFLARE_ACCOUNT_ID = _env("CLOUDFLARE_ACCOUNT_ID")
+    CLOUDFLARE_MODEL = _env("CLOUDFLARE_MODEL", "auto")
+    ZAI_API_KEY = _env("ZAI_API_KEY")                               # Z.ai: the GLM Flash models are free
+    ZAI_MODEL = _env("ZAI_MODEL", "auto")
+    HF_TOKEN = _env("HF_TOKEN")                                     # Hugging Face: small free monthly credit
+    HUGGINGFACE_MODEL = _env("HUGGINGFACE_MODEL", "auto")
+    AI_GATEWAY_API_KEY = _env("AI_GATEWAY_API_KEY")                 # Vercel AI Gateway: $5 free every 30 days
+    AI_GATEWAY_MODEL = _env("AI_GATEWAY_MODEL", "auto")
+    GITHUB_MODELS_TOKEN = _env("GITHUB_MODELS_TOKEN")               # GitHub Models: free, for prototyping (asked late)
+    GITHUB_MODEL = _env("GITHUB_MODEL", "auto")
+    NVIDIA_API_KEY = _env("NVIDIA_API_KEY")                         # NVIDIA API catalog: free for development (asked late)
+    NVIDIA_MODEL = _env("NVIDIA_MODEL", "auto")
     ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
     ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 

@@ -19,7 +19,7 @@ Admin is split into five tabs.
 | Tab | What's on it |
 | --- | --- |
 | **Overview** | **Needs your attention**, worst first (the broker not logged in or its automatic login failing, AI providers down, email not set up, server errors, reported library entries, the option-chain recorder, holidays running out, payments not connected), usage at a glance, a link to the PostHog dashboard once a key is set, and **Recent server errors**: the last 25 unexpected errors with the request, the error, the line of code and the ref code the user saw, kept across restarts |
-| **Services** | Market data: the broker login state, **Log in**, **Run the automatic login now**. Other services: Telegram, email (**Send a test email**), phone notifications, Sentry, the option-chain recorder, the newsletters, and **Send this week's summary now** (the owner's Monday 9:00 IST email). AI: a live test of every provider, the order each kind of job uses, and which keys are missing |
+| **Services** | Market data: the broker login state, **Log in**, **Run the automatic login now**. Other services: Telegram, email (**Send a test email**), phone notifications, Sentry, the option-chain recorder, the newsletters, and **Send this week's summary now** (the owner's Monday 9:00 IST email). **AI**: each provider's state, quota and models in use (success rate, median time, last problem), the order each kind of job asks them in, **Test every provider**, **Re-rank models**, **Pin** and **Block**, and the free providers not set up yet with where to get a key (see [AI providers](#ai-providers)) |
 | **Data checks** | **Check every feature**, **Rates and rules**, **Market breadth** (**Run now** per market), **Storage**, the **Data audit**, the **Whole market** audits for India and the US, **Exchange holidays** for every market, and **Save real prices** (the price snapshot the tests run on) |
 | **Users** | Every user with plan, join date, experiments, AI builds, invites and free months earned; **Change plan** grants Basic or Pro for 30 days, 90 days, a year or with no end. **Invite rewards** shows rewards given and sign-ups waiting for review. **Paper trading now** lists every running session with **Stop**. **Reported in the library** holds strategy-library entries people reported |
 | **Billing** | The **Launch offer**, payments status and **Check payments**, **Prices** per currency, and **Invoices** (the seller's GST details and every invoice) |
@@ -113,6 +113,83 @@ The option-chain facts and their history come from the recorded chains (NIFTY, B
 SENSEX; `OPTION_SNAPSHOTS`). There's no panel: `GET /admin/positioning` shows the job, the archive walk and each part's
 state, `POST /admin/positioning/run` reads the newest trading day now, and `POST /admin/positioning/run?backfill=true`
 takes the next step back through the archives. When a number is missing, the page says why in words.
+
+## AI providers
+
+The idea builder, the ask bar, the research reads and the long-document reads (deep dive, report card) all go through
+one AI layer (`backend/app/ai_providers.py`). It needs at least one key; two or three free ones from different
+companies make it hard to take down. Each provider below is optional and skipped while its variables are empty. After
+adding a key in **Railway → Variables**, redeploy, then press **Re-rank models** in **Admin → Services → AI**.
+
+| Provider | Free allowance (checked October 2026) | Production use on the free tier | Get a key | Railway variables |
+| --- | --- | --- | --- | --- |
+| Groq | About 30 requests a minute and 1,000 a day per model; the big models also have a daily token cap | Yes | [console.groq.com/keys](https://console.groq.com/keys) | `GROQ_API_KEY` (`GROQ_MODEL`) |
+| Google Gemini | Flash models: a few hundred to a thousand requests a day each; Gemma models many more | Yes. Free-tier prompts may be used by Google to improve its products | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `GEMINI_API_KEY` (`GEMINI_MODEL`) |
+| Mistral | "Experiment" plan: about 1 request a second and a large monthly token allowance (phone check at sign-up) | Allowed, but prompts may be used to train Mistral's models | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys) | `MISTRAL_API_KEY` (`MISTRAL_MODEL`) |
+| Cerebras | About 1 million tokens a day (some new accounts get trial credit instead) | Yes | [cloud.cerebras.ai](https://cloud.cerebras.ai) | `CEREBRAS_API_KEY` (`CEREBRAS_MODEL`) |
+| SambaNova | A few requests a minute per model | Yes | [cloud.sambanova.ai/apis](https://cloud.sambanova.ai/apis) | `SAMBANOVA_API_KEY` (`SAMBANOVA_MODEL`) |
+| OpenRouter | Models marked `:free` only: 20 a minute, 50 a day (1,000 a day once $10 of credit was ever bought) | Yes; some free models' hosts log prompts | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` (`OPENROUTER_MODEL`) |
+| Cloudflare Workers AI | 10,000 "neurons" a day (a few hundred short answers), reset at 00:00 UTC | Yes | [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens): use the "Workers AI" token template; the account id is on the dashboard's overview | `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (`CLOUDFLARE_MODEL`) |
+| Z.ai (GLM Flash) | The GLM Flash models cost nothing; about one request at a time | No clear statement either way: check z.ai's terms before relying on it. China-based | [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) | `ZAI_API_KEY` (`ZAI_MODEL`) |
+| Hugging Face | $0.10 of credit a month (about a hundred short answers); $2 with a PRO account | Yes (it's their paid service with a small free credit) | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens): a fine-grained token with "Make calls to Inference Providers" | `HF_TOKEN` (`HUGGINGFACE_MODEL`) |
+| Vercel AI Gateway | $5 of credit every 30 days on a set of free-tier models; buying credit ends the monthly $5 | **Flagged:** fine on a Vercel Pro team; Vercel's Hobby plan is for personal, non-commercial use. Asked after the production-ready providers | [vercel.com/dashboard/ai-gateway](https://vercel.com/dashboard/ai-gateway) | `AI_GATEWAY_API_KEY` (`AI_GATEWAY_MODEL`) |
+| GitHub Models | 50 to 150 requests a day per model; 8,000 tokens in and 4,000 out per request | **Flagged: prototyping tier.** GitHub describes free use as for prototyping. Asked only after every other free provider, and never for long documents | [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new): a fine-grained token with the "Models" (read) permission | `GITHUB_MODELS_TOKEN` (`GITHUB_MODEL`) |
+| NVIDIA API catalog | About 40 requests a minute | **Flagged: development and testing only** under NVIDIA's terms. Asked only after every other free provider | [build.nvidia.com/settings/api-keys](https://build.nvidia.com/settings/api-keys) | `NVIDIA_API_KEY` (`NVIDIA_MODEL`) |
+| Anthropic | None (paid) | Yes | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) | `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`) |
+
+Left out on purpose: **Chutes** (its free API tier ended on 30 September 2026), **Cohere** (the free trial key is for
+non-commercial use only) and anonymous gateways such as LLM7 and Pollinations (no account, no terms to rely on, and
+prompts pass through a third party). Free limits change often: the **Test** and **Re-rank** buttons show what actually
+works today.
+
+**Suggested set-up:** Groq, Google Gemini and Mistral first (production-ready, generous), then Cloudflare and Cerebras.
+The flagged ones add resilience but are asked last.
+
+### How it picks models
+
+- **Measured, not listed.** Every 6 hours (every 12 on Cloudflare, 24 on GitHub and 72 on Hugging Face, where measuring spends scarce credit; Anthropic only on demand), when you press **Re-rank models**, and
+  when every model a provider was using stops working, each provider's model list is read and filtered
+  (`backend/app/ai_catalog.py`, with a comment per rule): no speech, image, embedding, safety-filter or search models,
+  no code or maths specialists, no models built for another language (such as ALLaM, which is Arabic-first), nothing
+  under about 8B parameters when the name says its size, and no slow reasoners (R1 and its distills). Up to six of the
+  rest are each asked two small questions: a JSON object with exact values, and a one-sentence English answer about
+  revenue plus a one-word finance term. The ones that answer correctly are ranked by success rate, then speed, and the
+  best three per provider are used. Results are stored in `app_settings` (`ai:rank:<provider>`), so a restart keeps
+  them; before the first measurement each provider's known-good models (`defaults` in `ai_catalog.py`) are used.
+- **Every real request counts too:** each model's recent successes, failures and times feed the same score.
+- **By job:** quick jobs (idea builder, ask bar) put fast models first; research reads and long documents put strong
+  ones first and skip models whose context window the document wouldn't fit. The prototyping-tier providers come after
+  every production-ready one, and Anthropic (paid) is always last. The order each job uses right now is shown in the
+  panel. `AI_PROVIDERS` (and `AI_PROVIDERS_RESEARCH` for research and long reads) can still fix the order of providers
+  by hand; measurement then only orders each provider's own models.
+- **Reasoning models** (gpt-oss, Qwen 3, GLM, MiniMax, Gemma 4, o-series…) are asked to think little or not at all in
+  whichever way the provider accepts (`reasoning_effort`, `enable_thinking`, `thinking.type`, `/no_think`, Gemini's
+  thinking budget), get extra room for the answer, and their `<think>` blocks are stripped. A reply that holds only
+  reasoning is used only when the final answer is clearly marked. A setting a provider rejects is removed and the
+  request sent again.
+- **Every reply is checked:** not empty, not cut off, and a JSON object. An empty or cut-off reply gets one more try
+  with more room; anything else moves straight to the next model.
+- **Breakers and quotas:** a model that fails twice in a row is skipped for 2 minutes, doubling up to 6 hours; a
+  provider erroring 3 times in a row is paused for a minute, doubling up to 15. A rate limit (429) pauses the model or
+  the provider until the reset time it sends (`Retry-After`, the `x-ratelimit-reset-*` headers, Google's
+  `retryDelay`), and a provider that says it has no requests left is not asked until its reset. A rejected key pauses
+  the provider for 30 minutes; an unknown or retired model is skipped for 6 hours.
+- **Time budgets:** a whole request takes at most 30 s for quick jobs, 60 s for research reads and 120 s for long
+  documents (`BUDGET` in `ai_providers.py`), however many models are tried.
+- **Cache:** the same question for the same job is answered from memory for 6 hours (quick), 1 hour (research) or 12
+  hours (long), so a repeat doesn't spend free quota.
+- **Errors users see never name a provider**; the details (each model's error) are on the Admin page.
+
+### The AI panel (Admin → Services)
+
+Per provider: its state (OK, Check, Problem, Not tested), the free limit and terms, the quota left and when it resets,
+when it was last measured and what was left out, and each model in use with its success rate, median time and last
+problem. **Test every provider** sends a tiny request to each now; **Re-rank models** (or **Re-rank** on one provider)
+measures again in the background; **Pin** uses only that model for its provider (until **Unpin**; a
+`<NAME>_MODEL` in Railway pins too); **Block** never uses a model again (until **Unblock**). Providers without a key are
+listed with what they offer, a **Get a key** link and the Railway variables to set. The API behind it is
+`GET /admin/ai`, `POST /admin/ai/test`, `POST /admin/ai/rerank` (`{"provider"}` optional), `POST /admin/ai/pin`
+(`{"provider", "model"}`, `null` to unpin) and `POST /admin/ai/block` (`{"provider", "model", "blocked"}`).
 
 ## Email
 

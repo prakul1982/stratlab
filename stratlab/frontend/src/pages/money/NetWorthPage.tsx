@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { asOf, money, moneyShort } from "../../lib/format";
+import { asOf, money } from "../../lib/format";
 import { AsOf, Empty, Loading, Modal } from "../../components/ui";
-import { LineChart } from "../../components/Charts";
+import { ChartEmpty, XYChart } from "../../components/Charts";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
+import { moneyCompact } from "../../lib/chartFormat";
 
 type Kind = "epf" | "ppf" | "nps" | "fd" | "rd" | "gold" | "sgb" | "cash" | "property" | "crypto" | "other" | "loan" | "policy";
 type Entry = Record<string, string | number | null | undefined> & { kind: Kind; id: string; name?: string };
@@ -272,12 +273,11 @@ export function NetWorthPage() {
             {!view.history_allowed ? (
               <div className="banner"><span>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</span><Link to="/plans" className="btn sm">See plans</Link></div>
             ) : hist.length < 2 ? (
-              <p className="small muted" style={{ margin: 0 }}>A snapshot is taken on the 1st of each month and whenever you change an entry. The chart starts once there are two.</p>
+              <ChartEmpty height={220}>A snapshot is taken on the 1st of each month and whenever you change an entry. The chart starts once there are two.</ChartEmpty>
             ) : (
               <>
-                <LineChart lines={[{ values: hist.map((h) => h.net), color: "var(--blue)", width: 2, label: "Net worth" }]} labels={hist.map((h) => day(h.d))}
-                  axisLabels={hist.map((h) => new Date(`${h.d}T12:00:00`).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }))}
-                  format={(v) => inr(v)} axisFormat={(v) => moneyShort(v, "INR")} ariaLabel="Net worth over time" height={220} />
+                <XYChart series={[{ values: hist.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: Math.min(0, ...hist.map((h) => h.net)) } }]}
+                  times={hist.map((h) => h.d)} format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} ariaLabel="Net worth over time" height={220} testId="networth-chart" />
                 <p className="tiny muted" style={{ margin: 0 }}>Net worth at each snapshot: the 1st of each month and the days you changed an entry. Last snapshot {day(hist[hist.length - 1].d)}.</p>
               </>
             )}

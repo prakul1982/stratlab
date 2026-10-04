@@ -42,9 +42,9 @@ def test_everything_open_during_early_access(monkeypatch):
 
 def test_features_per_plan_once_payments_are_live(paid):
     assert not any(plan_info("free")["features"].values())
-    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal"}
+    basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts"}
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
-    assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax"}
+    assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax", "options_whatif"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {
         "indicators": "basic", "alerts": "basic", "scans": "basic", "fno": "pro", "export": "pro"}
     assert group_size("free") == 10 and group_size("basic") == 25
@@ -226,5 +226,67 @@ def test_experience_level_is_saved_with_other_prefs(monkeypatch):
         assert c.put("/me/prefs", json={"level": "expert"}).status_code == 422
         assert c.put("/me/prefs", json={"focus": "gamble"}).status_code == 422
         assert main.prefs_of("nobody") == {}
+    finally:
+        main.app.dependency_overrides.clear()
+
+
+def test_breakeven_after_costs_is_free(paid, monkeypatch):
+    """The builder's preview, with its round-trip charges and breakevens after costs, works on the Free plan."""
+    from app.options.data import OptionsData
+    from .fake_options_kite import FakeOptionsKite
+    monkeypatch.setattr(main, "options_data", OptionsData(FakeOptionsKite(live=True, drift={})))
+    try:
+        strat = {"underlying": "NIFTY", "legs": [{"side": "sell", "opt": "CE"}, {"side": "sell", "opt": "PE"}],
+                 "sizing": {"mode": "lots", "lots": 1}}
+        r = as_plan("free").post("/options/preview", json={"strategy": strat})
+        assert r.status_code == 200 and r.json()["charges"]["breakevens_after"]
+    finally:
+        main.app.dependency_overrides.clear()
+
+
+def test_etf_gap_alerts_are_basic(paid, monkeypatch):
+    """The gaps, their history and the badges are for everyone; an alert on the gap is Basic and up, and one set
+    before a downgrade isn't checked."""
+    from app import etf_nav
+    from tests import fake_etf
+    rows = etf_nav.parse_exchange(fake_etf.answer())["rows"]
+    monkeypatch.setattr(etf_nav, "load_live", lambda: {"read": None, "as_of": None, "rows": rows})
+    monkeypatch.setattr(etf_nav, "navs", lambda: {"schemes": {}, "isin": {}})
+    monkeypatch.setattr(etf_nav, "_days", lambda: {})
+    monkeypatch.setattr(etf_nav, "table", lambda: {"rows": [], "count": len(rows)})
+    monkeypatch.setattr(main, "alert_quotes", lambda r, s: {x: {"price": 105.2} for x in s})
+    monkeypatch.setattr(main.stock_alerts, "create", lambda uid, body, limit, q: {**body, "id": "abc123", "status": "active"})
+    monkeypatch.setattr(main, "alerts_page", lambda profile: {})
+    body = {"region": "IN", "symbol": "SILVERBEES", "kind": "etfgap", "op": "above", "value": 2}
+    try:
+        c = as_plan("free")
+        assert c.get("/invest/etf-gaps").json()["alerts"] is False and c.get("/invest/etf-gaps").json()["count"] == 5
+        r = c.post("/alerts", json=body)
+        assert r.status_code == 402 and "Basic plan" in r.json()["detail"]["message"]
+        assert c.post("/alerts", json={**body, "kind": "move", "op": "up"}).status_code == 200      # other alerts stay free
+        c = as_plan("basic")
+        assert c.get("/invest/etf-gaps").json()["alerts"] is True
+        assert c.post("/alerts", json=body).status_code == 200
+    finally:
+        main.app.dependency_overrides.clear()
+    monkeypatch.setattr(main.db, "get_setting", lambda k: None)
+    assert not main._alert_kind_ok({"id": "u1", "plan": "free"}, "etfgap") and main._alert_kind_ok({"id": "u1", "plan": "free"}, "price")
+    assert main._alert_kind_ok({"id": "u1", "plan": "basic", "plan_status": "active"}, "etfgap")
+
+
+def test_fo_changes_free_to_view_alerts_on_basic(paid, monkeypatch):
+    """F&O contract changes: the list and badges for everyone, the alert on Basic and up (turning it off always works)."""
+    from tests.fake_db import FakeSupabase
+    monkeypatch.setattr(main.db, "_client", FakeSupabase())
+    assert FEATURE_PLAN["fo_alerts"] == "basic" and not plan_info("free")["features"]["fo_alerts"]
+    try:
+        c = as_plan("free")
+        assert c.get("/trade/fo-changes").status_code == 200
+        r = c.put("/trade/fo-changes/alerts", json={"on": True})
+        assert r.status_code == 402 and "Basic plan" in r.json()["detail"]["message"]
+        assert c.put("/trade/fo-changes/alerts", json={"on": False}).status_code == 200
+        for plan in ("basic", "pro"):
+            r = as_plan(plan).put("/trade/fo-changes/alerts", json={"on": True})
+            assert r.status_code == 200 and r.json()["on"] is True
     finally:
         main.app.dependency_overrides.clear()

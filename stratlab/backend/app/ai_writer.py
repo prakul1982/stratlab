@@ -1,13 +1,8 @@
 """AI strategy builder (all plans, monthly limits in plans.py).
 Plain English -> validated rules, plus what the user did and didn't specify,
 so the app can ask follow-up questions for the missing parts."""
-import re
-import time
-
-import httpx
 from pydantic import ValidationError
 
-from .config import settings
 from .models import Cond, Risk, Session
 
 BASIC_TYPES = '"price", "num", "sma", "ema", "rsi"'
@@ -96,142 +91,29 @@ Never invent exits, stops or targets the user did not ask for; the app will ask 
 If nothing can be expressed, return {"entry": [], "exit": [], "mentioned": [], "notes": ["reason"]}."""
 
 
-from .ai_providers import AIBusy, AIConfig, AIError, complete, extract_json, status  # noqa: E402  (shared error types)
-
+from .ai_providers import AIBusy, AIConfig, AIError, ask_provider, complete, extract_json  # noqa: E402,F401  (shared error types)
+from . import ai_rank  # noqa: E402
 
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
-_model_cache = {"name": None, "list": [], "at": 0.0}
-_cooldown: dict[str, float] = {}   # model -> time until which we skip it after overload
-
-
-def _version_key(name: str):
-    nums = [float(x) for x in re.findall(r"(\d+(?:\.\d+)?)", name.split("/")[-1])[:1]] or [0.0]
-    stable = 0 if re.search(r"preview|exp|latest", name) else 1
-    return (stable, nums[0])
-
-
-def gemini_models() -> list[str]:
-    """Flash text models this key can use, best first (stable full Flash, then Lite, then previews)."""
-    if _model_cache["list"] and time.time() - _model_cache["at"] < 6 * 3600:
-        return _model_cache["list"]
-    r = httpx.get(f"{_GEMINI_BASE}/models", params={"pageSize": 1000},
-                  headers={"x-goog-api-key": settings.GEMINI_API_KEY}, timeout=20)
-    if r.status_code >= 400:
-        raise AIError("Couldn't list Gemini models for this key. Check GEMINI_API_KEY in Railway.")
-    skip = ("image", "tts", "audio", "live", "embedding", "vision", "thinking", "robotics", "computer", "native")
-    names = []
-    try:
-        listed = r.json().get("models", [])
-    except (ValueError, AttributeError):
-        raise AIError("Gemini sent something that isn't a model list. Try again in a minute.") from None
-    for m in listed if isinstance(listed, list) else []:
-        short = m.get("name", "").split("/")[-1]
-        if "generateContent" in (m.get("supportedGenerationMethods") or []) and "flash" in short and not any(k in short for k in skip):
-            names.append(short)
-    if not names:
-        raise AIError("This Gemini key has no Flash text models available.")
-    full = sorted([n for n in names if "lite" not in n], key=_version_key, reverse=True)
-    lite = sorted([n for n in names if "lite" in n], key=_version_key, reverse=True)
-    ordered = full[:3] + lite[:2]
-    _model_cache.update(list=ordered, name=ordered[0], at=time.time())
-    return ordered
 
 
 def _candidates() -> list[str]:
-    configured = settings.GEMINI_MODEL.strip()
-    try:
-        auto = gemini_models()
-    except AIError:
-        if configured and configured.lower() != "auto":
-            return [configured]
-        raise
-    lst = ([configured] if configured and configured.lower() != "auto" else []) + auto
-    seen, out = set(), []
-    for m in lst:
-        if m not in seen:
-            seen.add(m); out.append(m)
-    now = time.time()
-    ready = [m for m in out if _cooldown.get(m, 0) < now]
-    return ready or out
+    """Gemini models for reading scanned PDFs (ocr.py): the measured ones in use, Flash models only."""
+    models = [m for m in ai_rank.in_use("gemini") if m.startswith("gemini")]
+    return models or ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
 
 def _gemini(system: str, text: str, max_tokens: int = 8192) -> str:
-    if not settings.GEMINI_API_KEY:
-        raise AIConfig("GEMINI_API_KEY is missing.")
-    body = {
-        "systemInstruction": {"parts": [{"text": system}]},
-        "contents": [{"role": "user", "parts": [{"text": text}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": max(max_tokens, 8192),
-                             # these are extraction jobs: thinking only spends the reply budget (and the free quota)
-                             "thinkingConfig": {"thinkingBudget": 0}},
-    }
-    last_err = None
-    for model in _candidates()[:4]:
-        for attempt in range(2):
-            try:
-                r = httpx.post(f"{_GEMINI_BASE}/models/{model}:generateContent", json=body,
-                               headers={"x-goog-api-key": settings.GEMINI_API_KEY}, timeout=60)
-            except httpx.HTTPError:
-                last_err = "network"
-                time.sleep(1)
-                continue
-            if r.status_code in (429, 500, 502, 503, 504):
-                last_err = r.status_code
-                if attempt == 0:
-                    time.sleep(1.5)
-                    continue
-                _cooldown[model] = time.time() + 120   # skip this model for 2 minutes
-                break                                  # try the next model
-            if r.status_code == 404:
-                last_err = 404
-                _model_cache.update(list=[], at=0)
-                break
-            if r.status_code == 400 and "thinking" in r.text.lower() and "thinkingConfig" in body["generationConfig"]:
-                body["generationConfig"].pop("thinkingConfig")      # a model that must think: let it
-                continue
-            if r.status_code >= 400:
-                try:
-                    detail = r.json().get("error", {}).get("message", "")
-                except ValueError:
-                    detail = r.text[:200]
-                if r.status_code in (400, 403) and "key" in detail.lower():
-                    raise AIConfig("Google rejected GEMINI_API_KEY.")
-                raise AIError(f"The AI service returned an error ({r.status_code}) on model {model}: {detail[:160]}")
-            try:
-                parts = r.json()["candidates"][0]["content"]["parts"]
-            except (KeyError, IndexError, ValueError, TypeError):
-                last_err = "empty"
-                break
-            out = "".join(p.get("text", "") for p in parts if not p.get("thought"))
-            if not out.strip():                     # all thinking, no answer: the next model
-                last_err = "empty"
-                break
-            _model_cache["name"] = model
-            status("gemini").model = model
-            return out
-    if last_err == "empty":
-        raise AIError("The AI didn't return a strategy. Try rephrasing it.")
-    raise AIBusy("Google's models are busy or out of free quota.")
+    """Google Gemini alone, its measured models in turn (the AI layer asks it this way too)."""
+    return ask_provider("gemini", system, text, max_tokens)
 
 
 def _anthropic(system: str, text: str, max_tokens: int = 1500) -> str:
-    import anthropic
-    if not settings.ANTHROPIC_API_KEY:
-        raise AIError("The AI builder isn't configured on the server.")
-    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-    try:
-        msg = client.messages.create(model=settings.ANTHROPIC_MODEL, max_tokens=max_tokens, system=system,
-                                     messages=[{"role": "user", "content": text}])
-    except (anthropic.RateLimitError, anthropic.APIConnectionError):
-        raise AIBusy("The AI builder is busy right now.")
-    except anthropic.AuthenticationError:
-        raise AIConfig("Anthropic rejected ANTHROPIC_API_KEY.")
-    except anthropic.APIStatusError as e:
-        if e.status_code >= 500:  # overloaded (529) or a server error
-            raise AIBusy("The AI builder is busy right now.")
-        raise AIError(f"The AI service returned an error ({e.status_code}).")
-    status("anthropic").model = settings.ANTHROPIC_MODEL
-    return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+    """Claude alone (paid)."""
+    return ask_provider("anthropic", system, text, max_tokens)
+
+
+_gemini._builtin = _anthropic._builtin = True      # the AI layer uses its own clients instead of these wrappers
 
 
 def write_strategy(text: str, pro: bool) -> dict:

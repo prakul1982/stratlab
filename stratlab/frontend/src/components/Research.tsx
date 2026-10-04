@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { FAMILIES, familyOf, rememberView, type Family } from "../lib/navGroups";
 import { useApp } from "../lib/app";
-import { ago, pct, price, priceAxis, safeHref, signClass } from "../lib/format";
+import { ago, pct, price, safeHref, signClass } from "../lib/format";
 import {
   bandPosition, metricText, ordinal, researchApi, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
-import { LineChart } from "./Charts";
+import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { Star } from "./Icons";
 import { Info } from "./ui";
 import { SurvBadges } from "./Surveillance";
+import { FoBadges } from "./FoBadges";
 import { track } from "../lib/analytics";
 
 export { CompanySearch } from "./CompanySearch";
@@ -103,41 +104,14 @@ export function Change({ q, currency }: { q: Quote | null; currency: string }) {
 }
 
 /* ---------- price chart ---------- */
-const RANGES: [string, string][] = [["1m", "1M"], ["6m", "6M"], ["1y", "1Y"], ["3y", "3Y"], ["5y", "5Y"]];
-
+/** The company's candles in the shared price chart (its code loads only on pages that show one). */
 export function PriceChart({ region, symbol, currency }: { region: Region; symbol: string; currency: string }) {
-  const [range, setRange] = useState("1y");
-  const [data, setData] = useState<{ t: string; c: number }[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [src, setSrc] = useState("");
-  useEffect(() => {
-    let live = true;
-    setData(null); setError(null);
-    researchApi.chart(region, symbol, range).then((r) => { if (live) { setData(r.candles); setSrc(r.source); } })
-      .catch((e) => live && setError((e as Error).message));
-    return () => { live = false; };
-  }, [region, symbol, range]);
-  const change = data && data.length > 1 ? (data[data.length - 1].c / data[0].c - 1) * 100 : null;
-  const fmtDate = (t: string) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
-  const short = (t: string) => new Date(t).toLocaleDateString("en-GB", range === "1m" ? { day: "numeric", month: "short" } : { month: "short", year: "2-digit" });
-  const ticks = data ? data.map((d) => short(d.t)) : [];
+  const load = useMemo(() => companyLoader(region, symbol), [region, symbol]);
+  const compare = useCallback((other: string) => companyLoader(region, other)("1d", { range: "max" }).then((r) => r.candles), [region]);
   return (
-    <div className="stack" style={{ gap: 10 }}>
-      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-        <div className="seg" role="radiogroup" aria-label="Chart range">
-          {RANGES.map(([k, l]) => <button key={k} role="radio" aria-checked={range === k} aria-pressed={range === k} onClick={() => setRange(k)}>{l}</button>)}
-        </div>
-        {change != null && <span className={`small ${signClass(change)}`} style={{ fontWeight: 600 }}>{pct(change)} over {RANGES.find((r) => r[0] === range)?.[1]}</span>}
-      </div>
-      {error ? <p className="small muted" style={{ padding: "40px 0", textAlign: "center" }}>Couldn't load the chart: {error}</p>
-        : !data ? <div className="chart-skel" style={{ height: 260 }} />
-          : data.length < 2 ? <p className="small muted">No price history for this range.</p>
-            : <LineChart ariaLabel={`${symbol} price, ${range}`} height={260}
-                lines={[{ values: data.map((d) => d.c), color: "var(--ink)", width: 2, label: "Close" }]}
-                labels={data.map((d) => fmtDate(d.t))} axisLabels={ticks}
-                format={(v) => price(v, currency)} axisFormat={(v) => priceAxis(v, currency)} />}
-      {src && <span className="hint">{src === "Live prices" ? "Live exchange prices" : "Delayed prices"}. Daily closes.</span>}
-    </div>
+    <PriceChartView symbol={symbol} storageKey={`${region}:${symbol}`} currency={currency} load={load}
+      timeframes={["5m", "15m", "1h", "1d", "1w", "1mo"]} compareLoad={compare} compareHint={region === "IN" ? "e.g. TCS" : "e.g. MSFT"}
+      note="Prices as traded, not adjusted for dividends. Intraday candles cover recent weeks." />
   );
 }
 
@@ -394,6 +368,7 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
             <span className="num">{q == null ? <span className="skel" /> : x?.price != null ? price(x.price, region === "IN" ? "INR" : "USD") : "–"}</span>
             <span className={`tiny num ${signClass(x?.change_pct)}`}>{x?.change_pct != null ? pct(x.change_pct, 2) : ""}</span>
             <SurvBadges region={region} symbol={s} />
+            <FoBadges region={region} symbol={s} plain />
           </Link>
         );
       })}

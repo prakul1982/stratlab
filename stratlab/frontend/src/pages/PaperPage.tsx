@@ -1,17 +1,44 @@
 import { RiskOverview } from "../components/RiskOverview";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, moneyShort, pct, price, priceAxis, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
+import { money, pct, price, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
-import { LineChart, type Marker } from "../components/Charts";
+import { ChartEmpty, LineChart } from "../components/Charts";
+import { PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
+import type { PriceLevel } from "../charts/price/engine";
 import { Empty, Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
 import { SurvBadges, survRegion } from "../components/Surveillance";
+import { FoBadges } from "../components/FoBadges";
+import { foSymbol } from "../lib/foChanges";
 import { Earlier, splitToday } from "../components/Earlier";
 import { OrderList, type PaperOrder } from "../components/OrderList";
+import { moneyCompact } from "../lib/chartFormat";
+
+/** The session's candles, updated in place every few seconds: the forming candle grows from the ticks seen so far. */
+function LiveChart({ snap, cur }: { snap: LiveSnapshot; cur: string }) {
+  const forming = useRef<{ t: string; o: number; h: number; l: number } | null>(null);
+  const f = snap.forming;
+  if (f && (!forming.current || forming.current.t !== f.t)) forming.current = { t: f.t, o: f.c, h: f.c, l: f.c };
+  if (f && forming.current) { forming.current.h = Math.max(forming.current.h, f.c); forming.current.l = Math.min(forming.current.l, f.c); }
+  const bars = useMemo(() => {
+    const out: { t: string; o: number; h: number; l: number; c: number }[] = snap.bars.slice();
+    const fm = forming.current;
+    if (f && fm && (!out.length || f.t > out[out.length - 1].t)) out.push({ t: f.t, o: fm.o, h: fm.h, l: fm.l, c: f.c });
+    return out;
+  }, [snap.bars, f]);
+  const markers = useMemo(() => snap.events.map((e) => ({ t: e.t, side: e.side })), [snap.events]);
+  const a = snap.account;
+  const levels = useMemo<PriceLevel[]>(() => [...(a.stop ? [{ price: a.stop, label: "Stop", tone: "down" as const }] : []),
+    ...(a.target ? [{ price: a.target, label: "Target", tone: "up" as const }] : [])], [a.stop, a.target]);
+  const s = snap.strategy;
+  const studies = useMemo(() => strategyStudies([...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])]), [s]);
+  return <PriceChart symbol={snap.instrument.symbol} storageKey={(snap.instrument.id || snap.instrument.symbol).slice(0, 40)} currency={cur}
+    bars={bars} tf={s.tf as Tf} timeframes={[s.tf as Tf]} markers={markers} levels={levels} pageStudies={studies} height={340} />;
+}
 
 function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
   const { fail, refreshMe } = useApp();
@@ -42,8 +69,6 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   const tz = tzOf(snap.instrument);
   const intraday = snap.strategy.tf !== "1d";
   const a = snap.account;
-  const idx = new Map(snap.bars.map((b, i) => [b.t, i]));
-  const markers: Marker[] = snap.events.map((e) => ({ i: idx.get(e.t) ?? -1, side: e.side })).filter((m) => m.i >= 0);
   const alwaysOpen = snap.instrument.market === "CRYPTO";
   // orders: today's in view, the earlier ones folded
   const orders: PaperOrder[] = snap.events.map((e) => ({ ...e, sym: snap.instrument.symbol }));
@@ -69,6 +94,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
         <div className="stack" style={{ gap: 6 }}>
           <span className="eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
           <SurvBadges region={survRegion(snap.instrument)} symbol={snap.instrument.symbol} />
+          <FoBadges region={survRegion(snap.instrument)} symbol={foSymbol(snap.instrument)} />
           <h2 className="serif" style={{ fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em" }}>{snap.name}</h2>
         </div>
         <div className="row" style={{ gap: 12 }}>
@@ -84,20 +110,14 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
           <section className="card stack" style={{ gap: 10 }}>
             <div className="spread"><h3 className="h3">Live chart</h3>
               {snap.last_price != null && <span className="mono small">{snap.instrument.symbol} {price(snap.last_price, cur)}</span>}</div>
-            {snap.bars.length ? (
-              <LineChart ariaLabel="Recent candles with paper trades" labels={snap.bars.map((b) => when(b.t, tz, intraday))} height={300}
-                format={(x) => price(x, cur)} axisFormat={(x) => priceAxis(x, cur)} markers={markers}
-                levels={[...(a.stop ? [{ v: a.stop, color: "var(--orange)", label: "Stop" }] : []), ...(a.target ? [{ v: a.target, color: "var(--blue)", label: "Target" }] : [])]}
-                lines={[{ label: "Close", values: snap.bars.map((b) => b.c), color: "var(--ink)", width: 1.6 },
-                  ...Object.entries(snap.overlays).map(([k, v], i) => ({ label: k, values: v, color: ["var(--blue)", "var(--orange)", "var(--muted)"][i % 3], width: 1.2 }))]} />
-            ) : <p className="muted">The chart fills in as candles close.</p>}
+            {snap.bars.length ? <LiveChart snap={snap} cur={cur} /> : <p className="muted">The chart fills in as candles close.</p>}
           </section>
           <section className="card stack" style={{ gap: 10 }}>
             <h3 className="h3 row" style={{ gap: 0 }}>Paper equity<Info>{HELP.equityLive}</Info></h3>
             {snap.equity_curve.length > 1 ? (
-              <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, intraday))} height={160}
-                format={(x) => moneyShort(x, cur)} baseline={a.capital} lines={[{ label: "Equity", values: snap.equity_curve.map((p) => p.eq), color: "var(--blue)", width: 2 }]} />
-            ) : <p className="muted small">Your equity curve starts after the first closed candle.</p>}
+              <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, intraday))} times={snap.equity_curve.map((p) => p.t)} tz={tz} height={160}
+                format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} baseline={a.capital} lines={[{ label: "Equity", values: snap.equity_curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
+            ) : <ChartEmpty height={160}>Your equity curve starts after the first closed candle.</ChartEmpty>}
           </section>
         </div>
         <div className="stack" style={{ gap: 16 }}>
@@ -143,6 +163,7 @@ function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open
           <b>{r.name}</b>
           <span className="small muted">{r.instrument.symbol} · {new Date(r.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
           <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
+          <FoBadges region={survRegion(r.instrument)} symbol={foSymbol(r.instrument)} plain />
           <span className={`badge ${r.status}`} style={{ alignSelf: "flex-start" }}>{r.status}</span>
         </button>
       ))}
@@ -182,6 +203,7 @@ export function PaperPage() {
   return (
     <div className="stack" style={{ gap: 24 }}>
       <div className="stack" style={{ gap: 8 }}>
+        <span className="eyebrow">Trade · paper trading</span>
         <h1 className="page-title">Paper trading<Info>{HELP.paper}</Info></h1>
         <p className="page-sub">Your rules on live prices, with fake money. Each market runs in its own hours; crypto never closes.</p>
         {sub && <span className="page-chip">{sub}</span>}
