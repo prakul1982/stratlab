@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { FAMILIES } from "../lib/navGroups";
 import { signClass } from "../lib/format";
-import { crore, dayName, ratio, signed, type Summary } from "../lib/positioning";
+import { crore, dayName, ratio, sides, signed, type Summary } from "../lib/positioning";
 
 /** Options and Positioning switch with tabs, like the Scans: each keeps its own URL. */
 export function TradeTabs() {
@@ -38,11 +38,16 @@ export function PositioningCard() {
               <span className="tiny muted">FII index futures, net</span>
               <b className="num">{fii ? signed(fii.fut_idx_net as number | null) : "–"}</b>
               {fii?.fut_idx_net_chg != null && <span className={`tiny ${signClass(fii.fut_idx_net_chg as number)}`}>{signed(fii.fut_idx_net_chg as number)} from the day before</span>}
+              {fii?.fut_idx_long_pct != null && <span className="tiny muted" data-testid="pos-card-sides">{sides(fii.fut_idx_long_pct as number, fii.fut_idx_short_pct as number)}</span>}
             </div>
             <div className="space-fig">
               <span className="tiny muted">FII/FPI cash, net</span>
-              <b className="num">{crore(s.cash.fii?.net, true)}</b>
-              <span className="tiny muted">DII {crore(s.cash.dii?.net, true)}</span>
+              {s.cash.fii ? (
+                <>
+                  <b className="num">{crore(s.cash.fii.net, true)}</b>
+                  <span className="tiny muted">DII {crore(s.cash.dii?.net, true)}</span>
+                </>
+              ) : <span className="small muted" data-testid="pos-card-cash-reason">{s.cash.reason ?? "Not read yet."}</span>}
             </div>
             <div className="space-fig">
               <span className="tiny muted">NIFTY PCR (open interest)</span>

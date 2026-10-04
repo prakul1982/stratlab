@@ -85,10 +85,13 @@ class Settings:
                       else "http://localhost:8000")).rstrip("/")
     ADMIN_EMAILS = _env("ADMIN_EMAILS")                           # comma-separated Google emails that can open /admin
     ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails
-    # option chains recorded every few minutes in market hours, for options backtesting later ("" turns it off)
-    OPTION_SNAPSHOTS = _env("OPTION_SNAPSHOTS", "NFO:NIFTY,NFO:BANKNIFTY,BFO:SENSEX") or ""
+    # option chains recorded every few minutes in market hours, for options backtesting later and the Positioning page's
+    # history ("" turns it off); FINNIFTY and MIDCPNIFTY have monthly expiries only, so they add less than the others
+    OPTION_SNAPSHOTS = _env("OPTION_SNAPSHOTS", "NFO:NIFTY,NFO:BANKNIFTY,NFO:FINNIFTY,NFO:MIDCPNIFTY,BFO:SENSEX") or ""
     OPTION_SNAPSHOT_MINUTES = int(_env("OPTION_SNAPSHOT_MINUTES", "5") or 5)
-    # days of recorded option chains kept (about 70 MB a month for three underlyings); 120 fits the free database
+    # days of recorded option chains kept (about 70 MB a month for NIFTY, BANKNIFTY and SENSEX; FINNIFTY and MIDCPNIFTY,
+    # monthly expiries only, add roughly a third more): 120 days of all five is a few hundred MB, so the market
+    # database (MARKET_DATABASE_URL) is the place for them
     OPTION_SNAPSHOT_KEEP_DAYS = int(_env("OPTION_SNAPSHOT_KEEP_DAYS", "120") or 120)
     # a second Postgres (on Railway) for the bulky market-wide data, so the main database stays small (app/market_store.py)
     MARKET_DATABASE_URL = _env("MARKET_DATABASE_URL")
