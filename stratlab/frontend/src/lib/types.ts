@@ -181,6 +181,7 @@ export interface OptCharges {
   items: { key: string; label: string; amount: number }[];
   credit: boolean; premium: number; premium_after: number | null; pct_of_premium: number | null;
   max_profit: number | null; max_profit_after: number | null; pct_of_max_profit: number | null;
+  max_loss: number | null; max_loss_after: number | null;     // the worst at expiry, a negative amount; null when unbounded
   breakevens: number[]; breakevens_after: number[]; rates_as_of: string;
 }
 export interface OptLegLive { sym: string; opt: "CE" | "PE"; side: "sell" | "buy"; strike: number; qty: number; entry: number; mark: number; open: boolean; pnl: number }

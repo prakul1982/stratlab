@@ -90,7 +90,7 @@ function LegsEditor({ s, set, preview }: { s: OptionStrategy; set: (legs: OptLeg
 }
 
 const points = (xs: number[]) => xs.map((b) => Math.round(b).toLocaleString("en-IN")).join(" and ");
-const share = (v: number | null) => (v == null ? "–" : `${v.toFixed(2)}%`);
+const share = (v: number | null) => (v == null ? "–" : v > 0 && v < 0.005 ? "under 0.01%" : `${v.toFixed(2)}%`);
 const asOf = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /** What opening and closing the structure once costs, line by line, and what that does to its numbers. */
@@ -126,12 +126,21 @@ function Payoff({ p }: { p: OptPreview }) {
   const f = useMemo(() => payoff(p), [p]);
   const c = p.charges;
   const before = c ? c.breakevens : f.breakevens;
+  // exact bounds at expiry (the price can fall to zero; only calls can run on above the top strike), from the server
+  // when it has priced the charges, else the same sums here
+  const best = c ? c.max_profit : f.maxProfit, worst = c ? c.max_loss : f.maxLoss;
+  // the chart spans 10% either side of today's price; say where a bound lies when it's outside that
+  const lo = f.xs[0], hi = f.xs[f.xs.length - 1];
+  const outside = (v: number | null, x: number) => v != null && (x < lo || x > hi) ? Math.round(x).toLocaleString("en-IN") : null;
+  const bestOut = outside(best, f.bestAt), worstOut = outside(worst, f.worstAt);
   return (
     <div className="stack" style={{ gap: 10 }}>
       <div className="opt-stats">
         <div><span className="eyebrow">{f.credit >= 0 ? "Premium collected" : "Premium paid"}</span><b className="mono">{inr(Math.abs(f.credit))}</b></div>
-        <div><span className="eyebrow">Most it can make</span><b className="mono pos">{f.maxProfit == null ? "Unlimited" : inr(f.maxProfit)}</b></div>
-        <div><span className="eyebrow">Most it can lose</span><b className="mono neg">{f.maxLoss == null ? "Unlimited" : inr(f.maxLoss)}</b></div>
+        <div data-testid="opt-max-profit"><span className="eyebrow">Most it can make</span><b className="mono pos">{best == null ? "Unlimited" : inr(best)}</b>
+          {c && c.max_profit_after != null && <span className="small muted">{inr(c.max_profit_after)} after charges</span>}</div>
+        <div data-testid="opt-max-loss"><span className="eyebrow">Most it can lose</span><b className="mono neg">{worst == null ? "Unlimited" : inr(worst)}</b>
+          {c && c.max_loss_after != null && <span className="small muted">{inr(c.max_loss_after)} after charges</span>}</div>
         <div><span className="eyebrow">Margin needed</span><b className="mono">{p.margin != null ? inr(p.margin) : "Not available"}</b></div>
       </div>
       <LineChart ariaLabel="Profit or loss at expiry across prices" height={200} labels={f.xs.map((x) => `${p.legs.length ? "At " : ""}${Math.round(x).toLocaleString("en-IN")}`)}
@@ -142,6 +151,8 @@ function Payoff({ p }: { p: OptPreview }) {
         At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
         {before.length > 0 && <>Breaks even at {points(before)}{c ? " before charges" : ""}. </>}
         {c && (c.breakevens_after.length > 0 ? <>After charges: {points(c.breakevens_after)}. </> : <>After charges it doesn't break even at any price. </>)}
+        {bestOut != null && <>The most it can make is reached at {bestOut}, outside the chart. </>}
+        {worstOut != null && <>The most it can lose is reached at {worstOut}, outside the chart. </>}
         Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.
       </p>
       {c && <Charges c={c} />}

@@ -67,12 +67,25 @@ def breakevens(legs: list[dict], shift: float = 0.0) -> list[float]:
     return [round(b, 2) for b in out]
 
 
+def _corners(legs: list[dict]) -> list[float]:
+    """The payoff at zero and at every strike: between them it is a straight line, so its extremes are among these."""
+    return [_payoff_at(legs, x) for x in [0.0] + [float(lg["strike"]) for lg in legs]]
+
+
 def max_profit(legs: list[dict]) -> float | None:
-    """The most the structure makes at expiry before costs, or None when it keeps rising with the price."""
+    """The most the structure makes at expiry before costs, or None when it keeps rising with the price. Below the
+    lowest strike the price stops at zero, so a long put's best is (strike - premium) x units, reached at zero."""
     if _slope_above(legs) > 1e-9:
         return None
-    xs = [0.0] + [float(lg["strike"]) for lg in legs]
-    return max(_payoff_at(legs, x) for x in xs)
+    return max(_corners(legs))
+
+
+def max_loss(legs: list[dict]) -> float | None:
+    """The worst the structure does at expiry before costs (a negative amount), or None when it keeps falling as the
+    price rises."""
+    if _slope_above(legs) < -1e-9:
+        return None
+    return min(_corners(legs))
 
 
 def summary(legs: list[dict], kind: str, brokerage: float, freeze: int) -> dict:
@@ -82,7 +95,7 @@ def summary(legs: list[dict], kind: str, brokerage: float, freeze: int) -> dict:
     cost = rt["total"]
     net = sum((1 if lg["side"] == "sell" else -1) * lg["fill"] * lg["qty"] for lg in legs)
     premium = abs(net)
-    best = max_profit(legs)
+    best, worst = max_profit(legs), max_loss(legs)
     labels = {"brokerage": "Brokerage", "stt": STT_LABEL.get(kind, "STT"), "exchange": "Exchange charges", "sebi": "SEBI fee",
               "stamp": "Stamp duty", "gst": "GST"}
     return {
@@ -90,10 +103,12 @@ def summary(legs: list[dict], kind: str, brokerage: float, freeze: int) -> dict:
         "items": [{"key": k, "label": labels[k], "amount": round(v, 2)} for k, v in rt["items"].items() if v > 0.0049],
         "credit": net > 0, "premium": round(premium, 2),
         "premium_after": round(net - cost, 2) if net > 0 else None,
-        "pct_of_premium": round(cost / premium * 100, 2) if premium > 0 else None,
+        "pct_of_premium": round(cost / premium * 100, 4) if premium > 0 else None,
         "max_profit": round(best, 2) if best is not None else None,
         "max_profit_after": round(best - cost, 2) if best is not None else None,
-        "pct_of_max_profit": round(cost / best * 100, 2) if best is not None and best > 0 else None,
+        "pct_of_max_profit": round(cost / best * 100, 4) if best is not None and best > 0 else None,
+        "max_loss": round(worst, 2) if worst is not None else None,
+        "max_loss_after": round(worst - cost, 2) if worst is not None else None,
         "breakevens": breakevens(legs), "breakevens_after": breakevens(legs, cost),
         "rates_as_of": RATES_AS_OF,
     }

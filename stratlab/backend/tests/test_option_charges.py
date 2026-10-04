@@ -28,7 +28,7 @@ def test_short_straddle_breakevens_and_shares():
     assert s["total"] == 135.84 and s["credit"] and s["premium"] == 17550
     assert s["premium_after"] == approx(17550 - 135.84, abs=0.01)
     assert s["max_profit"] == 17550 and s["max_profit_after"] == approx(17414.16, abs=0.01)
-    assert s["pct_of_max_profit"] == 0.77 and s["pct_of_premium"] == 0.77   # 135.84 / 17,550
+    assert s["pct_of_max_profit"] == 0.774 and s["pct_of_premium"] == 0.774   # 135.843061 / 17,550
     assert s["breakevens"] == [22130, 22670]                                 # 22,400 ± 270
     # the payoff drops ₹135.84 everywhere: 135.843061 / 65 = 2.09 points nearer the strike on each side
     assert s["breakevens_after"] == [22132.09, 22667.91]
@@ -75,3 +75,43 @@ def test_commodity_options_are_labelled_ctt_and_currency_options_pay_none():
     cds = charges.summary([{**STRADDLE[0], "qty": 1000, "fill": 0.25}], "in_cds_opt", 20, 0)
     assert not any(i["key"] == "stt" for i in cds["items"])
     assert charges.kind_for("BFO") == "in_bse_opt" and charges.kind_for("NFO") == "in_opt"
+
+
+def bounds(legs):
+    s = charges.summary(legs, "in_opt", 20, 1800)
+    return s["max_profit"], s["max_loss"], s["max_profit_after"], s["max_loss_after"], s["total"]
+
+
+def test_long_put_is_bounded_at_a_price_of_zero():
+    # bought at 120: best (22,400 - 120) x 65 = ₹14,48,200 at zero, worst the ₹7,800 paid
+    hi, lo, hi_after, lo_after, cost = bounds([{"side": "buy", "opt": "PE", "strike": 22400, "fill": 120.0, "qty": 65}])
+    assert hi == 1448200 and lo == -7800
+    assert charges.summary([{"side": "buy", "opt": "PE", "strike": 22400, "fill": 120.0, "qty": 65}], "in_opt", 20, 1800)[
+        "pct_of_max_profit"] == approx(cost / 1448200 * 100, abs=1e-4)      # a tiny share, kept to 4 places
+    assert hi_after == approx(1448200 - cost, abs=0.01) and lo_after == approx(-7800 - cost, abs=0.01)
+
+
+def test_long_call_has_no_ceiling():
+    hi, lo, hi_after, _, _ = bounds([{"side": "buy", "opt": "CE", "strike": 22500, "fill": 100.0, "qty": 65}])
+    assert hi is None and hi_after is None and lo == -6500
+
+
+def test_short_put_loses_most_at_zero_and_keeps_at_most_the_premium():
+    hi, lo, _, lo_after, cost = bounds([{"side": "sell", "opt": "PE", "strike": 22400, "fill": 120.0, "qty": 65}])
+    assert hi == 7800 and lo == -1448200 and lo_after == approx(-1448200 - cost, abs=0.01)
+
+
+def test_short_call_and_straddle_have_no_floor_above():
+    assert bounds([{"side": "sell", "opt": "CE", "strike": 22400, "fill": 150.0, "qty": 65}])[1] is None
+    assert bounds(STRADDLE)[:2] == (17550, None)
+
+
+def test_iron_fly_is_bounded_both_ways():
+    # sell 22,400 straddle for 150 + 120, buy the 22,600 call for 60 and the 22,200 put for 50: net 160 a unit;
+    # worst past either wing: 160 - 200 = -40 a unit
+    legs = [*STRADDLE, {"side": "buy", "opt": "CE", "strike": 22600, "fill": 60.0, "qty": 65},
+            {"side": "buy", "opt": "PE", "strike": 22200, "fill": 50.0, "qty": 65}]
+    hi, lo, hi_after, lo_after, cost = bounds(legs)
+    assert hi == 160 * 65 and lo == -40 * 65
+    assert hi_after == approx(10400 - cost, abs=0.01) and lo_after == approx(-2600 - cost, abs=0.01)
+    assert charges.breakevens(legs) == [22240, 22560]

@@ -61,15 +61,16 @@ export function payoff(p: OptPreview) {
   const xs = [...Array.from({ length: n }, (_, i) => lo + ((hi - lo) * i) / (n - 1)), ...legs.map((l) => l.strike!).filter((k) => k > lo && k < hi)]
     .sort((a, b) => a - b).filter((x, i, arr) => i === 0 || x !== arr[i - 1]);
   const ys = xs.map(at);
-  // unlimited when the line is still sloping at the edges of a very wide range
-  const far = (x: number) => at(x);
-  const slopeUp = far(p.spot * 3) - far(p.spot * 2.5), slopeDown = far(p.spot * 0.05) - far(p.spot * 0.1);
-  const maxP = Math.max(...ys), maxL = Math.min(...ys);
+  // exact bounds, as options/charges.py works them out: the payoff is straight between strikes and the price stops at
+  // zero, so the extremes are at zero or a strike; only above the top strike can it run on, by the calls' net slope
+  const at0 = [0, ...legs.map((l) => l.strike!)], corners = at0.map(at);
+  const slopeAbove = legs.reduce((n, l) => n + (l.opt === "CE" ? (l.side === "buy" ? 1 : -1) * qty(l) : 0), 0);
+  const maxP = Math.max(...corners), maxL = Math.min(...corners);
   const breakevens: number[] = [];
   for (let i = 1; i < xs.length; i++) if ((ys[i - 1] < 0) !== (ys[i] < 0)) breakevens.push(xs[i - 1] + ((xs[i] - xs[i - 1]) * -ys[i - 1]) / (ys[i] - ys[i - 1]));
   const credit = legs.reduce((s, l) => s + (l.side === "sell" ? 1 : -1) * l.fill! * qty(l), 0);
-  return { xs, ys, maxProfit: slopeUp > 1e-6 || slopeDown > 1e-6 ? null : maxP, maxLoss: slopeUp < -1e-6 || slopeDown < -1e-6 ? null : maxL,
-    breakevens, credit };
+  return { xs, ys, maxProfit: slopeAbove > 1e-9 ? null : maxP, maxLoss: slopeAbove < -1e-9 ? null : maxL, breakevens, credit,
+    bestAt: at0[corners.indexOf(maxP)], worstAt: at0[corners.indexOf(maxL)] };   // the price where each bound is reached
 }
 
 /** sessionStorage key: an imported options strategy handed from the import dialog to the Options page. */

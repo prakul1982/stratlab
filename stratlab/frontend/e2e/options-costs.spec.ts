@@ -18,13 +18,19 @@ const items = (a: number[]) => ["Brokerage", "STT", "Exchange charges", "SEBI fe
 
 const STRADDLE = { ...base, legs: [leg("sell", "CE", 22400, 150), leg("sell", "PE", 22400, 120)],
   charges: { total: 135.84, orders: 4, brokerage_per_order: 20, freeze: 1800, items: items([80, 26.33, 12.33, 0.04, 0.53, 16.63]),
-    credit: true, premium: 17550, premium_after: 17414.16, pct_of_premium: 0.77, max_profit: 17550, max_profit_after: 17414.16,
-    pct_of_max_profit: 0.77, breakevens: [22130, 22670], breakevens_after: [22132.09, 22667.91], rates_as_of: "2026-04-01" } };
+    credit: true, premium: 17550, premium_after: 17414.16, pct_of_premium: 0.774, max_profit: 17550, max_profit_after: 17414.16,
+    pct_of_max_profit: 0.774, max_loss: null, max_loss_after: null, breakevens: [22130, 22670], breakevens_after: [22132.09, 22667.91],
+    rates_as_of: "2026-04-01" } };
 // a call spread 100 points wide bought for 99.5: ₹32.50 at most before charges of ₹125.18
 const SPREAD = { ...base, legs: [leg("buy", "CE", 22400, 150), leg("sell", "CE", 22500, 50.5)],
   charges: { total: 125.18, orders: 4, brokerage_per_order: 20, freeze: 1800, items: items([80, 19.55, 9.16, 0.03, 0.39, 16.05]),
     credit: false, premium: 6467.5, premium_after: null, pct_of_premium: 1.94, max_profit: 32.5, max_profit_after: -92.68,
-    pct_of_max_profit: 385.15, breakevens: [22499.5], breakevens_after: [], rates_as_of: "2026-04-01" } };
+    pct_of_max_profit: 385.15, max_loss: -6467.5, max_loss_after: -6592.68, breakevens: [22499.5], breakevens_after: [], rates_as_of: "2026-04-01" } };
+// a long put: its best is at a price of zero, (22,400 - 120) x 65, never "Unlimited"
+const PUT = { ...base, legs: [leg("buy", "PE", 22400, 120)],
+  charges: { total: 65.62, orders: 2, brokerage_per_order: 20, freeze: 1800, items: items([40, 11.7, 5.48, 0.02, 0.23, 8.19]),
+    credit: false, premium: 7800, premium_after: null, pct_of_premium: 0.8413, max_profit: 1448200, max_profit_after: 1448134.38,
+    pct_of_max_profit: 0.0045, max_loss: -7800, max_loss_after: -7865.62, breakevens: [22280], breakevens_after: [22278.99], rates_as_of: "2026-04-01" } };
 const UNDERLYINGS = [{ exchange: "NFO", name: "NIFTY", venue: "NSE", lot: 65, freeze: 1800, popular: true, index: true, expiries: ["2026-10-06"] }];
 
 async function open(page: Page, previews: unknown[]) {
@@ -57,7 +63,7 @@ async function touchable(page: Page) {
 }
 
 test("options builder: charges to open and close, and breakevens after them, on the Free plan", async ({ page }, info) => {
-  const errors = await open(page, [STRADDLE, SPREAD]);
+  const errors = await open(page, [STRADDLE, SPREAD, PUT]);
   await page.getByRole("button", { name: "Price it now" }).click();
   const box = page.getByTestId("opt-charges");
   await expect(box).toBeVisible();
@@ -66,6 +72,8 @@ test("options builder: charges to open and close, and breakevens after them, on 
   await expect(box).toContainText("Share of the most it can make0.77%");
   await expect(box).toContainText("Premium kept after charges₹17,414.16");
   await expect(page.getByTestId("opt-breakevens")).toContainText("Breaks even at 22,130 and 22,670 before charges. After charges: 22,132 and 22,668.");
+  await expect(page.getByTestId("opt-max-profit")).toContainText("₹17,550₹17,414 after charges");
+  await expect(page.getByTestId("opt-max-loss")).toContainText("Unlimited");
   // the second line on the payoff chart is the same payoff after charges
   await expect(page.locator("svg[aria-label='Profit or loss at expiry across prices'] path[stroke-dasharray]").first()).toBeAttached();
 
@@ -92,7 +100,17 @@ test("options builder: charges to open and close, and breakevens after them, on 
   await expect(box).toContainText("Share of the most it can make385.15%");
   await expect(box).toContainText("Most it can make after charges−₹92.68");
   await expect(box).not.toContainText("Premium kept");
+  await expect(page.getByTestId("opt-max-loss")).toContainText("−₹6,468−₹6,593 after charges");
   await box.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/breakeven-spread-${info.project.name}.png`, fullPage: false });
+
+  // a long put: bounded at a price of zero, so the tile gives the amount, and the note says it's off the chart
+  await page.getByRole("button", { name: "Price again" }).click();
+  await expect(page.getByTestId("opt-max-profit")).toContainText("₹14,48,200₹14,48,134 after charges");
+  await expect(page.getByTestId("opt-max-loss")).toContainText("−₹7,800−₹7,866 after charges");
+  await expect(box).toContainText("Share of the most it can makeunder 0.01%");
+  await expect(page.getByTestId("opt-breakevens")).toContainText("The most it can make is reached at 0, outside the chart.");
+  await page.getByTestId("opt-max-profit").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/breakeven-put-${info.project.name}.png`, fullPage: false });
   expect(errors, "uncaught errors in the page").toEqual([]);
 });
