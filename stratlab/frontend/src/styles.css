@@ -1130,7 +1130,6 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 :root { --pos-call: #1F4FB5; --pos-put: #B4500F; }
 :root[data-theme="dark"] { --pos-call: #6A8EE4; --pos-put: #D9773A; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme]) { --pos-call: #6A8EE4; --pos-put: #D9773A; } }
-.trade-tabs { align-self: flex-start; max-width: 100%; }
 .pos-table td .tiny { font-family: var(--mono); }
 .pos-table tr.total th, .pos-table tr.total td { font-weight: 600; border-top: 1px solid var(--line-2); }
 .pos-table tr.atm td, .pos-table tr.atm th { background: var(--chip); }
@@ -1149,7 +1148,6 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .space-fig .pos-sides { display: flex; flex-direction: column; font-size: 18px; line-height: 1.25; }
 .space-fig .pos-split-bar { width: 100%; max-width: 140px; margin: 4px 0 2px; }
 .pos-page .stack > .seg { align-self: flex-start; max-width: 100%; }
-@media (max-width: 640px) { .trade-tabs { flex-wrap: nowrap; } }
 /* ---------- trade journal ---------- */
 .j-bar { position: relative; height: 12px; min-width: 80px; }
 .j-bar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); }
