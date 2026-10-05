@@ -89,6 +89,16 @@ def test_chart_candles_of_futures_and_options_are_pro(w, monkeypatch):
     assert r.status_code == 402 and "Pro" in r.json()["detail"]["message"]
 
 
+def test_chart_candles_are_rate_limited_per_user(w):
+    from app import chart_routes
+    c = w["client"]
+    inst = c.get("/instruments/search?q=INFY&market=IN", headers=PRO).json()[0]
+    codes = [c.get(f"/chart/candles/{inst['id']}?tf=1d&range=1m", headers=PRO).status_code
+             for _ in range(chart_routes.CANDLE_READS + 1)]
+    assert codes[:-1] == [200] * chart_routes.CANDLE_READS and codes[-1] == 429
+    assert c.get(f"/chart/candles/{inst['id']}?tf=1d&range=1m", headers=FREE).status_code == 200   # per user
+
+
 def test_chart_drawings_stored_per_user_stay_small(w):
     """Every symbol full of the longest drawings must not grow one user's stored row without bound."""
     note = {"kind": "text", "text": "x" * 500, "id": "i" * 80,

@@ -8,6 +8,7 @@ from .auth import current_profile
 from .responses import err, ok
 
 router = APIRouter(prefix="/chart", tags=["chart"])
+CANDLE_READS = 60          # candle reads per user per minute
 
 
 def _m():
@@ -26,6 +27,8 @@ def candles(inst_id: str, tf: str = "1d", range: str = Query("1y", max_length=5)
     if len(inst_id) > 60:
         err(404, "instrument_not_found", "That instrument was not found. Search again.")
     m = _m()
+    # each read can reach the market data source: about one a second per user is plenty for scrolling back
+    m.throttle(profile, "chart_candles", CANDLE_READS, 60, "That's a lot of chart reads in a minute. Wait a moment and try again.")
     prov, inst = m.get_instrument(inst_id)
     if m.needs_fno(inst) and not m.fno(profile):          # the same line as search and backtests: F&O is Pro
         m.upgrade("Charts of Indian futures and options are on the Pro plan.")
