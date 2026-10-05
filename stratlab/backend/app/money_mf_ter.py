@@ -14,7 +14,9 @@ import json
 import re
 import threading
 import time
-from datetime import date, datetime, timezone
+import zipfile
+from datetime import date, datetime, timedelta, timezone
+from xml.etree import ElementTree
 from html.parser import HTMLParser
 
 import httpx
@@ -28,21 +30,20 @@ from .plans import FEATURE_PLAN, PLANS, allows
 from .admin import admin_profile
 from .responses import err, ok
 
-AMCS_URL = "https://www.amfiindia.com/api/populate-mf"                  # the fund houses: [{"mfId", "mfName"}]
-TER_URL = "https://www.amfiindia.com/api/populate-te-rdata-revised"     # one fund house's TER rows for one month
+URL = "https://www.amfiindia.com/api/populate-te-rdata-revised"     # the month's TER table; excel=true: the whole of it
 LATEST_KEY = "mfter:latest"        # {"at", "parts", "s": {scheme name: [date, category, type, regular parts, direct parts]}}
 HIST_KEY = "mfter:hist"            # {scheme name: {"t": [[date, regular total, direct total]], "c": [[date, category]]}}
 MONTHS_KEY = "mfter:months"        # {"YYYY-MM": unix time read}, so older months are read once
 STATUS_KEY = "mfter:status"        # how the last read went, for the platform check
 MAX_AGE = 12 * 3600                # re-read the current month after this long
 RETRY = 3600                       # after a failed read, wait this long
-PAUSE = 2.0                        # seconds between months in one run
-AMC_PAUSE = 1.0                    # seconds between fund houses in one month
-TRIES = 4                          # per request: the source answers a throttled call with a cut-off body, not an error
+PAUSE = 2.0                        # seconds between requests in one run
+TRIES = 3                          # per month: a busy source can answer with something that isn't a workbook
 BACKFILL = 24                      # months of history to build up, one older month a run
 MAX_POINTS = 200                   # history points kept per scheme
-TIMEOUT = 40.0
+TIMEOUT = 120.0                    # the month's workbook is a few MB, built on request
 MAX_BYTES = 30 * 1024 * 1024
+MAX_UNZIPPED = 300 * 1024 * 1024
 MIN_ROWS = 50                      # fewer in the current and previous month together means the read went wrong
 BACKGROUND = True                  # refresh in a thread when a copy exists (tests turn it off)
 CHECK_SCHEMES = 500                # the platform check wants at least this many schemes in a read
@@ -69,61 +70,98 @@ _mem: dict = {"latest": None, "hist": None, "months": None, "tried": 0.0, "runni
 
 
 # ---------- reading the disclosure ----------
-# The rows of the disclosure, as the columns parse() reads: (header, field or fields summed). Brokerage and
-# transaction costs are one part on the page; statutory levies include GST.
-_COLUMNS = [("Scheme Name", "Scheme_Name"), ("Scheme Type", "SchemeType_Desc"), ("Scheme Category", "SchemeCat_Desc"),
-            ("TER Date", "TER_Date")] + [
-    (f"{plan} Plan - {label} (%)", tuple(f"{p}_{f}" for f in fields))
-    for plan, p in (("Regular", "R"), ("Direct", "D"))
-    for label, fields in (("Base TER", ("BER",)), ("Brokerage and transaction costs", ("BrokerageCost", "TransactionCost")),
-                          ("Statutory levies", ("StatutoryLevies",)), ("Total TER", ("TER",)))]
+def _excel_rows(data: bytes):
+    """The rows of the disclosure's workbook (its first sheet), as lists of cell texts. The file has no shared
+    strings: every cell carries its own text."""
+    zf = zipfile.ZipFile(io.BytesIO(data))
+    name = "xl/worksheets/sheet1.xml"
+    if zf.getinfo(name).file_size > MAX_UNZIPPED:
+        raise ValueError("TER workbook too large")
+    row: dict[int, str] = {}
+    with zf.open(name) as f:
+        for _, el in ElementTree.iterparse(f):
+            tag = el.tag.rsplit("}", 1)[-1]
+            if tag == "c":
+                ref = re.match(r"[A-Z]+", el.get("r") or "")
+                v = next((x.text for x in el.iter() if x.tag.rsplit("}", 1)[-1] in ("v", "t") and x.text), "")
+                if ref:
+                    col = 0
+                    for ch in ref.group():
+                        col = col * 26 + ord(ch) - 64
+                    row[col - 1] = v
+                el.clear()
+            elif tag == "row":
+                yield [row.get(i, "") for i in range(max(row) + 1)] if row else []
+                row = {}
+                el.clear()
 
 
-def _get_json(c: httpx.Client, url: str, params: dict | None = None):
-    """A JSON answer, asked again with a growing wait when it comes back cut off (how the source throttles)."""
-    for i in range(TRIES):
-        if i:
-            time.sleep(PAUSE * 2 ** (i - 1))
-        r = c.get(url, params=params)
-        r.raise_for_status()
-        if len(r.content) > MAX_BYTES:
-            raise ValueError("answer too large")
-        try:
-            return r.json()
-        except ValueError:
+def _excel_day(v: str) -> str:
+    """A TER date as the workbook writes it (days since 30 Dec 1899) as YYYY-MM-DD; text dates are kept."""
+    try:
+        return (date(1899, 12, 30) + timedelta(days=int(float(v)))).isoformat()
+    except (TypeError, ValueError, OverflowError):
+        return v
+
+
+def _to_csv(rows) -> str:
+    """The workbook's rows in the columns parse() reads: brokerage and the trades' transaction cost are one part, the
+    date is written out. Columns are found by their headings."""
+    out = io.StringIO()
+    w = csv.writer(out)
+    head = None
+    for r in rows:
+        if head is None:
+            if not any("scheme name" in c.lower() for c in r):
+                continue
+            low = [c.lower() for c in r]
+            find = lambda *words: [i for i, c in enumerate(low) if all(x in c for x in words)]     # noqa: E731
+            head = {"name": find("scheme name"), "type": find("scheme type"), "cat": find("scheme category"),
+                    "date": find("ter date")}
+            for plan in ("regular", "direct"):
+                head[plan] = {"base": find(plan, "base"), "brokerage": find(plan, "brokerage") + find(plan, "transaction cost"),
+                              "levies": find(plan, "levies"), "total": find(plan, "total")}
+            if not head["name"] or not head["date"]:
+                raise ValueError("the TER workbook's columns weren't recognised")
+            w.writerow(["Scheme Name", "Scheme Type", "Scheme Category", "TER Date"] +
+                       [f"{p.title()} Plan - {LABEL[k]} (%)" for p in ("regular", "direct") for k in LABEL])
             continue
-    raise ValueError(f"no readable answer from the TER disclosure after {TRIES} tries")
+        cell = lambda i: r[i] if i < len(r) else ""     # noqa: E731
+        one = lambda idx: cell(idx[0]) if idx else ""     # noqa: E731
+
+        def part(idx):
+            vals = [_pct(cell(i)) for i in idx]
+            return "" if all(v is None for v in vals) else str(round(sum(v or 0 for v in vals), 4))
+        w.writerow([one(head["name"]), one(head["type"]), one(head["cat"]), _excel_day(one(head["date"]))] +
+                   [part(head[p][k]) for p in ("regular", "direct") for k in LABEL])
+    if head is None:
+        raise ValueError("no TER table in the workbook")
+    return out.getvalue()
 
 
-def _cell(row: dict, field) -> str:
-    if isinstance(field, tuple):
-        vals = [_pct(row.get(f)) for f in field]
-        return "" if all(v is None for v in vals) else str(round(sum(v or 0 for v in vals), 4))
-    v = row.get(field)
-    return "" if v is None else str(v)[:10] if field == "TER_Date" else str(v)
+LABEL = {"base": "Base TER", "brokerage": "Brokerage and transaction costs", "levies": "Statutory levies",
+         "total": "Total TER"}
 
 
 def fetch_month(month: int, year: int) -> str:
-    """One month's TER disclosure for every fund house, as CSV in the columns parse() reads. Tests replace this."""
-    headers = {"User-Agent": "Mozilla/5.0 (StratLab)", "Accept": "application/json"}
-    out = io.StringIO()
-    w = csv.writer(out)
-    w.writerow([h for h, _ in _COLUMNS])
+    """One month's TER disclosure for every fund house (the page's Excel download), as CSV in the columns parse()
+    reads. Asked again with a growing wait when the source answers with something that isn't a workbook. Tests
+    replace this."""
+    headers = {"User-Agent": "Mozilla/5.0 (StratLab)"}
+    params = {"MF_ID": "All", "Month": f"{month:02d}-{year}", "strCat": -1, "strType": -1, "excel": "true"}
     with httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers=headers) as c:
-        amcs = _get_json(c, AMCS_URL)
-        ids = [str(a["mfId"]) for a in amcs if isinstance(a, dict) and str(a.get("mfId") or "").isdigit()] if isinstance(amcs, list) else []
-        if not ids:
-            raise ValueError("the TER disclosure listed no fund houses")
-        for n, mf_id in enumerate(ids):
-            if n:
-                time.sleep(AMC_PAUSE)
-            got = _get_json(c, TER_URL, {"MF_ID": mf_id, "Month": f"{month:02d}-{year}", "strCat": -1, "strType": 1,
-                                         "page": 1, "pageSize": 10000})
-            rows = got.get("data") if isinstance(got, dict) else None
-            for r in rows if isinstance(rows, list) else []:
-                if isinstance(r, dict):
-                    w.writerow([_cell(r, f) for _, f in _COLUMNS])
-    return out.getvalue()
+        for i in range(TRIES):
+            if i:
+                time.sleep(PAUSE * 2 ** (i - 1))
+            r = c.get(URL, params=params)
+            r.raise_for_status()
+            if len(r.content) > MAX_BYTES:
+                raise ValueError("file too large")
+            try:
+                return _to_csv(_excel_rows(r.content))
+            except (zipfile.BadZipFile, KeyError, ElementTree.ParseError):
+                continue
+    raise ValueError(f"no readable TER workbook after {TRIES} tries")
 
 
 class _Tables(HTMLParser):
