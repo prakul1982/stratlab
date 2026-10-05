@@ -16,10 +16,13 @@ POPULAR = [("NFO", "NIFTY"), ("NFO", "BANKNIFTY"), ("BFO", "SENSEX"), ("NFO", "F
            ("BFO", "BANKEX"), ("MCX", "CRUDEOIL"), ("MCX", "NATURALGAS"), ("MCX", "GOLDM"), ("MCX", "SILVERM"), ("CDS", "USDINR")]
 # most units allowed in one order (the exchange's quantity freeze limit); check your broker, these change. NSE
 # revises its index limits every few months (rules.py lists the circular and the day it was checked).
-FREEZE_BEFORE = {"NIFTY": 1800, "BANKNIFTY": 900, "FINNIFTY": 1800, "MIDCPNIFTY": 2800, "NIFTYNXT50": 600,
-                 "SENSEX": 1000, "BANKEX": 900}
+# Before 5 Oct 2026: NSE/FAOP/68834 (30 Jun 2025, from 1 Jul 2025), BANKNIFTY 600; NIFTYFPI (Nifty India FPI 150,
+# F&O from 12 Aug 2026) 8,500 from 1 Sep 2026. From 5 Oct 2026: NSE/FAOP/76693 (1 Oct 2026). Checked 5 Oct 2026.
+FREEZE_BEFORE = {"NIFTY": 1800, "BANKNIFTY": 600, "FINNIFTY": 1800, "MIDCPNIFTY": 2800, "NIFTYNXT50": 600,
+                 "NIFTYFPI": 8500, "SENSEX": 1000, "BANKEX": 900}
 FREEZE_FROM = "2026-10-05"           # NSE's revised index limits apply from this day
-FREEZE = {**FREEZE_BEFORE, "NIFTY": 3510, "BANKNIFTY": 1440, "FINNIFTY": 3240, "MIDCPNIFTY": 5760, "NIFTYNXT50": 1125}
+FREEZE = {**FREEZE_BEFORE, "NIFTY": 3510, "BANKNIFTY": 1440, "FINNIFTY": 3240, "MIDCPNIFTY": 5760, "NIFTYNXT50": 1125,
+          "NIFTYFPI": 53900}
 
 
 def freeze(name: str, day: str | None = None) -> int:

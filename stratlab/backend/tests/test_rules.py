@@ -1,4 +1,4 @@
-"""Rates and rules: the values checked on 4 Oct 2026 (trading costs, freeze limits, return due dates, the 2025 Act's
+"""Rates and rules: the values checked on 4 and 5 Oct 2026 (trading costs, freeze limits, return due dates, the 2025 Act's
 section numbers), the dated register and its platform-check row, and the daily watch of the official sources."""
 from datetime import date, datetime, timezone
 
@@ -54,6 +54,17 @@ def test_freeze_limits_switch_on_the_day_nse_set():
     assert O.freeze("NIFTY", "2026-10-04") == 1800 and O.freeze("NIFTY", "2026-10-05") == 3510
     assert O.freeze("BANKNIFTY", "2026-10-05") == 1440 and O.freeze("MIDCPNIFTY", "2026-12-01") == 5760
     assert O.freeze("SENSEX", "2026-10-05") == 1000 and O.freeze("UNKNOWN", "2026-10-05") == 0
+
+
+def test_freeze_limits_before_and_from_5_oct_2026_match_the_nse_circulars():
+    """NSE/FAOP/68834 (from 1 Jul 2025) until 4 Oct 2026, NSE/FAOP/76693 from 5 Oct 2026 (checked 5 Oct 2026)."""
+    before = {"NIFTY": 1800, "BANKNIFTY": 600, "FINNIFTY": 1800, "MIDCPNIFTY": 2800, "NIFTYNXT50": 600, "NIFTYFPI": 8500}
+    after = {"NIFTY": 3510, "BANKNIFTY": 1440, "FINNIFTY": 3240, "MIDCPNIFTY": 5760, "NIFTYNXT50": 1125, "NIFTYFPI": 53900}
+    assert {k: O.freeze(k, "2026-10-04") for k in before} == before
+    assert {k: O.freeze(k, "2026-10-05") for k in after} == after
+    assert "NIFTYFPI" in W.INDICES
+    freeze = next(r for r in rules.registry() if r["id"] == "freeze")
+    assert "NSE/FAOP/76693" in freeze["source"] and "NIFTYFPI 53,900" in freeze["value"]
 
 
 def test_return_due_dates_follow_the_finance_act_2026():
@@ -128,6 +139,7 @@ def test_a_change_waiting_at_the_source_warns():
 # ---------- reading the sources ----------
 def test_read_freeze_and_lots():
     assert W.read_freeze("SYMBOL,VOL_FRZ_QTY\nNIFTY,3510\nBANKNIFTY,\"1,440\"\nRELIANCE,9000\n") == {"NIFTY": 3510, "BANKNIFTY": 1440}
+    assert W.read_freeze("SYMBOL,VOL_FRZ_QTY\nNIFTYFPI,\"53,900\"\n") == {"NIFTYFPI": 53900}
     with pytest.raises(ValueError):
         W.read_freeze("\xd0\xcf\x11\xe0\x00\x00binary")
     with pytest.raises(ValueError):

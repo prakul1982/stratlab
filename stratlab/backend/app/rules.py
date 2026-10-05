@@ -14,10 +14,10 @@ from datetime import date
 
 # the day each area was last checked against its official sources
 REVIEWED = {
-    "trading_costs": "2026-10-04",
-    "tax": "2026-10-04",
-    "interest_rates": "2026-10-04",
-    "market_rules": "2026-10-04",
+    "trading_costs": "2026-10-05",
+    "tax": "2026-10-05",
+    "interest_rates": "2026-10-05",
+    "market_rules": "2026-10-05",
     "surveillance": "2026-10-04",
 }
 AREAS = {
@@ -177,7 +177,7 @@ def registry() -> list[dict]:
     # ---- market rules
     add("freeze", "market_rules", "Index quantity freeze limits",
         ", ".join(f"{k} {v:,}" for k, v in O.FREEZE.items()) + f" (from {O.FREEZE_FROM})", "options/data.py FREEZE",
-        "https://zerodha.com/marketintel/bulletin/460064/quantity-freeze-limits-for-indices-from-october-5-2026 (NSE circular)", O.FREEZE_FROM)
+        "https://nsearchives.nseindia.com/content/circulars/FAOP76693.pdf (NSE/FAOP/76693, 1 Oct 2026)", O.FREEZE_FROM)
     add("lots", "market_rules", "F&O lot sizes and expiries", "read from the broker's instrument list every day (not hard-coded); "
         "NSE weekly expiry Tuesday, BSE Thursday since 1 Sep 2025", "options/data.py",
         "SEBI circular 26 May 2025 on expiry days")
