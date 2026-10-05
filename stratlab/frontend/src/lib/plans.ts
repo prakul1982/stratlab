@@ -22,7 +22,7 @@ export const LIMITS: Record<PlanId, Limits> = {
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif"] },
+      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "assistant"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -50,7 +50,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks`],
   pro: ["Everything in Basic, plus:", "Unlimited backtests, AI builds, deep dives and decks", `Paper trade ${L.pro.live_limit} strategies at a time`,
     "Indian F&O, options entered on your own rules' signals, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
-    "Export rules and trades", "Advance tax amounts, and the long-term exemption lot by lot",
+    "Export rules and trades, and StratLab in your AI assistant", "Advance tax amounts, and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],
 };
@@ -76,7 +76,8 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["etf_gaps", "Alerts on an ETF's price against its NAV"],
 
 ["fo_alerts", "Alerts when an F&O exit, lot size or expiry change touches your watchlist or paper sessions"],
-  ["options_whatif", "Options what-if: move the underlying, shift IV and pass days, and preview rolling a leg"]];
+  ["options_whatif", "Options what-if: move the underlying, shift IV and pass days, and preview rolling a leg"],
+  ["assistant", "StratLab in your AI assistant: your data and paper orders in Claude or ChatGPT"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",

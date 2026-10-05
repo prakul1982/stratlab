@@ -2,6 +2,7 @@
 import threading
 import time
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from . import db
 from . import alerts
@@ -17,6 +18,9 @@ from .plans import PLANS, access_plan, allows, has_fno, has_indicators, trial_st
 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}
 POLL_SECONDS = 15          # how often polled markets (crypto) are checked for a newly closed candle
+FRESH_SECONDS = 180        # a paper order placed by hand fills only at a price this recent
+MANUAL_WHY = "Opened from your AI assistant"
+MANUAL_CLOSE_WHY = "Closed from your AI assistant"
 
 
 def _session_bounds(ts: datetime):
@@ -174,6 +178,71 @@ class LiveSession:
         self.dirty = True
         for ev in new:
             self.mgr.on_order(self, ev)
+
+    # ---------- paper orders by hand (the AI assistant's paper tools) ----------
+    def price_problem(self, now: datetime | None = None) -> str | None:
+        """Why the latest price can't be used to fill a paper order now (the market is shut, or no price has arrived
+        in the last few minutes), or None when it can."""
+        from .data.calendar import is_trading_day
+        from .data.markets import BY_ID
+        now = now or datetime.now(IST)
+        m = BY_ID.get(self.market) or {}
+        hours = m.get("hours") or {}
+        local = now.astimezone(ZoneInfo(m.get("tz") or "UTC"))
+        if not is_trading_day(self.market, local.date()) or (
+                hours.get("open") and not hours["open"] <= local.strftime("%H:%M") < hours["close"]):
+            return f"{m.get('name') or self.market} is closed now, so there's no live price to fill a paper order at."
+        if not self.last_tick_at:
+            return "No live price has arrived for this session yet. Try again in a minute."
+        try:
+            age = (now - datetime.fromisoformat(self.last_tick_at)).total_seconds()
+        except (TypeError, ValueError):
+            age = None
+        if age is None or age > FRESH_SECONDS:
+            return "The last price for this session is more than a few minutes old. Try again once prices are flowing."
+        return None
+
+    def manual_open(self, side: str, qty: float, now: datetime | None = None) -> dict:
+        """Open a paper position at the latest price. Raises ValueError with a plain reason when it can't."""
+        d = 1 if side == "buy" else -1
+        if d not in self.engine.sides:
+            raise ValueError(f"This session's strategy trades {'short' if self.engine.sides == [-1] else 'long'} only, "
+                             f"so a {'buy' if d == 1 else 'short sale'} can't be opened in it.")
+        problem = self.price_problem(now)
+        if problem:
+            raise ValueError(problem)
+        with self.lock:
+            e = self.engine
+            if e.qty > 0:
+                raise ValueError("This session already has an open position. Close it first.")
+            if e.halted:
+                raise ValueError("This session hit its daily loss limit today, so it opens nothing more until tomorrow.")
+            q = C.floor_to(float(qty), e.qty_step)
+            if q <= 0:
+                raise ValueError(f"The quantity must be at least {e.qty_step:g} (this instrument's step).")
+            px = float(self.last_price)
+            need = e.manual_cost(side, q, px)
+            if need > e.cash:
+                raise ValueError(f"That needs about {need:,.2f} and the session has {e.cash:,.2f} in cash.")
+            ev = e.open_manual(datetime.now(IST).isoformat(timespec="seconds"), px, d, q, MANUAL_WHY)
+            self.dirty = True
+        self.mgr.on_order(self, ev)
+        return ev
+
+    def manual_close(self, now: datetime | None = None) -> dict:
+        """Close the open paper position at the latest price. Raises ValueError with a plain reason when it can't."""
+        if self.engine.qty <= 0:
+            raise ValueError("This session has no open position to close.")
+        problem = self.price_problem(now)
+        if problem:
+            raise ValueError(problem)
+        with self.lock:
+            if self.engine.qty <= 0:
+                raise ValueError("This session has no open position to close.")
+            ev = self.engine.close_manual(datetime.now(IST).isoformat(timespec="seconds"), float(self.last_price), MANUAL_CLOSE_WHY)
+            self.dirty = True
+        self.mgr.on_order(self, ev)
+        return ev
 
     def state(self) -> dict:
         d = self.engine.dump()

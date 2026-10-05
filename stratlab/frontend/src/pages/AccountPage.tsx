@@ -14,6 +14,7 @@ import { InvoicesCard } from "../components/InvoicesCard";
 import { InviteCard } from "../components/ShareCompany";
 import { NewslettersCard } from "../components/NewslettersCard";
 import { TipsCard } from "../components/TipsCard";
+import { AssistantCard } from "../components/AssistantCard";
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 
@@ -164,6 +165,8 @@ export function AccountPage() {
         <TipsCard />
 
         <PhoneCard />
+
+        <AssistantCard />
 
         <section className="card stack" style={{ gap: 16 }}>
           <div className="stack" style={{ gap: 4 }}>

@@ -56,7 +56,8 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif"},
+                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
+                     "assistant"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -77,10 +78,12 @@ PLANS = {
 # when an F&O contract change (an exit, a lot size, an expiry day) touches your watchlist or paper sessions (the dated
 # list and its badges are for everyone); options_whatif: the options what-if sliders (spot, IV and days forward, moving
 # the payoff, Greeks and P&L) and the roll preview (the model's Greeks for each strike in the chain and each leg, the net
-# Greeks and the payoff today beside the one at expiry are for everyone)
+# Greeks and the payoff today beside the one at expiry are for everyone); assistant: StratLab in your AI assistant (the MCP server,
+# mcp_server.py): read-only tools and paper orders in your own paper sessions, with keys made on Account
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-            "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif")
+            "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
+            "assistant")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
