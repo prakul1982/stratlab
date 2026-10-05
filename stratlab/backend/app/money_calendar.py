@@ -213,6 +213,7 @@ def holdings_events(uid: str, frm: date, to: date) -> list[dict]:
                 why = f" ({r['when']})" if r.get("when") else ""
                 out.append(_ev(d, f"{r['symbol']}: results{why}", "holdings", "results", r.get("purpose") or "Board meeting on results.",
                                symbol=r["symbol"], url=f"/research/{region}/{r['symbol']}"))
+    corp_actions.prefetch("IN", held)
     cal = corp_actions.load("IN")["rows"]
     rows: dict[str, dict] = {}
     for s in held:

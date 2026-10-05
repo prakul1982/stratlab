@@ -260,6 +260,11 @@ def merge(old: list[dict], new: list[dict], frm: date, today: date, first: bool 
     return list(out.values())
 
 
+def prefetch(region: str, symbols) -> None:
+    """The calendar and these companies' histories in one database read, for a page that goes through many holdings."""
+    db.prefetch_settings([KEY + region] + [f"{HIST}{region}:{s.upper()}" for s in symbols])
+
+
 def hist_load(region: str, symbol: str) -> dict:
     got = db.json_value(db.get_setting(f"{HIST}{region}:{symbol.upper()}"), {})
     got = got if isinstance(got, dict) else {}
