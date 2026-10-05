@@ -25,7 +25,10 @@ def candles(inst_id: str, tf: str = "1d", range: str = Query("1y", max_length=5)
         err(400, "bad_tf", "Pick 5m, 15m, 1h or 1d candles.")
     if len(inst_id) > 60:
         err(404, "instrument_not_found", "That instrument was not found. Search again.")
-    prov, inst = _m().get_instrument(inst_id)
+    m = _m()
+    prov, inst = m.get_instrument(inst_id)
+    if m.needs_fno(inst) and not m.fno(profile):          # the same line as search and backtests: F&O is Pro
+        m.upgrade("Charts of Indian futures and options are on the Pro plan.")
     until = CD.parse_before(before)
     max_days = (getattr(prov, "max_days", None) or {}).get(tf)
     if max_days is None:

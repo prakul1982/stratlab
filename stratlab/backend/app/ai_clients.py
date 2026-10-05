@@ -45,8 +45,25 @@ def _timeout(deadline: float) -> httpx.Timeout:
     return httpx.Timeout(left, connect=min(6.0, left))
 
 
+_TOKENS = re.compile(r"(?i)\b(bearer|key|token|api[_-]?key)(\s*[:=]?\s*)[A-Za-z0-9._~+/=-]{12,}")
+
+
+def redact(text: str) -> str:
+    """Error text with every configured key taken out, and anything after "Bearer", "key=" or "token:" that looks like
+    one: a provider that echoes the key it was sent mustn't put it on the Admin page or in the logs."""
+    for p in PROVIDERS.values():
+        k = key_for(p.name)
+        if k and len(k) >= 6:
+            text = text.replace(k, "[key]")
+    return _TOKENS.sub(lambda m: m.group(1) + m.group(2) + "[key]", text)
+
+
 def _short(r: httpx.Response) -> str:
-    """The provider's own error message, short, for the Admin page."""
+    """The provider's own error message, short and without any key, for the Admin page."""
+    return redact(_short_raw(r))[:160]
+
+
+def _short_raw(r: httpx.Response) -> str:
     try:
         data = r.json()
         err = data.get("error") if isinstance(data, dict) else None
@@ -55,10 +72,10 @@ def _short(r: httpx.Response) -> str:
         if isinstance(msg, (dict, list)):
             msg = str(msg)
         if msg:
-            return str(msg)[:160]
+            return str(msg)[:2000]
     except ValueError:
         pass
-    return re.sub(r"\s+", " ", r.text or "")[:160]
+    return re.sub(r"\s+", " ", r.text or "")[:2000]
 
 
 def classify(name: str, r: httpx.Response, model: str) -> CallError:
