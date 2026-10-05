@@ -59,7 +59,7 @@ def registry() -> list[dict]:
     from .data.markets import BY_ID
     from .engine import costs as C
     from .intel import filings as F
-    from .options import data as O
+    from .options import data as O, greeks as G
 
     nse_tx = "https://nsearchives.nseindia.com/content/circulars/FA73061.pdf (NSE, 27 Feb 2026)"
     budget26 = "https://www.indiabudget.gov.in/doc/memo.pdf (Finance Act 2026)"
@@ -173,6 +173,10 @@ def registry() -> list[dict]:
         "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2234502 (CBT, 2 Mar 2026)", "2025-04-01")
     add("sgb_rate", "interest_rates", "Gold bond interest", f"{N.SGB_RATE}% a year on the issue price, {N.SGB_YEARS}-year term",
         "money_networth.py SGB_RATE", "https://www.rbi.org.in (SGB FAQs)")
+    add("options_rate", "interest_rates", "Rate in the options model (Greeks, what-if)",
+        f"{_pct(G.RATE)} a year, near the 91-day T-bill cut-off yield", "options/greeks.py RATE",
+        "https://www.rbi.org.in (weekly T-bill auction results: 91-day cut-off 5.52% on 30 Sep 2026; repo 5.25%)",
+        "2026-10-05")
 
     # ---- market rules
     add("freeze", "market_rules", "Index quantity freeze limits",

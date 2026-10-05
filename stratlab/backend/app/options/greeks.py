@@ -25,7 +25,7 @@ from datetime import date, datetime, time as dtime
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
-RATE = 0.06                  # a round figure near India's short-term government bill yields in 2026
+RATE = 0.055                 # near the 91-day T-bill cut-off yield (RBI auction 30 Sep 2026: 5.52%; repo 5.25%), checked 5 Oct 2026
 MIN_VOL = 0.005              # a what-if IV shift can't take an option below 0.5% volatility
 NOTE = ("Model estimates: Black's formula on the forward, IV from each option's bid-ask middle. Real prices can "
         "differ.")

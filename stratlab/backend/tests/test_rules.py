@@ -67,6 +67,14 @@ def test_freeze_limits_before_and_from_5_oct_2026_match_the_nse_circulars():
     assert "NSE/FAOP/76693" in freeze["source"] and "NIFTYFPI 53,900" in freeze["value"]
 
 
+def test_options_rate_sits_near_the_91_day_t_bill_yield():
+    """91-day T-bill cut-off 5.52% (RBI auction, 30 Sep 2026), repo 5.25%: checked 5 Oct 2026."""
+    from app.options import greeks as G
+    assert G.RATE == 0.055
+    reg = {r["id"]: r for r in rules.registry()}
+    assert reg["options_rate"]["value"].startswith("5.5%") and reg["options_rate"]["area"] == "interest_rates"
+
+
 def test_return_due_dates_follow_the_finance_act_2026():
     facts = " ".join(T.filing_facts(2025, 1e6, True))
     assert "31 August" in facts and "31 October" in facts and "31 March" in facts
