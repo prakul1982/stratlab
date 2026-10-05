@@ -81,6 +81,10 @@ def build():
     mp.setattr(money_mf_behaviour, "fetch_json", fake_mf_history.fetch)
     mp.setattr(money_mf_behaviour, "BACKGROUND", False)
     mp.setattr(money_mf_behaviour, "PAUSE", 0)
+    # the Reserve Bank's Current Rates panel, from a trimmed real copy, for Money → Rates
+    from app import rbi_rates
+    rbi_page = (Path(__file__).parent / "fixtures" / "rates" / "rbi_home_rates.html").read_text()
+    mp.setattr(rbi_rates, "fetch_text", lambda url=rbi_rates.URL: rbi_page)
     etf_gaps(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates

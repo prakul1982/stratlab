@@ -69,6 +69,7 @@ CARD_WORDS = {
     "options_whatif": "what-if sliders",
     "mf_behaviour": "fund behaviour",
     "sip_luck": "SIP dip rules",
+    "rates_slab": "after your own tax",
 }
 
 
