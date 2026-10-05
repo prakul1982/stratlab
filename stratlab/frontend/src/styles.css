@@ -1327,6 +1327,7 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 .fo-tag { font: 600 11.5px/1.6 var(--mono); padding: 0 7px; border-radius: 6px; background: var(--chip); color: var(--ink-2); white-space: nowrap; }
 .fo-tag.fo-exit { color: var(--orange-ink); }
 .fo-yours { font-size: 12px; color: var(--blue-ink); }
+.fo-row .link { padding: 0 2px; }   /* a linked symbol sits on the same line height as a plain one */
 .fo-alert input { flex: none; width: 18px; height: 18px; }
 .surv-badge.fo-badge { white-space: normal; max-width: 100%; }   /* wraps inside a narrow card */
 /* Admin: the AI panel */
