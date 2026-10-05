@@ -52,9 +52,25 @@ about 3 to 10 seconds a company.
   only, no preferred shares, warrants, units or rights) and puts each new listing through the same checks as it
   appears. **Start** / **Pause** (with why it's paused), a progress bar with the rate and the time left, **Reset and
   check everything again**, **Re-check the N not checked yet**, **Re-check** on each company, and **Full re-check on the
-  1st of each month** (on by default; off means only new listings until you reset). A check a source turned away is
-  tried again in small batches every hour, backing off to a day while the source keeps refusing. When BSE refuses the
-  server, the panel says so and how many companies wait for their documents.
+  1st of each month** (on by default; off means only new listings until you reset). When BSE refuses the server, the
+  panel says so and how many companies wait for their documents.
+- **Why it's paused:** **off** (switched off; press **Start**), **busy** (a Data audit above is running; it carries on
+  when that ends), **offline** (India only: the broker's market data login isn't done today, so prices can't be read;
+  it carries on by itself once you log in), **cooling** (a source is turning every company away, so it waits between
+  companies, up to half an hour, until it answers again).
+- **Log in before the India audit.** The broker's login lasts one day. Each day, **Log in** on Services (or let the
+  automatic login run) before the India whole-market audit is due; until then it waits as **offline** rather than
+  marking every company "not checked yet".
+- **Clearing "not checked yet" rows:** a check a source turned away is tried again by itself, 20 an hour, backing off
+  to a day while the source keeps refusing. To retry them all at once, press **Re-check the N not checked yet**: it
+  re-checks only those rows, not the whole list.
+- **What the India checks treat as facts, not gaps:** a company that holds only one-on-one meetings with investors
+  (earnings calls are counted apart; a call with no transcript stays a gap) or files no investor presentation; for a
+  company with no sales in the years compared, "N checks can't be judged without sales"; a margin above 100% explained
+  by nil or negative sales or costs written back; new or untraded listings and DVR shares. ETFs and trusts in the
+  broker's list are not checked as companies. When the company page has no P/E it is worked out from market value
+  and trailing profit (or the reason is given: a loss, no market value, no balance sheet), and capex the balance
+  sheet can't estimate is read from the fixed assets bought in the cash flow breakdown.
 - A failed read of the stored results after a restart never overwrites them: nothing is checked or saved until they
   have been read (the panel says it's reading).
 - Stored findings are re-read with today's rules, so a fix shows up without re-running everything.
