@@ -1207,6 +1207,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .pos-table td .tiny { font-family: var(--mono); }
 .pos-table tr.total th, .pos-table tr.total td { font-weight: 600; border-top: 1px solid var(--line-2); }
 .pos-table tr.atm td, .pos-table tr.atm th { background: var(--chip); }
+.pos-table th .pos-expiry { display: block; font-weight: 400; }     /* the PCR card's expiry, under the index's name */
 .pos-section { min-width: 0; }
 .pos-details summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .strike-chart svg { display: block; }

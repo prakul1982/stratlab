@@ -306,8 +306,19 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByText("RELIANCE", { exact: true })).toBeVisible();
   await expect(table.getByText("TINYCO", { exact: true })).toBeVisible();            // listed only on BSE
   await expect(page.getByText(/your Zerodha Console file/)).toBeVisible();
+  await expect(table.getByRole("cell", { name: "Unrealised P&L", exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "Trend", exact: true })).toHaveCount(0);                 // the extra columns wait behind a click
+  if (info.project.name === "desktop") {                                                         // so the table fits a 1280px screen
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const wrap = await table.evaluate((t) => ({ scroll: t.parentElement!.scrollWidth, width: t.parentElement!.clientWidth }));
+    expect(wrap.scroll, "the positions table needs a sideways swipe at 1280px").toBeLessThanOrEqual(wrap.width + 1);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  }
+  await page.getByRole("button", { name: /More columns/ }).click();
   await expect(table.getByText(/red flag/).first()).toBeVisible({ timeout: 30_000 });  // the QIP filing, once the facts arrive
   await expect(table.getByText(/Stage \d/).first()).toBeVisible();
+  await page.reload();                                                                           // remembered on this device
+  await expect(table.getByRole("cell", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Recent filings")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
   await page.getByRole("radio", { name: "Add to them" }).click();
@@ -431,6 +442,9 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   const sales = page.getByRole("table", { name: "Realised sales" });
   await expect(sales.getByText("RELIANCE").first()).toBeVisible();
   await expect(sales.getByText("grandfathered")).toBeVisible();                                   // WIPRO, from the tax P&L
+  await expect(sales.getByRole("cell", { name: "Bought", exact: true })).toHaveCount(0);
+  await page.getByTestId("cols-tax-sales").click();
+  await expect(sales.getByRole("cell", { name: "Bought", exact: true })).toBeVisible();
   await expect(page.getByRole("table", { name: "Open lots below cost" }).getByText("TCS")).toBeVisible();
   await expect(page.getByText("Shares held on 31 Jan 2018")).toBeVisible();
   await page.getByRole("button", { name: "What is tax-loss harvesting?" }).click();
@@ -983,6 +997,8 @@ test("an invite link is remembered through sign-in, sent once, and taken out of 
 
 test("admin: invite counts in the Users tab", async ({ page }, info) => {
   const errors = await open(page, "/admin?tab=users", "Paper trading now");
+  await expect(page.getByRole("cell", { name: "Invited", exact: true })).toHaveCount(0);           // a click away, so the table fits a laptop
+  await page.getByTestId("cols-admin-users").click();
   await expect(page.getByRole("cell", { name: "Invited", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "Free months", exact: true })).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
@@ -1604,6 +1620,8 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByText("FII index futures, net")).toBeVisible();
   // both sides of the futures: the long and the short share, adding up to 100
   await expect(main.getByText("FII index futures, long · short")).toBeVisible();
+  await expect(main.getByTestId("split-fii")).toHaveCount(0);                                     // the split is a click away in the table
+  await main.getByTestId("cols-pos-part").click();
   const split = await main.getByTestId("split-fii").innerText();
   const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
   expect(lo + sh).toBeCloseTo(100, 1);
@@ -1632,6 +1650,10 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByText("FII/FPI net")).toBeVisible();
   const pcr = main.getByTestId("pcr-table");
   for (const n of ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]) await expect(pcr.locator(`tr[data-pcr="${n}"]`)).toBeVisible({ timeout: 30_000 });
+  await expect(pcr.locator('tr[data-pcr="NIFTY"]').getByTestId("pcr-expiry")).toHaveText(/\d/);     // the expiry, under the index's name
+  // both tables fit their cards without a sideways swipe on a laptop
+  const wide = await main.locator("[data-testid=part-table], [data-testid=pcr-table]").evaluateAll((ts) => ts.map((t) => t.parentElement!.scrollWidth - t.parentElement!.clientWidth));
+  if (info.project.name === "desktop") expect(wide.every((w) => w <= 1), `tables wider than their cards: ${wide}`).toBe(true);
   const facts = main.getByTestId("chain-facts");
   await expect(facts.getByText("Max-pain strike")).toBeVisible({ timeout: 30_000 });
   await expect(facts.getByText(/IV percentile/)).toBeVisible();
