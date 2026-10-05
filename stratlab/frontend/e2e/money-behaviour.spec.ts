@@ -84,6 +84,12 @@ test("fund behaviour: your return against the fund's, the SIP record and a redem
   await expect(falls.getByText("₹7,500")).toBeVisible();
   await expect(card.getByText(/hindsight arithmetic/).first()).toBeVisible();
 
+  if (process.env.E2E_SHOTS) {
+    await page.screenshot({ path: `${process.env.E2E_SHOTS}/fund-behaviour-${info.project.name}.png`, fullPage: true });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.screenshot({ path: `${process.env.E2E_SHOTS}/fund-behaviour-${info.project.name}-dark.png`, fullPage: true });
+    await page.emulateMedia({ colorScheme: "light" });
+  }
   await card.getByText("How this is worked out").click();
   await expect(card.getByText(/not a suggestion to start, stop or change a SIP/)).toBeVisible();
   await sane(page, errors, await card.innerText());

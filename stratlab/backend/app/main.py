@@ -32,6 +32,7 @@ from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_exp
 from . import money_mf
 from . import money_mf_ter
 from . import money_mf_behaviour
+from . import sip_test
 from . import money_advance_tax, money_routes
 from . import journal_routes
 from . import chart_routes
@@ -266,6 +267,7 @@ app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
 app.include_router(money_mf_ter.admin_router)  # /admin/ter
 app.include_router(money_mf_behaviour.router)  # /money/mutual-funds/behaviour
+app.include_router(sip_test.router)            # /invest/sip-test
 app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal

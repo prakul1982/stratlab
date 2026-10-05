@@ -1409,3 +1409,5 @@ table.greeks-t tr.greeks-net td { border-top: 1px solid var(--line-2); }
 .opt-extras > * { min-width: 0; }      /* a wide chain scrolls inside its card instead of stretching the grid past the screen */
 table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; padding: 5px 7px; }
 .model-inputs { max-width: 80ch; }
+/* Test a SIP: the form's fields in a grid that wraps to one column on a phone */
+.sip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; align-items: end; }

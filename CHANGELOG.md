@@ -8,6 +8,7 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 **Money**
 - **Your return against each fund's** on Mutual funds: your XIRR beside the fund's own NAV return over the same dates and the gap in points (every plan); the gap in rupees, your SIP record (months paid, missed and stopped, the longest unbroken run), redemptions made after a 10% fall from the high with those units at today's NAV (hindsight, labelled), how long redeemed units were held and how much of today's value is over 3 years old (Basic). From your statement and the public NAV history.
+- **Test a SIP** (`/money/sip-test`, and a "Test a SIP" button on Indian company and ETF pages): an amount (or a number of shares) every day, week or month into one stock or ETF or a split across up to 10, with a yearly step-up, on past closes with the charges of every purchase: money put in, value, XIRR, the deepest fall, the longest time below the money put in, and the same money as a lump sum on day one (every plan). Dip rules (only on dips, or extra on dips) beside the plain SIP, and the same SIP from every start month as the spread of XIRRs with the dip rule's luck check (Basic). The rule in plain words to copy.
 
 ### 5 October 2026: price charts, options Greeks and what-if, F&O changes, ETF vs NAV, fund costs and a self-healing AI
 

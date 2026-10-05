@@ -72,6 +72,8 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Your US sales in rupees at SBI's TT buying rate, the 24-month rule, the US tax credit and the calendar-year Schedule FA." },
     { to: "/money/itr", label: "ITR-ready export", icon: "receipt", title: "Your year laid out like the ITR schedules, and a PDF pack for your CA",
       blurb: "Schedule 112A, CG, dividends, F&O turnover, tax paid and Schedule FA as a spreadsheet or one PDF for your CA. Not a filed return." },
+    { to: "/money/sip-test", label: "Test a SIP", icon: "pulse", title: "What a stock or ETF SIP of yours would have done on past prices",
+      blurb: "An amount every day, week or month into stocks or ETFs, with a step-up or a dip rule: charges, XIRR, the deepest fall and a lump sum beside it." },
     { to: "/money/calendar", label: "Money calendar", icon: "calendar", title: "Tax due dates, results, dividends and your own dates in one calendar",
       blurb: "Advance tax and ITR dates, results and dividends for your stocks, maturities, premiums and EMIs, with a calendar feed." },
   ],

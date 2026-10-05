@@ -68,6 +68,7 @@ CARD_WORDS = {
     "fo_alerts": "F&O change alerts",
     "options_whatif": "what-if sliders",
     "mf_behaviour": "fund behaviour",
+    "sip_luck": "SIP dip rules",
 }
 
 
