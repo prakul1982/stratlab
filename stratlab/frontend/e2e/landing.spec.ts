@@ -39,17 +39,17 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   // what ships today, one line each
   const research = page.locator("#invest");
   for (const t of ["Company pages", "Deep dive", "Results calendar", "Corporate actions", "Deals and insider trades", "Surveillance lists",
-    "Filings and red flags", "Screens", "Stage 2 scan", "Sector rotation", "Market breadth"]) await expect(research.getByText(t, { exact: true })).toBeVisible();
+    "Filings and red flags", "Screens", "Stage 2 scan", "Sector rotation", "Market breadth", "Price charts", "ETF price vs NAV"]) await expect(research.getByText(t, { exact: true })).toBeVisible();
   const portfolio = page.locator("#money");
-  for (const t of ["My Holdings", "Tax report", "Mutual funds", "Net worth", "Tax tools", "US stocks in Indian tax", "ITR-ready export", "Money calendar",
+  for (const t of ["My Holdings", "Tax report", "Mutual funds", "Fund costs", "Net worth", "Tax tools", "US stocks in Indian tax", "ITR-ready export", "Money calendar",
     "Share cards and invites"]) await expect(portfolio.getByText(t, { exact: true })).toBeVisible();
   await expect(portfolio).toContainText("Zerodha");
   await expect(portfolio).toContainText("Groww");
   await expect(portfolio).toContainText("ZIP");
   await expect(portfolio).toContainText("Not a filed return");
-  for (const t of ["Walk-forward test", "Options, live", "Paper trading", "Strategy library", "Positioning", "Trade journal"]) await expect(page.locator("#trade").getByText(t, { exact: true })).toBeVisible();
+  for (const t of ["Walk-forward test", "Options, live", "Paper trading", "Strategy library", "Positioning", "Trade journal", "Greeks and what-if", "After charges", "F&O changes"]) await expect(page.locator("#trade").getByText(t, { exact: true })).toBeVisible();
   await expect(page.locator("#markets .lp-market")).toHaveCount(11);
-  for (const t of ["Stock alerts", "Results and corporate actions", "Market breadth", "Advance tax", "Money calendar", "Newsletters"]) await expect(page.locator("#alerts").getByText(t, { exact: true })).toBeVisible();
+  for (const t of ["Stock alerts", "Results and corporate actions", "Market breadth", "Advance tax", "Money calendar", "Newsletters", "F&O changes", "ETF price vs NAV"]) await expect(page.locator("#alerts").getByText(t, { exact: true })).toBeVisible();
   // the grids stay full: four research tools a row, three alerts a row, Money's cards in pairs
   expect(await page.locator("#invest .lp-tool").count() % 4).toBe(0);
   expect(await page.locator("#alerts .lp-tool").count() % 3).toBe(0);
