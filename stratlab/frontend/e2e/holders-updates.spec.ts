@@ -94,7 +94,7 @@ test("named holders: search a name, see each company alphabetically, follow", as
   await expect(page.getByRole("navigation", { name: "Scans" }).getByRole("link", { name: "Named holders" })).toBeVisible();
   // a name nobody holds
   await page.getByLabel("Holder's name").fill("zzzz nobody");
-  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByText("No holder above 1% by that name")).toBeVisible();
 });
 

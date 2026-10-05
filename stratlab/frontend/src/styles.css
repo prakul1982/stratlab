@@ -1418,7 +1418,7 @@ table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; pad
 .biz-quote { max-width: 260px; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .biz-filings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .biz-filings li { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-.holders-table .holder-name { white-space: normal; overflow-wrap: anywhere; max-width: 280px; display: inline-block; }
+.holders-table .holder-name { white-space: normal; overflow-wrap: anywhere; max-width: 280px; display: block; }
 .holder-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .holder-search { flex: 1 1 240px; min-width: 0; }
 .holder-names label { align-items: center; }
