@@ -2,7 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { resolve } from "node:path";
 
 // The README's screenshots, light and dark, 1280px wide: the landing page (top, its Money section, plans), the three space
-// homes, Positioning and an options paper session. Run with scripts/docs-shots.config.ts (see there); files land in
+// homes, Positioning, an options paper session, a company page's price chart, ETF vs NAV and F&O changes. Run with scripts/docs-shots.config.ts (see there); files land in
 // docs/screenshots. The fake world's data is synthetic, so nothing here is real market data.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const OUT = resolve(process.env.DOCS_SHOTS_DIR ?? "../../docs/screenshots");
@@ -91,6 +91,30 @@ for (const theme of THEMES) {
     await page.screenshot({ path: `${OUT}/positioning-${theme}.png` });
     await ctx.close();
   });
+
+  test(`price chart, ${theme}`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, theme, { signedIn: true, space: "invest", height: 900 });
+    await page.goto("/research/IN/RELIANCE");
+    const chart = page.getByTestId("price-chart").first();
+    await expect(chart).toHaveAttribute("data-bars", /^[1-9]\d*$/, { timeout: 30_000 });
+    await settle(page);
+    await chart.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    await chart.screenshot({ path: `${OUT}/price-chart-${theme}.png` });
+    await ctx.close();
+  });
+
+  for (const [name, path, ready, space] of [["etf-gaps", "/invest/etf-gaps", "ETF price against NAV", "invest"],
+    ["fo-changes", "/trade/fo-changes", "Every change", "trade"]] as const) {
+    test(`${name}, ${theme}`, async ({ browser }) => {
+      const { ctx, page } = await open(browser, theme, { signedIn: true, space, height: 900 });
+      await page.goto(path);
+      await expect(page.getByText(ready).first()).toBeVisible({ timeout: 30_000 });
+      await settle(page);
+      await page.screenshot({ path: `${OUT}/${name}-${theme}.png` });
+      await ctx.close();
+    });
+  }
 
   test(`options session, ${theme}`, async ({ browser }) => {
     const { ctx, page } = await open(browser, theme, { signedIn: true, space: "trade", height: 1120 });

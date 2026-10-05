@@ -33,14 +33,15 @@ const L = LIMITS;
 // full grid is on Plans.
 export const FEATURES: Record<PlanId, string[]> = {
   free: [`${L.free.backtests_per_month} backtests a month, each with a full verdict, and ${L.free.ai_builds_per_month} AI strategy builds`,
-    "Paper trading free for 5 market days", `Today's derivatives positioning, and a journal of your last ${L.free.journal_trades} trades`,
+    "Paper trading free for 5 market days, and the options builder with Greeks and breakevens after charges",
+    `Today's derivatives positioning, F&O contract changes, and a journal of your last ${L.free.journal_trades} trades`,
     `${L.free.deepdives_per_month} company deep dives and ${L.free.decks_per_month} slide deck a month`,
-    "Screens, sector rotation, today's market breadth and red flags on every company",
+    "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
     `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens`,
     `Import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries`,
     "The tax report, money calendar and a weekly My Stocks email", "Every market we cover, and your own CSV"],
   basic: ["Everything in Free, plus:", `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month`,
-    "All 20+ indicators: MACD, Supertrend, Bollinger Bands, VWAP and more",
+    "All 20+ indicators in your rules: MACD, Supertrend, Bollinger Bands, VWAP and more",
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times, with trade notifications and a daily report`,
     "The full trade journal, positioning history with IV percentiles, and F&O change alerts",
     `${L.basic.deepdives_per_month} company deep dives (report card and checklist) and ${L.basic.decks_per_month} decks a month`,
@@ -58,7 +59,7 @@ export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backt
   ["live_limit", "Paper trading sessions at a time"], ["group_size", "Instruments in a group test"], ["deepdives_per_month", "Company deep dives a month"],
   ["decks_per_month", "Company slide decks a month"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
   ["mf_schemes", "Mutual fund schemes kept"], ["networth_items", "Net worth entries"], ["journal_trades", "Trades the journal keeps"]];
-export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators"], ["group_live", "Paper trade a whole group"], ["options", "Options paper trading at set times"],
+export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group"], ["options", "Options paper trading at set times"],
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks"],
   ["scans", "Stage 2 + Supertrend scan, with a daily alert"], ["filings", "Red flags for the whole watchlist, with an evening alert"],
   ["investor_home", "Watchlist at a glance"], ["fno", "Indian F&O"], ["options_signal", "Options entered on your own rules' signals"],
@@ -76,7 +77,9 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators"], 
 
 ["fo_alerts", "Alerts when an F&O exit, lot size or expiry change touches your watchlist or paper sessions"],
   ["options_whatif", "Options what-if: move the underlying, shift IV and pass days, and preview rolling a leg"]];
-export const EVERYONE = ["Every market, and your own CSV", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
+export const EVERYONE = ["Every market, and your own CSV",
+  "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
+  "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
   "Corporate actions, deals and surveillance lists", "Today's market breadth numbers", "Derivatives positioning today: participant OI, FII/DII flows, PCR and the option chain facts",
   "F&O contract changes: stocks entering and leaving F&O, lot sizes and expiry days",
   "Option Greeks for every strike and your position, and the payoff today beside the one at expiry (model estimates)",

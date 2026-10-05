@@ -20,7 +20,7 @@ Admin is split into five tabs.
 | --- | --- |
 | **Overview** | **Needs your attention**, worst first (the broker not logged in or its automatic login failing, AI providers down, email not set up, server errors, reported library entries, the option-chain recorder, holidays running out, payments not connected), usage at a glance, a link to the PostHog dashboard once a key is set, and **Recent server errors**: the last 25 unexpected errors with the request, the error, the line of code and the ref code the user saw, kept across restarts |
 | **Services** | Market data: the broker login state, **Log in**, **Run the automatic login now**. Other services: Telegram, email (**Send a test email**), phone notifications, Sentry, the option-chain recorder, the newsletters, and **Send this week's summary now** (the owner's Monday 9:00 IST email). **AI**: each provider's state, quota and models in use (success rate, median time, last problem), the order each kind of job asks them in, **Test every provider**, **Re-rank models**, **Pin** and **Block**, and the free providers not set up yet with where to get a key (see [AI providers](#ai-providers)) |
-| **Data checks** | **Check every feature**, **Rates and rules**, **Market breadth** (**Run now** per market), **Storage**, the **Data audit**, the **Whole market** audits for India and the US, **Exchange holidays** for every market, and **Save real prices** (the price snapshot the tests run on) |
+| **Data checks** | **Check every feature**, **Rates and rules**, **Market breadth** (**Run now** per market), **Fund costs (TER)** (**Read now**), **Storage**, the **Data audit**, the **Whole market** audits for India and the US, **Exchange holidays** for every market, and **Save real prices** (the price snapshot the tests run on) |
 | **Users** | Every user with plan, join date, experiments, AI builds, invites and free months earned; **Change plan** grants Basic or Pro for 30 days, 90 days, a year or with no end. **Invite rewards** shows rewards given and sign-ups waiting for review. **Paper trading now** lists every running session with **Stop**. **Reported in the library** holds strategy-library entries people reported |
 | **Billing** | The **Launch offer**, payments status and **Check payments**, **Prices** per currency, and **Invoices** (the seller's GST details and every invoice) |
 
@@ -30,7 +30,8 @@ Admin is split into five tabs.
 data and compares what came back with what it should be: prices in every market and how fresh they are, a two-year
 backtest per market, the NIFTY 50 and US scans, sector rotation, the NIFTY option chain, exchange filings, insider
 trades, surveillance lists, BSE filings, company pages, news, the database and how full it is (**Database space**), the
-holiday calendar of every market (a warning under 60 days known), and **Rates and rules last reviewed**. No AI is used,
+holiday calendar of every market (a warning under 60 days known), **Rates and rules last reviewed**, and **Fund costs
+(TER)** (see [Fund costs](#fund-costs-ter)). No AI is used,
 so it costs no allowance.
 
 - **By itself:** every day at 4:50 pm IST. Anything that fails is tried again two minutes later; whatever still fails is
@@ -78,9 +79,10 @@ about 3 to 10 seconds a company.
 - **Exchange holidays** (Data checks): a row per market with where its holidays come from (the calendar package or
   the exchange's own list), how far ahead they're known, the next holiday and a status with a hint. For India, add a
   holiday by hand or refresh from the exchange here.
-- **Refreshes:** the results calendar, corporate actions and surveillance lists run on their own schedules; each has an
-  admin refresh route (`/admin/results/refresh`, `/admin/corp-actions/refresh`, `/admin/surveillance/refresh`) for
-  after an outage.
+- **Refreshes:** the results calendar, corporate actions, surveillance lists and F&O contract changes run on their own
+  schedules; each has an admin refresh route (`/admin/results/refresh`, `/admin/corp-actions/refresh`,
+  `/admin/surveillance/refresh`, `/admin/fo-changes/refresh`) for after an outage. There are no buttons for these:
+  call them signed in as an admin (see [F&O contract changes](#fo-contract-changes)).
 
 ### Rates and rules
 
@@ -113,6 +115,52 @@ The option-chain facts and their history come from the recorded chains (NIFTY, B
 SENSEX; `OPTION_SNAPSHOTS`). There's no panel: `GET /admin/positioning` shows the job, the archive walk and each part's
 state, `POST /admin/positioning/run` reads the newest trading day now, and `POST /admin/positioning/run?backfill=true`
 takes the next step back through the archives. When a number is missing, the page says why in words.
+
+### Fund costs (TER)
+
+`backend/app/money_mf_ter.py` reads the fund industry body's public monthly TER disclosure for **Mutual funds → Fund
+costs**: the current and previous month at most every 12 hours (started when someone opens the page and the copy is
+due), then one older month a run until two years are stored, with a pause between requests. It's kept market-wide in
+`app_settings`; nothing in it is per user.
+
+- **The panel** (Data checks → **Fund costs (TER)**): the last good read (when, how many schemes, which month), how many
+  schemes and months are stored, the last error, and the check's verdict. The check passes when the last good read had
+  500 or more schemes and is at most 45 days old, warns when it's older or smaller, and fails when nothing was ever read.
+- **Read now** reads the disclosure at once in the background, whatever the age of the stored copy (a second press while
+  it runs is refused). Press it on a new server, or when the check warns.
+- While the very first read runs, users see "Costs are being read; check back shortly." The same is
+  `GET /admin/ter` (status) and `POST /admin/ter/read`.
+
+### F&O contract changes
+
+`backend/app/fo_changes.py` keeps the dated list behind **Trade → F&O changes**: the exchange's F&O market lots file and
+its F&O circulars (exits, entries, lot sizes, expiry days and sessions), read twice a trading day at 08:15 and 19:50
+IST, and at once on a new server. A new change that touches a user's watchlist or running paper sessions is sent to
+those who turned the alert on (Basic and up), once each.
+
+- **No panel.** After an outage, or to see what the sources answer, call `POST /admin/fo-changes/refresh` signed in as
+  an admin: it reads both sources now and returns what was added, any problems and each source's state. It sends no
+  alerts; the next scheduled run sends any due.
+- Expiry dates come from the listed contracts once the day's broker login is done, else from the exchange's rule.
+
+### ETF price against NAV
+
+`backend/app/etf_nav.py` reads the exchange's ETF list (price, indicative NAV) every few minutes while India's market is
+open, records each ETF's close after the close with that day's NAV once the NAV file has it, and keeps 30 trading days.
+It runs by itself and has no admin panel; a new server reads the list at once.
+
+### Option-chain recorder (`OPTION_SNAPSHOTS`)
+
+The recorder (Services → the option-chain recorder; Overview flags a problem) saves the chains named in
+`OPTION_SNAPSHOTS` every `OPTION_SNAPSHOT_MINUTES` (5) in market hours and keeps `OPTION_SNAPSHOT_KEEP_DAYS` (120). The
+default is all five: `NFO:NIFTY,NFO:BANKNIFTY,NFO:FINNIFTY,NFO:MIDCPNIFTY,BFO:SENSEX`.
+
+- **Check Railway once:** a value set in **Railway → Variables** replaces the default. If `OPTION_SNAPSHOTS` is there
+  from before FINNIFTY and MIDCPNIFTY were added (for example `NFO:NIFTY,NFO:BANKNIFTY,BFO:SENSEX`), delete it to use
+  the default, or add the two, then redeploy. Without them, those indices get no chain facts or history on Positioning.
+- An empty value turns recording off. Options backtesting and the Positioning chain history are built from these
+  recordings, which can't be fetched again later, so keep it on.
+- The option chain on the Options builder, with its IV and Greeks, is read live and doesn't depend on the recorder.
 
 ## AI providers
 

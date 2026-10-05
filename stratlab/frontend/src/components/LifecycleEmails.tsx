@@ -42,7 +42,7 @@ export function LifecycleEmails() {
         {job.last_error ? ` Last problem: ${job.last_error}` : ""} Users turn off tips and reminders in Account; receipts always go.
       </p>
       <div className="row wrap" style={{ gap: 8 }}>
-        <select aria-label="Lifecycle email" value={kind} onChange={(e) => { setKind(e.target.value); setShown(null); }} style={{ minHeight: 36, maxWidth: "100%" }}>
+        <select className="input" aria-label="Lifecycle email" value={kind} onChange={(e) => { setKind(e.target.value); setShown(null); }} style={{ height: 36, flex: "1 1 200px", maxWidth: 360 }}>
           {list.emails.map((m) => <option key={m.kind} value={m.kind}>{m.name}{m.transactional ? " (always sent)" : ""}</option>)}
         </select>
         <button className="btn quiet sm" disabled={!!busy} onClick={() => run("preview")}>{busy === "preview" ? "Building…" : "Preview"}</button>

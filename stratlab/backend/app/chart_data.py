@@ -18,6 +18,7 @@ RANGES = {"1d": 4, "5d": 8, "1m": 31, "3m": 93, "6m": 186, "ytd": None, "1y": 36
 KEY = "chart_drawings:"
 MAX_SYMBOLS = 200          # symbols with drawings kept per user; the oldest drop off
 MAX_DRAWINGS = 100         # drawings per symbol
+MAX_BYTES = 256 * 1024     # one user's stored drawings, all symbols; the oldest symbols drop off past it
 SYMBOL = re.compile(r"^[A-Za-z0-9:^&._=-]{1,40}$")
 
 
@@ -100,11 +101,18 @@ def save(uid: str, symbol: str, items: list) -> list[dict]:
     data.pop(symbol, None)
     if kept:
         data[symbol] = {"items": kept, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    if len(data) > MAX_SYMBOLS:
-        for k in sorted(data, key=lambda k: str(data[k].get("at", "")))[: len(data) - MAX_SYMBOLS]:
-            data.pop(k)
+    oldest = [k for k in sorted(data, key=lambda k: str(data[k].get("at", ""))) if k != symbol]
+    while len(data) > MAX_SYMBOLS and oldest:
+        data.pop(oldest.pop(0))
+    size = {k: len(json.dumps(k)) + len(json.dumps(v, separators=(",", ":"))) + 2 for k, v in data.items()}
+    total = sum(size.values()) + 2
+    while total > MAX_BYTES and oldest:         # many full charts: keep the stored row small, newest kept
+        k = oldest.pop(0)
+        total -= size[k]
+        data.pop(k)
+    raw = json.dumps(data, separators=(",", ":"))
     if data:
-        db.set_setting(KEY + uid, json.dumps(data, separators=(",", ":")))
+        db.set_setting(KEY + uid, raw)
     else:
         db.delete_setting(KEY + uid)
     return kept

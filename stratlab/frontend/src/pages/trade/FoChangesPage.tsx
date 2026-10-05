@@ -5,6 +5,7 @@ import { useApp } from "../../lib/app";
 import { asOf } from "../../lib/format";
 import { loadFoChanges, type FoEvent, type FoKind, type FoView } from "../../lib/foChanges";
 import { Empty, Info, Loading } from "../../components/ui";
+import { Earlier } from "../../components/Earlier";
 
 /* /trade/fo-changes: one dated list of the exchange's changes to its F&O contracts: stocks entering and leaving F&O
  * (with the last series they trade), lot-size revisions (old and new lot, and when they apply) and expiry-day and
@@ -38,6 +39,15 @@ function Row({ e, mine }: { e: FoEvent; mine: Set<string> }) {
         {e.source === "circular" ? "Exchange circular" : "Exchange contract file"}{e.seen ? ` · first seen ${longDay(e.seen)}` : ""}
       </span>
     </li>
+  );
+}
+
+function Day({ day, rows, mine }: { day: string; rows: FoEvent[]; mine: Set<string> }) {
+  return (
+    <div className="stack fo-day" style={{ gap: 6 }}>
+      <h3 className="eyebrow">{longDay(day)}</h3>
+      <ul className="fo-list">{rows.map((e) => <Row key={e.id} e={e} mine={mine} />)}</ul>
+    </div>
   );
 }
 
@@ -82,6 +92,7 @@ export function FoChangesPage() {
       && (!term || symbolsOf(e).some((s) => s.includes(term)) || (e.subject ?? "").toUpperCase().includes(term)));
   }, [v, filter, onlyMine, q, mine]);
   const coming = useMemo(() => (v?.events ?? []).filter((e) => e.upcoming && e.source !== "circular" && e.kind !== "circular"), [v]);
+  // what is still ahead comes first, soonest first; what has passed is folded below it, newest first
   const groups = useMemo(() => {
     const out: [string, FoEvent[]][] = [];
     for (const e of shown) {
@@ -89,8 +100,10 @@ export function FoChangesPage() {
       if (last && last[0] === e.date) last[1].push(e);
       else out.push([e.date, [e]]);
     }
-    return out;
-  }, [shown]);
+    const today = v?.today ?? "";
+    return { ahead: out.filter(([d]) => d >= today).reverse(), past: out.filter(([d]) => d < today) };
+  }, [shown, v]);
+  const narrowed = filter !== "all" || onlyMine || !!q.trim();
 
   const setAlert = async (on: boolean) => {
     if (!v) return;
@@ -104,7 +117,7 @@ export function FoChangesPage() {
     <div className="stack fo-page" style={{ gap: 20 }}>
       <div className="stack" style={{ gap: 6 }}>
         <h1 className="page-title">F&amp;O contract changes</h1>
-        <p className="muted" style={{ maxWidth: "68ch" }}>Stocks entering and leaving F&amp;O with the last series they trade, lot-size revisions with the old and new lot, and changes to expiry days and sessions. From the exchange's contract file and circulars: facts, not advice.</p>
+        <p className="muted" style={{ maxWidth: "68ch" }}>Stocks entering and leaving F&amp;O, lot-size revisions, and changes to expiry days and sessions, from the exchange's contract file and circulars. Facts, not advice.</p>
         {v && <p className="tiny muted as-of" data-testid="fo-asof">
           {v.sources.map((s) => `${s.label} ${s.as_of ? `as of ${longDay(s.as_of)}` : "not read yet"}${s.failed ? " (couldn't be refreshed since)" : ""}`).join(" · ")}
         </p>}
@@ -143,16 +156,15 @@ export function FoChangesPage() {
               </div>
               {!v.events.length ? (
                 <Empty title="No changes read yet">The exchange's contract file and circulars are read twice a trading day; changes show here once they are.</Empty>
-              ) : !groups.length ? (
+              ) : !groups.ahead.length && !groups.past.length ? (
                 <p className="small muted">No changes match.</p>
               ) : (
                 <div className="stack" style={{ gap: 14 }}>
-                  {groups.map(([day, rows]) => (
-                    <div key={day} className="stack fo-day" style={{ gap: 6 }}>
-                      <h3 className="eyebrow">{longDay(day)}{day >= v.today ? " · coming up" : ""}</h3>
-                      <ul className="fo-list">{rows.map((e) => <Row key={e.id} e={e} mine={mine} />)}</ul>
-                    </div>
-                  ))}
+                  {groups.ahead.map(([day, rows]) => <Day key={day} day={day} rows={rows} mine={mine} />)}
+                  {/* a narrowed list is short, so its past changes show without a click */}
+                  <Earlier key={narrowed ? "narrowed" : "all"} label="Earlier changes" count={groups.past.reduce((n, [, r]) => n + r.length, 0)} open={narrowed || !groups.ahead.length}>
+                    {groups.past.map(([day, rows]) => <Day key={day} day={day} rows={rows} mine={mine} />)}
+                  </Earlier>
                 </div>
               )}
             </section>

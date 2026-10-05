@@ -61,13 +61,19 @@ const RESEARCH: [string, string][] = [
   ["Stage 2 scan", "Stocks in Stage 2 with the Supertrend up, fresh signals first."],
   ["Sector rotation", "Every sector against the market: leading, weakening, lagging, improving."],
   ["Market breadth", "How many stocks rose, fell, or sit above their 20, 50 and 200-day averages."],
+  ["Price charts", "Candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare."],
+  ["ETF price vs NAV", "How far each ETF trades from what a unit holds, with 30 days of history."],
+  ["Watchlist at a glance", "Trend, sector rotation, red flags and checklist for each company you follow."],
+  ["Compare", "Two companies side by side on the same numbers."],
 ];
 
 const PORTFOLIO: [string, string, string][] = [
   ["My Holdings", "From your broker's file: Zerodha, Groww, Upstox, Angel One and more.", "Seen only by you"],
   ["Tax report", "Capital gains from your tradebooks or their ZIP, first in, first out.", "An estimate for your CA"],
   ["Mutual funds", "Your CAMS or KFintech statement: value, XIRR and gains by year.", "Never fund ratings"],
+  ["Fund costs", "Each fund's expense ratio in rupees a year, direct and regular side by side.", "Rupees, not just %"],
   ["Net worth", "Stocks, funds, PF, PPF, NPS, deposits, gold and property, minus loans.", "Each value explained"],
+  ["Loans and insurance", "EMIs, interest this year, what a prepayment changes, and premiums due.", "Your own figures"],
   ["Dividends, bonuses and splits", "What's ahead on what you hold; a bonus or split applied in one click.", "Nothing changes without you"],
   ["Tax tools", "Dividends with TDS, advance tax by due date, the exemption left.", "Dates and totals"],
   ["US stocks in Indian tax", "US sales in rupees, the 24-month rule, tax credit and Schedule FA.", "For a resident individual"],
@@ -83,6 +89,10 @@ const TOOLS: [string, string][] = [
   ["Walk-forward test", "Re-tune on the past, trade the stretch the tuning never saw, repeat."],
   ["Whole groups", "One set of rules on NIFTY 50, the F&O stocks, US mega caps or your list."],
   ["Options, live", "Any structure up to eight legs at the real bid and ask."],
+  ["Greeks and what-if", "Delta, gamma, theta and vega, the payoff today and at expiry, and sliders."],
+  ["After charges", "Breakevens, most it can make and most it can lose, after every charge."],
+  ["F&O changes", "Stocks entering or leaving F&O, lot sizes and expiry days, by date."],
+  ["Trades on the chart", "Each backtest trade's entry and exit on the candles, with the rules' indicators."],
   ["Paper trading", "Run it live on real prices with fake money, with a report after each close."],
   ["Positioning", "Who holds index futures and options, FII and DII flows, PCR and max pain."],
   ["Trade journal", "Your real trades as round trips after charges, with the same honesty checks."],
@@ -99,6 +109,9 @@ const ALERTS: [string, string][] = [
   ["Advance tax", "A week and a day before each due date. The amounts stay on the page."],
   ["Money calendar", "One morning message for the dates you pick: tax, results, EMIs, your own."],
   ["Newsletters", "The Market Brief and My Stocks, daily or weekly, by email."],
+  ["F&O changes", "When an exit, lot size or expiry change touches your watchlist or paper sessions."],
+  ["ETF price vs NAV", "When an ETF you pick trades further above or below its NAV than your level."],
+  ["Paper trades", "Each trade as it happens, and a short report after the close."],
 ];
 
 const MARKETS: [string, string][] = [
@@ -114,7 +127,7 @@ const FAQ: [string, string][] = [
   ["Why not just look at the backtest return?", "Because almost any idea can be tuned to look great on past prices. The honesty checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."],
   ["Who can see my money data?", "Only you. Your holdings, funds, net worth, trades and tax figures are kept per account, never shown to anyone else, and each page deletes its data in one step. A mutual fund statement and its password are read once and not stored."],
   ["Does StratLab file my tax return?", "No. The tax report is an estimate to check with a chartered accountant, and the ITR-ready export lays out your year the way the ITR-2 and ITR-3 schedules ask for it. You or your CA file the return."],
-  ["Can I test options strategies?", "You can paper trade them live on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask, at a set time or when a notebook's rules signal. Backtesting options needs real past prices for every strike, so StratLab records the NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX chains every 5 minutes to build that history rather than guess with a pricing model."],
+  ["Can I test options strategies?", "You can paper trade them live on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask, at a set time or when a notebook's rules signal. Backtesting options needs real past prices for every strike, so StratLab records the NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX chains every 5 minutes to build that history rather than guess with a pricing model. The Greeks and the payoff before expiry are model estimates, labelled with their inputs."],
   ["How do invite rewards work?", "Invite friends, both get a month of Basic. Your invite link is in Account. When a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a month (about a week extra). If you already pay, your free time is kept and starts if your paid plan ever stops."],
   ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon and sends alerts as notifications."],
 ];
@@ -237,7 +250,7 @@ export function Login() {
             <div className="stack" style={{ gap: 6 }}>
               <span className="eyebrow">Options</span>
               <b className="serif" style={{ fontSize: 24 }}>Paper trade option structures on live prices.</b>
-              <p className="small muted" style={{ maxWidth: "60ch" }}>Straddles, strangles, condors or any structure up to eight legs, filled at the real bid and ask.</p>
+              <p className="small muted" style={{ maxWidth: "60ch" }}>Straddles, strangles, condors or any structure up to eight legs, filled at the real bid and ask. See the Greeks, the payoff today beside the one at expiry, and breakevens after charges.</p>
             </div>
             <span className="lp-fix">No real orders, ever</span>
           </div>

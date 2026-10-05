@@ -4,6 +4,37 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 5 October 2026: price charts, options Greeks and what-if, F&O changes, ETF vs NAV, fund costs and a self-healing AI
+
+**Everywhere**
+- **Space homes, one shape:** Trade, Invest and Money each open with a short heading, the next step (start a first notebook, pick up where you left off, or find a company), one row of four tool cards, the live panels with placeholders while they load, then the rest of the space's tools.
+- **Our own price chart** on company pages, experiments and paper sessions: candles, hollow candles, Heikin-Ashi, OHLC bars, line, area or baseline; 5-minute to daily candles, scrolling back for older ones; normal, log or % scale; volume and indicators (SMA, EMA, Bollinger bands, VWAP, Supertrend, Stage, 52-week high and low, RSI, MACD); drawings (trend line, level, ray, rectangle, Fibonacci, note) kept on your account; compare another symbol on a % scale; fullscreen, PNG and a table view. An experiment's chart marks each trade's entry and exit; a paper session's updates the forming candle with its stop and target.
+- **One chart system for every other chart:** a crosshair and tooltip by mouse, keyboard or tap, drag or pinch to zoom with a Reset, range buttons, legends that switch series on and off, linked charts that share a crosshair, Index to 100 and a table view. Colours checked for colour-blind readers in light and dark.
+
+**Trade**
+- **Options builder, after charges (every plan):** the charges to open and close, breakevens before and after them, the premium kept, and the exact most it can make and lose, before and after charges.
+- **Greeks and the payoff today (every plan):** each strike's IV and Greeks in the chain's **IV and Greeks** view, each leg's and the position's delta, gamma, theta and vega, and the payoff today beside the one at expiry, on the builder and an options session's page. Model estimates, shown with their inputs.
+- **What-if sliders and a roll preview (Pro):** move the underlying, shift IV and pass days; preview closing one leg and opening another strike or expiry, with the premium difference, both orders' charges and the net Greeks before and after.
+- **F&O changes** (`/trade/fo-changes`): stocks leaving F&O with their last series, entries, lot-size revisions and changes to expiry days and sessions, in one dated list from the exchange's own files, read twice a trading day. Badges on the watchlist, company pages and session cards. Free to view; an alert when a change touches your watchlist or running paper sessions (Basic).
+
+**Invest**
+- **ETF vs NAV** (`/invest/etf-gaps`, also a Scans tab): each Indian ETF's price against its indicative and last NAV, widest gap first, with 30 trading days of history, a badge in My Holdings and on the ETF's company page. Free to view; an alert when the gap passes your level (Basic).
+
+**Money**
+- **Fund costs** on Mutual funds: each fund's TER and what it comes to in rupees a year on your value (every plan); its parts, the direct and regular plans side by side with the gap in rupees, the TER since you bought, and category changes (Basic).
+
+**Plans**
+- New paid features, each named on its plan card and in the Plans grid: fund costs in rupees, ETF gap alerts and F&O change alerts on Basic; options what-if sliders and the roll preview on Pro. Prices unchanged.
+
+**Running StratLab**
+- **AI that heals itself:** each provider's models are listed, filtered and given a short test every few hours (and on demand); the ones that answer correctly and fast are used, fast first for quick jobs and strong first for research. Every reply is checked, an empty or cut-off one is retried once, failing models and providers pause and the next is asked, rate limits are respected until their reset, each request has a time budget, and repeated questions are answered from a cache. Errors users see never name a provider.
+- **More free AI providers:** Cloudflare Workers AI, Z.ai, Hugging Face, Vercel AI Gateway, GitHub Models and the NVIDIA API catalog join the existing ones, each optional.
+- **Admin → Services → AI:** each provider's state, quota and reset, models in use with success rate and median time, the order each job uses, and **Test every provider**, **Re-rank models**, **Pin** and **Block**; missing providers list their free limit, a key link and the Railway variables.
+- **Admin → Data checks → Fund costs (TER)** with **Read now**, and a **Fund costs (TER)** row in Check every feature. `POST /admin/fo-changes/refresh` reads the F&O sources on demand.
+
+**Landing page and docs**
+- The landing page lists price charts, ETF vs NAV, Greeks and what-if, breakevens after charges, F&O changes and fund costs in their spaces, with the new alerts; the plan cards and Plans grid match `plans.py`. The README, feature guide, admin guide (AI keys and Re-rank, TER **Read now**, the F&O refresh, `OPTION_SNAPSHOTS`), setup guide and roadmap match.
+
 ### 4–5 October 2026: three spaces, the Money space, positioning, breadth and the trade journal
 
 **Three spaces**

@@ -31,7 +31,8 @@ Honest strategy backtests with paper trading, company research, and your holding
 
 StratLab is one place to find out whether a trading idea has a real edge before any money is at risk, understand a
 listed company, and keep track of what you own and what it means at tax time. It has three spaces, picked at the top of
-the menu: **Trade** (the strategy lab), **Invest** (research) and **Money** (your own finances).
+the menu: **Trade** (the strategy lab), **Invest** (research) and **Money** (your own finances), each with its own home
+page.
 
 - **Facts, not advice.** Every number comes from reported results, exchange filings, the company's own documents,
   prices or your own files. StratLab never says buy, sell or hold, gives no price targets, ratings or quality scores,
@@ -48,6 +49,9 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 - Notebooks: describe an idea in plain English (or Ask with Ctrl+K), tap any word to change a rule, run numbered experiments, compare them.
 - Real costs per market, long/short/intraday rules, 20+ indicators, walk-forward tests, the similar-stocks check, group tests with one pot of capital, imports from Pine Script, Python, MetaTrader, AmiBroker and configs.
 - Paper trading on live prices in every market, and option structures (up to eight legs) at the real bid and ask. Each session shows today first; earlier trades fold under one line with their total, and each trade's orders open under it.
+- Options builder: charges to open and close, breakevens and the most it can make or lose before and after charges, each leg's IV and Greeks, and the payoff today beside the one at expiry, for everyone; what-if sliders (underlying, IV, days) and a roll preview on Pro. Greeks are model estimates, shown with their inputs.
+- Each backtest's trades and paper session's stops and targets on the price chart, with the indicators the rules use.
+- F&O changes (`/trade/fo-changes`): stocks entering and leaving F&O, lot-size revisions and expiry-day changes in one dated list, with badges and an alert when a change touches your watchlist or paper sessions (Basic).
 - Positioning: who holds index and stock futures and options (clients, DIIs, FIIs, proprietary traders; long and short shares), FII/DII cash flows, each index's put-call ratio, max pain, open interest by strike and ATM IV, with their history.
 - Trade journal: your real trades from a tradebook or tax P&L (equity and F&O), paired into round trips after charges, with your notes and the verdict's honesty checks run on them.
 - A strategy library, and share cards and public links for verdicts.
@@ -55,7 +59,7 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/trade-home-dark.png">
-  <img alt="The Trade home: Options first, then paper trading, the trade journal, the strategy library and import, today's positioning and your notebooks" src="docs/screenshots/trade-home-light.png">
+  <img alt="The Trade home: the next step, four tool cards (Options, Paper trading, Trade journal, Strategy library) and today's positioning" src="docs/screenshots/trade-home-light.png">
 </picture>
 
 <picture>
@@ -69,19 +73,35 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 </picture>
 
 <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/fo-changes-dark.png">
+  <img alt="F&O changes: what's coming up (stocks leaving F&O and lot-size revisions, each with its date), the alert setting, and every change by date" src="docs/screenshots/fo-changes-light.png">
+</picture>
+
+<picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/verdict-dark.png">
   <img alt="A verdict page: 'No edge here', with four honesty checks: unseen data, nearby settings, bad-luck drawdown and enough trades" src="docs/images/verdict-light.png">
 </picture>
 
 **Invest: research**
-- Company pages for every Indian (NSE, and BSE-only) and US company, plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
+- Company pages for every Indian (NSE, and BSE-only) and US company, with a price chart (candles, Heikin-Ashi, bars, line; 5 minutes to daily; indicators; drawings kept on your account; compare on a % scale), plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
 - Deep dive: ten years of numbers, the business and its plans read from the company's own presentations, calls or 10-K, industry measures, valuation on the yardstick its industry uses, a management report card, an investor checklist, and the whole thing as PowerPoint or PDF slides.
 - Results calendar, corporate actions (dividends, bonuses, splits, buybacks, rights, demergers), deals and insider trades (including bulk and block deals), exchange surveillance lists (ASM, GSM, ESM, trade-to-trade, price bands, F&O ban), and filings with red flags.
+- ETF vs NAV (`/invest/etf-gaps`): each Indian ETF's price against its indicative and last NAV, widest gap first, with 30 days of history and a gap alert (Basic).
 - Screens on plain facts, the Stage 2 + Supertrend scan, sector rotation, market breadth (advances and declines, stocks above their 20/50/200-day averages, new highs and lows, by group and sector), a watchlist and Watchlist at a glance, themes, market pulse, compare, News, and Markets now.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/invest-home-dark.png">
-  <img alt="The Invest home: company search, your watchlist with live prices, and today's results" src="docs/screenshots/invest-home-light.png">
+  <img alt="The Invest home: company search, four tool cards, your watchlist with live prices, and today's results" src="docs/screenshots/invest-home-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/price-chart-dark.png">
+  <img alt="A company page's price chart: a year of daily candles with volume, chart types, timeframes, indicators, drawing tools and compare" src="docs/screenshots/price-chart-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/etf-gaps-dark.png">
+  <img alt="ETF vs NAV: each ETF's price against its indicative NAV and last NAV, widest gap first" src="docs/screenshots/etf-gaps-light.png">
 </picture>
 
 <picture>
@@ -92,7 +112,7 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 **Money: what you own**
 - My Holdings: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (or any CSV or Excel file), add US stocks, and see value, P&L, sectors, dividends and one-click bonus and split adjustments. ETFs, REITs, InvITs and gold bonds keep their own label.
 - Tax report: capital gains on listed Indian shares and funds from tradebooks, tax P&L files or the broker's ZIP of them, matched FIFO with the July 2024 rates, the yearly exemption, 2018 grandfathering and intraday apart; the year's total tax estimate with F&O, commodity and currency results, other income, either regime, age band and residency; CSV and PDF downloads.
-- Mutual funds from the CAMS or KFintech CAS PDF: each scheme's value, XIRR, allocation by category and capital gains by year.
+- Mutual funds from the CAMS or KFintech CAS PDF: each scheme's value, XIRR, allocation by category and capital gains by year, and what each fund costs: its TER in rupees a year, its parts, the direct and regular plans side by side, and changes since you bought.
 - Net worth: holdings and funds plus PF, PPF, NPS, deposits, gold, property and cash, minus loans (EMIs and prepayment arithmetic), an insurance register and a monthly history.
 - Tax tools: dividends with TDS, advance tax due by each date (with 234B and 234C) and the long-term exemption, lot by lot.
 - US stocks in Indian tax: sales in rupees at the rate the Income-tax Rules use, the 24-month rule, US dividends and the foreign tax credit, and Schedule FA.
@@ -102,11 +122,11 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/money-home-dark.png">
-  <img alt="The Money home: holdings value and gain, this year's capital gains tax estimate, and a card for each Money tool" src="docs/screenshots/money-home-light.png">
+  <img alt="The Money home: four tool cards, holdings value and gain, and this year's capital gains tax estimate" src="docs/screenshots/money-home-light.png">
 </picture>
 
 **Alerts**
-- Stock alerts (price, day move, moving average, RSI, Stage, 52-week high or low; for India, insider trades, deals and surveillance), results and corporate-action messages, the red-flag and Stage 2 alerts, market breadth crossing a level, every paper trade and a daily report, advance tax and money calendar reminders, the Market Brief and My Stocks newsletters, and a weekly email per saved screen.
+- Stock alerts (price, day move, moving average, RSI, Stage, 52-week high or low; for India, insider trades, deals and surveillance; an ETF's gap to its NAV), F&O contract changes touching your watchlist or paper sessions, results and corporate-action messages, the red-flag and Stage 2 alerts, market breadth crossing a level, every paper trade and a daily report, advance tax and money calendar reminders, the Market Brief and My Stocks newsletters, and a weekly email per saved screen.
 - By phone notification (install from the browser), Telegram or email to a confirmed address.
 
 **Getting started:** a first-steps checklist on each space's home (a backtest, a watchlist, a deep dive, paper trading, alerts), a short tour, share cards for a company's facts, and invite rewards (a free month of Basic for both once a friend is active).
@@ -131,15 +151,16 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | Company slide decks | 1 a month | 5 a month | Unlimited |
 | Stock alerts on at once / saved screens / holdings kept | 5 / 2 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
 | Mutual fund schemes / Net worth entries / trades the journal keeps | 5 / 5 / 50 | Unlimited | Unlimited |
-| All 20+ indicators (Free: price, SMA, EMA, RSI) | – | ✓ | ✓ |
+| All 20+ indicators in strategy rules (Free: price, SMA, EMA, RSI; price charts show every indicator on every plan) | – | ✓ | ✓ |
 | Group and options paper trading, trade notifications, daily report | – | ✓ | ✓ |
 | Stage 2 scan, watchlist red flags, Watchlist at a glance, with alerts | – | ✓ | ✓ |
 | Daily Market Brief and My Stocks (weekly for everyone) | – | ✓ | ✓ |
 | Trade journal in full (honesty checks, breakdowns, paper vs real); positioning and market breadth history | – | ✓ | ✓ |
-| Mutual fund capital gains, Net worth history, dividends by company with TDS, money calendar reminders | – | ✓ | ✓ |
-| Indian F&O, options on your own signals, faster group entries, export | – | – | ✓ |
+| Mutual fund capital gains, fund costs in rupees (parts, both plans, changes), Net worth history, dividends by company with TDS, money calendar reminders | – | ✓ | ✓ |
+| F&O change alerts, ETF gap alerts | – | ✓ | ✓ |
+| Indian F&O, options on your own signals, options what-if sliders and roll preview, faster group entries, export | – | – | ✓ |
 | Advance tax amounts and the long-term exemption lot by lot, US stocks in Indian tax, the ITR-ready export | – | – | ✓ |
-| Every market, company pages, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
+| Every market, company pages and price charts, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, each fund's TER in rupees, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
 
 Paid features switch on once Razorpay's keys and monthly plan IDs are set; until then every feature is open to
 everyone and only the monthly counts apply. The admin can also run a **launch offer** (Pro for everyone for N days), and
@@ -161,7 +182,7 @@ flowchart LR
     API -. "optional" .-> MDB[("Market data Postgres<br/>(Railway)")]
     API --> MD["Market data<br/>(broker feed for India, public data elsewhere)"]
     API --> CO["Company data<br/>(reported results, exchange filings, SEC filings, company documents)"]
-    API --> AI["AI provider chain"]
+    API --> AI["AI layer<br/>(free providers, measured and ranked)"]
     API --> PAY["Razorpay"]
     API --> OUT["Phone push, Telegram, email<br/>(Brevo, Resend or SMTP)"]
     UI -. "optional" .-> PH["PostHog, Sentry"]
@@ -178,15 +199,24 @@ flowchart LR
   (`MARKET_DATABASE_URL`) takes the bulky market-wide data, and a nightly GitHub Action keeps an encrypted copy of the
   main database ([docs/ADMIN.md](docs/ADMIN.md#backups)).
 - The same engine runs backtests, the verdict checks and live paper trading, so a strategy behaves the same everywhere.
+- **AI** goes through one layer (`backend/app/ai_providers.py`) that heals itself: it measures each provider's models
+  every few hours, uses the ones that answer correctly and fast, checks every reply, pauses a failing model or provider
+  and moves on, and never names a provider to users. Free providers are enough; the admin AI panel shows each one
+  ([docs/ADMIN.md](docs/ADMIN.md#ai-providers)).
+- **Charts**: one shared chart system (`frontend/src/components/chart/`: crosshair, zoom, ranges, legends, linked charts,
+  a table view) draws every chart, and the price chart (`frontend/src/charts/price/`) is StratLab's own canvas engine,
+  loaded only on pages that show one.
 
 ```
 stratlab/
 ├── backend/app/      main.py (routes), engine/ (backtests, costs, verdict, walk-forward), options/, data/ (markets),
 │                     intel/ (company research, filings), newsletter/, and one module per feature: deepdive, screens,
 │                     holdings, tax_lots, results, corp_actions, deals, surveillance, stock_alerts, breadth, positioning,
-│                     journal, money_* (net worth, funds, tax tools, US tax, ITR, calendar), storage, invite_rewards…
+│                     journal, fo_changes, etf_nav, money_* (net worth, funds, fund costs, tax tools, US tax, ITR,
+│                     calendar), ai_* (the AI layer: catalog, ranking, providers), storage, invite_rewards…
 ├── backend/tests/    pytest: units, every route with hostile input, failing sources, tricky dates, security, load
-├── frontend/src/     pages/ (trade/, money/ and the rest), components/, lib/ (API client, plans, spaces, formatting, analytics)
+├── frontend/src/     pages/ (trade/, money/ and the rest), components/ (chart/: the shared chart system), charts/price/
+│                     (the price chart), lib/ (API client, plans, spaces, Greeks, formatting, analytics)
 ├── frontend/e2e/     Playwright: every page on desktop and phone, every route at several sizes, the landing page
 ├── frontend/scripts/ docs-shots: retakes the README's screenshots from the fake world
 └── supabase/         schema.sql
@@ -228,7 +258,8 @@ Set on the backend (Railway, or `stratlab/backend/.env`). Names and purposes onl
 | `RAZORPAY_PLAN_BASIC_YEAR`, `RAZORPAY_PLAN_PRO_YEAR` | Optional yearly plan IDs |
 | `AI_PROVIDERS`, `AI_PROVIDERS_RESEARCH`, `AI_PROVIDER` | The order AI providers are tried in, for quick jobs and long research reads |
 | `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI provider keys; each is used only when set |
-| `GROQ_MODEL`, `CEREBRAS_MODEL`, `SAMBANOVA_MODEL`, `MISTRAL_MODEL`, `OPENROUTER_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL` | Pin a model per provider (`auto` picks one) |
+| `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, `ZAI_API_KEY`, `HF_TOKEN`, `AI_GATEWAY_API_KEY`, `GITHUB_MODELS_TOKEN`, `NVIDIA_API_KEY` | More optional free AI providers; free limits, terms and key links in [docs/ADMIN.md](docs/ADMIN.md#ai-providers) |
+| `GROQ_MODEL`, `CEREBRAS_MODEL`, `SAMBANOVA_MODEL`, `MISTRAL_MODEL`, `OPENROUTER_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`, `CLOUDFLARE_MODEL`, `ZAI_MODEL`, `HUGGINGFACE_MODEL`, `AI_GATEWAY_MODEL`, `GITHUB_MODEL`, `NVIDIA_MODEL` | Pin a model per provider (`auto`, the default, uses the models the server measured) |
 | `FINNHUB_API_KEY` | US company data for the research pages |
 | `RESEARCH_AI_PER_DAY` | Fresh AI research reads per user per day (default 60) |
 | `TELEGRAM_BOT_TOKEN` | Telegram alerts |

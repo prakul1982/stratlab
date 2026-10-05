@@ -33,7 +33,7 @@ IST = ZoneInfo("Asia/Kolkata")
 RUN_AT = "07:40"                     # India time, every day: before the market opens
 TIMEOUT = 20
 MAX_SEEN = 400                       # circulars remembered
-INDICES = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50")
+INDICES = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "NIFTYFPI")
 CIRCULAR_DAYS = 14
 CIRCULAR_WORDS = re.compile(r"transaction charge|quantity freeze|freeze limit|lot size|securities transaction tax|\bSTT\b|"
                             r"expiry day|weekly expiry|trading hours|market timing|contract specification|\bIPFT\b", re.I)

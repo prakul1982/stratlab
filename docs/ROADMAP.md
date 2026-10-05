@@ -55,6 +55,13 @@ Found while checking live companies. Each shows a note on the page today instead
 ## Done recently
 Moved here from the plan above; details in the [changelog](../CHANGELOG.md).
 
+- **Charts:** StratLab's own price chart (candles, Heikin-Ashi, bars, indicators, drawings kept on the account,
+  compare) on company pages, experiments and paper sessions, and one shared chart system for every other chart.
+- **Options:** Greeks, the payoff today beside the one at expiry, what-if sliders and a roll preview, and breakevens
+  and the most it can make or lose after charges. **F&O changes:** exits, lot sizes and expiry days in one dated list.
+- **Invest:** ETF price against NAV. **Money:** what each fund costs in rupees.
+- **AI that heals itself:** models measured and ranked per provider, failing ones paused, more free providers, and an
+  admin AI panel.
 - **Three spaces:** Trade, Invest and Money, each with its own menu and home page, and a switcher at the top of the
   menu.
 - **Money:** net worth with loans and policies, mutual funds from the CAS, tax tools (dividends, advance tax, the

@@ -135,6 +135,7 @@ test("the search palette fits a landscape phone, and drops the keyboard hints", 
   await page.goto(WEB + "/");
   await expect(page.locator(".search-btn kbd").first()).toBeHidden({ timeout: 30_000 });
   await page.keyboard.press("Control+k");
+  await expect(page.locator(".palette")).toBeVisible();
   const box = await page.locator(".palette").boundingBox();
   expect(box && box.y + box.height, "the palette's foot is on the screen").toBeLessThanOrEqual(390);
   await ctx.close();
