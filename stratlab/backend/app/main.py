@@ -79,6 +79,7 @@ from . import surveillance
 from . import etf_nav
 from . import positioning
 from . import fo_changes_routes
+from . import market_events_routes
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
@@ -239,6 +240,7 @@ async def lifespan(app: FastAPI):
     rules_watch_job.start()
     positioning_job.start()
     fo_changes_routes.job.start()               # F&O contract changes, twice a trading day
+    market_events_routes.job.start()            # market events calendar, twice a day, and its reminders
     networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
@@ -268,6 +270,7 @@ app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
 app.include_router(fo_changes_routes.router)  # /trade/fo-changes
+app.include_router(market_events_routes.router)  # /trade/events
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr

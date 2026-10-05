@@ -37,7 +37,7 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
                      "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal",
-                     "mf_costs", "etf_gaps", "fo_alerts"},
+                     "mf_costs", "etf_gaps", "fo_alerts", "event_reminders"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -56,7 +56,8 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif"},
+                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
+                     "event_reminders"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -77,10 +78,13 @@ PLANS = {
 # when an F&O contract change (an exit, a lot size, an expiry day) touches your watchlist or paper sessions (the dated
 # list and its badges are for everyone); options_whatif: the options what-if sliders (spot, IV and days forward, moving
 # the payoff, Greeks and P&L) and the roll preview (the model's Greeks for each strike in the chain and each leg, the net
-# Greeks and the payoff today beside the one at expiry are for everyone)
+# Greeks and the payoff today beside the one at expiry are for everyone); event_reminders: reminders of market events (RBI,
+# data releases, the Fed, index changes, expiries) by phone, Telegram or email (the events calendar, its index badges and
+# adding the events to your Money calendar are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-            "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif")
+            "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
+            "event_reminders")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
