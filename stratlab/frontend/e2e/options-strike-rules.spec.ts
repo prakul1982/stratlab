@@ -83,7 +83,7 @@ test("options builder: legs picked by delta and premium, and the India VIX entry
   await page.getByLabel("Leg 1 strike by").selectOption("delta");
   await expect(page.getByLabel("Leg 1 delta")).toHaveValue("0.2");
   await page.getByLabel("Leg 2 strike by").selectOption("premium");
-  await page.getByLabel("Leg 2 premium").fill("50");
+  await page.getByLabel("Leg 2 premium", { exact: true }).fill("50");
   await expect(page.locator(".legs-box summary")).toContainText("Sell Δ 0.20 CE · Sell ≈ ₹50 PE");
   await expect(page.getByText("A rule picks its strike from the live quotes when the session enters")).toBeVisible();
   // a delta range needs both ends

@@ -47,7 +47,7 @@ test("India VIX on Positioning: today, the day's line, the past year and NIFTY A
   const errors = await open(page, "/trade/positioning", "India VIX");
   const panel = page.getByTestId("vix-panel");
   await panel.scrollIntoViewIfNeeded();
-  await expect(panel.getByRole("heading", { name: "India VIX" })).toBeVisible();
+  await expect(panel.locator("#vix-h")).toContainText("India VIX");
   const figs = panel.getByTestId("vix-figs");
   await expect(figs).toContainText("15.03");
   await expect(panel.getByTestId("vix-change")).toHaveText("+0.57 (+3.94%) from 14.46");
@@ -69,7 +69,7 @@ test("India VIX on Positioning: today, the day's line, the past year and NIFTY A
 });
 
 test("India VIX on the Trade home's positioning card", async ({ page }, info) => {
-  const errors = await open(page, "/trade", "Positioning");
+  const errors = await open(page, "/trade", "Test an idea, then trade it on paper");
   const card = page.getByTestId("positioning-card");
   await card.scrollIntoViewIfNeeded();
   await expect(card.getByTestId("pos-card-vix")).toHaveText("15.03");
