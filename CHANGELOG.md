@@ -4,6 +4,12 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 5 October 2026: stock futures, stock lending fees and margin funding
+
+- **Stock futures** (Trade, a Positioning tab at `/trade/positioning/stocks`): every F&O stock's price and open-interest change with the buildup words, OI by expiry, the share in later expiries (rollover), the basis and its annualised figure, and MWPL use with the ban line, from the exchange's evening files. Sort and filter, no ranking. Today for everyone; each stock's history and an alert when MWPL use crosses 80% (Basic). F&O values (OI change, rollover, basis) can be used in rules on Indian stocks' daily candles.
+- **Stock lending fees** (Invest, `/invest/stock-lending`): lending fees that traded on the exchange's SLB segment for your holdings and watchlist over 30 and 90 days, annualised against the share price, how often anything traded, eligibility, and how lending works. Every plan.
+- **Margin funding** (Invest, `/invest/margin-funding`): the market's MTF book and each stock's margin-funded amount as a percent of shares issued and of market value, with day and 30-day changes, and a calculator for your own MTF position's interest, cost-covering price and margin breach price. Today and the calculator for everyone; history and an alert on a funded level (Basic).
+
 ### 5 October 2026: price charts, options Greeks and what-if, F&O changes, ETF vs NAV, fund costs and a self-healing AI
 
 **Everywhere**

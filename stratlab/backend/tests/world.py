@@ -188,6 +188,9 @@ def _nse(sw=None):
     def handler(r: httpx.Request):
         if r.url.path == "/":
             return httpx.Response(200, text="<html></html>", headers={"set-cookie": "nsit=abc; Path=/"})
+        desk = fake_stock_desks.answer(r.url.path)
+        if desk is not None:           # the stock desks' daily files: F&O and cash bhavcopies, MWPL, SLB, margin trading
+            return httpx.Response(desk[0], content=desk[1])
         if r.url.path == "/api/corporate-announcements":
             return httpx.Response(200, json=rows)
         if r.url.path in ("/api/corporates-pit", "/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
@@ -198,9 +201,6 @@ def _nse(sw=None):
         fo = fake_fo_changes.answer(r.url.path)
         if fo is not None:             # the F&O contract file and the circulars
             return httpx.Response(200, text=fo) if isinstance(fo, str) else httpx.Response(200, json=fo)
-        desk = fake_stock_desks.answer(r.url.path)
-        if desk is not None:           # the stock desks' daily files: F&O and cash bhavcopies, MWPL, SLB, margin trading
-            return httpx.Response(desk[0], content=desk[1])
         pos = fake_positioning.answer(r.url.path)
         if pos is not None:            # the participant-wise files and the FII/DII numbers
             return httpx.Response(pos[0], text=pos[1]) if isinstance(pos[1], str) else httpx.Response(pos[0], json=pos[1])

@@ -47,11 +47,15 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Advances and declines, stocks above their 20/50/200-day averages, 52-week highs and lows, McClellan and sectors." },
     { to: "/invest/etf-gaps", label: "ETF vs NAV", icon: "lens", title: "Each Indian ETF's price against its indicative NAV and last NAV",
       blurb: "How far each ETF's price is from what a unit holds, the widest gap first, with 30 days of history and alerts." },
+    { to: "/invest/stock-lending", label: "Stock lending fees", icon: "receipt", title: "Lending fees that traded on the exchange for the stocks you hold and watch",
+      blurb: "Past traded SLB fees for your holdings and watchlist over 30 and 90 days, how often any traded, and how lending works." },
+    { to: "/invest/margin-funding", label: "Margin funding", icon: "wallet", title: "Margin-funded (MTF) amounts per stock and for the market, and your MTF cost",
+      blurb: "How much of each stock is bought with broker funding, the market's MTF book, and your own position's interest and margin worked out." },
   ],
   /** Trade pages beyond the menu's fixed entries, kept as data like Money's. */
   Trade: [
     { to: "/trade/positioning", label: "Positioning", icon: "layers", title: "Participant-wise open interest, FII/DII flows, PCR, max pain and IV",
-      blurb: "Who holds index futures and options, FII and DII cash flows, each index's PCR, OI by strike and ATM IV." },
+      blurb: "Who holds index futures and options, FII and DII cash flows, each index's PCR, OI by strike and ATM IV, and every F&O stock's futures: buildup, rollover, basis and MWPL use." },
     { to: "/trade/journal", label: "Trade journal", icon: "book", title: "Your real trades paired into round trips, judged by the verdict's checks",
       blurb: "Import your tradebook or tax P&L, equity and F&O: every round trip with its charges, your notes, and the verdict's honesty checks on your real trades." },
     { to: "/trade/fo-changes", label: "F&O changes", icon: "calendar", title: "Stocks entering and leaving F&O, lot-size revisions and expiry-day changes",

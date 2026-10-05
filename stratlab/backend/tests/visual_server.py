@@ -65,6 +65,7 @@ def build():
     screen_index()
     breadth(mp)
     positioning_history()
+    stock_desks_history(mp)
     # the public NAV files, from the test fixtures, for the mutual funds page
     from app import money_mf_nav
     navs = Path(__file__).parent / "fixtures" / "mf"
@@ -153,6 +154,16 @@ def positioning_history():
     if day:
         main.positioning_runner.run_day(day)
     main.positioning_runner.backfill(today, step=120, days=100)
+
+
+def stock_desks_history(mp):
+    """The stock desks (futures, lending, margin funding) as the evening job and its archive walk would have left them:
+    about two months of the fake exchange's files. The job itself stays off, so the stored days stay as they are."""
+    from app import exchange_days, stock_desks
+    for d in stock_desks.DESKS:
+        stock_desks.runner.catch_up(d)
+        stock_desks.runner.backfill(d, exchange_days.ist_now().date(), step=30)
+    mp.setattr(stock_desks.job, "start", lambda: None)
 
 
 def screen_index():

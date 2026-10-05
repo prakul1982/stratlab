@@ -95,6 +95,9 @@ const NetWorthPage = page(netWorth, "NetWorthPage");
 const journalPage = () => import("./pages/trade/JournalPage");
 const JournalPage = page(journalPage, "JournalPage");
 const FoChangesPage = page(() => import("./pages/trade/FoChangesPage"), "FoChangesPage");
+const StockFuturesPage = page(() => import("./pages/trade/StockFuturesPage"), "StockFuturesPage");
+const StockLendingPage = page(() => import("./pages/StockLendingPage"), "StockLendingPage");
+const MarginFundingPage = page(() => import("./pages/MarginFundingPage"), "MarginFundingPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -195,6 +198,7 @@ function Routed() {
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/options" element={<OptionsPage />} />
         <Route path="/trade/positioning" element={<PositioningPage />} />
+        <Route path="/trade/positioning/stocks" element={<StockFuturesPage />} />
         <Route path="/options/s/:sid" element={<OptionsSession />} />
         <Route path="/paper" element={<PaperPage />} />
         <Route path="/paper/:sid" element={<PaperPage />} />
@@ -226,6 +230,8 @@ function Routed() {
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/invest/breadth" element={<BreadthPage />} />
         <Route path="/invest/etf-gaps" element={<EtfGapsPage />} />
+        <Route path="/invest/stock-lending" element={<StockLendingPage />} />
+        <Route path="/invest/margin-funding" element={<MarginFundingPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />
