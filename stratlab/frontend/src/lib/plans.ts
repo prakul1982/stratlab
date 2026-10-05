@@ -18,11 +18,11 @@ export const LIMITS: Record<PlanId, Limits> = {
     stock_alerts: 5, screens: 2, holdings: 30, networth_items: 5, mf_schemes: 5, journal_trades: 50, features: [] },
   basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
     stock_alerts: 25, screens: 10, holdings: 100, networth_items: null, mf_schemes: null, journal_trades: null,
-    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts"] },
+    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts", "stock_futures", "mtf"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif"] },
+      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "stock_futures", "mtf"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -43,9 +43,9 @@ export const FEATURES: Record<PlanId, string[]> = {
   basic: ["Everything in Free, plus:", `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month`,
     "All 20+ indicators in your rules: MACD, Supertrend, Bollinger Bands, VWAP and more",
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times, with trade notifications and a daily report`,
-    "The full trade journal, positioning history with IV percentiles, and F&O change alerts",
+    "The full trade journal, positioning history with IV percentiles, stock futures history with MWPL alerts, and F&O change alerts",
     `${L.basic.deepdives_per_month} company deep dives (report card and checklist) and ${L.basic.decks_per_month} decks a month`,
-    "Stage 2 scan, watchlist red flags, Watchlist at a glance and market breadth charts, with alerts",
+    "Stage 2 scan, watchlist red flags, Watchlist at a glance, market breadth charts and margin funding history, with alerts",
     "Every mutual fund and net worth entry, fund capital gains and fund costs in rupees, dividends with TDS, and money reminders",
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks`],
   pro: ["Everything in Basic, plus:", "Unlimited backtests, AI builds, deep dives and decks", `Paper trade ${L.pro.live_limit} strategies at a time`,
@@ -76,7 +76,9 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["etf_gaps", "Alerts on an ETF's price against its NAV"],
 
 ["fo_alerts", "Alerts when an F&O exit, lot size or expiry change touches your watchlist or paper sessions"],
-  ["options_whatif", "Options what-if: move the underlying, shift IV and pass days, and preview rolling a leg"]];
+  ["options_whatif", "Options what-if: move the underlying, shift IV and pass days, and preview rolling a leg"],
+  ["stock_futures", "Stock futures: each F&O stock's OI, buildup, rollover, basis and MWPL history, with MWPL alerts"],
+  ["mtf", "Margin funding: each stock's and the market's MTF history, with alerts on a funded level"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
@@ -85,4 +87,6 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Option Greeks for every strike and your position, and the payoff today beside the one at expiry (model estimates)",
   "A trade journal with the basic stats", "My Holdings, the tax report and the year's total tax estimate", "Money calendar and its calendar feed",
   "Dividend and US share totals for each year, advance tax due dates and the exemption used", "A preview of the ITR-ready export",
-  "Weekly Market Brief and My Stocks", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history"];
+  "Weekly Market Brief and My Stocks", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
+  "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
+  "Margin-funded positions per stock today, and your own MTF cost worked out"];

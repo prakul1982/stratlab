@@ -10,6 +10,8 @@ RefType = Literal[
     # the candle itself, and the trading day it belongs to
     "open", "high", "low", "body", "upper_wick", "lower_wick", "range", "atr",
     "prev_close", "day_open", "day_high", "day_low", "day_chg",
+    # an Indian F&O stock's daily futures facts (stock_futures.py), on daily candles
+    "oi_change_pct", "rollover_pct", "basis_pct",
 ]
 HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
 
@@ -264,7 +266,7 @@ class StockAlertReq(BaseModel):
     """One stock alert; stock_alerts.clean checks the combination (a price level, an MA length…)."""
     region: Literal["IN", "US"] = "IN"
     symbol: str = Field(..., min_length=1, max_length=20)
-    kind: Literal["price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap"]
+    kind: Literal["price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap", "mwpl", "mtf"]
     op: Optional[Literal["above", "below", "up", "down", "either"]] = None
     value: Optional[float] = None
     period: Optional[int] = Field(None, ge=1, le=500)

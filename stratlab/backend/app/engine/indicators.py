@@ -15,7 +15,7 @@ DEFAULTS = {
 DAY = {"prev_close", "day_open", "day_high", "day_low", "day_chg"}
 # drawn under the price chart rather than on it
 OSCILLATORS = {"rsi", "macd", "macd_signal", "macd_hist", "adx", "stoch_k", "atr_pct", "volume", "vol_sma",
-               "body", "upper_wick", "lower_wick", "range", "atr", "day_chg", "stage"}
+               "body", "upper_wick", "lower_wick", "range", "atr", "day_chg", "stage", "oi_change_pct", "rollover_pct", "basis_pct"}
 
 
 def params(ref) -> tuple[int, float]:
@@ -245,6 +245,8 @@ def compute(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
         return _wilder(true_range(df), p)
     if t in DAY:
         return day_values(df, t, intraday)
+    if t in FO_REFS:
+        return fo_value(t, df)
     if t in ("volume", "vol_sma"):
         vol = df.v.where(df.v > 0)        # indices have no volume: leave it blank rather than zero
         return vol if t == "volume" else vol.rolling(p).mean()
@@ -272,6 +274,8 @@ def _base_name(ref) -> str:
     t = ref.t
     if t in NAMES:
         return NAMES[t]
+    if t in FO_REFS:
+        return FO_REFS[t]
     if t == "price":
         return "Price"
     if t == "num":
@@ -290,3 +294,46 @@ def _base_name(ref) -> str:
         return "Stage" if (p, int(m or 20)) == (150, 20) else f"Stage ({p}-candle average)"
     return {"adx": f"ADX {p}", "stoch_k": f"Stochastic {p}", "atr_pct": f"ATR% {p}", "dc_upper": f"Donchian high {p}",
             "dc_lower": f"Donchian low {p}", "volume": "Volume", "vol_sma": f"Volume SMA {p}", "atr": f"ATR {p}"}[t]
+
+
+# ---------- F&O stock facts (stock_futures.py stores them by day; a backtest on an Indian F&O stock's daily candles
+# gets them as the columns fo_oi, fo_near, fo_fut and fo_spot) ----------
+FO_REFS = {"oi_change_pct": "OI change %", "rollover_pct": "Rollover %", "basis_pct": "Futures basis %"}
+
+
+def _ratio_pct(a, b, minus: float = 1.0, sign: float = 1.0):
+    """sign * (a / b - minus) * 100, for numbers (None when b is missing or zero) and for series (NaN there)."""
+    if isinstance(a, pd.Series) or isinstance(b, pd.Series):
+        b = b.where(b > 0) if isinstance(b, pd.Series) else (b if b else np.nan)
+        return sign * (a / b - minus) * 100
+    if a is None or not b:
+        return None
+    return sign * (a / b - minus) * 100
+
+
+def oi_change_pct(oi, before):
+    """Open interest's change, as a percent of what was open before."""
+    return _ratio_pct(oi, before)
+
+
+def rollover_pct(near, total):
+    """The share of futures open interest outside the near expiry (in the next and far ones), in percent."""
+    if isinstance(near, pd.Series) or isinstance(total, pd.Series):
+        return _ratio_pct(near, total, minus=1.0, sign=-1.0)
+    return None if near is None or not total else (1 - near / total) * 100
+
+
+def basis_pct(fut, spot):
+    """The futures price's premium (or discount) over the share price, as a percent of the share price."""
+    return _ratio_pct(fut, spot)
+
+
+def fo_value(t: str, df: pd.DataFrame) -> pd.Series:
+    """A rule's F&O stock value on each candle; NaN where the day's F&O facts aren't stored (or not an F&O stock)."""
+    blank = pd.Series(np.nan, index=df.index)
+    col = lambda c: df[c].astype(float) if c in df else blank        # noqa: E731
+    if t == "oi_change_pct":
+        return oi_change_pct(col("fo_oi"), col("fo_oi").shift(1))
+    if t == "rollover_pct":
+        return rollover_pct(col("fo_near"), col("fo_oi"))
+    return basis_pct(col("fo_fut"), col("fo_spot"))

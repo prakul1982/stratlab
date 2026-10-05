@@ -24,7 +24,7 @@ from app.live import LiveManager
 from app.options.data import OptionsData
 from app.options.session import IST
 from datetime import date, datetime, timedelta
-from tests import fake_fo_changes, fake_kite, fake_positioning
+from tests import fake_fo_changes, fake_kite, fake_positioning, fake_stock_desks
 from tests.fake_options_kite import FakeOptionsKite
 from tests.fake_db import FakeSupabase, headers
 from tests.fake_intel import fake_finnhub, fake_news, fake_screener, fake_wiki
@@ -198,6 +198,9 @@ def _nse(sw=None):
         fo = fake_fo_changes.answer(r.url.path)
         if fo is not None:             # the F&O contract file and the circulars
             return httpx.Response(200, text=fo) if isinstance(fo, str) else httpx.Response(200, json=fo)
+        desk = fake_stock_desks.answer(r.url.path)
+        if desk is not None:           # the stock desks' daily files: F&O and cash bhavcopies, MWPL, SLB, margin trading
+            return httpx.Response(desk[0], content=desk[1])
         pos = fake_positioning.answer(r.url.path)
         if pos is not None:            # the participant-wise files and the FII/DII numbers
             return httpx.Response(pos[0], text=pos[1]) if isinstance(pos[1], str) else httpx.Response(pos[0], json=pos[1])
@@ -281,6 +284,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     fo_changes._cache.clear()                   # the F&O contract changes another test stored
     from app import positioning
     positioning.clear_cache()                   # positioning days and live chains another test stored
+    from app import exchange_days, stock_desks
+    exchange_days.clear_cache()                 # the stock desks' days another test stored
+    monkeypatch.setattr(stock_desks.runner, "pace", 0)
     from app import auth
     auth._cache.clear()
     auth._rejected.clear()
