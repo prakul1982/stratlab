@@ -10,6 +10,8 @@ RefType = Literal[
     # the candle itself, and the trading day it belongs to
     "open", "high", "low", "body", "upper_wick", "lower_wick", "range", "atr",
     "prev_close", "day_open", "day_high", "day_low", "day_chg",
+    # the market: India VIX's daily close and its change % (app/vix.py)
+    "india_vix", "india_vix_chg",
 ]
 HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
 
@@ -402,6 +404,19 @@ class OptLeg(BaseModel):
     opt: Literal["CE", "PE"]
     offset: float = Field(0, ge=-5000, le=5000)   # distance from the money: + is out of the money, - in the money
     lots: int = Field(1, ge=1, le=50)              # lots of this leg per unit of the structure
+    # how the strike is picked (options/strikes.py): the offset above, or a rule resolved on the quotes at entry
+    pick: Literal["offset", "delta", "delta_range", "premium", "straddle_pct"] = "offset"
+    delta: float = Field(0.2, gt=0, lt=1)          # closest model delta (either sign), or the low end of a delta range
+    deltaTo: float = Field(0.3, gt=0, lt=1)        # the high end of a delta range
+    premium: float = Field(50, gt=0, le=1e6)       # a premium in rupees
+    premiumOp: Literal["near", "gte", "lte"] = "near"   # nearest to it, the cheapest at or above it, the dearest at or below it
+    pct: float = Field(20, gt=0, le=200)           # % of the at-the-money straddle's premium
+
+    @model_validator(mode="after")
+    def _range(self):
+        if self.pick == "delta_range" and not self.delta < self.deltaTo:
+            raise ValueError("A delta range needs its low end below its high end.")
+        return self
 
 
 class OptTiming(BaseModel):
@@ -443,6 +458,20 @@ class OptCosts(BaseModel):
     freeze: int = Field(0, ge=0, le=100000)         # most units in one order; 0 = the exchange default
 
 
+class OptVix(BaseModel):
+    """Enter only while India VIX is inside a band (0 leaves that end open)."""
+    min: float = Field(0, ge=0, le=100)
+    max: float = Field(0, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _band(self):
+        if not self.min and not self.max:
+            raise ValueError("Set a lowest or a highest India VIX for the entry filter.")
+        if self.min and self.max and not self.min < self.max:
+            raise ValueError("The lowest India VIX has to be below the highest.")
+        return self
+
+
 class OptSignal(BaseModel):
     """Enter when a notebook's rules, run on the underlying's own candles, open a trade; exit when they close it."""
     rules: Strategy
@@ -472,6 +501,7 @@ class OptionStrategy(BaseModel):
     costs: OptCosts = Field(default_factory=OptCosts)
     notes: str = Field("", max_length=2000)
     signal: Optional[OptSignal] = None               # None: enter at the set time
+    vix: Optional[OptVix] = None                     # None: enter whatever India VIX is
 
     @model_validator(mode="after")
     def _times(self):

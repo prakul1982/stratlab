@@ -1409,3 +1409,9 @@ table.greeks-t tr.greeks-net td { border-top: 1px solid var(--line-2); }
 .opt-extras > * { min-width: 0; }      /* a wide chain scrolls inside its card instead of stretching the grid past the screen */
 table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; padding: 5px 7px; }
 .model-inputs { max-width: 80ch; }
+
+/* Options strike rules (the legs editor and the order log) */
+ul.order-rows li .order-pick { grid-column: 2 / -1; margin-top: -4px; }
+.legs .leg-pick { flex-wrap: wrap; align-items: center; }
+.legs .leg-pick select { max-width: 170px; }
+ul.leg-picks { margin: 0; padding-left: 18px; }

@@ -1,4 +1,19 @@
-import type { OptLeg, OptionStrategy, OptPreview } from "./types";
+import type { OptLeg, OptionStrategy, OptPreview, StrikePick } from "./types";
+
+/** The ways a leg's strike can be picked (strike rules beyond the distance are Pro). */
+export const PICKS: [StrikePick, string][] = [["offset", "Distance from ATM"], ["delta", "Closest delta"], ["delta_range", "Delta range"],
+  ["premium", "Premium"], ["straddle_pct", "% of ATM straddle"]];
+
+/** A leg's strike rule in a few words: "ATM", "2 OTM", "Δ 0.20", "Δ 0.15–0.25", "₹50", "≥ ₹40", "20% of straddle". */
+export function legRule(l: OptLeg, unit: "strikes" | "points"): string {
+  switch (l.pick ?? "offset") {
+    case "delta": return `Δ ${(l.delta ?? 0.2).toFixed(2)}`;
+    case "delta_range": return `Δ ${(l.delta ?? 0.2).toFixed(2)}–${(l.deltaTo ?? 0.3).toFixed(2)}`;
+    case "premium": return `${{ near: "≈", gte: "≥", lte: "≤" }[l.premiumOp ?? "near"]} ₹${l.premium ?? 50}`;
+    case "straddle_pct": return `${l.pct ?? 20}% of straddle`;
+    default: return l.offset === 0 ? "ATM" : `${Math.abs(l.offset)}${unit === "points" ? " pts" : ""} ${l.offset > 0 ? "OTM" : "ITM"}`;
+  }
+}
 
 export const STRUCTURES: { id: string; name: string; hint: string; unit: "strikes" | "points"; legs: OptLeg[] }[] = [
   { id: "short_straddle", name: "Short straddle", hint: "Sell the at-the-money call and put", unit: "strikes",
