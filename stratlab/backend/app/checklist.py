@@ -71,7 +71,8 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
     s = summary(p)
     ind = industry.classify(p, nums, symbol)
     grp = ind["group"]
-    financial = grp in ("lender", "insurer", "holding")
+    financial = grp in ("lender", "insurer", "holding", "bdc")
+    realty = grp in ("realty", "reit")          # a US REIT is held to the same softened rules as a developer
     g = nums.get("growth") or {}
     years = [y for y in nums.get("years") or [] if y.get("sales") is not None]
     quarters = [q for q in nums.get("quarters") or [] if q.get("sales_yoy") is not None]
@@ -93,17 +94,17 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
 
     # growth
     add("Growth", "Sales growth, 3 years", _state(g.get("sales_cagr_3y"), 10, 0), _pct(g.get("sales_cagr_3y")) + " a year",
-        "Pass at 10% a year or more; fail if sales shrank.", soft=grp in ("cyclical", "holding", "realty"))
+        "Pass at 10% a year or more; fail if sales shrank.", soft=grp in ("cyclical", "holding") or realty)
     add("Growth", "Profit growth, 3 years", _state(g.get("profit_cagr_3y"), 10, 0), _pct(g.get("profit_cagr_3y")) + " a year",
-        "Pass at 10% a year or more; fail if profit shrank.", soft=grp in ("cyclical", "holding", "realty"))
+        "Pass at 10% a year or more; fail if profit shrank.", soft=grp in ("cyclical", "holding") or realty)
     last_q = quarters[-1] if quarters else None
     add("Growth", "Latest quarter sales vs a year ago", _state(last_q and last_q["sales_yoy"], 5, 0),
         f"{_pct(last_q['sales_yoy'])} ({last_q['quarter']})" if last_q else "–", "Pass at +5% or more; fail if lower than a year ago.",
-        soft=grp in ("cyclical", "holding", "realty"))
+        soft=grp in ("cyclical", "holding") or realty)
 
     # quality
     if financial:
-        good, bad = {"lender": (15, 10), "insurer": (14, 8), "holding": (10, 5)}[grp]
+        good, bad = {"lender": (15, 10), "insurer": (14, 8), "holding": (10, 5), "bdc": (10, 5)}[grp]
         add("Quality", "Return on equity", _state(s.get("roe"), good, bad), _pct(s.get("roe"), False),
             f"For {'a ' if grp != 'insurer' else 'an '}{ind['label'].lower()}, return on equity: pass at {good}% or more; fail below {bad}%.")
     else:
@@ -113,14 +114,15 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
         opm_now = years[-1]["opm"] if years and years[-1].get("opm") is not None else None
         opm_then = years[-4]["opm"] if len(years) >= 4 and years[-4].get("opm") is not None else None
         d_opm = opm_now - opm_then if opm_now is not None and opm_then is not None else None
-        add("Quality", "Operating margin holding up", _state(d_opm, -1, -4),
-            f"{_pct(opm_now, False)}, from {_pct(opm_then, False)}" if d_opm is not None else "–",
-            "Pass if within 1 point of three years ago or better; fail if down more than 4 points.", soft=grp in ("cyclical", "realty"))
+        if grp != "reit":         # depreciation and property sales swing a REIT's operating profit: no margin to judge
+            add("Quality", "Operating margin holding up", _state(d_opm, -1, -4),
+                f"{_pct(opm_now, False)}, from {_pct(opm_then, False)}" if d_opm is not None else "–",
+                "Pass if within 1 point of three years ago or better; fail if down more than 4 points.", soft=grp == "cyclical" or realty)
 
         # balance sheet
         add("Balance sheet", "Debt to equity", _state(s.get("debt_equity"), 0.5, 1.0, higher_better=False),
             "–" if s.get("debt_equity") is None else f"{s['debt_equity']:.2f}", "Pass at 0.5 or less; fail above 1.",
-            soft=grp in ("utility", "realty"))
+            soft=grp == "utility" or realty)
 
         # cash
         last3 = years[-3:]
@@ -129,7 +131,7 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
         conv = sum(cfo) / sum(prof) if len(cfo) == 3 and len(prof) == 3 and sum(prof) > 0 else None
         add("Cash", "Profit turning into cash", _state(conv, 0.8, 0.5),
             "–" if conv is None else f"{conv:.2f}× profit over 3 years", "Cash from operations ÷ net profit over 3 years: pass at 0.8 or more; fail below 0.5.",
-            soft=grp == "realty")
+            soft=realty)
         fcf = [y["fcf"] for y in last3 if y.get("fcf") is not None]
         fcf_sum = sum(fcf) if len(fcf) == 3 else None
         add("Cash", "Free cash flow, 3 years", "na" if fcf_sum is None else "pass" if fcf_sum > 0 else "watch",

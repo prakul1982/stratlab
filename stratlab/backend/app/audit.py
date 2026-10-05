@@ -102,8 +102,9 @@ def _last_ttm(table: dict | None, *prefixes: str):
     return None
 
 
-FINANCIAL = {"lender", "insurer", "holding"}
+FINANCIAL = {"lender", "insurer", "holding", "bdc"}
 NO_REVENUE = "No revenue reported in any year: a company without sales yet"
+NO_PLANT = "No capex: the filings show no plant, property or equipment, so there is nothing to spend capex on"
 
 
 def short_history(n: int) -> str:
@@ -121,12 +122,19 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None) -> 
     missing = [y["year"] for y in years if y.get("sales") is None or y.get("profit") is None]
     first = next((i for i, y in enumerate(years) if y.get("sales") is not None), len(years))
     before = [y["year"] for y in years[:first]]                   # years before its first sales, with a profit (loss) filed
+    # years whose annual report has no revenue line at all (US filings): no sales that year, not a figure we missed
+    none_filed = set(nums.get("no_revenue") or [])
+    stopped = [y["year"] for y in years[first:] if y["year"] in none_filed and y.get("profit") is not None]
     if years and len(no_sales) == len(years) and all(y.get("profit") is not None for y in years):
         out.append(_issue("fact", "Numbers", NO_REVENUE))         # a company with no sales yet (in development, a shell)
     elif missing and missing == before and all(y.get("profit") is not None for y in years[:first]):
         out.append(_issue("fact", "Numbers", f"No revenue before {years[first]['year']}: sales began then"))
     elif missing:
-        out.append(_issue("gap", "Numbers", f"Revenue or profit missing for {', '.join(missing[:4])}"))
+        if stopped:
+            out.append(_issue("fact", "Numbers", f"No revenue in {', '.join(stopped[:4])}: the annual report shows no sales that year"))
+        rest = [y for y in missing if y not in stopped and not (y in before and y in none_filed)]
+        if rest:
+            out.append(_issue("gap", "Numbers", f"Revenue or profit missing for {', '.join(rest[:4])}"))
     if not nums.get("bank") and group not in FINANCIAL:
         # a margin above 100% means costs came out negative (provisions written back): the margin is the company
         # page's own figure, shown as filed, so it is worth a look but isn't our reading going wrong
@@ -135,10 +143,12 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None) -> 
             src = "The filings show" if p.get("region") == "US" else "The company page shows"
             out.append(_issue("gap", "Numbers", f"{src} an operating margin above 100% in {', '.join(odd[:4])} (costs written back)"))
         if len(years) >= 3 and all(y.get("capex") is None for y in years[-3:]):
-            out.append(_issue("gap", "Capex", "No capex estimate for the last three years"))
+            out.append(_issue("fact", "Capex", NO_PLANT) if p.get("region") == "US" and not _plant(p, 3)
+                       else _issue("gap", "Capex", "No capex estimate for the last three years"))
     ttm = _last_ttm(p.get("pl"), "Net Profit")
-    if snap.get("pe") and snap.get("market_cap_cr") and ttm and ttm > 0:
-        ours = snap["market_cap_cr"] / ttm
+    fx = _usd_rate(p)
+    if snap.get("pe") and snap.get("market_cap_cr") and ttm and ttm > 0 and fx:
+        ours = snap["market_cap_cr"] / (ttm * fx)
         off = _off(ours, snap["pe"])
         explained = any("P/E is based on" in n for n in nums.get("notes") or [])
         if off is not None and off > PE_TOLERANCE and not explained:
@@ -148,9 +158,27 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None) -> 
     if ttm_sales and len(q) == 4 and all(v is not None for v in q):
         off = _off(sum(q), ttm_sales)
         if off is not None and off > TTM_TOLERANCE and abs(sum(q) - ttm_sales) > TTM_ROUNDING:
-            unit = ("$m", "") if p.get("region") == "US" else ("", " cr")
-            out.append(_issue("mismatch", "Numbers", f"Trailing revenue {unit[0]}{ttm_sales:,.0f}{unit[1]} vs last four quarters {unit[0]}{sum(q):,.0f}{unit[1]}"))
+            if p.get("region") == "US":            # in the filings' own unit: "$1,204 m", "CAD 95 m"
+                from .deepdive import money
+                unit = p.get("unit") or nums.get("unit") or "$ million"
+                out.append(_issue("mismatch", "Numbers", f"Trailing revenue {money(ttm_sales, unit)} vs last four quarters {money(sum(q), unit)}"))
+            else:
+                out.append(_issue("mismatch", "Numbers", f"Trailing revenue {ttm_sales:,.0f} cr vs last four quarters {sum(q):,.0f} cr"))
     return out
+
+
+def _plant(p: dict, n: int) -> bool:
+    """Whether the balance sheet shows any plant, property or equipment in the last `n` years."""
+    vals = (((p.get("balance") or {}).get("rows") or {}).get("Fixed Assets") or [])[-n:]
+    return any(v for v in vals)
+
+
+def _usd_rate(p: dict) -> float | None:
+    """Dollars to one unit of the company's reporting currency (US filings), so a market value in dollars can be set
+    against its reported profit; 1 for everything reported in the market's own currency."""
+    if p.get("currency") in (None, "USD", "INR"):
+        return 1.0
+    return (p.get("fx") or {}).get("rate")
 
 
 NO_PRICES = {    # why there's no trend: the facts first, then a source to try again
@@ -165,12 +193,19 @@ def _near(ours: float, other: float) -> bool:
     return off is None or off <= PRICE_TOLERANCE or abs(ours - other) <= PRICE_TICK
 
 
+def _in_range(ours: float, low, high) -> bool:
+    """Within the session's traded range (with the usual tolerance): a close read a few minutes before or after the
+    company page's quote, on a stock moving fast that day, is the same session's price, not a different one."""
+    return bool(low and high and low * (1 - PRICE_TOLERANCE) <= ours <= high * (1 + PRICE_TOLERANCE))
+
+
 def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = None, page_quote=None) -> list[dict]:
     """Our last daily close against the exchange's quote and the company page. `exchange` is the quote's last price,
     or (last price, previous close): a thinly traded stock's close can be a day older than its last trade, or BSE's
     closing price (an average of the last half hour) rather than the last trade, so either agreeing is a match.
-    `page_quote` is the company page's own (last price, previous close) when it has them (US): the page's price can
-    be today's while our last daily close is yesterday's, so its previous close counts too, as the exchange's does.
+    `page_quote` is the company page's own (last price, previous close[, day high, day low]) when it has them (US): the
+    page's price can be today's while our last daily close is yesterday's, so its previous close counts too, as the
+    exchange's does; and a close anywhere in the page's day range is that session's price read at another minute.
     `why` says why there's no trend when there isn't one ("new", "untraded", "stale" or "error")."""
     out = []
     if not trend:
@@ -184,8 +219,9 @@ def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = Non
     if ours is not None and quote and not any(_near(ours, q) for q in quote):
         out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {quote[0]:,.2f} on the exchange's live quote"))
     elif ours is not None and snap.get("price"):
-        page = [x for x in (page_quote or ()) if x] or [snap["price"]]
-        if not any(_near(ours, q) for q in page):
+        page = [x for x in (page_quote or ())[:2] if x] or [snap["price"]]
+        hi, lo = (tuple(page_quote or ())[2:4] + (None, None))[:2]
+        if not any(_near(ours, q) for q in page) and not _in_range(ours, lo, hi):
             prev = f" (previous close {page[1]:,.2f})" if len(page) > 1 else ""
             out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {page[0]:,.2f} on the company page{prev}"))
     return out
@@ -201,7 +237,8 @@ def _explained(label: str, years: list[dict], quarters: list[dict]) -> bool:
         return True                               # the stage needs 170 trading days of prices: a young listing has none yet
     last3, last4 = years[-3:], years[-4:]
     if label.startswith(("Sales growth", "Operating margin holding up")):
-        return len(years) < 4
+        # too short a history, or a year in the window whose annual report shows no sales at all
+        return len(years) < 4 or any(y.get("sales") is None and y.get("no_revenue") for y in last4)
     if label.startswith("Profit growth"):
         return len(years) < 4 or any((y.get("profit") or 0) <= 0 for y in last4[:1] + last4[-1:])
     if label.startswith("Latest quarter"):
@@ -224,7 +261,9 @@ def check_view(view: dict, meets: int | None = None) -> list[dict]:
     if v.get("value") is None and "There's no" not in (v.get("why") or ""):      # a loss or negative net worth is said
         out.append(_issue("gap", "Valuation", f"No {v.get('short') or 'valuation'} figure"))
     nums = view.get("numbers") or {}
-    years, quarters = nums.get("years") or [], nums.get("quarters") or []
+    none_filed = set(nums.get("no_revenue") or [])
+    years = [{**y, "no_revenue": y.get("year") in none_filed} for y in nums.get("years") or []]
+    quarters = nums.get("quarters") or []
     na = [c["label"] for c in cl.get("checks", []) if c.get("state") == "na"]
     unexplained = [x for x in na if not _explained(x, years, quarters)]
     if len(unexplained) >= 3:
@@ -241,7 +280,7 @@ def check_view(view: dict, meets: int | None = None) -> list[dict]:
         if "annual_report" not in kinds and "quarterly_report" not in kinds:
             out.append(_issue("fact", "Documents", STOPPED_FILING))
         elif "annual_report" not in kinds:
-            out.append(_issue("gap", "Documents", "No annual report (10-K, 20-F or 40-F) filed in the last two years"))
+            out.append(_issue("fact", "Documents", LATE_ANNUAL))
         elif "quarterly_report" not in kinds and not foreign:
             out.append(_issue("gap", "Documents", "No quarterly report (10-Q) filed in the last two years"))
     else:
@@ -257,6 +296,8 @@ def check_view(view: dict, meets: int | None = None) -> list[dict]:
 
 
 STOPPED_FILING = "No annual or quarterly report filed in the last two years: the company has stopped filing with the SEC"
+LATE_ANNUAL = ("No annual report (10-K, 20-F or 40-F) filed in the last two years, though it still files quarterly "
+               "reports: its annual report is late")
 NO_MEETS = ("Held no earnings calls or analyst meetings in the last two years (none told to the exchange), "
             "so there's no presentation or call transcript to read")
 
@@ -282,7 +323,7 @@ def check_documents(docs: list[dict], read) -> list[dict]:
 # nothing for the app to show, and that's a fact about the security: funds, SPACs and shells file no annual results,
 # foreign companies traded over the counter file nothing with the SEC, and some report in another currency
 NOT_COVERED = ("has no annual results filed", "isn't a company that files with the SEC", "has nothing for that",
-               "not US dollars")
+               "not US dollars", "can't be shown here", "no business numbers to show")
 # SEC industry codes of securities with no operating business to check: blank-check companies (SPACs), and funds and
 # trusts that hold investments or commodities
 NOT_OPERATING = {"6770": "a blank-check company (SPAC) with no business of its own yet",
@@ -297,12 +338,15 @@ def restate(issue: dict, us: bool = False) -> dict | None:
     if level == "mismatch" and detail.startswith("Operating margin above 100% in "):
         src = "The filings show" if us else "The company page shows"
         return _issue("gap", area, f"{src} an operating margin above 100% in {detail[31:]} (costs written back)")
-    m = re.match(r"Trailing revenue \$?m?([\d,.]+)(?: cr)? vs last four quarters \$?m?([\d,.]+)", detail)
+    m = re.match(r"Trailing revenue \$?m?([\d,.]+)(?: cr)? vs last four quarters \$?m?([\d,.]+)(?: cr)?$", detail)
     if level == "mismatch" and m:
         a, b = num(m[1]), num(m[2])
         if abs(a - b) <= TTM_ROUNDING:
             return None
-        return _issue(level, area, f"Trailing revenue $m{a:,.0f} vs last four quarters $m{b:,.0f}") if us else issue
+        if us:                                  # a US company's figures are in $ million, never crore
+            from .deepdive import money
+            return _issue(level, area, f"Trailing revenue {money(a, '$ million')} vs last four quarters {money(b, '$ million')}")
+        return issue
     m = re.match(r"Last close ([\d,.]+) vs ([\d,.]+)", detail)
     if level == "mismatch" and area == "Prices" and m and abs(num(m[1]) - num(m[2])) <= PRICE_TICK:
         return None
@@ -313,8 +357,10 @@ def restate(issue: dict, us: bool = False) -> dict | None:
     m = re.match(r"Only (\d+) years? of annual results$", detail)
     if level == "gap" and m and int(m[1]) > 0:
         return _issue("fact", area, short_history(int(m[1])))
-    if level == "gap" and area == "Documents" and detail.startswith("No annual report (10-K)"):
-        return _issue(level, area, "No annual report (10-K, 20-F or 40-F) filed in the last two years")
+    if level == "gap" and area == "Documents" and detail.startswith("No annual report (10-K"):
+        return _issue("fact", area, LATE_ANNUAL)
+    if area == "Company page" and detail.startswith(("SEC EDGAR has nothing for that", "The SEC has nothing for that")):
+        return _issue("fact", area, OLD_NOTHING)      # checked before the reason was read: said plainly until re-checked
     return issue
 
 
@@ -330,6 +376,10 @@ def restate_row(row: dict, us: bool = False) -> list[dict]:
         issues = [i for i in issues if not i["detail"].startswith(("No annual report", "No quarterly report"))]
         issues.append(_issue("fact", "Documents", STOPPED_FILING))
     return issues
+
+
+# the old wording for a company with no figures filed as data, before the reason was read from its filings
+OLD_NOTHING = "The SEC has no financial statements filed as data for this company, so its results can't be shown here."
 
 
 class Skipped(Exception):

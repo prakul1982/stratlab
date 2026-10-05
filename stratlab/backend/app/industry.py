@@ -22,7 +22,15 @@ GROUPS = {
     "cyclical": ("Cyclical: metals, cement, chemicals", "Growth and margins swing with the commodity cycle, so 3-year growth and "
                  "margin checks can't fail, only ask for a closer look."),
     "general": ("General", "Standard rules for companies that make and sell things."),
+    # US only, from the company's SEC filings (see intel.sec.company_kind)
+    "reit": ("Real estate investment trust (REIT)", "REITs own property or property loans and pay out most of their income. "
+             "Depreciation and gains on property sales swing their operating profit, so operating margin isn't judged, and "
+             "growth, debt and cash flow checks can't fail, only ask for a closer look."),
+    "bdc": ("Business development company", "Business development companies lend to and invest in private companies and "
+            "pay out most of their income, so sales, margin, capex and debt checks don't describe them. Return on equity "
+            "is used instead."),
 }
+KINDS = {"reit": "reit", "bdc": "bdc"}       # a US company's kind from its filings -> its group
 
 WORDS = [  # first match wins, checked against the industry classification and then the company name
     ("insurer", r"insurance|insurer"),
@@ -41,7 +49,7 @@ UTILITIES = {"NTPC", "POWERGRID", "TATAPOWER", "ADANIPOWER", "ADANIGREEN", "NHPC
 
 def classify(p: dict, nums: dict | None = None, symbol: str | None = None) -> dict:
     path = [x for x in (p.get("industry_path") or []) if x][:4]
-    group = "lender" if (nums or {}).get("bank") else None
+    group = KINDS.get(p.get("kind") or "") or ("lender" if (nums or {}).get("bank") else None)
     # the most specific part first: a US division like "Finance, Insurance & Real Estate" would otherwise decide
     for hay in ((path[-1] if path else "").lower(), " / ".join(path).lower(), (p.get("name") or "").lower()):
         if group:
@@ -116,7 +124,7 @@ def measures(p: dict, symbol: str | None = None) -> dict:
 
 # ---------- how each kind of business is usually valued ----------
 EV_EBITDA = {"hospital", "hotel", "telecom", "cement", "metal", "power", "airline"}
-BOOK = {"lender", "insurer", "holding", "realty"}
+BOOK = {"lender", "insurer", "holding", "realty", "reit", "bdc"}
 
 
 def _last(table: dict | None, prefix: str):
@@ -132,18 +140,25 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
     pe = snap.get("pe")
     ttm = _last(p.get("pl"), "Net Profit")
     loss = ttm is not None and ttm <= 0
+    mcap = snap.get("market_cap_cr")
+    if mcap and p.get("currency") not in (None, "USD", "INR"):
+        # a US-listed company reporting in another currency: its market value (dollars) in that currency, at today's
+        # rate, to set against its reported book, debt and EBITDA
+        rate = (p.get("fx") or {}).get("rate")
+        mcap = mcap / rate if rate else None
     if group in BOOK or measure_key in BOOK:
         v = snap.get("pb")
         worth = ((_last(p.get("balance"), "Reserves") or 0) + (_last(p.get("balance"), "Equity Capital") or 0)
                  if _last(p.get("balance"), "Reserves") is not None else (_last(p.get("balance"), "Equity") or 0))
-        if v is None and snap.get("market_cap_cr") and worth > 0:       # no book value on the page: from the balance sheet
-            v = snap["market_cap_cr"] / worth
+        if v is None and mcap and worth > 0:       # no book value on the page: from the balance sheet
+            v = mcap / worth
         return {"name": "Price to book", "short": "P/B", "value": round(v, 2) if v is not None else None, "pe": pe,
-                "why": "Lenders, insurers, holding companies and developers are usually valued on their book (net worth)."
+                "why": ("REITs and business development companies are usually valued on their book (net asset value)."
+                        if group in KINDS else "Lenders, insurers, holding companies and developers are usually valued on their book (net worth).")
                        + (" There's no P/B here: the company's net worth is negative." if v is None and worth < 0 else "")}
     if measure_key in EV_EBITDA or group == "utility":
         ebitda = _last(p.get("pl"), "Operating Profit")          # the latest column is the trailing twelve months
-        mcap, debt = snap.get("market_cap_cr"), _last(p.get("balance"), "Borrowings") or 0
+        debt = _last(p.get("balance"), "Borrowings") or 0
         cash = _last(p.get("balance"), "Cash")             # US filings report it; for India, the Other Assets breakdown
         v = (mcap + debt - (cash or 0)) / ebitda if mcap and ebitda and ebitda > 0 else None
         return {"name": "EV / EBITDA", "short": "EV/EBITDA", "value": round(v, 1) if v is not None else None, "pe": pe,
