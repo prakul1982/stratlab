@@ -39,9 +39,14 @@ CLOSE_AT = "15:45"                 # India time: the day's closing prices are re
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
 NOTE = ("Price is the last traded price on the exchange. The NAV is the fund house's own figure for what one unit "
         "holds, published each evening for that day, so through the day the price moves while the NAV stays at the "
-        "last close. The indicative NAV (iNAV), the estimate worked out through market hours from the holdings' "
-        "prices, shows when one is published. A gap is the price's distance from either, as a percent. "
-        "Figures as of the times shown.")
+        "last close. A gap is the price's distance from the NAV, as a percent. Figures as of the times shown.")
+# said only when a source gave a real indicative NAV (the exchange's list gives none)
+INAV_NOTE = (" The indicative NAV (iNAV) is the estimate of what one unit holds, worked out through market hours from "
+             "the holdings' prices; a gap to it is shown too.")
+
+
+def note(has_inav: bool) -> str:
+    return NOTE + (INAV_NOTE if has_inav else "")
 
 _cache = TTLCache(max_items=50)
 _lock = threading.Lock()
@@ -329,7 +334,8 @@ def table() -> dict:
     rows.sort(key=lambda v: (v["gap"] is None, -abs(v["gap"] or 0), v["symbol"]))
     nav_days = sorted({v["nav_date"] for v in rows if v["nav_date"]})
     out = {"rows": rows, "as_of": live["as_of"], "read": live["read"], "nav_as_of": nav_days[-1] if nav_days else None,
-           "count": len(rows), "with_gap": sum(1 for v in rows if v["gap"] is not None), "note": NOTE}
+           "count": len(rows), "with_gap": sum(1 for v in rows if v["gap"] is not None),
+           "note": note(any(v["inav"] is not None for v in rows))}
     _cache.set("table", out, 60)
     return out
 
@@ -342,7 +348,7 @@ def detail(symbol: str) -> dict | None:
     if not r:
         return None
     h = history(sym)
-    return {"row": row_view(sym, r, navs(), live["as_of"]), "history": h, "days": summary(h), "note": NOTE}
+    return {"row": row_view(sym, r, navs(), live["as_of"]), "history": h, "days": summary(h), "note": note(r.get("inav") is not None)}
 
 
 def known(symbol: str) -> bool:

@@ -25,6 +25,14 @@ def answer(stamp: str = "03-Oct-2026 15:30:00") -> dict:
         for s, name, isin, p, i, _ in ETFS]}
 
 
+def answer_live(stamp: str = "03-Oct-2026 15:30:00") -> dict:
+    """The answer as the exchange really gives it (October 2026): "nav" is the fund's last published NAV, dated by
+    "navDate", and there is no indicative NAV. The browser tests' world serves this one."""
+    return {"timestamp": stamp, "navDate": stamp[:11], "data": [
+        {"symbol": s, "assets": name.split("ETF ")[-1], "ltP": p, "nav": f"{nav:.4f}" if nav is not None else "-", "chn": "0.5", "per": "0.4"}
+        for s, name, isin, p, _, nav in ETFS]}
+
+
 def isins() -> dict:
     return {s: isin for s, _, isin, *_ in ETFS}
 

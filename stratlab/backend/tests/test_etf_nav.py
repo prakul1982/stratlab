@@ -196,7 +196,10 @@ def test_routes(w):
     text = json.dumps(body)
     assert not PROVIDERS.search(text) and not ADVICE.search(text)
     r = c.get("/invest/etf-gaps/SILVERBEES", headers=headers("free-token"))
-    assert r.status_code == 200 and r.json()["row"]["gap"] == 6.1
+    # the world's list is shaped like the exchange's real one: last NAVs, no indicative NAV, and the note says no iNAV
+    d = r.json()
+    assert r.status_code == 200 and d["row"]["gap"] == 6.91 and d["row"]["basis"] == "NAV" and d["row"]["inav"] is None
+    assert "iNAV" not in d["note"] and "iNAV" not in body["note"] and "iNAV" not in d["row"]["text"]
     for bad in ("RELIANCE", "x" * 40, "A;B"):
         assert c.get(f"/invest/etf-gaps/{bad}", headers=headers("free-token")).status_code == 404
     assert c.get("/invest/etf-gaps").status_code == 401
@@ -206,8 +209,8 @@ def test_routes(w):
 def test_alert_clean_and_describe():
     a = sa.clean({"region": "IN", "symbol": "SILVERBEES", "kind": "etfgap", "op": "above", "value": 2})
     assert (a["op"], a["value"]) == ("above", 2.0)
-    assert sa.describe(a) == "Trades 2% or more above its NAV"
-    assert sa.describe({**a, "op": "either", "value": 1.5}) == "Trades 1.5% or more away from its NAV, either way"
+    assert sa.describe(a) == "Trades 2% or more above its last NAV"
+    assert sa.describe({**a, "op": "either", "value": 1.5}) == "Trades 1.5% or more away from its last NAV, either way"
     for bad in ({"op": "up"}, {"value": 0}, {"value": 80}, {"value": None}, {"region": "US"}):
         with pytest.raises(sa.AlertError):
             sa.clean({"region": "IN", "symbol": "SILVERBEES", "kind": "etfgap", "op": "above", "value": 2, **bad})
@@ -261,7 +264,7 @@ def test_create_alert_route(w, monkeypatch):
     c = w["client"]
     body = {"region": "IN", "symbol": "SILVERBEES", "kind": "etfgap", "op": "above", "value": 3}
     r = c.post("/alerts", json=body, headers=headers("basic-token"))
-    assert r.status_code == 200 and r.json()["alert"]["text"] == "Trades 3% or more above its NAV"
+    assert r.status_code == 200 and r.json()["alert"]["text"] == "Trades 3% or more above its last NAV"
     r = c.post("/alerts", json={**body, "symbol": "RELIANCE"}, headers=headers("basic-token"))
     assert r.status_code == 400 and "ETF list" in r.json()["detail"]["message"]
 

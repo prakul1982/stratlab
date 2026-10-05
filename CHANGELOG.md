@@ -18,7 +18,7 @@ What shipped, newest first, grouped by month. Built from the git history.
 - **F&O changes** (`/trade/fo-changes`): stocks leaving F&O with their last series, entries, lot-size revisions and changes to expiry days and sessions, in one dated list from the exchange's own files, read twice a trading day. Badges on the watchlist, company pages and session cards. Free to view; an alert when a change touches your watchlist or running paper sessions (Basic).
 
 **Invest**
-- **ETF vs NAV** (`/invest/etf-gaps`, also a Scans tab): each Indian ETF's price against its indicative and last NAV, widest gap first, with 30 trading days of history, a badge in My Holdings and on the ETF's company page. Free to view; an alert when the gap passes your level (Basic).
+- **ETF vs NAV** (`/invest/etf-gaps`, also a Scans tab): each Indian ETF's price against its last published NAV, widest gap first, with 30 trading days of history, a badge in My Holdings and on the ETF's company page. Free to view; an alert when the gap passes your level (Basic).
 
 **Money**
 - **Fund costs** on Mutual funds: each fund's TER and what it comes to in rupees a year on your value (every plan); its parts, the direct and regular plans side by side with the gap in rupees, the TER since you bought, and category changes (Basic).

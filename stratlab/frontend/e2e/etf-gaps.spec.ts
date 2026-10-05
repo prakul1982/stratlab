@@ -3,7 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 // ETF price against NAV: the list (widest gap first, filters, one ETF's own view with its 30-day history) and the badge
 // on an ETF in My Holdings, on desktop and phone. The fake world's ETFs and numbers are made up (tests/fake_etf.py):
-// SILVERBEES trades 6.1% above its iNAV, NIFTYBEES 0.19% above. Each project signs in as its own fake Basic user.
+// SILVERBEES trades 6.9% above its last NAV, NIFTYBEES 0.26% above. Like the exchange's real list, the fake one gives
+// last NAVs and no indicative NAV, so no iNAV column or figure shows. Each project signs in as its own fake Basic user.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const HOLDINGS_FILES = new URL("../../backend/tests/fixtures/holdings/", import.meta.url).pathname;
 const ADVICE = /\b(buy|sell|hold|accumulate|avoid|cheap|expensive|overpriced|underpriced|overvalued|undervalued)\b/i;
@@ -43,6 +44,7 @@ async function sane(page: Page, errors: string[], words = true) {
   if (!words) return;                    // another page's own copy (My Holdings) is checked by its own tests
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(ADVICE);
+  expect(text, "an iNAV the source doesn't give").not.toMatch(/iNAV|indicative/i);
   expect(text).not.toMatch(PROVIDERS);
 }
 
@@ -64,18 +66,21 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   const rows = table.locator("tbody tr");
   await expect(rows).toHaveCount(5);
   await expect(rows.first()).toHaveAttribute("data-etf", "SILVERBEES");
-  await expect(rows.first()).toContainText("6.1% above");
-  await expect(rows.last()).toHaveAttribute("data-etf", "LIQUIDBEES");
+  await expect(rows.first()).toContainText("6.9% above");
+  const head = table.locator("thead tr").first();
+  await expect(head).toContainText("Price vs last NAV");
+  await expect(head).not.toContainText("iNAV");                                          // none published: no empty columns
+  await expect(rows.last()).toHaveAttribute("data-etf", "BANKBEES");                    // no published NAV: no gap, last
   // the scans' tabs lead here too
   await expect(page.getByRole("navigation", { name: "Scans" }).getByRole("link", { name: "ETF vs NAV" })).toBeVisible();
 
   await page.getByRole("button", { name: /^Gold/ }).click();
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toHaveAttribute("data-etf", "GOLDBEES");
-  await expect(rows.first()).toContainText("0.79% below");
+  await expect(rows.first()).toContainText("0.98% below");
   await page.getByRole("button", { name: /^All/ }).click();
   await page.getByLabel("Order").selectOption("below");
-  await expect(rows.first()).toHaveAttribute("data-etf", "BANKBEES");
+  await expect(rows.first()).toHaveAttribute("data-etf", "GOLDBEES");
   await page.getByLabel("Find an ETF").fill("nifty 50");
   await expect(rows).toHaveCount(1);
   await page.getByLabel("Find an ETF").fill("");
@@ -85,14 +90,16 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   await expect(page).toHaveURL(/etf=SILVERBEES/);
   const panel = page.locator("#etf-gap");
   await expect(panel.getByRole("heading", { name: "Price against NAV" })).toBeVisible();
-  await expect(panel.getByText("SILVERBEES trades 6.1% above its indicative NAV.")).toBeVisible();
+  await expect(panel.getByText("SILVERBEES trades 6.9% above its last NAV.")).toBeVisible();
+  await expect(panel.getByText("Indicative NAV")).toHaveCount(0);
+  await expect(panel.getByText(/NAV of 3 Oct/)).toBeVisible();
   await expect(panel.getByRole("img", { name: /SILVERBEES's gap to NAV at each close/ })).toBeVisible();
   await expect(panel.getByText(/Over 30 trading days/)).toBeVisible();
   await expect(panel.getByRole("button", { name: "Alert on the gap" })).toBeVisible();          // a Basic user
   await panel.getByRole("button", { name: "Alert on the gap" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("Alert me when")).toHaveValue("etfgap_either");
-  await expect(dialog.getByText("Gap to its NAV (%)")).toBeVisible();
+  await expect(dialog.getByText("Gap to its last NAV (%)")).toBeVisible();
   await dialog.getByRole("button", { name: "Close" }).click();
   await expect(dialog).toHaveCount(0);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/etf-gaps-${info.project.name}.png`, fullPage: true });
@@ -110,12 +117,12 @@ test("my holdings: an ETF shows its gap to NAV, and it opens the ETF's view", as
   const table = page.getByRole("table", { name: "Positions" });
   const row = (s: string) => table.getByRole("row").filter({ has: page.getByText(s, { exact: true }) });
   const badge = row("NIFTYBEES").locator("[data-etf-gap='NIFTYBEES']");
-  await expect(badge).toHaveText("0.19% above iNAV");
+  await expect(badge).toHaveText("0.26% above last NAV");
   await expect(row("RELIANCE").locator("[data-etf-gap]")).toHaveCount(0);           // shares get no gap
   if (SHOTS) await row("NIFTYBEES").screenshot({ path: `${SHOTS}/holdings-etf-badge-${info.project.name}.png` });
   await sane(page, errors, false);
   if (phone) await touchable(page);
   await badge.click();
   await expect(page).toHaveURL(/\/invest\/etf-gaps\?etf=NIFTYBEES/);
-  await expect(page.locator("#etf-gap").getByText("NIFTYBEES trades 0.19% above its indicative NAV.")).toBeVisible();
+  await expect(page.locator("#etf-gap").getByText("NIFTYBEES trades 0.26% above its last NAV.")).toBeVisible();
 });

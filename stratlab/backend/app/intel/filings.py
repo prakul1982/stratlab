@@ -847,7 +847,7 @@ class NSEFilings:
         return rows
 
     def etf_list(self):
-        """Every ETF's last price and indicative NAV, as the exchange's ETF page lists them (etf_nav.py reads it). One
+        """Every ETF's last price and last published NAV, as the exchange's ETF page lists them (etf_nav.py reads it). One
         call for the whole market, behind a breaker of its own. It names each ETF's underlying, not the fund, and
         carries no ISIN: etf_securities() has those."""
         return self._get("/api/etf", {}, referer="https://www.nseindia.com/market-data/exchange-traded-funds-etf", circuit="etf")

@@ -222,9 +222,9 @@ def _nse(sw=None):
                       + datetime.now().strftime("%d-%b-%Y") + ",10,INE999N01011", "SOMEBOND,Some Bond,N1,01-Jan-2020,1000,INE888B07019"]
             lines += [f"{s},{n},EQ,01-Jan-2000,1,{isin}" for s, n, isin in ISINS]
             return httpx.Response(200, text="\n".join(lines))
-        if r.url.path == "/api/etf":                  # every ETF's price and iNAV (etf_nav.py)
+        if r.url.path == "/api/etf":                  # every ETF's price and last NAV (etf_nav.py)
             from tests import fake_etf
-            return httpx.Response(200, json=fake_etf.answer())
+            return httpx.Response(200, json=fake_etf.answer_live())
         if r.url.path == "/content/equities/eq_etfseclist.csv":   # the ETFs' ISINs (the list above has none)
             from tests import fake_etf
             return httpx.Response(200, text=fake_etf.securities_csv())

@@ -45,7 +45,7 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
   Invest: [
     { to: "/invest/breadth", label: "Market breadth", icon: "pulse", title: "How many stocks rise, fall, sit above their averages or make new highs",
       blurb: "Advances and declines, stocks above their 20/50/200-day averages, 52-week highs and lows, McClellan and sectors." },
-    { to: "/invest/etf-gaps", label: "ETF vs NAV", icon: "lens", title: "Each Indian ETF's price against its indicative NAV and last NAV",
+    { to: "/invest/etf-gaps", label: "ETF vs NAV", icon: "lens", title: "Each Indian ETF's price against its last published NAV",
       blurb: "How far each ETF's price is from what a unit holds, the widest gap first, with 30 days of history and alerts." },
   ],
   /** Trade pages beyond the menu's fixed entries, kept as data like Money's. */
