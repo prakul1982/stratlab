@@ -64,6 +64,7 @@ class SettingsReq(BaseModel):
     capital: float | None = Field(None, ge=1, le=1e11)
     brokerage_delivery: float = Field(0, ge=0, le=1000)
     brokerage_other: float = Field(20, ge=0, le=1000)
+    show: Literal["all", "real", "practice"] | None = None     # real trades, chart replay practice, or both (kept when left out)
 
 
 class LinkReq(BaseModel):
@@ -104,7 +105,10 @@ def view(profile, data: dict | None = None) -> dict:
     uid, plan = profile["id"], profile["_plan"]
     data = data or J.load(uid)
     got = J.trades(uid, data, today())
-    allt = got["trades"]
+    every = got["trades"]
+    show = data["settings"].get("show", "all")
+    practice = sum(1 for t in every if t["src"] == "practice")
+    allt = every if show == "all" or not practice else [t for t in every if (t["src"] == "practice") == (show == "practice")]
     limit = journal_limit(plan)
     shown = allt[-limit:] if limit else allt
     full = allows(plan, "journal")
@@ -114,6 +118,7 @@ def view(profile, data: dict | None = None) -> dict:
             "trades": [_row(t) for t in reversed(shown[-J.MAX_LIST:])], "open": got["open"], "unmatched": got["unmatched"], "overlap": got["overlap"],
             "summary": J.summary(shown, cap), "verdict": J.verdict(shown, cap) if full and shown else None,
             "breakdowns": J.breakdowns(shown) if full else None, "r": J.r_distribution(shown) if full else None,
+            "practice_count": practice, "real_count": len(every) - practice, "show": show if practice else "all",
             "files": data["files"], "settings": data["settings"], "links": data["links"] if full else {},
             "paper": _paper_list(uid) if full else [], "tags": sorted({t["note"]["tag"] for t in allt if t["note"].get("tag")}),
             "emotions": J.EMOTIONS, "mistakes": J.MISTAKES, "segments": J.SEGMENTS, "assumptions": J.ASSUMPTIONS,
@@ -128,9 +133,10 @@ def journal(profile=Depends(current_profile)):
 
 @router.get("/brief")
 def brief(profile=Depends(current_profile)):
-    """A line for the Trade home: how many closed trades, their P&L after charges and win rate (no checks run)."""
+    """A line for the Trade home: how many closed real trades, their P&L after charges and win rate (no checks run;
+    chart replay practice isn't counted here)."""
     j = J.load(profile["id"])
-    allt = J.trades(profile["id"], j, today())["trades"]
+    allt = [t for t in J.trades(profile["id"], j, today())["trades"] if t["src"] != "practice"]
     limit = journal_limit(profile["_plan"])
     shown = allt[-limit:] if limit else allt
     nets = [t["net"] for t in shown]
@@ -263,6 +269,8 @@ def remove_trade(tid: str, profile=Depends(current_profile)):
     t = _find(profile, j, tid)
     if t["src"] == "manual":
         j["manual"] = [m for m in j["manual"] if m["id"] != tid]
+    elif t["src"] == "practice":
+        j["practice"] = [m for m in j["practice"] if m["id"] != tid]
     else:
         j["hidden"] = j["hidden"] + [tid]
     j["notes"].pop(tid, None)
@@ -280,10 +288,14 @@ def restore(profile=Depends(current_profile)):
 
 @router.put("/settings")
 def settings(req: SettingsReq, profile=Depends(current_profile)):
-    """The trading capital (for drawdowns as a %) and the brokerage a tradebook line pays."""
+    """The trading capital (for drawdowns as a %), the brokerage a tradebook line pays, and whether the page shows real
+    trades, chart replay practice or both."""
     _edit(profile)
     j = J.load(profile["id"])
-    j["settings"] = J.clean_settings(req.model_dump())
+    got = req.model_dump()
+    if got["show"] is None:
+        got["show"] = j["settings"].get("show", "all")
+    j["settings"] = J.clean_settings(got)
     return _m().ok(view(profile, J.save(profile["id"], j)))
 
 
@@ -330,6 +342,7 @@ def compare(tag: str = Query(..., min_length=1, max_length=40), session: str = Q
 
 @router.delete("")
 def delete_all(profile=Depends(current_profile)):
-    """Delete my journal: every imported and added trade, the notes, the settings and the paper links, at once."""
+    """Delete my journal: every imported and added trade, the practice trades, the notes, the settings and the paper
+    links, at once."""
     J.delete(profile["id"])
     return {"deleted": True}

@@ -43,6 +43,8 @@ export interface PriceChartProps {
   history?: string;
   /** Only closes are known (an uploaded file): drawn as a line, area or baseline. */
   closesOnly?: boolean;
+  /** While set, a click on the candles picks that price (chart replay's stop and target) instead of drawing. */
+  onPickPrice?: ((price: number) => void) | null;
 }
 
 const TF_LABEL: Record<Tf, string> = { "5m": "5m", "15m": "15m", "1h": "1h", "1d": "1D", "1w": "1W", "1mo": "1M" };
@@ -193,6 +195,15 @@ export default function PriceChart(props: PriceChartProps) {
     rootRef.current!.dataset.markers = String(list.length);
   }, [markers]);
   useEffect(() => { engineRef.current?.setLevels(levels ?? []); }, [levels]);
+  const pickRef = useRef(props.onPickPrice);
+  pickRef.current = props.onPickPrice;
+  const picking = !!props.onPickPrice;
+  useEffect(() => {
+    const e = engineRef.current;
+    if (!e) return;
+    e.picker = picking ? (p) => pickRef.current?.(p) : null;
+    rootRef.current!.dataset.picking = String(picking);
+  }, [picking]);
   useEffect(() => { engineRef.current?.setScaleMode(mode); syncData(); }, [mode, syncData]);
   useEffect(() => { engineRef.current?.setIntraday(intraday); rootRef.current!.dataset.tf = tf; }, [intraday, tf]);
   useEffect(() => {

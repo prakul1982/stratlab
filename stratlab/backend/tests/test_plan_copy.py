@@ -70,6 +70,8 @@ CARD_WORDS = {
     "cas_history": "closing auction history",
     "vix_filter": "India VIX entry filter",
     "strike_rules": "strikes picked by delta or premium",
+    "chart_replay": "chart replay practice",
+    "signal_webhooks": "alert webhooks",
 }
 
 

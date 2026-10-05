@@ -1437,3 +1437,11 @@ ul.order-rows li .order-pick { grid-column: 2 / -1; margin-top: -4px; }
 .legs .leg-pick { flex-wrap: wrap; align-items: center; }
 .legs .leg-pick select { max-width: 170px; }
 ul.leg-picks { margin: 0; padding-left: 18px; }
+/* Signal forward test (/trade/signals) and chart replay (/trade/replay) */
+.sg-cards { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.sg-card { flex: none; min-width: 200px; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; color: inherit; text-decoration: none; }
+.sg-card[aria-current="page"] { border: 2px solid var(--ink); }
+.sg-code { margin: 0; padding: 12px 14px; background: var(--chip); border-radius: 10px; font-family: var(--mono); font-size: 13px; overflow-x: auto; white-space: pre; max-width: 100%; }
+.sg-log td { vertical-align: top; }
+.badge.j-practice { background: var(--chip); color: var(--ink-2); }
+.rp-controls .btn { min-height: 40px; }

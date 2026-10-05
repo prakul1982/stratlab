@@ -18,12 +18,14 @@ export const LIMITS: Record<PlanId, Limits> = {
     stock_alerts: 5, screens: 2, holdings: 30, networth_items: 5, mf_schemes: 5, journal_trades: 50, features: [] },
   basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
     stock_alerts: 25, screens: 10, holdings: 100, networth_items: null, mf_schemes: null, journal_trades: null,
-    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter"] },
+    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter",
+      "chart_replay"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
       "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
-      "vix_filter", "strike_rules"] },
+      "vix_filter", "strike_rules",
+      "chart_replay", "signal_webhooks"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -44,14 +46,14 @@ export const FEATURES: Record<PlanId, string[]> = {
   basic: ["Everything in Free, plus:", `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month`,
     "All 20+ indicators in your rules: MACD, Supertrend, Bollinger Bands, VWAP and more",
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times, with trade notifications and a daily report`,
-    "The full trade journal, positioning history with IV percentiles, closing auction history, F&O change alerts and an India VIX entry filter",
+    "The full trade journal, positioning history with IV percentiles, chart replay practice, closing auction history, F&O change alerts and an India VIX entry filter",
     `${L.basic.deepdives_per_month} company deep dives (report card and checklist) and ${L.basic.decks_per_month} decks a month`,
     "Stage 2 scan, watchlist red flags, Watchlist at a glance and market breadth charts, with alerts",
     "Every mutual fund and net worth entry, fund capital gains and fund costs in rupees, dividends with TDS, and money reminders",
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks`],
   pro: ["Everything in Basic, plus:", "Unlimited backtests, AI builds, deep dives and decks", `Paper trade ${L.pro.live_limit} strategies at a time`,
     "Indian F&O, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
-    "Export rules and trades", "Advance tax amounts, and the long-term exemption lot by lot",
+    "Export rules and trades, and forward-test alert webhooks in paper trading", "Advance tax amounts, and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],
 };
@@ -80,7 +82,9 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["options_whatif", "Options what-if: move the underlying, shift IV and pass days, and preview rolling a leg"],
   ["cas_history", "Closing auction history: 60 days of auction closes against the reference price, and index closes"],
   ["vix_filter", "Options sessions that enter only inside an India VIX band"],
-  ["strike_rules", "Option strikes picked by model delta, a delta range, premium or a share of the ATM straddle"]];
+  ["strike_rules", "Option strikes picked by model delta, a delta range, premium or a share of the ATM straddle"],
+  ["chart_replay", "Chart replay practice on past candles, logged to the journal"],
+  ["signal_webhooks", "Forward-test TradingView or Chartink alerts in paper trading with a secret webhook"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",

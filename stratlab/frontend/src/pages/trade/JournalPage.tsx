@@ -18,7 +18,7 @@ type Note = { tag?: string; notes?: string; links?: string[]; emotions?: string[
 type Trade = {
   id: string; symbol: string; u: string; segment: string; segment_label: string; side: "long" | "short" | null; entry_t: string; exit_t: string;
   qty: number; entry: number; exit: number; gross: number; charges: number; net: number; r: number | null; hold_s: number | null; hold_days: number;
-  fills: number; src: "tradebook" | "pnl" | "manual"; expired: boolean; charges_from: string; note: Note;
+  fills: number; src: "tradebook" | "pnl" | "manual" | "practice"; expired: boolean; charges_from: string; note: Note;
 };
 type Row = { key: string; label?: string; n: number; win_rate: number; net: number; avg: number; gross: number; charges: number };
 type Check = { id: string; title: string; status: CheckStatus; detail: string; data: any };
@@ -36,10 +36,12 @@ type Journal = {
   breakdowns: Record<string, Row[]> | null;
   r: { n: number; of: number; avg: number | null; buckets: { label: string; n: number }[]; planned_rr: number | null; planned_n: number; hit_target: number } | null;
   files: { name: string; broker: string; trades: number; at: string }[];
-  settings: { capital: number | null; brokerage_delivery: number; brokerage_other: number };
+  settings: { capital: number | null; brokerage_delivery: number; brokerage_other: number; show?: Show };
+  practice_count: number; real_count: number; show: Show;
   links: Record<string, string>; paper: { id: string; name: string; status: string; symbol?: string }[]; tags: string[];
   emotions: string[]; mistakes: string[]; segments: Record<string, string>; assumptions: string; plan_name: string;
 };
+type Show = "all" | "real" | "practice";
 type Imported = { added: number; duplicates: number; over: number; problems: { line: number; text: string; reason: string }[]; problem_count: number;
   skipped: { name: string; reason: string }[]; broker: string; journal: Journal };
 type Compared = { tag: string; session: { id: string; name: string }; note: string;
@@ -116,6 +118,11 @@ export function JournalPage() {
       .then(() => notify("Your journal is deleted.")).catch(fail);
   };
 
+  const showOnly = async (show: Show) => {
+    if (!j || show === j.show) return;
+    try { setJ(await api<Journal>("/trade/journal/settings", { method: "PUT", body: { ...j.settings, show } })); } catch (e) { fail(e); }
+  };
+
   if (!j) return <Loading label="Opening your journal" />;
   const s = j.summary;
   const has = j.total > 0;
@@ -169,8 +176,19 @@ export function JournalPage() {
         )}
       </section>
 
+      {(j.practice_count ?? 0) > 0 && (
+        <div className="row wrap j-show" style={{ gap: 10, alignItems: "center" }}>
+          <div className="seg" role="group" aria-label="Which trades">
+            {([["real", `Real trades (${j.real_count})`], ["practice", `Practice (${j.practice_count})`], ["all", "Both"]] as [Show, string][]).map(([k, l]) => (
+              <button key={k} type="button" aria-pressed={j.show === k} onClick={() => showOnly(k)}>{l}</button>
+            ))}
+          </div>
+          <span className="tiny muted">Practice trades come from <Link className="link" to="/trade/replay">chart replay</Link>: a simulation on past candles, not real trades.</span>
+        </div>
+      )}
+
       {!has ? (
-        <Empty title="No trades yet">
+        <Empty title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
           <p className="muted">Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.</p>
         </Empty>
       ) : (
@@ -450,7 +468,9 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
                     <button className="btn quiet sm" onClick={() => onEdit(t)} aria-label={`Journal: ${t.symbol} ${when(t.exit_t)}`}><Pencil size={15} />{Object.keys(t.note).length ? "Edit" : "Note"}</button>
                   </div>
                   <div className="tiny muted">{t.side === "long" ? "Long" : t.side === "short" ? "Short" : "Side not in the file"} · {t.segment_label}</div>
-                  {t.note.tag && <div className="tiny"><span className="badge fact">{t.note.tag}</span></div>}
+                  {(t.note.tag || t.src === "practice") && <div className="tiny row wrap" style={{ gap: 4 }}>
+                    {t.src === "practice" && <span className="badge j-practice">Chart replay</span>}
+                    {t.note.tag && <span className="badge fact">{t.note.tag}</span>}</div>}
                   {t.expired && <div className="tiny muted">Expired: counted at ₹0</div>}
                 </td>
                 <td className={signClass(t.net)}>{signed(t.net)}</td>
@@ -458,7 +478,7 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
                 <td className="small">{when(t.exit_t)}<div className="tiny muted">{holdText(t)}</div></td>
                 <td>{qtyText(t.qty)}</td>
                 <td className="small">{t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 })} → {t.exit.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</td>
-                <td className="small" title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "you" ? "As you entered them" : "Worked out at the published rates"}>{inr(t.charges, 2)}</td>
+                <td className="small" title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{inr(t.charges, 2)}</td>
               </tr>
             ))}
           </tbody>
@@ -504,7 +524,7 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const del = async () => {
-    if (!confirm(t.src === "manual" ? "Delete this trade?" : "Leave this trade out of the journal? You can show removed trades again at the foot of the page.")) return;
+    if (!confirm(t.src === "manual" || t.src === "practice" ? "Delete this trade?" : "Leave this trade out of the journal? You can show removed trades again at the foot of the page.")) return;
     try { onSaved(await api<Journal>(`/trade/journal/trades/${encodeURIComponent(t.id)}`, { method: "DELETE" })); } catch (e) { fail(e); }
   };
   return (
@@ -533,7 +553,7 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
         </fieldset>
         <div className="spread" style={{ flexWrap: "wrap" }}>
           <button className="btn" disabled={busy} onClick={save}>Save</button>
-          <button className="btn quiet sm danger" onClick={del}><Trash size={16} />{t.src === "manual" ? "Delete trade" : "Remove trade"}</button>
+          <button className="btn quiet sm danger" onClick={del}><Trash size={16} />{t.src === "manual" || t.src === "practice" ? "Delete trade" : "Remove trade"}</button>
         </div>
       </div>
     </Modal>

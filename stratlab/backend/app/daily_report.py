@@ -64,13 +64,17 @@ def summarise(s, day: str) -> dict:
     elif snap.get("kind") == "options":
         trades = [t for t in s.engine.trades if _day(t["closed"]) == day]
         open_n = 1 if snap.get("position") else 0
+    elif kind == "signal":                      # moved by outside signals: today's trades and what became of the signals
+        trades = [t for t in s.trades if _day(t["exit_t"]) == day]
+        open_n = 1 if acct.get("qty") else 0
     else:
         trades = [t for t in s.engine.trades if _day(t["exit_t"]) == day]
         open_n = 1 if acct.get("qty") else 0
     return {"name": s.name, "currency": s.inst.get("currency") or ("INR" if getattr(s, "market", "IN") == "IN" else ""),
             "closed": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0), "pnl": sum(t["pnl"] for t in trades),
             "open": open_n, "unrealised": acct.get("unrealised") or 0.0,
-            "equity": acct["equity"], "capital": acct["capital"]}
+            "equity": acct["equity"], "capital": acct["capital"],
+            **({"signals": s.signal_counts(day)} if kind == "signal" else {})}
 
 
 def _money(x: float, cur: str) -> str:
@@ -88,6 +92,11 @@ def text(market_name: str, day: str, rows: list[dict]) -> str:
                  if r["closed"] else "No trades closed")
         still = f"; {r['open']} open, {_money(r['unrealised'], r['currency'])} on paper" if r["open"] else ""
         lines.append(f"{r['name']}\n  Today: {today}{still}\n  Since start: {_money(total, r['currency'])} ({pct:+.1f}%)")
+        sig = r.get("signals")
+        if sig and sig["received"]:
+            extra = [f"{sig['late']} late" if sig["late"] else "", f"{sig['refused']} refused" if sig["refused"] else ""]
+            extra = [x for x in extra if x]
+            lines.append(f"  Signals: {sig['received']} arrived" + (f" ({', '.join(extra)}; see the session's signal log)" if extra else ""))
     lines += ["", "Paper trading only: no real orders. Turn this report off under Account → Alerts."]
     return "\n".join(lines)
 
