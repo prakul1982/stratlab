@@ -140,6 +140,12 @@ def test_a_canadian_filer_is_shown_in_canadian_dollars_with_price_ratios_in_doll
     assert v["value"] == round((2000 / 0.73 + 200) / 200, 1)
 
 
+def test_the_pe_fallback_converts_a_foreign_filers_market_value():
+    p = sec.with_fx(sec.build(_cad(), _subs(["40-F"])), lambda cur: 0.73)
+    v = industry.valuation(p, {"market_cap_cr": 2000.0}, "general", "general")       # no P/E given: worked out
+    assert v["value"] == round(2000 / 0.73 / 140, 1)
+
+
 def test_without_todays_rate_the_price_ratios_are_left_out_not_mixed():
     p = sec.with_fx(sec.build(_cad(), _subs(["40-F"])), lambda cur: (_ for _ in ()).throw(SourceError("x", "down", busy=True)))
     assert "fx" not in p and "couldn't be read" in p["currency_note"]
