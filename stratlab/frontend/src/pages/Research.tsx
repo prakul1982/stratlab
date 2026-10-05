@@ -16,6 +16,8 @@ import { AsOf, Info, Loading } from "../components/ui";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { DealsPanel } from "../components/Deals";
+import { BizUpdatesPanel } from "../components/BizUpdates";
+import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { FoBadges } from "../components/FoBadges";
@@ -224,6 +226,12 @@ export function CompanyPage() {
 
       {region === "IN" && <Panel title="Filings and red flags" id="filings" span="full"
         info="What the company told the exchange: fund raises (QIP, preferential, rights), pledges, resignations, defaults, regulator action, rating changes, results and calls."><FilingsPanel symbol={sym} /></Panel>}
+
+      {region === "IN" && <BizUpdatesPanel symbol={sym} wrap={(body, right) => <Panel title="Business updates" id="business-updates" span="full" right={right}
+        info="Monthly or quarterly numbers the company files between results (sales volumes, deposits and advances, and the like), copied from its own filing with the line and page each comes from.">{body}</Panel>} />}
+
+      {region === "IN" && <NamedHoldersPanel symbol={sym} wrap={(body, right) => <Panel title="Named holders" id="named-holders" span="full" right={right}
+        info="From the latest quarterly shareholding pattern: the promoter group's members and every public holder above 1%, with the change since the quarter before.">{body}</Panel>} />}
 
       {region === "IN" && <Panel title="Deals and insider trades" id="deals" span="full"
         info="Who bought or sold, from exchange disclosures: promoters', directors' and key staff's own trades and pledges, holders crossing 5% and moving 2% at a time (substantial acquisitions), and bulk and block deals with the named client."><DealsPanel symbol={sym} /></Panel>}

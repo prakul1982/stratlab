@@ -20,14 +20,16 @@ export const LIMITS: Record<PlanId, Limits> = {
     stock_alerts: 25, screens: 10, holdings: 100, networth_items: null, mf_schemes: null, journal_trades: null,
     features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter",
       "chart_replay",
-      "event_reminders"] },
+      "event_reminders",
+      "biz_updates", "holders"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
       "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
       "vix_filter", "strike_rules",
       "chart_replay", "signal_webhooks",
-      "event_reminders"] },
+      "event_reminders",
+      "biz_updates", "holders"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -49,7 +51,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     "All 20+ indicators in your rules: MACD, Supertrend, Bollinger Bands, VWAP and more",
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times, with trade notifications and a daily report`,
     "The full trade journal, positioning history with IV percentiles, chart replay practice, closing auction history, F&O change alerts, market event reminders and an India VIX entry filter",
-    `${L.basic.deepdives_per_month} company deep dives (report card and checklist) and ${L.basic.decks_per_month} decks a month`,
+    `${L.basic.deepdives_per_month} company deep dives (report card and checklist) and ${L.basic.decks_per_month} decks a month, business updates in numbers and named-holder search`,
     "Stage 2 scan, watchlist red flags, Watchlist at a glance and market breadth charts, with alerts",
     "Every mutual fund and net worth entry, fund capital gains and fund costs in rupees, dividends with TDS, and money reminders",
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks`],
@@ -87,7 +89,9 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["strike_rules", "Option strikes picked by model delta, a delta range, premium or a share of the ATM straddle"],
   ["chart_replay", "Chart replay practice on past candles, logged to the journal"],
   ["signal_webhooks", "Forward-test TradingView or Chartink alerts in paper trading with a secret webhook"],
-  ["event_reminders", "Reminders of market events: RBI policy, data releases, the Fed, index changes and expiries"]];
+  ["event_reminders", "Reminders of market events: RBI policy, data releases, the Fed, index changes and expiries"],
+  ["biz_updates", "Monthly and quarterly business updates read into numbers, the sector view and an alert on new ones"],
+  ["holders", "Named holders above 1%: search a holder across companies and follow their changes"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
@@ -98,4 +102,5 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Option Greeks for every strike and your position, and the payoff today beside the one at expiry (model estimates)",
   "A trade journal with the basic stats", "My Holdings, the tax report and the year's total tax estimate", "Money calendar and its calendar feed",
   "Dividend and US share totals for each year, advance tax due dates and the exemption used", "A preview of the ITR-ready export",
-  "Weekly Market Brief and My Stocks", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history"];
+  "Weekly Market Brief and My Stocks", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
+  "Named holders above 1% and the business-update filings on every company page"];

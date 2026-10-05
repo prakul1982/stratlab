@@ -78,6 +78,7 @@ from . import corp_actions
 from . import surveillance
 from . import etf_nav
 from . import vix
+from . import biz_updates, shareholders
 from . import positioning
 from . import fo_changes_routes
 from . import closing_auction
@@ -167,9 +168,10 @@ def _alert_limit(profile: dict) -> int:
 
 
 def _alert_kind_ok(profile: dict, kind: str) -> bool:
-    """Alerts on an ETF's price against its NAV are Basic and up; after a downgrade they wait."""
+    """Alerts on an ETF's price against its NAV and on business updates are Basic and up; after a downgrade they wait."""
     from .plans import access_plan
-    return kind != "etfgap" or allows(access_plan(profile), "etf_gaps")
+    need_ = {"etfgap": "etf_gaps", "bizupdate": "biz_updates"}.get(kind)
+    return not need_ or allows(access_plan(profile), need_)
 
 
 stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit,
@@ -211,6 +213,13 @@ vix.setup(lambda: filings_feed)                  # India VIX: the exchange's ind
 vix.use_options(lambda: options_data)
 vix_job = vix.Job(lambda: filings_feed)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
+# monthly and quarterly business updates read into numbers, and named holders above 1% (the exchange's filings)
+biz_updates.setup(lambda: filings_feed, lambda: deep_docs, lambda: (_gemini, _anthropic))
+biz_job = biz_updates.Job(lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit, kind_ok=_alert_kind_ok),
+                          biz_updates.alert_symbols)
+shareholders.setup(lambda: filings_feed)
+holders_job = shareholders.Job(lambda: filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
+                               can_alert=lambda p: allows(access_plan(p), "holders") and bool(alerts.jobs_for(p, "", "")))
 
 
 @asynccontextmanager
@@ -259,6 +268,8 @@ async def lifespan(app: FastAPI):
     etf_job.start()
     closing_auction_job.start()       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
     vix_job.start()
+    biz_job.start()
+    holders_job.start()
     ai_providers.job.start()          # measures the AI models every 6 hours
     yield
 
@@ -290,6 +301,8 @@ app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
 app.include_router(closing_auction.router)     # /trade/closing-auction
 app.include_router(vix.router)                 # /trade/vix
+app.include_router(biz_updates.router)         # /research/business-updates, /invest/business-updates
+app.include_router(shareholders.router)        # /research/holders, /invest/holders
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 
 
@@ -1340,6 +1353,8 @@ def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
         need(profile, "etf_gaps", "ETF gap alerts")
         if not etf_nav.known(body["symbol"]):
             err(400, "not_etf", f"{body['symbol']} isn't on the exchange's ETF list.")
+    if body["kind"] == "bizupdate":                 # a new monthly or quarterly business update: Basic and up
+        need(profile, "biz_updates", "Business update alerts")
     q = alert_seed(body["region"], body["symbol"])
     try:
         a = (stock_alerts.update(profile["id"], aid, body, limit, q) if aid else stock_alerts.create(profile["id"], body, limit, q))

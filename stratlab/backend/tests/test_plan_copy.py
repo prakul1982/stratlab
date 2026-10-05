@@ -73,6 +73,8 @@ CARD_WORDS = {
     "chart_replay": "chart replay practice",
     "signal_webhooks": "alert webhooks",
     "event_reminders": "market event reminders",
+    "biz_updates": "business updates in numbers",
+    "holders": "named-holder search",
 }
 
 

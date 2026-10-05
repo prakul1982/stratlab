@@ -10,6 +10,11 @@ What shipped, newest first, grouped by month. Built from the git history.
 - **Strikes picked by rule (Pro):** an options leg can take the strike nearest a model delta, inside a delta range, nearest (or at least, or at most) a rupee premium, or nearest a share of the at-the-money straddle, resolved on the live quotes at entry and at each re-centre. The builder's preview shows what each rule picks now (every plan), and the order log says why under each order.
 - **India VIX (every plan):** a panel on Positioning and a tile on the Trade home's positioning card: the value and change, the day's range, where it sits among the past year's closes, NIFTY ATM IV beside it, today's line and the year's chart. India VIX and its change % are rule values in notebooks, and the verdict's nearby-settings check nudges a VIX cut-off.
 - **India VIX entry filter (Basic):** options sessions can enter only while India VIX is inside a band; the session page lists the entries it held back.
+### 5 October 2026: business updates in numbers and named holders above 1%
+
+**Invest**
+- **Business updates, read into numbers:** automakers' monthly sales and lenders' quarterly deposits and advances, found among each company's exchange filings and read into figures, each kept only when its line is found in the filed document (with the page). A **Business updates** panel on Indian company pages and the deep dive shows the change on the month (or quarter) and on the year and a 24-month chart; **Business updates** (`/invest/business-updates`) lists a sector's latest figures alphabetically; an alert when a company files a new update. The filings list is for everyone; the figures, sector view and alert are Basic.
+- **Named holders above 1%:** each company's latest shareholding pattern (the exchange's XBRL) names its promoter group and every public holder above 1%; a **Named holders** panel shows them by stake with the change since the quarter before (every plan). **Named holders** (`/invest/holders`, Basic) searches a name across companies, alphabetically, with new and dropped lines, lets you untick spellings that aren't the same holder, and follow one for a message when a new quarter's filing changes them.
 
 ### 5 October 2026: price charts, options Greeks and what-if, F&O changes, ETF vs NAV, fund costs and a self-healing AI
 

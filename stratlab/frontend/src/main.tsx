@@ -92,6 +92,8 @@ const ScreensPage = page(screensPage, "ScreensPage");
 const breadthPage = () => import("./pages/BreadthPage");
 const BreadthPage = page(breadthPage, "BreadthPage");
 const EtfGapsPage = page(() => import("./pages/EtfGapsPage"), "EtfGapsPage");
+const HoldersPage = page(() => import("./pages/HoldersPage"), "HoldersPage");
+const BizUpdatesPage = page(() => import("./pages/BizUpdatesPage"), "BizUpdatesPage");
 const netWorth = () => import("./pages/money/NetWorthPage");
 const NetWorthPage = page(netWorth, "NetWorthPage");
 const journalPage = () => import("./pages/trade/JournalPage");
@@ -235,6 +237,8 @@ function Routed() {
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/invest/breadth" element={<BreadthPage />} />
         <Route path="/invest/etf-gaps" element={<EtfGapsPage />} />
+        <Route path="/invest/holders" element={<HoldersPage />} />
+        <Route path="/invest/business-updates" element={<BizUpdatesPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />

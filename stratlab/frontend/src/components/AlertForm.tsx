@@ -110,6 +110,8 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         ? "Checked through the trading day: the live price against the fund's last published NAV. On the Basic plan."
         : c.kind === "surveillance"
         ? "Checked twice each trading day against the exchange's surveillance lists (ASM, GSM, ESM, trade-to-trade, F&O ban, price bands). The alert says which list, which stage and the list's date."
+        : c.kind === "bizupdate"
+        ? "Checked each evening against the company's exchange filings. The alert gives the update's headline figure and its change on the year, as filed. On the Basic plan."
         : EVENT_KINDS.includes(c.kind)
         ? "Checked once each evening against that day's exchange disclosures. The alert says who, which way, how many and when."
         : c.kind === "move" || c.kind === "high52" || c.kind === "low52"
