@@ -211,7 +211,12 @@ def _file_words(url: str | None) -> str:
     """The words in a filing's PDF name: NSE keeps the name the company uploaded ("ACME_01082026190000_Q1FY27
     ConcallTranscript.pdf"), which often says what the filing is when its subject doesn't."""
     from urllib.parse import unquote, urlsplit
-    name = unquote(urlsplit(url or "").path.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
+    url = (url or "")[:500]                   # from the exchange's feed: untrusted, and only the name is wanted
+    try:
+        path = urlsplit(url).path
+    except ValueError:                        # a malformed link ("https://[..."): its words still count
+        path = url.split("?", 1)[0].split("#", 1)[0]
+    name = unquote(path.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
     return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", re.sub(r"[_\-.+]+", " ", name))
 
 

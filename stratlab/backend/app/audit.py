@@ -78,9 +78,13 @@ def _issue(level: str, area: str, detail: str) -> dict:
     return {"level": level, "area": area, "detail": detail}
 
 
+PLAIN_MAX = 1000                # a source's message is untrusted and can be a whole page: the regex below is
+                               # quadratic on long runs, and only the first 120 to 200 characters are ever shown
+
+
 def _plain(why) -> str:
     """A source's message without its "Try again later." (the audit says when it tries again)."""
-    return re.sub(r"\s*Try again[^.]*\.?\s*$", "", str(why or "")).strip().rstrip(".")
+    return re.sub(r"\s*Try again[^.]*\.?\s*$", "", str(why or "")[:PLAIN_MAX]).strip().rstrip(".")
 
 
 def _later(area: str, why: str) -> dict:
@@ -916,6 +920,9 @@ class MarketAudit:
             sym = self.current = due[0]
         try:
             row = self.check_fn(sym)
+        except Exception as e:                # stored as a finding and retried at the batches' pace: never the same
+            row = {"symbol": sym, "name": sym, "seconds": 0,      # company every minute, holding up the rest
+                   "issues": [_issue("error", "Audit", _plain(e)[:200] or e.__class__.__name__)]}
         finally:
             with self.lock:
                 self.current = None
