@@ -5,7 +5,8 @@ export const FAMILIES: Record<Family, { label: string; home: string; views: [str
   scans: {
     label: "Scans", home: "/research/scans",
     views: [["/research/scan", "Trend scan"], ["/research/screens", "Screener"], ["/research/rotation", "Sector rotation"], ["/research/filings", "Red flags"],
-      ["/invest/breadth", "Market breadth"], ["/invest/etf-gaps", "ETF vs NAV"]],
+      ["/invest/breadth", "Market breadth"], ["/invest/etf-gaps", "ETF vs NAV"],
+      ["/invest/business-updates", "Business updates"], ["/invest/holders", "Named holders"]],
   },
   watch: {
     label: "Watchlist", home: "/research/watchlist",
@@ -47,6 +48,10 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Advances and declines, stocks above their 20/50/200-day averages, 52-week highs and lows, McClellan and sectors." },
     { to: "/invest/etf-gaps", label: "ETF vs NAV", icon: "lens", title: "Each Indian ETF's price against its indicative NAV and last NAV",
       blurb: "How far each ETF's price is from what a unit holds, the widest gap first, with 30 days of history and alerts." },
+    { to: "/invest/business-updates", label: "Business updates", icon: "calendar", title: "Automakers' monthly sales and lenders' quarterly figures, read into numbers",
+      blurb: "Monthly and quarterly updates as each company filed them, with the change on the month and the year, side by side." },
+    { to: "/invest/holders", label: "Named holders", icon: "layers", title: "Search a holder named above 1% across every company's shareholding pattern",
+      blurb: "Which companies a fund or person is named in, above 1%, and what changed since the quarter before. Follow one for a message." },
   ],
   /** Trade pages beyond the menu's fixed entries, kept as data like Money's. */
   Trade: [

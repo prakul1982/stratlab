@@ -6,6 +6,8 @@ import { pct, safeHref, signClass } from "../lib/format";
 import { scaleFor } from "../lib/research";
 import { Panel, ResearchNav, TrendBars } from "../components/Research";
 import { DealsPanel } from "../components/Deals";
+import { BizUpdatesPanel } from "../components/BizUpdates";
+import { NamedHoldersPanel } from "../components/NamedHolders";
 import { AsOf, Loading } from "../components/ui";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
@@ -271,6 +273,12 @@ export function DeepDivePage() {
           )}
 
           {v.checklist && <ChecklistPanel c={v.checklist} />}
+
+          {!us && <BizUpdatesPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Business updates" span="full" right={right}
+            info="Monthly or quarterly numbers the company files between results, copied from its own filing with the line and page each comes from.">{body}</Panel>} />}
+
+          {!us && <NamedHoldersPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Named holders" span="full" right={right}
+            info="From the latest quarterly shareholding pattern: the promoter group's members and every public holder above 1%.">{body}</Panel>} />}
 
           {!us && <Panel title="Deals and insider trades" span="full" info="Who bought or sold, from exchange disclosures: promoters' and insiders' own trades and pledges, substantial acquisitions, and bulk and block deals.">
             <DealsPanel symbol={v.symbol} />

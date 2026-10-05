@@ -5,7 +5,7 @@ import { track } from "./analytics";
 /** Stock alerts the user sets: a price level, a day's move, a moving average, RSI, Stage, a 52-week high or low, and
  * (Indian stocks) an insider trade or a bulk or block deal disclosed to the exchange, or a stock entering or leaving
  * an exchange surveillance list. */
-export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal" | "surveillance" | "etfgap";
+export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal" | "surveillance" | "etfgap" | "bizupdate";
 export type AlertOp = "above" | "below" | "up" | "down" | "either" | null;
 
 export interface StockAlert {
@@ -42,10 +42,12 @@ export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: Aler
   { key: "etfgap_above", label: "ETF trades above its NAV by", kind: "etfgap", op: "above", india: true },
   { key: "etfgap_below", label: "ETF trades below its NAV by", kind: "etfgap", op: "below", india: true },
   { key: "etfgap_either", label: "ETF trades away from its NAV, either way, by", kind: "etfgap", op: "either", india: true },
+  // a new monthly or quarterly business update filed (Basic and up)
+  { key: "bizupdate", label: "Files a monthly or quarterly business update", kind: "bizupdate", op: null, india: true },
 ];
 /** Alerts on exchange disclosures and surveillance lists, checked against the exchange's daily lists rather than the
  * live price. */
-export const EVENT_KINDS: AlertKind[] = ["insider", "deal", "surveillance"];
+export const EVENT_KINDS: AlertKind[] = ["insider", "deal", "surveillance", "bizupdate"];
 export const MA_PERIODS = [20, 50, 100, 150, 200];
 
 export const conditionKey = (a: { kind: AlertKind; op: AlertOp }) =>

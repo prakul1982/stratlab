@@ -67,6 +67,8 @@ CARD_WORDS = {
     "etf_gaps": "ETF gap alerts",
     "fo_alerts": "F&O change alerts",
     "options_whatif": "what-if sliders",
+    "biz_updates": "business updates in numbers",
+    "holders": "named-holder search",
 }
 
 

@@ -1409,3 +1409,20 @@ table.greeks-t tr.greeks-net td { border-top: 1px solid var(--line-2); }
 .opt-extras > * { min-width: 0; }      /* a wide chain scrolls inside its card instead of stretching the grid past the screen */
 table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; padding: 5px 7px; }
 .model-inputs { max-width: 80ch; }
+
+/* business updates and named holders (BizUpdates.tsx, NamedHolders.tsx, HoldersPage, BizUpdatesPage) */
+.link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--blue-ink); cursor: pointer; text-align: left; }
+.link-btn:hover, .link-btn.on, .link-btn[aria-pressed="true"] { text-decoration: underline; }
+.biz-table th:not(:first-child), .biz-table td:not(:first-child), .holders-table th:not(:first-child), .holders-table td:not(:first-child) { padding-left: 10px; }
+.biz-table tr.on td { background: var(--blue-soft); }
+.biz-quote { max-width: 260px; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.biz-filings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.biz-filings li { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.holders-table .holder-name { white-space: normal; overflow-wrap: anywhere; max-width: 280px; display: inline-block; }
+.holder-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.holder-search { flex: 1 1 240px; min-width: 0; }
+.holder-names label { align-items: center; }
+@media (max-width: 640px) {
+  .biz-quote { max-width: 160px; }
+  .holders-table .holder-name { max-width: 170px; }
+}
