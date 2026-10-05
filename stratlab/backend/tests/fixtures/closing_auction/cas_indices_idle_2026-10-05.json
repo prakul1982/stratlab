@@ -1,0 +1,50 @@
+[
+ {
+  "change": 9.7,
+  "closePrice": 22421.95,
+  "currentPrice": 22431.65,
+  "icChange": 0,
+  "icPerChange": 0,
+  "icStatus": "CLOSE",
+  "indexName": "NIFTY 50",
+  "indexTime": null,
+  "indicativeClose": 0,
+  "perChange": 0.04
+ },
+ {
+  "change": -86.75,
+  "closePrice": 68981.35,
+  "currentPrice": 68894.6,
+  "icChange": 0,
+  "icPerChange": 0,
+  "icStatus": "CLOSE",
+  "indexName": "NIFTY NEXT 50",
+  "indexTime": null,
+  "indicativeClose": 0,
+  "perChange": -0.13
+ },
+ {
+  "change": 64.5,
+  "closePrice": 54450.75,
+  "currentPrice": 54515.25,
+  "icChange": 0,
+  "icPerChange": 0,
+  "icStatus": "CLOSE",
+  "indexName": "NIFTY BANK",
+  "indexTime": null,
+  "indicativeClose": 0,
+  "perChange": 0.12
+ },
+ {
+  "change": 9.9,
+  "closePrice": 24556.1,
+  "currentPrice": 24566,
+  "icChange": 0,
+  "icPerChange": 0,
+  "icStatus": "CLOSE",
+  "indexName": "NIFTY FIN SERVICE",
+  "indexTime": null,
+  "indicativeClose": 0,
+  "perChange": 0.04
+ }
+]

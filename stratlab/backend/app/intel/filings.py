@@ -851,6 +851,18 @@ class NSEFilings:
         it). One call for the whole market, behind a breaker of its own."""
         return self._get("/api/etf", {}, referer="https://www.nseindia.com/market-data/exchange-traded-funds-etf", circuit="etf")
 
+    CAS_PAGE = "https://www.nseindia.com/market-data/closing-auction-session"
+
+    def cas_stocks(self):
+        """The closing auction session's per-stock data as the exchange's CAS page shows it (closing_auction.py reads
+        it): reference price, band, indicative equilibrium price and quantity, final price, imbalance, best bid and
+        ask, and the list of eligible symbols. One call for the market, behind a breaker of its own."""
+        return self._get("/api/NextApi/apiClient/casApi", {"functionName": "getCASData"}, referer=self.CAS_PAGE, circuit="cas")
+
+    def cas_indices(self):
+        """The F&O indices on the CAS page: value, previous close and the indicative close during the auction."""
+        return self._get("/api/NextApi/apiClient/casApi", {"functionName": "getAllFnoIndexData"}, referer=self.CAS_PAGE, circuit="cas")
+
 
 BSE_ATTACH = "https://www.bseindia.com/xml-data/corpfiling/"
 # What Chrome sends when bseindia.com's own announcements page asks api.bseindia.com for data (a cross-origin XHR on

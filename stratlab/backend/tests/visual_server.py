@@ -76,6 +76,7 @@ def build():
     for k, v in (("MIN_ROWS", 1), ("PAUSE", 0), ("BACKGROUND", False), ("BACKFILL", 3)):
         mp.setattr(money_mf_ter, k, v)
     etf_gaps(mp)
+    closing_auction(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
     fx_rates.seed()
@@ -126,6 +127,16 @@ def breadth(mp):
         for region in ("IN", "US"):
             main.breadth_runner.run(region)
     mp.setattr(main.breadth_job, "start", lambda: None)      # the stored counts stay as they are for the whole run
+def closing_auction(mp):
+    """Today's closing auction, as read just after it ended, and 8 stored days for the history."""
+    from datetime import date
+    from app import closing_auction as CA
+    from tests import fake_cas
+    CA.refresh(main.filings_feed)
+    fake_cas.seed(date.today())
+    mp.setattr(main.closing_auction_job, "start", lambda: None)
+
+
 def etf_gaps(mp):
     """ETF prices against their NAV: the exchange's ETF list as the job would have read it (from the fake exchange),
     the made-up ETFs' NAVs added to the NAV file, and 30 trading days of stored closes."""

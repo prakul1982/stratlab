@@ -37,6 +37,7 @@ class Timetable(NamedTuple):
     cas_end: str                       # continuous trading ends for CAS stocks (stocks with derivatives)
     cash_end: str                      # continuous trading ends for every other stock and ETF
     auction: tuple[str, str] | None    # the closing auction for CAS stocks: starts, matching done (official close out)
+    entry: tuple[str, str] | None      # the auction's order entry (it ends at random in its last 2 minutes)
     fo_end: str                        # the derivatives segment closes
     settle_at: str                     # the price that settles expiring contracts is fixed by this time
     source: str
@@ -44,8 +45,8 @@ class Timetable(NamedTuple):
 
 # one row per timetable, oldest first
 TIMES = [
-    Timetable("2000-01-01", "09:15", "15:30", "15:30", None, "15:30", "15:30", "Exchange market hours before the closing auction"),
-    Timetable("2026-08-03", "09:15", "15:15", "15:30", ("15:15", "15:35"), "15:40", "15:30",
+    Timetable("2000-01-01", "09:15", "15:30", "15:30", None, None, "15:30", "15:30", "Exchange market hours before the closing auction"),
+    Timetable("2026-08-03", "09:15", "15:15", "15:30", ("15:15", "15:35"), ("15:20", "15:30"), "15:40", "15:30",
               "SEBI HO/47/11/11(3)2025-MRD-POD2/I/2765/2026 (16 Jan 2026); NSE/CMTR/74466, NSE/FAOP/74467 (29 May 2026)"),
 ]
 CAS_FROM = TIMES[-1].since if TIMES[-1].auction else None
@@ -114,6 +115,23 @@ def close_known(kind: str, day) -> time:
     return continuous(kind, day)[1]
 
 
+def phase(now: datetime) -> str:
+    """Where the closing auction is at a moment: "none" (no auction that day), "before", "transition" (reference price,
+    no orders), "entry" (order entry), "matching" or "closed" (the official close is out)."""
+    local = now.astimezone(IST)
+    tt = timetable(local)
+    if not tt.auction:
+        return "none"
+    t = local.time()
+    if t < _t(tt.auction[0]):
+        return "before"
+    if t < _t(tt.entry[0]):
+        return "transition"
+    if t < _t(tt.entry[1]):
+        return "entry"
+    return "matching" if t < _t(tt.auction[1]) else "closed"
+
+
 def settle_at(day) -> time:
     """When the price that settles contracts expiring that day is fixed."""
     return _t(timetable(day).settle_at)
@@ -132,7 +150,8 @@ def describe(day) -> dict:
     """The day's timetable, for pages and the rules register."""
     tt = timetable(day)
     return {"since": tt.since, "open": tt.open, "cas_stocks_continuous_end": tt.cas_end, "other_continuous_end": tt.cash_end,
-            "auction": list(tt.auction) if tt.auction else None, "derivatives_close": tt.fo_end,
+            "auction": list(tt.auction) if tt.auction else None, "order_entry": list(tt.entry) if tt.entry else None,
+            "derivatives_close": tt.fo_end,
             "settlement_fixed_by": tt.settle_at, "source": tt.source}
 
 
