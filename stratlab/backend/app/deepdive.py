@@ -187,9 +187,10 @@ def profit_note(p: dict) -> str | None:
 
 
 # ---------- which documents to read ----------
-# what companies call the quarterly deck: TCS and HCL file a "fact sheet", Bharti a "quarterly report", others an
-# "investor release" or "earnings update"
+# what companies call the quarterly deck: TCS and HCL file a "fact sheet", Bharti a "quarterly report", Eternal a
+# "shareholders' letter", others an "investor release" or "earnings update"
 PRESENTATION = re.compile(r"investors?'?s? presentation|earnings presentation|results presentation|analysts?'? presentation|"
+                          r"shareholders?'? letter|"
                           r"fact ?sheet|quarterly report|investors?'? (?:release|update|deck)|earnings (?:release|update)|"
                           r"performance (?:update|review) presentation|corporate presentation|"
                           r"(?:earnings|conference|con\.?) ?call presentation|analysts?(?:/institutional investors?)? meet presentation|"
@@ -198,15 +199,30 @@ PRESENTATION = re.compile(r"investors?'?s? presentation|earnings presentation|re
 TRANSCRIPT = re.compile(r"\btran?scr?i?pts?\b", re.I)
 # NSE's subject for analyst meets and calls: a deck filed under it is a presentation even when it's only called one
 MEET = re.compile(r"analysts?/institutional investor meet|con\.? ?call|earnings call|conference call", re.I)
+# NSE files every meeting with analysts or investors under one subject that names calls too, so a call is told apart
+# by the rest of the filing: an earnings or conference call, its audio recording or its transcript. A one-on-one
+# meeting with an investor has no transcript to file; an earnings call has to have one.
+MEET_SUBJECT = re.compile(r"analysts?\s*/\s*institutional investors? meet\s*/\s*con\.? ?call updates?", re.I)
+CALL = re.compile(r"earnings? (?:conference )?call|conference call|con\.? ?call|concall|results? call|post[- ]results?|"
+                  r"investors?(?: and analysts?)? call|analysts?(?: and investors?)? call|audio|recording|\btran?scr?i?pts?\b", re.I)
 
 
-def documents(items: list[dict]) -> list[dict]:
-    """Investor presentations and earnings-call transcripts among a company's filings, newest first, with a PDF link."""
-    out = []
+def _file_words(url: str | None) -> str:
+    """The words in a filing's PDF name: NSE keeps the name the company uploaded ("ACME_01082026190000_Q1FY27
+    ConcallTranscript.pdf"), which often says what the filing is when its subject doesn't."""
+    from urllib.parse import unquote, urlsplit
+    name = unquote(urlsplit(url or "").path.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", re.sub(r"[_\-.+]+", " ", name))
+
+
+def documents(items: list[dict], per_kind: int | None = None) -> list[dict]:
+    """Investor presentations and earnings-call transcripts among a company's filings, newest first, with a PDF link;
+    `per_kind`: at most that many of each kind, so a run of decks can't crowd out the transcripts."""
+    out, seen = [], {}
     for i in items:
         if not i.get("url"):
             continue
-        hay = f"{i.get('subject', '')} {i.get('text', '')}".lower()
+        hay = f"{i.get('subject', '')} {i.get('text', '')} {_file_words(i['url'])}".lower()
         if TRANSCRIPT.search(hay):
             kind = "transcript"
         elif (i.get("category") == "presentation" or PRESENTATION.search(hay)
@@ -216,8 +232,21 @@ def documents(items: list[dict]) -> list[dict]:
             kind = "annual_report"
         else:
             continue
-        out.append({"kind": kind, "at": i["at"], "title": i.get("subject") or kind, "url": i["url"]})
+        seen[kind] = seen.get(kind, 0) + 1
+        if per_kind is None or seen[kind] <= per_kind:
+            out.append({"kind": kind, "at": i["at"], "title": i.get("subject") or kind, "url": i["url"]})
     return out
+
+
+def meetings(items: list[dict], since: str) -> dict:
+    """What a company told the exchange about its meetings since a time ("2024-10-05T00:00"): {"meets": every
+    analyst or investor meeting and call, "calls": the earnings or conference calls among them (their notice,
+    recording or transcript)}, and {"filed": how many filings of any kind}, which is never none for a listed company
+    that is trading: one that files nothing at all wasn't read."""
+    recent = [i for i in items if i["at"] >= since]
+    meets = [i for i in recent if i.get("category") == "concall"]
+    calls = [i for i in meets if CALL.search(f"{MEET_SUBJECT.sub(' ', i.get('subject') or '')} {i.get('text') or ''} {_file_words(i.get('url'))}")]
+    return {"meets": len(meets), "calls": len(calls), "filed": len(recent)}
 
 
 # ---------- the document reads ----------

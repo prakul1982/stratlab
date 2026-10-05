@@ -193,9 +193,10 @@ def test_common_subject_lines_are_found(subject, text, kind):
 
 def test_no_calls_held_is_a_fact_not_two_gaps():
     view = {"region": "IN", "documents": [], "checklist": {"checks": [], "industry": {"path": ["x"]}}, "valuation": {"value": 1}}
-    assert audit.check_view(view, meets=0) == [audit._issue("fact", "Documents", audit.NO_MEETS)]
-    gaps = audit.check_view(view, meets=3)               # it held calls and filed nothing we found: worth a look
-    assert [i["level"] for i in gaps] == ["gap", "gap"]
+    told = lambda meets, calls: {"meets": meets, "calls": calls, "filed": 40}       # noqa: E731
+    assert audit.check_view(view, told(0, 0)) == [audit._issue("fact", "Documents", audit.NO_MEETS)]
+    found = audit.check_view(view, told(3, 2))           # it held calls and no transcript was found: worth a look
+    assert [i["level"] for i in found] == ["fact", "gap"] and "2 of its filings" in found[1]["detail"]
     assert len(audit.check_view(view)) == 2              # unknown (an older check): as before
 
 

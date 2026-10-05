@@ -1000,16 +1000,28 @@ class BSEFilings:
         if hit is not None:
             return hit
         to = ist_now()
-        frm = to - timedelta(days=days)
+        rows = self._window(code, to - timedelta(days=days), to)
+        if not rows and days > 366:
+            # every company that trades files something in two years, and BSE's own page searches a year at a time:
+            # nothing at all for the whole window is asked again a year at a time before it is believed
+            end = to
+            while end > to - timedelta(days=days):
+                start = max(end - timedelta(days=365), to - timedelta(days=days))
+                rows += self._window(code, start, end)
+                end = start - timedelta(days=1)
+        items = normalise(rows)
+        self.cache.set(key, items, 1800)
+        return items
+
+    def _window(self, code: str, frm: datetime, to: datetime) -> list[dict]:
+        """One company's announcements between two dates, page by page (50 a page, up to PAGES pages)."""
         rows: list[dict] = []
         for page in range(1, self.PAGES + 1):
             table = self._page(code, frm, to, page).get("Table") or []
             rows += bse_rows(table)
             if len(table) < 50:
                 break
-        items = normalise(rows)
-        self.cache.set(key, items, 1800)
-        return items
+        return rows
 
     def industry(self, code: str) -> list[str]:
         """BSE's own classification of a company, from its quote page's header: sector › industry › group › sub-group

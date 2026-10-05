@@ -95,8 +95,9 @@ interface MarketState {
   /** the stored results couldn't be read yet (just after a restart): nothing else is filled in */
   loading?: boolean; error?: string;
   enabled: boolean; listed: number; checked: number; due: number; current: string | null; eta_hours: number | null;
-  /** why nothing is being checked: switched off, an audit above is running, or a source is turning every company away */
-  paused?: "off" | "busy" | "cooling" | "loading" | null; cool_minutes?: number; rate_per_hour?: number;
+  /** why nothing is being checked: switched off, an audit above is running, market data offline, or a source is
+   * turning every company away */
+  paused?: "off" | "busy" | "offline" | "cooling" | "loading" | null; cool_minutes?: number; rate_per_hour?: number;
   list_at: string | null; list_error: string | null; reset_at?: string | null;
   full?: { running: boolean; since: string | null; done_at: string | null; left: number; checked: number | null; everything?: boolean; pending_only?: boolean };
   monthly?: { on: boolean; last: string | null; next: string | null };
@@ -115,10 +116,11 @@ const until = (iso: string) => {
   return s < 60 ? "any minute" : s < 3600 ? `in ${Math.round(s / 60)} min` : `in ${Math.round(s / 3600)} h`;
 };
 const hoursText = (h: number) => (h < 1 ? "under an hour" : h < 48 ? `about ${Math.round(h)} hours` : `about ${Math.round(h / 24)} days`);
-const PAUSED: Record<"off" | "busy" | "cooling" | "loading", string> = {
+const PAUSED: Record<"off" | "busy" | "offline" | "cooling" | "loading", string> = {
   loading: "Reading the stored results; nothing is checked or changed until they are.",
   off: "Paused: switched off. Press Start to check companies.",
   busy: "Paused: an audit above is running. It carries on by itself when that finishes.",
+  offline: "Waiting: market data is offline until today's data login. It carries on by itself once prices are back.",
   cooling: "Slowed down: a source is turning every company away, so it waits between companies until it answers again.",
 };
 

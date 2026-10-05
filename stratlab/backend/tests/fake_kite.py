@@ -143,6 +143,7 @@ class FakeKiteConnect:
             if r:
                 p = price_of(r["tradingsymbol"], now)
                 out[k] = {"instrument_token": r["instrument_token"], "last_price": p, "volume": 1000,
+                          "last_trade_time": now.replace(tzinfo=None, microsecond=0),
                           "ohlc": {"open": p * 0.99, "high": p * 1.01, "low": p * 0.98, "close": p * 0.995},
                           "depth": {"buy": [{"price": p - 0.05, "quantity": 100}], "sell": [{"price": p + 0.05, "quantity": 100}]}}
         return out

@@ -1579,6 +1579,12 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
     except Exception:
         pass
+    n = deepdive.numbers(p)
+    if not n["bank"] and len(n["years"]) >= 3 and all(y["capex"] is None for y in n["years"][-3:]):
+        try:     # no estimate from the balance sheet (fixed assets sold or written down): what it spent buying them
+            p = research_hub.screener.with_capex(p)
+        except Exception:
+            pass
     try:
         items = filings_feed.announcements(sym, max(deepdive.DOC_DAYS, 366 * years))
         doc_note, fsum = None, filings.summarise(items)
@@ -1589,9 +1595,10 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
     insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
     trend, why = price_status(sym)
     cut = (datetime.now(IST) - timedelta(days=366 * years)).strftime("%Y-%m-%dT%H:%M")
-    meets = None if doc_note else sum(1 for i in items if i.get("category") == "concall" and i["at"] >= cut)
-    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": trend,
-            "trend_why": why, "trades": insider, "meets": meets}
+    told = None if doc_note else deepdive.meetings(items, cut)
+    # four of each kind a year: a deck and a transcript a quarter, so a run of decks can't push the transcripts out
+    return {"p": p, "docs": deepdive.documents(items, 4 * max(2, years)), "doc_note": doc_note, "filings": fsum, "trend": trend,
+            "trend_why": why, "trades": insider, "told": told}
 
 
 def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]:
@@ -3676,12 +3683,12 @@ audit_runner = audit.Runner()
 
 
 def live_price(sym: str):
-    """The live exchange quote from the broker's feed as (last price, previous close), since a thinly traded stock's
-    last daily close can be either; the exchange's own last price when the feed is offline (its website turns cloud
-    servers away, so that is a last resort). Works for NSE symbols and BSE-only codes alike."""
+    """The live exchange quote from the broker's feed: last price, previous close, the day's range and the time of
+    the last trade, for audit.check_prices; the exchange's own last price when the feed is offline (its website turns
+    cloud servers away, so that is a last resort). Works for NSE symbols and BSE-only codes alike."""
     if kite.ready():
         q = kite.quote([sym]).get(sym) or {}
-        return (q.get("price"), q.get("prev_close"))
+        return {k: q.get(k) for k in ("price", "prev_close", "low", "high", "at")}
     return filings_feed.last_price(sym)
 
 
@@ -3796,7 +3803,10 @@ def _market_check(sym: str) -> dict:
     return _nse_check(sym)
 
 
-market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: bool(audit_runner.state.get("running")))
+# daily prices and the exchange's quote come from the broker's feed: while it is offline (the day's login not done
+# yet) the audit waits rather than marking every company it reaches "not checked yet"
+market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: bool(audit_runner.state.get("running")),
+                                 ready_fn=lambda: kite.ready())
 
 
 def _sec_companies() -> list[dict]:

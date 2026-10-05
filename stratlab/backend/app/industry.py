@@ -127,32 +127,50 @@ def _last(table: dict | None, prefix: str):
     return None
 
 
+def _none_because(short: str, snap: dict, p: dict, own: str | None) -> str:
+    """Why a multiple is blank, when it is a fact about the company: `own` is the multiple's own reason (a loss,
+    negative net worth or EBITDA); otherwise no market value (shares not trading) or no reported results."""
+    why = own or ("the company page shows no market value for its shares" if not snap.get("market_cap_cr")
+                  else "there are no reported results to divide by" if not (p.get("pl") or {}).get("rows") else None)
+    return f" There's no {short} here: {why}." if why else ""
+
+
 def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
     """The multiple this kind of business is usually valued on, with P/E alongside. Facts, not a verdict."""
     pe = snap.get("pe")
     ttm = _last(p.get("pl"), "Net Profit")
-    loss = ttm is not None and ttm <= 0
+    eps = _last(p.get("pl"), "EPS")
+    # a loss for the shareholders: the group's profit can be positive while their share of it (EPS) isn't
+    loss = (ttm is not None and ttm <= 0) or (eps is not None and eps <= 0)
+    computed = pe is None and not loss and bool(snap.get("market_cap_cr")) and ttm is not None
+    if computed:                               # no P/E on the page: market value ÷ the last 12 months' profit
+        pe = snap["market_cap_cr"] / ttm
     if group in BOOK or measure_key in BOOK:
         v = snap.get("pb")
-        worth = ((_last(p.get("balance"), "Reserves") or 0) + (_last(p.get("balance"), "Equity Capital") or 0)
-                 if _last(p.get("balance"), "Reserves") is not None else (_last(p.get("balance"), "Equity") or 0))
-        if v is None and snap.get("market_cap_cr") and worth > 0:       # no book value on the page: from the balance sheet
+        bal = p.get("balance")
+        worth = ((_last(bal, "Reserves") or 0) + (_last(bal, "Equity Capital") or 0) if _last(bal, "Reserves") is not None
+                 else _last(bal, "Equity"))
+        if v is None and snap.get("market_cap_cr") and worth and worth > 0:   # no book value on the page: from the balance sheet
             v = snap["market_cap_cr"] / worth
+        own = ("the company's net worth is negative" if worth is not None and worth < 0
+               else "the company has no balance sheet on its page" if worth is None and snap.get("market_cap_cr") else None)
         return {"name": "Price to book", "short": "P/B", "value": round(v, 2) if v is not None else None, "pe": pe,
                 "why": "Lenders, insurers, holding companies and developers are usually valued on their book (net worth)."
-                       + (" There's no P/B here: the company's net worth is negative." if v is None and worth < 0 else "")}
+                       + (_none_because("P/B", snap, p, own) if v is None else "")}
     if measure_key in EV_EBITDA or group == "utility":
         ebitda = _last(p.get("pl"), "Operating Profit")          # the latest column is the trailing twelve months
         mcap, debt = snap.get("market_cap_cr"), _last(p.get("balance"), "Borrowings") or 0
         cash = _last(p.get("balance"), "Cash")             # US filings report it; for India, the Other Assets breakdown
         v = (mcap + debt - (cash or 0)) / ebitda if mcap and ebitda and ebitda > 0 else None
+        own = "EBITDA was negative over the last 12 months" if ebitda is not None and ebitda <= 0 else None
         return {"name": "EV / EBITDA", "short": "EV/EBITDA", "value": round(v, 1) if v is not None else None, "pe": pe,
                 "why": "Asset-heavy businesses (hospitals, hotels, telecom, cement, metals, power, airlines) are usually valued on "
                        "enterprise value to EBITDA, because depreciation and debt differ so much between them. Here EV is market "
                        + ("value plus borrowings less cash" if cash is not None else "value plus borrowings (cash isn't subtracted)")
                        + " and EBITDA is the last twelve months' operating profit."
-                       + (" There's no EV/EBITDA here: EBITDA was negative over the last 12 months."
-                          if v is None and ebitda is not None and ebitda <= 0 else "")}
+                       + (_none_because("EV/EBITDA", snap, p, own) if v is None else "")}
     return {"name": "Price to earnings", "short": "P/E", "value": round(pe, 1) if pe is not None else None, "pe": pe,
             "why": "Most businesses are compared on price to earnings."
-                   + (" There's no P/E here: the company made a loss over the last 12 months." if pe is None and loss else "")}
+                   + (" Here it is market value divided by the last 12 months' net profit." if computed else "")
+                   + (_none_because("P/E", snap, p, "the company made a loss over the last 12 months" if loss else None)
+                      if pe is None else "")}
