@@ -885,8 +885,8 @@ def expiry_events(today: date, listed=None, frm: date | None = None, to: date | 
         if d and frm <= d <= to:
             monthly.add(d)
             out.append(_ev("expiry", d, "Monthly F&O expiry", "The month's index and stock futures and options expire (NIFTY, BANKNIFTY "
-                           "and the stocks), as listed" + ("." if mine else " by the exchange's rule: the last Tuesday, a day earlier "
-                                                           "when that is a holiday."), eid=_id("exp-m", d), time_ist="15:30",
+                           "and the stocks)" + (", as listed." if mine else ". The date is the exchange's rule: the last Tuesday, a "
+                                                "day earlier when that is a holiday."), eid=_id("exp-m", d), time_ist="15:30",
                            status="released" if d < today else "scheduled"))
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
     weekly = {_day(d) for d in got} - {None}

@@ -62,6 +62,8 @@ def build():
     surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them
     from app import fo_changes
     fo_changes.refresh(main.filings_feed)    # the F&O contract file and circulars, likewise
+    from tests import fake_market_events
+    fake_market_events.seed()                # the market events calendar's sources, as the morning read would have kept them
     screen_index()
     breadth(mp)
     positioning_history()
