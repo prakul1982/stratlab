@@ -149,7 +149,7 @@ def test_wrong_turned_off_and_replaced_urls_are_refused_without_touching_anythin
     assert send(c, path, body).status_code == 404
     c.delete("/trade/signals/hook", headers=PRO)                                    # turned off
     assert send(c, new, body).status_code == 404
-    assert not db.get_session_row("u-pro", s["id"])["state"] or not db.get_session_row("u-pro", s["id"])["state"].get("signals")
+    assert not (db.get_session_row("u-pro", s["id"]).get("state") or {}).get("signals")
     assert main.manager.sessions[s["id"]].signals == []
     assert c.get("/hooks/signal/" + new.rsplit("/", 1)[1]).status_code == 405        # only POST
 
@@ -236,7 +236,7 @@ def test_a_plan_without_it_refuses_signals(w, monkeypatch):
 
 def test_the_signal_log_late_stale_repeat_and_refusals(w):
     c = w["client"]
-    path, s = url(c), session(c, capital=20000)
+    path, s = url(c), session(c, capital=20000, allow_short=False)
     sid = s["id"]
     now = datetime.now(timezone.utc)
     late = (now - timedelta(seconds=150)).isoformat()

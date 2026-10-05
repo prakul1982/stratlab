@@ -97,7 +97,7 @@ class SignalSession:
         self._next_mark = 0.0
         self._last_curve = 0.0
         self.started_at = row["started_at"]
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()      # a fill asks for the price while holding it
         self.dirty = False
         self.feed_ok = True
 
