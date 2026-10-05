@@ -153,21 +153,19 @@ _MULT = {"lakh": 1e5, "lakhs": 1e5, "crore": 1e7, "crores": 1e7, "cr": 1e7, "mil
          "bn": 1e9, "thousand": 1e3, "k": 1e3}
 
 
-def _close(a: float, b: float) -> bool:
-    return abs(a - b) <= max(1e-9, 0.0005 * abs(b))
-
-
 def number_in(value: float, quote: str) -> bool:
     """The figure is written in its quote: as is ("236,013"), or with a scale word ("1.9 million" for 1,900,000)."""
     for m in _NUM.finditer(quote or ""):
+        raw = m.group(1).replace(",", "")
         try:
-            x = float(m.group(1).replace(",", ""))
+            x = float(raw)
         except ValueError:
             continue
-        if _close(x, value):
+        step = 0.5 * 10 ** -len(raw.partition(".")[2])        # what rounding to the digits shown can hide
+        if abs(x - value) <= step + 1e-9:
             return True
         mult = _MULT.get((m.group(2) or "").lower().strip())
-        if mult and _close(x * mult, value):
+        if mult and abs(x * mult - value) <= step * mult + 1e-9:
             return True
     return False
 
@@ -408,7 +406,7 @@ def series(reads: dict) -> list[dict]:
                 py = shift(p, -12)
                 if py not in m["points"] or m["points"][py]["filed_later"]:
                     m["points"][py] = {"period": py, "value": f["prior"], "filed_later": True, "source": src}
-    newest = max(reads.values(), key=lambda r: r.get("at") or "", default=None)
+    newest = max((r for r in reads.values() if r.get("period") and r.get("figures")), key=lambda r: r.get("at") or "", default=None)
     if newest:
         order = [metric_key(f["metric"], f.get("segment"), f["unit"], f["basis"]) for f in newest.get("figures") or []]
     out = []
@@ -427,7 +425,7 @@ def series(reads: dict) -> list[dict]:
                     "change_year": change(latest["value"], year["value"], m["unit"]) if year else None,
                     "points": [x for x in pts if x["period"] >= lo]})
     rank = {k: i for i, k in enumerate(order)}
-    out.sort(key=lambda m: (not m["headline"] or m["key"] not in rank, rank.get(m["key"], 999), m["latest"]["period"] < (newest or {}).get("period", ""),
+    out.sort(key=lambda m: (not m["headline"] or m["key"] not in rank, rank.get(m["key"], 999), m["latest"]["period"] < ((newest or {}).get("period") or ""),
                             m["metric"].lower()))
     return out[:MAX_FIGURES * 2]
 
