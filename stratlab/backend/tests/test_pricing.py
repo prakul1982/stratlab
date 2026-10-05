@@ -11,6 +11,7 @@ from app.config import settings
 @pytest.fixture
 def store(monkeypatch):
     saved = {}
+    pricing.forget()                    # prices another test saved, kept in memory
     monkeypatch.setattr(pricing.db, "get_setting", lambda k: saved.get(k))
     monkeypatch.setattr(pricing.db, "set_setting", lambda k, v: saved.__setitem__(k, v))
     return saved
