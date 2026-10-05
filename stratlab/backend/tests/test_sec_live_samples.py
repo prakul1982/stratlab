@@ -104,6 +104,14 @@ def test_a_share_count_from_years_ago_isnt_used():
     assert "Market Cap" not in r and "Book Value" not in r and "Stock P/E" not in r
 
 
+def test_a_mistyped_cover_page_count_is_checked_against_earnings_per_share():
+    baba = build("baba")                                     # 18,580,374,278 on the page, 1,858,037,427 in its data
+    assert baba["currency"] == "CNY" and 18.0e9 < baba["shares"] < 18.6e9
+    r = sec.ratios(sec.with_ads({**baba, "fx": {"rate": 0.14}}, 8), 105.85)
+    assert 200000 < r["Market Cap"] < 300000 and 10 < r["Stock P/E"] < 30
+    assert build("azn")["shares"] == 1562000000.0            # a count that agrees stays as filed
+
+
 def test_total_equity_with_a_large_minority_part_isnt_the_owners_equity():
     bn = build("bn")                                         # only the total is tagged; minorities were most of it
     assert row(bn, "balance", "Equity")["Dec 2025"] is None

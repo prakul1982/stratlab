@@ -593,6 +593,15 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
             f = max(got, key=lambda f: (f["end"], f.get("filed") or ""))
             shares = (f["end"], float(f["val"]))
             break
+    # a cover-page count mistyped in the filing's data (Alibaba's 2026 20-F: 18,580,374,278 shares read as 1,858,037,427)
+    # is checked against the latest year's profit over its earnings per share, which is restated for any split before
+    # the report was issued; more than three times apart, the count the earnings imply is used
+    eps_basic = flows(facts, ("EarningsPerShareBasic", "BasicEarningsLossPerShare"), "annual", f"{cur}/shares")
+    last = ends[-1]
+    if shares and abs(eps_basic.get(last) or 0) >= 0.05 and ni_a.get(last):
+        implied = ni_a[last] / eps_basic[last]
+        if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3:
+            shares = (last, float(round(implied)))
     out = {"name": subs.get("name") or facts_json.get("entityName") or "", "ratios": {}, "growth": {}, "pros": [], "cons": [],
            "pl": {"cols": pl_cols, "rows": pl_rows}, "balance": bal, "cashflow": cf, "quarters": quarters,
            "basis": "consolidated", "unit": "$ million" if cur == "USD" else f"{cur} million", "currency": cur, "region": "US",
