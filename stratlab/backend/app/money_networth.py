@@ -317,6 +317,13 @@ class ItemReq(BaseModel):
     loan_type: Optional[Literal["home", "car", "personal", "education", "credit_card", "other"]] = None
     tenure_months: Optional[int] = Field(None, ge=0, le=600)
     lender: Optional[str] = Field(None, max_length=60)
+    # a floating-rate loan: its benchmark, the spread over it, how often the rate resets, the last reset and the rate
+    # on the latest statement (loan_check.py compares that with the benchmark plus the spread)
+    benchmark: Optional[Literal["fixed", "repo", "tbill", "mclr", "other"]] = None
+    spread: Optional[float] = Field(None, ge=-10, le=30)
+    reset_months: Optional[Literal[1, 3, 6, 12]] = None
+    last_reset: Optional[str] = Field(None, max_length=10)
+    current_rate: Optional[float] = Field(None, ge=0, le=60)
     policy_type: Optional[Literal["term", "health", "life", "vehicle", "other"]] = None
     insurer: Optional[str] = Field(None, max_length=60)
     sum_assured: Optional[float] = Field(None, ge=0, le=1e12)
@@ -344,10 +351,11 @@ FIELDS = {
     "property": (("value", "as_of"), ("value",)),
     "crypto": (("coin", "qty", "value", "as_of"), ()),
     "other": (("value", "as_of"), ("value",)),
-    "loan": (("loan_type", "lender", "principal", "rate", "tenure_months", "start"), ("principal", "rate")),
+    "loan": (("loan_type", "lender", "principal", "rate", "tenure_months", "start", "benchmark", "spread", "reset_months", "last_reset",
+              "current_rate"), ("principal", "rate")),
     "policy": (("policy_type", "insurer", "sum_assured", "premium", "frequency", "due", "nominee"), ("insurer", "premium")),
 }
-DATES = ("as_of", "opened", "start", "maturity", "due")
+DATES = ("as_of", "opened", "start", "maturity", "due", "last_reset")
 WORDS = {"balance": "the balance", "tier1": "the Tier I value", "principal": "the amount", "rate": "the interest rate",
          "start": "the start date", "maturity": "the maturity date", "monthly": "the monthly amount", "units": "the units",
          "value": "the value", "insurer": "the insurer", "premium": "the premium"}
@@ -406,6 +414,13 @@ def clean(req: ItemReq, now: date | None = None) -> dict:
             raise EntryError("Crypto: enter the coin and quantity, or its value.")
     if k == "loan":
         out.setdefault("loan_type", "other")
+        if out.get("benchmark") in (None, "fixed"):
+            for f in ("spread", "reset_months", "last_reset"):
+                out.pop(f, None)
+        else:
+            out.setdefault("reset_months", 12 if out["benchmark"] == "mclr" else 3)
+            if out.get("last_reset") and out.get("start") and out["last_reset"] < out["start"]:
+                raise EntryError("Loan: the last reset can't be before the loan started.")
         if out.get("tenure_months"):
             if not out.get("start"):
                 raise EntryError("Loan: enter the start date, so the EMIs paid so far can be counted.")
@@ -713,6 +728,18 @@ def upcoming_dates(uid: str, days: int = 60, at: date | None = None) -> list[dic
                     if d > end:
                         break
                     add(d, "emi", f"{label}: EMI", f"EMI {j} of {i['tenure_months']}", pay)
+                if i.get("benchmark") not in (None, "fixed") and i.get("reset_months"):
+                    anchor = _date(i.get("last_reset")) or s
+                    step, n = int(i["reset_months"]), 1
+                    d = add_months(anchor, step)
+                    while d < at:
+                        n += 1
+                        d = add_months(anchor, step * n)
+                    while d <= end and d <= add_months(s, i["tenure_months"]):
+                        add(d, "loan_reset", f"{label}: rate reset", "The floating rate resets to its benchmark on this date; check the "
+                            "new rate on your statement")
+                        n += 1
+                        d = add_months(anchor, step * n)
         except (KeyError, TypeError, ValueError, OverflowError):
             continue
     return sorted(out, key=lambda x: (x["date"], x["title"]))

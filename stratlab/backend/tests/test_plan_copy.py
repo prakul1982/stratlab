@@ -70,6 +70,7 @@ CARD_WORDS = {
     "mf_behaviour": "fund behaviour",
     "sip_luck": "SIP dip rules",
     "rates_slab": "after your own tax",
+    "loan_check": "floating-rate loan check",
 }
 
 

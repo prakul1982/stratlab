@@ -37,7 +37,7 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
                      "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal",
-                     "mf_costs", "etf_gaps", "fo_alerts", "mf_behaviour", "sip_luck", "rates_slab"},
+                     "mf_costs", "etf_gaps", "fo_alerts", "mf_behaviour", "sip_luck", "rates_slab", "loan_check"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -57,7 +57,7 @@ PLANS = {
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
                      "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
-                     "mf_behaviour", "sip_luck", "rates_slab"},
+                     "mf_behaviour", "sip_luck", "rates_slab", "loan_check"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -83,11 +83,12 @@ PLANS = {
 # fall and holding periods (your XIRR beside the fund's NAV return is for everyone); sip_luck: the SIP test's dip rules
 # and the spread of results over every start month (a plain SIP test with charges and the lump sum is for everyone);
 # rates_slab: fixed-income rates after tax at the marginal rate from your own tax estimate (after tax at a slab you
-# pick is for everyone)
+# pick is for everyone); loan_check: each floating-rate loan against its benchmark, the gap to your statement's rate
+# and what each change did (the benchmark, spread and reset fields and the reset dates in the calendar are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
             "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
-            "mf_behaviour", "sip_luck", "rates_slab")
+            "mf_behaviour", "sip_luck", "rates_slab", "loan_check")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
