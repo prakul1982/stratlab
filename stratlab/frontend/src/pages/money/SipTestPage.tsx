@@ -7,6 +7,7 @@ import type { Instrument, Market } from "../../lib/types";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
 import { LineChart } from "../../components/Charts";
 import { Info } from "../../components/ui";
+import { sipParams } from "../../lib/sip";
 
 /* Test a stock or ETF SIP before setting one up: a fixed amount (or number of shares) every day, week or month into one
  * Indian stock or ETF or a split across up to 10, with a yearly step-up and an optional dip rule, on past closes with
@@ -44,13 +45,13 @@ export function SipTestPage() {
   const [params] = useSearchParams();
   const [picks, setPicks] = useState<Pick[]>([]);
   const [mode, setMode] = useState<"amount" | "qty">("amount");
-  const [amount, setAmount] = useState("10000");
+  const [amount, setAmount] = useState(() => sipParams(params).amount ?? "10000");
   const [qty, setQty] = useState("1");
-  const [freq, setFreq] = useState<"daily" | "weekly" | "monthly">("monthly");
+  const [freq, setFreq] = useState<"daily" | "weekly" | "monthly">(() => sipParams(params).freq ?? "monthly");
   const [dom, setDom] = useState("1");
   const [weekday, setWeekday] = useState("0");
   const [stepUp, setStepUp] = useState("0");
-  const [years, setYears] = useState("5");
+  const [years, setYears] = useState(() => sipParams(params).years ?? "5");
   const [brokerage, setBrokerage] = useState("0");
   const [rule, setRule] = useState<Rule>("plain");
   const [dip, setDip] = useState("10");

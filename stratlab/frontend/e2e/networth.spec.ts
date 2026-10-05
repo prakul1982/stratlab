@@ -77,6 +77,7 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   const assets = page.getByRole("table", { name: "Assets" });
   await expect(assets.getByText("Bank FD")).toBeVisible();
   await expect(assets.getByText(/Matures .*: ₹1,14,/)).toBeVisible();                   // two years at 7%, every quarter
+  await expect(assets.getByText(/interest to maturity ₹14,\d{3}, ₹\d{1,2},\d{3} after tax at 31\.2%/)).toBeVisible();   // the default 30% slab with cess
 
   await kind.selectOption("loan");
   await page.getByLabel("Kind").selectOption("home");

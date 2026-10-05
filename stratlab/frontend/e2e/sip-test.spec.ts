@@ -111,3 +111,29 @@ test("test a SIP: from a company page, a split, the spread over start months and
   await sane(page, errors, await page.locator("main").innerText());
   if (phone) await touchable(page);
 });
+
+test("test as a SIP: from the new-notebook flow, with the instrument and settings prefilled from the link", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  const n = phone ? 290 : 287;
+  await request.put(`${API}/me/prefs`, { headers: { Authorization: `Bearer load-${n}` }, data: { focus: "both", level: "some", space: "all" } });
+  const errors = await open(page, "/new", "What trading idea do you want to test?", n);
+  await page.getByPlaceholder(/Search any NSE or BSE stock/).first().fill("INFY");
+  await page.locator(".results button", { hasText: "INFY" }).first().click();
+  await page.getByRole("link", { name: "Test as a SIP instead" }).click();
+  await expect(page).toHaveURL(/\/money\/sip-test\?symbol=INFY/);
+  await expect(page.getByRole("list", { name: "In this SIP" }).getByText("INFY", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel("Amount each time (₹)")).toHaveValue("10000");        // nothing else asked for: the defaults
+
+  // settings in the link are read; anything odd is ignored
+  await page.goto("/money/sip-test?symbol=INFY&amount=5000&freq=weekly&years=3");
+  await expect(page.getByRole("list", { name: "In this SIP" }).getByText("INFY", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel("Amount each time (₹)")).toHaveValue("5000");
+  await expect(page.getByLabel("How often")).toHaveValue("weekly");
+  await expect(page.getByLabel("Years")).toHaveValue("3");
+  await page.goto("/money/sip-test?symbol=INFY&amount=-4&freq=hourly&years=99");
+  await expect(page.getByLabel("Amount each time (₹)")).toHaveValue("10000");
+  await expect(page.getByLabel("How often")).toHaveValue("monthly");
+  await expect(page.getByLabel("Years")).toHaveValue("5");
+  await sane(page, errors, await page.locator("main").innerText());
+  if (phone) await touchable(page);
+});

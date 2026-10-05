@@ -4,7 +4,16 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 5 October 2026: small fixes
+
+- **Audit price check (India):** a company page's price that matches any of our last 5 daily closes now agrees, since a thinly traded stock's page can be several sessions old. A price that matches none is still flagged.
+- **Net worth: interest after tax on deposits:** each FD and RD shows its interest to maturity after tax, worked out as on the Rates page (your own estimate's rate on Basic and up, the 30% slab otherwise).
+- **Test as a SIP from notebooks:** the new-notebook flow and a notebook on an Indian stock or ETF link to the SIP test with that instrument chosen. The SIP test also reads `amount`, `freq` and `years` from the link.
+
 ### 5 October 2026: strikes picked by delta or premium, and India VIX
+
+**All**
+- **An All home (`/all`):** All in the space switcher now has a home of its own: one next step, a short folded list of what is new (each linking to its page, with Basic or Pro where a plan is needed), the top three tools of Trade, Invest and Money, and the next market events. `/` opens it for All, and the menu gets an "All home" link.
 
 **Trade**
 - **Strikes picked by rule (Pro):** an options leg can take the strike nearest a model delta, inside a delta range, nearest (or at least, or at most) a rupee premium, or nearest a share of the at-the-money straddle, resolved on the live quotes at entry and at each re-centre. The builder's preview shows what each rule picks now (every plan), and the order log says why under each order.

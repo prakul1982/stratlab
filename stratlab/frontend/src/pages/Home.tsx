@@ -7,6 +7,7 @@ import { ago } from "../lib/format";
 import { blankStrategy, parseStrategyText, riskForCurrency, STARTERS } from "../lib/rules";
 import type { Instrument, Notebook } from "../lib/types";
 import { HELP } from "../lib/help";
+import { sipTestLink } from "../lib/sip";
 import { InstrumentSearch } from "../components/InstrumentSearch";
 import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
@@ -65,6 +66,8 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
         <div className="row wrap" style={{ gap: 10 }}>
           <span className="pill" style={{ fontSize: 15 }}>✓ {where.instrument.symbol} · {market?.name}</span>
           <button className="link" onClick={() => setWhere({ ...where, instrument: null })}>Pick another</button>
+          {(() => { const to = sipTestLink({ ...where.instrument, market: where.instrument.market ?? where.market });
+            return to ? <Link className="link" to={to}>Test as a SIP instead</Link> : null; })()}
         </div>
       ) : market && market.status === "live" ? (
         <InstrumentSearch market={market} compact onPick={(i) => setWhere({ market: where.market, instrument: i })} />

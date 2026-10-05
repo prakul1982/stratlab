@@ -78,6 +78,21 @@ def test_the_company_page_can_be_a_session_behind():
     assert found[0]["level"] == "mismatch" and "vs 300.00 on the company page" in found[0]["detail"]
 
 
+def test_a_thin_stock_page_price_can_be_several_sessions_old():
+    trend = {"price": 351.80, "chg": -3.0, "recent": [385.00, 372.0, 360.5, 355.0, 351.80]}
+    assert audit.check_prices({"price": 385.00}, trend, None) == []         # five sessions back
+    assert audit.check_prices({"price": 360.50}, trend, None) == []
+    found = audit.check_prices({"price": 399.00}, trend, None)              # matches none of them
+    assert found[0]["level"] == "mismatch" and "vs 399.00 on the company page" in found[0]["detail"]
+    old = {**trend, "recent": [385.00, 372.0, 360.5, 355.0, 351.80, 340.0]}  # only the last 5 count
+    assert audit.check_prices({"price": 385.00}, old, None)[0]["level"] == "mismatch"
+
+
+def test_the_trend_carries_the_last_five_closes():
+    bars = [{"t": f"2026-09-{d:02d}", "o": 10 + d, "h": 11 + d, "l": 9 + d, "c": 10 + d} for d in range(1, 31)]
+    assert main.scan.analyse(bars)["recent"] == [float(10 + d) for d in range(26, 31)]
+
+
 def test_the_quote_carries_its_last_trade_time(w):
     q = main.kite.quote(["RELIANCE"])["RELIANCE"]
     assert q["at"][:10] == datetime.now(main.IST).date().isoformat()

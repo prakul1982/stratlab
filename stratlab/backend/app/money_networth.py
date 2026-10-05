@@ -867,7 +867,14 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         plan = profile["_plan"]
         allowed = has_history(plan)
         limit = item_limit(plan)
-        return {**v, "history": hist if allowed else None, "history_allowed": allowed, "history_count": len(hist),
+        dep = None
+        if any(i.get("kind") in ("fd", "rd") for i in items):
+            try:
+                from . import fixed_income        # imports this module, so not at the top
+                dep = fixed_income.networth_deposits(profile)
+            except Exception as e:
+                print("net worth: deposit tax unavailable:", type(e).__name__)
+        return {**v, "deposit_tax": dep, "history": hist if allowed else None, "history_allowed": allowed, "history_count": len(hist),
                 "limit": limit, "count": len(items), "kinds": {k: LABEL[k] for k in KINDS}}
 
     @r.get("")

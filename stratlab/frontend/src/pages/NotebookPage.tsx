@@ -13,6 +13,7 @@ import { MoreMenu } from "../components/MoreMenu";
 import { RulesCard } from "../components/Rules";
 import { AutoGrow, Info, Loading, Modal, VerdictBadge } from "../components/ui";
 import { HELP } from "../lib/help";
+import { sipTestLink } from "../lib/sip";
 import { IdeaComposer } from "../components/IdeaComposer";
 
 const PERIODS: Record<Tf, number[]> = {
@@ -265,6 +266,7 @@ export function NotebookPage() {
               <span className="market-btn-cta">{inst || group ? "Change" : "Choose"} →</span>
             </Link>
             <Info>{HELP.market}</Info>
+            {sipTestLink(inst) && <Link className="btn quiet sm" to={sipTestLink(inst)!}>Test as a SIP</Link>}
           </div>
           <div className="toolbar" role="toolbar" aria-label="Notebook actions">
             <button className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>

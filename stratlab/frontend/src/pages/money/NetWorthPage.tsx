@@ -26,8 +26,9 @@ type View = {
   insurance: { policies: Policy[]; yearly_premium: number; cover: Record<string, number>; next: string | null };
   gold_price: { per_g: number; as_of: string } | null; rates: { epf: number; epf_note: string; ppf: number; ppf_note: string; sgb: number };
   history: { d: string; net: number; assets: number; liabilities: number; why: string }[] | null; history_allowed: boolean; history_count: number;
-  limit: number | null; count: number;
+  limit: number | null; count: number; deposit_tax?: DepositTax | null;
 };
+type DepositTax = { tax_rate: number; basis: "estimate" | "slab"; items: Record<string, { interest: number; interest_after_tax: number }> };
 type Prepay = {
   outstanding: number; amount: number; closes: boolean; emi: number; months_left: number; interest_left?: number; interest_saved?: number; note: string;
   tenure: { months_left: number; months_saved: number; interest_saved: number; ends: string } | null;
@@ -142,7 +143,7 @@ function EntryForm({ kind, start, busy, onSave, onCancel, saveLabel }: { kind: K
 }
 
 /** One line of figures under an entry: maturity, interest, EMIs, as the server worked them out. */
-function Facts({ r }: { r: Row }) {
+function Facts({ r, tax }: { r: Row; tax?: DepositTax | null }) {
   const f = r.facts || {};
   const bits: string[] = [];
   if (f.maturity) bits.push(`${f.matured ? "Matured" : "Matures"} ${day(f.maturity)}${f.maturity_value != null ? `: ${inr(f.maturity_value)}` : ""}`);
@@ -151,6 +152,8 @@ function Facts({ r }: { r: Row }) {
   if (f.paid_in != null) bits.push(`paid in ${inr(f.paid_in)}`);
   if (f.yearly_interest != null) bits.push(`interest ${inr(f.yearly_interest)} a year`);
   if (f.next_interest) bits.push(`next interest ${day(f.next_interest)}`);
+  const d = tax?.items?.[r.id];
+  if (d) bits.push(`interest to maturity ${inr(d.interest)}, ${inr(d.interest_after_tax)} after tax at ${tax!.tax_rate}%${tax!.basis === "estimate" ? " (your estimate)" : ""}`);
   if (!bits.length) return null;
   return <div className="tiny muted">{bits.join(" · ")}</div>;
 }
@@ -303,7 +306,7 @@ export function NetWorthPage() {
                       <tr key={r.id}>
                         <td style={{ textAlign: "left", whiteSpace: "normal", minWidth: 180 }}>
                           <b>{r.name}</b>{r.name !== r.label && <span className="tiny muted"> · {r.label}</span>}{r.basis === "as entered" && <span className="tiny muted"> · as entered</span>}
-                          <div className="small muted">{r.rule}</div><Facts r={r} />
+                          <div className="small muted">{r.rule}</div><Facts r={r} tax={view.deposit_tax} />
                         </td>
                         <td className="num">{r.value == null ? "–" : inr(r.value)}<div className="tiny muted">as of {day(r.as_of)}</div></td>
                         <td>{r.entry ? <button className="btn quiet sm" onClick={() => startEdit(r.entry!)} aria-label={`Edit ${r.name}`}>Edit</button>

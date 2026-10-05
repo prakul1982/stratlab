@@ -114,20 +114,33 @@ def deposits(uid: str, t: float, at: date) -> list[dict]:
     return out
 
 
-def view(profile: dict, slab: float | None, own: bool) -> dict:
-    full = allows(profile["_plan"], "rates_slab")
-    at = date.today()
-    fy = tax_lots.fy_of(at.isoformat())
+def tax_basis(profile: dict, slab: float | None, own: bool) -> tuple[float, str, dict | None, int]:
+    """(tax rate as a fraction, "estimate" or "slab", the estimate's marginal-rate facts, the financial year). The
+    user's own estimate counts only on a plan with `rates_slab`; everyone else gets the picked slab (30% by default)."""
+    fy = tax_lots.fy_of(date.today().isoformat())
     mine = None
-    if full and own:
+    if allows(profile["_plan"], "rates_slab") and own:
         inputs = tax_total.load_inputs(profile["id"]).get(fy)
         if inputs and inputs.get("saved"):
             mine = marginal(fy, inputs)
     if mine:
-        t, basis = mine["rate"], "estimate"
-    else:
-        s = slab if slab is not None else 30
-        t, basis = slab_rate(s), "slab"
+        return mine["rate"], "estimate", mine, fy
+    return slab_rate(slab if slab is not None else 30), "slab", None, fy
+
+
+def networth_deposits(profile: dict) -> dict:
+    """What Net worth shows beside each FD and RD: the interest to maturity after tax, at the same rate the Rates page
+    uses by default (the user's own estimate on a plan with `rates_slab`, else the 30% slab)."""
+    t, basis, _, _ = tax_basis(profile, None, True)
+    rows = deposits(profile["id"], t, date.today())
+    return {"tax_rate": round(t * 100, 2), "basis": basis,
+            "items": {r["id"]: {"interest": r["interest"], "interest_after_tax": r["interest_after_tax"]} for r in rows}}
+
+
+def view(profile: dict, slab: float | None, own: bool) -> dict:
+    full = allows(profile["_plan"], "rates_slab")
+    at = date.today()
+    t, basis, mine, fy = tax_basis(profile, slab, own)
     rbi = rbi_rates.current()
     r = rbi["rates"]
     market = []
