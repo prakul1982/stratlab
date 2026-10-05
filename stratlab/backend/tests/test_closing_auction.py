@@ -41,6 +41,18 @@ def test_reads_the_real_idle_answer():
     assert i["NIFTY 50"] == {"value": 22431.65, "prev_close": 22421.95, "indicative": None, "status": "CLOSE"}
 
 
+def test_reads_the_real_answer_after_the_auction():
+    s = CA.parse_stocks(FC.closed_stocks())
+    assert s["as_of"] == "2026-10-05T15:29:43+05:30" and s["status"] == "Closed"
+    r = s["rows"]["HDFCBANK"]
+    assert (r["ref"], r["final"], r["final_qty"], r["lower"], r["upper"]) == (705.45, 704.8, 1204879, 684.3, 726.6)
+    assert (r["buy_qty"], r["sell_qty"]) == (3041126, 3028799)
+    v = CA.stock_view("HDFCBANK", r, "closed")
+    assert v["final_out"] and v["gap"] == -0.09 and v["price"] == 704.8
+    i = CA.parse_indices(FC.closed_indices())
+    assert i["NIFTY 50"]["value"] == 22555.75 and i["NIFTY 50"]["indicative"] is None
+
+
 def test_reads_the_auction_loosely():
     s = CA.parse_stocks(FC.auction_stocks())
     assert sorted(s["rows"]) == ["INFY", "RELIANCE", "TCS"]          # no price at all, and a bad symbol, are left out

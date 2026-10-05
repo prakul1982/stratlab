@@ -103,10 +103,11 @@ def _when(v) -> str | None:
 
 
 # per stock, as stored: reference, lower band, upper band, IEP, IEQ, final price, final qty, unmatched at IEP,
-# unmatched market orders, best bid qty, best bid, best ask, best ask qty
-FIELDS = ("ref", "lower", "upper", "iep", "ieq", "final", "final_qty", "imb", "imb_mkt", "bid_qty", "bid", "ask", "ask_qty")
+# unmatched market orders, best bid qty, best bid, best ask, best ask qty, total buy qty, total sell qty
+FIELDS = ("ref", "lower", "upper", "iep", "ieq", "final", "final_qty", "imb", "imb_mkt", "bid_qty", "bid", "ask", "ask_qty",
+          "buy_qty", "sell_qty")
 _SRC = ("refrencePrice", "lowerBand", "upperBand", "IEP", "totTradedQty", "finalPrice", "finalQuantity", "iiqAtEP",
-        "iiqAtMO", "bestBidQty", "bestBidPrice", "bestAskPrice", "bestAskQty")
+        "iiqAtMO", "bestBidQty", "bestBidPrice", "bestAskPrice", "bestAskQty", "totalBuyQuantity", "totalSellQuantity")
 
 
 def parse_stocks(data) -> dict:
@@ -240,6 +241,7 @@ def stock_view(sym: str, r: dict, phase: str) -> dict:
             "price": price, "final_out": bool(final), "gap": g,
             "imbalance": imb, "imbalance_market": num(r.get("imb_mkt")),
             "bid": pos(r.get("bid")), "bid_qty": num(r.get("bid_qty")), "ask": pos(r.get("ask")), "ask_qty": num(r.get("ask_qty")),
+            "buy_qty": num(r.get("buy_qty")), "sell_qty": num(r.get("sell_qty")),
             "text": f"{sym}: {'final price' if final else 'IEP'} {words(g)}" if g is not None else None}
 
 

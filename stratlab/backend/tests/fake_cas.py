@@ -17,6 +17,15 @@ def idle_stocks() -> dict:
     return json.loads((FIX / "cas_stocks_idle_2026-10-05.json").read_text())
 
 
+def closed_stocks() -> dict:
+    """The real answer after the auction of 5 Oct 2026, three stocks (order books left out)."""
+    return json.loads((FIX / "cas_stocks_closed_2026-10-05.json").read_text())
+
+
+def closed_indices() -> list:
+    return json.loads((FIX / "cas_indices_closed_2026-10-05.json").read_text())
+
+
 def idle_indices() -> list:
     return json.loads((FIX / "cas_indices_idle_2026-10-05.json").read_text())
 
@@ -25,7 +34,7 @@ def _row(sym, ref, iep, ieq, final=None, final_qty=None, imb=0):
     return {"symbol": sym, "refrencePrice": ref, "lowerBand": round(ref * 0.97, 2) if ref else None,
             "upperBand": round(ref * 1.03, 2) if ref else None, "IEP": iep, "totTradedQty": ieq, "finalPrice": final,
             "finalQuantity": final_qty, "iiqAtEP": imb, "iiqAtMO": 0, "bestBidQty": 100, "bestBidPrice": iep,
-            "bestAskPrice": iep, "bestAskQty": 120, "change": None, "perChange": None}
+            "bestAskPrice": iep, "bestAskQty": 120, "totalBuyQuantity": ieq, "totalSellQuantity": ieq, "change": None, "perChange": None}
 
 
 def auction_stocks(final: bool = False) -> dict:

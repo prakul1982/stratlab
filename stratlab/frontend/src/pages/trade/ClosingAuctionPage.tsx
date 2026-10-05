@@ -107,6 +107,7 @@ function StockRow({ r }: { r: CasStock }) {
       <td className="num">{r.price == null ? "–" : price(r.price, "INR")}<div className="tiny muted">{r.final_out ? "final" : "indicative"}</div></td>
       <td className="num">{gapText(r.gap)}</td>
       <td className="num">{qtyText(r.final_out ? r.final_qty : r.ieq)}</td>
+      <td className="num">{qtyText(r.buy_qty)} / {qtyText(r.sell_qty)}</td>
       <td className="num">{qtyText(r.imbalance)}</td>
     </tr>
   );
@@ -121,7 +122,7 @@ function Stocks({ v }: { v: CasView }) {
   const shown = rows.slice(0, 40), rest = rows.slice(40);
   const head = (
     <thead><tr><th style={{ textAlign: "left" }}>Stock</th><th>Reference (band)</th><th>{v.phase === "closed" ? "Final price" : "IEP"}</th>
-      <th>Gap to reference</th><th>{v.phase === "closed" ? "Quantity" : "Indicative quantity"}</th><th>Unmatched</th></tr></thead>
+      <th>Gap to reference</th><th>{v.phase === "closed" ? "Quantity" : "Indicative quantity"}</th><th>Bid / ask quantity</th><th>Unmatched</th></tr></thead>
   );
   return (
     <section className="card stack" style={{ gap: 12 }} aria-labelledby="cas-stocks-h">

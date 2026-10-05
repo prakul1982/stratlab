@@ -6,7 +6,7 @@ export type CasStock = {
   symbol: string; ref: number | null; lower: number | null; upper: number | null; iep: number | null; ieq: number | null;
   final: number | null; final_qty: number | null; price: number | null; final_out: boolean; gap: number | null;
   imbalance: number | null; imbalance_market: number | null; bid: number | null; bid_qty: number | null; ask: number | null;
-  ask_qty: number | null; text: string | null;
+  ask_qty: number | null; buy_qty: number | null; sell_qty: number | null; text: string | null;
 };
 export type CasIndex = { name: string; value: number | null; prev_close: number | null; indicative: number | null; status: string | null;
   start: number | null; gap: number | null; close_gap: number | null };
