@@ -5,7 +5,8 @@ export type RefType =
   | "bb_upper" | "bb_mid" | "bb_lower" | "vwap" | "supertrend" | "stage"
   | "adx" | "stoch_k" | "atr_pct" | "dc_upper" | "dc_lower" | "volume" | "vol_sma"
   | "open" | "high" | "low" | "body" | "upper_wick" | "lower_wick" | "range" | "atr"
-  | "prev_close" | "day_open" | "day_high" | "day_low" | "day_chg" | "india_vix" | "india_vix_chg";
+  | "prev_close" | "day_open" | "day_high" | "day_low" | "day_chg" | "india_vix" | "india_vix_chg"
+  | "oi_change_pct" | "rollover_pct" | "basis_pct";
 export type Op = "xa" | "xb" | "gt" | "lt" | "eq";
 export type Tf = "1d" | "1h" | "15m" | "5m";
 export type HigherTf = "15m" | "1h" | "1d";

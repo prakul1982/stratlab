@@ -85,6 +85,7 @@ from . import closing_auction
 from . import replay_routes, signals_routes
 from . import market_events_routes
 from . import mcp_server
+from . import mtf, slb, stock_desks, stock_futures     # the per-stock market desks: futures, lending, margin funding
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
@@ -168,11 +169,14 @@ def _alert_limit(profile: dict) -> int:
     return stock_alert_limit(access_plan(profile))
 
 
+ALERT_FEATURE = {"etfgap": "etf_gaps", "bizupdate": "biz_updates", "mwpl": "stock_futures", "mtf": "mtf"}     # kinds of alert on a paid plan
+
+
 def _alert_kind_ok(profile: dict, kind: str) -> bool:
-    """Alerts on an ETF's price against its NAV and on business updates are Basic and up; after a downgrade they wait."""
+    """Alerts on an ETF's price against its NAV, on business updates, on MWPL use and on margin funding are Basic and up;
+    after a downgrade they wait."""
     from .plans import access_plan
-    need_ = {"etfgap": "etf_gaps", "bizupdate": "biz_updates"}.get(kind)
-    return not need_ or allows(access_plan(profile), need_)
+    return kind not in ALERT_FEATURE or allows(access_plan(profile), ALERT_FEATURE[kind])
 
 
 stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit,
@@ -257,6 +261,7 @@ async def lifespan(app: FastAPI):
     invite_job.start()
     rules_watch_job.start()
     positioning_job.start()
+    stock_desks.job.start()                     # stock futures, lending fees and margin funding: the evening files
     fo_changes_routes.job.start()               # F&O contract changes, twice a trading day
     market_events_routes.job.start()            # market events calendar, twice a day, and its reminders
     networth_job.start()
@@ -304,6 +309,10 @@ app.include_router(closing_auction.router)     # /trade/closing-auction
 app.include_router(vix.router)                 # /trade/vix
 app.include_router(biz_updates.router)         # /research/business-updates, /invest/business-updates
 app.include_router(shareholders.router)        # /research/holders, /invest/holders
+app.include_router(stock_futures.router)       # /trade/stock-futures
+app.include_router(slb.router)                 # /invest/stock-lending
+app.include_router(mtf.router)                 # /invest/margin-funding
+app.include_router(stock_desks.admin_router)   # /admin/stock-desks
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 app.include_router(mcp_server.router)          # /mcp and /me/assistant: StratLab in your AI assistant
 
@@ -1338,6 +1347,14 @@ def alert_note(a: dict, q: dict | None) -> str | None:
         now = [f["label"] for f in surveillance.flags_for(a["symbol"])]
         return (f"{a['symbol']} is on {', '.join(now)} now. " if now else f"{a['symbol']} isn't on an exchange surveillance list now. ") + \
             "The alert fires when it enters, leaves or changes stage on one."
+    if a["kind"] == "mwpl":
+        r = stock_futures.row_for(a["symbol"])
+        return ((f"{a['symbol']}'s MWPL use was {r['m']:.1f}% on {r['as_of']}. " if r and r.get("m") is not None else "")
+                + "The alert fires when it crosses 80%, either way, in the evening's file.")
+    if a["kind"] == "mtf":
+        r = mtf.for_symbol(a["symbol"])
+        return ((f"{a['symbol']}'s margin-funded shares were {r['pct_shares']:.2f}% of shares issued on {r['as_of']}. "
+                 if r.get("pct_shares") is not None else "") + "The alert fires when the daily disclosure crosses your level.")
     if a["kind"] != "price" or not isinstance(p, (int, float)) or (a.get("state") or {}).get("side") != a["op"]:
         return None
     m = stock_alerts.money
@@ -1351,6 +1368,12 @@ def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
         body = stock_alerts.clean(req.model_dump())
     except stock_alerts.AlertError as e:
         err(400, "bad_alert", str(e))
+    if body["kind"] == "mwpl":                      # MWPL use crossing 80%: Basic and up, on a stock with futures
+        need(profile, "stock_futures", "MWPL alerts")
+        if stock_futures.DESK.store.days() and stock_futures.row_for(body["symbol"]) is None:
+            err(400, "no_futures", f"{body['symbol']} has no stock futures in the newest F&O file.")
+    if body["kind"] == "mtf":                       # margin-funded shares crossing a level: Basic and up
+        need(profile, "mtf", "Margin funding alerts")
     if body["kind"] == "etfgap":                    # an ETF's price against its NAV: Basic and up, on a listed ETF
         need(profile, "etf_gaps", "ETF gap alerts")
         if not etf_nav.known(body["symbol"]):

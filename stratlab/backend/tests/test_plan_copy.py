@@ -76,6 +76,8 @@ CARD_WORDS = {
     "biz_updates": "business updates in numbers",
     "holders": "named-holder search",
     "assistant": "in your AI assistant",
+    "stock_futures": "stock futures history",
+    "mtf": "margin funding history",
 }
 
 

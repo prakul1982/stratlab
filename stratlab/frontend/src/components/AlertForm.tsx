@@ -43,7 +43,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     const n = Number(value);
-    const needsValue = c.kind === "price" || c.kind === "move" || c.kind === "rsi" || c.kind === "etfgap";
+    const needsValue = c.kind === "price" || c.kind === "move" || c.kind === "rsi" || c.kind === "etfgap" || c.kind === "mtf";
     if (!sym) { notify("Enter a ticker, like RELIANCE or AAPL."); return; }
     if (needsValue && (!value.trim() || !Number.isFinite(n) || n <= 0)) { notify(c.kind === "move" ? "Enter the day's move in percent." : c.kind === "etfgap" ? "Enter the gap in percent." : "Enter the level."); return; }
     const body: AlertBody = {
@@ -95,6 +95,8 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="5" /></label>}
       {c.kind === "etfgap" && <label className="field">Gap to its last NAV (%)
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="2" /></label>}
+      {c.kind === "mtf" && <label className="field">Level (% of shares issued)
+        <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="1" /></label>}
       {c.kind === "rsi" && <label className="field">RSI level (1 to 99)
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} /></label>}
       {c.kind === "ma" && <label className="field">Moving average
@@ -108,6 +110,10 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         </select></label>}
       <span className="hint">{c.kind === "etfgap"
         ? "Checked through the trading day: the live price against the fund's last published NAV. On the Basic plan."
+        : c.kind === "mwpl"
+        ? "Checked each evening against the exchange's combined open interest file: fires when the stock's MWPL use crosses 80%, up or down. From 95% the stock is in the F&O ban period. On the Basic plan."
+        : c.kind === "mtf"
+        ? "Checked each evening against the exchange's margin trading disclosure (published the next trading day): fires when the funded shares cross your level. On the Basic plan."
         : c.kind === "surveillance"
         ? "Checked twice each trading day against the exchange's surveillance lists (ASM, GSM, ESM, trade-to-trade, F&O ban, price bands). The alert says which list, which stage and the list's date."
         : c.kind === "bizupdate"

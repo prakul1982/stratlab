@@ -1473,3 +1473,22 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .biz-quote { max-width: 160px; }
   .holders-table .holder-name { max-width: 170px; }
 }
+/* the per-stock desks: stock futures (a Positioning tab), stock lending fees, margin funding */
+.sf-filters { flex-wrap: wrap; }
+.sf-search, .etf-gap-search.sf-search { max-width: 220px; }
+.sf-table td, .sf-table th { vertical-align: top; }
+.sf-buildup { display: inline-flex; flex-direction: column; gap: 2px; }
+.sf-tag { font-size: 0.82rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); white-space: nowrap; }
+.sf-mwpl { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sf-bar { position: relative; width: 64px; height: 6px; border-radius: 3px; background: var(--line); overflow: visible; }
+.sf-bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--ink); opacity: 0.55; }
+.sf-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--muted); }
+.sf-ban { font-size: 0.75rem; font-weight: 600; padding: 0 6px; border-radius: 4px; border: 1px solid var(--muted); white-space: nowrap; }
+.sf-days { display: flex; flex-wrap: wrap; gap: 4px; }
+.sf-day { display: inline-flex; flex-direction: column; align-items: center; font-size: 0.72rem; color: var(--muted); padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; min-width: 44px; }
+.sf-day b { color: var(--ink); font-size: 0.8rem; }
+.slb-facts { display: grid; gap: 10px; margin: 0; }
+.slb-facts dt { font-weight: 600; font-size: 0.9rem; }
+.slb-facts dd { margin: 2px 0 0; }
+.mtf-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.pos-tabs { align-self: flex-start; flex-wrap: wrap; }

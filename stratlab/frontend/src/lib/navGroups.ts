@@ -52,11 +52,15 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Monthly and quarterly updates as each company filed them, with the change on the month and the year, side by side." },
     { to: "/invest/holders", label: "Named holders", icon: "layers", title: "Search a holder named above 1% across every company's shareholding pattern",
       blurb: "Which companies a fund or person is named in, above 1%, and what changed since the quarter before. Follow one for a message." },
+    { to: "/invest/stock-lending", label: "Stock lending fees", icon: "receipt", title: "Lending fees that traded on the exchange for the stocks you hold and watch",
+      blurb: "Past traded SLB fees for your holdings and watchlist over 30 and 90 days, how often any traded, and how lending works." },
+    { to: "/invest/margin-funding", label: "Margin funding", icon: "wallet", title: "Margin-funded (MTF) amounts per stock and for the market, and your MTF cost",
+      blurb: "How much of each stock is bought with broker funding, the market's MTF book, and your own position's interest and margin worked out." },
   ],
   /** Trade pages beyond the menu's fixed entries, kept as data like Money's. */
   Trade: [
     { to: "/trade/positioning", label: "Positioning", icon: "layers", title: "Participant-wise open interest, FII/DII flows, PCR, max pain and IV",
-      blurb: "Who holds index futures and options, FII and DII cash flows, each index's PCR, OI by strike and ATM IV." },
+      blurb: "Who holds index futures and options, FII and DII cash flows, each index's PCR, OI by strike and ATM IV, and every F&O stock's futures: buildup, rollover, basis and MWPL use." },
     { to: "/trade/journal", label: "Trade journal", icon: "book", title: "Your real trades paired into round trips, judged by the verdict's checks",
       blurb: "Import your tradebook or tax P&L, equity and F&O: every round trip with its charges, your notes, and the verdict's honesty checks on your real trades." },
     { to: "/trade/fo-changes", label: "F&O changes", icon: "calendar", title: "Stocks entering and leaving F&O, lot-size revisions and expiry-day changes",

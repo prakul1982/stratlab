@@ -1,5 +1,6 @@
 """Load candles for a test, run the backtest and the verdict, and pack the result
 into an experiment record small enough to keep in a notebook."""
+import json
 from datetime import datetime, timedelta, timezone
 
 from .engine import costs as C
@@ -85,9 +86,24 @@ def _default_meta():
     return UploadMeta()
 
 
+def _with_fo(strategy, inst: dict | None, bars: list[dict]) -> list[dict]:
+    """An Indian stock's daily candles with its stored F&O facts by day (stock_futures.enrich), when a rule uses one of
+    the F&O values (OI change, rollover, basis); other candles as they are."""
+    from .engine.indicators import FO_REFS
+    try:
+        text = json.dumps(strategy.model_dump()) if hasattr(strategy, "model_dump") else ""
+    except (TypeError, ValueError):
+        return bars
+    if not inst or not any(f'"{t}"' in text for t in FO_REFS) or not str(inst.get("id") or "").startswith("IN:"):
+        return bars
+    from . import stock_futures
+    return stock_futures.enrich(str(inst.get("symbol") or ""), bars)
+
+
 def run(strategy, data: dict) -> dict:
     """Backtest plus verdict."""
     bars, start = data["bars"], data["start"]
+    bars = _with_fo(strategy, data.get("inst"), bars)
     out = backtest(bars, strategy, start, data["lot"], data["kind"])
     out["verdict"] = evaluate(bars, strategy, start, out, data["lot"], data["kind"], data["days"], data["max_days"])
     out.update({"instrument": data["inst"], "lot": data["lot"], "days": data["days"], "warmup_short": start < 200})

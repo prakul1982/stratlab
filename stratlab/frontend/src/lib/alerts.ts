@@ -5,7 +5,8 @@ import { track } from "./analytics";
 /** Stock alerts the user sets: a price level, a day's move, a moving average, RSI, Stage, a 52-week high or low, and
  * (Indian stocks) an insider trade or a bulk or block deal disclosed to the exchange, or a stock entering or leaving
  * an exchange surveillance list. */
-export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal" | "surveillance" | "etfgap" | "bizupdate";
+export type AlertKind = "price" | "move" | "ma" | "rsi" | "stage" | "high52" | "low52" | "insider" | "deal" | "surveillance" | "etfgap" | "bizupdate"
+  | "mwpl" | "mtf";
 export type AlertOp = "above" | "below" | "up" | "down" | "either" | null;
 
 export interface StockAlert {
@@ -44,10 +45,14 @@ export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: Aler
   { key: "etfgap_either", label: "ETF trades away from its last NAV, either way, by", kind: "etfgap", op: "either", india: true },
   // a new monthly or quarterly business update filed (Basic and up)
   { key: "bizupdate", label: "Files a monthly or quarterly business update", kind: "bizupdate", op: null, india: true },
+  // an F&O stock's MWPL use (the stock futures desk) and a stock's margin-funded share (Basic and up)
+  { key: "mwpl", label: "MWPL use crosses 80%, either way", kind: "mwpl", op: null, india: true },
+  { key: "mtf_above", label: "Margin-funded shares rise above (% of shares issued)", kind: "mtf", op: "above", india: true },
+  { key: "mtf_below", label: "Margin-funded shares fall below (% of shares issued)", kind: "mtf", op: "below", india: true },
 ];
 /** Alerts on exchange disclosures and surveillance lists, checked against the exchange's daily lists rather than the
  * live price. */
-export const EVENT_KINDS: AlertKind[] = ["insider", "deal", "surveillance", "bizupdate"];
+export const EVENT_KINDS: AlertKind[] = ["insider", "deal", "surveillance", "bizupdate", "mwpl", "mtf"];
 export const MA_PERIODS = [20, 50, 100, 150, 200];
 
 export const conditionKey = (a: { kind: AlertKind; op: AlertOp }) =>
