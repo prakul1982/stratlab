@@ -1317,7 +1317,12 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 .etf-gap-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .etf-gap-big { font-size: 26px; line-height: 1.15; }
 .etf-gap-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.etf-gap-search { min-height: 40px; flex: 1 1 160px; min-width: 0; max-width: 260px; }
+.etf-gap-search { height: 40px; flex: 1 1 160px; min-width: 0; max-width: 260px; }
+/* seven columns fit a laptop: tighter cells, and the 30-day range wraps onto two lines */
+.etf-gap-table th:not(:first-child), .etf-gap-table td:not(:first-child) { padding-left: 10px; }
+.etf-gap-table td:last-child { white-space: normal; min-width: 130px; }
+.etf-gap-table td:last-child .tiny { white-space: nowrap; }
+.etf-gap-table .etf-gap-name { max-width: 220px; }
 .etf-gaps tr.on td { background: var(--blue-soft); }
 @media (max-width: 640px) { .etf-gap-figs { grid-template-columns: 1fr 1fr; } .etf-gap-big { font-size: 21px; } .etf-gap-search { max-width: none; } }
 
