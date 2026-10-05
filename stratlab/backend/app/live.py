@@ -244,7 +244,10 @@ class LiveManager:
 
     def _attach(self, row: dict):
         kind = (row.get("instrument") or {}).get("type")
-        if kind == "OPTIONS":
+        if (row.get("strategy") or {}).get("kind") == "signal":      # moved by outside signals (signal_session.py)
+            from .signal_session import SignalSession
+            s = SignalSession(self, row)
+        elif kind == "OPTIONS":
             from .options.session import OptionSession
             s = OptionSession(self, row, self.options)
         elif kind == "GROUP":
@@ -405,6 +408,11 @@ def session_needs(s, plan: str) -> str | None:
         f = getattr(s, "fast", {}) or {}
         if (f.get("ticks") or f.get("maxSpreadPct")) and not allows(plan, "fast_entries"):
             return "Faster group entries"
+    if kind == "signal":
+        if not allows(plan, "signal_webhooks"):
+            return "Forward-testing outside signals"
+        if needs_fno(s.inst) and not allows(plan, "fno"):
+            return "Indian F&O"
     if kind == "options":
         if not allows(plan, "options"):
             return "Options paper trading"

@@ -79,6 +79,7 @@ from . import surveillance
 from . import etf_nav
 from . import positioning
 from . import fo_changes_routes
+from . import replay_routes, signals_routes
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
@@ -268,6 +269,9 @@ app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
 app.include_router(fo_changes_routes.router)  # /trade/fo-changes
+app.include_router(replay_routes.router)      # /trade/replay: chart replay practice
+app.include_router(signals_routes.router)     # /trade/signals: forward-testing outside signals
+app.include_router(signals_routes.hook_router)  # /hooks/signal/<token>: the signal webhook (no sign-in)
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
