@@ -9,7 +9,13 @@ import type { StudyConfig, StudyType } from "./studies";
 
 export type { PriceChartProps, Tf, RangeKey, Loader } from "./PriceChart";
 
-const Chart = lazy(() => import("./PriceChart"));
+const load = () => import("./PriceChart");
+const Chart = lazy(load);
+
+/** Start downloading the chart's code now, for a page that shows it once its own data is in. */
+export function preloadPriceChart() {
+  load().catch(() => undefined);      // only a head start: the chart itself reports a failed download
+}
 
 export function PriceChart(props: PriceChartProps) {
   const h = props.height ?? 420;
