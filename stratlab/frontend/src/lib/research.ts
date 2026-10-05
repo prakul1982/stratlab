@@ -138,19 +138,27 @@ export function bigMoney(v: number | null | undefined, currency: string): string
   return `${s}${Math.round(v).toLocaleString()}`;
 }
 
+/** The currency a US filing's amounts are in: "$", or a foreign filer's own ("CAD million" → "CAD"). */
+export function millionsOf(unit: string | null | undefined): string {
+  const m = /^([A-Z]{3}) million$/.exec(unit ?? "");
+  return m ? m[1] : "$";
+}
+
 /** The unit a group of amounts (one chart, one table) reads best in. US filings are in $ million and Indian figures in
  * ₹ crore; a group switches to $ billion or ₹ lakh crore only when it's large AND every number in it still shows to
- * within 1% (so a small loss is never printed as 0.00). Only the display unit changes, never the amount. */
+ * within 1% (so a small loss is never printed as 0.00). Only the display unit changes, never the amount. `unit`: a
+ * US-listed foreign filer's own ("CAD million"), labelled "CAD million" / "CAD billion". */
 export type Scale = { k: number; unit: string; fmt: (x: number | null | undefined) => string };
-export function scaleFor(values: (number | null | undefined)[], us: boolean): Scale {
+export function scaleFor(values: (number | null | undefined)[], us: boolean, unit?: string | null): Scale {
   const nz = values.filter((x): x is number => x != null && Number.isFinite(x) && x !== 0).map(Math.abs);
   const max = nz.length ? Math.max(...nz) : 0, min = nz.length ? Math.min(...nz) : 0;
   const make = (k: number, unit: string, dp: number, locale: string): Scale =>
     ({ k, unit, fmt: (x) => (x == null ? "–" : (x / k).toLocaleString(locale, { minimumFractionDigits: dp, maximumFractionDigits: dp })) });
   if (us) {
-    if (max >= 10000 && min >= 5000) return make(1000, "$ billion", 1, "en-US");
-    if (max >= 10000 && min >= 500) return make(1000, "$ billion", 2, "en-US");
-    return { k: 1, unit: "$ million", fmt: (x) => (x == null ? "–" : x.toLocaleString("en-US", { maximumFractionDigits: 2 })) };
+    const cur = millionsOf(unit);
+    if (max >= 10000 && min >= 5000) return make(1000, `${cur} billion`, 1, "en-US");
+    if (max >= 10000 && min >= 500) return make(1000, `${cur} billion`, 2, "en-US");
+    return { k: 1, unit: `${cur} million`, fmt: (x) => (x == null ? "–" : x.toLocaleString("en-US", { maximumFractionDigits: 2 })) };
   }
   if (max >= 100000 && min >= 50000) return make(100000, "₹ lakh crore", 2, "en-IN");
   return { k: 1, unit: "₹ crore", fmt: (x) => (x == null ? "–" : x.toLocaleString("en-IN", { maximumFractionDigits: 2 })) };

@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct, safeHref, signClass } from "../lib/format";
-import { scaleFor } from "../lib/research";
+import { millionsOf, scaleFor } from "../lib/research";
 import { Panel, ResearchNav, TrendBars } from "../components/Research";
 import { DealsPanel } from "../components/Deals";
 import { AsOf, Loading } from "../components/ui";
@@ -46,10 +46,14 @@ export interface DeepView {
 
 const cr = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-IN", { maximumFractionDigits: 2 }));
 const usd = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
-/** An amount in $ million as people say it: "$950 million", "$215.9 billion". */
-const usdAmount = (v: number | null | undefined) => (v == null ? "–" : Math.abs(v) >= 1000
-  ? `$${(v / 1000).toLocaleString("en-US", Math.abs(v) >= 10000 ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billion`
-  : `$${usd(v)} million`);
+/** An amount in $ million as people say it: "$950 million", "$215.9 billion"; or in a foreign filer's own currency
+ * ("CAD 950 million") when `cur` is given. */
+const usdAmount = (v: number | null | undefined, cur = "$") => {
+  const s = cur === "$" ? "$" : `${cur} `;
+  return v == null ? "–" : Math.abs(v) >= 1000
+    ? `${s}${(v / 1000).toLocaleString("en-US", Math.abs(v) >= 10000 ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billion`
+    : `${s}${usd(v)} million`;
+};
 /** An amount in ₹ crore as people say it: "₹945 crore", "₹1.25 lakh crore". */
 const inrAmount = (v: number | null | undefined) => (v == null ? "–" : Math.abs(v) >= 100000   // within 0.5%
   ? `₹${(v / 100000).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lakh crore` : `₹${cr(v)} crore`);
@@ -74,11 +78,12 @@ function lossNote(values: (number | null | undefined)[], years: number): string 
 
 const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", other: "" };
 const RESULT: Record<string, [string, string]> = { met: ["Met", "pass"], missed: ["Missed", "fail"], pending: ["Not due yet", "next"], unchecked: ["Can't check", "skip"] };
-const target = (lo: number | null, hi: number | null, unit: string) =>
+const target = (lo: number | null, hi: number | null, unit: string, cur = "$") =>
   lo == null ? "–" : unit === "crore" ? (hi != null ? `${inrAmount(lo)} – ${inrAmount(hi)}` : inrAmount(lo))
-    : unit === "million" ? (hi != null ? `${usdAmount(lo)} – ${usdAmount(hi)}` : usdAmount(lo)) : `${lo}${hi != null ? `–${hi}` : ""}%`;
+    : unit === "million" ? (hi != null ? `${usdAmount(lo, cur)} – ${usdAmount(hi, cur)}` : usdAmount(lo, cur)) : `${lo}${hi != null ? `–${hi}` : ""}%`;
 
-function ReportCard({ c }: { c: Card }) {
+/** `cur`: the currency a US filing's amounts are in ("$", or a foreign filer's own, like "CAD"). */
+function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
   const checked = c.met + c.missed;
   return (
     <>
@@ -102,14 +107,14 @@ function ReportCard({ c }: { c: Card }) {
               </div>
               <div className="promise-facts tiny">
                 {r.period && <span><span className="muted">For</span> {r.period}</span>}
-                {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit)}</b></span>}
-                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? inrAmount(r.actual) : r.unit === "million" ? usdAmount(r.actual) : `${r.actual.toFixed(1)}%`}</b></span>}
+                {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit, cur)}</b></span>}
+                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? inrAmount(r.actual) : r.unit === "million" ? usdAmount(r.actual, cur) : `${r.actual.toFixed(1)}%`}</b></span>}
                 <a className="link" href={safeHref(r.source.url)} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
               </div>
               {r.quote && <span className="tiny muted">"{r.quote}"</span>}
               {r.settled_by && <span className="tiny">
                 <span className="muted">Result from the company's own words:</span> "{r.settled_by.quote}" <a className="link" href={safeHref(r.settled_by.source.url)} target="_blank" rel="noopener noreferrer">{r.settled_by.source.title}, {day(r.settled_by.source.at)} ↗</a></span>}
-              {r.revised && <span className="tiny muted">Later changed to {target(r.revised.low, r.revised.high, r.unit)} ({day(r.revised.at)}).</span>}
+              {r.revised && <span className="tiny muted">Later changed to {target(r.revised.low, r.revised.high, r.unit, cur)} ({day(r.revised.at)}).</span>}
             </div>);
         })}</div>
       ) : <p className="small muted" style={{ margin: 0 }}>No specific targets were found in these calls.</p>}
@@ -204,9 +209,10 @@ export function DeepDivePage() {
   const n = v?.numbers;
   const years = (n?.years ?? []).filter((y) => y.sales != null);
   // each chart and table picks its own unit (see scaleFor): large and exact enough → $ billion / ₹ lakh crore
-  const salesS = scaleFor(years.map((y) => y.sales), us), profitS = scaleFor(years.map((y) => y.profit), us);
-  const qS = scaleFor((n?.quarters ?? []).slice(-8).flatMap((q) => [q.sales, q.profit]), us);
-  const capS = scaleFor([...years].reverse().slice(0, 8).flatMap((y) => [y.sales, y.capex, y.cfo, y.fcf, y.debt]), us);
+  const cur = millionsOf(n?.unit);       // a US-listed company reporting in another currency: its figures in that currency
+  const salesS = scaleFor(years.map((y) => y.sales), us, n?.unit), profitS = scaleFor(years.map((y) => y.profit), us, n?.unit);
+  const qS = scaleFor((n?.quarters ?? []).slice(-8).flatMap((q) => [q.sales, q.profit]), us, n?.unit);
+  const capS = scaleFor([...years].reverse().slice(0, 8).flatMap((y) => [y.sales, y.capex, y.cfo, y.fcf, y.debt]), us, n?.unit);
   const b = v?.reads?.business, p = v?.reads?.plans;
   return (
     <div className="stack" style={{ gap: 22 }}>
@@ -216,7 +222,7 @@ export function DeepDivePage() {
         <span className="eyebrow">Deep dive · {us ? "United States" : "India"} · {sym}</span>
         <h1 className="page-title">{v?.name ?? sym}: business, capex and growth</h1>
         <p className="muted" style={{ fontSize: 16, maxWidth: 760 }}>{us
-          ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in dollars, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
+          ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in {cur === "$" ? "dollars" : `the currency it reports in (${cur})`}, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}</p>
         {v && <AsOf parts={[["Reported numbers", v.numbers_at], ["Last close", v.price_at]]} />}
         <div className="row wrap" style={{ gap: 10 }}>
@@ -284,7 +290,7 @@ export function DeepDivePage() {
           <Panel title="Capex and cash" span="full" info={n.capex_reported
             ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${capS.unit}.`
             : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
-            {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total) : inrAmount(n.capex_3y_total)}</b> spent on capex over the last three years. Figures in {capS.unit}.</p>}
+            {n.capex_3y_total != null && <p className="small" style={{ margin: 0 }}>{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total, cur) : inrAmount(n.capex_3y_total)}</b> spent on capex over the last three years. Figures in {capS.unit}.</p>}
             <div className="table-wrap"><table className="nums">
               <thead><tr><th>Year <span className="tiny muted">({capS.unit})</span></th><th className="num">Sales</th><th className="num">Capex</th><th className="num">Capex / sales</th><th className="num">Cash from operations</th><th className="num">Free cash flow</th><th className="num">Debt</th></tr></thead>
               <tbody>{[...years].reverse().slice(0, 8).map((y) => (
@@ -403,7 +409,7 @@ export function DeepDivePage() {
             {carding && <Loading label={us ? "Reading past earnings releases" : "Reading past earnings calls"} />}
             {!v.card && !carding && <p className="small muted" style={{ margin: 0 }}>{v.calls ? `Reads up to ${({ 1: 4, 2: 6, 3: 9 } as Record<number, number>)[span] ?? 12} ${us ? "earnings releases" : "calls"} over the last ${span === 1 ? "year" : `${span} years`} (pick how far back) for the targets management gave (growth, margins, capex), then checks each against the reported results. Counts as one of your daily AI reads; kept for a week and shared.`
               : us ? "No earnings releases were found in the company's filings for the last two years." : "No earnings-call transcripts were found in the company's filings for the last two years."}</p>}
-            {v.card && <ReportCard c={v.card} />}
+            {v.card && <ReportCard c={v.card} cur={cur} />}
             {v.card?.problems?.length ? <p className="tiny muted" style={{ margin: 0 }}>Couldn't read: {v.card.problems.join(" · ")}</p> : null}
           </section>
 
