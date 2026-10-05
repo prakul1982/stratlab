@@ -195,6 +195,10 @@ def _nse(sw=None):
         surv = surveillance_answers().get(r.url.path)
         if surv is not None:
             return httpx.Response(200, text=surv) if isinstance(surv, str) else httpx.Response(200, json=surv)
+        from tests import fake_shp
+        shp = fake_shp.answer(r)
+        if shp is not None:            # the shareholding-pattern list and its XBRL documents
+            return shp
         fo = fake_fo_changes.answer(r.url.path)
         if fo is not None:             # the F&O contract file and the circulars
             return httpx.Response(200, text=fo) if isinstance(fo, str) else httpx.Response(200, json=fo)
@@ -277,6 +281,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     surveillance._cache.clear()                 # the surveillance lists another test stored
     from app import etf_nav
     etf_nav.forget()                            # the ETF list and gap history another test stored
+    from app import biz_updates, shareholders
+    biz_updates.forget()                        # business-update reads and named holders another test stored
+    shareholders.forget()
     from app import fo_changes
     fo_changes._cache.clear()                   # the F&O contract changes another test stored
     from app import positioning

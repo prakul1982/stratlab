@@ -26,10 +26,11 @@ from .engine.indicators import rsi, stage
 
 KEY = "stockalerts:"                 # app_settings: stockalerts:<uid> = {"uid", "items": [...], "sent": [...], "pending": [...]}
 REGIONS = ("IN", "US")
-KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap")
+KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap", "bizupdate")
 NEEDS_BARS = {"ma", "rsi", "stage", "high52", "low52"}
 EVENTS = {"insider": ("insider", "sast"), "deal": ("bulk", "block"),   # alerts on exchange disclosures, not on the price
-          "surveillance": ("surveillance",)}                   # and on the exchange's surveillance lists
+          "surveillance": ("surveillance",),                   # and on the exchange's surveillance lists
+          "bizupdate": ("bizupdate",)}                         # and on monthly or quarterly business updates (biz_updates.py)
 MAX_SEEN = 300                       # disclosure ids an event alert remembers, so none is sent twice
 MA_PERIODS = (20, 50, 100, 150, 200)
 RSI_PERIOD = 14
@@ -102,6 +103,8 @@ def describe(a: dict) -> str:
             op, f"Trades {_num(v)}% or more away from its NAV, either way")
     if k == "surveillance":
         return "Enters or leaves an exchange surveillance list (ASM, GSM, ESM, trade-to-trade, F&O ban, price band)"
+    if k == "bizupdate":
+        return "Files a monthly or quarterly business update"
     return "Makes a new 52-week high" if k == "high52" else "Makes a new 52-week low"
 
 
@@ -585,12 +588,16 @@ def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
     if a["kind"] == "surveillance":
         from .surveillance import change_text
         return f"{a['symbol']} {'; '.join(change_text(d) for d in new[:4])}. From exchange surveillance lists", st
+    if a["kind"] == "bizupdate":
+        d = new[0]
+        said = d.get("text") or "a new business update"
+        return f"{a['symbol']} filed a business update: {said}. From the company's exchange filing", st
     from .deals import describe as say
     more = f"; and {len(new) - 1} more" if len(new) > 1 else ""
     return f"{a['symbol']}: {say(new[0])}{more}. From exchange disclosures", st
 
 
-def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=None) -> int:
+def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=None, kind_ok=None) -> int:
     """Check every active alert on insider trades and deals against the disclosures in `rows` (the evening's read of
     the whole market) and send what fired, within each user's plan and message limits. Returns messages sent."""
     profile = profile or db.cached_profile
@@ -613,6 +620,8 @@ def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=No
         changes = {}
         for a in mine:
             if a.get("kind") not in EVENTS or a.get("region") != "IN" or not a.get("id"):
+                continue
+            if kind_ok and not kind_ok(p, a["kind"]):     # a paid kind after a downgrade waits
                 continue
             text, st = evaluate_event(a, by_sym.get(a.get("symbol"), []))
             if text or st != (a.get("state") or {}):
