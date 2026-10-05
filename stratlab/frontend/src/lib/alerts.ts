@@ -39,9 +39,9 @@ export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: Aler
   { key: "deal", label: "A bulk or block deal is reported", kind: "deal", op: null, india: true },
   { key: "surveillance", label: "Enters or leaves an exchange surveillance list", kind: "surveillance", op: null, india: true },
   // an Indian ETF's price against its NAV (Basic and up)
-  { key: "etfgap_above", label: "ETF trades above its NAV by", kind: "etfgap", op: "above", india: true },
-  { key: "etfgap_below", label: "ETF trades below its NAV by", kind: "etfgap", op: "below", india: true },
-  { key: "etfgap_either", label: "ETF trades away from its NAV, either way, by", kind: "etfgap", op: "either", india: true },
+  { key: "etfgap_above", label: "ETF trades above its last NAV by", kind: "etfgap", op: "above", india: true },
+  { key: "etfgap_below", label: "ETF trades below its last NAV by", kind: "etfgap", op: "below", india: true },
+  { key: "etfgap_either", label: "ETF trades away from its last NAV, either way, by", kind: "etfgap", op: "either", india: true },
 ];
 /** Alerts on exchange disclosures and surveillance lists, checked against the exchange's daily lists rather than the
  * live price. */

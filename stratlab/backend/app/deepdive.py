@@ -226,6 +226,13 @@ MEET = re.compile(r"analysts?/institutional investor meet|con\.? ?call|earnings 
 MEET_SUBJECT = re.compile(r"analysts?\s*/\s*institutional investors? meet\s*/\s*con\.? ?call updates?", re.I)
 CALL = re.compile(r"earnings? (?:conference )?call|conference call|con\.? ?call|concall|results? call|post[- ]results?|"
                   r"investors?(?: and analysts?)? call|analysts?(?: and investors?)? call|audio|recording|\btran?scr?i?pts?\b", re.I)
+# a deck or transcript for shareholders' resolutions (an AGM, a postal ballot) isn't the business presentation or a call
+NOT_DECK = re.compile(r"postal ballot|general meeting|\b[ae]gm\b|shareholders?'*s? approval", re.I)
+
+
+def _agm(text: str) -> bool:
+    """A filing about the shareholders' meeting (an AGM, a postal ballot), not a call or meeting with analysts."""
+    return bool(NOT_DECK.search(text) and not MEET.search(text))
 
 
 def _file_words(url: str | None) -> str:
@@ -249,10 +256,13 @@ def documents(items: list[dict], per_kind: int | None = None) -> list[dict]:
         if not i.get("url"):
             continue
         hay = f"{i.get('subject', '')} {i.get('text', '')} {_file_words(i['url'])}".lower()
-        if TRANSCRIPT.search(hay):
+        agm = _agm(hay)
+        if TRANSCRIPT.search(hay) and not agm:
             kind = "transcript"
-        elif (i.get("category") == "presentation" or PRESENTATION.search(hay)
-              or ((i.get("category") == "concall" or MEET.search(hay)) and "presentation" in hay)):
+        elif TRANSCRIPT.search(hay):
+            continue
+        elif PRESENTATION.search(hay) or (not agm and (
+                i.get("category") == "presentation" or ((i.get("category") == "concall" or MEET.search(hay)) and "presentation" in hay))):
             kind = "presentation"
         elif "annual report" in hay:
             kind = "annual_report"
@@ -270,7 +280,11 @@ def meetings(items: list[dict], since: str) -> dict:
     recording or transcript)}, and {"filed": how many filings of any kind}, which is never none for a listed company
     that is trading: one that files nothing at all wasn't read."""
     recent = [i for i in items if i["at"] >= since]
-    meets = [i for i in recent if i.get("category") == "concall"]
+    # the transcript of a shareholders' meeting (Infosys files its AGM's) is neither a meeting with investors nor a call
+    # a transcript counts whatever it was classed as ("Transcript of the discussion on the financial results" reads as
+    # results first)
+    meets = [i for i in recent if (i.get("category") == "concall" or TRANSCRIPT.search(f"{i.get('subject') or ''} {i.get('text') or ''}"))
+             and not _agm(f"{i.get('subject') or ''} {i.get('text') or ''}")]
     calls = [i for i in meets if CALL.search(f"{MEET_SUBJECT.sub(' ', i.get('subject') or '')} {i.get('text') or ''} {_file_words(i.get('url'))}")]
     return {"meets": len(meets), "calls": len(calls), "filed": len(recent)}
 

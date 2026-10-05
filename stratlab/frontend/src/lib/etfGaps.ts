@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
 
-/** Indian ETFs' market price against their NAV: the exchange's indicative NAV (iNAV) through market hours and the fund
- * house's last published NAV. One answer for the list page and every badge in the app, read once and kept for five
+/** Indian ETFs' market price against their NAV: the fund house's last published NAV (with its date), and an indicative
+ * NAV (iNAV) only when a source gives one (the exchange's list doesn't). One answer for the list page and every badge in the app, read once and kept for five
  * minutes. Facts only: a gap as a percent, with the time of each number. */
 export type Fund = "equity" | "gold" | "silver" | "debt" | "intl";
 export interface GapSummary { days: number; avg: number; low: number; high: number; from: string; to: string }
@@ -60,7 +60,7 @@ export function gapShort(g: number | null | undefined): string {
   return `${gapPct(g)} ${g > 0 ? "above" : "below"}`;
 }
 
-/** "trades 4.2% above its iNAV". */
+/** "trades 4.2% above its last NAV". */
 export function gapWords(g: number | null | undefined, basis: string): string {
   if (g == null) return "";
   if (Math.abs(g) < 0.005) return `trades at its ${basis}`;

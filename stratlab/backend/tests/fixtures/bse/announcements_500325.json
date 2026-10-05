@@ -1,0 +1,61 @@
+{
+ "Table": [
+  {
+   "NEWSID": "1d0580e1-da8c-4522-9dbd-98e845403780",
+   "SCRIP_CD": 500325,
+   "NEWSSUB": "Announcement under Regulation 30 (LODR)-Analyst / Investor Meet - Intimation",
+   "NEWS_DT": "2026-09-21T19:08:08.48",
+   "DissemDT": "2026-09-21T19:08:08.48",
+   "ATTACHMENTNAME": "98351eb1-c4b4-4a32-b863-7d92a8b07e80.pdf",
+   "HEADLINE": "Please note that the Company executives will be participating in the Institutional Investors'' Meeting - BofA Asia Pacific Conference 2026, scheduled to be held on September 24, 2026 at ....",
+   "CATEGORYNAME": "Company Update",
+   "SUBCATNAME": "Analyst / Investor Meet",
+   "PDFFLAG": 1,
+   "SLONGNAME": "Reliance Industries Ltd"
+  },
+  {
+   "NEWSID": "bc793bdc-eaa7-4661-b0d2-d7eab2a36dd1",
+   "SCRIP_CD": 500325,
+   "NEWSSUB": "Announcement under Regulation 30 (LODR)-Analyst / Investor Meet - Outcome",
+   "NEWS_DT": "2026-07-19T18:13:24.85",
+   "DissemDT": "2026-07-19T18:13:24.85",
+   "ATTACHMENTNAME": "c9d3d96a-8b04-4b41-b454-3f98d1f90702.pdf",
+   "HEADLINE": "Transcript of the discussion on the Unaudited Financial Results (Consolidated and Standalone) of the Company for the quarter ended June 30, 2026, at the analyst meet held on July 17, 2026, ....",
+   "CATEGORYNAME": "Company Update",
+   "SUBCATNAME": "Analyst / Investor Meet",
+   "PDFFLAG": 1,
+   "SLONGNAME": "Reliance Industries Ltd"
+  },
+  {
+   "NEWSID": "11883343-7d6e-41e3-81e5-47393faa2488",
+   "SCRIP_CD": 500325,
+   "NEWSSUB": "Presentation On The Resolutions Proposed For Shareholders' Approval Vide Postal Ballot Notice Dated July 17, 2026",
+   "NEWS_DT": "2026-07-25T14:37:43.477",
+   "DissemDT": "2026-07-25T14:37:43.477",
+   "ATTACHMENTNAME": "13522767-dd93-4464-aa8b-ab7bf24b2799.pdf",
+   "HEADLINE": "Presentation on the resolutions proposed for shareholder''s approval vide Postal Ballot Notice dated July 17, 2026 is attached.",
+   "CATEGORYNAME": "Company Update",
+   "SUBCATNAME": "General",
+   "PDFFLAG": 1,
+   "SLONGNAME": "Reliance Industries Ltd"
+  },
+  {
+   "NEWSID": "89896881-0be1-46dc-8c9c-6e1b7c7865c7",
+   "SCRIP_CD": 500325,
+   "NEWSSUB": "Closure of Trading Window",
+   "NEWS_DT": "2026-09-30T17:19:23.773",
+   "DissemDT": "2026-09-30T17:19:23.773",
+   "ATTACHMENTNAME": "417b8682-2c18-48b2-8859-18320b5f550e.pdf",
+   "HEADLINE": "This is to inform that pursuant to the Reliance Code to Regulate, Monitor and Report Trading by DIrectors, Promoters, Designated Persons and Specified Connected Persons of the Company and ....",
+   "CATEGORYNAME": "Insider Trading / SAST",
+   "SUBCATNAME": "Closure of Trading Window",
+   "PDFFLAG": 1,
+   "SLONGNAME": "Reliance Industries Ltd"
+  }
+ ],
+ "Table1": [
+  {
+   "ROWCNT": 4
+  }
+ ]
+}

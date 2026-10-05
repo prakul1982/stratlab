@@ -98,8 +98,8 @@ def describe(a: dict) -> str:
     if k == "deal":
         return "A bulk or block deal is reported"
     if k == "etfgap":                   # an ETF's price against its NAV (etf_nav.py)
-        return {"above": f"Trades {_num(v)}% or more above its NAV", "below": f"Trades {_num(v)}% or more below its NAV"}.get(
-            op, f"Trades {_num(v)}% or more away from its NAV, either way")
+        return {"above": f"Trades {_num(v)}% or more above its last NAV", "below": f"Trades {_num(v)}% or more below its last NAV"}.get(
+            op, f"Trades {_num(v)}% or more away from its last NAV, either way")
     if k == "surveillance":
         return "Enters or leaves an exchange surveillance list (ASM, GSM, ESM, trade-to-trade, F&O ban, price band)"
     return "Makes a new 52-week high" if k == "high52" else "Makes a new 52-week low"

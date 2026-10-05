@@ -109,18 +109,21 @@ BSE_FILINGS = [
 def fake_bse():
     """BSE's announcements API: three filings for the BSE-only company, nothing for anyone else."""
     import json
-    from datetime import date, timedelta
+    from datetime import date, datetime, timedelta
     days = {"d1": date.today() - timedelta(days=5), "d2": date.today() - timedelta(days=12), "d3": date.today() - timedelta(days=20)}
 
     def handler(req: httpx.Request):
         if req.url.path.endswith("/AnnSubCategoryGetData/w"):
             scrip = req.url.params.get("strScrip")
+            frm, to = (datetime.strptime(req.url.params.get(k), "%Y%m%d").date() for k in ("strPrevDate", "strToDate"))
+            if (to - frm).days > 365:                          # what BSE answers to a range over a year (seen live)
+                return httpx.Response(200, json={"Status": False, "Message": "Date range cannot exceed 12 months."})
             rows = []
             if scrip in ("543210", "500325") and req.url.params.get("pageno") == "1":
                 text = json.dumps(BSE_FILINGS)
                 for k, v in days.items():
                     text = text.replace("{" + k + "}", v.isoformat())
-                rows = json.loads(text)
+                rows = [r for r in json.loads(text) if frm.isoformat() <= r["DissemDT"][:10] <= to.isoformat()]
             return httpx.Response(200, json={"Table": rows, "Table1": [{"ROWCNT": len(rows)}]})
         if req.url.path.endswith("/DefaultData/w"):           # corporate actions: an interim dividend for the BSE-only company
             ex = (date.today() + timedelta(days=7)).strftime("%d %b %Y")

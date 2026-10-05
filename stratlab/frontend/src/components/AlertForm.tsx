@@ -93,7 +93,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={now != null ? String(Math.round(now)) : "3000"} /></label>}
       {c.kind === "move" && <label className="field">Move in a day (%)
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="5" /></label>}
-      {c.kind === "etfgap" && <label className="field">Gap to its NAV (%)
+      {c.kind === "etfgap" && <label className="field">Gap to its last NAV (%)
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="2" /></label>}
       {c.kind === "rsi" && <label className="field">RSI level (1 to 99)
         <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} /></label>}
@@ -107,7 +107,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
           {[1, 2, 3, 4].map((s) => <option key={s} value={s}>Enters Stage {s}</option>)}
         </select></label>}
       <span className="hint">{c.kind === "etfgap"
-        ? "Checked through the trading day: the live price against the exchange's indicative NAV (else the fund's last NAV). On the Basic plan."
+        ? "Checked through the trading day: the live price against the fund's last published NAV. On the Basic plan."
         : c.kind === "surveillance"
         ? "Checked twice each trading day against the exchange's surveillance lists (ASM, GSM, ESM, trade-to-trade, F&O ban, price bands). The alert says which list, which stage and the list's date."
         : EVENT_KINDS.includes(c.kind)
