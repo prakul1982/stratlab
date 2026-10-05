@@ -1538,7 +1538,7 @@ def deep_region(region: str) -> str:
 
 def deep_base_us(sym: str, years: int = 2) -> dict:
     """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
-    p = dict(research_routes.source_call(lambda: sec_feed.company(sym)))
+    p = sec.with_fx(dict(research_routes.source_call(lambda: sec_feed.company(sym))), usd_per)
     try:
         m = research_hub.yahoo.meta(sym)
     except Exception:                     # no price: the numbers still stand, the ratios that need a price don't
@@ -1556,8 +1556,19 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
         p["insider"] = None
     cut = (datetime.now(IST).date() - timedelta(days=366 * years)).isoformat()
     docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
-    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": price_trend(sym, "US"),
-            "quote": {"price": m.get("price"), "prev_close": m.get("prev_close")} if m.get("price") else None}
+    trend, why = price_status(sym, "US")
+    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why,
+            "quote": {k: m.get(k) for k in ("price", "prev_close", "high", "low")} if m.get("price") else None}
+
+
+def usd_per(cur: str) -> float | None:
+    """Today's US dollars to one unit of a currency, from the market data source's quote of the pair (or the
+    other way round, turned over)."""
+    try:
+        return research_hub.yahoo.meta(f"{cur}USD=X").get("price")
+    except SourceError:
+        back = research_hub.yahoo.meta(f"USD{cur}=X").get("price")
+        return 1 / back if back else None
 
 
 def deep_years(years: int) -> int:
@@ -1598,11 +1609,20 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
     """(Stage and Supertrend on daily candles, or None; and when None, why): "untraded" (not on the exchange's
     trading list, or no trades in the window: suspended), "new" (under 30 days of prices), "stale" (no trade for a
     month) or "error" (the price source didn't answer: try again later)."""
+    if market == "US":                    # share classes and preferred series are written with a dash for prices: BRK-B
+        sym = re.sub(r"[./]", "-", sym)
     try:
         ids, _ = universes.resolve(markets, market, [{"symbol": sym}])
     except Exception:
         return None, "error"
     if not ids:
+        if market == "US":                # not found, or the price source didn't answer: only the first is a fact
+            try:
+                research_hub.yahoo.chart(sym, "1d", 30)
+            except SourceError as e:
+                return None, "error" if e.busy else "untraded"
+            except Exception:
+                return None, "error"
         return None, "untraded"
     try:
         bars = scan._bars(markets, ids[0])
@@ -1639,6 +1659,7 @@ def deep_view(sym: str, base: dict) -> dict:
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
+            "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
             "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
             "industry_measures": industry.measures(p, sym),
