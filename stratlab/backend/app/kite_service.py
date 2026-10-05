@@ -235,6 +235,14 @@ class KiteService:
         self._by_token = {r["token"]: r for r in rows}
         self._inst_day = today_ist()
 
+    def derivative_names(self) -> set[str]:
+        """The underlyings the derivatives segment lists today (stock symbols and index names). A stock in this set
+        closes through the closing auction (data/sessions.py)."""
+        self._load_instruments()
+        if getattr(self, "_deriv_of", None) is not self._inst:
+            self._deriv, self._deriv_of = {str(r["name"]).upper() for r in self._inst if r["fno"]}, self._inst
+        return self._deriv
+
     def instruments_of(self, exchange: str) -> list[dict]:
         """Kite's raw instrument list for one exchange (MCX commodities), fetched once a day."""
         key = ("instruments", exchange, today_ist())

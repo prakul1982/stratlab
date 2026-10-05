@@ -11,18 +11,68 @@ from .engine.core import Ctx, Engine, chart_series, cond_text
 from .kite_service import IST, KiteService, TickHub
 from .models import Strategy
 from .daily_report import Reporter
+from .data import sessions as S
 from .data.markets import MARKETS
 from .errors import report
 from .plans import PLANS, access_plan, allows, has_fno, has_indicators, trial_state
 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}
 POLL_SECONDS = 15          # how often polled markets (crypto) are checked for a newly closed candle
+OFFICIAL_WAIT = timedelta(minutes=30)   # a daily candle waits this long past the close for the official close
 
 
-def _session_bounds(ts: datetime):
-    open_ = ts.replace(hour=9, minute=15, second=0, microsecond=0)
-    close = ts.replace(hour=15, minute=30, second=0, microsecond=0)
+def _session_bounds(ts: datetime, kind: str = "cash"):
+    """When continuous trading starts and ends that day for this kind of instrument (data/sessions.py): a stock with
+    derivatives stops at 15:15 since the closing auction began, futures and options run to 15:40."""
+    start, end = S.continuous(kind, ts)
+    open_ = ts.replace(hour=start.hour, minute=start.minute, second=0, microsecond=0)
+    close = ts.replace(hour=end.hour, minute=end.minute, second=0, microsecond=0)
     return open_, close
+
+
+def session_kind(kite, inst: dict | None) -> str:
+    """The instrument's kind in the session table: "cas", "cash", "index" or "fo"."""
+    names = getattr(kite, "derivative_names", None)
+    try:
+        return S.kind_of(inst, names() if names else ())
+    except Exception as e:                     # no instrument list (logged out): the plain cash timetable
+        print("session kind unknown:", e)
+        return S.kind_of(inst)
+
+
+def official_close(kite, inst: dict, day: str) -> float | None:
+    """The day's official close from its daily candle (the auction price for a stock with derivatives), or None
+    before it's out."""
+    try:
+        bars = kite.history(inst["token"], "1d", 7, ttl=60)
+    except Exception as e:
+        print("official close unavailable:", inst.get("symbol"), e)
+        return None
+    for b in reversed(bars or []):
+        if str(b["t"])[:10] == day:
+            return float(b["c"])
+    return None
+
+
+def close_at_auction(engine: Engine, kind: str, now: datetime, close_px) -> dict | None:
+    """An intraday position (one with a square-off time) still open when the day's official close is out closes at
+    that close: no continuous candle came after its square-off time (for a stock with derivatives, a square-off after
+    15:15 falls in the closing auction), and orders placed in the auction fill at its price, as orders in the cash
+    market's post-close session fill at the close. Cash-market instruments and indices only; `close_px()` fetches the
+    close. Returns the order, or None."""
+    if kind == "fo" or engine.qty <= 0 or engine.t_sq is None:
+        return None
+    local = now.astimezone(IST)
+    if str(engine.entry_t)[:10] != local.date().isoformat():
+        return None
+    known = S.close_known(kind, local)
+    if local.time() < known:
+        return None
+    px = close_px()
+    if px is None:
+        return None
+    why = "Square-off at the closing auction price" if S.auction(kind, local) else "Square-off at the closing price"
+    return engine._close({"t": S.at(local, known).isoformat()}, px, why)
 
 
 def _closed(bar: dict, tf: str) -> bool:
@@ -30,29 +80,34 @@ def _closed(bar: dict, tf: str) -> bool:
     return datetime.fromisoformat(bar["t"]).timestamp() + secs <= time.time()
 
 
-def drop_forming(bars: list[dict], tf: str) -> list[dict]:
-    """Kite returns the candle that is still forming; live trading must start from closed candles only."""
+def drop_forming(bars: list[dict], tf: str, kind: str = "cash") -> list[dict]:
+    """Kite returns the candle that is still forming; live trading must start from closed candles only. Today's daily
+    candle counts as closed once the official close is out."""
     if not bars:
         return bars
     now = datetime.now(IST)
     last = datetime.fromisoformat(bars[-1]["t"]).astimezone(IST)
     if tf == "1d":
-        _, close = _session_bounds(now)
-        forming = last.date() == now.date() and now < close
+        forming = last.date() == now.date() and now < S.at(now, S.close_known(kind, now))
     else:
         forming = last + timedelta(minutes=MINUTES[tf]) > now
     return bars[:-1] if forming else bars
 
 
 class CandleBuilder:
-    def __init__(self, tf: str):
-        self.tf = tf
+    """Candles from ticks, inside the instrument's continuous session only: a tick after continuous trading ends
+    makes no candle, so nothing fills on it. With `official(day)` given, the daily candle waits for the day's official
+    close (for a stock with derivatives, the closing auction price) and closes on it; if the close still isn't out
+    OFFICIAL_WAIT after it should be, the candle closes on the last price."""
+    def __init__(self, tf: str, kind: str = "cash", official=None):
+        self.tf, self.kind, self.official = tf, kind, official
         self.minutes = MINUTES.get(tf)
         self.cur: dict | None = None
         self.vol0: float | None = None
+        self._retry = 0.0
 
     def _bucket(self, ts: datetime):
-        open_, close = _session_bounds(ts)
+        open_, close = _session_bounds(ts, self.kind)
         if ts < open_ or ts >= close:
             return None
         if self.minutes is None:
@@ -82,8 +137,27 @@ class CandleBuilder:
 
     def flush(self, now: datetime) -> list[dict]:
         if self.cur and now >= self.cur["end"]:
+            if self.minutes is None and self.official is not None and not self._settle(now):
+                return []
             return [self._close()]
         return []
+
+    def _settle(self, now: datetime) -> bool:
+        """The daily candle takes the official close; False while it should wait for it."""
+        local = now.astimezone(IST)
+        day = self.cur["start"].astimezone(IST).date()
+        known = S.at(day, S.close_known(self.kind, day))
+        if local < known:
+            return False
+        if time.time() < self._retry and local < known + OFFICIAL_WAIT:
+            return False
+        px = self.official(day.isoformat())
+        if px is None:
+            self._retry = time.time() + 60
+            return local >= known + OFFICIAL_WAIT
+        c = self.cur
+        c["c"], c["h"], c["l"] = px, max(c["h"], px), min(c["l"], px)
+        return True
 
     def _close(self) -> dict:
         c, self.cur = self.cur, None
@@ -101,13 +175,16 @@ class LiveSession:
         # India streams ticks from Kite; other markets are polled for closed candles
         self.polled = self.market != "IN"
         self.prov = mgr.markets.provider(self.market) if mgr.markets else None
+        # India: which session timetable the instrument follows (a stock with derivatives closes through the auction)
+        self.session_kind = "cash" if self.polled else session_kind(mgr.kite, self.inst)
         if self.polled:
             if self.prov is None:
                 raise ValueError("That market isn't connected.")
             bars = self.prov.history(self.inst, self.tf, self.prov.warmup_days(self.tf, 300))
             bars = [b for b in bars if _closed(b, self.tf)]
         else:
-            bars = drop_forming(mgr.kite.history(self.inst["token"], self.tf, KiteService.warmup_days(self.tf, 300)), self.tf)
+            bars = drop_forming(mgr.kite.history(self.inst["token"], self.tf, KiteService.warmup_days(self.tf, 300)), self.tf,
+                                self.session_kind)
         self.bars = bars[-400:]
         if len(self.bars) < 30:
             raise ValueError("Not enough price history to start this strategy.")
@@ -117,7 +194,7 @@ class LiveSession:
         self.next_poll = 0.0
         self.poll_ok = True
         self.equity_curve: list[dict] = state.get("equity_curve", [])
-        self.builder = CandleBuilder(self.tf)
+        self.builder = CandleBuilder(self.tf, self.session_kind, self._official if self.session_kind in ("cas", "index") else None)
         self.last_price = self.bars[-1]["c"]
         self.last_tick_at: str | None = None
         self.started_at = row["started_at"]
@@ -143,6 +220,16 @@ class LiveSession:
         with self.lock:
             for c in self.builder.flush(now):
                 self._on_candle(c)
+            ev = close_at_auction(self.engine, self.session_kind, now,
+                                  lambda: self._official(now.astimezone(IST).date().isoformat()))
+            if ev:
+                self.last_price = ev["px"]
+                self.equity_curve.append({"t": ev["t"], "eq": round(self.engine.equity(ev["px"]), 2)})
+                self.dirty = True
+                self.mgr.on_order(self, ev)
+
+    def _official(self, day: str) -> float | None:
+        return official_close(self.mgr.kite, self.inst, day)
 
     def _poll(self):
         if time.time() < self.next_poll:

@@ -8,7 +8,7 @@ from .data.calendar import is_trading_day
 
 # when to send, in the market's own time: a few minutes after the close, so the last candle is in
 SEND_AT = {
-    "IN": ("Asia/Kolkata", time(15, 40)),
+    "IN": ("Asia/Kolkata", time(15, 45)),       # after the derivatives segment's 15:40 close (data/sessions.py)
     "US": ("America/New_York", time(16, 10)),
     "UK": ("Europe/London", time(16, 40)),
     "EU": ("Europe/Berlin", time(17, 40)),

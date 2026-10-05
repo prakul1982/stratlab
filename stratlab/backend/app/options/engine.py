@@ -3,10 +3,17 @@
 Nothing here models a premium: every fill is the real bid (when selling) or ask (when
 buying) from the exchange at that moment, less any extra slippage the user sets, and
 open legs are marked at what closing them would get. The engine is a state machine
-fed one snapshot of quotes at a time, so tests can drive it with made-up quotes."""
+fed one snapshot of quotes at a time, so tests can drive it with made-up quotes.
+
+A position still open when its contracts expire (the square-off set after the derivatives close, or the session down
+at the time) is settled the way the clearing corporation settles it: each leg at its intrinsic value against the
+settlement price, the underlying's official close on the expiry day (since 3 Aug 2026 set by the closing auction for
+stocks with derivatives and, through them, for indices; data/sessions.py). No brokerage on settlement; the STT on
+exercised options is not modelled."""
 import math
 from datetime import datetime, timedelta
 
+from ..data import sessions
 from ..engine import costs as C
 from ..models import OptionStrategy
 
@@ -72,9 +79,11 @@ def fill_price(q: dict | None, side: str, slip_ticks: int) -> float | None:
 
 
 class OptionsEngine:
-    def __init__(self, s: OptionStrategy, state: dict | None = None, margin_fn=None, freeze_default: int = 0):
+    def __init__(self, s: OptionStrategy, state: dict | None = None, margin_fn=None, freeze_default: int = 0,
+                 settle_fn=None):
         self.s = s
         self.margin_fn = margin_fn            # legs -> margin needed, or None when it can't be had
+        self.settle_fn = settle_fn            # expiry -> the settlement price (the underlying's official close), or None
         self.freeze = s.costs.freeze or freeze_default
         self.kind = {"MCX": "in_mcx_opt", "CDS": "in_cds_opt", "BFO": "in_bse_opt"}.get(s.exchange, "in_opt")
         st = state or {}
@@ -158,6 +167,29 @@ class OptionsEngine:
         leg.update(open=False, exit=px, mark=px)
         self.pos["closed_pnl"] += pnl
         out.append(self._order(now, leg, side, px, why, pnl))
+
+    def _expired(self, now: datetime, expiry: str) -> bool:
+        """The contracts have stopped trading: the expiry day's derivatives close has passed."""
+        today = now.date().isoformat()
+        return expiry < today or (expiry == today and now.time() >= sessions.fo_close(now.date()))
+
+    def _settle_expiry(self, now: datetime, under: float, out: list):
+        """Every open leg at its intrinsic value against the settlement price, then the trade is closed."""
+        p = self.pos
+        for leg in p["legs"]:
+            if not leg["open"]:
+                continue
+            k = leg["strike"]
+            px = round(max(0.0, under - k) if leg["opt"] == "CE" else max(0.0, k - under), 2)
+            pnl = self._leg_pnl(leg, px)
+            leg.update(open=False, exit=px, mark=px)
+            p["closed_pnl"] += pnl
+            ev = {"t": now.isoformat(), "side": "buy" if leg["side"] == "sell" else "sell", "qty": leg["qty"], "px": px,
+                  "why": f"Expiry settlement at {under:,.2f}", "sym": leg["sym"], "strike": k, "opt": leg.get("opt"),
+                  "slices": 0, "pnl": round(pnl, 2)}
+            self.events.append(ev)
+            out.append(ev)
+        self._exit(now, {}, "Expiry settlement", out)
 
     # ---------- the structure ----------
     def _plan(self, contracts: Contracts, atm: float, legs=None) -> list[tuple] | None:
@@ -281,6 +313,11 @@ class OptionsEngine:
             self.day, self.entries_today, self.day_realised, self.halted = today, 0, 0.0, False
         p = self.pos
         if p:
+            if self.settle_fn and p.get("expiry") and self._expired(now, p["expiry"]):
+                px = self.settle_fn(p["expiry"])
+                if px is not None:
+                    self._settle_expiry(now, float(px), out)
+                    return out
             if not fresh:
                 return out   # without live prices no stop can be judged; hold and wait
             if now >= _at(now, t.squareoff) or p["opened"][:10] != today:

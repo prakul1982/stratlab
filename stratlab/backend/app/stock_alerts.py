@@ -34,7 +34,8 @@ MAX_SEEN = 300                       # disclosure ids an event alert remembers, 
 MA_PERIODS = (20, 50, 100, 150, 200)
 RSI_PERIOD = 14
 YEAR = 252                           # trading days in 52 weeks
-AFTER_CLOSE = 5                      # minutes after the close to keep checking, so the closing price is seen
+AFTER_CLOSE = 10                     # minutes after the close to keep checking, so the closing price is seen (India's
+                                     # closing auction ends at 15:35 for F&O stocks: data/sessions.py)
 
 PER_HOUR = 5                         # messages one user can get in an hour
 PER_DAY = 20                         # and in a day

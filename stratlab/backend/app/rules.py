@@ -56,6 +56,7 @@ def registry() -> list[dict]:
     """Every rule: {id, area, name, value, where, source, since}. `value` is read from the module that uses it."""
     from . import instrument_kinds as K, money_advance_tax as A, money_dividends as D, money_networth as N, tax_lots as L, tax_total as T
     from . import money_fx as FX, money_us_tax as U
+    from .data import sessions as SS
     from .data.markets import BY_ID
     from .engine import costs as C
     from .intel import filings as F
@@ -189,6 +190,17 @@ def registry() -> list[dict]:
     hours = {m: BY_ID[m]["hours"] for m in ("IN", "MCX", "CDS", "US")}
     add("hours", "market_rules", "Market hours (local)", "; ".join(f"{m} {h['open']}-{h['close']}" for m, h in hours.items())
         + " (MCX to 23:55 when the US is off daylight saving)", "data/markets.py", "the exchanges' trading-hours pages")
+    cas = SS.timetable(SS.CAS_FROM)
+    add("closing_auction", "market_rules", "Closing auction (CAS) and India's session times",
+        f"stocks with derivatives: continuous trading {cas.open}-{cas.cas_end}, closing auction {cas.auction[0]}-{cas.auction[1]} "
+        f"(order entry ends at random 15:28-15:30), its price is the official close; other stocks to {cas.cash_end} "
+        f"(close = VWAP of the last 30 minutes); futures and options to {cas.fo_end}; expiry settlement at the "
+        f"underlying's close (indices from their constituents' closes; stocks at the volume-weighted average of the "
+        f"exchanges' auction closes), fixed by {cas.settle_at}. SEBI's 12 Sep 2026 consultation proposes other "
+        "timings and settlement prices: not in force", "data/sessions.py TIMES (live.py, group_live.py, options/)",
+        f"{SS.SOURCES['sebi']} (SEBI HO/47/11/11(3)2025-MRD-POD2/I/2765/2026, 16 Jan 2026); NSE/CMTR/74466 and "
+        f"NSE/FAOP/74467 (29 May 2026); NCL/CMPT/73370 (19 Mar 2026); consultation: {SS.SOURCES['consultation']}",
+        SS.CAS_FROM)
 
     # ---- surveillance
     add("surv_lists", "surveillance", "Surveillance list addresses",
