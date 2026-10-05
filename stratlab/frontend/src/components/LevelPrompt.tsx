@@ -42,7 +42,7 @@ export function LevelPrompt({ onDone }: { onDone: () => void }) {
       <p className="muted" style={{ marginBottom: 14 }}>StratLab has three spaces: Trade, Invest and Money. We'll open the one you pick. The others stay one tap away, and you can change this any time on the Account page.</p>
       <div className="stack" style={{ gap: 6, marginBottom: 14 }}>
         <span className="small muted">How much have you done?</span>
-        <div className="seg" role="radiogroup" aria-label="Experience" style={{ alignSelf: "flex-start" }}>
+        <div className="seg seg-even" role="radiogroup" aria-label="Experience" style={{ alignSelf: "flex-start" }}>
           {LEVELS.map(([l, title, what]) => <button key={l} role="radio" aria-checked={lvl === l} aria-pressed={lvl === l} title={what} onClick={() => setLvl(l)}>{title}</button>)}
         </div>
       </div>

@@ -17,7 +17,7 @@ _WORDS = [
     (r"\bKite(?:'s)?\b", "the live feed"), (r"Yahoo Finance", "the market data source"), (r"\bYahoo\b", "the market data source"),
     (r"Screener\.in", "the fundamentals source"), (r"\bScreener\b", "the fundamentals source"),
     (r"FINNHUB_API_KEY", "a server key"), (r"finnhub\.io", "the provider"), (r"\bFinnhub\b", "the company data source"),
-    (r"Google News", "the news source"),
+    (r"Google News", "the news source"), (r"SEC EDGAR", "The SEC"), (r"\bEDGAR\b", "the SEC's filing system"),
 ]
 _RX = [(re.compile(p), r) for p, r in _WORDS]
 

@@ -384,9 +384,10 @@ class KiteService:
             ohlc = v.get("ohlc") or {}
             prev = ohlc.get("close") or None
             last = v.get("last_price")
+            traded = v.get("last_trade_time")
             out[keys.get(k, k.split(":", 1)[1])] = {
                 "price": last, "prev_close": prev, "open": ohlc.get("open"), "high": ohlc.get("high"),
-                "low": ohlc.get("low"), "volume": v.get("volume"),
+                "low": ohlc.get("low"), "volume": v.get("volume"), "at": traded.isoformat() if hasattr(traded, "isoformat") else None,
                 "change": (last - prev) if last is not None and prev else None,
                 "change_pct": ((last / prev - 1) * 100) if last is not None and prev else None,
             }

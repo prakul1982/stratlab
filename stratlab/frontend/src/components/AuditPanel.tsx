@@ -95,8 +95,9 @@ interface MarketState {
   /** the stored results couldn't be read yet (just after a restart): nothing else is filled in */
   loading?: boolean; error?: string;
   enabled: boolean; listed: number; checked: number; due: number; current: string | null; eta_hours: number | null;
-  /** why nothing is being checked: switched off, an audit above is running, or a source is turning every company away */
-  paused?: "off" | "busy" | "cooling" | "loading" | null; cool_minutes?: number; rate_per_hour?: number;
+  /** why nothing is being checked: switched off, an audit above is running, market data offline, or a source is
+   * turning every company away */
+  paused?: "off" | "busy" | "offline" | "cooling" | "loading" | null; cool_minutes?: number; rate_per_hour?: number;
   list_at: string | null; list_error: string | null; reset_at?: string | null;
   full?: { running: boolean; since: string | null; done_at: string | null; left: number; checked: number | null; everything?: boolean; pending_only?: boolean };
   monthly?: { on: boolean; last: string | null; next: string | null };
@@ -115,10 +116,11 @@ const until = (iso: string) => {
   return s < 60 ? "any minute" : s < 3600 ? `in ${Math.round(s / 60)} min` : `in ${Math.round(s / 3600)} h`;
 };
 const hoursText = (h: number) => (h < 1 ? "under an hour" : h < 48 ? `about ${Math.round(h)} hours` : `about ${Math.round(h / 24)} days`);
-const PAUSED: Record<"off" | "busy" | "cooling" | "loading", string> = {
+const PAUSED: Record<"off" | "busy" | "offline" | "cooling" | "loading", string> = {
   loading: "Reading the stored results; nothing is checked or changed until they are.",
   off: "Paused: switched off. Press Start to check companies.",
   busy: "Paused: an audit above is running. It carries on by itself when that finishes.",
+  offline: "Waiting: market data is offline until today's data login. It carries on by itself once prices are back.",
   cooling: "Slowed down: a source is turning every company away, so it waits between companies until it answers again.",
 };
 
@@ -172,8 +174,9 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
         <>
           <p className="small" style={{ margin: 0 }}>
             <b>{m.paused ? PAUSED[m.paused] : m.due ? `Running · ${m.due.toLocaleString("en-IN")} to check` : "Running · up to date"}</b>
-            {m.paused === "cooling" && !!m.cool_minutes && ` (${m.cool_minutes} min between companies now)`}
-            {" · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked
+            {m.paused === "cooling" && !!m.cool_minutes && ` ${m.cool_minutes} min between companies now.`}
+            {/* a pause reason is a full sentence, so the counts start a new one rather than hang off a "." with a "·" */}
+            {m.paused ? " " : " · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : m.paused ? "List not read yet" : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked
             {m.current && <> · now <span className="mono">{m.current}</span></>}
           </p>
           {full?.running && (
@@ -182,7 +185,8 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
                 ? <><b>Re-checking companies not checked yet:</b> {full.left.toLocaleString("en-IN")} left</>
                 : <><b>Full check:</b> {done.toLocaleString("en-IN")} of {m.listed.toLocaleString("en-IN")} done</>}
                 {m.rate_per_hour ? ` · ${m.rate_per_hour.toLocaleString("en-IN")} an hour` : ""}
-                {m.enabled && m.eta_hours != null && full.left > 0 && ` · ${hoursText(m.eta_hours)} left`}
+                {/* no time left while it waits (switched off, an audit above, market data offline): nothing is moving */}
+                {m.enabled && (!m.paused || m.paused === "cooling") && m.eta_hours != null && full.left > 0 &&` · ${hoursText(m.eta_hours)} left`}
                 {full.since ? ` · started ${ago(full.since)}` : ""}
                 {!m.enabled && " · paused: press Start to carry on"}</p>
               {!full.pending_only && m.listed > 0 && (
@@ -245,7 +249,10 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
     .filter((r) => r.shown.length), [all, show]);
   const csv = () => {
     const lines = [["symbol", "name", "level", "area", "detail"].join(",")];
-    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, i.level, i.area, i.detail].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
+    // names and details come from the exchanges' feeds: a leading = + - @ (or tab/CR) would run as a spreadsheet
+    // formula when the file is opened, so such a cell is written as text
+    const cell = (x: unknown) => { const s = String(x ?? ""); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; };
+    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, i.level, i.area, i.detail].map(cell).join(","));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = file; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);

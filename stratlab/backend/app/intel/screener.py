@@ -183,34 +183,50 @@ class Screener(Source):
             return None
         return {**copy.deepcopy(p), "url": f"https://www.screener.in{path}"}
 
-    def with_cash(self, p: dict) -> dict:
-        """`p` with a "Cash Equivalents" row in its balance sheet, from the site's breakdown of Other Assets (the
-        page itself folds cash into that line). Unchanged when the breakdown can't be read; never counts as an outage."""
-        bal = p.get("balance") or {}
-        cols, rows = bal.get("cols") or [], bal.get("rows") or {}
-        if not p.get("company_id") or not cols or any(k.lower().startswith("cash") for k in rows):
-            return p
-        key = ("cash", p["company_id"], p.get("basis"))
+    def _schedule(self, p: dict, parent: str, section: str, line: str) -> dict | None:
+        """One line of the site's breakdown of a statement line ({column: value}), as its page shows when the line is
+        opened: cash inside Other Assets, fixed assets bought inside Cash from Investing Activity. None when it can't
+        be read (busy: asked again next time); never counts as an outage."""
+        key = ("schedule", p["company_id"], p.get("basis"), parent, line)
         got = self.cache.get(key)
         if got is None:
             if not self.limit.take():
-                return p                          # busy: no cash this time, asked again next time
+                return None
             got = {}
             try:
                 r = self.http.get(f"/api/company/{p['company_id']}/schedules/",
-                                  params={"parent": "Other Assets", "section": "balance-sheet",
+                                  params={"parent": parent, "section": section,
                                           "consolidated": "true" if p.get("basis") == "consolidated" else ""})
                 data = r.json() if r.status_code == 200 else {}
                 row = next((v for k, v in (data.items() if isinstance(data, dict) else ())
-                            if isinstance(v, dict) and re.match(r"cash", k, re.I)), None)
+                            if isinstance(v, dict) and re.match(line, k, re.I)), None)
                 got = {str(k).strip(): num(str(v)) for k, v in (row or {}).items()}
             except (httpx.HTTPError, ValueError):
                 got = {}
             self.cache.set(key, got, 6 * 3600 if got else 1800)
+        return got
+
+    def _with_line(self, p: dict, table: str, name: str, parent: str, section: str, line: str) -> dict:
+        """`p` with the breakdown line added to one of its tables as `name`, when the table doesn't have it yet."""
+        t = p.get(table) or {}
+        cols, rows = t.get("cols") or [], t.get("rows") or {}
+        if not p.get("company_id") or not cols or any(k.lower().startswith(name.lower().split()[0]) for k in rows):
+            return p
+        got = self._schedule(p, parent, section, line) or {}
         vals = [got.get(str(c).strip()) for c in cols]
         if not any(v is not None for v in vals):
             return p
-        return {**p, "balance": {**bal, "rows": {**rows, "Cash Equivalents": vals}}}
+        return {**p, table: {**t, "rows": {**rows, name: vals}}}
+
+    def with_cash(self, p: dict) -> dict:
+        """`p` with a "Cash Equivalents" row in its balance sheet, from the site's breakdown of Other Assets (the
+        page itself folds cash into that line). Unchanged when the breakdown can't be read."""
+        return self._with_line(p, "balance", "Cash Equivalents", "Other Assets", "balance-sheet", r"cash")
+
+    def with_capex(self, p: dict) -> dict:
+        """`p` with a "Capex" row in its cash flow statement: the fixed assets it bought each year, from the site's
+        breakdown of Cash from Investing Activity (the page shows only the total). Unchanged when it can't be read."""
+        return self._with_line(p, "cashflow", "Capex", "Cash from Investing Activity", "cash-flow", r"fixed assets purchased")
 
     RENAMED = {"TATAMOTORS": "TMPV"}   # known symbol changes only: a fuzzy site search can land on another company
 

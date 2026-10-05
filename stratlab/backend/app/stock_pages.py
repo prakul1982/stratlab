@@ -146,7 +146,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "currency": "USD" if region == "US" else "INR", "unit": nums.get("unit") or ("$ million" if region == "US" else "₹ crore"),
         "price": prices.get("price") or snap.get("price"), "price_at": prices.get("price_at"),
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
-        "market_cap": snap.get("market_cap_cr"), "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
+        "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
         "div_yield": snap.get("div_yield"),
         "net_margin": snap.get("net_margin"), "opm": snap.get("opm"), "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
         "bank": bool(nums.get("bank")), "years": years,
@@ -411,7 +411,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     out = [("Last price", _money(f, f.get("price"))),
            ("1-year range", f"{_money(f, f.get('low52'))} to {_money(f, f.get('high52'))}"
             if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None else "–"),
-           (f"Market cap ({unit})", _fmt(f.get("market_cap"), 0)), ("P/E", _fmt(f.get("pe"))),
+           (f"Market cap ({f.get('market_cap_unit') or unit})", _fmt(f.get("market_cap"), 0)), ("P/E", _fmt(f.get("pe"))),
            ("Return on equity", _fmt(f.get("roe"), 1, "%"))]
     if not f.get("bank"):
         out += [("Operating margin", _fmt(f.get("opm"), 1, "%")), ("Debt to equity", _fmt(f.get("debt_equity"), 2))]

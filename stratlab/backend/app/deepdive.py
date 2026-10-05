@@ -18,14 +18,26 @@ DOC_DAYS = 730                # filings searched for documents: two years
 
 
 # ---------- numbers ----------
+def _millions_of(unit: str | None) -> str | None:
+    """The currency sign of an amount in millions: "$" for "$ million", "CAD " for a company reporting in Canadian
+    dollars ("CAD million"); None for ₹ crore."""
+    if unit and unit.startswith("$"):
+        return "$"
+    if unit and unit.endswith(" million"):
+        return unit.split()[0] + " "
+    return None
+
+
 def money(v: float, unit: str | None = None, digits: int = 0) -> str:
     """An amount in the company's reporting unit, in the size people say it: Indian pages are in ₹ crore ("₹1,234 cr",
-    from a lakh crore up "₹9.10 lakh cr"); US filings are in $ million ("$950 m", from a billion up "$215.9 bn")."""
+    from a lakh crore up "₹9.10 lakh cr"); US filings are in $ million ("$950 m", from a billion up "$215.9 bn"), or in
+    the millions of the currency a foreign filer reports in ("CAD 950 m")."""
     sign = "-" if v < 0 else ""
-    if unit and unit.startswith("$"):
+    sym = _millions_of(unit)
+    if sym:
         if abs(v) >= 1000:                    # to within 1%: one decimal from $10 billion, two below
-            return f"{sign}${abs(v) / 1000:,.{1 if abs(v) >= 10000 else 2}f} bn"
-        return f"{sign}${abs(v):,.{digits}f} m"
+            return f"{sign}{sym}{abs(v) / 1000:,.{1 if abs(v) >= 10000 else 2}f} bn"
+        return f"{sign}{sym}{abs(v):,.{digits}f} m"
     if abs(v) >= 100000:
         return f"{sign}₹{abs(v) / 100000:,.2f} lakh cr"
     return f"{sign}₹{abs(v):,.{digits}f} cr"
@@ -54,16 +66,18 @@ def in_billions(text: str | None) -> str | None:
     return _MILLIONS.sub(big, text)
 
 
-def scale_for(values, us: bool) -> tuple[int, str, int]:
+def scale_for(values, us: bool, unit: str | None = None) -> tuple[int, str, int]:
     """(divide by, unit, decimals) for one chart or table: $ billion or ₹ lakh crore only when the numbers are large and
-    every one of them still shows to within 1% (a small loss never prints as 0.00). The same rule as the page."""
+    every one of them still shows to within 1% (a small loss never prints as 0.00). The same rule as the page.
+    `unit`: a foreign filer's own ("CAD million"), which reads "CAD billion" when large."""
     nz = [abs(x) for x in values if x]
     hi, lo = (max(nz), min(nz)) if nz else (0, 0)
+    cur = unit.split()[0] if us and unit and unit.endswith(" million") and not unit.startswith("$") else "$"
     if us and hi >= 10000 and lo >= 500:
-        return 1000, "$ billion", 1 if lo >= 5000 else 2
+        return 1000, f"{cur} billion", 1 if lo >= 5000 else 2
     if not us and hi >= 100000 and lo >= 50000:
         return 100000, "₹ lakh crore", 2
-    return 1, "$ million" if us else "₹ crore", 0
+    return 1, f"{cur} million" if us else "₹ crore", 0
 
 
 def _series(table: dict | None, *prefixes: str) -> list:
@@ -140,7 +154,8 @@ def numbers(p: dict) -> dict:
                          "opm": qo[i] if i < len(qo) else None, "sales_yoy": round(yoy, 1) if yoy is not None else None})
     recent_capex = [y["capex"] for y in years[-3:] if y["capex"] is not None]
     eps = _series(pl, "EPS")[:n]
-    notes = [p["basis_note"]] if p.get("basis_note") else []
+    # what the figures are in (a foreign filer's own currency) and what isn't shown for this kind of company (US)
+    notes = [p[k] for k in ("basis_note", "currency_note", "margin_note") if p.get(k)]
     note = profit_note(p)
     if note:
         notes.append(note)
@@ -151,6 +166,7 @@ def numbers(p: dict) -> dict:
                    "eps_cagr_3y": _cagr(eps, 3), "eps_cagr_5y": _cagr(eps, 5)},
         "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None,
         "unit": p.get("unit") or "₹ crore", "fye": _fye(p), "capex_reported": any(v is not None for v in reported), "bank": bank, "basis": p.get("basis"), "notes": notes,
+        "no_revenue": list(p.get("no_revenue") or []),
     }
 
 
@@ -172,24 +188,30 @@ def profit_note(p: dict) -> str | None:
     ttm = next((v[-1] for k, v in (pl.get("rows") or {}).items() if k.lower().startswith("net profit") and len(v) == len(cols)), None)
     if not ttm or ttm <= 0:
         return None
+    # a US-listed company reporting in another currency: its profit in dollars at today's rate, as the P/E has it
+    foreign = p.get("currency") not in (None, "USD", "INR")
+    fx = (p.get("fx") or {}).get("rate") if foreign else 1.0
+    if not fx:
+        return None
     owners = mcap / pe
-    ratio = ttm / owners
+    ratio = ttm * fx / owners
+    u = p.get("unit")
+    behind = money(owners, "$ million" if foreign else u)
     if ratio > 1.25:
-        u = p.get("unit")
         return (f"Net profit over the last 12 months ({money(ttm, u)}) is about {ratio:.1f}× the earnings the P/E is based on "
-                f"({money(owners, u)}): it includes the share owned by minority shareholders of subsidiaries, or one-off gains. "
+                f"({behind}): it includes the share owned by minority shareholders of subsidiaries, or one-off gains. "
                 "Earnings per share growth shows what belongs to this company's shareholders.")
     if ratio < 0.8:
-        u = p.get("unit")
         return (f"Net profit over the last 12 months ({money(ttm, u)}) is well below the earnings the P/E is based on "
-                f"({money(owners, u)}), usually because of one-off losses. Earnings per share growth is the cleaner guide.")
+                f"({behind}), usually because of one-off losses. Earnings per share growth is the cleaner guide.")
     return None
 
 
 # ---------- which documents to read ----------
-# what companies call the quarterly deck: TCS and HCL file a "fact sheet", Bharti a "quarterly report", others an
-# "investor release" or "earnings update"
+# what companies call the quarterly deck: TCS and HCL file a "fact sheet", Bharti a "quarterly report", Eternal a
+# "shareholders' letter", others an "investor release" or "earnings update"
 PRESENTATION = re.compile(r"investors?'?s? presentation|earnings presentation|results presentation|analysts?'? presentation|"
+                          r"shareholders?'? letter|"
                           r"fact ?sheet|quarterly report|investors?'? (?:release|update|deck)|earnings (?:release|update)|"
                           r"performance (?:update|review) presentation|corporate presentation|"
                           r"(?:earnings|conference|con\.?) ?call presentation|analysts?(?:/institutional investors?)? meet presentation|"
@@ -198,15 +220,35 @@ PRESENTATION = re.compile(r"investors?'?s? presentation|earnings presentation|re
 TRANSCRIPT = re.compile(r"\btran?scr?i?pts?\b", re.I)
 # NSE's subject for analyst meets and calls: a deck filed under it is a presentation even when it's only called one
 MEET = re.compile(r"analysts?/institutional investor meet|con\.? ?call|earnings call|conference call", re.I)
+# NSE files every meeting with analysts or investors under one subject that names calls too, so a call is told apart
+# by the rest of the filing: an earnings or conference call, its audio recording or its transcript. A one-on-one
+# meeting with an investor has no transcript to file; an earnings call has to have one.
+MEET_SUBJECT = re.compile(r"analysts?\s*/\s*institutional investors? meet\s*/\s*con\.? ?call updates?", re.I)
+CALL = re.compile(r"earnings? (?:conference )?call|conference call|con\.? ?call|concall|results? call|post[- ]results?|"
+                  r"investors?(?: and analysts?)? call|analysts?(?: and investors?)? call|audio|recording|\btran?scr?i?pts?\b", re.I)
 
 
-def documents(items: list[dict]) -> list[dict]:
-    """Investor presentations and earnings-call transcripts among a company's filings, newest first, with a PDF link."""
-    out = []
+def _file_words(url: str | None) -> str:
+    """The words in a filing's PDF name: NSE keeps the name the company uploaded ("ACME_01082026190000_Q1FY27
+    ConcallTranscript.pdf"), which often says what the filing is when its subject doesn't."""
+    from urllib.parse import unquote, urlsplit
+    url = (url or "")[:500]                   # from the exchange's feed: untrusted, and only the name is wanted
+    try:
+        path = urlsplit(url).path
+    except ValueError:                        # a malformed link ("https://[..."): its words still count
+        path = url.split("?", 1)[0].split("#", 1)[0]
+    name = unquote(path.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", re.sub(r"[_\-.+]+", " ", name))
+
+
+def documents(items: list[dict], per_kind: int | None = None) -> list[dict]:
+    """Investor presentations and earnings-call transcripts among a company's filings, newest first, with a PDF link;
+    `per_kind`: at most that many of each kind, so a run of decks can't crowd out the transcripts."""
+    out, seen = [], {}
     for i in items:
         if not i.get("url"):
             continue
-        hay = f"{i.get('subject', '')} {i.get('text', '')}".lower()
+        hay = f"{i.get('subject', '')} {i.get('text', '')} {_file_words(i['url'])}".lower()
         if TRANSCRIPT.search(hay):
             kind = "transcript"
         elif (i.get("category") == "presentation" or PRESENTATION.search(hay)
@@ -216,8 +258,21 @@ def documents(items: list[dict]) -> list[dict]:
             kind = "annual_report"
         else:
             continue
-        out.append({"kind": kind, "at": i["at"], "title": i.get("subject") or kind, "url": i["url"]})
+        seen[kind] = seen.get(kind, 0) + 1
+        if per_kind is None or seen[kind] <= per_kind:
+            out.append({"kind": kind, "at": i["at"], "title": i.get("subject") or kind, "url": i["url"]})
     return out
+
+
+def meetings(items: list[dict], since: str) -> dict:
+    """What a company told the exchange about its meetings since a time ("2024-10-05T00:00"): {"meets": every
+    analyst or investor meeting and call, "calls": the earnings or conference calls among them (their notice,
+    recording or transcript)}, and {"filed": how many filings of any kind}, which is never none for a listed company
+    that is trading: one that files nothing at all wasn't read."""
+    recent = [i for i in items if i["at"] >= since]
+    meets = [i for i in recent if i.get("category") == "concall"]
+    calls = [i for i in meets if CALL.search(f"{MEET_SUBJECT.sub(' ', i.get('subject') or '')} {i.get('text') or ''} {_file_words(i.get('url'))}")]
+    return {"meets": len(meets), "calls": len(calls), "filed": len(recent)}
 
 
 # ---------- the document reads ----------

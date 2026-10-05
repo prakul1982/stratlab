@@ -173,7 +173,7 @@ def test_bse_refusing_leaves_documents_pending_and_the_panel_counts_them(w, monk
         raise SourceError("the exchange", "The exchange feed refused the request (403). Try again later.", busy=True)
     monkeypatch.setattr(main.filings_feed.bse, "announcements", refuse)
     base = main.deep_base("TINYCO")
-    assert base["doc_note"] == main.BSE_WAIT and base["meets"] is None
+    assert base["doc_note"] == main.BSE_WAIT and base["told"] is None
     row = main._market_check("BSE:543210")
     docs = [i for i in row["issues"] if i["area"] == "Documents"]
     assert docs and docs[0]["level"] == "pending" and "not available from BSE right now" in docs[0]["detail"]

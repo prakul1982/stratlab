@@ -177,7 +177,7 @@ export function AccountPage() {
             {focus && <p className="small muted">{FOCUSES.find(([f]) => f === focus)?.[2]}</p>}
           </Block>
           <Block title="Experience">
-            <div className="seg" role="radiogroup" aria-label="Experience" style={{ justifySelf: "start" }}>
+            <div className="seg seg-even" role="radiogroup" aria-label="Experience" style={{ justifySelf: "start" }}>
               {LEVELS.map(([l, title]) => <button key={l} role="radio" aria-checked={level === l} aria-pressed={level === l} onClick={() => setLevel(l)}>{title}</button>)}
             </div>
             {level && <p className="small muted">{LEVELS.find(([l]) => l === level)?.[2]}</p>}

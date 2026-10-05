@@ -312,7 +312,7 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
     """One promise against the numbers: met, missed, pending (not reported yet) or unchecked (not a number we have)."""
     today = today or ist_date()
     per = parse_period(g.get("period"))
-    us = (nums.get("unit") or "").startswith("$")
+    us = (nums.get("unit") or "").endswith("million")      # US filings, in dollars or a foreign filer's own currency
     res = {**g, "actual": None, "result": "unchecked", "unit": ("million" if us else "crore") if g["metric"] == "capex" else "%"}
     dc = g.get("doc_check")
 

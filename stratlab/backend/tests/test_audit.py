@@ -431,7 +431,7 @@ def test_market_sheet_fixes_us(monkeypatch):
     assert audit.check_prices({"price": 0.04}, {"price": 0.05}, None) == []                       # a cent on a penny stock
     p = {"region": "US", "pl": {"cols": ["Dec 2024", "TTM"], "rows": {"Sales": [100, 300]}}}
     found = audit.check_numbers(p, {"years": [], "quarters": [{"sales": 50}] * 4}, {})
-    assert any("$m300 vs last four quarters $m200" in i["detail"] for i in found)
+    assert any("$300 m vs last four quarters $200 m" in i["detail"] for i in found)
     from tests import world as W
     w = W.build(monkeypatch)
     try:
@@ -452,4 +452,4 @@ def test_stored_findings_are_read_with_todays_rules():
     assert now[0]["level"] == "gap" and "company page shows" in now[0]["detail"]
     assert now[1] is None and now[2] == old[2] and now[3] is None and now[4]["level"] == "fact"
     us = audit.restate(audit._issue("mismatch", "Numbers", "Trailing revenue 900 cr vs last four quarters 700 cr"), us=True)
-    assert us["detail"] == "Trailing revenue $m900 vs last four quarters $m700"
+    assert us["detail"] == "Trailing revenue $900 m vs last four quarters $700 m"

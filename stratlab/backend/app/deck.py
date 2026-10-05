@@ -141,18 +141,19 @@ def plan(v: dict) -> tuple[list[Slide], str]:
     name, sym = v["name"], v["symbol"]
     n = v["numbers"]
     years = [y for y in n["years"] if y.get("sales") is not None]
-    us = (n.get("unit") or "").startswith("$")
+    us = v.get("region") == "US" or (n.get("unit") or "").startswith("$")
+    unit = n.get("unit") or ("$ million" if us else "₹ crore")      # a foreign filer's own currency: "CAD million"
     bank = bool(n.get("bank"))
     today = datetime.now(timezone.utc).strftime("%d %b %Y")
     footer = f"{name} ({sym}) · Deep dive · {today}"
     month = date(2000, int(n.get("fye") or 3), 1).strftime("%B")
-    amt = lambda x: "–" if x is None else money(x, "$ million" if us else "₹ crore")  # noqa: E731
+    amt = lambda x: "–" if x is None else money(x, unit)  # noqa: E731
 
     def fig_for(values):                     # each chart and table picks its unit, exact to within 1% (see scale_for)
-        k, unit, dp = scale_for(values, us)
+        k, label, dp = scale_for(values, us, unit)
         if k == 1 and not us:
-            return k, unit, _cr
-        return k, unit, (lambda x: "–" if x is None else f"{x / k:,.{dp}f}")
+            return k, label, _cr
+        return k, label, (lambda x: "–" if x is None else f"{x / k:,.{dp}f}")
 
     snap = v.get("snapshot") or {}
     vv = v.get("valuation") or {}
@@ -166,7 +167,8 @@ def plan(v: dict) -> tuple[list[Slide], str]:
     ret = ("ROE", _pc(snap.get("roe"))) if bank else ("ROCE", _pc(snap.get("roce")))
     lev = (("Dividend yield", _pc(snap.get("div_yield"))) if bank
            else ("Debt / equity", "–" if snap.get("debt_equity") is None else f"{snap['debt_equity']:.2f}"))
-    tiles = [("Market cap", amt(snap.get("market_cap_cr"))), val, ret, lev,
+    cap = snap.get("market_cap_cr")              # the market value is in dollars whatever the filings' currency
+    tiles = [("Market cap", "–" if cap is None else money(cap, "$ million") if us else amt(cap)), val, ret, lev,
              ("Sales growth, 3y", _pc(n["growth"].get("sales_cagr_3y"), True)),
              ("Profit growth, 3y", _pc(n["growth"].get("profit_cagr_3y"), True))]
     slides: list[Slide] = []
@@ -323,7 +325,7 @@ def plan(v: dict) -> tuple[list[Slide], str]:
     # 12. sources
     docs = v.get("documents") or []
     s = Slide("Sources", "Numbers: the company's reported annual and quarterly results. "
-              + ("Filings: the SEC's EDGAR system (10-K, 10-Q and 8-K)." if us else "Filings, presentations and call transcripts: the exchange (NSE)."))
+              + ("Filings: the company's reports to the SEC (10-K, 10-Q and 8-K)." if us else "Filings, presentations and call transcripts: the exchange (NSE)."))
     if docs:
         s.add("table", (M, 1.65, W_IN - 2 * M, 4.5), head=["Filed", "Document", "Link"],
               rows=[[x["at"][:10], x["title"], {"text": _short_link(x["url"]), "url": x["url"]}] for x in docs[:9]],

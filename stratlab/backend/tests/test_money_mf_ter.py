@@ -329,3 +329,45 @@ def test_admin_can_force_a_read(w, ter):
 
 def test_signed_out_is_refused(w):
     assert w["client"].get("/money/mutual-funds/costs").status_code == 401
+
+
+
+def test_reads_the_months_workbook_and_retries_a_bad_answer(monkeypatch):
+    """The month's disclosure is its Excel download: dates as day numbers, brokerage and transaction cost as two
+    columns (one part here); an answer that isn't a workbook is asked again."""
+    import httpx
+    from app.xlsx_write import workbook
+    head = ["NSDL Scheme Code", "Scheme Name", "Scheme Type", "Scheme Category", "TER Date",
+            "Regular Plan - Base Expense Ratio (BER) (%)", "Regular Plan - Brokerage cost (%)",
+            "Regular Plan - Transaction Cost incurred for the purpose of execution of trade (%)",
+            "Regular Plan - Statutory Levies (including GST) (%)", "Regular Plan - Total TER (%)",
+            "Direct Plan - Base Expense Ratio (BER) (%)", "Direct Plan - Brokerage cost (%)",
+            "Direct Plan - Transaction Cost incurred for the purpose of execution of trade (%)",
+            "Direct Plan - Statutory Levies (including GST) (%)", "Direct Plan - Total TER (%)"]
+    row = ["X/O/E/1", "Asha Flexi Cap Fund", "Open Ended", "Equity Scheme - Flexi Cap Fund", 46266,
+           1.09, 0.02, 0.01, 0.18, 1.3, 0.53, 0.02, 0, 0.21, 0.76]
+    book = workbook([("TER", [head, row], None)])
+    asked = []
+
+    def answer(req: httpx.Request) -> httpx.Response:
+        asked.append(dict(req.url.params))
+        return httpx.Response(200, content=b"<html>busy</html>" if len(asked) == 1 else book)
+    real = httpx.Client
+    monkeypatch.setattr(T.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(answer), **kw))
+    monkeypatch.setattr(T, "PAUSE", 0)
+    got = T.parse(T.fetch_month(9, 2026))
+    assert asked[0] == {"MF_ID": "All", "Month": "09-2026", "strCat": "-1", "strType": "-1", "excel": "true"}
+    assert len(asked) == 2
+    assert got["parts"] == ["base", "brokerage", "levies", "total"]
+    assert got["rows"] == [{"name": "Asha Flexi Cap Fund", "type": "Open Ended", "category": "Equity Scheme - Flexi Cap Fund",
+                            "date": "2026-09-01", "reg": {"base": 1.09, "brokerage": 0.03, "levies": 0.18, "total": 1.3},
+                            "dir": {"base": 0.53, "brokerage": 0.02, "levies": 0.21, "total": 0.76}}]
+
+
+def test_never_a_workbook_is_an_error(monkeypatch):
+    import httpx
+    real = httpx.Client
+    monkeypatch.setattr(T.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(lambda r: httpx.Response(200, text="no")), **kw))
+    monkeypatch.setattr(T, "PAUSE", 0)
+    with pytest.raises(ValueError):
+        T.fetch_month(9, 2026)

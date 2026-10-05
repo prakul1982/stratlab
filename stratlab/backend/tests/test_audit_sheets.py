@@ -193,9 +193,10 @@ def test_common_subject_lines_are_found(subject, text, kind):
 
 def test_no_calls_held_is_a_fact_not_two_gaps():
     view = {"region": "IN", "documents": [], "checklist": {"checks": [], "industry": {"path": ["x"]}}, "valuation": {"value": 1}}
-    assert audit.check_view(view, meets=0) == [audit._issue("fact", "Documents", audit.NO_MEETS)]
-    gaps = audit.check_view(view, meets=3)               # it held calls and filed nothing we found: worth a look
-    assert [i["level"] for i in gaps] == ["gap", "gap"]
+    told = lambda meets, calls: {"meets": meets, "calls": calls, "filed": 40}       # noqa: E731
+    assert audit.check_view(view, told(0, 0)) == [audit._issue("fact", "Documents", audit.NO_MEETS)]
+    found = audit.check_view(view, told(3, 2))           # it held calls and no transcript was found: worth a look
+    assert [i["level"] for i in found] == ["fact", "gap"] and "2 of its filings" in found[1]["detail"]
     assert len(audit.check_view(view)) == 2              # unknown (an older check): as before
 
 
@@ -315,12 +316,10 @@ def test_ifrs_filers_in_dollars_are_read():
     assert p["cashflow"]["rows"]["Capex"][-1] == 50.0 and p["balance"]["rows"]["Equity"][-1] == 900.0
 
 
-def test_a_filer_in_another_currency_is_not_covered():
+def test_a_filer_in_another_currency_is_shown_in_that_currency():
     facts = {"facts": {"ifrs-full": {"Revenue": {"units": {"EUR": [_year(2024, 5e9)]}}}}}
-    with pytest.raises(sec.SourceError) as e:
-        sec.build(facts)
-    assert "reports its results in EUR" in str(e.value)
-    assert any(x in str(e.value) for x in audit.NOT_COVERED)
+    p = sec.build(facts)
+    assert p["currency"] == "EUR" and p["unit"] == "EUR million" and p["pl"]["rows"]["Sales"][-1] == 5000.0
 
 
 def test_bank_reit_and_profit_fallbacks():

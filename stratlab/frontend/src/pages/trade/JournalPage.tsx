@@ -125,7 +125,7 @@ export function JournalPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Trade journal</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your real trades, judged honestly</h1>
-        <p className="page-sub">Your broker's tradebook, equity and F&amp;O, as round trips after charges, with your notes and the same checks a backtest's verdict uses. Facts about past trades; only you can see them.</p>
+        <p className="page-sub">Your broker's trades, equity and F&amp;O, as round trips after charges, checked like a backtest. Only you can see them.</p>
       </div>
 
       <section className="card stack" style={{ gap: 14 }} aria-labelledby="j-import">
@@ -295,7 +295,7 @@ function CheckCard({ c }: { c: Check }) {
   const d = c.data;
   return (
     <div className="card stack" style={{ gap: 12, padding: 20 }} data-check={c.id}>
-      <div className="spread" style={{ alignItems: "flex-start" }}><h3 className="h3 row" style={{ gap: 0 }}>{c.title}<Info>{CHECK_HELP[c.id]}</Info></h3><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
+      <div className="spread check-head"><h3 className="h3 row" style={{ gap: 0 }}>{c.title}<Info>{CHECK_HELP[c.id]}</Info></h3><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
       {c.id === "sample" && d && <div className="serif" style={{ fontSize: 56, lineHeight: 1, letterSpacing: "-0.03em" }}>{d.trades}</div>}
       {c.id === "luck" && d && <Halves a={d.earlier} b={d.later} an={d.earlier_n} bn={d.later_n} />}
       {c.id === "shuffle" && d && d.unit === "pct" && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}

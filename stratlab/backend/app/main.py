@@ -1538,7 +1538,7 @@ def deep_region(region: str) -> str:
 
 def deep_base_us(sym: str, years: int = 2) -> dict:
     """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
-    p = dict(research_routes.source_call(lambda: sec_feed.company(sym)))
+    p = sec.with_fx(dict(research_routes.source_call(lambda: sec_feed.company(sym))), usd_per)
     try:
         m = research_hub.yahoo.meta(sym)
     except Exception:                     # no price: the numbers still stand, the ratios that need a price don't
@@ -1556,8 +1556,19 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
         p["insider"] = None
     cut = (datetime.now(IST).date() - timedelta(days=366 * years)).isoformat()
     docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
-    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": price_trend(sym, "US"),
-            "quote": {"price": m.get("price"), "prev_close": m.get("prev_close")} if m.get("price") else None}
+    trend, why = price_status(sym, "US")
+    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why,
+            "quote": {k: m.get(k) for k in ("price", "prev_close", "high", "low")} if m.get("price") else None}
+
+
+def usd_per(cur: str) -> float | None:
+    """Today's US dollars to one unit of a currency, from the market data source's quote of the pair (or the
+    other way round, turned over)."""
+    try:
+        return research_hub.yahoo.meta(f"{cur}USD=X").get("price")
+    except SourceError:
+        back = research_hub.yahoo.meta(f"USD{cur}=X").get("price")
+        return 1 / back if back else None
 
 
 def deep_years(years: int) -> int:
@@ -1579,6 +1590,12 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
     except Exception:
         pass
+    n = deepdive.numbers(p)
+    if not n["bank"] and len(n["years"]) >= 3 and all(y["capex"] is None for y in n["years"][-3:]):
+        try:     # no estimate from the balance sheet (fixed assets sold or written down): what it spent buying them
+            p = research_hub.screener.with_capex(p)
+        except Exception:
+            pass
     try:
         items = filings_feed.announcements(sym, max(deepdive.DOC_DAYS, 366 * years))
         doc_note, fsum = None, filings.summarise(items)
@@ -1589,20 +1606,30 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
     insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
     trend, why = price_status(sym)
     cut = (datetime.now(IST) - timedelta(days=366 * years)).strftime("%Y-%m-%dT%H:%M")
-    meets = None if doc_note else sum(1 for i in items if i.get("category") == "concall" and i["at"] >= cut)
-    return {"p": p, "docs": deepdive.documents(items)[:10 * max(2, years)], "doc_note": doc_note, "filings": fsum, "trend": trend,
-            "trend_why": why, "trades": insider, "meets": meets}
+    told = None if doc_note else deepdive.meetings(items, cut)
+    # four of each kind a year: a deck and a transcript a quarter, so a run of decks can't push the transcripts out
+    return {"p": p, "docs": deepdive.documents(items, 4 * max(2, years)), "doc_note": doc_note, "filings": fsum, "trend": trend,
+            "trend_why": why, "trades": insider, "told": told}
 
 
 def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]:
     """(Stage and Supertrend on daily candles, or None; and when None, why): "untraded" (not on the exchange's
     trading list, or no trades in the window: suspended), "new" (under 30 days of prices), "stale" (no trade for a
     month) or "error" (the price source didn't answer: try again later)."""
+    if market == "US":                    # share classes and preferred series are written with a dash for prices: BRK-B
+        sym = re.sub(r"[./]", "-", sym)
     try:
         ids, _ = universes.resolve(markets, market, [{"symbol": sym}])
     except Exception:
         return None, "error"
     if not ids:
+        if market == "US":                # not found, or the price source didn't answer: only the first is a fact
+            try:
+                research_hub.yahoo.chart(sym, "1d", 30)
+            except SourceError as e:
+                return None, "error" if e.busy else "untraded"
+            except Exception:
+                return None, "error"
         return None, "untraded"
     try:
         bars = scan._bars(markets, ids[0])
@@ -1639,6 +1666,7 @@ def deep_view(sym: str, base: dict) -> dict:
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
+            "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
             "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
             "industry_measures": industry.measures(p, sym),
@@ -3676,12 +3704,12 @@ audit_runner = audit.Runner()
 
 
 def live_price(sym: str):
-    """The live exchange quote from the broker's feed as (last price, previous close), since a thinly traded stock's
-    last daily close can be either; the exchange's own last price when the feed is offline (its website turns cloud
-    servers away, so that is a last resort). Works for NSE symbols and BSE-only codes alike."""
+    """The live exchange quote from the broker's feed: last price, previous close, the day's range and the time of
+    the last trade, for audit.check_prices; the exchange's own last price when the feed is offline (its website turns
+    cloud servers away, so that is a last resort). Works for NSE symbols and BSE-only codes alike."""
     if kite.ready():
         q = kite.quote([sym]).get(sym) or {}
-        return (q.get("price"), q.get("prev_close"))
+        return {k: q.get(k) for k in ("price", "prev_close", "low", "high", "at")}
     return filings_feed.last_price(sym)
 
 
@@ -3796,7 +3824,10 @@ def _market_check(sym: str) -> dict:
     return _nse_check(sym)
 
 
-market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: bool(audit_runner.state.get("running")))
+# daily prices and the exchange's quote come from the broker's feed: while it is offline (the day's login not done
+# yet) the audit waits rather than marking every company it reaches "not checked yet"
+market_audit = audit.MarketAudit(india_listing, _market_check, busy_fn=lambda: bool(audit_runner.state.get("running")),
+                                 ready_fn=lambda: kite.ready())
 
 
 def _sec_companies() -> list[dict]:
