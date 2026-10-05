@@ -387,5 +387,5 @@ def test_the_web_client_turns_failures_into_source_errors():
     with pytest.raises(ValueError):
         web.pdf_text("https://example.org/real.pdf")               # a damaged PDF is a ValueError too, never a crash
     assert web.rbi_month(2026, 3, first=True) == "ok"
-    method, url, _, body = hits[-1]
+    method, _, _, body = hits[-1]
     assert method == "POST" and b"__VIEWSTATE=abc" in body and b"hdnYear=2026" in body and b"hdnMonth=3" in body
