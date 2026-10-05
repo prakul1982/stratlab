@@ -174,8 +174,9 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
         <>
           <p className="small" style={{ margin: 0 }}>
             <b>{m.paused ? PAUSED[m.paused] : m.due ? `Running · ${m.due.toLocaleString("en-IN")} to check` : "Running · up to date"}</b>
-            {m.paused === "cooling" && !!m.cool_minutes && ` (${m.cool_minutes} min between companies now)`}
-            {" · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked
+            {m.paused === "cooling" && !!m.cool_minutes && ` ${m.cool_minutes} min between companies now.`}
+            {/* a pause reason is a full sentence, so the counts start a new one rather than hang off a "." with a "·" */}
+            {m.paused ? " " : " · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : m.paused ? "List not read yet" : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked
             {m.current && <> · now <span className="mono">{m.current}</span></>}
           </p>
           {full?.running && (
@@ -184,7 +185,8 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
                 ? <><b>Re-checking companies not checked yet:</b> {full.left.toLocaleString("en-IN")} left</>
                 : <><b>Full check:</b> {done.toLocaleString("en-IN")} of {m.listed.toLocaleString("en-IN")} done</>}
                 {m.rate_per_hour ? ` · ${m.rate_per_hour.toLocaleString("en-IN")} an hour` : ""}
-                {m.enabled && m.eta_hours != null && full.left > 0 && ` · ${hoursText(m.eta_hours)} left`}
+                {/* no time left while it waits (switched off, an audit above, market data offline): nothing is moving */}
+                {m.enabled && (!m.paused || m.paused === "cooling") && m.eta_hours != null && full.left > 0 &&` · ${hoursText(m.eta_hours)} left`}
                 {full.since ? ` · started ${ago(full.since)}` : ""}
                 {!m.enabled && " · paused: press Start to carry on"}</p>
               {!full.pending_only && m.listed > 0 && (
