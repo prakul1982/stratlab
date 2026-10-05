@@ -30,6 +30,7 @@ const home = () => import("./pages/Home");
 const spaceHomes = () => import("./pages/SpaceHomes");
 const SpaceHome = page(spaceHomes, "SpaceHome");
 const TradeHome = page(spaceHomes, "TradeHome");
+const AllHome = page(spaceHomes, "AllHome");
 const InvestHome = page(spaceHomes, "InvestHome");
 const MoneyHome = page(spaceHomes, "MoneyHome");
 const NotebooksHome = page(home, "NotebooksHome");
@@ -193,6 +194,7 @@ function Routed() {
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<SpaceHome />} />
+        <Route path="/all" element={<AllHome />} />
         <Route path="/trade" element={<TradeHome />} />
         <Route path="/invest" element={<InvestHome />} />
         <Route path="/money" element={<MoneyHome />} />

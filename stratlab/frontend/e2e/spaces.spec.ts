@@ -184,6 +184,7 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   // the owner: holdings and tradebooks are loaded by the fake world, and Basic tools are on
   const errors = await signIn(page, ADMIN, "/trade");
   await page.getByRole("button", { name: /All of it/ }).click({ timeout: 4000 }).catch(() => undefined);   // first visit of the run
+  await page.goto("/trade");     // "All of it" opens the All home now; this test is about the Trade home
   await expect(page.locator(".space-strip")).toBeVisible({ timeout: 30_000 });
   const strip = page.locator(".space-strip > a");
   await expect(strip.first()).toContainText("Options");

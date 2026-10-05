@@ -39,13 +39,15 @@ export function viewForFocus(focus: Focus | null | undefined): SpaceView | null 
   return focus === "both" ? "all" : focus ?? null;
 }
 
-/** The home page `/` opens: the space showing, or for "All" the one the person came for (Trade if all of it). */
-export function homeOf(view: SpaceView, focus: Focus | null | undefined): string {
-  if (view !== "all") return SPACES[view].home;
-  return focus === "invest" || focus === "money" ? SPACES[focus].home : SPACES.trade.home;
+/** "All" has a home of its own: the newest features and the top tools of each space. */
+export const ALL_HOME = "/all";
+
+/** The home page `/` opens: the space showing, or for "All" its own home. */
+export function homeOf(view: SpaceView, _focus?: Focus | null): string {
+  return view === "all" ? ALL_HOME : SPACES[view].home;
 }
 
-export const SPACE_HOMES = SPACE_IDS.map((s) => SPACES[s].home);
+export const SPACE_HOMES = [...SPACE_IDS.map((s) => SPACES[s].home), ALL_HOME];
 
 const KEY = "stratlab.space";
 const VIEWS: SpaceView[] = [...SPACE_IDS, "all"];
