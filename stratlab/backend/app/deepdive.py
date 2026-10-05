@@ -155,7 +155,7 @@ def numbers(p: dict) -> dict:
     recent_capex = [y["capex"] for y in years[-3:] if y["capex"] is not None]
     eps = _series(pl, "EPS")[:n]
     # what the figures are in (a foreign filer's own currency) and what isn't shown for this kind of company (US)
-    notes = [p[k] for k in ("basis_note", "currency_note", "margin_note") if p.get(k)]
+    notes = [p[k] for k in ("basis_note", "currency_note", "share_note", "margin_note") if p.get(k)]
     note = profit_note(p)
     if note:
         notes.append(note)
