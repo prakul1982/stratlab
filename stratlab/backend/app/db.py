@@ -1,4 +1,5 @@
 """Supabase access with the service-role key (bypasses RLS, server only)."""
+import contextvars
 import json
 import threading
 import time
@@ -86,8 +87,8 @@ def profile_by_subscription(sub_id: str) -> dict | None:
 
 # ---------- usage ----------
 def count_usage(user_id: str, kind: str, since_iso: str) -> int:
-    r = (sb().table("usage_events").select("id", count="exact")
-         .eq("user_id", user_id).eq("kind", kind).gte("created_at", since_iso).execute())
+    r = (sb().table("usage_events").select("id", count="exact")       # the count only: one row, not every one
+         .eq("user_id", user_id).eq("kind", kind).gte("created_at", since_iso).limit(1).execute())
     return r.count or 0
 
 
@@ -183,7 +184,52 @@ def _market(key: str):
     return ms if ms is not None and market_store.is_market_key(key) else None
 
 
-def get_setting(key: str) -> str | None:
+# One request reads the same setting several times (a user's preferences four times in /me, each holding's corporate
+# actions twice in the tax report), and every read is a round trip to the database. Within a request each key is read
+# once: SettingsMemo gives each request its own copy. Any write in this process, from any thread, drops the key from
+# every request's copy, and a read that overlapped a write isn't kept, so a request never sees an older value than
+# it would have read from the database.
+_memo: contextvars.ContextVar[dict | None] = contextvars.ContextVar("settings_memo", default=None)
+_memos: dict[int, dict] = {}            # every running request's copy, so a write can reach them all
+_memo_lock = threading.Lock()
+_writes = [0]                           # how many writes so far: a read that saw this change isn't kept
+
+
+def _forget_setting(key: str) -> None:
+    with _memo_lock:
+        _writes[0] += 1
+        for m in _memos.values():
+            m.pop(key, None)
+
+
+def _remember(memo: dict, key: str, value, mark: int) -> None:
+    with _memo_lock:
+        if _writes[0] == mark:
+            memo[key] = value
+
+
+class SettingsMemo:
+    """ASGI middleware: one database read per setting key per request."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        memo: dict = {}
+        with _memo_lock:
+            _memos[id(memo)] = memo
+        token = _memo.set(memo)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            _memo.reset(token)
+            with _memo_lock:
+                _memos.pop(id(memo), None)
+
+
+def _read_setting(key: str) -> str | None:
     ms = _market(key)
     if ms is not None:
         v = ms.get(key)
@@ -193,19 +239,56 @@ def get_setting(key: str) -> str | None:
     return r.data[0]["value"] if r.data else None
 
 
-def set_setting(key: str, value: str) -> None:
-    ms = _market(key)
-    if ms is not None:
-        ms.set(key, value)
+def get_setting(key: str) -> str | None:
+    memo = _memo.get()
+    if memo is None:
+        return _read_setting(key)
+    if key in memo:
+        return memo[key]
+    mark = _writes[0]
+    v = _read_setting(key)
+    _remember(memo, key, v, mark)
+    return v
+
+
+def prefetch_settings(keys) -> None:
+    """Read several settings in one database call, for the rest of this request (outside a request it does nothing).
+    For a page that reads one key per holding: one round trip instead of one per holding. Keys kept in the market
+    data store are left to get_setting."""
+    memo = _memo.get()
+    if memo is None:
         return
-    sb().table("app_settings").upsert({"key": key, "value": value, "updated_at": now_iso()}).execute()
+    want = sorted({k for k in keys if k not in memo and _market(k) is None})
+    for i in range(0, len(want), 100):                  # keeps the address of one read short
+        part, mark = want[i:i + 100], _writes[0]
+        try:
+            rows = sb().table("app_settings").select("key,value").in_("key", part).execute().data or []
+        except Exception:               # only a head start: each read then goes (and fails) as it would have
+            return
+        got = {r["key"]: r["value"] for r in rows}
+        for k in part:
+            _remember(memo, k, got.get(k), mark)
+
+
+def set_setting(key: str, value: str) -> None:
+    try:
+        ms = _market(key)
+        if ms is not None:
+            ms.set(key, value)
+            return
+        sb().table("app_settings").upsert({"key": key, "value": value, "updated_at": now_iso()}).execute()
+    finally:
+        _forget_setting(key)
 
 
 def delete_setting(key: str) -> None:
-    ms = _market(key)
-    if ms is not None:
-        ms.delete(key)
-    sb().table("app_settings").delete().eq("key", key).execute()
+    try:
+        ms = _market(key)
+        if ms is not None:
+            ms.delete(key)
+        sb().table("app_settings").delete().eq("key", key).execute()
+    finally:
+        _forget_setting(key)
 
 
 # ---------- recorded option chains ----------

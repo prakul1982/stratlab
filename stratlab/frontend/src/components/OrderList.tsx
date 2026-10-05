@@ -4,7 +4,7 @@ import { money, price, signClass, when } from "../lib/format";
  * re-centre, a stop) under one line with their P&L added up, each order a row: side, contract, quantity × price. */
 
 export type PaperOrder = { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number | null;
-  slices?: number; strike?: number; opt?: "CE" | "PE" };
+  slices?: number; strike?: number; opt?: "CE" | "PE"; pick?: string };
 
 export function OrderList({ events, cur, tz, newest = false }: { events: PaperOrder[]; cur: string; tz: string; newest?: boolean }) {
   const groups = orderGroups(events);
@@ -19,6 +19,7 @@ export function OrderList({ events, cur, tz, newest = false }: { events: PaperOr
             <span className={`side-chip ${e.side}`} aria-label={e.side === "buy" ? "Buy" : "Sell"} role="img">{e.side === "buy" ? "B" : "S"}</span>
             <span className="order-sym">{contract(e)}</span>
             <span className="order-num small muted">{e.qty.toLocaleString("en-IN", { maximumFractionDigits: 4 })} × {price(e.px, cur)}</span>
+            {e.pick && <span className="order-pick tiny muted" data-testid="order-pick">{e.pick}</span>}
           </li>
         ))}</ul>
       </div>

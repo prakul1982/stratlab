@@ -1,6 +1,6 @@
 import type { Cond, Op, Ref, RefType, Risk, Strategy, Tf } from "./types";
 
-export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boolean; group?: "candle" | "day" }[] = [
+export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boolean; group?: "candle" | "day" | "market" | "fo" }[] = [
   { t: "price", name: "Price", friendly: "the price" },
   { t: "sma", name: "SMA", friendly: "average price" },
   { t: "ema", name: "EMA", friendly: "fast average" },
@@ -34,6 +34,12 @@ export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boo
   { t: "day_open", name: "Day open", friendly: "today's open", pro: true, group: "day" },
   { t: "day_high", name: "Day high (so far)", friendly: "today's high", pro: true, group: "day" },
   { t: "day_low", name: "Day low (so far)", friendly: "today's low", pro: true, group: "day" },
+  { t: "india_vix", name: "India VIX (daily close)", friendly: "India VIX", pro: true, group: "market" },
+  { t: "india_vix_chg", name: "India VIX change %", friendly: "India VIX's change", pro: true, group: "market" },
+  // an Indian F&O stock's stored daily futures facts (the stock futures desk), on daily candles
+  { t: "oi_change_pct", name: "Futures OI change %", friendly: "the change in futures open interest", pro: true, group: "fo" },
+  { t: "rollover_pct", name: "Rollover % (OI in later expiries)", friendly: "the rollover", pro: true, group: "fo" },
+  { t: "basis_pct", name: "Futures basis % (over the share)", friendly: "the futures' premium", pro: true, group: "fo" },
 ];
 const PRO_TYPES = new Set(INDICATORS.filter((i) => i.pro).map((i) => i.t));
 export const DEFAULTS: Partial<Record<RefType, [number, number?]>> = {
@@ -61,6 +67,8 @@ export function mkRef(t: RefType): Ref {
 const PLAIN: Partial<Record<RefType, string>> = {
   open: "Open", high: "High", low: "Low", body: "Candle body", upper_wick: "Upper wick", lower_wick: "Lower wick",
   range: "Candle range", prev_close: "Prev close", day_open: "Day open", day_high: "Day high", day_low: "Day low", day_chg: "Day change %",
+  india_vix: "India VIX", india_vix_chg: "India VIX change %",
+  oi_change_pct: "Futures OI change %", rollover_pct: "Rollover %", basis_pct: "Futures basis %",
 };
 const TF_WORD: Record<string, string> = { "15m": "15m", "1h": "1h", "1d": "daily" };
 

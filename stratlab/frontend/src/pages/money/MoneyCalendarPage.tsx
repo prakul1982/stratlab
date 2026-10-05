@@ -8,7 +8,7 @@ import { Copy, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Earlier } from "../../components/Earlier";
 
-type Cat = "tax" | "holdings" | "money" | "custom";
+type Cat = "tax" | "holdings" | "money" | "custom" | "market";
 type Ev = { id: string; date: string; title: string; cat: Cat; kind: string; detail: string; amount: number | null; symbol: string | null;
   url: string | null; event_id?: string; repeat?: Repeat };
 type Repeat = "none" | "monthly" | "yearly";
@@ -17,10 +17,10 @@ type Feed = { path: string; amounts: boolean; created_at: string | null };
 type Reminders = { on: boolean; days: number; channel: "email" | "push" | "both"; cats: Cat[] };
 type View = {
   events: Ev[]; start: string; end: string; today: string; as_of: string; cats: { id: Cat; label: string }[]; own: Own[]; own_max: number;
-  feed: Feed | null; reminders: Reminders; reminders_allowed: boolean; reminders_plan: string; remind_days: number[]; notes: string[];
+  feed: Feed | null; reminders: Reminders; reminders_allowed: boolean; market_on?: boolean; reminders_plan: string; remind_days: number[]; notes: string[];
 };
 
-const CAT_LABEL: Record<Cat, string> = { tax: "Tax", holdings: "Holdings", money: "Money", custom: "Yours" };
+const CAT_LABEL: Record<Cat, string> = { tax: "Tax", holdings: "Holdings", money: "Money", custom: "Yours", market: "Market" };
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const REPEAT: Record<Repeat, string> = { none: "Once", monthly: "Every month", yearly: "Every year" };
 const inr = (v: number | null | undefined) => money(v, "INR", 0);
@@ -117,7 +117,7 @@ function Month({ y, m, events, today, picked, onPick }: { y: number; m: number; 
 export function MoneyCalendarPage() {
   const { fail, notify } = useApp();
   const [mode, setMode] = useState<"list" | "month">(() => { try { return localStorage.getItem("stratlab.moneycal.mode") === "month" ? "month" : "list"; } catch { return "list"; } });
-  const [cats, setCats] = useState<Cat[]>(["tax", "holdings", "money", "custom"]);
+  const [cats, setCats] = useState<Cat[]>(["tax", "holdings", "money", "custom", "market"]);
   const [view, setView] = useState<View | null>(null);
   const [cursor, setCursor] = useState<{ y: number; m: number }>(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [picked, setPicked] = useState<string | null>(null);
@@ -307,7 +307,7 @@ export function MoneyCalendarPage() {
                     <option value="both">Email and phone</option><option value="email">Email</option><option value="push">Phone notification</option></select></label>
                 </div>
                 <div className="row small" style={{ gap: 14, flexWrap: "wrap" }} role="group" aria-label="Remind me about">
-                  {view.cats.map((c) => (
+                  {view.cats.filter((c) => c.id !== "market").map((c) => (
                     <label key={c.id} className="row" style={{ gap: 6 }}><input type="checkbox" checked={rem.cats.includes(c.id)}
                       onChange={(e) => setRem({ ...rem, cats: e.target.checked ? [...rem.cats, c.id] : rem.cats.filter((x) => x !== c.id) })} />{c.label}</label>
                   ))}
@@ -322,6 +322,11 @@ export function MoneyCalendarPage() {
 
       <section className="stack" style={{ gap: 8 }}>
         <ul className="tiny muted" style={{ margin: 0, paddingLeft: 20 }}>{view.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+        <p className="tiny muted" style={{ margin: 0 }} data-testid="mc-market">
+          {view.market_on ? "Market events (RBI policy, data releases, the Fed, index changes) are in this calendar and its feed. "
+            : "RBI policy, data releases, the Fed and index changes can go into this calendar and its feed too. "}
+          <Link className="link" to="/trade/events">{view.market_on ? "Change which ones" : "Turn them on from Market events"}</Link>
+        </p>
         <p className="tiny muted" style={{ margin: 0 }}>Only you can see your calendar. Your own dates and amounts are kept with your account and deleted with the button below.</p>
         <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={deleteAll}><Trash size={16} />Delete my money calendar</button>
       </section>

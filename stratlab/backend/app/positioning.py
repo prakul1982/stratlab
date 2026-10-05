@@ -184,6 +184,16 @@ class Feed:
 
     def _text(self, url: str) -> str | None:
         """One file's text; None when it isn't there (404, or a page instead of the file)."""
+        r = self._response(url)
+        return r.text if r is not None else None
+
+    def raw(self, url: str) -> bytes | None:
+        """One file's bytes (a zip or a gzip as published); None when it isn't there. The per-stock desks
+        (exchange_days.py) read the exchange's daily files through this, with the same cookies, retry and breaker."""
+        r = self._response(url)
+        return r.content if r is not None else None
+
+    def _response(self, url: str):
         if time.time() < self._down:
             raise SourceError(self.name, "The exchange's files aren't answering right now. Try again in a minute.", busy=True)
         try:
@@ -213,9 +223,9 @@ class Feed:
         if r.status_code >= 400:
             raise SourceError(self.name, f"The exchange's file was refused ({r.status_code}).")
         self._fails = 0
-        if "<html" in r.text[:500].lower():
+        if b"<html" in r.content[:500].lower():
             return None
-        return r.text
+        return r
 
     def participants(self, kind: str, day: date) -> dict | None:
         """A day's participant-wise file, parsed; None when it isn't published (or archived)."""
@@ -323,6 +333,7 @@ def _set_state(**parts):
 
 def clear_cache():
     _cache.clear()
+    _last_live.clear()
 
 
 # ---------- the maths ----------
@@ -675,17 +686,32 @@ def _compact(chain: dict) -> list[list]:
 _live_lock = threading.Lock()
 
 
+# The last chain read for each index, kept a few minutes past its minute: when the minute is up, a page gets that one
+# at once while the next read runs in the background, instead of waiting a second or more on the feed.
+_last_live: dict[tuple, tuple[float, dict]] = {}
+LIVE_STALE_FOR = 600
+_refreshing: set[tuple] = set()
+_refreshing_lock = threading.Lock()
+
+
 def live_chains(options_data, names: tuple, choice: str) -> dict[str, dict | None]:
     """Today's chains for several indices from the live feed, compacted like a recording and kept a minute; None for an
     index when the feed is offline. Every index's quotes go out together (one request for the spots, then the
-    contracts in as few requests as the feed allows), since the feed takes about one request a second for everyone."""
-    out, need = {}, []
+    contracts in as few requests as the feed allows), since the feed takes about one request a second for everyone.
+    Once the minute is up, the last chain (up to LIVE_STALE_FOR old) answers while a fresh one is read behind it."""
+    out, need, behind = {}, [], []
     for name in names:
-        hit = _cache.get(("live", NAMES[name], name, choice))
+        key = ("live", NAMES[name], name, choice)
+        hit = _cache.get(key)
         if hit is not None:
             out[name] = hit or None
+        elif (last := _last_live.get(key)) and time.time() - last[0] < LIVE_STALE_FOR:
+            out[name] = last[1]
+            behind.append(name)
         else:
             need.append(name)
+    if behind:
+        _refresh_behind(options_data, behind, choice)
     if not need:
         return out
     with _live_lock:                        # a second caller waits for the first one's answer instead of asking again
@@ -697,8 +723,40 @@ def live_chains(options_data, names: tuple, choice: str) -> dict[str, dict | Non
         got = _read_live(options_data, need, choice) if need else {}
         for name in need:
             out[name] = got.get(name)
-            _cache.set(("live", NAMES[name], name, choice), got.get(name) or {}, 60 if got.get(name) else 30)
+            _keep_live(name, choice, got.get(name))
     return out
+
+
+def _keep_live(name: str, choice: str, chain: dict | None):
+    key = ("live", NAMES[name], name, choice)
+    _cache.set(key, chain or {}, 60 if chain else 30)
+    if chain:
+        _last_live[key] = (time.time(), chain)
+    else:
+        _last_live.pop(key, None)          # the feed went offline: no older chain stands in for it
+
+
+def _refresh_behind(options_data, names: list[str], choice: str):
+    """Read these indices' chains again in a background thread (one at a time per index and choice)."""
+    with _refreshing_lock:                  # not _live_lock: that one is held while a chain is read
+        todo = [n for n in names if (n, choice) not in _refreshing]
+        _refreshing.update((n, choice) for n in todo)
+    if not todo:
+        return
+
+    def work():
+        try:
+            with _live_lock:
+                left = [n for n in todo if _cache.get(("live", NAMES[n], n, choice)) is None]
+                got = _read_live(options_data, left, choice) if left else {}
+                for n in left:
+                    _keep_live(n, choice, got.get(n))
+        except Exception as e:
+            print("positioning: background chain read failed:", str(e)[:120])
+        finally:
+            with _refreshing_lock:
+                _refreshing.difference_update((n, choice) for n in todo)
+    threading.Thread(target=work, daemon=True, name="positioning-live").start()
 
 
 def _read_live(options_data, names: list[str], choice: str) -> dict[str, dict]:

@@ -39,6 +39,8 @@ export function EtfGapsPage() {
     for (const r of data?.rows ?? []) c[r.fund] = (c[r.fund] ?? 0) + 1;
     return c;
   }, [data]);
+  // an indicative NAV shows only when the list has one: the exchange's list gives the last published NAV
+  const hasInav = useMemo(() => (data?.rows ?? []).some((r) => r.inav != null), [data]);
   const open = (sym: string | null) => { const p = new URLSearchParams(params); if (sym) p.set("etf", sym); else p.delete("etf"); setParams(p, { replace: false }); };
 
   return (
@@ -47,8 +49,8 @@ export function EtfGapsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Scans · India</span>
         <h1 className="page-title">ETF price against NAV</h1>
-        <p className="page-sub">How far each ETF's price is from what one unit holds: its indicative NAV (iNAV) in market hours and its last published
-          NAV, as a percent above or below. Facts with their times, not a view on any fund.</p>
+        <p className="page-sub">How far each ETF's price is from what one unit holds: its last published NAV, as a percent above or below, with
+          the NAV's date. Facts with their times, not a view on any fund.</p>
       </div>
 
       {pick && <EtfGapDetailView key={pick} symbol={pick} />}
@@ -67,14 +69,14 @@ export function EtfGapsPage() {
             <input className="input etf-gap-search" type="search" aria-label="Find an ETF" placeholder="Find an ETF" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <p className="tiny muted" style={{ margin: 0 }}>
-            {data.as_of ? `Prices and iNAVs as of ${asOf(data.as_of)}` : "Prices as last read"}{data.nav_as_of ? ` · NAVs of ${asOf(data.nav_as_of)}` : ""} · {data.count} ETFs
+            {data.as_of ? `Prices as of ${asOf(data.as_of)}` : "Prices as last read"}{data.nav_as_of ? ` · NAVs of ${asOf(data.nav_as_of)}` : ""} · {data.count} ETFs
             <Info label="What the numbers are">{data.note}</Info>
           </p>
           {rows.length === 0 ? <p className="small muted">No ETF matches that.</p> : (
             <div className="table-wrap">
               <table className="etf-gap-table" aria-label="ETFs by gap to NAV">
                 <thead>
-                  <tr><th style={{ textAlign: "left" }}>ETF</th><th>Price</th><th>iNAV</th><th>Gap to iNAV</th><th>Last NAV</th><th>Gap to NAV</th>
+                  <tr><th style={{ textAlign: "left" }}>ETF</th><th>Price</th>{hasInav && <><th>iNAV</th><th>Gap to iNAV</th></>}<th>Last NAV</th><th>Price vs last NAV</th>
                     <th>30 trading days</th></tr>
                 </thead>
                 <tbody>
@@ -86,8 +88,10 @@ export function EtfGapsPage() {
                         <div className="tiny muted etf-gap-name">{r.name}</div>
                       </td>
                       <td className="num">{price(r.price, "INR")}</td>
-                      <td className="num">{r.inav == null ? "–" : price(r.inav, "INR")}</td>
-                      <td className={`num ${signClass(r.inav_gap)}`}>{gapShort(r.inav_gap)}</td>
+                      {hasInav && <>
+                        <td className="num">{r.inav == null ? "–" : price(r.inav, "INR")}</td>
+                        <td className={`num ${signClass(r.inav_gap)}`}>{gapShort(r.inav_gap)}</td>
+                      </>}
                       <td className="num">{r.nav == null ? "–" : price(r.nav, "INR")}{r.nav_date && <div className="tiny muted">{asOf(r.nav_date)}</div>}</td>
                       <td className={`num ${signClass(r.nav_gap)}`}>{gapShort(r.nav_gap)}</td>
                       <td className="num small">{r.days ? <>{r.days.low === r.days.high ? gapShort(r.days.low) : <>{gapShort(r.days.low)} to {gapShort(r.days.high)}</>}<div className="tiny muted">avg {gapShort(r.days.avg)}</div></> : "–"}</td>

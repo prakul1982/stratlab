@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, money, pct, signClass } from "../lib/format";
 import { homeOf } from "../lib/spaces";
 import { NAV_GROUPS } from "../lib/navGroups";
+import { evDay, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
 import { AsOf, Fig, Loading, PanelSkel, VerdictBadge } from "../components/ui";
@@ -179,6 +180,7 @@ export function InvestHome() {
         </div>
       </section>
       <ToolStrip label="Invest tools" tools={tools} />
+      <NextEvents />
       <div className="grid2 space-panels">
         <WatchPanel />
         <ResultsToday />
@@ -189,6 +191,26 @@ export function InvestHome() {
       </div>
       <Explore title="More you can do" hide={INVEST_LINKED} order="invest" />
     </div>
+  );
+}
+
+/** The next few market events (RBI policy, data releases, the Fed, index changes) on one line each, from the Events page. */
+function NextEvents() {
+  const v = useEvents();
+  const next = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && e.kind !== "holiday").slice(0, 3) : null;
+  if (next && !next.length) return null;
+  return (
+    <section className="card stack" style={{ gap: 8 }} aria-labelledby="inv-events-h" data-testid="invest-events">
+      <div className="spread" style={{ gap: 8 }}>
+        <h2 id="inv-events-h" className="h3">Coming up</h2>
+        <Link to="/trade/events" className="link small">Market events →</Link>
+      </div>
+      {next === null ? <PanelSkel label="Reading the market events" lines={1} /> : (
+        <div className="space-events">
+          {next.map((e) => <span key={e.id} className="small"><span className="muted">{evDay(e.date)}</span> {e.title}</span>)}
+        </div>
+      )}
+    </section>
   );
 }
 

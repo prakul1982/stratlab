@@ -9,7 +9,8 @@ BASIC_TYPES = '"price", "num", "sma", "ema", "rsi"'
 PRO_TYPES = ('"price", "num", "sma", "ema", "rsi", "macd", "macd_signal", "macd_hist", '
              '"bb_upper", "bb_mid", "bb_lower", "vwap", "supertrend", "stage", "adx", "stoch_k", "atr_pct", '
              '"dc_upper", "dc_lower", "volume", "vol_sma", "atr", "open", "high", "low", "body", "upper_wick", '
-             '"lower_wick", "range", "prev_close", "day_open", "day_high", "day_low", "day_chg"')
+             '"lower_wick", "range", "prev_close", "day_open", "day_high", "day_low", "day_chg", "india_vix", '
+             '"india_vix_chg"')
 
 SYSTEM = """You turn a trader's strategy (an idea in words, or code/config they already use) into JSON rules for a
 backtesting engine. The engine holds one position at a time. A strategy can go long (buy, then sell), short (sell
@@ -74,6 +75,8 @@ Allowed types for this user: %TYPES%
   The candle: "open", "high", "low", "body" (|close - open|), "upper_wick", "lower_wick", "range" (high - low).
   The trading day: "prev_close" (previous day's close), "day_open", "day_high", "day_low" (so far today),
   "day_chg" (% change from the previous day's close, e.g. -2 means down 2%).
+  The market: "india_vix" (India VIX's daily close; intraday candles see the previous day's close) and "india_vix_chg"
+  (its % change from the close before). "VIX below 17" = india_vix lt num 17; "VIX up more than 5%" = india_vix_chg gt num 5.
 Examples:
   "a green candle" = price gt open.  "the previous candle closed above the 7 EMA" = price ago 1 gt ema p 7 ago 1.
   "lower wick longer than 1.5 x the body" = lower_wick gt body k 1.5.  "1-hour close above the 1-hour 7 EMA" =

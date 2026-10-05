@@ -1,13 +1,15 @@
 """Trade journal: the user's real trades, paired into round trips, with their own notes, and judged by the same
 honesty checks as a backtest's verdict.
 
-Three sources, kept apart and paired when the page opens:
+Four sources, kept apart and paired when the page opens:
 - fills, from a broker's tradebook (every buy and sale, equity and F&O), paired first in, first out per instrument
   from flat to flat: scaling in and out stays one trade, a part-filled order is one trade, and a reversal (selling
   more than you hold) closes one trade and opens the next one short;
 - lines, from a tax P&L (each exit with its entry, as the broker matched it; equity and F&O from the ZIP), which come
   already paired, with the charges the broker listed;
-- trades added by hand.
+- trades added by hand;
+- practice trades from chart replay (replay.py), already paired and charged, marked "practice" so the page can show
+  real trades, practice or both.
 Charges on fills are worked out with engine/costs.py at the published rates and the brokerage the user sets. An option
 still open after its expiry is closed at ₹0 on its expiry (a tradebook has no line for expiry; one that expired in the
 money settled at its intrinsic value, so the trade is marked and the page says so).
@@ -36,6 +38,8 @@ KEY = "journal:"
 MAX_FILLS = 20000                 # tradebook lines kept (a very busy year)
 MAX_LINES = 20000                 # tax P&L exits kept
 MAX_MANUAL = 2000
+MAX_PRACTICE = 2000               # practice trades from chart replay
+SHOWS = ("all", "real", "practice")
 MAX_NOTES = 5000                  # trades with a journal entry
 MAX_FILES = 40
 MAX_LIST = 2000                   # trades sent to the page at once (the stats use all of them)
@@ -49,7 +53,7 @@ EMOTIONS = ["Calm", "Confident", "Focused", "Anxious", "Fearful", "Greedy", "Imp
             "Revenge"]
 MISTAKES = ["Entered early", "Entered late", "Chased the price", "No stop", "Moved my stop", "Exited early",
             "Held too long", "Position too big", "Ignored my plan", "Overtraded", "Averaged down", "Traded the news"]
-DEFAULTS = {"capital": None, "brokerage_delivery": 0.0, "brokerage_other": 20.0}
+DEFAULTS = {"capital": None, "brokerage_delivery": 0.0, "brokerage_other": 20.0, "show": "all"}
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 HOLDS = [("m15", "Under 15 minutes"), ("h1", "15 minutes to 1 hour"), ("day", "Over an hour, same day"),
          ("sameday", "Same day (no times in the file)"), ("d5", "1 to 5 days"), ("d30", "6 to 30 days"),
@@ -371,18 +375,20 @@ def clean_settings(s) -> dict:
     s = s if isinstance(s, dict) else {}
     cap = _num(s.get("capital"), 1, 1e11)
     return {"capital": cap, "brokerage_delivery": _num(s.get("brokerage_delivery"), 0, 1000) or 0.0,
-            "brokerage_other": DEFAULTS["brokerage_other"] if _num(s.get("brokerage_other"), 0, 1000) is None else float(s["brokerage_other"])}
+            "brokerage_other": DEFAULTS["brokerage_other"] if _num(s.get("brokerage_other"), 0, 1000) is None else float(s["brokerage_other"]),
+            "show": s.get("show") if s.get("show") in SHOWS else "all"}
 
 
 def load(uid: str) -> dict:
-    """{"fills", "lines", "manual", "notes": {trade id: entry}, "hidden": [ids], "settings", "links": {tag: session id},
-    "files", "updated_at"}. Damaged rows are dropped, never shown."""
+    """{"fills", "lines", "manual", "practice", "notes": {trade id: entry}, "hidden": [ids], "settings", "links": {tag:
+    session id}, "files", "updated_at"}. Damaged rows are dropped, never shown."""
     got = db.json_value(db.get_setting(_key(uid)), {})
     notes = got.get("notes") if isinstance(got.get("notes"), dict) else {}
     links = got.get("links") if isinstance(got.get("links"), dict) else {}
     return {"fills": [f for f in got.get("fills") or [] if _fill_ok(f)][:MAX_FILLS],
             "lines": [x for x in got.get("lines") or [] if _line_ok(x)][:MAX_LINES],
             "manual": [m for m in got.get("manual") or [] if _manual_ok(m)][:MAX_MANUAL],
+            "practice": [m for m in got.get("practice") or [] if _manual_ok(m)][-MAX_PRACTICE:],
             "notes": {k: clean_note(v) for k, v in notes.items() if isinstance(k, str) and isinstance(v, dict)},
             "hidden": [h for h in got.get("hidden") or [] if isinstance(h, str)][:MAX_FILLS],
             "settings": clean_settings(got.get("settings")),
@@ -393,7 +399,8 @@ def load(uid: str) -> dict:
 
 def save(uid: str, data: dict) -> dict:
     data = {**data, "updated_at": datetime.now(timezone.utc).isoformat(timespec="microseconds")}
-    out = {k: data[k] for k in ("fills", "lines", "manual", "notes", "hidden", "settings", "links", "files", "updated_at")}
+    data.setdefault("practice", [])
+    out = {k: data[k] for k in ("fills", "lines", "manual", "practice", "notes", "hidden", "settings", "links", "files", "updated_at")}
     out["notes"] = dict(list(out["notes"].items())[-MAX_NOTES:])
     db.set_setting(_key(uid), json.dumps(out, separators=(",", ":")))
     return data
@@ -642,7 +649,9 @@ def line_trades(lines: list[dict], s: dict) -> list[dict]:
     return out
 
 
-def manual_trades(manual: list[dict], s: dict) -> list[dict]:
+def manual_trades(manual: list[dict], s: dict, src: str = "manual") -> list[dict]:
+    """Trades added by hand, or practice trades from chart replay (src "practice", their charges worked out when they
+    were played)."""
     out = []
     for m in manual:
         info = classify(m["sym"], m.get("exchange", ""))
@@ -653,16 +662,16 @@ def manual_trades(manual: list[dict], s: dict) -> list[dict]:
         qty, sign = m["qty"], 1 if m["side"] == "long" else -1
         gross = sign * (m["exit"] - m["entry"]) * qty
         if _num(m.get("charges")) is not None:
-            charges, src = float(m["charges"]), "you"
+            charges, src_c = float(m["charges"]), "you" if src == "manual" else "replay"
         else:
             brk = _brokerage(kind, s)
             buy_px, sell_px = (m["entry"], m["exit"]) if sign > 0 else (m["exit"], m["entry"])
-            charges, src = _cost(kind, "buy", qty, buy_px, brk) + _cost(kind, "sell", qty, sell_px, brk), "rates"
+            charges, src_c = _cost(kind, "buy", qty, buy_px, brk) + _cost(kind, "sell", qty, sell_px, brk), "rates"
         hold_s, days = _hold(m["ed"], m.get("et") or "", m["xd"], m.get("xt") or "")
         out.append({"id": m["id"], "symbol": clean_symbol(m["sym"]), "u": info["u"], "segment": _seg(info["group"], intraday),
                     "side": m["side"], "entry_t": _at(m["ed"], m.get("et") or ""), "exit_t": _at(m["xd"], m.get("xt") or ""),
                     "qty": qty, "entry": m["entry"], "exit": m["exit"], "gross": gross, "charges": charges, "net": gross - charges,
-                    "hold_s": hold_s, "hold_days": days, "fills": 2, "src": "manual", "expired": False, "charges_from": src})
+                    "hold_s": hold_s, "hold_days": days, "fills": 2, "src": src, "expired": False, "charges_from": src_c})
     return out
 
 
@@ -675,7 +684,7 @@ def trades(uid: str, data: dict, today: date) -> dict:
         s = data["settings"]
         a, open_, unmatched = pair_fills(data["fills"], s, today)
         lines = covered(data["fills"], data["lines"])
-        all_ = a + line_trades(lines, s) + manual_trades(data["manual"], s)
+        all_ = a + line_trades(lines, s) + manual_trades(data["manual"], s) + manual_trades(data.get("practice") or [], s, "practice")
         ids: dict[str, int] = {}
         for t in all_:                         # the same id twice (identical trades): number the later ones
             ids[t["id"]] = ids.get(t["id"], 0) + 1

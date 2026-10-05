@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago } from "../lib/format";
+import { useMoreColumns } from "./MoreColumns";
 
 type View = { currencies: Record<string, Row>; rates_at: string | null; rate_errors: string[] };
 
@@ -21,6 +22,8 @@ export function PricesPanel() {
   const [edit, setEdit] = useState<Record<string, Partial<Record<string, string>>>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const more = useMoreColumns("admin-prices", 2);     // the yearly prices: one click away, so the table fits a laptop
+  const shown = more.on ? PRICE : PRICE.slice(0, 2);
   useEffect(() => { api<View>("/admin/prices").then(show).catch(fail); }, [fail]);
   const readRates = async () => {
     setBusy(true);
@@ -53,6 +56,7 @@ export function PricesPanel() {
       <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
         <h2 className="h2">Prices outside India</h2>
         <div className="row" style={{ gap: 8 }}>
+          {more.toggle}
           <button className="btn quiet sm" disabled={busy} onClick={readRates}>Read today's rates</button>
           <button className="btn sm" disabled={busy || !Object.keys(edit).length} onClick={save}>{busy ? "Saving…" : "Save changes"}</button>
         </div>
@@ -65,12 +69,12 @@ export function PricesPanel() {
         {fx.errors.length ? ` Couldn't read: ${fx.errors.map((e) => e.split(":")[0]).join(", ")} (last rate kept).` : ""}</p>
       {!rows ? <p className="small muted">Loading…</p> : (
         <div className="table-wrap"><table>
-          <thead><tr><th>Currency</th>{PRICE.map((f) => <th key={f} className="num">{LABEL[f]}</th>)}<th>Price</th><th>Charged in</th><th /></tr></thead>
+          <thead><tr><th>Currency</th>{shown.map((f) => <th key={f} className="num">{LABEL[f]}</th>)}<th>Price</th><th>Charged in</th><th /></tr></thead>
           <tbody>{Object.entries(rows).filter(([c]) => c !== "INR").map(([c, r]) => (
             <Fragment key={c}>
               <tr>
                 <td><b>{c}</b> <span className="tiny muted">{r.name}{r.rate ? ` · ₹${r.rate.toLocaleString("en-IN", { maximumFractionDigits: r.rate < 1 ? 4 : 2 })}` : ""}</span></td>
-                {PRICE.map((f) => <td key={f} className="num"><input value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal"
+                {shown.map((f) => <td key={f} className="num"><input value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal"
                   aria-label={`${c} ${LABEL[f]}`} style={{ width: 90, textAlign: "right" }} /></td>)}
                 <td>{r.auto ? <span className="badge next">Automatic</span>
                   : <button className="btn quiet sm" disabled={busy} onClick={() => automatic(c)} title="Follow the rupee price again">Fixed · make automatic</button>}</td>
@@ -78,7 +82,7 @@ export function PricesPanel() {
                 <td><button className="btn quiet sm" onClick={() => setOpen(open === c ? null : c)}>{open === c ? "Hide plans" : "Razorpay plans"}</button></td>
               </tr>
               {open === c && (
-                <tr><td colSpan={8}>
+                <tr><td colSpan={shown.length + 4}>
                   <div className="row wrap" style={{ gap: 10 }}>{PLAN.map((f) => (
                     <label key={f} className="stack tiny" style={{ gap: 2 }}>{LABEL[f.replace("plan_", "")]} plan ID
                       <input value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} placeholder="plan_…" style={{ width: 190 }} /></label>))}

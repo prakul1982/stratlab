@@ -19,6 +19,7 @@ PER_MINUTE_USER = 600
 PER_MINUTE_ANON = 240
 PER_MINUTE_ADDRESS = 1200           # every request from one address, signed in or not: made-up tokens can't dodge the limit
 EXEMPT = ("/health",)               # the host's health check
+HOOKS = "/hooks/signal/"            # signal webhooks (signals_routes.py): limited per secret URL, not per address
 
 HEADERS = [
     (b"x-content-type-options", b"nosniff"),
@@ -66,6 +67,10 @@ def address(scope) -> str:
 
 
 def caller(scope) -> tuple[str, int]:
+    if scope.get("path", "").startswith(HOOKS):
+        # signal webhooks come from an alert service's few shared addresses, on behalf of many people: each secret URL
+        # gets its own allowance (the per-address limit still applies, and signals_routes.py has tighter ones per URL)
+        return "h:" + hashlib.sha256(scope["path"].encode()).hexdigest()[:32], PER_MINUTE_ANON
     auth = dict(scope.get("headers") or []).get(b"authorization", b"")
     if auth[:7].lower() == b"bearer ":
         return "u:" + hashlib.sha256(auth[7:].strip()).hexdigest()[:32], PER_MINUTE_USER

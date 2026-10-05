@@ -114,12 +114,28 @@ def defaults() -> dict:
     return out
 
 
+# The landing and plans pages ask for prices on every visit: the admin's changes are kept in memory for a minute
+# (a change made here is seen at once).
+_saved_cache: list = [0.0, None]
+SAVED_TTL = 60
+
+
+def forget():
+    _saved_cache[:] = [0.0, None]
+
+
 def _saved() -> dict:
+    import copy
+    import time
+    if _saved_cache[1] is not None and time.monotonic() - _saved_cache[0] < SAVED_TTL:
+        return copy.deepcopy(_saved_cache[1])
     try:
         raw = db.get_setting(KEY)
-        return json.loads(raw) if raw else {}
+        got = json.loads(raw) if raw else {}
     except Exception:
         return {}
+    _saved_cache[:] = [time.monotonic(), got]
+    return copy.deepcopy(got)
 
 
 def table() -> dict:
@@ -171,7 +187,11 @@ def save(changes: dict) -> dict:
                     cur[f] = v
                 else:
                     cur.pop(f, None)
-    db.set_setting(KEY, json.dumps(saved))
+    forget()
+    try:
+        db.set_setting(KEY, json.dumps(saved))
+    finally:
+        forget()
     return table()
 
 

@@ -130,7 +130,9 @@ def test_the_pdf_name_says_what_a_filing_is_and_decks_cant_crowd_out_transcripts
     assert [d["kind"] for d in got].count("presentation") == 8 and got[-1]["kind"] == "transcript"
 
 
-def test_bse_asks_a_year_at_a_time_when_two_years_come_back_empty():
+def test_bse_is_asked_a_year_at_a_time():
+    """Checked live on 5 Oct 2026: BSE answers a range over twelve months with {"Status": false, "Message": "Date range
+    cannot exceed 12 months."} and no table, which read as "filed nothing" for all 2,492 BSE-only companies."""
     asked = []
 
     def handler(r):
@@ -138,16 +140,24 @@ def test_bse_asks_a_year_at_a_time_when_two_years_come_back_empty():
             return httpx.Response(200, text="<html></html>")
         frm, to = r.url.params["strPrevDate"], r.url.params["strToDate"]
         asked.append((frm, to))
-        days = (datetime.strptime(to, "%Y%m%d") - datetime.strptime(frm, "%Y%m%d")).days
-        table = [] if days > 366 else [{"NEWSID": f"n{frm}", "DissemDT": f"{to[:4]}-{to[4:6]}-{to[6:]}T10:00:00",
-                                        "NEWSSUB": "A Ltd - 543210 - Analyst / Investor Meet - Intimation",
-                                        "SUBCATNAME": "Analyst / Investor Meet - Intimation", "HEADLINE": "", "ATTACHMENTNAME": "a.pdf"}]
-        return httpx.Response(200, json={"Table": table})
+        if (datetime.strptime(to, "%Y%m%d") - datetime.strptime(frm, "%Y%m%d")).days > 365:
+            return httpx.Response(200, json={"Status": False, "Message": "Date range cannot exceed 12 months."})
+        table = [{"NEWSID": f"n{frm}", "DissemDT": f"{to[:4]}-{to[4:6]}-{to[6:]}T10:00:00",
+                  "NEWSSUB": "A Ltd - 543210 - Analyst / Investor Meet - Intimation",
+                  "SUBCATNAME": "Analyst / Investor Meet - Intimation", "HEADLINE": "", "ATTACHMENTNAME": "a.pdf"}]
+        return httpx.Response(200, json={"Table": table, "Table1": [{"ROWCNT": 1}]})
     feed = F.BSEFilings(transport=httpx.MockTransport(handler), sleep=lambda s: None)
     items = feed.announcements("543210", 732)
-    assert len(asked) == 3 and len(items) == 2 and items[0]["category"] == "concall"
+    assert len(asked) == 3 and len(items) == 3 and items[0]["category"] == "concall"   # 365 + 365 + 2 days
+    days = [(datetime.strptime(t, "%Y%m%d") - datetime.strptime(f, "%Y%m%d")).days for f, t in asked]
+    assert max(days) <= 365
+    assert all(datetime.strptime(asked[i + 1][1], "%Y%m%d") < datetime.strptime(asked[i][0], "%Y%m%d") for i in range(2))
     asked.clear()
-    assert len(feed.announcements("543210", 365)) == 1 and len(asked) == 1     # a year answers as asked
+    assert len(feed.announcements("543210", 365)) == 1 and len(asked) == 1     # a year is one request
+    feed.WINDOW = 400                                                          # asked for more: said, not read as nothing
+    with pytest.raises(F.SourceError) as e:
+        feed.announcements("543211", 400)
+    assert "Date range cannot exceed 12 months" in str(e.value) and not e.value.busy
 
 
 # ---------- 299 checklist rows: companies without sales ----------

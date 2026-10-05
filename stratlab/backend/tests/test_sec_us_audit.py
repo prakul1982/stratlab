@@ -196,11 +196,13 @@ def test_a_year_whose_report_has_no_revenue_line_is_a_fact_not_a_gap():
 
 
 def test_a_missing_revenue_figure_in_a_report_that_tags_revenue_stays_a_gap():
-    rev = [_yr(2020, 5e6), _yr(2021, 8e6), _f(9e6, "2023-12-31", "2023-01-01", accn="0001-2023-1")]
+    rev = [_yr(2020, 5e6), _yr(2021, 8e6), _yr(2023, 9e6)]
     ni = [_yr(y, -50e6) for y in range(2020, 2025)]
-    facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "NetIncomeLoss": {"units": {"USD": ni}}}}}
+    cost = [_yr(2022, 3e6)]                                          # a cost of sales that year: there were sales, unread
+    facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "NetIncomeLoss": {"units": {"USD": ni}},
+                                   "CostOfGoodsAndServicesSold": {"units": {"USD": cost}}}}}
     p = sec.build(facts, _subs(["10-K"]))
-    assert "Dec 2022" not in p["no_revenue"]                         # its report (filed 2023) tags revenue: not read
+    assert "Dec 2022" not in p["no_revenue"]                         # its report tags a sales line that year: not read
     found = audit.check_numbers(p, deepdive.numbers(p), {})
     assert any(i["level"] == "gap" and "Dec 2022" in i["detail"] for i in found)
 
@@ -313,7 +315,7 @@ def test_nil_capex_and_debt_need_the_rest_of_the_report_to_agree():
     # plant growing every year: something was bought, so capex is unknown rather than nil
     plant = [_i(10e6 * (y - 2020), f"{y}-12-31", accn=f"0001-{y + 1}-1") for y in years]
     p = sec.build({"facts": {"us-gaap": {**base, "PropertyPlantAndEquipmentNet": {"units": {"USD": plant}}}}}, _subs(["10-K"]))
-    assert p["cashflow"]["rows"]["Capex"] == [0.0, None, None]
+    assert p["cashflow"]["rows"]["Capex"] == [None, None, None]        # the first year too: no year before to compare
     # interest paid in the same report: there is debt somewhere, tagged in a way not read
     owes = {**base, "InterestExpense": {"units": {"USD": [_yr(y, 1e6) for y in years]}}}
     assert sec.build({"facts": {"us-gaap": owes}}, _subs(["10-K"]))["balance"]["rows"]["Borrowings"] == [None, None, None]

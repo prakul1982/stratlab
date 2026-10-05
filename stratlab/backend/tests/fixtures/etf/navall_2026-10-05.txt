@@ -1,0 +1,20 @@
+Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Plan;Option;Net Asset Value;Date
+
+Open Ended Schemes(Other Scheme - Other  ETFs)
+
+Nippon India Mutual Fund
+
+140084;INF204KB14I2;-;Nippon India ETF Nifty 50 BeES;Direct Plan;;255.7379;01-Oct-2026
+
+Open Ended Schemes(Other Scheme - Gold ETF)
+
+Nippon India Mutual Fund
+
+140088;INF204KB17I5;-;Nippon India ETF Gold BeES;Direct Plan;;121.5196;01-Oct-2026
+
+Open Ended Schemes(Exchange Traded Funds (ETFs) - ETFs investing overseas)
+
+Mirae Asset Mutual Fund
+
+148927;INF769K01HF4;-;Mirae Asset NYSE FANG+ ETF;;;179.6993;01-Oct-2026
+

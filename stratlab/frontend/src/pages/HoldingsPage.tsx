@@ -10,6 +10,7 @@ import { HoldingsActionsPanel } from "../components/CorpActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { CompanyCombobox } from "../components/CompanyCombobox";
+import { useMoreColumns } from "../components/MoreColumns";
 
 type Row = {
   symbol: string; exchange: string; name: string; sector: string; qty: number; avg: number | null; price: number | null;
@@ -55,6 +56,7 @@ export function HoldingsPage() {
   const { fail, notify } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [facts, setFacts] = useState<FactsReply | null>(null);
+  const more = useMoreColumns("holdings", 6);     // price detail, sector, trend and filings: one click away, so the table fits a laptop
   const [mode, setMode] = useState<"replace" | "add">("replace");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
@@ -216,13 +218,17 @@ export function HoldingsPage() {
           <section className="card stack" style={{ gap: 12 }}>
             <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
               <h2 className="h2">Positions</h2>
-              {!facts && <span className="tiny muted">Checking each stock's trend and filings…</span>}
+              <span className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                {!facts && <span className="tiny muted">Checking each stock's trend and filings…</span>}
+                {more.toggle}
+              </span>
             </div>
             <div className="table-wrap">
               <table aria-label="Positions">
                 <thead>
-                  <tr><th>Stock</th><th>Sector</th><th>Qty</th><th>Avg. price</th><th>Price</th><th>Value</th><th>Unrealised P&amp;L</th><th>Today</th><th>Weight</th>
-                    <th style={{ textAlign: "left" }}>Trend</th><th style={{ textAlign: "left" }}>Filings, 3 months</th><th style={{ textAlign: "left" }}>Results meeting</th><th /></tr>
+                  <tr><th>Stock</th><th>Value</th><th>Unrealised P&amp;L</th><th>Today</th><th>Weight</th><th>Qty</th>
+                    {more.on && <><th>Avg. price</th><th>Price</th><th style={{ textAlign: "left" }}>Sector</th>
+                      <th style={{ textAlign: "left" }}>Trend</th><th style={{ textAlign: "left" }}>Filings, 3 months</th><th style={{ textAlign: "left" }}>Results meeting</th></>}<th /></tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => {
@@ -230,17 +236,19 @@ export function HoldingsPage() {
                     return (
                       <tr key={`${r.exchange}:${r.symbol}`}>
                         <td>{r.kind && r.kind !== "stock" ? <b>{r.symbol}</b> : <Link className="link" to={`/research/${isUS(r) ? "US" : "IN"}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>}{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}{isUS(r) && <span className="tiny muted"> US</span>}{r.kind_label && <> <span className={`badge kind-${r.kind}`} title="Instrument type">{r.kind_label}</span></>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>{!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} />}</td>
-                        <td className="small">{r.sector}</td>
-                        <td className="num">{qtyText(r.qty)}</td>
-                        <td className="num">{price(r.avg, r.currency ?? "INR")}</td>
-                        <td className="num">{price(r.price, r.currency ?? "INR")}</td>
                         <td className="num">{money(r.value ?? r.invested, r.currency ?? "INR", 0)}</td>
                         <td className={`num ${signClass(r.pnl)}`}>{r.pnl == null ? "–" : <>{money(r.pnl, r.currency ?? "INR", 0)} <span className="tiny">{pct(r.pnl_pct)}</span></>}</td>
                         <td className={`num ${signClass(r.day)}`}>{r.day == null ? "–" : <>{money(r.day, r.currency ?? "INR", 0)} <span className="tiny">{pct(r.day_pct, 2)}</span></>}</td>
                         <td className="num">{r.weight == null ? "–" : `${r.weight.toFixed(1)}%`}</td>
-                        <td style={{ textAlign: "left" }} className="small"><Trend f={f} /></td>
-                        <td style={{ textAlign: "left" }} className="small"><FilingsCell f={f} allowed={facts?.filings !== false} plan={facts?.filings_plan} /></td>
-                        <td style={{ textAlign: "left" }} className="small">{f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="muted">–</span>}</td>
+                        <td className="num">{qtyText(r.qty)}</td>
+                        {more.on && <>
+                          <td className="num">{price(r.avg, r.currency ?? "INR")}</td>
+                          <td className="num">{price(r.price, r.currency ?? "INR")}</td>
+                          <td className="small" style={{ textAlign: "left" }}>{r.sector}</td>
+                          <td style={{ textAlign: "left" }} className="small"><Trend f={f} /></td>
+                          <td style={{ textAlign: "left" }} className="small"><FilingsCell f={f} allowed={facts?.filings !== false} plan={facts?.filings_plan} /></td>
+                          <td style={{ textAlign: "left" }} className="small">{f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="muted">–</span>}</td>
+                        </>}
                         <td><button className="btn quiet sm" onClick={() => setEdit(r)} aria-label={`Edit ${r.symbol}`}>Edit</button></td>
                       </tr>
                     );

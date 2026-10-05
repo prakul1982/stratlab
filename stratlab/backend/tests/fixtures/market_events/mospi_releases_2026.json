@@ -1,0 +1,263 @@
+{
+ "success": true,
+ "message": "Release Calendar fetched successfully.",
+ "data": [
+  {
+   "id": 259,
+   "title": "First Press Release of All India Index of Industrial Production of New Series With Base Year 2022-23",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1780371708887_52b83604-666c-443a-82c6-4411103e2ede_Press_Release_IIP_2022-23f.pdf\">First Press Release of All India Index of Industrial Production of New Series With Base Year 2022-23</a></p>",
+   "doc_url": "uploads/release_calendar/1780315915132_Press_Release_IIP_2022-23.pdf",
+   "year": 2026,
+   "month": 6,
+   "week": 23,
+   "day": 1,
+   "level": "day"
+  },
+  {
+   "id": 95,
+   "title": "All India Index of Industrial Production (IIP)",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1772446993082_bafbeab1-d887-4088-ad79-34bca753b231_IIP_Press_release_January_2026.pdf\">Quick Estimates of IIP (Base: 2011-12) for the month of January 2026</a></p>",
+   "doc_url": null,
+   "year": 2026,
+   "month": 3,
+   "week": 10,
+   "day": 2,
+   "level": "day"
+  },
+  {
+   "id": 260,
+   "title": "Press Note on Provisional Estimates of Annual GDP FY 2025-26 and Quarterly Estimates of GDP for Q4 of FY 2025-26",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1780655857536_5ac01869-ca4a-422d-b7a7-57b81da60932_Press_Note_on_GDP_Estimates_for_Q4_2025-26_and_PE_FY_2025-26_F.pdf\">Press Note on Provisional Estimates of Annual GDP FY 2025-26 and Quarterly Estimates of GDP for Q4 of FY 2025-26</a></p>",
+   "doc_url": "uploads/release_calendar/1780657343774_Press_Note_on_GDP_Estimates_for_Q4_2025-26_and_PE_FY_2025-26_F.pdf",
+   "year": 2026,
+   "month": 6,
+   "week": 23,
+   "day": 5,
+   "level": "day"
+  },
+  {
+   "id": 77,
+   "title": "First Advance Estimates of GDP for FY 2025-26",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1767781372753_1380ce82-f5a5-440d-99e6-e6b35af0deb5_GDP_Press_Note_on_FAE_2025-26.pdf\">Press Note on First Advance Estimates of GDP, FY 2025-26</a></p>",
+   "doc_url": "uploads/release_calendar/1767783068644_GDP_Press_Note_on_FAE_2025-26.pdf",
+   "year": 2026,
+   "month": 1,
+   "week": 2,
+   "day": 6,
+   "level": "day"
+  },
+  {
+   "id": 269,
+   "title": "Press release of CPI for the month of July 2026",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1786529680747_3113661d-1a2b-4b9a-af06-b340193ef9a0_Press_Release_CPI_July_2026.pdf\">Press release of CPI for the month of July 2026</a></p>",
+   "doc_url": null,
+   "year": 2026,
+   "month": 8,
+   "week": 33,
+   "day": 12,
+   "level": "day"
+  },
+  {
+   "id": 261,
+   "title": "Press release of CPI for the month of May 2026",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1781259853555_04875571-19f2-4830-9cad-3a1bfd5992e1_Press_Release_of_CPI_for_May_2026.pdf\">Press release of CPI for the month of May 2026</a></p>",
+   "doc_url": "uploads/release_calendar/1781260985588_Press_Release_of_CPI_for_May_2026.pdf",
+   "year": 2026,
+   "month": 6,
+   "week": 24,
+   "day": 12,
+   "level": "day"
+  },
+  {
+   "id": 252,
+   "title": "Press release of CPI for the month of April 2026",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/PressRelease/CPI%20Press%20Release%20of%20April%202026.pdf\">Press release of CPI for the month of April 2026</a></p>\r\n<p>&nbsp;</p>",
+   "doc_url": null,
+   "year": 2026,
+   "month": 5,
+   "week": 20,
+   "day": 12,
+   "level": "day"
+  },
+  {
+   "id": 245,
+   "title": "Press release of CPI for the month of December 2025",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1768213461321_53cd35fd-1bbc-4b43-b92d-8fb67474ee74_Press_Release_of_CPI_for_December_2025.pdf\">Press release of CPI for the month of December 2025</a></p>\r\n<p>&nbsp;</p>",
+   "doc_url": "uploads/release_calendar/1768214980837_Press_Release_of_CPI_for_December_2025.pdf",
+   "year": 2026,
+   "month": 1,
+   "week": 3,
+   "day": 12,
+   "level": "day"
+  },
+  {
+   "id": 96,
+   "title": "All India Consumer Price Index (CPI)",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1773310539387_714ce3b5-4644-4aef-b2e3-64433640a9c3_Press_Release_of_CPI_February_2026.pdf\">Press release of CPI for the month of February 2026</a></p>\r\n<p>&nbsp;</p>",
+   "doc_url": "uploads/release_calendar/1773312227790_Press_Release_of_CPI_February_2026.pdf",
+   "year": 2026,
+   "month": 3,
+   "week": 11,
+   "day": 12,
+   "level": "day"
+  },
+  {
+   "id": 86,
+   "title": "All India Consumer Price Index (CPI)",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1770891893893_6b458c0a-c327-4fef-a554-41131ea67273_Press_Relase_of_CPI_for_Jan26.pdf\">Press release of CPI for the month of January 2026</a></p>\r\n<p>&nbsp;</p>",
+   "doc_url": "uploads/release_calendar/1770893480876_Press_Relase_of_CPI_for_Jan26.pdf",
+   "year": 2026,
+   "month": 2,
+   "week": 7,
+   "day": 12,
+   "level": "day"
+  },
+  {
+   "id": 264,
+   "title": "All India Consumer Price Index (CPI)",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1783937698596_1013f1a1-3400-41aa-b4f4-5bbff10db7b7_Press_Release_of_CPI_for_June_2026.pdf\">Press release of CPI for the month of June 2026</a></p>",
+   "doc_url": "uploads/release_calendar/1783939341380_Press_Release_of_CPI_for_June_2026.pdf",
+   "year": 2026,
+   "month": 7,
+   "week": 29,
+   "day": 13,
+   "level": "day"
+  },
+  {
+   "id": 248,
+   "title": "Press release of CPI for the month of March 2026\r\n",
+   "description": "<p><a title=\"Press release of CPI for the month of March 2026\" href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1776075408775_60ad93d0-aedc-405b-864a-d1e965e7ba40_Press_Release_of_CPI_March_2026.pdf\" target=\"_blank\" rel=\"noopener\">Press release of CPI for the month of March 2026</a></p>",
+   "doc_url": null,
+   "year": 2026,
+   "month": 4,
+   "week": 16,
+   "day": 13,
+   "level": "day"
+  },
+  {
+   "id": 277,
+   "title": "Press release of CPI for the month of August 2026",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1789381904344_6c792dcf-8a9f-4fca-93d3-99d833bdb358_Press_Release_of_CPI_for_August_2026.pdf\">Press release of CPI for the month of August 2026</a></p>",
+   "doc_url": "uploads/release_calendar/1789382517924_Press_Release_of_CPI_for_August_2026.pdf",
+   "year": 2026,
+   "month": 9,
+   "week": 38,
+   "day": 14,
+   "level": "day"
+  },
+  {
+   "id": 94,
+   "title": "Press Note on new series of GDP estimates with base year 2022-23 ",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1772189865181_f040336d-bc57-4aed-b80f-586d9ccb279e_Press_Note_on_New_Series_of_GDP_Estimates_with_Base_Year_2022-23_27022026.pdf\">Press Note on new series of GDP estimates with base year 2022-23&nbsp;</a></p>\r\n<p>&nbsp;</p>\r\n<p>&nbsp;</p>",
+   "doc_url": "uploads/release_calendar/1772190058170_Press_Note_on_New_Series_of_GDP_Estimates_with_Base_Year_2022-23_27022026.pdf",
+   "year": 2026,
+   "month": 2,
+   "week": 9,
+   "day": 27,
+   "level": "day"
+  },
+  {
+   "id": 281,
+   "title": "Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for August 2026\r\n",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1790590696008_1b346687-0a5f-445a-83a2-28283c586094_IIP_Press_Release_August_2026.pdf\">Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for August 2026</a></p>",
+   "doc_url": "uploads/release_calendar/1790592333487_IIP_Press_Release_August_2026.pdf",
+   "year": 2026,
+   "month": 9,
+   "week": 40,
+   "day": 28,
+   "level": "day"
+  },
+  {
+   "id": 273,
+   "title": "Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for July 2026",
+   "description": "<p><a title=\"Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for July 2026\" href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1787912132242_3d2fc197-d8a9-48a0-840f-d0cdc12c6835_IIP_Press_Release_July_2026.pdf\" target=\"_blank\" rel=\"noopener\">Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for July 2026</a></p>",
+   "doc_url": "uploads/release_calendar/1787914894705_IIP_Press_Release_July_2026.pdf",
+   "year": 2026,
+   "month": 8,
+   "week": 35,
+   "day": 28,
+   "level": "day"
+  },
+  {
+   "id": 266,
+   "title": "Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for June 2026\r\n",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1785234090071_a0da1e19-8970-4e3c-8188-3fd540cfa461_IIP_Press_release_Jun_2026.pdf\">Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for June 2026</a></p>",
+   "doc_url": "uploads/release_calendar/1785235403520_IIP_Press_release_Jun_2026.pdf",
+   "year": 2026,
+   "month": 7,
+   "week": 31,
+   "day": 28,
+   "level": "day"
+  },
+  {
+   "id": 251,
+   "title": "All India Index of Industrial Production (IIP)",
+   "description": "<div>\r\n<p class=\"mt-4\"><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1777370981972_ac151bbf-29ab-4f2c-a10e-bd727a4d3564_IIP_Press_release_March_2026.pdf\">Quick Estimates of IIP (Base: 2011-12) for the month of March 2026</a></p>\r\n<p class=\"mt-4\">&nbsp;</p>\r\n<p>&nbsp;</p>\r\n<p>&nbsp;</p>\r\n</div>",
+   "doc_url": "uploads/release_calendar/1777372902142_IIP_Press_release_March_2026.pdf",
+   "year": 2026,
+   "month": 4,
+   "week": 18,
+   "day": 28,
+   "level": "day"
+  },
+  {
+   "id": 85,
+   "title": "All India Index of Industrial Production (IIP)",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1769595591351_d76a957c-0311-4bc6-95d0-75540f4a0004_IIP_Press_release_December_2025.pdf\">Quick Estimates of IIP (Base: 2011-12) for the month of December 2025</a></p>\r\n<p>&nbsp;</p>",
+   "doc_url": null,
+   "year": 2026,
+   "month": 1,
+   "week": 5,
+   "day": 28,
+   "level": "day"
+  },
+  {
+   "id": 263,
+   "title": "Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for May 2026",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1782727994645_1af6a37e-b7fb-4ee8-bf52-96fcea2a47e2_IIP_Press_release_May_2026.pdf\">Press Release on Quick Estimates of all India Index of Industrial Production (IIP) base year 2022-23 for May 2026</a></p>",
+   "doc_url": "uploads/release_calendar/1782729963965_IIP_Press_release_May_2026.pdf",
+   "year": 2026,
+   "month": 6,
+   "week": 27,
+   "day": 29,
+   "level": "day"
+  },
+  {
+   "id": 102,
+   "title": "All India Index of Industrial Production (IIP)",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1774865320639_b310863d-ad4a-47cb-b3c0-7eb7b56a2a5b_Press_release_IIP_February_2026.pdf\">Quick Estimates of IIP (Base: 2011-12) for the month of February 2026</a></p>",
+   "doc_url": "uploads/release_calendar/1774867176456_Press_release_IIP_February_2026.pdf",
+   "year": 2026,
+   "month": 3,
+   "week": 14,
+   "day": 30,
+   "level": "day"
+  },
+  {
+   "id": 274,
+   "title": "\r\nPress Note on Quarterly Estimates of GDP for Q1 of FY 2026-27\r\n",
+   "description": "<p><a href=\"https://www.mospi.gov.in/uploads/latestReleases/latest_release_1788172583113_d65a77cf-240e-4491-82ee-59f78618fa41_Press_Note_on_GDP_Estimates_for_Q1_2026-27.pdf\">Press Note on Quarterly Estimates of GDP for Q1 of FY 2026-27</a></p>",
+   "doc_url": null,
+   "year": 2026,
+   "month": 8,
+   "week": 36,
+   "day": 31,
+   "level": "day"
+  }
+ ],
+ "code": 200,
+ "filter": {
+  "applied_level": "week",
+  "year": 2026,
+  "month": 10,
+  "week": null,
+  "day": null
+ },
+ "pagination": {
+  "currentPage": 1,
+  "perPage": 100,
+  "totalRecords": 57,
+  "totalPages": 1,
+  "count": 57
+ }
+}

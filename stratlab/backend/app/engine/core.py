@@ -280,6 +280,33 @@ class Engine:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
         return self._try_enter(bars, ctx, i, closes_at)
 
+    # --- paper orders placed by hand (the AI assistant's paper tools), live only ---
+    def manual_cost(self, side: str, q: float, px: float) -> float:
+        """What opening `q` at `px` takes from cash: the fill after slippage plus the order's charges."""
+        d = 1 if side == "buy" else -1
+        fill = px * (1 + self.r.slippage / 100 * d)
+        return q * fill + C.total(C.order_costs(self.kind, side, q, fill, self.r.brokerage))
+
+    def open_manual(self, t: str, px: float, d: int, q: float, why: str) -> dict:
+        """Open a position of `q` at the latest price `px`, with the same slippage and charges as a rule's entry. No
+        stop or target is set; the strategy's exit rules, time exit and square-off still apply from the next candle."""
+        open_side = "buy" if d == 1 else "sell"
+        px = px * (1 + self.r.slippage / 100 * d)
+        self.dir = d
+        self.entry_cost = self._pay(open_side, q, px)
+        self.cash -= d * q * px + self.entry_cost
+        self.qty, self.entry, self.entry_t, self.held, self.best = q, px, t, 0, px
+        self.sl = self.init_sl = 0.0
+        self.tg = math.inf
+        self.day_trades += 1
+        ev = {"t": t, "side": open_side, "px": px, "qty": q, "why": why}
+        self.events.append(ev)
+        return ev
+
+    def close_manual(self, t: str, px: float, why: str) -> dict:
+        """Close the open position at the latest price `px`, as an exit rule would."""
+        return self._close({"t": t}, px, why)
+
     def _hit_exit(self, ctx: Ctx, i: int) -> bool:
         return any(eval_cond(ctx, c, i) for c in self._rules(self.dir, exit=True))
 

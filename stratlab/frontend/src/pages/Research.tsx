@@ -12,13 +12,20 @@ import {
   AIRead, Change, CompanySearch, EarningsBars, MarginCascade, MetricsGrid, NewsList, Panel, PriceChart,
   QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
+import { preloadPriceChart } from "../charts/price/lazy";
+import { loadSurveillance } from "../lib/surveillance";
+import { loadEtfGaps } from "../lib/etfGaps";
+import { loadFoChanges } from "../lib/foChanges";
 import { AsOf, Info, Loading } from "../components/ui";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { DealsPanel } from "../components/Deals";
+import { BizUpdatesPanel } from "../components/BizUpdates";
+import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { FoBadges } from "../components/FoBadges";
+import { IndexBadges } from "../components/IndexBadges";
 import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { CompanyActions } from "../components/CorpActions";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
@@ -110,6 +117,9 @@ export function CompanyPage() {
     let live = true;
     setC(null); setError(null); setResults(null);
     researchApi.company(region, sym).then((x) => live && setC(x)).catch((e) => live && setError((e as Error).message));
+    // what the page shows under the company's name loads alongside it, not after it
+    preloadPriceChart();
+    if (region === "IN") { void loadSurveillance(); void loadEtfGaps(); void loadFoChanges(); }
     api<{ next: ResultRow | null; last: ResultRow | null }>(`/research/results/${region}/${encodeURIComponent(sym)}`)
       .then((x) => live && setResults(x)).catch(() => undefined);      // the calendar is a nice-to-have here
     return () => { live = false; };
@@ -139,6 +149,7 @@ export function CompanyPage() {
             <SurvBadges region={region} symbol={c.symbol} />
             {region === "IN" && <EtfGapBadge symbol={c.symbol} />}
             <FoBadges region={region} symbol={c.symbol} />
+            <IndexBadges region={region} symbol={c.symbol} />
             <AsOf parts={[["Prices", c.as_of], ["Reported numbers", c.numbers_at]]} />
           </div>
           <Change q={c.quote} currency={ccy} />
@@ -155,6 +166,7 @@ export function CompanyPage() {
           <AlertButton region={region} symbol={c.symbol} />
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
           <ShareCompanyButton region={region} symbol={c.symbol} />
+          {region === "IN" && <Link className="btn quiet sm" to={`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`}>Test a SIP</Link>}
           {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
           {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
         </div>
@@ -222,6 +234,12 @@ export function CompanyPage() {
 
       {region === "IN" && <Panel title="Filings and red flags" id="filings" span="full"
         info="What the company told the exchange: fund raises (QIP, preferential, rights), pledges, resignations, defaults, regulator action, rating changes, results and calls."><FilingsPanel symbol={sym} /></Panel>}
+
+      {region === "IN" && <BizUpdatesPanel symbol={sym} wrap={(body, right) => <Panel title="Business updates" id="business-updates" span="full" right={right}
+        info="Monthly or quarterly numbers the company files between results (sales volumes, deposits and advances, and the like), copied from its own filing with the line and page each comes from.">{body}</Panel>} />}
+
+      {region === "IN" && <NamedHoldersPanel symbol={sym} wrap={(body, right) => <Panel title="Named holders" id="named-holders" span="full" right={right}
+        info="From the latest quarterly shareholding pattern: the promoter group's members and every public holder above 1%, with the change since the quarter before.">{body}</Panel>} />}
 
       {region === "IN" && <Panel title="Deals and insider trades" id="deals" span="full"
         info="Who bought or sold, from exchange disclosures: promoters', directors' and key staff's own trades and pledges, holders crossing 5% and moving 2% at a time (substantial acquisitions), and bulk and block deals with the named client."><DealsPanel symbol={sym} /></Panel>}

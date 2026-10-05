@@ -9,6 +9,9 @@ import {
 import { ChartEmpty, Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
 import { Info, Loading } from "../components/ui";
+import { useMoreColumns } from "../components/MoreColumns";
+import { VixPanel } from "../components/VixPanel";
+import { PosTabs } from "./trade/StockFuturesPage";
 
 /* /trade/positioning: who holds index futures and options (the exchange's participant-wise files), FII and DII cash
  * flows, each index's put-call ratio, and one index's option chain as facts: open interest and its change by strike,
@@ -70,9 +73,10 @@ function Split({ long, short, words }: { long: number | null; short: number | nu
   );
 }
 
-/** The participants' futures and options (index or stock): long, short, net and each side's share of the futures,
- * each with its change from the day before. */
-function ParticipantTable({ rows, kind, seg }: { rows: PRow[]; kind: "oi" | "vol"; seg: Segment }) {
+/** The participants' futures and options (index or stock): long, short and net, each with its change from the day
+ * before. Each side's share of the futures (worked out from long and short) is the extra column, so the table fits a
+ * laptop; the FII figures above show it for FIIs either way. */
+function ParticipantTable({ rows, kind, seg, split }: { rows: PRow[]; kind: "oi" | "vol"; seg: Segment; split: boolean }) {
   const [lo, sh]: [string, string] = kind === "oi" ? ["long", "short"] : ["bought", "sold"];
   const cols: [string, string][] = [
     [`fut_${seg}_long`, `Futures ${lo}`], [`fut_${seg}_short`, `Futures ${sh}`], [`fut_${seg}_net`, "Futures net"],
@@ -86,7 +90,7 @@ function ParticipantTable({ rows, kind, seg }: { rows: PRow[]; kind: "oi" | "vol
           <tr>
             <th scope="col">{seg === "idx" ? "Index" : "Stock"} F&amp;O</th>
             {cols.slice(0, 3).map(([k, l]) => <th key={k} scope="col">{l}</th>)}
-            <th scope="col">Futures {lo} / {sh}</th>
+            {split && <th scope="col">Futures {lo} / {sh}</th>}
             {cols.slice(3).map(([k, l]) => <th key={k} scope="col">{l}</th>)}
           </tr>
         </thead>
@@ -99,7 +103,7 @@ function ParticipantTable({ rows, kind, seg }: { rows: PRow[]; kind: "oi" | "vol
               <tr key={r.id} className={r.id === "total" ? "total" : ""} data-participant={r.id}>
                 <th scope="row">{r.label}</th>
                 {cols.slice(0, 3).map(cell)}
-                <td data-testid={`split-${r.id}`}><Split long={n(r, `fut_${seg}_long_pct`)} short={n(r, `fut_${seg}_short_pct`)} words={[lo, sh]} /></td>
+                {split && <td data-testid={`split-${r.id}`}><Split long={n(r, `fut_${seg}_long_pct`)} short={n(r, `fut_${seg}_short_pct`)} words={[lo, sh]} /></td>}
                 {cols.slice(3).map(cell)}
               </tr>
             );
@@ -137,6 +141,7 @@ function Participants({ s }: { s: Summary }) {
   const cov = s.coverage?.participants;
   const words: [string, string] = kind === "oi" ? ["long", "short"] : ["bought", "sold"];
   const segWord = SEG_WORD[seg];
+  const more = useMoreColumns("pos-part", 1);
   return (
     <Card id="pos-part" title="Participant-wise open interest"
       info="The exchange's daily count of futures and options contracts each kind of participant held open (or traded that day), long and short, for index and for stock contracts. Clients are individuals and firms trading for themselves; DIIs are domestic institutions (mutual funds, insurers, banks); FIIs are foreign portfolio investors; Pro is brokers trading their own money. Long / short is each side's share of the futures held. The small line under each number is the change from the trading day before.">
@@ -148,6 +153,7 @@ function Participants({ s }: { s: Summary }) {
       <div className="row wrap" style={{ gap: 8 }}>
         <Seg label="Index or stock contracts" value={seg} onChange={setSeg} options={[["idx", "Index F&O"], ["stk", "Stock F&O"]]} />
         <Seg label="Open interest or volume" value={kind} onChange={setKind} options={[["oi", "Open interest"], ["vol", "Volume"]]} />
+        {rows.length > 0 && more.toggle}
       </div>
       <p className="small muted" data-testid="part-status">{statusLine(p, "participant files")}{p.prev ? ` Changes are from ${dayName(p.prev)}.` : ""}</p>
       {fii && (
@@ -162,7 +168,7 @@ function Participants({ s }: { s: Summary }) {
             sub={`${sides(n(fii, `opt_${seg}_put_long_pct`), n(fii, `opt_${seg}_put_short_pct`), words)}`} />
         </div>
       )}
-      {rows.length ? <ParticipantTable rows={rows} kind={kind} seg={seg} /> : <p className="small muted">No {kind === "oi" ? "open interest" : "volume"} file stored yet.</p>}
+      {rows.length ? <ParticipantTable rows={rows} kind={kind} seg={seg} split={more.on} /> : <p className="small muted">No {kind === "oi" ? "open interest" : "volume"} file stored yet.</p>}
       <p className="tiny muted">Contracts, as the exchange counts them. {kind === "vol" ? "Volume is what each participant bought and sold that day; open interest is what they held at the close." : "Open interest is what each participant held at the close; Volume shows what they bought and sold that day."}</p>
     </Card>
   );
@@ -208,16 +214,16 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
       <div className="table-wrap">
         <table className="nums pos-table" data-testid="pcr-table">
           <caption className="sr-only">Put-call ratio for each index's nearest expiry</caption>
-          <thead><tr><th scope="col">Index</th><th scope="col">Expiry</th><th scope="col">PCR (OI)</th><th scope="col">Near the money</th><th scope="col">PCR (volume)</th></tr></thead>
+          <thead><tr><th scope="col">Index <span className="tiny muted">· expiry</span></th><th scope="col">PCR (OI)</th><th scope="col">Near the money</th><th scope="col">PCR (volume)</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.name} data-pcr={r.name}>
-                <th scope="row">{r.name}</th>
+                <th scope="row">{r.name}{r.source && <span className="tiny muted pos-expiry" data-testid="pcr-expiry">{r.expiry ? shortDay(r.expiry) : "–"}</span>}</th>
                 {r.source ? (
                   <>
-                    <td>{r.expiry ? shortDay(r.expiry) : "–"}</td><td>{ratio(r.pcr_oi)}</td><td>{ratio(r.pcr_near)}</td><td>{ratio(r.pcr_vol)}</td>
+                    <td>{ratio(r.pcr_oi)}</td><td>{ratio(r.pcr_near)}</td><td>{ratio(r.pcr_vol)}</td>
                   </>
-                ) : <td colSpan={4} className="muted small" style={{ textAlign: "left" }}>
+                ) : <td colSpan={3} className="muted small" style={{ textAlign: "left", whiteSpace: "normal" }}>
                   {coverage?.chains[r.name]?.days ? `No live chain now; recorded since ${dayName(coverage.chains[r.name].first)}` : "No live chain now, and not recorded yet"}
                 </td>}
               </tr>
@@ -456,13 +462,15 @@ export function PositioningPage() {
       <div className="stack" style={{ gap: 6 }}>
         <span className="eyebrow">Trade · derivatives</span>
         <h1 className="page-title">Positioning</h1>
-        <p className="muted" style={{ maxWidth: "68ch" }}>Who holds index and stock futures and options, FII and DII cash flows, and what the index option chains show. The exchange's numbers as published: facts, not advice.</p>
+        <p className="muted" style={{ maxWidth: "68ch" }}>Who holds index and stock futures and options, FII and DII cash flows, India VIX, and what the index option chains show. The exchange's numbers as published: facts, not advice.</p>
       </div>
+      <PosTabs />
       {error ? <div className="banner">{error}</div>
         : !s ? <Loading label="Reading the newest numbers" />
         : (
           <>
             <Participants s={s} />
+            <VixPanel />
             <div className="grid2" style={{ alignItems: "start" }}>
               <Cash s={s} />
               <PcrTable coverage={s.coverage} />

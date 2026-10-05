@@ -50,6 +50,8 @@ const verdict = () => import("./pages/PublicVerdict");
 const PublicVerdict = page(verdict, "PublicVerdict");
 const OptionsSession = page(() => import("./pages/OptionsSession"), "OptionsSession");
 const PaperPage = page(() => import("./pages/PaperPage"), "PaperPage");
+const ReplayPage = page(() => import("./pages/trade/ReplayPage"), "ReplayPage");
+const SignalsPage = page(() => import("./pages/trade/SignalsPage"), "SignalsPage");
 const PlansPage = page(() => import("./pages/PlansPage"), "PlansPage");
 const AccountPage = page(() => import("./pages/AccountPage"), "AccountPage");
 const AdminPage = page(() => import("./pages/AdminPage"), "AdminPage");
@@ -77,6 +79,8 @@ const moneyCalendar = () => import("./pages/money/MoneyCalendarPage");
 const MoneyCalendarPage = page(moneyCalendar, "MoneyCalendarPage");
 const UsTaxPage = page(() => import("./pages/money/UsTaxPage"), "UsTaxPage");
 const ItrExportPage = page(() => import("./pages/money/ItrExportPage"), "ItrExportPage");
+const SipTestPage = page(() => import("./pages/money/SipTestPage"), "SipTestPage");
+const RatesPage = page(() => import("./pages/money/RatesPage"), "RatesPage");
 const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
@@ -90,11 +94,18 @@ const ScreensPage = page(screensPage, "ScreensPage");
 const breadthPage = () => import("./pages/BreadthPage");
 const BreadthPage = page(breadthPage, "BreadthPage");
 const EtfGapsPage = page(() => import("./pages/EtfGapsPage"), "EtfGapsPage");
+const HoldersPage = page(() => import("./pages/HoldersPage"), "HoldersPage");
+const BizUpdatesPage = page(() => import("./pages/BizUpdatesPage"), "BizUpdatesPage");
 const netWorth = () => import("./pages/money/NetWorthPage");
 const NetWorthPage = page(netWorth, "NetWorthPage");
 const journalPage = () => import("./pages/trade/JournalPage");
 const JournalPage = page(journalPage, "JournalPage");
 const FoChangesPage = page(() => import("./pages/trade/FoChangesPage"), "FoChangesPage");
+const ClosingAuctionPage = page(() => import("./pages/trade/ClosingAuctionPage"), "ClosingAuctionPage");
+const EventsPage = page(() => import("./pages/trade/EventsPage"), "EventsPage");
+const StockFuturesPage = page(() => import("./pages/trade/StockFuturesPage"), "StockFuturesPage");
+const StockLendingPage = page(() => import("./pages/StockLendingPage"), "StockLendingPage");
+const MarginFundingPage = page(() => import("./pages/MarginFundingPage"), "MarginFundingPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -195,11 +206,17 @@ function Routed() {
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/options" element={<OptionsPage />} />
         <Route path="/trade/positioning" element={<PositioningPage />} />
+        <Route path="/trade/positioning/stocks" element={<StockFuturesPage />} />
         <Route path="/options/s/:sid" element={<OptionsSession />} />
         <Route path="/paper" element={<PaperPage />} />
         <Route path="/paper/:sid" element={<PaperPage />} />
         <Route path="/trade/journal" element={<JournalPage />} />
         <Route path="/trade/fo-changes" element={<FoChangesPage />} />
+        <Route path="/trade/closing-auction" element={<ClosingAuctionPage />} />
+        <Route path="/trade/replay" element={<ReplayPage />} />
+        <Route path="/trade/signals" element={<SignalsPage />} />
+        <Route path="/trade/signals/:sid" element={<SignalsPage />} />
+        <Route path="/trade/events" element={<EventsPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
@@ -212,6 +229,8 @@ function Routed() {
         <Route path="/money/calendar" element={<MoneyCalendarPage />} />
         <Route path="/money/us-tax" element={<UsTaxPage />} />
         <Route path="/money/itr" element={<ItrExportPage />} />
+        <Route path="/money/sip-test" element={<SipTestPage />} />
+        <Route path="/money/rates" element={<RatesPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />
@@ -226,6 +245,10 @@ function Routed() {
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/invest/breadth" element={<BreadthPage />} />
         <Route path="/invest/etf-gaps" element={<EtfGapsPage />} />
+        <Route path="/invest/holders" element={<HoldersPage />} />
+        <Route path="/invest/business-updates" element={<BizUpdatesPage />} />
+        <Route path="/invest/stock-lending" element={<StockLendingPage />} />
+        <Route path="/invest/margin-funding" element={<MarginFundingPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />

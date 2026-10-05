@@ -26,15 +26,19 @@ from .engine.indicators import rsi, stage
 
 KEY = "stockalerts:"                 # app_settings: stockalerts:<uid> = {"uid", "items": [...], "sent": [...], "pending": [...]}
 REGIONS = ("IN", "US")
-KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap")
+KINDS = ("price", "move", "ma", "rsi", "stage", "high52", "low52", "insider", "deal", "surveillance", "etfgap", "bizupdate", "mwpl", "mtf")
 NEEDS_BARS = {"ma", "rsi", "stage", "high52", "low52"}
 EVENTS = {"insider": ("insider", "sast"), "deal": ("bulk", "block"),   # alerts on exchange disclosures, not on the price
-          "surveillance": ("surveillance",)}                   # and on the exchange's surveillance lists
+          "surveillance": ("surveillance",),                   # and on the exchange's surveillance lists
+          "bizupdate": ("bizupdate",),                         # and on monthly or quarterly business updates (biz_updates.py)
+          "mwpl": ("mwpl",),                                   # a stock's MWPL use crossing 80% (stock_futures.py)
+          "mtf": ("mtf",)}                                     # its margin-funded share crossing a level (mtf.py)
 MAX_SEEN = 300                       # disclosure ids an event alert remembers, so none is sent twice
 MA_PERIODS = (20, 50, 100, 150, 200)
 RSI_PERIOD = 14
 YEAR = 252                           # trading days in 52 weeks
-AFTER_CLOSE = 5                      # minutes after the close to keep checking, so the closing price is seen
+AFTER_CLOSE = 10                     # minutes after the close to keep checking, so the closing price is seen (India's
+                                     # closing auction ends at 15:35 for F&O stocks: data/sessions.py)
 
 PER_HOUR = 5                         # messages one user can get in an hour
 PER_DAY = 20                         # and in a day
@@ -98,10 +102,16 @@ def describe(a: dict) -> str:
     if k == "deal":
         return "A bulk or block deal is reported"
     if k == "etfgap":                   # an ETF's price against its NAV (etf_nav.py)
-        return {"above": f"Trades {_num(v)}% or more above its NAV", "below": f"Trades {_num(v)}% or more below its NAV"}.get(
-            op, f"Trades {_num(v)}% or more away from its NAV, either way")
+        return {"above": f"Trades {_num(v)}% or more above its last NAV", "below": f"Trades {_num(v)}% or more below its last NAV"}.get(
+            op, f"Trades {_num(v)}% or more away from its last NAV, either way")
+    if k == "mwpl":
+        return "MWPL use crosses 80%, either way"
+    if k == "mtf":
+        return f"Margin-funded shares cross {op} {v:g}% of shares issued"
     if k == "surveillance":
         return "Enters or leaves an exchange surveillance list (ASM, GSM, ESM, trade-to-trade, F&O ban, price band)"
+    if k == "bizupdate":
+        return "Files a monthly or quarterly business update"
     return "Makes a new 52-week high" if k == "high52" else "Makes a new 52-week low"
 
 
@@ -148,6 +158,12 @@ def clean(req: dict) -> dict:
         if not _finite(v) or not 0.1 <= v <= 50:
             raise AlertError("Enter the gap as a percent between 0.1 and 50.")
         out.update(op=op, value=round(float(v), 2))
+    elif kind == "mtf":
+        if op not in ("above", "below"):
+            raise AlertError("Pick above or below.")
+        if not _finite(v) or not 0.01 <= v <= 50:
+            raise AlertError("Enter the level as a percent of shares issued, between 0.01 and 50.")
+        out.update(op=op, value=round(float(v), 3))
     elif kind == "ma":
         if period not in MA_PERIODS:
             raise AlertError(f"Pick a moving average of {', '.join(map(str, MA_PERIODS))} days.")
@@ -575,6 +591,8 @@ def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
     """An alert on disclosures: the deals of its kind on its stock that it hasn't sent yet, filed since it was set.
     Returns the message (else None) and the alert's new state."""
     st = dict(a.get("state") or {})
+    if a["kind"] == "mtf":
+        return _evaluate_mtf(a, rows, st)
     seen = [x for x in st.get("seen") or [] if isinstance(x, str)]
     since = str(a.get("created_at") or "")[:10]
     new = [d for d in rows if isinstance(d, dict) and d.get("kind") in EVENTS.get(a["kind"], ()) and d.get("symbol") == a["symbol"]
@@ -582,15 +600,43 @@ def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
     if not new:
         return None, st
     st["seen"] = (seen + [d["id"] for d in new])[-MAX_SEEN:]
+    if a["kind"] == "mwpl":
+        return f"{a['symbol']}: {new[-1].get('text') or 'MWPL use crossed 80%.'} From the exchange's open interest files", st
     if a["kind"] == "surveillance":
         from .surveillance import change_text
         return f"{a['symbol']} {'; '.join(change_text(d) for d in new[:4])}. From exchange surveillance lists", st
+    if a["kind"] == "bizupdate":
+        d = new[0]
+        said = d.get("text") or "a new business update"
+        return f"{a['symbol']} filed a business update: {said}. From the company's exchange filing", st
     from .deals import describe as say
     more = f"; and {len(new) - 1} more" if len(new) > 1 else ""
     return f"{a['symbol']}: {say(new[0])}{more}. From exchange disclosures", st
 
 
-def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=None) -> int:
+def _evaluate_mtf(a: dict, rows: list[dict], st: dict) -> tuple[str | None, dict]:
+    """A level on a stock's margin-funded shares as a percent of shares issued: fires when the newest day crosses to
+    the alert's side of it from the other side (the first day seen only sets the side)."""
+    mine = sorted((d for d in rows if isinstance(d, dict) and d.get("kind") == "mtf" and d.get("symbol") == a["symbol"]
+                   and _finite(d.get("pct"))), key=lambda d: str(d.get("day") or ""))
+    if not mine:
+        return None, st
+    d = mine[-1]
+    if str(d.get("day") or "") <= str(st.get("day") or ""):
+        return None, st
+    side = "above" if d["pct"] > a["value"] else "below"
+    was = st.get("side")
+    if was is None and _finite(d.get("was")):
+        was = "above" if d["was"] > a["value"] else "below"
+    st.update(side=side, day=d.get("day"))
+    if was is None or was == side or side != a["op"]:
+        return None, st
+    return (f"{a['symbol']}: margin-funded shares were {d['pct']:.2f}% of shares issued on {d.get('day')} "
+            f"({money(float(d.get('crore') or 0), 'IN')} crore funded), {side} your {a['value']:g}% level. "
+            "From the exchange's margin trading disclosure"), st
+
+
+def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=None, kind_ok=None) -> int:
     """Check every active alert on insider trades and deals against the disclosures in `rows` (the evening's read of
     the whole market) and send what fired, within each user's plan and message limits. Returns messages sent."""
     profile = profile or db.cached_profile
@@ -613,6 +659,8 @@ def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=No
         changes = {}
         for a in mine:
             if a.get("kind") not in EVENTS or a.get("region") != "IN" or not a.get("id"):
+                continue
+            if kind_ok and not kind_ok(p, a["kind"]):     # a paid kind after a downgrade waits
                 continue
             text, st = evaluate_event(a, by_sym.get(a.get("symbol"), []))
             if text or st != (a.get("state") or {}):

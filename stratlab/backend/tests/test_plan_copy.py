@@ -67,6 +67,21 @@ CARD_WORDS = {
     "etf_gaps": "ETF gap alerts",
     "fo_alerts": "F&O change alerts",
     "options_whatif": "what-if sliders",
+    "cas_history": "closing auction history",
+    "vix_filter": "India VIX entry filter",
+    "strike_rules": "strikes picked by delta or premium",
+    "chart_replay": "chart replay practice",
+    "signal_webhooks": "alert webhooks",
+    "event_reminders": "market event reminders",
+    "biz_updates": "business updates in numbers",
+    "holders": "named-holder search",
+    "assistant": "in your AI assistant",
+    "stock_futures": "stock futures history",
+    "mtf": "margin funding history",
+    "mf_behaviour": "fund behaviour",
+    "sip_luck": "SIP dip rules",
+    "rates_slab": "after your own tax",
+    "loan_check": "floating-rate loan check",
 }
 
 

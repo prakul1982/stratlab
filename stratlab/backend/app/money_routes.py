@@ -66,6 +66,7 @@ def dividend_parts(uid: str, fetch: bool = True) -> tuple[dict, list[dict], list
     ind = holdings.indian(h["items"])
     us = [i for i in h["items"] if holdings.market_of(i) == "US"]
     syms = [i["symbol"] for i in ind]
+    corp_actions.prefetch("IN", syms)
     if fetch and syms:
         M._corp_histories(uid, syms, t)
     cal = corp_actions.load("IN")["rows"]

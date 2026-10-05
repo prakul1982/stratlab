@@ -43,8 +43,9 @@ IST = ZoneInfo("Asia/Kolkata")
 KEY = "moneycal:"                 # moneycal:<uid> = {"events": [...], "feed": {...}, "reminders": {...}}
 FEED_KEY = "moneycalfeed:"        # moneycalfeed:<sha256 of the token> = uid
 JOB_KEY = "moneycaljob:reminders"  # the last day the reminders went out
-CATS = ("tax", "holdings", "money", "custom")
-CAT_NAMES = {"tax": "Tax", "holdings": "Holdings", "money": "Money", "custom": "Your events"}
+CATS = ("tax", "holdings", "money", "custom", "market")
+CAT_NAMES = {"tax": "Tax", "holdings": "Holdings", "money": "Money", "custom": "Your events", "market": "Market events"}
+REMIND_CATS = CATS[:4]            # market events have their own reminders (market_events.py), so none go out twice
 MAX_EVENTS = 200                  # the user's own events
 MAX_SPAN = 400                    # days in one view
 FEED_BEHIND, FEED_AHEAD = 30, 400  # what the feed holds, around today
@@ -99,7 +100,7 @@ def _event_ok(e) -> bool:
 
 def clean_reminders(r) -> dict:
     r = r if isinstance(r, dict) else {}
-    cats = [c for c in r.get("cats") or [] if c in CATS] if isinstance(r.get("cats"), list) else list(CATS)
+    cats = [c for c in r.get("cats") or [] if c in REMIND_CATS] if isinstance(r.get("cats"), list) else list(REMIND_CATS)
     return {"on": bool(r.get("on")), "days": r.get("days") if r.get("days") in REMIND_DAYS else 3,
             "channel": r.get("channel") if r.get("channel") in ("email", "push", "both") else "both", "cats": cats}
 
@@ -213,6 +214,7 @@ def holdings_events(uid: str, frm: date, to: date) -> list[dict]:
                 why = f" ({r['when']})" if r.get("when") else ""
                 out.append(_ev(d, f"{r['symbol']}: results{why}", "holdings", "results", r.get("purpose") or "Board meeting on results.",
                                symbol=r["symbol"], url=f"/research/{region}/{r['symbol']}"))
+    corp_actions.prefetch("IN", held)
     cal = corp_actions.load("IN")["rows"]
     rows: dict[str, dict] = {}
     for s in held:
@@ -337,6 +339,28 @@ def custom_events(data: dict, frm: date, to: date) -> list[dict]:
     return out
 
 
+# ---------- market events, when the user sent them here from the Events page ----------
+def market_on(uid: str) -> bool:
+    try:
+        from . import market_events
+        return market_events.prefs(uid)["money_calendar"]
+    except Exception:
+        return False
+
+
+def market_events(uid: str, frm: date, to: date) -> list[dict]:
+    """The market events calendar's events of the kinds the user picked (RBI, data releases, the Fed, index changes,
+    expiries, holidays), only when they turned this on there."""
+    from . import market_events as mk
+    out = []
+    for e in mk.for_money_calendar(uid, frm, to):
+        d = _day(e["date"])
+        when = f" At {e['time']} India time." if e.get("time") else ""
+        fig = f" {e['figure']}." if e.get("figure") else ""
+        out.append(_ev(d, e["title"], "market", f"market_{e['kind']}", (e.get("detail") or "") + when + fig, ref=e["id"], url="/trade/events"))
+    return out
+
+
 # ---------- everything together ----------
 def events(uid: str, frm: date, to: date, cats: set[str] | None = None, data: dict | None = None) -> list[dict]:
     """Every event in the window, by date, in the categories asked for. A part that fails is left out, never the
@@ -353,6 +377,8 @@ def events(uid: str, frm: date, to: date, cats: set[str] | None = None, data: di
         parts.append(lambda: [e for e in hook_events(uid, frm, to) if e["cat"] in cats])
     if "custom" in cats:
         parts.append(lambda: custom_events(data, frm, to))
+    if "market" in cats:
+        parts.append(lambda: market_events(uid, frm, to))
     for p in parts:
         try:
             out += p()
@@ -558,7 +584,8 @@ def view(profile, start: date, end: date, cats: set[str] | None = None) -> dict:
     feed = data["feed"]
     return {"events": events(uid, start, end, cats, data), "start": start.isoformat(), "end": end.isoformat(),
             "today": _today().isoformat(), "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-            "cats": [{"id": c, "label": CAT_NAMES[c]} for c in CATS],
+            "cats": [{"id": c, "label": CAT_NAMES[c]} for c in CATS if c != "market" or market_on(uid)],
+            "market_on": market_on(uid),
             "own": [e for e in data["events"]], "own_max": MAX_EVENTS,
             "feed": {"path": f"/money/calendar/feed/{feed['token']}.ics", "amounts": feed["amounts"], "created_at": feed.get("created_at")} if feed else None,
             "reminders": data["reminders"], "reminders_allowed": _reminders_allowed(profile),

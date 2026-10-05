@@ -13,7 +13,7 @@ const PART: Record<string, string> = { asm_lt: "asm", asm_st: "asm", gsm: "gsm",
 
 let cached: { at: number; p: Promise<SurvView | null> } | null = null;
 
-function loadSurveillance(): Promise<SurvView | null> {
+export function loadSurveillance(): Promise<SurvView | null> {
   if (!cached || Date.now() - cached.at > 10 * 60_000) {
     const p = api<SurvView>("/research/surveillance").catch(() => { cached = null; return null; });
     cached = { at: Date.now(), p };

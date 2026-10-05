@@ -13,9 +13,11 @@ DEFAULTS = {
 }
 # values that live on the candle or the trading day rather than being an indicator with a length
 DAY = {"prev_close", "day_open", "day_high", "day_low", "day_chg"}
+# the market's own series rather than the instrument's: India VIX's daily close and its change %
+MARKET = {"india_vix", "india_vix_chg"}
 # drawn under the price chart rather than on it
 OSCILLATORS = {"rsi", "macd", "macd_signal", "macd_hist", "adx", "stoch_k", "atr_pct", "volume", "vol_sma",
-               "body", "upper_wick", "lower_wick", "range", "atr", "day_chg", "stage"}
+               "body", "upper_wick", "lower_wick", "range", "atr", "day_chg", "stage", "oi_change_pct", "rollover_pct", "basis_pct"} | MARKET
 
 
 def params(ref) -> tuple[int, float]:
@@ -154,6 +156,29 @@ def day_values(df: pd.DataFrame, t: str, intraday: bool) -> pd.Series:
     return day[t].astype(float)
 
 
+def market_values(df: pd.DataFrame, t: str, intraday: bool, closes: dict | None = None) -> pd.Series:
+    """India VIX's daily close ("india_vix") or its change % from the close before ("india_vix_chg"), for each candle.
+    A daily candle gets that day's value (else the last one before it, over a holiday the two calendars don't share).
+    An intraday candle gets the previous trading day's, so a backtest never sees a close that hadn't happened yet, and
+    live rules see what the backtest saw. Blank with no stored history."""
+    if closes is None:
+        try:
+            from .. import vix
+            closes = vix.closes()
+        except Exception:
+            closes = {}
+    if not closes or not len(df):
+        return pd.Series(np.nan, index=df.index)
+    days = sorted(closes)
+    vals = np.array([closes[d] for d in days], dtype=float)
+    if t == "india_vix_chg":
+        prev = np.concatenate(([np.nan], vals[:-1]))
+        vals = (vals / prev - 1) * 100
+    bar_days = df.t.dt.strftime("%Y-%m-%d").to_numpy()
+    idx = np.searchsorted(np.array(days), bar_days, side="left" if intraday else "right") - 1
+    return pd.Series(np.where(idx >= 0, vals[np.clip(idx, 0, None)], np.nan), index=df.index)
+
+
 def higher_tf(df: pd.DataFrame, tf: str) -> tuple[pd.DataFrame, np.ndarray]:
     """Candles of a higher timeframe built from these ones, and for each original candle the index of the
     last higher-timeframe candle that had closed by then (-1 if none), so nothing peeks at the future."""
@@ -245,6 +270,10 @@ def compute(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
         return _wilder(true_range(df), p)
     if t in DAY:
         return day_values(df, t, intraday)
+    if t in MARKET:
+        return market_values(df, t, intraday)
+    if t in FO_REFS:
+        return fo_value(t, df)
     if t in ("volume", "vol_sma"):
         vol = df.v.where(df.v > 0)        # indices have no volume: leave it blank rather than zero
         return vol if t == "volume" else vol.rolling(p).mean()
@@ -253,7 +282,8 @@ def compute(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
 
 NAMES = {"open": "Open", "high": "High", "low": "Low", "body": "Candle body", "upper_wick": "Upper wick",
          "lower_wick": "Lower wick", "range": "Candle range", "prev_close": "Previous close", "day_open": "Day open",
-         "day_high": "Day high", "day_low": "Day low", "day_chg": "Day change %"}
+         "day_high": "Day high", "day_low": "Day low", "day_chg": "Day change %", "india_vix": "India VIX",
+         "india_vix_chg": "India VIX change %"}
 TF_WORD = {"15m": "15-min", "1h": "1-hour", "1d": "daily"}
 
 
@@ -272,6 +302,8 @@ def _base_name(ref) -> str:
     t = ref.t
     if t in NAMES:
         return NAMES[t]
+    if t in FO_REFS:
+        return FO_REFS[t]
     if t == "price":
         return "Price"
     if t == "num":
@@ -290,3 +322,46 @@ def _base_name(ref) -> str:
         return "Stage" if (p, int(m or 20)) == (150, 20) else f"Stage ({p}-candle average)"
     return {"adx": f"ADX {p}", "stoch_k": f"Stochastic {p}", "atr_pct": f"ATR% {p}", "dc_upper": f"Donchian high {p}",
             "dc_lower": f"Donchian low {p}", "volume": "Volume", "vol_sma": f"Volume SMA {p}", "atr": f"ATR {p}"}[t]
+
+
+# ---------- F&O stock facts (stock_futures.py stores them by day; a backtest on an Indian F&O stock's daily candles
+# gets them as the columns fo_oi, fo_near, fo_fut and fo_spot) ----------
+FO_REFS = {"oi_change_pct": "OI change %", "rollover_pct": "Rollover %", "basis_pct": "Futures basis %"}
+
+
+def _ratio_pct(a, b, minus: float = 1.0, sign: float = 1.0):
+    """sign * (a / b - minus) * 100, for numbers (None when b is missing or zero) and for series (NaN there)."""
+    if isinstance(a, pd.Series) or isinstance(b, pd.Series):
+        b = b.where(b > 0) if isinstance(b, pd.Series) else (b if b else np.nan)
+        return sign * (a / b - minus) * 100
+    if a is None or not b:
+        return None
+    return sign * (a / b - minus) * 100
+
+
+def oi_change_pct(oi, before):
+    """Open interest's change, as a percent of what was open before."""
+    return _ratio_pct(oi, before)
+
+
+def rollover_pct(near, total):
+    """The share of futures open interest outside the near expiry (in the next and far ones), in percent."""
+    if isinstance(near, pd.Series) or isinstance(total, pd.Series):
+        return _ratio_pct(near, total, minus=1.0, sign=-1.0)
+    return None if near is None or not total else (1 - near / total) * 100
+
+
+def basis_pct(fut, spot):
+    """The futures price's premium (or discount) over the share price, as a percent of the share price."""
+    return _ratio_pct(fut, spot)
+
+
+def fo_value(t: str, df: pd.DataFrame) -> pd.Series:
+    """A rule's F&O stock value on each candle; NaN where the day's F&O facts aren't stored (or not an F&O stock)."""
+    blank = pd.Series(np.nan, index=df.index)
+    col = lambda c: df[c].astype(float) if c in df else blank        # noqa: E731
+    if t == "oi_change_pct":
+        return oi_change_pct(col("fo_oi"), col("fo_oi").shift(1))
+    if t == "rollover_pct":
+        return rollover_pct(col("fo_near"), col("fo_oi"))
+    return basis_pct(col("fo_fut"), col("fo_spot"))

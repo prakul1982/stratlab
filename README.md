@@ -86,7 +86,7 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 - Company pages for every Indian (NSE, and BSE-only) and US company, with a price chart (candles, Heikin-Ashi, bars, line; 5 minutes to daily; indicators; drawings kept on your account; compare on a % scale), plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
 - Deep dive: ten years of numbers, the business and its plans read from the company's own presentations, calls or 10-K, industry measures, valuation on the yardstick its industry uses, a management report card, an investor checklist, and the whole thing as PowerPoint or PDF slides.
 - Results calendar, corporate actions (dividends, bonuses, splits, buybacks, rights, demergers), deals and insider trades (including bulk and block deals), exchange surveillance lists (ASM, GSM, ESM, trade-to-trade, price bands, F&O ban), and filings with red flags.
-- ETF vs NAV (`/invest/etf-gaps`): each Indian ETF's price against its indicative and last NAV, widest gap first, with 30 days of history and a gap alert (Basic).
+- ETF vs NAV (`/invest/etf-gaps`): each Indian ETF's price against its last published NAV, widest gap first, with 30 days of history and a gap alert (Basic).
 - Screens on plain facts, the Stage 2 + Supertrend scan, sector rotation, market breadth (advances and declines, stocks above their 20/50/200-day averages, new highs and lows, by group and sector), a watchlist and Watchlist at a glance, themes, market pulse, compare, News, and Markets now.
 
 <picture>
@@ -101,7 +101,7 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/etf-gaps-dark.png">
-  <img alt="ETF vs NAV: each ETF's price against its indicative NAV and last NAV, widest gap first" src="docs/screenshots/etf-gaps-light.png">
+  <img alt="ETF vs NAV: each ETF's price against its last published NAV, widest gap first" src="docs/screenshots/etf-gaps-light.png">
 </picture>
 
 <picture>

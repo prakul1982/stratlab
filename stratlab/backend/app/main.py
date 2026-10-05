@@ -22,6 +22,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from kiteconnect import exceptions as kite_exc
 from pydantic import ValidationError
@@ -31,6 +32,10 @@ from razorpay.errors import SignatureVerificationError
 from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
 from . import money_mf
 from . import money_mf_ter
+from . import money_mf_behaviour
+from . import sip_test
+from . import fixed_income
+from . import loan_check
 from . import money_advance_tax, money_routes
 from . import journal_routes
 from . import chart_routes
@@ -65,7 +70,7 @@ from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators
-from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer
+from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import OptionsData, freeze as freeze_limit
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
@@ -77,8 +82,15 @@ from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
 from . import etf_nav
+from . import vix
+from . import biz_updates, shareholders
 from . import positioning
 from . import fo_changes_routes
+from . import closing_auction
+from . import replay_routes, signals_routes
+from . import market_events_routes
+from . import mcp_server
+from . import mtf, slb, stock_desks, stock_futures     # the per-stock market desks: futures, lending, margin funding
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
@@ -162,10 +174,14 @@ def _alert_limit(profile: dict) -> int:
     return stock_alert_limit(access_plan(profile))
 
 
+ALERT_FEATURE = {"etfgap": "etf_gaps", "bizupdate": "biz_updates", "mwpl": "stock_futures", "mtf": "mtf"}     # kinds of alert on a paid plan
+
+
 def _alert_kind_ok(profile: dict, kind: str) -> bool:
-    """Alerts on an ETF's price against its NAV are Basic and up; after a downgrade they wait."""
+    """Alerts on an ETF's price against its NAV, on business updates, on MWPL use and on margin funding are Basic and up;
+    after a downgrade they wait."""
     from .plans import access_plan
-    return kind != "etfgap" or allows(access_plan(profile), "etf_gaps")
+    return kind not in ALERT_FEATURE or allows(access_plan(profile), ALERT_FEATURE[kind])
 
 
 stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit,
@@ -201,7 +217,19 @@ positioning_runner = positioning.Runner(lambda: filings_feed)
 positioning_job = positioning.Job(positioning_runner)
 etf_nav.setup(lambda: filings_feed)              # ETF prices against their NAV: the exchange's ETF list
 etf_job = etf_nav.Job(lambda: filings_feed)
+closing_auction.setup(lambda: filings_feed)      # the closing auction desk: the exchange's CAS data
+closing_auction_job = closing_auction.Job(lambda: filings_feed)
+vix.setup(lambda: filings_feed)                  # India VIX: the exchange's index list, its chart and history
+vix.use_options(lambda: options_data)
+vix_job = vix.Job(lambda: filings_feed)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
+# monthly and quarterly business updates read into numbers, and named holders above 1% (the exchange's filings)
+biz_updates.setup(lambda: filings_feed, lambda: deep_docs, lambda: (_gemini, _anthropic))
+biz_job = biz_updates.Job(lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit, kind_ok=_alert_kind_ok),
+                          biz_updates.alert_symbols)
+shareholders.setup(lambda: filings_feed)
+holders_job = shareholders.Job(lambda: filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
+                               can_alert=lambda p: allows(access_plan(p), "holders") and bool(alerts.jobs_for(p, "", "")))
 
 
 @asynccontextmanager
@@ -238,7 +266,9 @@ async def lifespan(app: FastAPI):
     invite_job.start()
     rules_watch_job.start()
     positioning_job.start()
+    stock_desks.job.start()                     # stock futures, lending fees and margin funding: the evening files
     fo_changes_routes.job.start()               # F&O contract changes, twice a trading day
+    market_events_routes.job.start()            # market events calendar, twice a day, and its reminders
     networth_job.start()
     threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
@@ -247,6 +277,10 @@ async def lifespan(app: FastAPI):
     screen_job.start()
     breadth_job.start()
     etf_job.start()
+    closing_auction_job.start()       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
+    vix_job.start()
+    biz_job.start()
+    holders_job.start()
     ai_providers.job.start()          # measures the AI models every 6 hours
     yield
 
@@ -264,15 +298,32 @@ app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
 app.include_router(money_mf_ter.admin_router)  # /admin/ter
+app.include_router(money_mf_behaviour.router)  # /money/mutual-funds/behaviour
+app.include_router(sip_test.router)            # /invest/sip-test
+app.include_router(fixed_income.router)        # /money/rates
+app.include_router(loan_check.router)          # /money/loans/check
 app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
 app.include_router(fo_changes_routes.router)  # /trade/fo-changes
+app.include_router(replay_routes.router)      # /trade/replay: chart replay practice
+app.include_router(signals_routes.router)     # /trade/signals: forward-testing outside signals
+app.include_router(signals_routes.hook_router)  # /hooks/signal/<token>: the signal webhook (no sign-in)
+app.include_router(market_events_routes.router)  # /trade/events
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
+app.include_router(closing_auction.router)     # /trade/closing-auction
+app.include_router(vix.router)                 # /trade/vix
+app.include_router(biz_updates.router)         # /research/business-updates, /invest/business-updates
+app.include_router(shareholders.router)        # /research/holders, /invest/holders
+app.include_router(stock_futures.router)       # /trade/stock-futures
+app.include_router(slb.router)                 # /invest/stock-lending
+app.include_router(mtf.router)                 # /invest/margin-funding
+app.include_router(stock_desks.admin_router)   # /admin/stock-desks
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
+app.include_router(mcp_server.router)          # /mcp and /me/assistant: StratLab in your AI assistant
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -350,10 +401,12 @@ def _load_errors():
         print("could not load errors:", x)
 
 
+app.add_middleware(db.SettingsMemo)   # innermost: each request reads a setting from the database once
 app.add_middleware(HeavyGate)   # inside the guard: heavy work takes turns, ordinary pages don't wait behind it
 app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
-                   allow_methods=["*"], allow_headers=["*"])
+                   allow_methods=["*"], allow_headers=["*"], max_age=7200)   # a browser asks before each call only every 2 h, not 10 min
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
 # ---------- helpers ----------
@@ -545,6 +598,7 @@ def me(profile=Depends(current_profile)):
         print("lifecycle visit failed:", str(e)[:160])
     plan = profile["_plan"]
     info = plan_info(plan)
+    used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck"))
     return ok({
         "id": profile["id"], "email": profile.get("email"),
         "plan": plan, "plan_info": info, "paid_plan": profile.get("_paid_plan", plan),
@@ -553,10 +607,10 @@ def me(profile=Depends(current_profile)):
         "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                     "renews_or_ends": profile.get("current_period_end"),
                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
-        "usage": {"backtests_used": backtests_used(profile), "backtests_limit": info["backtests_per_month"],
-                  "ai_used": db.count_usage(profile["id"], "ai", month_start_iso()), "ai_limit": info["ai_builds_per_month"],
-                  "deepdive_used": deep_used(profile, "deepdive"), "deepdive_limit": info["deepdives_per_month"],
-                  "deck_used": deep_used(profile, "deck"), "deck_limit": info["decks_per_month"]},
+        "usage": {"backtests_used": used["backtest"], "backtests_limit": info["backtests_per_month"],
+                  "ai_used": used["ai"], "ai_limit": info["ai_builds_per_month"],
+                  "deepdive_used": used["deepdive"], "deepdive_limit": info["deepdives_per_month"],
+                  "deck_used": used["deck"], "deck_limit": info["decks_per_month"]},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
@@ -567,6 +621,17 @@ def me(profile=Depends(current_profile)):
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "is_admin": admin.is_admin(profile),
     })
+
+
+_usage_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="usage-counts")
+
+
+def month_usage(uid: str, kinds: tuple[str, ...]) -> dict[str, int]:
+    """This month's count of each kind of use, the counts asked for at the same time: every page opens with /me, and
+    one database round trip after another made it the slowest call of the first load."""
+    since = month_start_iso()
+    jobs = {k: _usage_pool.submit(db.count_usage, uid, k, since) for k in kinds}
+    return {k: f.result() for k, f in jobs.items()}
 
 
 def data_note() -> dict | None:
@@ -1305,6 +1370,14 @@ def alert_note(a: dict, q: dict | None) -> str | None:
         now = [f["label"] for f in surveillance.flags_for(a["symbol"])]
         return (f"{a['symbol']} is on {', '.join(now)} now. " if now else f"{a['symbol']} isn't on an exchange surveillance list now. ") + \
             "The alert fires when it enters, leaves or changes stage on one."
+    if a["kind"] == "mwpl":
+        r = stock_futures.row_for(a["symbol"])
+        return ((f"{a['symbol']}'s MWPL use was {r['m']:.1f}% on {r['as_of']}. " if r and r.get("m") is not None else "")
+                + "The alert fires when it crosses 80%, either way, in the evening's file.")
+    if a["kind"] == "mtf":
+        r = mtf.for_symbol(a["symbol"])
+        return ((f"{a['symbol']}'s margin-funded shares were {r['pct_shares']:.2f}% of shares issued on {r['as_of']}. "
+                 if r.get("pct_shares") is not None else "") + "The alert fires when the daily disclosure crosses your level.")
     if a["kind"] != "price" or not isinstance(p, (int, float)) or (a.get("state") or {}).get("side") != a["op"]:
         return None
     m = stock_alerts.money
@@ -1318,10 +1391,18 @@ def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
         body = stock_alerts.clean(req.model_dump())
     except stock_alerts.AlertError as e:
         err(400, "bad_alert", str(e))
+    if body["kind"] == "mwpl":                      # MWPL use crossing 80%: Basic and up, on a stock with futures
+        need(profile, "stock_futures", "MWPL alerts")
+        if stock_futures.DESK.store.days() and stock_futures.row_for(body["symbol"]) is None:
+            err(400, "no_futures", f"{body['symbol']} has no stock futures in the newest F&O file.")
+    if body["kind"] == "mtf":                       # margin-funded shares crossing a level: Basic and up
+        need(profile, "mtf", "Margin funding alerts")
     if body["kind"] == "etfgap":                    # an ETF's price against its NAV: Basic and up, on a listed ETF
         need(profile, "etf_gaps", "ETF gap alerts")
         if not etf_nav.known(body["symbol"]):
             err(400, "not_etf", f"{body['symbol']} isn't on the exchange's ETF list.")
+    if body["kind"] == "bizupdate":                 # a new monthly or quarterly business update: Basic and up
+        need(profile, "biz_updates", "Business update alerts")
     q = alert_seed(body["region"], body["symbol"])
     try:
         a = (stock_alerts.update(profile["id"], aid, body, limit, q) if aid else stock_alerts.create(profile["id"], body, limit, q))
@@ -1536,14 +1617,28 @@ def deep_region(region: str) -> str:
     return r
 
 
+def us_price_ratios(p: dict, sym: str) -> dict:
+    """Today's quote for a US ticker (share classes and preferred series written the quote screens' way, BRK-B,
+    BAC-PL) and the company's ratios from it, set on `p`; the quote is returned ({} without one). A preferred share,
+    warrant or unit trades at its own price, not a slice of the company's value, so its price makes no market value,
+    P/E or yield; the company's own figures stand."""
+    try:
+        m = research_hub.yahoo.meta(sec.price_symbol(sym))
+    except Exception:                     # no price: the numbers still stand, the ratios that need a price don't
+        m = {}
+    if sec.non_common(sym):
+        p["ratios"] = sec.ratios(p, None)
+        p["share_note"] = (f"{sym.upper()} is a preferred share, warrant or unit of the company, not its common stock: "
+                           "the figures are the company's, and its price isn't used for market value or P/E.")
+    else:
+        p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+    return m
+
+
 def deep_base_us(sym: str, years: int = 2) -> dict:
     """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
     p = sec.with_fx(dict(research_routes.source_call(lambda: sec_feed.company(sym))), usd_per)
-    try:
-        m = research_hub.yahoo.meta(sym)
-    except Exception:                     # no price: the numbers still stand, the ratios that need a price don't
-        m = {}
-    p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+    m = us_price_ratios(p, sym)
     try:
         wiki = research_hub.wiki.company(p.get("name") or sym) or {}
         p["about"] = wiki.get("extract") or ""
@@ -1616,8 +1711,8 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
     """(Stage and Supertrend on daily candles, or None; and when None, why): "untraded" (not on the exchange's
     trading list, or no trades in the window: suspended), "new" (under 30 days of prices), "stale" (no trade for a
     month) or "error" (the price source didn't answer: try again later)."""
-    if market == "US":                    # share classes and preferred series are written with a dash for prices: BRK-B
-        sym = re.sub(r"[./]", "-", sym)
+    if market == "US":                    # share classes and preferred series are written with a dash for prices: BRK-B, BAC-PL
+        sym = sec.price_symbol(sym)
     try:
         ids, _ = universes.resolve(markets, market, [{"symbol": sym}])
     except Exception:
@@ -2069,6 +2164,7 @@ def holdings_corp_view(profile, fetch: bool = True) -> dict:
     today = datetime.now(IST).date()
     ind = holdings.indian(h["items"])           # the exchange's corporate actions are for Indian stocks
     syms = [i["symbol"] for i in ind]
+    corp_actions.prefetch("IN", syms)
     checking = _corp_histories(profile["id"], syms, today) if fetch and syms else 0
     cal = corp_actions.load("IN")["rows"]
     acts = {s: corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) for s in syms}
@@ -2243,6 +2339,7 @@ def tax_inputs(profile) -> dict:
     # price of shares held then: a tax P&L of recent years needs no company's history
     need = sorted({t["sym"] for t in trades if t.get("sym") and (t.get("src") != "pnl" or t["d"] <= tax_lots.GF_DATE)})
     if need:
+        corp_actions.prefetch("IN", need)
         _corp_histories(uid, need, today)
         cal = corp_actions.load("IN")["rows"]
         acts = {s: [a for a in corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) if corp_actions.adjusts(a)] for s in need}
@@ -2667,12 +2764,8 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     sym = co["sym"]
     try:
         if region == "US":
-            p = dict(sec_feed.company(sym))
-            try:
-                m = research_hub.yahoo.meta(sym)
-            except Exception:             # no price: the reported numbers still stand
-                m = {}
-            p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+            p = sec.with_fx(dict(sec_feed.company(sym)), usd_per)
+            us_price_ratios(p, sym)
             items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
             exchange, red = "Listed in the US", None
         else:
@@ -3084,7 +3177,7 @@ def get_live(sid: str, profile=Depends(current_profile)):
 def orders_from(events: list[dict]) -> list[dict]:
     """The session's orders, newest first, in the shape the app shows."""
     return [{"side": e["side"], "qty": e["qty"], "price": e["px"], "reason": e.get("why"), "pnl": e.get("pnl"),
-             "ts": e["t"]} for e in reversed(events[-200:])]
+             "ts": e["t"]} for e in reversed(events[-200:]) if "side" in e]     # an options skip line isn't an order
 
 
 @app.post("/live/sessions/{sid}/stop")
@@ -3225,9 +3318,17 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
         err(503, "no_spot", f"Couldn't get the {s.underlying} price just now.")
     atm = c.atm(spot)
     legs = []
+    # a strike rule (delta, premium, a share of the straddle) picks on the quotes of the strikes near the money now
+    rq = options_data.quotes(opt_strikes.keys_for(c, atm, s.legs)) if opt_strikes.uses_rules(s.legs) else {}
+    rm = opt_strikes.model_for(c, atm, spot, rq, positioning.ist_now()) if opt_strikes.needs_model(s.legs) else None
     for lg in s.legs:
-        k = c.strike_for(atm, lg.opt, lg.offset, s.offsetUnit)
-        legs.append({"side": lg.side, "opt": lg.opt, "lots": lg.lots, "strike": k, "key": c.key(lg.opt, k) if k is not None else None})
+        why = None
+        if lg.pick == "offset":
+            k = c.strike_for(atm, lg.opt, lg.offset, s.offsetUnit)
+        else:
+            k, why = opt_strikes.pick(c, atm, lg, rq, rm)
+        legs.append({"side": lg.side, "opt": lg.opt, "lots": lg.lots, "strike": k, "key": c.key(lg.opt, k) if k is not None else None,
+                     "rule": opt_strikes.describe(lg, s.offsetUnit), "pick": why})
     q = options_data.quotes([l["key"] for l in legs if l["key"]])
     for l in legs:
         l["quote"] = q.get(l["key"]) if l["key"] else None
@@ -3363,6 +3464,10 @@ def start_options(req: OptionStartReq, profile=Depends(current_profile)):
     s = req.strategy
     if s.signal:
         need(profile, "options_signal", "Options entered on a notebook's signal")
+    if opt_strikes.uses_rules(s.legs):
+        need(profile, "strike_rules", "Picking strikes by delta or premium")
+    if s.vix:
+        need(profile, "vix_filter", "The India VIX entry filter")
     options_ready()
     if not options_data.contracts(s.exchange, s.underlying, s.expiry):
         err(404, "no_contracts", f"No {s.underlying} options are listed on {s.exchange} for that expiry.")

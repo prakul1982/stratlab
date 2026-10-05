@@ -9,7 +9,9 @@ The model is Black's 1976 formula on the forward, the same maths positioning.py 
 - RATE is the yearly rate the premiums are discounted at. On the forward it only discounts, so for a weekly option it
   moves a premium by about 0.1%. The positioning page's ATM IV keeps a rate of zero, so its history stays comparable;
   at the money the two differ by a few hundredths of a vol point.
-- Time runs to 15:30 India time on the expiry day, in years of 365 calendar days. Theta is per calendar day.
+- Time runs to the moment the expiry's settlement price is fixed (data/sessions.py: 15:30 India time, when the
+  closing auction's order entry ends since 3 Aug 2026, and the end of the last-30-minute VWAP before; contracts keep
+  trading to 15:40 but their value is settled by then), in years of 365 calendar days. Theta is per calendar day.
 - Delta and gamma are per point of the forward (which moves point for point with the underlying, give or take the
   carry), vega per 1 vol point, theta per calendar day with the forward held still.
 
@@ -21,8 +23,10 @@ What-if (the frontend's src/lib/greeks.ts is a port of this part, tested against
 
 Model outputs only: they describe today's prices under stated inputs. Real prices can differ."""
 import math
-from datetime import date, datetime, time as dtime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
+
+from ..data import sessions
 
 IST = ZoneInfo("Asia/Kolkata")
 RATE = 0.055                 # near the 91-day T-bill cut-off yield (RBI auction 30 Sep 2026: 5.52%; repo 5.25%), checked 5 Oct 2026
@@ -90,8 +94,9 @@ def greeks(f: float, k: float, t: float, sigma: float, kind: str, r: float = RAT
 
 
 def years_to(expiry: str, at: datetime) -> float:
-    """Time from `at` to 15:30 India time on the expiry day, in years of 365 days."""
-    end = datetime.combine(date.fromisoformat(expiry), dtime(15, 30), IST)
+    """Time from `at` to when the expiry's settlement price is fixed (15:30 India time), in years of 365 days."""
+    day = date.fromisoformat(expiry)
+    end = datetime.combine(day, sessions.settle_at(day), IST)
     if at.tzinfo is None:
         at = at.replace(tzinfo=IST)
     return (end - at).total_seconds() / (365 * 86400)

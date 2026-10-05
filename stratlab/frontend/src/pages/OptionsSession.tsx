@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { money, price, signClass, when } from "../lib/format";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
-import { atExpiry, legName, priceGrid, type HeldLeg } from "../lib/options";
+import { atExpiry, legName, legRule, priceGrid, type HeldLeg } from "../lib/options";
 import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info, Loading } from "../components/ui";
@@ -39,7 +39,10 @@ export function OptionsSession() {
   const running = snap.status === "running";
   const a = snap.account, p = snap.position, s = snap.strategy;
   const { today, earlier } = splitToday(snap.trades, (x) => x.closed, TZ);
-  const openOrders = p ? ordersSince(snap.events, p.opened) : [];
+  // the order log also keeps a line when the India VIX filter held an entry back; those aren't orders
+  const orders = snap.events.filter((e) => e.kind !== "skip");
+  const skips = snap.events.filter((e) => e.kind === "skip").slice(-5).reverse();
+  const openOrders = p ? ordersSince(orders, p.opened) : [];
   const feed = !running ? "" : !snap.feed_connected ? "Reconnecting to prices" : snap.fresh ? "Live option prices" : "Waiting for the market to open";
 
   const stop = async () => {
@@ -93,7 +96,8 @@ export function OptionsSession() {
       <section className="card rules-strip" aria-label="Rules">
         <span className="eyebrow">Rules</span>
         <ul>
-          <li>{s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.offset === 0 ? "ATM" : `${l.offset}${s.offsetUnit === "points" ? " pts" : ""} ${l.offset > 0 ? "OTM" : "ITM"}`} ${l.opt}${l.lots > 1 ? ` × ${l.lots}` : ""}`).join(", ")}</li>
+          <li>{s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${legRule(l, s.offsetUnit)} ${l.opt}${l.lots > 1 ? ` × ${l.lots}` : ""}`).join(", ")}</li>
+          {s.vix && <li data-testid="rule-vix">Enter only while India VIX is {s.vix.min && s.vix.max ? `between ${s.vix.min} and ${s.vix.max}` : s.vix.max ? `at or below ${s.vix.max}` : `at or above ${s.vix.min}`}</li>}
           <li>Enter {s.timing.entry}–{s.timing.lastEntry}, up to {s.timing.maxEntries} a day{s.timing.cooldown ? `, ${s.timing.cooldown} min apart` : ""}</li>
           <li>Square off {s.timing.squareoff}</li>
           {s.risk.stopType !== "none" && <li>Stop at {s.risk.stopType === "amount" ? inr(s.risk.stop) : `${s.risk.stop}% of premium`}</li>}
@@ -133,8 +137,15 @@ export function OptionsSession() {
         {today.length > 0 && (
           <div className="stack" style={{ gap: 6 }}>
             {p && <span className="eyebrow" style={{ marginTop: 6 }}>Closed today</span>}
-            <TradeList rows={today} events={snap.events} shown={shown} toggle={toggle} />
+            <TradeList rows={today} events={orders} shown={shown} toggle={toggle} />
           </div>
+        )}
+        {skips.length > 0 && (
+          <Earlier label="Entries the India VIX filter held back" count={skips.length} className="in-card">
+            <ul className="small muted" data-testid="vix-skips" style={{ margin: 0, paddingLeft: 18 }}>
+              {skips.map((e) => <li key={e.t}>{t(e.t)}: {e.why}</li>)}
+            </ul>
+          </Earlier>
         )}
       </section>
 
@@ -143,7 +154,7 @@ export function OptionsSession() {
       {earlier.length > 0 && (
         <section className="card" aria-label="Earlier trades">
           <Earlier label="Earlier trades" count={earlier.length} note={<Totals rows={earlier} />}>
-            <TradeList rows={earlier} events={snap.events} shown={shown} toggle={toggle} />
+            <TradeList rows={earlier} events={orders} shown={shown} toggle={toggle} />
           </Earlier>
         </section>
       )}
