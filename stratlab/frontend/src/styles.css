@@ -1324,6 +1324,7 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 .etf-gap-table td:last-child .tiny { white-space: nowrap; }
 .etf-gap-table .etf-gap-name { max-width: 220px; }
 .etf-gaps tr.on td { background: var(--blue-soft); }
+.mf-schemes th:not(:first-child), .mf-schemes td:not(:first-child) { padding-left: 10px; }   /* eight columns fit a laptop */
 @media (max-width: 640px) { .etf-gap-figs { grid-template-columns: 1fr 1fr; } .etf-gap-big { font-size: 21px; } .etf-gap-search { max-width: none; } }
 
 /* F&O contract changes (Trade): a dated list, each change tagged by kind */

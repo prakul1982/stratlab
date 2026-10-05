@@ -103,7 +103,7 @@ export function MutualFundsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money · Mutual funds</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your mutual funds, in one place</h1>
-        <p className="page-sub">Upload your Consolidated Account Statement to see every scheme's value at the latest NAV, what you put in, the gain, XIRR, your mix by category, and capital gains for each financial year. Facts and arithmetic only, never advice. Only you can see your funds, and you can delete them at any time.</p>
+        <p className="page-sub">Upload your Consolidated Account Statement to see every scheme's value at the latest NAV, what you put in, the gain, XIRR, your mix by category, and capital gains for each financial year. Only you can see your funds, and you can delete them at any time.</p>
       </div>
       <div className="banner" role="note"><span>{view?.disclaimer ?? "Facts and arithmetic from your own statement, valued at the latest published NAV. Not investment or tax advice."}</span></div>
 
@@ -188,7 +188,7 @@ export function MutualFundsPage() {
           <section className="card stack" style={{ gap: 12 }}>
             <h2 className="h2">Schemes</h2>
             <div className="table-wrap">
-              <table aria-label="Schemes">
+              <table className="mf-schemes" aria-label="Schemes">
                 <thead><tr><th style={{ textAlign: "left" }}>Scheme</th><th>Units</th><th>NAV</th><th>Invested</th><th>Value</th><th>Gain</th><th>XIRR</th><th style={{ textAlign: "left" }}>Taxed as</th></tr></thead>
                 <tbody>{schemes.map((s) => (
                   <tr key={s.key}>
@@ -202,10 +202,10 @@ export function MutualFundsPage() {
                     <td className="num">{price(s.nav, "INR")}<div className="tiny muted">{s.nav_date ? dateOnly(s.nav_date) : "–"}{s.nav_source === "statement" ? " · statement" : ""}</div></td>
                     <td className="num">{inr(s.invested)}</td>
                     <td className="num">{inr(s.value)}</td>
-                    <td className={`num ${signClass(s.gain)}`}>{s.gain == null ? "–" : <>{inr(s.gain)} <span className="tiny">{pct(s.gain_pct)}</span></>}</td>
+                    <td className={`num ${signClass(s.gain)}`}>{s.gain == null ? "–" : <>{inr(s.gain)}<div className="tiny">{pct(s.gain_pct)}</div></>}</td>
                     <td className={`num ${signClass(s.xirr)}`}>{xirrText(s.xirr)}</td>
                     <td style={{ textAlign: "left" }}>
-                      <select className="input" value={s.kind} aria-label={`How ${s.name} is taxed`} onChange={(e) => setKind(s.key, e.target.value === s.kind_auto ? null : e.target.value as Kind)}>
+                      <select className="input" style={{ width: 170 }} value={s.kind} aria-label={`How ${s.name} is taxed`} onChange={(e) => setKind(s.key, e.target.value === s.kind_auto ? null : e.target.value as Kind)}>
                         {(Object.keys(KIND_SHORT) as Kind[]).map((k) => <option key={k} value={k}>{KIND_SHORT[k]}</option>)}
                       </select>
                       <div className="tiny muted">{s.kind_set ? "Set by you" : "From the category"}</div>
@@ -253,7 +253,7 @@ export function MutualFundsPage() {
                         <thead><tr><th style={{ textAlign: "left" }}>Kind</th><th>Rate</th><th>Gains</th><th>After set-off</th><th>Exempt</th><th>Taxable</th><th>Tax</th></tr></thead>
                         <tbody>{y.buckets.map((b) => (
                           <tr key={b.key}><td style={{ textAlign: "left" }}>{b.label}</td><td className="num">{rate(b.rate, b.slab)}</td><td className="num">{inr(b.gains)}</td><td className="num">{inr(b.after_setoff)}</td>
-                            <td className="num">{inr(b.exempt)}</td><td className="num">{inr(b.taxable)}</td><td className="num">{b.slab ? "At your slab rate" : inr(b.tax)}</td></tr>
+                            <td className="num">{inr(b.exempt)}</td><td className="num">{inr(b.taxable)}</td><td className="num">{b.slab ? <span className="small muted" style={{ fontFamily: "var(--sans)" }}>At your slab rate</span> : inr(b.tax)}</td></tr>
                         ))}</tbody>
                       </table>
                     </div>
