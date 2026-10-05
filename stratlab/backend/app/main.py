@@ -1536,14 +1536,28 @@ def deep_region(region: str) -> str:
     return r
 
 
+def us_price_ratios(p: dict, sym: str) -> dict:
+    """Today's quote for a US ticker (share classes and preferred series written the quote screens' way, BRK-B,
+    BAC-PL) and the company's ratios from it, set on `p`; the quote is returned ({} without one). A preferred share,
+    warrant or unit trades at its own price, not a slice of the company's value, so its price makes no market value,
+    P/E or yield; the company's own figures stand."""
+    try:
+        m = research_hub.yahoo.meta(sec.price_symbol(sym))
+    except Exception:                     # no price: the numbers still stand, the ratios that need a price don't
+        m = {}
+    if sec.non_common(sym):
+        p["ratios"] = sec.ratios(p, None)
+        p["share_note"] = (f"{sym.upper()} is a preferred share, warrant or unit of the company, not its common stock: "
+                           "the figures are the company's, and its price isn't used for market value or P/E.")
+    else:
+        p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+    return m
+
+
 def deep_base_us(sym: str, years: int = 2) -> dict:
     """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
     p = sec.with_fx(dict(research_routes.source_call(lambda: sec_feed.company(sym))), usd_per)
-    try:
-        m = research_hub.yahoo.meta(sym)
-    except Exception:                     # no price: the numbers still stand, the ratios that need a price don't
-        m = {}
-    p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+    m = us_price_ratios(p, sym)
     try:
         wiki = research_hub.wiki.company(p.get("name") or sym) or {}
         p["about"] = wiki.get("extract") or ""
@@ -1616,8 +1630,8 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
     """(Stage and Supertrend on daily candles, or None; and when None, why): "untraded" (not on the exchange's
     trading list, or no trades in the window: suspended), "new" (under 30 days of prices), "stale" (no trade for a
     month) or "error" (the price source didn't answer: try again later)."""
-    if market == "US":                    # share classes and preferred series are written with a dash for prices: BRK-B
-        sym = re.sub(r"[./]", "-", sym)
+    if market == "US":                    # share classes and preferred series are written with a dash for prices: BRK-B, BAC-PL
+        sym = sec.price_symbol(sym)
     try:
         ids, _ = universes.resolve(markets, market, [{"symbol": sym}])
     except Exception:
@@ -2667,12 +2681,8 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     sym = co["sym"]
     try:
         if region == "US":
-            p = dict(sec_feed.company(sym))
-            try:
-                m = research_hub.yahoo.meta(sym)
-            except Exception:             # no price: the reported numbers still stand
-                m = {}
-            p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
+            p = sec.with_fx(dict(sec_feed.company(sym)), usd_per)
+            us_price_ratios(p, sym)
             items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
             exchange, red = "Listed in the US", None
         else:
