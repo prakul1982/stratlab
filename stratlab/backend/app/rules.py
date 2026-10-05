@@ -14,10 +14,10 @@ from datetime import date
 
 # the day each area was last checked against its official sources
 REVIEWED = {
-    "trading_costs": "2026-10-04",
-    "tax": "2026-10-04",
-    "interest_rates": "2026-10-04",
-    "market_rules": "2026-10-04",
+    "trading_costs": "2026-10-05",
+    "tax": "2026-10-05",
+    "interest_rates": "2026-10-05",
+    "market_rules": "2026-10-05",
     "surveillance": "2026-10-04",
 }
 AREAS = {
@@ -59,7 +59,7 @@ def registry() -> list[dict]:
     from .data.markets import BY_ID
     from .engine import costs as C
     from .intel import filings as F
-    from .options import data as O
+    from .options import data as O, greeks as G
 
     nse_tx = "https://nsearchives.nseindia.com/content/circulars/FA73061.pdf (NSE, 27 Feb 2026)"
     budget26 = "https://www.indiabudget.gov.in/doc/memo.pdf (Finance Act 2026)"
@@ -173,11 +173,15 @@ def registry() -> list[dict]:
         "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2234502 (CBT, 2 Mar 2026)", "2025-04-01")
     add("sgb_rate", "interest_rates", "Gold bond interest", f"{N.SGB_RATE}% a year on the issue price, {N.SGB_YEARS}-year term",
         "money_networth.py SGB_RATE", "https://www.rbi.org.in (SGB FAQs)")
+    add("options_rate", "interest_rates", "Rate in the options model (Greeks, what-if)",
+        f"{_pct(G.RATE)} a year, near the 91-day T-bill cut-off yield", "options/greeks.py RATE",
+        "https://www.rbi.org.in (weekly T-bill auction results: 91-day cut-off 5.52% on 30 Sep 2026; repo 5.25%)",
+        "2026-10-05")
 
     # ---- market rules
     add("freeze", "market_rules", "Index quantity freeze limits",
         ", ".join(f"{k} {v:,}" for k, v in O.FREEZE.items()) + f" (from {O.FREEZE_FROM})", "options/data.py FREEZE",
-        "https://zerodha.com/marketintel/bulletin/460064/quantity-freeze-limits-for-indices-from-october-5-2026 (NSE circular)", O.FREEZE_FROM)
+        "https://nsearchives.nseindia.com/content/circulars/FAOP76693.pdf (NSE/FAOP/76693, 1 Oct 2026)", O.FREEZE_FROM)
     add("lots", "market_rules", "F&O lot sizes and expiries", "read from the broker's instrument list every day (not hard-coded); "
         "NSE weekly expiry Tuesday, BSE Thursday since 1 Sep 2025", "options/data.py",
         "SEBI circular 26 May 2025 on expiry days")
