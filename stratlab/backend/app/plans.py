@@ -38,7 +38,8 @@ PLANS = {
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
                      "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal",
                      "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter",
-                     "chart_replay"},
+                     "chart_replay",
+                     "event_reminders"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -59,7 +60,8 @@ PLANS = {
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
                      "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
                      "vix_filter", "strike_rules",
-                     "chart_replay", "signal_webhooks"},
+                     "chart_replay", "signal_webhooks",
+                     "event_reminders"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -84,12 +86,13 @@ PLANS = {
 # history (today's auction, live, is for everyone); vix_filter: the India VIX entry filter on options sessions (the India VIX
 # panel, its history and percentile are for everyone; India VIX in notebook rules comes with the other indicators);
 # strike_rules: options legs whose strike is picked by model delta, a delta range, premium or a share of the ATM straddle
-# (the builder's preview of what a rule picks is for everyone); chart_replay: chart replay practice, logged to the trade journal; signal_webhooks: a secret webhook URL that moves paper sessions from outside alerts (TradingView, Chartink), with the signal log and the verdict's checks on the forward test
+# (the builder's preview of what a rule picks is for everyone); chart_replay: chart replay practice, logged to the trade journal; signal_webhooks: a secret webhook URL that moves paper sessions from outside alerts (TradingView, Chartink), with the signal log and the verdict's checks on the forward test; event_reminders: reminders of market events (RBI, data releases, the Fed, index changes, expiries) by phone, Telegram or email (the events calendar, its index badges and adding the events to your Money calendar are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
             "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
             "cas_history", "vix_filter", "strike_rules",
-            "chart_replay", "signal_webhooks")
+            "chart_replay", "signal_webhooks",
+            "event_reminders")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

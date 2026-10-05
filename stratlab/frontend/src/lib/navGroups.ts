@@ -62,6 +62,8 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Step through a past chart with the future hidden, place practice orders with a stop and target, and see the result after charges." },
     { to: "/trade/signals", label: "Signal forward test", icon: "pulse", title: "Send TradingView or Chartink alerts into paper trading",
       blurb: "A secret webhook URL for your alerts: each one fills on paper at StratLab's own price, with a log of every signal and the verdict's checks." },
+    { to: "/trade/events", label: "Market events", icon: "calendar", title: "RBI policy, data releases, the Fed, index changes, expiries and holidays",
+      blurb: "One dated list from the official calendars, with the published figure once it is out, and reminders." },
   ],
   Money: [
     { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",

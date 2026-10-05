@@ -98,6 +98,7 @@ const journalPage = () => import("./pages/trade/JournalPage");
 const JournalPage = page(journalPage, "JournalPage");
 const FoChangesPage = page(() => import("./pages/trade/FoChangesPage"), "FoChangesPage");
 const ClosingAuctionPage = page(() => import("./pages/trade/ClosingAuctionPage"), "ClosingAuctionPage");
+const EventsPage = page(() => import("./pages/trade/EventsPage"), "EventsPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -207,6 +208,7 @@ function Routed() {
         <Route path="/trade/replay" element={<ReplayPage />} />
         <Route path="/trade/signals" element={<SignalsPage />} />
         <Route path="/trade/signals/:sid" element={<SignalsPage />} />
+        <Route path="/trade/events" element={<EventsPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />

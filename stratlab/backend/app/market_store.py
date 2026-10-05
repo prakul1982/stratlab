@@ -18,7 +18,7 @@ from .config import settings
 MARKET_PREFIXES = (
     "audit:", "deep:", "breadth:hist:", "breadth:sectors:", "breadth:members:", "corpact:cal:", "corpact:hist:",
     "deals:", "results:cal:", "surv:", "screens:index:", "screens:known:", "fmv2018:", "fxhist:", "mfnav:", "isin:",
-    "pos:", "holidays-auto:", "mfter:", "closeauc:", "vix:",
+    "pos:", "holidays-auto:", "mfter:", "closeauc:", "vix:", "mktevents:cal:",
 )
 
 SCHEMA = """

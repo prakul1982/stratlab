@@ -72,6 +72,7 @@ CARD_WORDS = {
     "strike_rules": "strikes picked by delta or premium",
     "chart_replay": "chart replay practice",
     "signal_webhooks": "alert webhooks",
+    "event_reminders": "market event reminders",
 }
 
 
