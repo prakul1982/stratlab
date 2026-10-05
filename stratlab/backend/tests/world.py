@@ -24,7 +24,7 @@ from app.live import LiveManager
 from app.options.data import OptionsData
 from app.options.session import IST
 from datetime import date, datetime, timedelta
-from tests import fake_fo_changes, fake_kite, fake_positioning
+from tests import fake_cas, fake_fo_changes, fake_kite, fake_positioning
 from tests.fake_options_kite import FakeOptionsKite
 from tests.fake_db import FakeSupabase, headers
 from tests.fake_intel import fake_finnhub, fake_news, fake_screener, fake_wiki
@@ -195,6 +195,9 @@ def _nse(sw=None):
         surv = surveillance_answers().get(r.url.path)
         if surv is not None:
             return httpx.Response(200, text=surv) if isinstance(surv, str) else httpx.Response(200, json=surv)
+        cas = fake_cas.answer(r.url.path, r.url.params)
+        if cas is not None:            # the closing auction, just ended
+            return httpx.Response(200, json=cas)
         fo = fake_fo_changes.answer(r.url.path)
         if fo is not None:             # the F&O contract file and the circulars
             return httpx.Response(200, text=fo) if isinstance(fo, str) else httpx.Response(200, json=fo)
@@ -281,7 +284,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     from app import etf_nav
     etf_nav.forget()                            # the ETF list and gap history another test stored
     from app import fo_changes
-    fo_changes._cache.clear()                   # the F&O contract changes another test stored
+    fo_changes._cache.clear()
+    from app import closing_auction
+    closing_auction.forget()                    # the closing auction another test stored                   # the F&O contract changes another test stored
     from app import positioning
     positioning.clear_cache()                   # positioning days and live chains another test stored
     from app import auth

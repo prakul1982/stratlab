@@ -863,6 +863,18 @@ class NSEFilings:
         self.cache.set(("etf-isins",), out, 86400)
         return out
 
+    CAS_PAGE = "https://www.nseindia.com/market-data/closing-auction-session"
+
+    def cas_stocks(self):
+        """The closing auction session's per-stock data as the exchange's CAS page shows it (closing_auction.py reads
+        it): reference price, band, indicative equilibrium price and quantity, final price, imbalance, best bid and
+        ask, and the list of eligible symbols. One call for the market, behind a breaker of its own."""
+        return self._get("/api/NextApi/apiClient/casApi", {"functionName": "getCASData"}, referer=self.CAS_PAGE, circuit="cas")
+
+    def cas_indices(self):
+        """The F&O indices on the CAS page: value, previous close and the indicative close during the auction."""
+        return self._get("/api/NextApi/apiClient/casApi", {"functionName": "getAllFnoIndexData"}, referer=self.CAS_PAGE, circuit="cas")
+
 
 ETF_SECURITIES_URL = "https://nsearchives.nseindia.com/content/equities/eq_etfseclist.csv"
 

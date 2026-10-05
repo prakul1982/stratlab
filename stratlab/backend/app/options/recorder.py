@@ -5,12 +5,12 @@ money): bid, ask, last price and open interest for every call and put, plus the 
 history for expired options, so this recording is the only way to build one."""
 import threading
 import time
-from datetime import datetime, time as dtime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
+from ..data import sessions
 from ..data.calendar import is_trading_day
 
 IST = timezone(timedelta(hours=5, minutes=30))
-OPEN, CLOSE = dtime(9, 15), dtime(15, 30)
 AROUND = 15                     # strikes each side of the money
 
 
@@ -25,8 +25,10 @@ def parse_targets(text: str) -> list[tuple[str, str]]:
 
 
 def in_hours(now: datetime) -> bool:
+    """While the derivatives segment trades (data/sessions.py: 09:15-15:40 since 3 Aug 2026, 15:30 before)."""
     local = now.astimezone(IST)
-    return is_trading_day("IN", local.date()) and OPEN <= local.time() <= CLOSE
+    start, end = sessions.continuous("fo", local.date())
+    return is_trading_day("IN", local.date()) and start <= local.time() <= end
 
 
 def compact(chain: dict) -> list[list]:

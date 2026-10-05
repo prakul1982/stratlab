@@ -1422,3 +1422,13 @@ table.greeks-t tr.greeks-net td { border-top: 1px solid var(--line-2); }
 .opt-extras > * { min-width: 0; }      /* a wide chain scrolls inside its card instead of stretching the grid past the screen */
 table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; padding: 5px 7px; }
 .model-inputs { max-width: 80ch; }
+
+/* the closing auction desk */
+.cas-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cas-steps li { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.cas-steps li.on { border-color: var(--blue); background: var(--blue-soft); color: var(--blue-ink); font-weight: 600; }
+.cas-step-time { font-variant-numeric: tabular-nums; }
+.cas-table th:not(:first-child), .cas-table td:not(:first-child) { padding-left: 10px; text-align: right; }
+.cas-table td .tiny { white-space: nowrap; }
+.cas-search { max-width: 220px; }
+@media (max-width: 640px) { .cas-search { max-width: none; width: 100%; } .cas-steps li { grid-template-columns: 96px minmax(0, 1fr); } }

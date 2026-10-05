@@ -32,6 +32,7 @@ def utc(*a):
 def test_due_times():
     assert R.due("IN", utc(2026, 9, 24, 10, 15)) == "2026-09-24"   # 15:45 IST on a Thursday
     assert R.due("IN", utc(2026, 9, 24, 9, 0)) is None              # 14:30 IST, still open
+    assert R.due("IN", utc(2026, 9, 24, 10, 14)) is None            # 15:44 IST: futures and options stop at 15:40
     assert R.due("IN", utc(2026, 9, 24, 14, 0)) is None             # 19:30 IST, past the window
     assert R.due("IN", utc(2026, 9, 26, 10, 15)) is None            # Saturday
     assert R.due("CRYPTO", utc(2026, 9, 26, 23, 56)) == "2026-09-26"  # crypto reports on weekends too

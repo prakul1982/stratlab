@@ -79,6 +79,7 @@ from . import surveillance
 from . import etf_nav
 from . import positioning
 from . import fo_changes_routes
+from . import closing_auction
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
@@ -201,6 +202,8 @@ positioning_runner = positioning.Runner(lambda: filings_feed)
 positioning_job = positioning.Job(positioning_runner)
 etf_nav.setup(lambda: filings_feed)              # ETF prices against their NAV: the exchange's ETF list
 etf_job = etf_nav.Job(lambda: filings_feed)
+closing_auction.setup(lambda: filings_feed)      # the closing auction desk: the exchange's CAS data
+closing_auction_job = closing_auction.Job(lambda: filings_feed)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
 
 
@@ -247,6 +250,7 @@ async def lifespan(app: FastAPI):
     screen_job.start()
     breadth_job.start()
     etf_job.start()
+    closing_auction_job.start()       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
     ai_providers.job.start()          # measures the AI models every 6 hours
     yield
 
@@ -272,6 +276,7 @@ app.include_router(chart_routes.router)       # /chart: candles and drawings for
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
+app.include_router(closing_auction.router)     # /trade/closing-auction
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 
 
