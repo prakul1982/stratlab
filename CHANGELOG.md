@@ -7,6 +7,7 @@ What shipped, newest first, grouped by month. Built from the git history.
 ### 5 October 2026: small fixes
 
 - **Audit price check (India):** a company page's price that matches any of our last 5 daily closes now agrees, since a thinly traded stock's page can be several sessions old. A price that matches none is still flagged.
+- **Net worth: interest after tax on deposits:** each FD and RD shows its interest to maturity after tax, worked out as on the Rates page (your own estimate's rate on Basic and up, the 30% slab otherwise).
 
 ### 5 October 2026: strikes picked by delta or premium, and India VIX
 

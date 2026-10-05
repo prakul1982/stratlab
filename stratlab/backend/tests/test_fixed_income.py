@@ -132,6 +132,31 @@ def test_basic_uses_the_own_estimate_and_lists_deposits(w, paid):
     assert d["basis"] == "slab" and d["tax_rate"] == 5.2
 
 
+def test_net_worth_shows_the_same_after_tax_interest(w, paid):
+    c = w["client"]
+    from app import tax_lots
+    from datetime import date
+    fy = tax_lots.fy_of(date.today().isoformat())
+    fd = {"id": "a1", "kind": "fd", "name": "Bank FD", "principal": 100000, "rate": 7.0, "compounding": "quarterly",
+          "start": "2026-01-01", "maturity": "2027-01-01"}
+    rd = {"id": "a2", "kind": "rd", "name": "Bank RD", "monthly": 5000, "rate": 6.5, "start": "2026-01-01", "maturity": "2027-01-01"}
+    cash = {"id": "a3", "kind": "cash", "name": "Cash", "value": 1000}
+    for uid in ("u-basic", "u-free"):
+        db.set_setting(nw.KEY + uid, json.dumps({"items": [fd, rd, cash]}))
+    assert c.get("/money/net-worth", headers=FREE).json()["deposit_tax"]["basis"] == "slab"
+    tax_total.save_inputs("u-basic", fy, {"regime": "new", "other": 2000000, "salary": 2000000})
+    rates = c.get("/money/rates", headers=BASIC).json()
+    d = c.get("/money/net-worth", headers=BASIC).json()["deposit_tax"]
+    assert d["basis"] == "estimate" and d["tax_rate"] == 20.8
+    for x in rates["deposits"]:                                               # the Rates page's own figures
+        assert d["items"][x["id"]] == {"interest": x["interest"], "interest_after_tax": x["interest_after_tax"]}
+    assert set(d["items"]) == {"a1", "a2"}
+    free = c.get("/money/net-worth", headers=FREE).json()["deposit_tax"]       # Free: the default 30% slab, never the estimate
+    assert free["tax_rate"] == 31.2 and free["items"]["a1"]["interest_after_tax"] == pytest.approx(free["items"]["a1"]["interest"] * 0.688, abs=1)
+    db.set_setting(nw.KEY + "u-free", json.dumps({"items": [cash]}))
+    assert c.get("/money/net-worth", headers=FREE).json()["deposit_tax"] is None
+
+
 def test_bad_input_and_signed_out(w):
     c = w["client"]
     assert c.get("/money/rates?slab=12", headers=PRO).status_code == 400
