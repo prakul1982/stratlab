@@ -27,6 +27,9 @@ class Feed:
             raise ValueError("down")
         return self.data
 
+    def etf_securities(self):
+        return FE.isins()
+
 
 @pytest.fixture
 def w(monkeypatch):
@@ -63,8 +66,8 @@ def test_parse_exchange_list():
     assert got["as_of"] == "2026-10-03T15:30+05:30"
     rows = got["rows"]
     assert set(rows) == {"SILVERBEES", "GOLDBEES", "NIFTYBEES", "BANKBEES", "LIQUIDBEES"}       # ODDETF has no price
-    assert rows["SILVERBEES"] == {"name": "Nippon India Silver ETF", "isin": "INF204KC1402", "price": 105.2, "inav": 99.15,
-                                  "underlying": "Nippon India Silver ETF"}
+    assert rows["SILVERBEES"] == {"name": "Nippon India Silver ETF", "isin": "", "price": 105.2, "inav": 99.15,
+                                  "underlying": "Nippon India Silver ETF", "nav": None, "nav_date": "2026-10-03"}
     assert rows["LIQUIDBEES"]["price"] == 1000.0
 
 
@@ -96,7 +99,7 @@ def test_table_widest_gap_first(w):
 def test_nav_only_when_no_inav(w):
     data = FE.answer()
     for it in data["data"]:
-        it["nav"] = "-"
+        it["iNavValue"] = "-"
     E.refresh(Feed(data))
     by = {r["symbol"]: r for r in E.table()["rows"]}
     assert by["GOLDBEES"]["basis"] == "NAV" and by["GOLDBEES"]["gap"] == -0.98
@@ -231,7 +234,7 @@ def test_gap_now(w):
     assert E.gap_now("RELIANCE", 100) is None and E.gap_now("SILVERBEES", None) is None
     data = FE.answer()
     for it in data["data"]:
-        it["nav"] = "-"
+        it["iNavValue"] = "-"
     E.refresh(Feed(data))
     g = E.gap_now("GOLDBEES", 81.2)
     assert g["basis"] == "NAV" and g["gap"] == -0.98 and "on 2026-10-03" in g["text"]

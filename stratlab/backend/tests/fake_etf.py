@@ -17,10 +17,22 @@ ETFS = [
 
 
 def answer(stamp: str = "03-Oct-2026 15:30:00") -> dict:
-    """The exchange's /api/etf answer, in its shape: numbers as text, the ISIN under "meta"."""
-    return {"timestamp": stamp, "data": [
-        {"symbol": s, "assets": name.split("ETF ")[-1], "underlyingAsset": None, "ltP": p, "nav": i, "chn": "0.5", "per": "0.4",
-         "meta": {"symbol": s, "companyName": name, "isin": isin}} for s, name, isin, p, i, _ in ETFS]}
+    """The exchange's /api/etf answer, in its shape (as read live in October 2026): numbers as text, "assets" naming the
+    underlying, no ISIN (that is in the ETF securities file, securities_csv). The live answer's "nav" is the last
+    published NAV; these ETFs give an indicative NAV instead ("iNavValue"), the case where a source has one."""
+    return {"timestamp": stamp, "navDate": stamp[:11], "data": [
+        {"symbol": s, "assets": name.split("ETF ")[-1], "ltP": p, "iNavValue": i, "chn": "0.5", "per": "0.4"}
+        for s, name, isin, p, i, _ in ETFS]}
+
+
+def isins() -> dict:
+    return {s: isin for s, _, isin, *_ in ETFS}
+
+
+def securities_csv() -> str:
+    """The exchange's ETF securities file (eq_etfseclist.csv), in its columns."""
+    head = "Symbol,Underlying Asset,SecurityName,DateofListing,MarketLot,ISINNumber,FaceValue,ETF Underlying,Underlying Key"
+    return "\n".join([head] + [f"{s},{name},{s}ETF,01-Jan-10,1,{isin},1,EQUITY,{name}" for s, name, isin, *_ in ETFS]) + "\n"
 
 
 def nav_lines(day: date) -> str:

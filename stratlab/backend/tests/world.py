@@ -225,6 +225,9 @@ def _nse(sw=None):
         if r.url.path == "/api/etf":                  # every ETF's price and iNAV (etf_nav.py)
             from tests import fake_etf
             return httpx.Response(200, json=fake_etf.answer())
+        if r.url.path == "/content/equities/eq_etfseclist.csv":   # the ETFs' ISINs (the list above has none)
+            from tests import fake_etf
+            return httpx.Response(200, text=fake_etf.securities_csv())
         if r.url.path == "/api/holiday-master":
             return httpx.Response(200, json={"CM": [{"tradingDate": "26-Jan-2027", "weekDay": "Tuesday", "description": "Republic Day"},
                                                     {"tradingDate": "22-Mar-2027", "weekDay": "Monday", "description": "Holi"}],

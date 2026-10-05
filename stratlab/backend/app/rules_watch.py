@@ -131,8 +131,15 @@ def read_circulars(data, words: re.Pattern | None = None) -> list[dict]:
         link = next((str(v) for k, v in r.items() if any(w in str(k).lower() for w in ("link", "file")) and isinstance(v, str)
                      and v.startswith("http")), "")
         no = next((str(v) for k, v in r.items() if re.search(r"no$|number", str(k), re.I) and isinstance(v, (str, int))), "")
+        # the department that wrote it ("FAOP" for equity F&O), when the answer says
+        low = {str(k).lower(): v for k, v in r.items()}
+        dept = next((str(low[k]) for k in ("filedept", "dept", "circdepartment", "department")
+                     if isinstance(low.get(k), str) and low[k]), "")
         cid = hashlib.sha1(f"{day}|{subject}".encode()).hexdigest()[:16]
-        out.append({"id": cid, "date": day[:30], "subject": subject[:300], "url": link[:300], "no": no[:60]})
+        # NSE sends both "cirDate": "20261001" and "cirDisplayDate": "October 01, 2026": the id keeps the first (so a
+        # circular seen before stays seen), the message shows the one people read
+        shown = next((str(v) for k, v in r.items() if "display" in str(k).lower() and "date" in str(k).lower() and v), day)
+        out.append({"id": cid, "date": shown[:30], "subject": subject[:300], "url": link[:300], "no": no[:60], "dept": dept[:60]})
     return out
 
 

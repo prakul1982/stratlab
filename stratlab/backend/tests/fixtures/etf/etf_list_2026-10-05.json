@@ -1,0 +1,48 @@
+{
+ "timestamp": "05-Oct-2026 12:12:50",
+ "navDate": "04-Oct-2026",
+ "data": [
+  {
+   "symbol": "GOLDBEES",
+   "assets": "Gold",
+   "open": "121.43",
+   "high": "121.43",
+   "low": "120.52",
+   "ltP": "121.18",
+   "chn": "-0.25",
+   "per": "-0.21",
+   "qty": "12035465",
+   "nav": "121.5196",
+   "prevClose": "121.43",
+   "series": "EQ"
+  },
+  {
+   "symbol": "NIFTYBEES",
+   "assets": "Nifty 50",
+   "open": "256.5",
+   "high": "259.69",
+   "low": "255.8",
+   "ltP": "256.08",
+   "chn": "-0.42",
+   "per": "-0.16",
+   "qty": "5329595",
+   "nav": "255.7379",
+   "prevClose": "256.5",
+   "series": "EQ"
+  },
+  {
+   "symbol": "MAFANG",
+   "assets": "NYSE FANG+ Total Return Index",
+   "open": "254.41",
+   "high": "259.72",
+   "low": "248.21",
+   "ltP": "256.42",
+   "chn": "8.21",
+   "per": "3.31",
+   "qty": "869722",
+   "nav": "179.6993",
+   "prevClose": "248.21",
+   "series": "EQ"
+  }
+ ]
+}
