@@ -19,6 +19,7 @@ import { DealsPanel } from "../components/Deals";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { FoBadges } from "../components/FoBadges";
+import { IndexBadges } from "../components/IndexBadges";
 import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { CompanyActions } from "../components/CorpActions";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
@@ -139,6 +140,7 @@ export function CompanyPage() {
             <SurvBadges region={region} symbol={c.symbol} />
             {region === "IN" && <EtfGapBadge symbol={c.symbol} />}
             <FoBadges region={region} symbol={c.symbol} />
+            <IndexBadges region={region} symbol={c.symbol} />
             <AsOf parts={[["Prices", c.as_of], ["Reported numbers", c.numbers_at]]} />
           </div>
           <Change q={c.quote} currency={ccy} />

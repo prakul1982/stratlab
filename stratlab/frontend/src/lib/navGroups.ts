@@ -56,6 +56,8 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Import your tradebook or tax P&L, equity and F&O: every round trip with its charges, your notes, and the verdict's honesty checks on your real trades." },
     { to: "/trade/fo-changes", label: "F&O changes", icon: "calendar", title: "Stocks entering and leaving F&O, lot-size revisions and expiry-day changes",
       blurb: "One dated list from the exchange's contract file and circulars: exits with the last series, old and new lots, expiry days." },
+    { to: "/trade/events", label: "Market events", icon: "calendar", title: "RBI policy, data releases, the Fed, index changes, expiries and holidays",
+      blurb: "One dated list from the official calendars, with the published figure once it is out, and reminders." },
   ],
   Money: [
     { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",

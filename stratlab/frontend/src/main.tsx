@@ -95,6 +95,7 @@ const NetWorthPage = page(netWorth, "NetWorthPage");
 const journalPage = () => import("./pages/trade/JournalPage");
 const JournalPage = page(journalPage, "JournalPage");
 const FoChangesPage = page(() => import("./pages/trade/FoChangesPage"), "FoChangesPage");
+const EventsPage = page(() => import("./pages/trade/EventsPage"), "EventsPage");
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -200,6 +201,7 @@ function Routed() {
         <Route path="/paper/:sid" element={<PaperPage />} />
         <Route path="/trade/journal" element={<JournalPage />} />
         <Route path="/trade/fo-changes" element={<FoChangesPage />} />
+        <Route path="/trade/events" element={<EventsPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
