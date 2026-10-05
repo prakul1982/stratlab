@@ -17,7 +17,7 @@
 }
 
 .pc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
-.pc-bar .pc-gap { flex: 1 1 auto; }
+.pc-bar .pc-end { display: flex; align-items: center; gap: 6px; margin-left: auto; }   /* the view buttons wrap as one group, kept to the right */
 .pc-btn, .pc-sel {
   min-height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card);
   color: var(--ink); font: inherit; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;

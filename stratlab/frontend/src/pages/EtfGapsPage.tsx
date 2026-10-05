@@ -47,8 +47,8 @@ export function EtfGapsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Scans · India</span>
         <h1 className="page-title">ETF price against NAV</h1>
-        <p className="page-sub">How far each ETF's price on the exchange is from what one unit holds: its indicative NAV through market hours and the
-          fund's last published NAV. A gap is a percent of the NAV, above or below. Facts with their times, not a view on any fund.</p>
+        <p className="page-sub">How far each ETF's price is from what one unit holds: its indicative NAV (iNAV) in market hours and its last published
+          NAV, as a percent above or below. Facts with their times, not a view on any fund.</p>
       </div>
 
       {pick && <EtfGapDetailView key={pick} symbol={pick} />}
@@ -64,7 +64,7 @@ export function EtfGapsPage() {
             <span className="chip-select"><select aria-label="Order" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
               {SORTS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select></span>
-            <input className="etf-gap-search" type="search" aria-label="Find an ETF" placeholder="Find an ETF" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="input etf-gap-search" type="search" aria-label="Find an ETF" placeholder="Find an ETF" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <p className="tiny muted" style={{ margin: 0 }}>
             {data.as_of ? `Prices and iNAVs as of ${asOf(data.as_of)}` : "Prices as last read"}{data.nav_as_of ? ` · NAVs of ${asOf(data.nav_as_of)}` : ""} · {data.count} ETFs
@@ -72,7 +72,7 @@ export function EtfGapsPage() {
           </p>
           {rows.length === 0 ? <p className="small muted">No ETF matches that.</p> : (
             <div className="table-wrap">
-              <table aria-label="ETFs by gap to NAV">
+              <table className="etf-gap-table" aria-label="ETFs by gap to NAV">
                 <thead>
                   <tr><th style={{ textAlign: "left" }}>ETF</th><th>Price</th><th>iNAV</th><th>Gap to iNAV</th><th>Last NAV</th><th>Gap to NAV</th>
                     <th>30 trading days</th></tr>

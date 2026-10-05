@@ -457,12 +457,13 @@ export default function PriceChart(props: PriceChartProps) {
             )}
           </div>
         )}
-        <span className="pc-gap" />
-        <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom out" title="Zoom out" onClick={() => engineRef.current?.zoomBy(0.8)}>{ICON.zoomOut}</button>
-        <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom in" title="Zoom in" onClick={() => engineRef.current?.zoomBy(1.25)}>{ICON.zoomIn}</button>
-        <button type="button" className="pc-btn icon" aria-label="Reset the view" title="Reset the view (double-click the chart)" onClick={() => { engineRef.current?.resetView(); if (range) applyRange(range); }}>{ICON.reset}</button>
-        <button type="button" className="pc-btn icon" aria-label="Download as PNG" title="Download as PNG" onClick={shot}>{ICON.camera}</button>
-        <button type="button" className="pc-btn icon" aria-label={full ? "Exit full screen" : "Full screen"} title={full ? "Exit full screen" : "Full screen"} aria-pressed={full} onClick={toggleFull}>{full ? ICON.exit : ICON.full}</button>
+        <span className="pc-end">
+          <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom out" title="Zoom out" onClick={() => engineRef.current?.zoomBy(0.8)}>{ICON.zoomOut}</button>
+          <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom in" title="Zoom in" onClick={() => engineRef.current?.zoomBy(1.25)}>{ICON.zoomIn}</button>
+          <button type="button" className="pc-btn icon" aria-label="Reset the view" title="Reset the view (double-click the chart)" onClick={() => { engineRef.current?.resetView(); if (range) applyRange(range); }}>{ICON.reset}</button>
+          <button type="button" className="pc-btn icon" aria-label="Download as PNG" title="Download as PNG" onClick={shot}>{ICON.camera}</button>
+          <button type="button" className="pc-btn icon" aria-label={full ? "Exit full screen" : "Full screen"} title={full ? "Exit full screen" : "Full screen"} aria-pressed={full} onClick={toggleFull}>{full ? ICON.exit : ICON.full}</button>
+        </span>
       </div>
 
       <div ref={stageRef} className="pc-stage" tabIndex={0} role="group" aria-label={`${symbol} price chart. Arrow keys move it, plus and minus zoom, Delete removes the selected drawing.`}
