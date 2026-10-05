@@ -329,3 +329,40 @@ def test_admin_can_force_a_read(w, ter):
 
 def test_signed_out_is_refused(w):
     assert w["client"].get("/money/mutual-funds/costs").status_code == 401
+
+
+def test_reads_the_disclosure_api_and_retries_a_cut_off_answer(monkeypatch):
+    """The disclosure is read fund house by fund house; a throttled call comes back cut off and is asked again."""
+    import httpx
+    asked = []
+    row = {"Scheme_Name": "Asha Flexi Cap Fund", "SchemeType_Desc": "Open Ended", "SchemeCat_Desc": "Equity Scheme - Flexi Cap Fund",
+           "TER_Date": "2026-05-20T00:00:00.000Z", "R_BER": "1.0900", "R_BrokerageCost": "0.0200", "R_TransactionCost": "0.0100",
+           "R_StatutoryLevies": "0.1800", "R_TER": "1.3000", "D_BER": "0.5300", "D_BrokerageCost": "0.0200",
+           "D_TransactionCost": "0.0000", "D_StatutoryLevies": "0.2100", "D_TER": "0.7600"}
+
+    def answer(req: httpx.Request) -> httpx.Response:
+        asked.append(req.url.path)
+        if req.url.path.endswith("populate-mf"):
+            return httpx.Response(200, json=[{"tableId": 1, "mfId": "9", "mfName": "Asha Mutual Fund"}, {"mfId": "x"}])
+        assert req.url.params["MF_ID"] == "9" and req.url.params["Month"] == "05-2026"
+        if asked.count(req.url.path) == 1:
+            return httpx.Response(200, text='{"data": [{"Sch')          # throttled: cut off, still 200
+        return httpx.Response(200, json={"data": [row], "meta": {"page": 1, "pageCount": 1}})
+    real = httpx.Client
+    monkeypatch.setattr(T.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(answer), **kw))
+    monkeypatch.setattr(T, "PAUSE", 0)
+    monkeypatch.setattr(T, "AMC_PAUSE", 0)
+    got = T.parse(T.fetch_month(5, 2026))
+    assert got["parts"] == ["base", "brokerage", "levies", "total"]
+    assert got["rows"] == [{"name": "Asha Flexi Cap Fund", "type": "Open Ended", "category": "Equity Scheme - Flexi Cap Fund",
+                            "date": "2026-05-20", "reg": {"base": 1.09, "brokerage": 0.03, "levies": 0.18, "total": 1.3},
+                            "dir": {"base": 0.53, "brokerage": 0.02, "levies": 0.21, "total": 0.76}}]
+    assert asked.count("/api/populate-te-rdata-revised") == 2
+
+
+def test_disclosure_with_no_fund_houses_is_an_error(monkeypatch):
+    import httpx
+    real = httpx.Client
+    monkeypatch.setattr(T.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=[])), **kw))
+    with pytest.raises(ValueError):
+        T.fetch_month(5, 2026)

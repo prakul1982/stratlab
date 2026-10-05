@@ -28,14 +28,17 @@ from .plans import FEATURE_PLAN, PLANS, allows
 from .admin import admin_profile
 from .responses import err, ok
 
-URL = "https://www.amfiindia.com/modules/LoadTERData"
+AMCS_URL = "https://www.amfiindia.com/api/populate-mf"                  # the fund houses: [{"mfId", "mfName"}]
+TER_URL = "https://www.amfiindia.com/api/populate-te-rdata-revised"     # one fund house's TER rows for one month
 LATEST_KEY = "mfter:latest"        # {"at", "parts", "s": {scheme name: [date, category, type, regular parts, direct parts]}}
 HIST_KEY = "mfter:hist"            # {scheme name: {"t": [[date, regular total, direct total]], "c": [[date, category]]}}
 MONTHS_KEY = "mfter:months"        # {"YYYY-MM": unix time read}, so older months are read once
 STATUS_KEY = "mfter:status"        # how the last read went, for the platform check
 MAX_AGE = 12 * 3600                # re-read the current month after this long
 RETRY = 3600                       # after a failed read, wait this long
-PAUSE = 2.0                        # seconds between requests in one run
+PAUSE = 2.0                        # seconds between months in one run
+AMC_PAUSE = 1.0                    # seconds between fund houses in one month
+TRIES = 4                          # per request: the source answers a throttled call with a cut-off body, not an error
 BACKFILL = 24                      # months of history to build up, one older month a run
 MAX_POINTS = 200                   # history points kept per scheme
 TIMEOUT = 40.0
@@ -66,15 +69,61 @@ _mem: dict = {"latest": None, "hist": None, "months": None, "tried": 0.0, "runni
 
 
 # ---------- reading the disclosure ----------
-def fetch_month(month: int, year: int) -> str:
-    """One month's TER table as published (HTML). Tests replace this."""
-    headers = {"User-Agent": "Mozilla/5.0 (StratLab)", "Content-Type": "application/x-www-form-urlencoded"}
-    with httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers=headers) as c:
-        r = c.post(URL, content=f"MonthTER={month}-{year}&MF_ID=-1&NAV_ID=1&SchemeCat_Desc=-1")
+# The rows of the disclosure, as the columns parse() reads: (header, field or fields summed). Brokerage and
+# transaction costs are one part on the page; statutory levies include GST.
+_COLUMNS = [("Scheme Name", "Scheme_Name"), ("Scheme Type", "SchemeType_Desc"), ("Scheme Category", "SchemeCat_Desc"),
+            ("TER Date", "TER_Date")] + [
+    (f"{plan} Plan - {label} (%)", tuple(f"{p}_{f}" for f in fields))
+    for plan, p in (("Regular", "R"), ("Direct", "D"))
+    for label, fields in (("Base TER", ("BER",)), ("Brokerage and transaction costs", ("BrokerageCost", "TransactionCost")),
+                          ("Statutory levies", ("StatutoryLevies",)), ("Total TER", ("TER",)))]
+
+
+def _get_json(c: httpx.Client, url: str, params: dict | None = None):
+    """A JSON answer, asked again with a growing wait when it comes back cut off (how the source throttles)."""
+    for i in range(TRIES):
+        if i:
+            time.sleep(PAUSE * 2 ** (i - 1))
+        r = c.get(url, params=params)
         r.raise_for_status()
         if len(r.content) > MAX_BYTES:
-            raise ValueError("file too large")
-        return r.text
+            raise ValueError("answer too large")
+        try:
+            return r.json()
+        except ValueError:
+            continue
+    raise ValueError(f"no readable answer from the TER disclosure after {TRIES} tries")
+
+
+def _cell(row: dict, field) -> str:
+    if isinstance(field, tuple):
+        vals = [_pct(row.get(f)) for f in field]
+        return "" if all(v is None for v in vals) else str(round(sum(v or 0 for v in vals), 4))
+    v = row.get(field)
+    return "" if v is None else str(v)[:10] if field == "TER_Date" else str(v)
+
+
+def fetch_month(month: int, year: int) -> str:
+    """One month's TER disclosure for every fund house, as CSV in the columns parse() reads. Tests replace this."""
+    headers = {"User-Agent": "Mozilla/5.0 (StratLab)", "Accept": "application/json"}
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow([h for h, _ in _COLUMNS])
+    with httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers=headers) as c:
+        amcs = _get_json(c, AMCS_URL)
+        ids = [str(a["mfId"]) for a in amcs if isinstance(a, dict) and str(a.get("mfId") or "").isdigit()] if isinstance(amcs, list) else []
+        if not ids:
+            raise ValueError("the TER disclosure listed no fund houses")
+        for n, mf_id in enumerate(ids):
+            if n:
+                time.sleep(AMC_PAUSE)
+            got = _get_json(c, TER_URL, {"MF_ID": mf_id, "Month": f"{month:02d}-{year}", "strCat": -1, "strType": 1,
+                                         "page": 1, "pageSize": 10000})
+            rows = got.get("data") if isinstance(got, dict) else None
+            for r in rows if isinstance(rows, list) else []:
+                if isinstance(r, dict):
+                    w.writerow([_cell(r, f) for _, f in _COLUMNS])
+    return out.getvalue()
 
 
 class _Tables(HTMLParser):
