@@ -435,10 +435,12 @@ def search(query: str) -> list[dict]:
     look like one holder (same first and last word) are grouped; the user can untick any of them."""
     keys: dict[str, dict] = {}
     for sym, co in _index().items():
-        for q in co["q"].values():
-            for r in _rows(q):
+        for q in sorted(co["q"]):                      # oldest first: the name shown is the latest spelling filed
+            for r in _rows(co["q"][q]):
                 if matches(query, r["key"]):
-                    k = keys.setdefault(r["key"], {"key": r["key"], "name": r["name"], "companies": set()})
+                    k = keys.setdefault(r["key"], {"key": r["key"], "name": r["name"], "companies": set(), "q": ""})
+                    if q >= k["q"]:
+                        k["name"], k["q"] = r["name"], q
                     k["companies"].add(sym)
     groups: list[dict] = []
     for k in sorted(keys.values(), key=lambda x: x["key"]):

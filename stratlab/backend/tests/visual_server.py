@@ -76,12 +76,31 @@ def build():
     for k, v in (("MIN_ROWS", 1), ("PAUSE", 0), ("BACKGROUND", False), ("BACKFILL", 3)):
         mp.setattr(money_mf_ter, k, v)
     etf_gaps(mp)
+    holders_and_updates(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
     fx_rates.seed()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     return w
+
+
+def holders_and_updates(mp):
+    """Named holders from the real (trimmed) shareholding samples, with Safari's list also shown on RELIANCE's page;
+    business updates: a made-up year for RELIANCE, and Maruti's and TVS Motor's real September filings read as the job
+    would have (the model's replies in fake_biz)."""
+    from app import biz_updates as B
+    from app.docs import Docs
+    from tests import fake_biz, fake_shp
+    fake_shp.seed(also={"RELIANCE": "SAFARI"})
+    fake_biz.seed(("RELIANCE",))
+    mp.setattr(B, "complete", fake_biz.ai)
+    docs = Docs(transport=fake_biz.docs_transport(), check_host=lambda h: True, ocr=lambda d: "")
+    for sym in ("MARUTI", "TVSMOTOR"):
+        item = next(u for u in B.updates(fake_biz.announcements(sym)) if u["url"].endswith(fake_biz.FILES[sym]))
+        B.save(sym, item["id"], B.read_one(sym, item, docs, None, []))
+    mp.setattr(main.biz_job, "start", lambda: None)
+    mp.setattr(main.holders_job, "start", lambda: None)
 
 
 def invite_rewards():

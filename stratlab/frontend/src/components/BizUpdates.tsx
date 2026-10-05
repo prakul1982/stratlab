@@ -35,7 +35,7 @@ export function periodName(p: string, span: "month" | "quarter" = "month") {
     const q = ({ 6: 1, 9: 2, 12: 3, 3: 4 } as Record<number, number>)[m];
     if (q) return `Q${q} FY${String((m >= 4 ? y + 1 : y) % 100).padStart(2, "0")}`;
   }
-  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+  return `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${y}`;
 }
 
 /** 2,36,013 units, ₹33,275 billion, 34.2%: the unit as filed, Indian digit grouping. */
