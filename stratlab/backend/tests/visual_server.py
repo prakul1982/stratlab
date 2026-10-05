@@ -75,6 +75,12 @@ def build():
     mp.setattr(money_mf_ter, "fetch_month", lambda m, y: (navs / "ter_disclosure.html").read_text())
     for k, v in (("MIN_ROWS", 1), ("PAUSE", 0), ("BACKGROUND", False), ("BACKFILL", 3)):
         mp.setattr(money_mf_ter, k, v)
+    # a made-up NAV history for the flexi cap fund, for the fund behaviour card's redemption after a fall
+    from app import money_mf_behaviour
+    from tests import fake_mf_history
+    mp.setattr(money_mf_behaviour, "fetch_json", fake_mf_history.fetch)
+    mp.setattr(money_mf_behaviour, "BACKGROUND", False)
+    mp.setattr(money_mf_behaviour, "PAUSE", 0)
     etf_gaps(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates

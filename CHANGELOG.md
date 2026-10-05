@@ -4,6 +4,11 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 5 October 2026: fund behaviour, stock and ETF SIP tests, fixed-income rates and floating-rate loans
+
+**Money**
+- **Your return against each fund's** on Mutual funds: your XIRR beside the fund's own NAV return over the same dates and the gap in points (every plan); the gap in rupees, your SIP record (months paid, missed and stopped, the longest unbroken run), redemptions made after a 10% fall from the high with those units at today's NAV (hindsight, labelled), how long redeemed units were held and how much of today's value is over 3 years old (Basic). From your statement and the public NAV history.
+
 ### 5 October 2026: price charts, options Greeks and what-if, F&O changes, ETF vs NAV, fund costs and a self-healing AI
 
 **Everywhere**
