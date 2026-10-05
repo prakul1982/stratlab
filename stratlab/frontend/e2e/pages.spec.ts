@@ -306,8 +306,8 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByText("RELIANCE", { exact: true })).toBeVisible();
   await expect(table.getByText("TINYCO", { exact: true })).toBeVisible();            // listed only on BSE
   await expect(page.getByText(/your Zerodha Console file/)).toBeVisible();
-  await expect(table.getByRole("columnheader", { name: "Unrealised P&L" })).toBeVisible();
-  await expect(table.getByRole("columnheader", { name: "Trend" })).toHaveCount(0);                 // the extra columns wait behind a click
+  await expect(table.getByRole("cell", { name: "Unrealised P&L", exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "Trend", exact: true })).toHaveCount(0);                 // the extra columns wait behind a click
   if (info.project.name === "desktop") {                                                         // so the table fits a 1280px screen
     await page.setViewportSize({ width: 1280, height: 900 });
     const wrap = await table.evaluate((t) => ({ scroll: t.parentElement!.scrollWidth, width: t.parentElement!.clientWidth }));
@@ -318,7 +318,7 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByText(/red flag/).first()).toBeVisible({ timeout: 30_000 });  // the QIP filing, once the facts arrive
   await expect(table.getByText(/Stage \d/).first()).toBeVisible();
   await page.reload();                                                                           // remembered on this device
-  await expect(table.getByRole("columnheader", { name: "Trend" })).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByRole("cell", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Recent filings")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
   await page.getByRole("radio", { name: "Add to them" }).click();
@@ -442,9 +442,9 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   const sales = page.getByRole("table", { name: "Realised sales" });
   await expect(sales.getByText("RELIANCE").first()).toBeVisible();
   await expect(sales.getByText("grandfathered")).toBeVisible();                                   // WIPRO, from the tax P&L
-  await expect(sales.getByRole("columnheader", { name: "Bought" })).toHaveCount(0);
+  await expect(sales.getByRole("cell", { name: "Bought", exact: true })).toHaveCount(0);
   await page.getByTestId("cols-tax-sales").click();
-  await expect(sales.getByRole("columnheader", { name: "Bought" })).toBeVisible();
+  await expect(sales.getByRole("cell", { name: "Bought", exact: true })).toBeVisible();
   await expect(page.getByRole("table", { name: "Open lots below cost" }).getByText("TCS")).toBeVisible();
   await expect(page.getByText("Shares held on 31 Jan 2018")).toBeVisible();
   await page.getByRole("button", { name: "What is tax-loss harvesting?" }).click();
