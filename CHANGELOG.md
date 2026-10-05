@@ -4,6 +4,10 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 5 October 2026: small fixes
+
+- **Audit price check (India):** a company page's price that matches any of our last 5 daily closes now agrees, since a thinly traded stock's page can be several sessions old. A price that matches none is still flagged.
+
 ### 5 October 2026: strikes picked by delta or premium, and India VIX
 
 **Trade**

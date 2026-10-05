@@ -286,7 +286,9 @@ def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = Non
         hi, lo = (tuple(page_quote or ())[2:4] + (None, None))[:2]
         chg = trend.get("chg")
         before = ours / (1 + chg / 100) if page_quote is None and chg is not None and chg > -100 else None
-        if not any(_near(x, on_page) for on_page in page for x in (ours, before) if x) and not _in_range(ours, lo, hi):
+        # a thinly traded stock's page price can be several sessions old: any of our last 5 closes counts (India)
+        recent = (trend.get("recent") or [])[-5:] if page_quote is None else []
+        if not any(_near(x, on_page) for on_page in page for x in (ours, before, *recent) if x) and not _in_range(ours, lo, hi):
             prev = f" (previous close {page[1]:,.2f})" if len(page) > 1 else ""
             out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {page[0]:,.2f} on the company page{prev}"))
     return out
