@@ -3,6 +3,7 @@ import base64
 import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
+import math
 import logging
 from html import escape as html_escape
 import re
@@ -18,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -440,6 +442,24 @@ def _research_error(request, exc):
 @app.exception_handler(DataError)
 def _data_error(request, exc):
     return JSONResponse(status_code=502, content={"detail": {"code": "data_error", "message": public_text(str(exc))}})
+
+
+def _finite_json(v):
+    """A value safe to send as JSON: NaN and ±Infinity (which Python's JSON reader accepts in a request body) become
+    text, so echoing a bad input back in a 422 can't crash the reply."""
+    if isinstance(v, float) and not math.isfinite(v):
+        return str(v)
+    if isinstance(v, dict):
+        return {k: _finite_json(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_finite_json(x) for x in v]
+    return v
+
+
+@app.exception_handler(RequestValidationError)
+def _invalid_request(request, exc):
+    """FastAPI's own 422, with any NaN or Infinity in the echoed input made safe to send."""
+    return JSONResponse(status_code=422, content={"detail": _finite_json(jsonable_encoder(exc.errors()))})
 
 
 @app.exception_handler(kite_exc.KiteException)

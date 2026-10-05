@@ -261,3 +261,27 @@ def test_create_alert_route(w, monkeypatch):
     assert r.status_code == 200 and r.json()["alert"]["text"] == "Trades 3% or more above its NAV"
     r = c.post("/alerts", json={**body, "symbol": "RELIANCE"}, headers=headers("basic-token"))
     assert r.status_code == 400 and "ETF list" in r.json()["detail"]["message"]
+
+
+def test_alert_on_a_non_etf_saved_before_the_list_never_fires(w, monkeypatch):
+    """With no list read yet nothing can be refused, but once the list is known an alert on a symbol not on it is
+    refused when saved or edited, and one saved earlier never fires."""
+    monkeypatch.setattr(main, "alert_quotes", lambda r, s: {x: {"price": 105.2} for x in s})
+    monkeypatch.setattr(E, "_first_read", lambda: None)
+    c = w["client"]
+    body = {"region": "IN", "symbol": "RELIANCE", "kind": "etfgap", "op": "either", "value": 0.1}
+    r = c.post("/alerts", json=body, headers=headers("basic-token"))
+    assert r.status_code == 200                        # no list stored: allowed for now
+    aid = r.json()["alert"]["id"]
+    E.refresh(Feed())                                  # the list is read, and RELIANCE isn't on it
+    assert c.post("/alerts", json=body, headers=headers("basic-token")).status_code == 400
+    assert c.put(f"/alerts/{aid}", json=body, headers=headers("basic-token")).status_code == 400
+    sent = []
+    chk = sa.Checker(lambda r, s: {x: {"price": 1e6, "change_pct": 50} for x in s}, lambda r, s: [], lambda p: 10,
+                     send=lambda p, subject, text: sent.append(text) or ["push"], profile=lambda uid: {"id": uid},
+                     gaps=E.gap_now)
+    from app.data import calendar
+    monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: True)
+    ist = timezone(timedelta(hours=5, minutes=30))
+    chk.tick(datetime(2026, 10, 2, 11, 0, tzinfo=ist).astimezone(timezone.utc))
+    assert sent == []
