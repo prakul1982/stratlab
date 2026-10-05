@@ -247,7 +247,10 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
     .filter((r) => r.shown.length), [all, show]);
   const csv = () => {
     const lines = [["symbol", "name", "level", "area", "detail"].join(",")];
-    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, i.level, i.area, i.detail].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
+    // names and details come from the exchanges' feeds: a leading = + - @ (or tab/CR) would run as a spreadsheet
+    // formula when the file is opened, so such a cell is written as text
+    const cell = (x: unknown) => { const s = String(x ?? ""); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; };
+    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, i.level, i.area, i.detail].map(cell).join(","));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = file; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
