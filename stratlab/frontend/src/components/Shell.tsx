@@ -5,7 +5,7 @@ import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, M
 import { Logo } from "./Logo";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { FAMILIES, NAV_GROUPS, familyOf } from "../lib/navGroups";
-import { ALL_GROUPS, SPACE_IDS, SPACES, spaceOf, type GroupId, type SpaceView } from "../lib/spaces";
+import { ALL_GROUPS, ALL_HOME, SPACE_IDS, SPACES, spaceOf, type GroupId, type SpaceView } from "../lib/spaces";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
@@ -146,11 +146,9 @@ export function Shell({ children }: { children: ReactNode }) {
         </button>
       </div>
       <nav className="side-groups" aria-label="Main">
-        {space !== "all" && (
-          <div className="side-list">
-            <NavLink to={SPACES[space].home} end><Compass size={16} />{SPACES[space].label} home</NavLink>
-          </div>
-        )}
+        <div className="side-list">
+          <NavLink to={space === "all" ? ALL_HOME : SPACES[space].home} end><Compass size={16} />{space === "all" ? "All" : SPACES[space].label} home</NavLink>
+        </div>
         {order.map((g) => {
           const { label, items } = groups[g];
           const shutNow = isShut(g);

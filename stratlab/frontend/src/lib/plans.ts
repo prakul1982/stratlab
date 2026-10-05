@@ -118,3 +118,8 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Named holders above 1% and the business-update filings on every company page",
   "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
   "Margin-funded positions per stock today, and your own MTF cost worked out"];
+
+/** The cheapest plan that includes a feature flag ("free" when neither paid list names it). */
+export function planOf(feature: string): PlanId {
+  return LIMITS.basic.features.includes(feature) ? "basic" : LIMITS.pro.features.includes(feature) ? "pro" : "free";
+}

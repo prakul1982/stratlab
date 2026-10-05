@@ -12,6 +12,9 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ### 5 October 2026: strikes picked by delta or premium, and India VIX
 
+**All**
+- **An All home (`/all`):** All in the space switcher now has a home of its own: one next step, a short folded list of what is new (each linking to its page, with Basic or Pro where a plan is needed), the top three tools of Trade, Invest and Money, and the next market events. `/` opens it for All, and the menu gets an "All home" link.
+
 **Trade**
 - **Strikes picked by rule (Pro):** an options leg can take the strike nearest a model delta, inside a delta range, nearest (or at least, or at most) a rupee premium, or nearest a share of the at-the-money straddle, resolved on the live quotes at entry and at each re-centre. The builder's preview shows what each rule picks now (every plan), and the order log says why under each order.
 - **India VIX (every plan):** a panel on Positioning and a tile on the Trade home's positioning card: the value and change, the day's range, where it sits among the past year's closes, NIFTY ATM IV beside it, today's line and the year's chart. India VIX and its change % are rule values in notebooks, and the verdict's nearby-settings check nudges a VIX cut-off.
