@@ -56,6 +56,10 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Import your tradebook or tax P&L, equity and F&O: every round trip with its charges, your notes, and the verdict's honesty checks on your real trades." },
     { to: "/trade/fo-changes", label: "F&O changes", icon: "calendar", title: "Stocks entering and leaving F&O, lot-size revisions and expiry-day changes",
       blurb: "One dated list from the exchange's contract file and circulars: exits with the last series, old and new lots, expiry days." },
+    { to: "/trade/replay", label: "Chart replay", icon: "lens", title: "Practise on past candles, one at a time, logged to your journal",
+      blurb: "Step through a past chart with the future hidden, place practice orders with a stop and target, and see the result after charges." },
+    { to: "/trade/signals", label: "Signal forward test", icon: "pulse", title: "Send TradingView or Chartink alerts into paper trading",
+      blurb: "A secret webhook URL for your alerts: each one fills on paper at StratLab's own price, with a log of every signal and the verdict's checks." },
   ],
   Money: [
     { to: "/holdings", label: "My Holdings", icon: "book", title: "Your stocks from your broker's file",

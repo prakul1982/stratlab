@@ -1409,3 +1409,12 @@ table.greeks-t tr.greeks-net td { border-top: 1px solid var(--line-2); }
 .opt-extras > * { min-width: 0; }      /* a wide chain scrolls inside its card instead of stretching the grid past the screen */
 table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; padding: 5px 7px; }
 .model-inputs { max-width: 80ch; }
+
+/* Signal forward test (/trade/signals) and chart replay (/trade/replay) */
+.sg-cards { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.sg-card { flex: none; min-width: 200px; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; color: inherit; text-decoration: none; }
+.sg-card[aria-current="page"] { border: 2px solid var(--ink); }
+.sg-code { margin: 0; padding: 12px 14px; background: var(--chip); border-radius: 10px; font-family: var(--mono); font-size: 13px; overflow-x: auto; white-space: pre; max-width: 100%; }
+.sg-log td { vertical-align: top; }
+.badge.j-practice { background: var(--chip); color: var(--ink-2); }
+.rp-controls .btn { min-height: 40px; }

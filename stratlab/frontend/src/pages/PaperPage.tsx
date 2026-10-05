@@ -183,7 +183,7 @@ export function PaperPage() {
 
   const stopped = (rows ?? []).filter((r) => r.status !== "running" && r.status !== "paused");
   const current = (rows ?? []).filter((r) => !stopped.includes(r));     // running and paused first; the stopped ones folded
-  const open = (r: LiveRow) => nav(r.instrument?.type === "OPTIONS" ? `/options/s/${r.id}` : `/paper/${r.id}`);
+  const open = (r: LiveRow) => nav(r.instrument?.type === "OPTIONS" ? `/options/s/${r.id}` : (r.instrument as { signal?: boolean })?.signal ? `/trade/signals/${r.id}` : `/paper/${r.id}`);
   const clearStopped = async () => {
     if (!confirm(`Delete ${stopped.length} stopped session${stopped.length === 1 ? "" : "s"} and their orders? Running ones stay. This can't be undone.`)) return;
     try {

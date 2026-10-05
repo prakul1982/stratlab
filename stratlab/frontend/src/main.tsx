@@ -50,6 +50,8 @@ const verdict = () => import("./pages/PublicVerdict");
 const PublicVerdict = page(verdict, "PublicVerdict");
 const OptionsSession = page(() => import("./pages/OptionsSession"), "OptionsSession");
 const PaperPage = page(() => import("./pages/PaperPage"), "PaperPage");
+const ReplayPage = page(() => import("./pages/trade/ReplayPage"), "ReplayPage");
+const SignalsPage = page(() => import("./pages/trade/SignalsPage"), "SignalsPage");
 const PlansPage = page(() => import("./pages/PlansPage"), "PlansPage");
 const AccountPage = page(() => import("./pages/AccountPage"), "AccountPage");
 const AdminPage = page(() => import("./pages/AdminPage"), "AdminPage");
@@ -200,6 +202,9 @@ function Routed() {
         <Route path="/paper/:sid" element={<PaperPage />} />
         <Route path="/trade/journal" element={<JournalPage />} />
         <Route path="/trade/fo-changes" element={<FoChangesPage />} />
+        <Route path="/trade/replay" element={<ReplayPage />} />
+        <Route path="/trade/signals" element={<SignalsPage />} />
+        <Route path="/trade/signals/:sid" element={<SignalsPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
