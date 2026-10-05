@@ -225,6 +225,10 @@ def _nse(sw=None):
                       + datetime.now().strftime("%d-%b-%Y") + ",10,INE999N01011", "SOMEBOND,Some Bond,N1,01-Jan-2020,1000,INE888B07019"]
             lines += [f"{s},{n},EQ,01-Jan-2000,1,{isin}" for s, n, isin in ISINS]
             return httpx.Response(200, text="\n".join(lines))
+        from tests import fake_vix
+        vx = fake_vix.answer(r.url.path, r.url.params)
+        if vx is not None:                            # India VIX: the index list, its chart and its history (vix.py)
+            return httpx.Response(200, json=vx)
         if r.url.path == "/api/etf":                  # every ETF's price and last NAV (etf_nav.py)
             from tests import fake_etf
             return httpx.Response(200, json=fake_etf.answer_live())
@@ -283,10 +287,12 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     surveillance._cache.clear()                 # the surveillance lists another test stored
     from app import etf_nav
     etf_nav.forget()                            # the ETF list and gap history another test stored
+    from app import vix
+    vix.forget()                                # India VIX quotes and history another test read
     from app import fo_changes
-    fo_changes._cache.clear()
+    fo_changes._cache.clear()                   # the F&O contract changes another test stored
     from app import closing_auction
-    closing_auction.forget()                    # the closing auction another test stored                   # the F&O contract changes another test stored
+    closing_auction.forget()                    # the closing auction another test stored
     from app import positioning
     positioning.clear_cache()                   # positioning days and live chains another test stored
     from app import auth

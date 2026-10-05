@@ -1432,3 +1432,8 @@ table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; pad
 .cas-table td .tiny { white-space: nowrap; }
 .cas-search { max-width: 220px; }
 @media (max-width: 640px) { .cas-search { max-width: none; width: 100%; } .cas-steps li { grid-template-columns: 96px minmax(0, 1fr); } }
+/* Options strike rules (the legs editor and the order log) */
+ul.order-rows li .order-pick { grid-column: 2 / -1; margin-top: -4px; }
+.legs .leg-pick { flex-wrap: wrap; align-items: center; }
+.legs .leg-pick select { max-width: 170px; }
+ul.leg-picks { margin: 0; padding-left: 18px; }

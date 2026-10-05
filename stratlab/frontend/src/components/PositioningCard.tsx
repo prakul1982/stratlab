@@ -3,12 +3,16 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { signClass } from "../lib/format";
 import { crore, dayName, missingWhy, ratio, sides, signed, type Summary } from "../lib/positioning";
+import { vixChange, vixNum } from "../lib/vix";
 import { Fig, PanelSkel } from "./ui";
+import { useVix } from "./VixPanel";
 
-/** The newest positioning numbers in a few lines (FII index futures, the FII and DII cash flows, NIFTY's PCR), for the
- * Trade home and the Options page. */
+/** The newest positioning numbers in a few lines (FII index futures, the FII and DII cash flows, NIFTY's PCR, India
+ * VIX), for the Trade home and the Options page. */
 export function PositioningCard() {
   const [s, setS] = useState<Summary | null | "error">(null);
+  const vix = useVix();
+  const vq = vix && vix !== "error" ? vix : null;
   useEffect(() => { api<Summary>("/trade/positioning?brief=1").then(setS).catch(() => setS("error")); }, []);
   const fii = s && s !== "error" ? s.participants.oi.find((r) => r.id === "fii") : undefined;
   const nifty = s && s !== "error" ? s.pcr?.find((r) => r.name === "NIFTY") : undefined;
@@ -32,6 +36,9 @@ export function PositioningCard() {
               note={s.cash.dii?.net != null && `DII ${crore(s.cash.dii.net, true)}`} />
             <Fig label="NIFTY PCR (open interest)" value={nifty?.pcr_oi != null ? ratio(nifty.pcr_oi) : null} missing="Not recorded yet"
               note={nifty?.expiry && `Expiry ${dayName(nifty.expiry)}`} />
+            <Fig label="India VIX" value={vq?.value != null ? <span data-testid="pos-card-vix">{vixNum(vq.value)}</span> : null}
+              missing={vix === null ? "Reading…" : "Not available"}
+              note={vq && (vixChange(vq.quote) ?? (vq.percentile.percentile != null ? `Higher than ${Math.round(vq.percentile.percentile)}% of the past year` : null))} />
           </div>
         )}
       {s && s !== "error" && (

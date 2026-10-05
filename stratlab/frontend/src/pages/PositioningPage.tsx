@@ -10,6 +10,7 @@ import { ChartEmpty, Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
 import { Info, Loading } from "../components/ui";
 import { useMoreColumns } from "../components/MoreColumns";
+import { VixPanel } from "../components/VixPanel";
 
 /* /trade/positioning: who holds index futures and options (the exchange's participant-wise files), FII and DII cash
  * flows, each index's put-call ratio, and one index's option chain as facts: open interest and its change by strike,
@@ -460,13 +461,14 @@ export function PositioningPage() {
       <div className="stack" style={{ gap: 6 }}>
         <span className="eyebrow">Trade · derivatives</span>
         <h1 className="page-title">Positioning</h1>
-        <p className="muted" style={{ maxWidth: "68ch" }}>Who holds index and stock futures and options, FII and DII cash flows, and what the index option chains show. The exchange's numbers as published: facts, not advice.</p>
+        <p className="muted" style={{ maxWidth: "68ch" }}>Who holds index and stock futures and options, FII and DII cash flows, India VIX, and what the index option chains show. The exchange's numbers as published: facts, not advice.</p>
       </div>
       {error ? <div className="banner">{error}</div>
         : !s ? <Loading label="Reading the newest numbers" />
         : (
           <>
             <Participants s={s} />
+            <VixPanel />
             <div className="grid2" style={{ alignItems: "start" }}>
               <Cash s={s} />
               <PcrTable coverage={s.coverage} />

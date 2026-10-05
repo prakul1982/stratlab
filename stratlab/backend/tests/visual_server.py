@@ -77,6 +77,7 @@ def build():
         mp.setattr(money_mf_ter, k, v)
     etf_gaps(mp)
     closing_auction(mp)
+    vix_history(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
     fx_rates.seed()
@@ -148,6 +149,14 @@ def etf_gaps(mp):
     etf_nav.refresh(main.filings_feed)
     fake_etf.seed_history(date.today())
     mp.setattr(main.etf_job, "start", lambda: None)          # the stored list stays as it is for the whole run
+
+
+def vix_history(mp):
+    """India VIX's last year of daily closes, as the job would have stored them (made up, from the fake exchange)."""
+    from datetime import date, timedelta
+    from app import vix
+    vix.fetch(date.today() - timedelta(days=400), date.today(), main.filings_feed, sleep=lambda s: None, pace=0)
+    mp.setattr(main.vix_job, "start", lambda: None)
 
 
 def positioning_history():

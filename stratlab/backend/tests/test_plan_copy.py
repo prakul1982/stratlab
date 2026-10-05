@@ -68,6 +68,8 @@ CARD_WORDS = {
     "fo_alerts": "F&O change alerts",
     "options_whatif": "what-if sliders",
     "cas_history": "closing auction history",
+    "vix_filter": "India VIX entry filter",
+    "strike_rules": "strikes picked by delta or premium",
 }
 
 

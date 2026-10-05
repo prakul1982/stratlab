@@ -4,6 +4,13 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 5 October 2026: strikes picked by delta or premium, and India VIX
+
+**Trade**
+- **Strikes picked by rule (Pro):** an options leg can take the strike nearest a model delta, inside a delta range, nearest (or at least, or at most) a rupee premium, or nearest a share of the at-the-money straddle, resolved on the live quotes at entry and at each re-centre. The builder's preview shows what each rule picks now (every plan), and the order log says why under each order.
+- **India VIX (every plan):** a panel on Positioning and a tile on the Trade home's positioning card: the value and change, the day's range, where it sits among the past year's closes, NIFTY ATM IV beside it, today's line and the year's chart. India VIX and its change % are rule values in notebooks, and the verdict's nearby-settings check nudges a VIX cut-off.
+- **India VIX entry filter (Basic):** options sessions can enter only while India VIX is inside a band; the session page lists the entries it held back.
+
 ### 5 October 2026: price charts, options Greeks and what-if, F&O changes, ETF vs NAV, fund costs and a self-healing AI
 
 **Everywhere**

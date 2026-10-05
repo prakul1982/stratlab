@@ -16,8 +16,10 @@ from datetime import datetime, timedelta
 from ..data import sessions
 from ..engine import costs as C
 from ..models import OptionStrategy
+from . import strikes as SR
 
 TICK = 0.05
+VIX_KEY = "NSE:INDIA VIX"     # the India VIX quote an entry filter reads (sessions quote it beside the legs)
 
 
 class Contracts:
@@ -98,11 +100,13 @@ class OptionsEngine:
         self.cool_until = st.get("cool_until")
         self.note = st.get("note", "")
         self.used_signal = st.get("used_signal")    # the rules' trade we last acted on, so a stop doesn't re-enter it
+        self.vix_skip = st.get("vix_skip")          # the day and side of the India VIX band last logged as a skip
 
     def dump(self) -> dict:
         return {"cash": self.cash, "pos": self.pos, "trades": self.trades[-500:], "events": self.events[-400:],
                 "day": self.day, "entries_today": self.entries_today, "day_realised": self.day_realised,
-                "halted": self.halted, "cool_until": self.cool_until, "note": self.note, "used_signal": self.used_signal}
+                "halted": self.halted, "cool_until": self.cool_until, "note": self.note, "used_signal": self.used_signal,
+                "vix_skip": self.vix_skip}
 
     def legs_for(self, direction: str | None):
         """The structure for a signal's direction: the legs as set for long, calls and puts swapped for short."""
@@ -136,7 +140,8 @@ class OptionsEngine:
         return self.cash + self.mtm(q) - self.pos["costs"]
 
     # ---------- orders ----------
-    def _order(self, now: datetime, leg: dict, side: str, px: float, why: str, pnl: float | None = None) -> dict:
+    def _order(self, now: datetime, leg: dict, side: str, px: float, why: str, pnl: float | None = None,
+               picked: str | None = None) -> dict:
         slices = max(1, math.ceil(leg["qty"] / self.freeze)) if self.freeze else 1
         cost = C.total(C.order_costs(self.kind, side, leg["qty"], px, slices * self.s.costs.brokerage))
         self.pos["costs"] += cost
@@ -145,10 +150,12 @@ class OptionsEngine:
               "strike": leg.get("strike"), "opt": leg.get("opt"), "slices": slices}
         if pnl is not None:
             ev["pnl"] = round(pnl, 2)
+        if picked:
+            ev["pick"] = picked
         self.events.append(ev)
         return ev
 
-    def _open_leg(self, now, contracts: Contracts, quotes, opt, side, strike, qty, why, out) -> bool:
+    def _open_leg(self, now, contracts: Contracts, quotes, opt, side, strike, qty, why, out, picked: str | None = None) -> bool:
         key = contracts.key(opt, strike)
         px = fill_price(quotes.get(key), side, self.s.costs.slippageTicks) if key else None
         if px is None:
@@ -157,7 +164,7 @@ class OptionsEngine:
         leg = {"key": key, "sym": sym, "opt": opt, "side": side, "strike": strike, "qty": qty, "entry": px,
                "mark": px, "open": True}
         self.pos["legs"].append(leg)
-        out.append(self._order(now, leg, side, px, why))
+        out.append(self._order(now, leg, side, px, why, picked=picked))
         return True
 
     def _close_leg(self, now, leg, quotes, why, out):
@@ -192,14 +199,25 @@ class OptionsEngine:
         self._exit(now, {}, "Expiry settlement", out)
 
     # ---------- the structure ----------
-    def _plan(self, contracts: Contracts, atm: float, legs=None) -> list[tuple] | None:
-        """(opt, side, strike, lots) for each leg around a centre strike, or None when a strike doesn't exist."""
+    def _plan(self, contracts: Contracts, atm: float, legs=None, quotes: dict | None = None, spot: float | None = None,
+              now: datetime | None = None) -> list[tuple] | None:
+        """(opt, side, strike, lots, why picked) for each leg around a centre strike, or None when a strike doesn't
+        exist or a leg's strike rule can't pick one on these quotes (self.plan_note says which)."""
+        legs = legs or self.s.legs
+        self.plan_note = "A strike this structure needs isn't listed for that expiry."
+        m = SR.model_for(contracts, atm, spot, quotes or {}, now) if SR.needs_model(legs) and now else None
         out = []
-        for lg in legs or self.s.legs:
-            k = contracts.strike_for(atm, lg.opt, lg.offset, self.s.offsetUnit)
+        for lg in legs:
+            why = None
+            if getattr(lg, "pick", "offset") == "offset":
+                k = contracts.strike_for(atm, lg.opt, lg.offset, self.s.offsetUnit)
+            else:
+                k, why = SR.pick(contracts, atm, lg, quotes or {}, m)
+                if k is None:
+                    self.plan_note = why + " No entry until a strike fits."
             if k is None:
                 return None
-            out.append((lg.opt, lg.side, k, lg.lots))
+            out.append((lg.opt, lg.side, k, lg.lots, why))
         return out
 
     def _units(self, contracts: Contracts, plan: list[tuple]) -> int:
@@ -210,7 +228,7 @@ class OptionsEngine:
         if not self.margin_fn:
             self.note = "Margin sizing needs the broker's margin service, which isn't available; used 1 unit."
             return 1
-        legs = [{"key": contracts.key(o, k), "side": sd, "qty": n * contracts.lot} for o, sd, k, n in plan]
+        legs = [{"key": contracts.key(o, k), "side": sd, "qty": n * contracts.lot} for o, sd, k, n, _ in plan]
         one = self.margin_fn(legs)
         if not one or one <= 0:
             self.note = "Couldn't get the margin for this structure; used 1 unit."
@@ -230,11 +248,11 @@ class OptionsEngine:
 
     def _enter(self, now, spot, contracts: Contracts, quotes, out, direction: str | None = None) -> bool:
         atm = contracts.atm(spot)
-        plan = self._plan(contracts, atm, self.legs_for(direction))
+        plan = self._plan(contracts, atm, self.legs_for(direction), quotes, spot, now)
         if plan is None:
-            self.note = "A strike this structure needs isn't listed for that expiry."
+            self.note = self.plan_note
             return False
-        missing = [(o, sd, k) for o, sd, k, _ in plan if fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None]
+        missing = [(o, sd, k) for o, sd, k, _, _ in plan if fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None]
         if missing:
             legs = ", ".join(f"{k:g} {o} ({'buy' if sd == 'buy' else 'sell'})" for o, sd, k in missing)
             note = f"No price yet for {legs}, so no entry. It enters once every leg has a bid, ask or last price."
@@ -250,8 +268,8 @@ class OptionsEngine:
                     "costs": 0.0, "orders": 0, "peak": 0.0, "low": 0.0, "rolls": 0, "expiry": contracts.expiry,
                     "units": units, "last_check": now.isoformat(), "credit": 0.0, "dir": direction}
         # buy the hedges first, as a broker would, so the sold legs get the margin benefit
-        for opt, side, k, n in sorted(plan, key=lambda x: x[1] != "buy"):
-            self._open_leg(now, contracts, quotes, opt, side, k, n * units * contracts.lot, "Entry", out)
+        for opt, side, k, n, why in sorted(plan, key=lambda x: x[1] != "buy"):
+            self._open_leg(now, contracts, quotes, opt, side, k, n * units * contracts.lot, "Entry", out, why)
         p = self.pos
         p["credit"] = sum((l["entry"] if l["side"] == "sell" else -l["entry"]) * l["qty"] for l in p["legs"])
         self.entries_today += 1
@@ -287,14 +305,14 @@ class OptionsEngine:
         if abs(atm - p["center"]) < r.threshold * contracts.step(spot) - 1e-9:
             return
         legs = [lg for lg in self.legs_for(p.get("dir")) if r.roll == "all" or lg.side == "sell"]
-        plan = self._plan(contracts, atm, legs)
-        if plan is None or any(fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None for o, sd, k, _ in plan):
+        plan = self._plan(contracts, atm, legs, quotes, spot, now)
+        if plan is None or any(fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None for o, sd, k, _, _ in plan):
             return   # try again at the next check
         for leg in p["legs"]:
             if leg["open"] and (r.roll == "all" or leg["side"] == "sell"):
                 self._close_leg(now, leg, quotes, "Re-centre", out)
-        for opt, side, k, n in sorted(plan, key=lambda x: x[1] != "buy"):
-            self._open_leg(now, contracts, quotes, opt, side, k, n * p["units"] * contracts.lot, "Re-centre", out)
+        for opt, side, k, n, why in sorted(plan, key=lambda x: x[1] != "buy"):
+            self._open_leg(now, contracts, quotes, opt, side, k, n * p["units"] * contracts.lot, "Re-centre", out, why)
         p["center"] = atm
         p["rolls"] += 1
         p["credit"] = p["closed_pnl"] + sum((l["entry"] if l["side"] == "sell" else -l["entry"]) * l["qty"]
@@ -378,9 +396,32 @@ class OptionsEngine:
         if not fresh or not spot or not contracts:
             self.note = "Waiting for live prices." if not fresh else "Waiting for the option chain."
             return out
+        if self.s.vix and not self._vix_ok(now, quotes):
+            return out
         if self._enter(now, spot, contracts, quotes, out, want["dir"] if sig else None) and sig:
             self.used_signal = want["key"]
         return out
+
+    def _vix_ok(self, now: datetime, quotes: dict) -> bool:
+        """The India VIX entry filter: True inside the band. Outside it the note says so, and the order log gets one
+        line the first time each day the value is found below or above the band."""
+        f = self.s.vix
+        q = quotes.get(VIX_KEY) or {}
+        v = q.get("ltp")
+        if not v or v <= 0:
+            self.note = "Waiting for India VIX: entries are filtered on it."
+            return False
+        side = "below" if f.min and v < f.min else "above" if f.max and v > f.max else None
+        if side is None:
+            return True
+        edge = f.min if side == "below" else f.max
+        self.note = f"India VIX is {v:.2f}, {side} {edge:g}; entries wait until it is {vix_band(f)}."
+        tag = f"{now.date().isoformat()}:{side}"
+        if self.vix_skip != tag:
+            self.vix_skip = tag
+            self.events.append({"t": now.isoformat(), "kind": "skip", "vix": round(v, 2),
+                                "why": f"Skipped: India VIX {v:.2f}, {side} {edge:g}"})
+        return False
 
     def legs_view(self, quotes: dict) -> list[dict]:
         if not self.pos:
@@ -391,3 +432,10 @@ class OptionsEngine:
             out.append({"sym": l["sym"], "opt": l["opt"], "side": l["side"], "strike": l["strike"], "qty": l["qty"],
                         "entry": l["entry"], "mark": px, "open": l["open"], "pnl": round(self._leg_pnl(l, px), 2)})
         return out
+
+
+def vix_band(f) -> str:
+    """An entry filter's band in words: "between 11 and 18", "at or below 18", "at or above 11"."""
+    if f.min and f.max:
+        return f"between {f.min:g} and {f.max:g}"
+    return f"at or below {f.max:g}" if f.max else f"at or above {f.min:g}"

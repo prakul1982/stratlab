@@ -5,7 +5,7 @@ export type RefType =
   | "bb_upper" | "bb_mid" | "bb_lower" | "vwap" | "supertrend" | "stage"
   | "adx" | "stoch_k" | "atr_pct" | "dc_upper" | "dc_lower" | "volume" | "vol_sma"
   | "open" | "high" | "low" | "body" | "upper_wick" | "lower_wick" | "range" | "atr"
-  | "prev_close" | "day_open" | "day_high" | "day_low" | "day_chg";
+  | "prev_close" | "day_open" | "day_high" | "day_low" | "day_chg" | "india_vix" | "india_vix_chg";
 export type Op = "xa" | "xb" | "gt" | "lt" | "eq";
 export type Tf = "1d" | "1h" | "15m" | "5m";
 export type HigherTf = "15m" | "1h" | "1d";
@@ -154,7 +154,10 @@ export interface LiveRow {
 }
 
 // ---------- options ----------
-export interface OptLeg { side: "sell" | "buy"; opt: "CE" | "PE"; offset: number; lots: number }
+/** How a leg's strike is picked: a distance from the money, or a rule resolved on the quotes at entry (Pro). */
+export type StrikePick = "offset" | "delta" | "delta_range" | "premium" | "straddle_pct";
+export interface OptLeg { side: "sell" | "buy"; opt: "CE" | "PE"; offset: number; lots: number;
+  pick?: StrikePick; delta?: number; deltaTo?: number; premium?: number; premiumOp?: "near" | "gte" | "lte"; pct?: number }
 export interface OptionStrategy {
   name: string; structure: string; exchange: "NFO" | "BFO" | "MCX" | "CDS"; underlying: string; expiry: string;
   offsetUnit: "strikes" | "points"; legs: OptLeg[];
@@ -166,6 +169,7 @@ export interface OptionStrategy {
   costs: { brokerage: number; slippageTicks: number; freeze: number };
   notes: string;
   signal?: { rules: Strategy; notebook?: string | null; name: string; short: "mirror" | "none" } | null;
+  vix?: { min: number; max: number } | null;     // enter only while India VIX is inside this band (0 = that end open)
 }
 export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: string; lot: number; expiries: string[]; venue: string; popular: boolean; freeze: number; index: boolean }
 export interface OptQuote { ltp: number | null; bid: number | null; ask: number | null; oi?: number | null; volume?: number | null; ts?: string | null }
@@ -178,7 +182,8 @@ export interface PositionGreeks { legs: (OptionGreeks | null)[]; model_legs: Mod
 export interface OptPreview {
   spot: number; atm: number; step: number; expiry: string; lot: number; freeze: number; units: number;
   margin_one: number | null; margin: number | null; strikes: number[]; expiries?: string[];
-  legs: { side: "sell" | "buy"; opt: "CE" | "PE"; lots: number; strike: number | null; sym: string | null; quote: OptQuote | null; fill: number | null }[];
+  legs: { side: "sell" | "buy"; opt: "CE" | "PE"; lots: number; strike: number | null; sym: string | null; quote: OptQuote | null; fill: number | null;
+    rule?: string; pick?: string | null }[];     // the leg's rule in words, and why a strike rule picked its strike (or why none)
   charges?: OptCharges | null;     // opening and closing every leg once at the fills shown; null when a leg has no quote
   model?: GreekModel | null; greeks?: PositionGreeks | null;     // null once the expiry has passed
 }
@@ -214,7 +219,7 @@ export interface OptionSnapshot {
   signal?: { tf: Tf; position: "long" | "short" | null; since: string | null; last_candle: string | null; price: number | null; ok: boolean;
     name: string; short: "mirror" | "none" } | null;
   events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; slices?: number;
-    strike?: number; opt?: "CE" | "PE" }[];
+    strike?: number; opt?: "CE" | "PE"; pick?: string; kind?: "skip"; vix?: number }[];
   trades: OptTrade[]; equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; cash: number; realised: number; today: number; halted: boolean; entries_today: number;
     trades: number; wins: number; unrealised: number };

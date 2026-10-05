@@ -37,7 +37,7 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
                      "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal",
-                     "mf_costs", "etf_gaps", "fo_alerts", "cas_history"},
+                     "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -56,7 +56,8 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history"},
+                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
+                     "vix_filter", "strike_rules"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -78,11 +79,14 @@ PLANS = {
 # list and its badges are for everyone); options_whatif: the options what-if sliders (spot, IV and days forward, moving
 # the payoff, Greeks and P&L) and the roll preview (the model's Greeks for each strike in the chain and each leg, the net
 # Greeks and the payoff today beside the one at expiry are for everyone); cas_history: the closing auction desk's 60-day
-# history (today's auction, live, is for everyone)
+# history (today's auction, live, is for everyone); vix_filter: the India VIX entry filter on options sessions (the India VIX
+# panel, its history and percentile are for everyone; India VIX in notebook rules comes with the other indicators);
+# strike_rules: options legs whose strike is picked by model delta, a delta range, premium or a share of the ATM straddle
+# (the builder's preview of what a rule picks is for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
             "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
-            "cas_history")
+            "cas_history", "vix_filter", "strike_rules")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

@@ -65,7 +65,7 @@ from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators
-from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer
+from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import OptionsData, freeze as freeze_limit
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
@@ -77,6 +77,7 @@ from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
 from . import etf_nav
+from . import vix
 from . import positioning
 from . import fo_changes_routes
 from . import closing_auction
@@ -204,6 +205,9 @@ etf_nav.setup(lambda: filings_feed)              # ETF prices against their NAV:
 etf_job = etf_nav.Job(lambda: filings_feed)
 closing_auction.setup(lambda: filings_feed)      # the closing auction desk: the exchange's CAS data
 closing_auction_job = closing_auction.Job(lambda: filings_feed)
+vix.setup(lambda: filings_feed)                  # India VIX: the exchange's index list, its chart and history
+vix.use_options(lambda: options_data)
+vix_job = vix.Job(lambda: filings_feed)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
 
 
@@ -251,6 +255,7 @@ async def lifespan(app: FastAPI):
     breadth_job.start()
     etf_job.start()
     closing_auction_job.start()       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
+    vix_job.start()
     ai_providers.job.start()          # measures the AI models every 6 hours
     yield
 
@@ -277,6 +282,7 @@ app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
 app.include_router(closing_auction.router)     # /trade/closing-auction
+app.include_router(vix.router)                 # /trade/vix
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 
 
@@ -3099,7 +3105,7 @@ def get_live(sid: str, profile=Depends(current_profile)):
 def orders_from(events: list[dict]) -> list[dict]:
     """The session's orders, newest first, in the shape the app shows."""
     return [{"side": e["side"], "qty": e["qty"], "price": e["px"], "reason": e.get("why"), "pnl": e.get("pnl"),
-             "ts": e["t"]} for e in reversed(events[-200:])]
+             "ts": e["t"]} for e in reversed(events[-200:]) if "side" in e]     # an options skip line isn't an order
 
 
 @app.post("/live/sessions/{sid}/stop")
@@ -3240,9 +3246,17 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
         err(503, "no_spot", f"Couldn't get the {s.underlying} price just now.")
     atm = c.atm(spot)
     legs = []
+    # a strike rule (delta, premium, a share of the straddle) picks on the quotes of the strikes near the money now
+    rq = options_data.quotes(opt_strikes.keys_for(c, atm, s.legs)) if opt_strikes.uses_rules(s.legs) else {}
+    rm = opt_strikes.model_for(c, atm, spot, rq, positioning.ist_now()) if opt_strikes.needs_model(s.legs) else None
     for lg in s.legs:
-        k = c.strike_for(atm, lg.opt, lg.offset, s.offsetUnit)
-        legs.append({"side": lg.side, "opt": lg.opt, "lots": lg.lots, "strike": k, "key": c.key(lg.opt, k) if k is not None else None})
+        why = None
+        if lg.pick == "offset":
+            k = c.strike_for(atm, lg.opt, lg.offset, s.offsetUnit)
+        else:
+            k, why = opt_strikes.pick(c, atm, lg, rq, rm)
+        legs.append({"side": lg.side, "opt": lg.opt, "lots": lg.lots, "strike": k, "key": c.key(lg.opt, k) if k is not None else None,
+                     "rule": opt_strikes.describe(lg, s.offsetUnit), "pick": why})
     q = options_data.quotes([l["key"] for l in legs if l["key"]])
     for l in legs:
         l["quote"] = q.get(l["key"]) if l["key"] else None
@@ -3378,6 +3392,10 @@ def start_options(req: OptionStartReq, profile=Depends(current_profile)):
     s = req.strategy
     if s.signal:
         need(profile, "options_signal", "Options entered on a notebook's signal")
+    if opt_strikes.uses_rules(s.legs):
+        need(profile, "strike_rules", "Picking strikes by delta or premium")
+    if s.vix:
+        need(profile, "vix_filter", "The India VIX entry filter")
     options_ready()
     if not options_data.contracts(s.exchange, s.underlying, s.expiry):
         err(404, "no_contracts", f"No {s.underlying} options are listed on {s.exchange} for that expiry.")

@@ -2,8 +2,9 @@
 
 1. Unseen data: split the test period 70/30 and trade each part with fresh capital.
    A real edge keeps making money on the part it wasn't tuned on.
-2. Nearby settings: nudge the indicator lengths up and down. If only the exact
-   settings you picked make money, the result is probably a lucky fit.
+2. Nearby settings: nudge the indicator lengths up and down (and an India VIX
+   cut-off, when the rules have one). If only the exact settings you picked make
+   money, the result is probably a lucky fit.
 3. Bad-luck drawdown: reshuffle the order of the trades 1,000 times. The worst
    falls show how deep a drawdown the same trades could have produced.
 4. Enough trades: under 15 trades, luck dominates; 30+ is a fair sample.
@@ -14,7 +15,7 @@ import numpy as np
 
 from ..models import Ref
 from .core import Ctx, simulate
-from .indicators import params, ref_name
+from .indicators import MARKET, params, ref_name
 
 SPLIT = 0.7
 SHUFFLES = 1000
@@ -69,8 +70,23 @@ def check_unseen(bars, strategy, start, lot, kind, ctx) -> dict:
     return {"id": "unseen", "title": "Unseen data", "status": status, "detail": detail, "data": data}
 
 
-def _param_keys(strategy) -> list[tuple[str, int]]:
+def _market_cut(c) -> tuple[str, float] | None:
+    """A rule comparing India VIX (or its change %) with a number: ("india_vix", the number)."""
+    for a, b in ((c.l, c.r), (c.r, c.l)):
+        if a.t in MARKET and b.t == "num" and b.v is not None:
+            return a.t, float(b.v)
+    return None
+
+
+def _param_keys(strategy) -> list[tuple[str, float]]:
+    """What the check nudges, at most two: an India VIX cut-off first (a level picked to fit the past is the easiest
+    lucky number to miss), then the indicator lengths."""
     keys = []
+    for c in strategy.all_conds():
+        cut = _market_cut(c)
+        if cut and cut not in keys:
+            keys.append(cut)
+            break
     for c in strategy.all_conds():
         for ref in (c.l, c.r):
             if ref.t in PERIOD_TYPES:
@@ -78,6 +94,22 @@ def _param_keys(strategy) -> list[tuple[str, int]]:
                 if key not in keys:
                     keys.append(key)
     return keys[:2]
+
+
+def _values(key: tuple[str, float]) -> list:
+    """The nudged values of a key: lengths by NUDGES; an India VIX level by the same factors to the nearest 0.5; a
+    change % by 1 and 2 points either way."""
+    t, v = key
+    if t == "india_vix_chg":
+        return [round(v + d, 2) for d in (-2, -1, 0, 1, 2)]
+    if t in MARKET:
+        out = []
+        for f in NUDGES:
+            x = round(v * f * 2) / 2 if f != 1.0 else v
+            if x > 0 and x not in out:
+                out.append(x)
+        return out
+    return _nudged(int(v))
 
 
 def _nudged(p: int) -> list[int]:
@@ -89,9 +121,14 @@ def _nudged(p: int) -> list[int]:
     return vals
 
 
-def _with(strategy, subs: dict[tuple[str, int], int]):
+def _with(strategy, subs: dict[tuple, float]):
     s = copy.deepcopy(strategy)
     for c in s.all_conds():
+        cut = _market_cut(c)
+        if cut in subs:
+            num = c.r if c.r.t == "num" else c.l
+            num.v = subs[cut]
+            continue
         for ref in (c.l, c.r):
             key = (ref.t, params(ref)[0]) if ref.t in PERIOD_TYPES else None
             if key in subs:
@@ -107,8 +144,8 @@ def check_nearby(bars, strategy, start, lot, kind, ctx) -> dict:
     cap = strategy.risk.capital
     cols_key = keys[0]
     rows_key = keys[1] if len(keys) > 1 else None
-    cols = _nudged(cols_key[1])
-    rows = _nudged(rows_key[1]) if rows_key else [None]
+    cols = _values(cols_key)
+    rows = _values(rows_key) if rows_key else [None]
     grid, profitable, total, yours = [], 0, 0, [0, 0]
     for ri, rv in enumerate(rows):
         row = []
@@ -131,6 +168,8 @@ def check_nearby(bars, strategy, start, lot, kind, ctx) -> dict:
               "fail": "Most settings near yours lose money. Your exact numbers look like a lucky fit."}[status]
 
     def label(key):
+        if key[0] in MARKET:
+            return ref_name(Ref(t=key[0])) + " cut-off"
         return ref_name(Ref(t=key[0], p=key[1])).rsplit(" ", 1)[0]
 
     data = {"grid": grid, "cols": cols, "rows": rows if rows_key else [], "col_label": label(cols_key),
