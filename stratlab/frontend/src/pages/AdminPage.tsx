@@ -350,7 +350,7 @@ export function AdminPage() {
           )}
 
           {tab === "services" && (
-            <div className="grid2">
+            <div className="grid2" style={{ alignItems: "start" }}>
               <section className="card stack" style={{ gap: 4 }}>
                 <h2 className="h2" style={{ marginBottom: 6 }}>Market data</h2>
                 <Status ok={sv!.kite_ready} label="Broker data (India)" detail={sv!.kite_invalid ? sv!.kite_invalid : sv!.kite_ready ? `Logged in${sv!.kite_token_day ? ` for ${dateOnly(sv!.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline."} />

@@ -1339,7 +1339,9 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 /* Admin: the AI panel */
 .ai-provider { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
 .ai-model, .ai-missing { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px dashed var(--line); }
-.ai-missing { border-top-style: solid; }
+.ai-missing { border-top-style: solid; flex-wrap: nowrap; }   /* each "Get a key" stays on the right, however long the text */
+.ai-missing > .stack { flex: 1 1 auto; }
+.ai-missing > .btn { flex: none; }
 .ai-id { overflow-wrap: anywhere; }
 
 /* ---------- charts (components/chart) ---------- */
