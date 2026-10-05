@@ -62,9 +62,12 @@ def build():
     surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them
     from app import fo_changes
     fo_changes.refresh(main.filings_feed)    # the F&O contract file and circulars, likewise
+    from tests import fake_market_events
+    fake_market_events.seed()                # the market events calendar's sources, as the morning read would have kept them
     screen_index()
     breadth(mp)
     positioning_history()
+    stock_desks_history(mp)
     # the public NAV files, from the test fixtures, for the mutual funds page
     from app import money_mf_nav
     navs = Path(__file__).parent / "fixtures" / "mf"
@@ -75,13 +78,44 @@ def build():
     mp.setattr(money_mf_ter, "fetch_month", lambda m, y: (navs / "ter_disclosure.html").read_text())
     for k, v in (("MIN_ROWS", 1), ("PAUSE", 0), ("BACKGROUND", False), ("BACKFILL", 3)):
         mp.setattr(money_mf_ter, k, v)
+    # a made-up NAV history for the flexi cap fund, for the fund behaviour card's redemption after a fall
+    from app import money_mf_behaviour
+    from tests import fake_mf_history
+    mp.setattr(money_mf_behaviour, "fetch_json", fake_mf_history.fetch)
+    mp.setattr(money_mf_behaviour, "BACKGROUND", False)
+    mp.setattr(money_mf_behaviour, "PAUSE", 0)
+    # the Reserve Bank's Current Rates panel, from a trimmed real copy, for Money → Rates
+    from app import rbi_rates
+    rbi_page = (Path(__file__).parent / "fixtures" / "rates" / "rbi_home_rates.html").read_text()
+    mp.setattr(rbi_rates, "fetch_text", lambda url=rbi_rates.URL: rbi_page)
     etf_gaps(mp)
+    closing_auction(mp)
+    vix_history(mp)
+    holders_and_updates(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
     fx_rates.seed()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     return w
+
+
+def holders_and_updates(mp):
+    """Named holders from the real (trimmed) shareholding samples, with Safari's list also shown on RELIANCE's page;
+    business updates: a made-up year for RELIANCE, and Maruti's and TVS Motor's real September filings read as the job
+    would have (the model's replies in fake_biz)."""
+    from app import biz_updates as B
+    from app.docs import Docs
+    from tests import fake_biz, fake_shp
+    fake_shp.seed(also={"RELIANCE": "SAFARI"})
+    fake_biz.seed(("RELIANCE",))
+    mp.setattr(B, "complete", fake_biz.ai)
+    docs = Docs(transport=fake_biz.docs_transport(), check_host=lambda h: True, ocr=lambda d: "")
+    for sym in ("MARUTI", "TVSMOTOR"):
+        item = next(u for u in B.updates(fake_biz.announcements(sym)) if u["url"].endswith(fake_biz.FILES[sym]))
+        B.save(sym, item["id"], B.read_one(sym, item, docs, None, []))
+    mp.setattr(main.biz_job, "start", lambda: None)
+    mp.setattr(main.holders_job, "start", lambda: None)
 
 
 def invite_rewards():
@@ -126,6 +160,16 @@ def breadth(mp):
         for region in ("IN", "US"):
             main.breadth_runner.run(region)
     mp.setattr(main.breadth_job, "start", lambda: None)      # the stored counts stay as they are for the whole run
+def closing_auction(mp):
+    """Today's closing auction, as read just after it ended, and 8 stored days for the history."""
+    from datetime import date
+    from app import closing_auction as CA
+    from tests import fake_cas
+    CA.refresh(main.filings_feed)
+    fake_cas.seed(date.today())
+    mp.setattr(main.closing_auction_job, "start", lambda: None)
+
+
 def etf_gaps(mp):
     """ETF prices against their NAV: the exchange's ETF list as the job would have read it (from the fake exchange),
     the made-up ETFs' NAVs added to the NAV file, and 30 trading days of stored closes."""
@@ -137,6 +181,14 @@ def etf_gaps(mp):
     etf_nav.refresh(main.filings_feed)
     fake_etf.seed_history(date.today())
     mp.setattr(main.etf_job, "start", lambda: None)          # the stored list stays as it is for the whole run
+
+
+def vix_history(mp):
+    """India VIX's last year of daily closes, as the job would have stored them (made up, from the fake exchange)."""
+    from datetime import date, timedelta
+    from app import vix
+    vix.fetch(date.today() - timedelta(days=400), date.today(), main.filings_feed, sleep=lambda s: None, pace=0)
+    mp.setattr(main.vix_job, "start", lambda: None)
 
 
 def positioning_history():
@@ -153,6 +205,16 @@ def positioning_history():
     if day:
         main.positioning_runner.run_day(day)
     main.positioning_runner.backfill(today, step=120, days=100)
+
+
+def stock_desks_history(mp):
+    """The stock desks (futures, lending, margin funding) as the evening job and its archive walk would have left them:
+    about two months of the fake exchange's files. The job itself stays off, so the stored days stay as they are."""
+    from app import exchange_days, stock_desks
+    for d in stock_desks.DESKS:
+        stock_desks.runner.catch_up(d)
+        stock_desks.runner.backfill(d, exchange_days.ist_now().date(), step=30)
+    mp.setattr(stock_desks.job, "start", lambda: None)
 
 
 def screen_index():

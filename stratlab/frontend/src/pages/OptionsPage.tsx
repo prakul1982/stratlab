@@ -4,8 +4,8 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, price } from "../lib/format";
 import { HELP } from "../lib/help";
-import { blankOptions, IMPORTED, legName, payoff, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
-import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, Underlying } from "../lib/types";
+import { blankOptions, IMPORTED, legName, legRule, payoff, PICKS, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
+import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import type { OptionGreeks } from "../lib/greeks";
@@ -60,14 +60,51 @@ function Seg<T extends string>({ value, options, onChange, label }: { value: T; 
   );
 }
 
-function LegsEditor({ s, set, preview }: { s: OptionStrategy; set: (legs: OptLeg[]) => void; preview: OptPreview | null }) {
+/** A small number box for a leg's rule, keeping what's typed until it's a number in range. */
+function RuleNum({ label, value, onChange, min, max, step, width = 72 }: { label: string; value: number; onChange: (v: number) => void; min: number; max: number; step: number; width?: number }) {
+  const [txt, setTxt] = useState(String(value));
+  useEffect(() => setTxt(String(value)), [value]);
+  return <input aria-label={label} type="number" inputMode="decimal" value={txt} min={min} max={max} step={step} style={{ width }}
+    onChange={(e) => { setTxt(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= min && n <= max) onChange(n); }} />;
+}
+
+/** How a leg's strike is picked, and the number(s) the rule needs. */
+function PickCell({ l, i, unit, upd, rules }: { l: OptLeg; i: number; unit: "points" | "strikes"; upd: (i: number, p: Partial<OptLeg>) => void; rules: boolean }) {
+  const pick = l.pick ?? "offset";
+  const n = (k: keyof OptLeg, d: number) => (l[k] as number | undefined) ?? d;
+  return (
+    <div className="row wrap leg-pick" style={{ gap: 6 }}>
+      <select aria-label={`Leg ${i + 1} strike by`} value={pick} onChange={(e) => upd(i, { pick: e.target.value as StrikePick })}>
+        {PICKS.map(([v, name]) => <option key={v} value={v} disabled={v !== "offset" && !rules && v !== pick}>{name}{v !== "offset" && !rules ? " (Pro)" : ""}</option>)}
+      </select>
+      {pick === "offset" && <RuleNum label={`Leg ${i + 1} distance from the money`} value={l.offset} min={-5000} max={5000} step={unit === "points" ? 50 : 1}
+        onChange={(v) => upd(i, { offset: v })} />}
+      {pick === "offset" && <span className="tiny muted">{unit}</span>}
+      {(pick === "delta" || pick === "delta_range") && <RuleNum label={`Leg ${i + 1} delta`} value={n("delta", 0.2)} min={0.01} max={0.99} step={0.05}
+        onChange={(v) => upd(i, { delta: v })} />}
+      {pick === "delta_range" && <><span className="tiny muted">to</span><RuleNum label={`Leg ${i + 1} delta, high end`} value={n("deltaTo", 0.3)} min={0.01} max={0.99} step={0.05}
+        onChange={(v) => upd(i, { deltaTo: v })} /></>}
+      {pick === "premium" && <>
+        <select aria-label={`Leg ${i + 1} premium match`} value={l.premiumOp ?? "near"} onChange={(e) => upd(i, { premiumOp: e.target.value as OptLeg["premiumOp"] })}>
+          <option value="near">nearest</option><option value="gte">at or above</option><option value="lte">at or below</option></select>
+        <span className="tiny muted">₹</span><RuleNum label={`Leg ${i + 1} premium`} value={n("premium", 50)} min={0.05} max={1000000} step={5} width={84}
+          onChange={(v) => upd(i, { premium: v })} /></>}
+      {pick === "straddle_pct" && <><RuleNum label={`Leg ${i + 1} share of the straddle`} value={n("pct", 20)} min={1} max={200} step={5}
+        onChange={(v) => upd(i, { pct: v })} /><span className="tiny muted">% of ATM straddle</span></>}
+    </div>
+  );
+}
+
+function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs: OptLeg[]) => void; preview: OptPreview | null; rules: boolean }) {
   const upd = (i: number, p: Partial<OptLeg>) => set(s.legs.map((l, j) => (j === i ? { ...l, ...p } : l)));
   const unit = s.offsetUnit === "points" ? "points" : "strikes";
+  const picks = preview ? preview.legs.map((p, i) => [i, p.pick] as const).filter(([, w]) => !!w) : [];
+  const usesRules = s.legs.some((l) => (l.pick ?? "offset") !== "offset");
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div className="table-wrap" style={{ margin: 0 }}>
         <table className="legs">
-          <thead><tr><th>Buy or sell</th><th>Type</th><th>{unit === "points" ? "Points" : "Strikes"} from ATM<Info>{HELP.optOffset}</Info></th><th>Lots</th>
+          <thead><tr><th>Buy or sell</th><th>Type</th><th>Strike by<Info>{HELP.optStrikeRule}</Info></th><th>Lots</th>
             {preview && <><th>Strike</th><th>Fill now</th></>}<th /></tr></thead>
           <tbody>{s.legs.map((l, i) => {
             const p = preview?.legs[i];
@@ -77,17 +114,25 @@ function LegsEditor({ s, set, preview }: { s: OptionStrategy; set: (legs: OptLeg
                   <option value="sell">Sell</option><option value="buy">Buy</option></select></td>
                 <td><select aria-label={`Leg ${i + 1} call or put`} value={l.opt} onChange={(e) => upd(i, { opt: e.target.value as OptLeg["opt"] })}>
                   <option value="CE">Call (CE)</option><option value="PE">Put (PE)</option></select></td>
-                <td><input aria-label={`Leg ${i + 1} distance from the money`} type="number" value={l.offset} step={unit === "points" ? 50 : 1}
-                  onChange={(e) => { const n = parseFloat(e.target.value); if (!isNaN(n)) upd(i, { offset: n }); }} /></td>
+                <td><PickCell l={l} i={i} unit={unit} upd={upd} rules={rules} /></td>
                 <td><input aria-label={`Leg ${i + 1} lots`} type="number" min={1} max={50} value={l.lots}
                   onChange={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) upd(i, { lots: n }); }} /></td>
-                {preview && <><td className="mono">{p?.strike ?? "not listed"}</td><td className="mono">{p?.fill != null ? price(p.fill, "INR") : "no quote"}</td></>}
+                {preview && <><td className="mono">{p?.strike ?? (p?.pick ? "none fits" : "not listed")}</td><td className="mono">{p?.fill != null ? price(p.fill, "INR") : "no quote"}</td></>}
                 <td>{s.legs.length > 1 && <button className="chip-x" aria-label={`Remove leg ${i + 1}`} onClick={() => set(s.legs.filter((_, j) => j !== i))}>×</button>}</td>
               </tr>
             );
           })}</tbody>
         </table>
       </div>
+      {picks.length > 0 && (
+        <ul className="small muted leg-picks" data-testid="leg-picks">
+          {picks.map(([i, w]) => <li key={i}>Leg {i + 1}: {w}</li>)}
+        </ul>
+      )}
+      {usesRules && <p className="tiny muted" style={{ maxWidth: "70ch" }}>
+        A rule picks its strike from the live quotes when the session enters (and at each re-centre), so the strike can differ from the one shown now.
+        Deltas are the pricing model's estimates.{!rules && " Picking strikes by delta or premium is on the Pro plan; Price it now shows what a rule would pick."}
+      </p>}
       {s.legs.length < 8 && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }}
         onClick={() => set([...s.legs, { side: "buy", opt: "CE", offset: s.offsetUnit === "points" ? 500 : 6, lots: 1 }])}>Add a leg</button>}
     </div>
@@ -269,7 +314,9 @@ function ChainGreeks({ g }: { g?: OptionGreeks | null }) {
 }
 
 export function OptionsPage() {
-  const { fail, notify, refreshMe, notebooks } = useApp();
+  const { fail, notify, refreshMe, notebooks, me } = useApp();
+  const feats = me?.plan_info?.features;
+  const rulesOk = feats ? !!feats.strike_rules : true, vixOk = feats ? !!feats.vix_filter : true;
   const nav = useNavigate();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
@@ -317,7 +364,7 @@ export function OptionsPage() {
   };
   const start = async () => {
     const when = s.signal ? `whenever "${s.signal.name}" signals a trade (from ${s.timing.entry})` : `at ${s.timing.entry}`;
-    if (!confirm(`Start paper trading "${s.name}"? It enters ${when} on market days with fake money, on live ${s.underlying} option prices.`)) return;
+    if (!confirm(`Start paper trading "${s.name}"? It enters ${when} on market days with fake money, on live ${s.underlying} option prices.${s.vix ? " Entries wait while India VIX is outside your band." : ""}`)) return;
     setStarting(true);
     try {
       const snap = await api<{ id: string }>("/options/sessions", { method: "POST", body: { strategy: s } });
@@ -372,7 +419,8 @@ export function OptionsPage() {
   const lossOpts: [OptionStrategy["risk"]["stopType"], string][] = [["none", "Off"], ["amount", "₹"], ["credit_pct", "% of premium"]];
   const MAIN = ["short_straddle", "short_strangle", "iron_fly", "iron_condor"];
   const inMain = MAIN.includes(s.structure);
-  const legsText = s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + "× " : ""}${l.offset === 0 ? "ATM" : `${Math.abs(l.offset)}${s.offsetUnit === "points" ? " pts" : ""} ${l.offset > 0 ? "OTM" : "ITM"}`} ${l.opt}`).join(" · ");
+  const legsText = s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + "× " : ""}${legRule(l, s.offsetUnit)} ${l.opt}`).join(" · ");
+  const vf = s.vix;
 
   return (
     <div className="stack opt-page" style={{ gap: 20 }}>
@@ -445,7 +493,7 @@ export function OptionsPage() {
               <Seg label="Distance unit" value={s.offsetUnit} options={[["strikes", "Strikes"], ["points", "Points"]]}
                 onChange={(v) => patch({ offsetUnit: v, legs: s.legs.map((l) => ({ ...l, offset: v === "points" ? l.offset * (preview?.step ?? 50) : Math.round(l.offset / (preview?.step ?? 50)) })) })} />
             </div>
-            <LegsEditor s={s} preview={preview} set={(legs) => patch({ legs, structure: "custom" })} />
+            <LegsEditor s={s} preview={preview} rules={rulesOk} set={(legs) => patch({ legs, structure: "custom" })} />
           </div>
         </details>
         </Block>
@@ -476,6 +524,24 @@ export function OptionsPage() {
               {s.signal.short === "mirror" ? "; when they go short, it enters the same legs with calls and puts swapped" : ""}. When they exit, the options are closed.
               Your stop, target and square-off below still apply, and one signal is traded once.
             </p>}
+          </div>
+        </div>
+
+        <div className="opt-row" data-testid="vix-filter">
+          <span className="opt-label">India VIX</span>
+          <div className="stack" style={{ gap: 8 }}>
+            <label className="row small" style={{ gap: 8 }}>
+              <input type="checkbox" checked={!!vf} disabled={!vixOk && !vf} onChange={(e) => patch({ vix: e.target.checked ? { min: 11, max: 18 } : null })} />
+              Enter only while India VIX is in a band{!vixOk && " (Basic)"}<Info>{HELP.optVix}</Info>
+            </label>
+            {vf && (
+              <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
+                <Num label="Lowest (0 = none)" value={vf.min} max={100} step={0.5} width={140} onChange={(v) => patch({ vix: { ...vf, min: v } })} />
+                <Num label="Highest (0 = none)" value={vf.max} max={100} step={0.5} width={140} onChange={(v) => patch({ vix: { ...vf, max: v } })} />
+              </div>
+            )}
+            {vf && !vf.min && !vf.max && <span className="hint">Set a lowest or a highest value, or turn the filter off.</span>}
+            {vf && vf.min > 0 && vf.max > 0 && vf.min >= vf.max && <span className="hint">The lowest value has to be below the highest.</span>}
           </div>
         </div>
 

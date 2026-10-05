@@ -24,7 +24,7 @@ from app.live import LiveManager
 from app.options.data import OptionsData
 from app.options.session import IST
 from datetime import date, datetime, timedelta
-from tests import fake_fo_changes, fake_kite, fake_positioning
+from tests import fake_cas, fake_fo_changes, fake_kite, fake_positioning, fake_stock_desks
 from tests.fake_options_kite import FakeOptionsKite
 from tests.fake_db import FakeSupabase, headers
 from tests.fake_intel import fake_finnhub, fake_news, fake_screener, fake_wiki
@@ -188,6 +188,9 @@ def _nse(sw=None):
     def handler(r: httpx.Request):
         if r.url.path == "/":
             return httpx.Response(200, text="<html></html>", headers={"set-cookie": "nsit=abc; Path=/"})
+        desk = fake_stock_desks.answer(r.url.path)
+        if desk is not None:           # the stock desks' daily files: F&O and cash bhavcopies, MWPL, SLB, margin trading
+            return httpx.Response(desk[0], content=desk[1])
         if r.url.path == "/api/corporate-announcements":
             return httpx.Response(200, json=rows)
         if r.url.path in ("/api/corporates-pit", "/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
@@ -195,6 +198,13 @@ def _nse(sw=None):
         surv = surveillance_answers().get(r.url.path)
         if surv is not None:
             return httpx.Response(200, text=surv) if isinstance(surv, str) else httpx.Response(200, json=surv)
+        cas = fake_cas.answer(r.url.path, r.url.params)
+        if cas is not None:            # the closing auction, just ended
+            return httpx.Response(200, json=cas)
+        from tests import fake_shp
+        shp = fake_shp.answer(r)
+        if shp is not None:            # the shareholding-pattern list and its XBRL documents
+            return shp
         fo = fake_fo_changes.answer(r.url.path)
         if fo is not None:             # the F&O contract file and the circulars
             return httpx.Response(200, text=fo) if isinstance(fo, str) else httpx.Response(200, json=fo)
@@ -222,9 +232,16 @@ def _nse(sw=None):
                       + datetime.now().strftime("%d-%b-%Y") + ",10,INE999N01011", "SOMEBOND,Some Bond,N1,01-Jan-2020,1000,INE888B07019"]
             lines += [f"{s},{n},EQ,01-Jan-2000,1,{isin}" for s, n, isin in ISINS]
             return httpx.Response(200, text="\n".join(lines))
-        if r.url.path == "/api/etf":                  # every ETF's price and iNAV (etf_nav.py)
+        from tests import fake_vix
+        vx = fake_vix.answer(r.url.path, r.url.params)
+        if vx is not None:                            # India VIX: the index list, its chart and its history (vix.py)
+            return httpx.Response(200, json=vx)
+        if r.url.path == "/api/etf":                  # every ETF's price and last NAV (etf_nav.py)
             from tests import fake_etf
-            return httpx.Response(200, json=fake_etf.answer())
+            return httpx.Response(200, json=fake_etf.answer_live())
+        if r.url.path == "/content/equities/eq_etfseclist.csv":   # the ETFs' ISINs (the list above has none)
+            from tests import fake_etf
+            return httpx.Response(200, text=fake_etf.securities_csv())
         if r.url.path == "/api/holiday-master":
             return httpx.Response(200, json={"CM": [{"tradingDate": "26-Jan-2027", "weekDay": "Tuesday", "description": "Republic Day"},
                                                     {"tradingDate": "22-Mar-2027", "weekDay": "Monday", "description": "Holi"}],
@@ -277,10 +294,20 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     surveillance._cache.clear()                 # the surveillance lists another test stored
     from app import etf_nav
     etf_nav.forget()                            # the ETF list and gap history another test stored
+    from app import vix
+    vix.forget()                                # India VIX quotes and history another test read
+    from app import biz_updates, shareholders
+    biz_updates.forget()                        # business-update reads and named holders another test stored
+    shareholders.forget()
     from app import fo_changes
     fo_changes._cache.clear()                   # the F&O contract changes another test stored
+    from app import closing_auction
+    closing_auction.forget()                    # the closing auction another test stored
     from app import positioning
     positioning.clear_cache()                   # positioning days and live chains another test stored
+    from app import exchange_days, stock_desks
+    exchange_days.clear_cache()                 # the stock desks' days another test stored
+    monkeypatch.setattr(stock_desks.runner, "pace", 0)
     from app import auth
     auth._cache.clear()
     auth._rejected.clear()

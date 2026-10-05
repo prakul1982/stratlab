@@ -395,7 +395,7 @@ def _india_documents(kinds: list[str], told: dict | None, price_why: str | None)
         if calls is None:
             out.append(_issue("gap", "Documents", "No call transcript filed in the last two years"))
         elif calls == 0:
-            out.append(_issue("fact", "Documents", NO_CALLS))
+            out.append(_issue("fact", "Documents", NO_CALLS if meets else NO_CALLS_TOLD))
         else:
             out.append(_issue("gap", "Documents", f"No call transcript found, though {calls} of its filings in the last two "
                                                   "years are about earnings calls"))
@@ -409,6 +409,8 @@ NO_MEETS = ("Held no earnings calls or analyst meetings in the last two years (n
             "so there's no presentation or call transcript to read")
 NO_CALLS = ("Held no earnings call in the last two years (only meetings with analysts or investors were told to the "
             "exchange), so there's no call transcript to read")
+NO_CALLS_TOLD = ("Held no earnings call in the last two years (no calls or meetings with investors were told to the "
+                 "exchange), so there's no call transcript to read")
 NOTHING_FILED = ("Filed nothing with the exchange in the last two years (its shares aren't trading), so there's no "
                  "presentation or call transcript to read")
 NO_FILINGS_READ = ("No filings came back from the exchange for the last two years, though a trading company files its "

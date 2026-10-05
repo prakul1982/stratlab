@@ -59,6 +59,8 @@ CIRCULAR_KINDS = (
     ("lot", re.compile(r"lot size|market lot|\blots?\b", re.I)),
     ("expiry", re.compile(r"expiry|trading hours|market timing|pre-open|session", re.I)),
 )
+FO_DEPT = re.compile(r"^FAOP$|^futures\s*&\s*options trading$", re.I)
+MOCK = re.compile(r"\bmock trading\b", re.I)          # the weekly test session: no change to any contract
 DERIVATIVES = re.compile(r"F\s*&\s*O|\bFO\b|derivative|futures|options|contracts?", re.I)
 
 _cache = TTLCache(max_items=20)
@@ -89,6 +91,18 @@ def _next_month(month: str, step: int = 1) -> str:
     m += step
     y, m = y + (m - 1) // 12, (m - 1) % 12 + 1
     return f"{y:04d}-{m:02d}"
+
+
+def serial_months(months: list[str]) -> list[str]:
+    """The monthly series every underlying trades: the run of consecutive months the file starts with ("2026-10",
+    "2026-11", "2026-12"). The file also lists the long-dated index options (quarterly and half-yearly months years
+    out, which only some indices have), and a blank there says nothing about a stock leaving."""
+    out = list(months[:1])
+    for m in months[1:]:
+        if m != _next_month(out[-1]):
+            break
+        out.append(m)
+    return out
 
 
 def rule_expiry(month: str) -> date:
@@ -134,9 +148,10 @@ def _day(iso) -> str:
 
 def iso_day(text: str) -> str | None:
     """An ISO date from the ways the exchange writes one: "October 01, 2026", "01-Oct-2026", "2026-10-01",
-    "01/10/2026"."""
+    "01/10/2026", "20261001" (the circulars' own date field)."""
     s = re.sub(r"\s+", " ", str(text or "")).strip()
-    for fmt in ("%B %d, %Y", "%b %d, %Y", "%d-%b-%Y", "%d-%B-%Y", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y"):
+    for fmt in ("%B %d, %Y", "%b %d, %Y", "%d-%b-%Y", "%d-%B-%Y", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y",
+                "%Y%m%d"):
         try:
             return datetime.strptime(s[:30].split(" 00:")[0].strip(), fmt).date().isoformat()
         except ValueError:
@@ -206,18 +221,20 @@ def derive(lots: dict, expiry) -> list[dict]:
     one month to the next (a revision from that series on). `expiry(symbol, month)` gives a series' expiry date."""
     out = []
     months = lots["months"]
+    serial = serial_months(months)            # entering and leaving are read on the monthly series only
     for sym, r in sorted(lots["rows"].items()):
         have = [m for m in months if m in r["lots"]]
+        near = [m for m in serial if m in r["lots"]]
         seg = "index" if r["index"] else "stock"
         if not have:
             continue
-        if have[-1] != months[-1]:
-            out.append(_event("exit", sym, segment=seg, series=have[-1], expiry=expiry(sym, have[-1]).isoformat(),
-                              lot=r["lots"][have[-1]], id=f"exit:{sym}:{have[-1]}"))
-        if have[0] != months[0]:
-            before = expiry(sym, _next_month(have[0], -1))
-            out.append(_event("entry", sym, segment=seg, series=have[0], effective=_after(before).isoformat(),
-                              lot=r["lots"][have[0]], id=f"entry:{sym}:{have[0]}"))
+        if near and near[-1] != serial[-1]:
+            out.append(_event("exit", sym, segment=seg, series=near[-1], expiry=expiry(sym, near[-1]).isoformat(),
+                              lot=r["lots"][near[-1]], id=f"exit:{sym}:{near[-1]}"))
+        if near and near[0] != serial[0]:
+            before = expiry(sym, _next_month(near[0], -1))
+            out.append(_event("entry", sym, segment=seg, series=near[0], effective=_after(before).isoformat(),
+                              lot=r["lots"][near[0]], id=f"entry:{sym}:{near[0]}"))
         for a, b in zip(have, have[1:]):
             was, now = r["lots"][a], r["lots"][b]
             if was != now:
@@ -258,13 +275,23 @@ def read_circulars(data, known: set[str] | None = None) -> list[dict]:
     and sessions) or another F&O circular, with the F&O symbols its subject names (of those in `known`)."""
     from .rules_watch import read_circulars as read_all
     known = known or set()
-    out = []
-    for c in read_all(data, FO_WORDS):
-        subject = c["subject"]
+    out, seen = [], set()
+    rows = read_all(data, re.compile(".", re.S))
+    # the exchange says which department wrote each circular: the equity F&O desk's (FAOP) are the ones about these
+    # contracts; commodity, currency, SME and listing circulars also say "derivatives", "futures" or "market lot"
+    for c in rows:
+        subject, by_dept = c["subject"], bool(c.get("dept"))
+        if c["id"] in seen or MOCK.search(subject):
+            continue
+        if by_dept and not FO_DEPT.search(c["dept"]):
+            continue
+        if not by_dept and not FO_WORDS.search(subject):
+            continue
+        seen.add(c["id"])
         kind = next((k for k, rx in CIRCULAR_KINDS if rx.search(subject)), "circular")
         if kind in ("exit", "entry") and not DERIVATIVES.search(subject):
             kind = "circular"
-        if kind == "circular" and not DERIVATIVES.search(subject):
+        if kind == "circular" and not by_dept and not DERIVATIVES.search(subject):
             continue                          # "exclusion from an index", "trading hours" of another segment...
         words = set(re.findall(r"[A-Z][A-Z0-9&\-]{1,19}", subject.upper()))
         syms = sorted(words & known)

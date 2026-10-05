@@ -161,8 +161,9 @@ those who turned the alert on (Basic and up), once each.
 
 ### ETF price against NAV
 
-`backend/app/etf_nav.py` reads the exchange's ETF list (price, indicative NAV) every few minutes while India's market is
-open, records each ETF's close after the close with that day's NAV once the NAV file has it, and keeps 30 trading days.
+`backend/app/etf_nav.py` reads the exchange's ETF list (price and the last published NAV; it gives no indicative NAV)
+every few minutes while India's market is open, takes each ETF's ISIN from the exchange's ETF securities file (once a
+day) to match it in the NAV file, records each ETF's close after the close with that day's NAV once the NAV file has it, and keeps 30 trading days.
 It runs by itself and has no admin panel; a new server reads the list at once.
 
 ### Option-chain recorder (`OPTION_SNAPSHOTS`)

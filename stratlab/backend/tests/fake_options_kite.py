@@ -80,8 +80,9 @@ class _Inner:
 class FakeOptionsKite:
     """Spot moves in a slow wave so demos show P&L changing; `live=False` makes every quote days old."""
 
-    def __init__(self, live=True, drift=None, clock=None):
+    def __init__(self, live=True, drift=None, clock=None, vix=13.8):
         self.live = live
+        self.vix = vix              # India VIX (NSE:INDIA VIX); None leaves it unquoted
         self.clock = clock or (lambda: datetime.now(IST))      # tests can pin the feed's time to the session's
         self.drift = drift          # fixed spot offsets per spot key, for tests
         self.kite = _Inner(self)
@@ -133,6 +134,8 @@ class FakeOptionsKite:
         return None
 
     def price(self, key, now):
+        if key == "NSE:INDIA VIX":
+            return self.vix
         s = self.spot(key, now)
         if s is not None:
             return s

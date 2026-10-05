@@ -184,6 +184,16 @@ class Feed:
 
     def _text(self, url: str) -> str | None:
         """One file's text; None when it isn't there (404, or a page instead of the file)."""
+        r = self._response(url)
+        return r.text if r is not None else None
+
+    def raw(self, url: str) -> bytes | None:
+        """One file's bytes (a zip or a gzip as published); None when it isn't there. The per-stock desks
+        (exchange_days.py) read the exchange's daily files through this, with the same cookies, retry and breaker."""
+        r = self._response(url)
+        return r.content if r is not None else None
+
+    def _response(self, url: str):
         if time.time() < self._down:
             raise SourceError(self.name, "The exchange's files aren't answering right now. Try again in a minute.", busy=True)
         try:
@@ -213,9 +223,9 @@ class Feed:
         if r.status_code >= 400:
             raise SourceError(self.name, f"The exchange's file was refused ({r.status_code}).")
         self._fails = 0
-        if "<html" in r.text[:500].lower():
+        if b"<html" in r.content[:500].lower():
             return None
-        return r.text
+        return r
 
     def participants(self, kind: str, day: date) -> dict | None:
         """A day's participant-wise file, parsed; None when it isn't published (or archived)."""

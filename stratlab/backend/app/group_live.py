@@ -13,7 +13,7 @@ from datetime import datetime
 from .engine import costs as C
 from .engine.core import Ctx, Engine
 from .kite_service import IST, KiteService
-from .live import CandleBuilder, _closed, drop_forming
+from .live import CandleBuilder, _closed, close_at_auction, drop_forming, official_close, session_kind
 from .models import Strategy
 
 POLL_SECONDS = 60          # each polled member is checked this often for a newly closed candle
@@ -32,13 +32,18 @@ class Member:
         self.engine = Engine(sess.each, lot, state=state or None, cost_kind=C.kind_of(inst))
         self.engine.gate = sess.free_slot
         self.engine.veto = self.filtered
-        self.builder = CandleBuilder(sess.tf)
+        # India: the member's session timetable (a stock with derivatives closes through the auction)
+        self.kind = "cash" if sess.polled else session_kind(sess.mgr.kite, inst)
+        self.builder = CandleBuilder(sess.tf, self.kind, self.official if self.kind in ("cas", "index") else None)
         self.last_price = self.bars[-1]["c"]
         self.next_poll = 0.0
         self.bid = self.ask = None
         self.quote_at = 0.0
         self.next_eval = 0.0
         self.skips = (state or {}).get("skips") or {"spread": 0, "price": 0}
+
+    def official(self, day: str) -> float | None:
+        return official_close(self.s.mgr.kite, self.inst, day)
 
     def filtered(self) -> bool:
         """True (and counted) when the entry rules hold but the trade should be skipped."""
@@ -137,7 +142,8 @@ class GroupLiveSession:
             if self.polled:
                 bars = [b for b in prov.history(inst, self.tf, prov.warmup_days(self.tf, 300)) if _closed(b, self.tf)]
             else:
-                bars = drop_forming(self.mgr.kite.history(inst["token"], self.tf, KiteService.warmup_days(self.tf, 300)), self.tf)
+                bars = drop_forming(self.mgr.kite.history(inst["token"], self.tf, KiteService.warmup_days(self.tf, 300)), self.tf,
+                                    session_kind(self.mgr.kite, inst))
             return (inst, bars) if len(bars) >= 30 else (inst, None)
         except Exception as e:
             print("group member failed to load:", iid, e)
@@ -204,6 +210,11 @@ class GroupLiveSession:
                 for m in self.members:
                     for c in m.builder.flush(now):
                         self._on_candle(m, c)
+                    ev = close_at_auction(m.engine, m.kind, now, lambda m=m: m.official(now.astimezone(IST).date().isoformat()))
+                    if ev:
+                        m.last_price = ev["px"]
+                        self.dirty = True
+                        self.mgr.on_order(self, {**ev, "sym": m.sym})
             return
         due = [m for m in self.members if time.time() >= m.next_poll]
         for m in due[:POLLS_PER_PASS]:

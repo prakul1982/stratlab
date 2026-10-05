@@ -1148,6 +1148,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-holdings { background: var(--blue-soft); color: var(--blue-ink); }
 .mc-money { background: var(--chip); color: var(--ink-2); }
 .mc-custom { background: var(--card); color: var(--ink); border: 1px solid var(--line-2); }
+.mc-market { background: var(--chip); color: var(--ink); }
 .mc-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .mc-wd { font-family: var(--mono); font-size: 11.5px; text-transform: uppercase; color: var(--muted); text-align: center; padding: 2px 0; }
 .mc-cell { min-height: 92px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left; padding: 6px; border-radius: 8px;
@@ -1161,7 +1162,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 .mc-dot.mc-tax { background: var(--orange); }
 .mc-dot.mc-holdings { background: var(--blue); }
-.mc-dot.mc-money, .mc-dot.mc-custom { background: var(--muted); }
+.mc-dot.mc-money, .mc-dot.mc-custom, .mc-dot.mc-market { background: var(--muted); }
 .mc-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mc-t { font-size: 11.5px; line-height: 1.3; padding: 1px 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mc-more { font-size: 11px; color: var(--muted); }
@@ -1207,6 +1208,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .pos-table td .tiny { font-family: var(--mono); }
 .pos-table tr.total th, .pos-table tr.total td { font-weight: 600; border-top: 1px solid var(--line-2); }
 .pos-table tr.atm td, .pos-table tr.atm th { background: var(--chip); }
+.pos-table th .pos-expiry { display: block; font-weight: 400; }     /* the PCR card's expiry, under the index's name */
 .pos-section { min-width: 0; }
 .pos-details summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .strike-chart svg { display: block; }
@@ -1348,6 +1350,17 @@ table.plan-compare th:not(:first-child) { width: 16%; }
 .fo-row .link { padding: 0 2px; }   /* a linked symbol sits on the same line height as a plain one */
 .fo-alert input { flex: none; width: 18px; height: 18px; }
 .surv-badge.fo-badge { white-space: normal; max-width: 100%; }   /* wraps inside a narrow card */
+/* market events (/trade/events): neutral tags, figures in ink, the index table scrolling inside its card */
+.ev-tag.ev-rbi, .ev-tag.ev-india { color: var(--ink); }
+.ev-title { min-width: 0; }
+.ev-figure { font-variant-numeric: tabular-nums; }
+.ev-seg { flex-wrap: wrap; max-width: 100%; }
+.ev-kind input { flex: none; width: 16px; height: 16px; }
+.ev-idx-wrap { overflow-x: auto; max-width: 100%; }
+table.ev-idx { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.ev-idx th, table.ev-idx td { text-align: left; padding: 6px 10px 6px 0; vertical-align: top; border-top: 1px solid var(--line); }
+table.ev-idx td:not(:first-child) { min-width: 140px; overflow-wrap: anywhere; }
+.space-events { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
 /* Admin: the AI panel */
 .ai-provider { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
 .ai-model, .ai-missing { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px dashed var(--line); }
@@ -1421,3 +1434,63 @@ table.greeks-t tr.greeks-net td { border-top: 1px solid var(--line-2); }
 .opt-extras > * { min-width: 0; }      /* a wide chain scrolls inside its card instead of stretching the grid past the screen */
 table.chain-g th, table.chain-g td { white-space: nowrap; text-align: right; padding: 5px 7px; }
 .model-inputs { max-width: 80ch; }
+
+/* the closing auction desk */
+.cas-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cas-steps li { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.cas-steps li.on { border-color: var(--blue); background: var(--blue-soft); color: var(--blue-ink); font-weight: 600; }
+.cas-step-time { font-variant-numeric: tabular-nums; }
+.cas-table th:not(:first-child), .cas-table td:not(:first-child) { padding-left: 10px; text-align: right; }
+.cas-table td .tiny { white-space: nowrap; }
+.cas-search { max-width: 220px; }
+@media (max-width: 640px) { .cas-search { max-width: none; width: 100%; } .cas-steps li { grid-template-columns: 96px minmax(0, 1fr); } }
+/* Options strike rules (the legs editor and the order log) */
+ul.order-rows li .order-pick { grid-column: 2 / -1; margin-top: -4px; }
+.legs .leg-pick { flex-wrap: wrap; align-items: center; }
+.legs .leg-pick select { max-width: 170px; }
+ul.leg-picks { margin: 0; padding-left: 18px; }
+/* Signal forward test (/trade/signals) and chart replay (/trade/replay) */
+.sg-cards { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.sg-card { flex: none; min-width: 200px; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; color: inherit; text-decoration: none; }
+.sg-card[aria-current="page"] { border: 2px solid var(--ink); }
+.sg-code { margin: 0; padding: 12px 14px; background: var(--chip); border-radius: 10px; font-family: var(--mono); font-size: 13px; overflow-x: auto; white-space: pre; max-width: 100%; }
+.sg-log td { vertical-align: top; }
+.badge.j-practice { background: var(--chip); color: var(--ink-2); }
+.rp-controls .btn { min-height: 40px; }
+/* business updates and named holders (BizUpdates.tsx, NamedHolders.tsx, HoldersPage, BizUpdatesPage) */
+.link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--blue-ink); cursor: pointer; text-align: left; }
+.link-btn:hover, .link-btn.on, .link-btn[aria-pressed="true"] { text-decoration: underline; }
+.biz-table th:not(:first-child), .biz-table td:not(:first-child), .holders-table th:not(:first-child), .holders-table td:not(:first-child) { padding-left: 10px; }
+.biz-table tr.on td { background: var(--blue-soft); }
+.biz-quote { max-width: 260px; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.biz-filings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.biz-filings li { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.holders-table .holder-name { white-space: normal; overflow-wrap: anywhere; max-width: 280px; display: block; }
+.holder-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.holder-search { flex: 1 1 240px; min-width: 0; }
+.holder-names label { align-items: center; }
+@media (max-width: 640px) {
+  .biz-quote { max-width: 160px; }
+  .holders-table .holder-name { max-width: 170px; }
+}
+/* the per-stock desks: stock futures (a Positioning tab), stock lending fees, margin funding */
+.sf-filters { flex-wrap: wrap; }
+.sf-search, .etf-gap-search.sf-search { max-width: 220px; }
+.sf-table td, .sf-table th { vertical-align: top; }
+.sf-buildup { display: inline-flex; flex-direction: column; gap: 2px; }
+.sf-tag { font-size: 0.82rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); white-space: nowrap; }
+.sf-mwpl { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sf-bar { position: relative; width: 64px; height: 6px; border-radius: 3px; background: var(--line); overflow: visible; }
+.sf-bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--ink); opacity: 0.55; }
+.sf-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--muted); }
+.sf-ban { font-size: 0.75rem; font-weight: 600; padding: 0 6px; border-radius: 4px; border: 1px solid var(--muted); white-space: nowrap; }
+.sf-days { display: flex; flex-wrap: wrap; gap: 4px; }
+.sf-day { display: inline-flex; flex-direction: column; align-items: center; font-size: 0.72rem; color: var(--muted); padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; min-width: 44px; }
+.sf-day b { color: var(--ink); font-size: 0.8rem; }
+.slb-facts { display: grid; gap: 10px; margin: 0; }
+.slb-facts dt { font-weight: 600; font-size: 0.9rem; }
+.slb-facts dd { margin: 2px 0 0; }
+.mtf-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.pos-tabs { align-self: flex-start; flex-wrap: wrap; }
+/* Test a SIP: the form's fields in a grid that wraps to one column on a phone */
+.sip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; align-items: end; }

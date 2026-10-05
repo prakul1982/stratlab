@@ -7,6 +7,7 @@ import { Loading, Modal } from "../components/ui";
 import { AuditPanel, MarketAuditPanel } from "../components/AuditPanel";
 import { PricesPanel } from "../components/PricesPanel";
 import { InvoiceAdminPanel } from "../components/InvoiceAdminPanel";
+import { useMoreColumns } from "../components/MoreColumns";
 import { PlatformPanel } from "../components/PlatformPanel";
 import { RulesPanel } from "../components/RulesPanel";
 import { BreadthAdminPanel } from "../components/BreadthAdminPanel";
@@ -177,6 +178,7 @@ export function AdminPage() {
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [reported, setReported] = useState<{ entries: ReportedRow[]; reasons: Record<string, string> } | null>(null);
   const [q, setQ] = useState("");
+  const usersMore = useMoreColumns("admin-users", 2);     // invite counts: one click away, so the users table fits a laptop
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [promoDays, setPromoDays] = useState(10);
@@ -418,17 +420,22 @@ export function AdminPage() {
               <section className="card stack" style={{ gap: 14 }}>
                 <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
                   <h2 className="h2">Users</h2>
-                  <input className="input" style={{ maxWidth: 320 }} placeholder="Search by email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users by email" />
+                  <span className="row" style={{ gap: 10, flexWrap: "wrap", flex: "1 1 260px", justifyContent: "flex-end" }}>
+                    <input className="input" style={{ maxWidth: 320 }} placeholder="Search by email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users by email" />
+                    {usersMore.toggle}
+                  </span>
                 </div>
                 {!users ? <Loading label="Loading users" /> : users.length === 0 ? <p className="small muted">No users match.</p> : (
                   <div className="table-wrap"><table>
-                    <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th><th title="Accounts that signed up through this user's invite link">Invited</th><th title="Free months of Basic this user earned from invites">Free months</th><th></th></tr></thead>
+                    <thead><tr><th>Email</th><th>Plan</th><th>Joined</th><th>Experiments</th><th>AI builds</th>
+                      {usersMore.on && <><th title="Accounts that signed up through this user's invite link">Invited</th><th title="Free months of Basic this user earned from invites">Free months</th></>}<th></th></tr></thead>
                     <tbody>{users.slice(0, shownUsers).map((u) => (
                       <tr key={u.id}>
                         <td>{u.email ?? "–"}</td>
                         <td><span className={`badge ${u.plan === "free" ? "skip" : "next"}`}>{PLAN_NAME[u.plan]}</span>
                           {u.plan !== "free" && <span className="small muted" style={{ marginLeft: 8 }}>{u.plan_until ? `until ${dateOnly(u.plan_until)}` : u.paying ? "Razorpay" : "no end"}</span>}</td>
-                        <td>{dateOnly(u.created_at)}</td><td className="num">{u.experiments}</td><td className="num">{u.ai_builds}</td><td className="num">{u.referrals ?? 0}</td><td className="num">{u.free_months ?? 0}</td>
+                        <td>{dateOnly(u.created_at)}</td><td className="num">{u.experiments}</td><td className="num">{u.ai_builds}</td>
+                        {usersMore.on && <><td className="num">{u.referrals ?? 0}</td><td className="num">{u.free_months ?? 0}</td></>}
                         <td><button className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button></td>
                       </tr>
                     ))}</tbody>

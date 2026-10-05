@@ -219,6 +219,34 @@ class OptionsData:
                 "atm": mid, "step": c.step(mid), "rows": rows, "spot_ts": spot_q.get("ts") if spot_q else None,
                 "freeze": freeze(name)}
 
+    def settlement_price(self, exchange: str, name: str, expiry: str) -> float | None:
+        """The price NSE and BSE options settle at on their expiry day: the underlying's official close that day (the
+        index close; for a stock, the auction close). Stock contracts settle at the volume-weighted average of the
+        exchanges' closes; this uses the close on the exchange named here, nearly all the volume. None before the
+        close is out, and for commodity and currency options (they settle on other rules)."""
+        if exchange not in ("NFO", "BFO"):
+            return None
+        from ..data import sessions
+        from ..live import official_close, session_kind
+        key = self.spot_key(exchange, name, expiry)
+        if not key:
+            return None
+        ex, sym = key.split(":", 1)
+        try:
+            inst = self.kite.by_symbol(sym, ex)
+        except Exception as e:
+            print("settlement price: no instrument list:", e)
+            inst = None
+        if inst:
+            kind = session_kind(self.kite, inst)
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo("Asia/Kolkata"))
+            if expiry == now.date().isoformat() and now.time() < sessions.close_known(kind, now.date()):
+                return None
+            return official_close(self.kite, inst, expiry)
+        return None
+
     # ---------- margin ----------
     def margin(self, legs: list[dict]) -> float | None:
         """The broker's margin for a basket (hedge benefit included), or None if it can't be had."""

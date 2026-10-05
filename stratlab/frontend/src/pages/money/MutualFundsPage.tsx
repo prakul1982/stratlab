@@ -7,6 +7,7 @@ import { AsOf, Empty, Info, Loading } from "../../components/ui";
 import { Trash, Upload } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { FundCosts } from "./FundCosts";
+import { FundBehaviour } from "./FundBehaviour";
 
 type Kind = "equity" | "debt" | "hybrid" | "other";
 type Scheme = {
@@ -222,6 +223,7 @@ export function MutualFundsPage() {
           </section>
 
           {held.length > 0 && <FundCosts version={`${view.updated_at}|${view.txns}`} />}
+          <FundBehaviour version={`${view.updated_at}|${view.txns}`} />
 
           {!view.gains_allowed && (
             <div className="banner"><span>Capital gains for each financial year, and every scheme you hold, are on the {view.gains_plan} plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>

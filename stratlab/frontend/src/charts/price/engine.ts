@@ -59,6 +59,9 @@ export class PriceChartEngine {
   drawings: Drawing[] = [];
   selected: string | null = null;
   tool: DrawingKind | null = null;
+  /** When set, a click on the price pane hands its price to this instead of drawing or selecting (chart replay's
+   *  stop and target lines). */
+  picker: ((price: number) => void) | null = null;
   private draft: { d: Drawing; pending: boolean; moved: boolean } | null = null;
   private moving: { id: string; handle: number | null; from: { t: number; p: number }; orig: Drawing } | null = null;
   private axisDrag: { kind: "price" | "time"; x: number; y: number } | null = null;
@@ -315,6 +318,11 @@ export class PriceChartEngine {
     if (x > this.plotW()) { this.axisDrag = { kind: "price", x, y }; return true; }
     if (y > this.H - AXIS_H) { this.axisDrag = { kind: "time", x, y }; return true; }
     if (!this.inPricePane(y)) return false;
+    if (this.picker) {
+      const p = this.price.value(y);
+      if (Number.isFinite(p) && p > 0) this.picker(p);
+      return true;
+    }
     if (this.draft?.pending) {
       this.draft.d.points[1] = this.toPoint(x, y);
       this.finishDraft();

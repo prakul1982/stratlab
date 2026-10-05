@@ -50,6 +50,8 @@ function RefEditor({ value, onChange, allowNum, allIndicators, tf }: { value: Re
           <optgroup label="Price and indicators">{INDICATORS.filter((i) => !i.group).map(opt)}</optgroup>
           <optgroup label="The candle">{INDICATORS.filter((i) => i.group === "candle").map(opt)}</optgroup>
           <optgroup label="The trading day">{INDICATORS.filter((i) => i.group === "day").map(opt)}</optgroup>
+          <optgroup label="The market (India VIX; intraday candles see the previous close)">{INDICATORS.filter((i) => i.group === "market").map(opt)}</optgroup>
+          <optgroup label="F&amp;O stock data (India, daily candles)">{INDICATORS.filter((i) => i.group === "fo").map(opt)}</optgroup>
           {allowNum && <option value="num">A number</option>}
         </select>
       </label>

@@ -37,7 +37,12 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
                      "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal",
-                     "mf_costs", "etf_gaps", "fo_alerts"},
+                     "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter",
+                     "chart_replay",
+                     "event_reminders",
+                     "biz_updates", "holders",
+                     "stock_futures", "mtf",
+                     "mf_behaviour", "sip_luck", "rates_slab", "loan_check"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -56,7 +61,14 @@ PLANS = {
         "journal_trades": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif"},
+                     "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
+                     "vix_filter", "strike_rules",
+                     "chart_replay", "signal_webhooks",
+                     "event_reminders",
+                     "biz_updates", "holders",
+                     "assistant",
+                     "stock_futures", "mtf",
+                     "mf_behaviour", "sip_luck", "rates_slab", "loan_check"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -77,10 +89,21 @@ PLANS = {
 # when an F&O contract change (an exit, a lot size, an expiry day) touches your watchlist or paper sessions (the dated
 # list and its badges are for everyone); options_whatif: the options what-if sliders (spot, IV and days forward, moving
 # the payoff, Greeks and P&L) and the roll preview (the model's Greeks for each strike in the chain and each leg, the net
-# Greeks and the payoff today beside the one at expiry are for everyone)
+# Greeks and the payoff today beside the one at expiry are for everyone); cas_history: the closing auction desk's 60-day
+# history (today's auction, live, is for everyone); vix_filter: the India VIX entry filter on options sessions (the India VIX
+# panel, its history and percentile are for everyone; India VIX in notebook rules comes with the other indicators);
+# strike_rules: options legs whose strike is picked by model delta, a delta range, premium or a share of the ATM straddle
+# (the builder's preview of what a rule picks is for everyone); chart_replay: chart replay practice, logged to the trade journal; signal_webhooks: a secret webhook URL that moves paper sessions from outside alerts (TradingView, Chartink), with the signal log and the verdict's checks on the forward test; event_reminders: reminders of market events (RBI, data releases, the Fed, index changes, expiries) by phone, Telegram or email (the events calendar, its index badges and adding the events to your Money calendar are for everyone); biz_updates: monthly and quarterly business updates read into numbers on company pages, the sector view and the "new business update" alert (the list of update filings is for everyone); holders: searching named holders above 1% across companies and following one (each company's named holders are for everyone); assistant: StratLab in your AI assistant (the MCP server, mcp_server.py): read-only tools and paper orders in your own paper sessions, with keys made on Account; stock_futures: each F&O stock's stored history (OI, buildup, rollover, basis, MWPL use) and the alert on MWPL use crossing 80% (today's table is for everyone); mtf: a stock's and the market's margin-funding history and the alert on a funded level (today's numbers and the MTF cost calculator are for everyone); mf_behaviour: fund behaviour, i.e. the gap to each fund's own return in rupees, the SIP record, redemptions after a fall and holding periods (your XIRR beside the fund's NAV return is for everyone); sip_luck: the SIP test's dip rules and the spread of results over every start month (a plain SIP test with charges and the lump sum is for everyone); rates_slab: fixed-income rates after tax at the marginal rate from your own tax estimate (after tax at a slab you pick is for everyone); loan_check: each floating-rate loan against its benchmark, the gap to your statement's rate and what each change did (the benchmark, spread and reset fields and the reset dates in the calendar are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
-            "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif")
+            "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
+            "cas_history", "vix_filter", "strike_rules",
+            "chart_replay", "signal_webhooks",
+            "event_reminders",
+            "biz_updates", "holders",
+            "assistant",
+            "stock_futures", "mtf",
+            "mf_behaviour", "sip_luck", "rates_slab", "loan_check")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

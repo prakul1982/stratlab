@@ -31,7 +31,7 @@ RULES: list[tuple[str, str, str, list[str]]] = [
     ("rights", "Rights issue (fund raise)", "red", [r"rights issue", r"issue .{0,20}on rights basis"]),
     ("warrants", "Warrants issued (fund raise)", "red", [r"convertible warrants", r"issue of warrants", r"allotment of warrants"]),
     ("fund_raise", "Fund raise approved or planned", "red", [r"fund[- ]?rais", r"raising of funds", r"raise funds"]),
-    ("pledge", "Promoter pledge or encumbrance", "red", [r"\bpledge", r"encumbrance", r"regulation 31\b"]),
+    ("pledge", "Promoter pledge or encumbrance", "red", [r"\bpledge", r"encumbrance", r"regulation 31\b(?!\s*\(4\))"]),
     ("regulator", "Regulator or tax action", "red", [r"\bsebi\b.{0,40}(order|penalt|show cause|adjudicat)", r"show[- ]cause", r"search (and|&) seizure",
                                                    r"income tax (search|survey)", r"enforcement directorate", r"\bpenalty\b"]),
     ("rating_down", "Credit rating downgraded", "red", [r"downgrad", r"rating .{0,30}(revised|placed) .{0,30}(negative|watch)"]),
@@ -847,9 +847,59 @@ class NSEFilings:
         return rows
 
     def etf_list(self):
-        """Every ETF's last price, indicative NAV and ISIN, as the exchange's ETF page lists them (etf_nav.py reads
-        it). One call for the whole market, behind a breaker of its own."""
+        """Every ETF's last price and last published NAV, as the exchange's ETF page lists them (etf_nav.py reads it). One
+        call for the whole market, behind a breaker of its own. It names each ETF's underlying, not the fund, and
+        carries no ISIN: etf_securities() has those."""
         return self._get("/api/etf", {}, referer="https://www.nseindia.com/market-data/exchange-traded-funds-etf", circuit="etf")
+
+    def etf_securities(self) -> dict[str, str]:
+        """{symbol: ISIN} for every ETF the exchange lists, from its ETF securities file. Cached for a day."""
+        hit = self.cache.get(("etf-isins",))
+        if hit is not None:
+            return hit
+        out = etf_isins(self._surv_text(ETF_SECURITIES_URL))
+        if not out:
+            raise SourceError(self.name, "The exchange's ETF list file had no ISINs.")
+        self.cache.set(("etf-isins",), out, 86400)
+        return out
+
+    CAS_PAGE = "https://www.nseindia.com/market-data/closing-auction-session"
+
+    def cas_stocks(self):
+        """The closing auction session's per-stock data as the exchange's CAS page shows it (closing_auction.py reads
+        it): reference price, band, indicative equilibrium price and quantity, final price, imbalance, best bid and
+        ask, and the list of eligible symbols. One call for the market, behind a breaker of its own."""
+        return self._get("/api/NextApi/apiClient/casApi", {"functionName": "getCASData"}, referer=self.CAS_PAGE, circuit="cas")
+
+    def cas_indices(self):
+        """The F&O indices on the CAS page: value, previous close and the indicative close during the auction."""
+        return self._get("/api/NextApi/apiClient/casApi", {"functionName": "getAllFnoIndexData"}, referer=self.CAS_PAGE, circuit="cas")
+
+
+ETF_SECURITIES_URL = "https://nsearchives.nseindia.com/content/equities/eq_etfseclist.csv"
+
+
+def etf_isins(text: str) -> dict[str, str]:
+    """{symbol: ISIN} from the exchange's ETF securities file ("Symbol,Underlying Asset,SecurityName,DateofListing,
+    MarketLot,ISINNumber,..."), the columns found by name."""
+    import csv
+    import io
+    rows = list(csv.reader(io.StringIO(text or "")))
+    if not rows:
+        return {}
+    head = [c.strip().lower() for c in rows[0]]
+    try:
+        at_sym = head.index("symbol")
+        at_isin = next(i for i, c in enumerate(head) if "isin" in c)
+    except (ValueError, StopIteration):
+        return {}
+    out = {}
+    for r in rows[1:]:
+        if len(r) > max(at_sym, at_isin):
+            sym, isin = r[at_sym].strip().upper(), r[at_isin].strip().upper()
+            if sym and re.fullmatch(r"IN[A-Z0-9]{10}", isin):
+                out[sym] = isin
+    return out
 
 
 BSE_ATTACH = "https://www.bseindia.com/xml-data/corpfiling/"
@@ -898,6 +948,7 @@ class BSEFilings:
     BASE = "https://api.bseindia.com/BseIndiaAPI/api"
     HOME = "https://www.bseindia.com/"
     PAGES = 6                       # 50 a page: about a year's filings for a busy small company
+    WINDOW = 365                    # days one request covers: BSE answers a longer range with "Date range cannot exceed 12 months."
     GAP = 0.5                       # seconds between calls at least: a steady pace, not a burst
     BACKOFF = (2.0, 6.0)            # the pauses before each retry after a refusal (401, 403, 429)
     REST = 600                      # refused through every retry: leave BSE alone this long (ten minutes)
@@ -982,9 +1033,15 @@ class BSEFilings:
         raise SourceError(self.name, "The exchange feed refused the request. Try again later.", busy=True)   # not reached
 
     def _page(self, code: str, frm: datetime, to: datetime, page: int) -> dict:
-        return self._call("/AnnSubCategoryGetData/w", {
+        data = self._call("/AnnSubCategoryGetData/w", {
             "pageno": page, "strCat": "-1", "strPrevDate": frm.strftime("%Y%m%d"), "strScrip": code,
             "strSearch": "P", "strToDate": to.strftime("%Y%m%d"), "strType": "C", "subcategory": "-1"})
+        # a request BSE won't serve comes back as {"Status": false, "Message": "..."} and no table: say so, rather
+        # than read it as a company that filed nothing
+        if data.get("Status") is False and "Table" not in data:
+            raise SourceError(self.name, "The exchange feed turned the request down: "
+                                         f"{str(data.get('Message') or 'no reason given')[:120]}")
+        return data
 
     def _failed(self):
         self._fails += 1
@@ -1000,15 +1057,12 @@ class BSEFilings:
         if hit is not None:
             return hit
         to = ist_now()
-        rows = self._window(code, to - timedelta(days=days), to)
-        if not rows and days > 366:
-            # every company that trades files something in two years, and BSE's own page searches a year at a time:
-            # nothing at all for the whole window is asked again a year at a time before it is believed
-            end = to
-            while end > to - timedelta(days=days):
-                start = max(end - timedelta(days=365), to - timedelta(days=days))
-                rows += self._window(code, start, end)
-                end = start - timedelta(days=1)
+        start = to - timedelta(days=days)
+        rows: list[dict] = []
+        while to >= start:                  # BSE serves at most twelve months a request: a year at a time, newest first
+            frm = max(start, to - timedelta(days=self.WINDOW))
+            rows += self._window(code, frm, to)
+            to = frm - timedelta(days=1)
         items = normalise(rows)
         self.cache.set(key, items, 1800)
         return items

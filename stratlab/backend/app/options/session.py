@@ -6,7 +6,8 @@ from zoneinfo import ZoneInfo
 
 from ..models import OptionStrategy
 from .data import OptionsData, freeze
-from .engine import OptionsEngine
+from .engine import VIX_KEY, OptionsEngine
+from . import strikes as SR
 from .signal import SignalFeed
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -26,7 +27,9 @@ class OptionSession:
         self.started_at = row["started_at"]
         state = row.get("state") or {}
         s = self.strategy
-        self.engine = OptionsEngine(s, state=state or None, margin_fn=data.margin, freeze_default=freeze(s.underlying))
+        settle = getattr(data, "settlement_price", None)
+        self.engine = OptionsEngine(s, state=state or None, margin_fn=data.margin, freeze_default=freeze(s.underlying),
+                                    settle_fn=(lambda e: settle(s.exchange, s.underlying, e)) if settle else None)
         self.equity_curve: list[dict] = state.get("equity_curve", [])
         self.lock = threading.Lock()
         self.dirty = False
@@ -56,10 +59,18 @@ class OptionSession:
             if self.signal and self.strategy.signal.short == "mirror":
                 legs += e.legs_for("short")        # quote both, so either signal can enter at once
             for lg in legs:
+                if lg.pick != "offset":
+                    continue
                 k = c.strike_for(atm, lg.opt, lg.offset, self.strategy.offsetUnit)
                 if k is not None:
                     keys.append(c.key(lg.opt, k))
-        return [k for k in keys if k]
+            # a strike rule picks among the strikes near the money: quote them all (and the ATM pair for the model)
+            # while the session could enter or re-centre
+            if not e.pos or self.strategy.recenter.enabled:
+                keys += SR.keys_for(c, atm, legs)
+        if self.strategy.vix and not e.pos:
+            keys.append(VIX_KEY)
+        return [k for k in dict.fromkeys(keys) if k]
 
     def on_timer(self, now: datetime):
         if time.time() < self.next_poll:

@@ -8,6 +8,7 @@ import { Download, Trash, Upload } from "../components/Icons";
 import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
+import { useMoreColumns } from "../components/MoreColumns";
 
 type Bucket = { key: string; label: string; rate: number; gains: number; after_setoff: number; exempt: number; taxable: number; tax: number; slab?: boolean };
 type Sale = { key: string; bought: string; sold: string; qty: number; cost: number; sale: number; gain: number; term: "ST" | "LT"; bonus: boolean; gf: "applied" | "missing" | null; rate: number | null; mf?: boolean };
@@ -104,6 +105,9 @@ export function TaxReportPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
   const [allSales, setAllSales] = useState(false);
+  // each wide table leads with what the tax works out from; the rest is a click away, so it fits a laptop
+  const salesMore = useMoreColumns("tax-sales", 3);
+  const lotsMore = useMoreColumns("tax-below", 3);
   const [getting, setGetting] = useState<"csv" | "pdf" | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
@@ -319,16 +323,18 @@ export function TaxReportPage() {
 
           {y.count > 0 && (
             <section className="card stack" style={{ gap: 12 }}>
-              <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}><h2 className="h2">Each sale, matched to its purchase</h2><span className="tiny muted">{y.count} line{y.count === 1 ? "" : "s"}</span></div>
+              <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}><h2 className="h2">Each sale, matched to its purchase</h2>
+                <span className="row" style={{ gap: 10, flexWrap: "wrap" }}><span className="tiny muted">{y.count} line{y.count === 1 ? "" : "s"}</span>{salesMore.toggle}</span></div>
               <div className="table-wrap">
                 <table aria-label="Realised sales">
-                  <thead><tr><th style={{ textAlign: "left" }}>Stock</th><th>Bought</th><th>Sold</th><th>Qty</th><th>Cost</th><th>Sale</th><th>Gain or loss</th><th>Term</th><th>Rate</th></tr></thead>
+                  <thead><tr><th style={{ textAlign: "left" }}>Stock</th><th>Gain or loss</th><th>Term</th><th>Sold</th><th>Cost</th><th>Sale</th>
+                    {salesMore.on && <><th>Bought</th><th>Qty</th><th>Rate</th></>}</tr></thead>
                   <tbody>{(allSales ? y.rows : y.rows.slice(0, 30)).map((r, i) => (
                     <tr key={i}>
                       <td style={{ textAlign: "left" }}><b>{name(r.key)}</b>{rep.kinds?.[r.key] && <> <span className="badge kind-etf">{rep.kinds[r.key]}</span></>}{r.bonus && <span className="tiny muted"> bonus</span>}{r.gf === "applied" && <span className="tiny muted"> grandfathered</span>}{r.gf === "missing" && <span className="tiny neg"> 31 Jan 2018 price missing</span>}</td>
-                      <td className="num">{dateOnly(r.bought)}</td><td className="num">{dateOnly(r.sold)}</td><td className="num">{qtyText(r.qty)}</td>
-                      <td className="num">{inr(r.cost)}</td><td className="num">{inr(r.sale)}</td><td className={`num ${signClass(r.gain)}`}>{inr(r.gain)}</td>
-                      <td>{r.term === "LT" ? "Long" : "Short"}</td><td className="num">{rate(r.rate)}</td>
+                      <td className={`num ${signClass(r.gain)}`}>{inr(r.gain)}</td><td>{r.term === "LT" ? "Long" : "Short"}</td>
+                      <td className="num">{dateOnly(r.sold)}</td><td className="num">{inr(r.cost)}</td><td className="num">{inr(r.sale)}</td>
+                      {salesMore.on && <><td className="num">{dateOnly(r.bought)}</td><td className="num">{qtyText(r.qty)}</td><td className="num">{rate(r.rate)}</td></>}
                     </tr>
                   ))}</tbody>
                 </table>
@@ -347,17 +353,22 @@ export function TaxReportPage() {
             <p className="small muted" style={{ margin: 0 }}>Lots still open in your files that are worth less than they cost at today's price, and how long each has been held. Facts only: this is not a suggestion to do anything.</p>
             {rep.below_cost.rows.length === 0 ? <p className="small" style={{ margin: 0 }}>{rep.below_cost.open ? "No open lot is below its cost at today's price." : "Your files leave no shares open."}</p> : (
               <>
-                <p className="small" style={{ margin: 0 }}>Below cost now: <b className="neg">{inr(rep.below_cost.st)}</b> on short-term lots and <b className="neg">{inr(rep.below_cost.lt)}</b> on long-term lots.</p>
+                <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
+                  <p className="small" style={{ margin: 0 }}>Below cost now: <b className="neg">{inr(rep.below_cost.st)}</b> on short-term lots and <b className="neg">{inr(rep.below_cost.lt)}</b> on long-term lots.</p>
+                  {lotsMore.toggle}
+                </div>
                 <div className="table-wrap">
                   <table aria-label="Open lots below cost">
-                    <thead><tr><th style={{ textAlign: "left" }}>Stock</th><th>Bought</th><th>Qty</th><th>Cost a share</th><th>Price now</th><th>Below cost by</th><th>Held</th><th>Term today</th></tr></thead>
+                    <thead><tr><th style={{ textAlign: "left" }}>Stock</th><th>Below cost by</th><th>Held</th><th style={{ textAlign: "left" }}>Term today</th><th>Bought</th>
+                      {lotsMore.on && <><th>Qty</th><th>Cost a share</th><th>Price now</th></>}</tr></thead>
                     <tbody>{rep.below_cost.rows.map((r, i) => (
                       <tr key={i}>
                         <td style={{ textAlign: "left" }}><Link className="link" to={`/research/IN/${encodeURIComponent(r.key)}`}><b>{name(r.key)}</b></Link>{r.bonus && <span className="tiny muted"> bonus</span>}</td>
-                        <td className="num">{dateOnly(r.bought)}</td><td className="num">{qtyText(r.qty)}</td><td className="num">{price(r.cost_each, "INR")}</td><td className="num">{price(r.price, "INR")}</td>
                         <td className="num neg">{inr(r.loss)}{r.loss_pct != null && <span className="tiny"> {r.loss_pct.toFixed(1)}%</span>}</td>
                         <td className="num">{r.days} days</td>
-                        <td className="small">{r.term === "LT" ? "Long-term" : <>Short-term<div className="tiny muted">long-term from {dateOnly(r.long_from)}</div></>}</td>
+                        <td className="small" style={{ textAlign: "left" }}>{r.term === "LT" ? "Long-term" : <>Short-term<div className="tiny muted">long-term from {dateOnly(r.long_from)}</div></>}</td>
+                        <td className="num">{dateOnly(r.bought)}</td>
+                        {lotsMore.on && <><td className="num">{qtyText(r.qty)}</td><td className="num">{price(r.cost_each, "INR")}</td><td className="num">{price(r.price, "INR")}</td></>}
                       </tr>
                     ))}</tbody>
                   </table>

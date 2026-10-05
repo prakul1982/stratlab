@@ -1,9 +1,14 @@
 """The markets StratLab knows about. `provider` names the data source that serves a
-market; a market without one is shown as coming soon."""
+market; a market without one is shown as coming soon.
+
+India's hours are the cash market's. The finer timetable (stocks with derivatives stop continuous trading at 15:15
+for the closing auction, futures and options trade to 15:40) is data/sessions.py, which the paper engines read."""
 
 MARKETS = [
     {"id": "IN", "name": "India", "venues": "NSE and BSE", "currency": "INR", "symbol": "₹",
-     "tz": "Asia/Kolkata", "hours": {"open": "09:15", "close": "15:30", "days": "Mon–Fri"},
+     "tz": "Asia/Kolkata", "hours": {"open": "09:15", "close": "15:30", "days": "Mon–Fri",
+                                    "note": "F&O stocks: continuous trading to 15:15, then the closing auction to 15:35; "
+                                            "futures and options to 15:40"},
      "what": "Stocks, indices, F&O", "costs": "STT, stamp duty, GST", "provider": "kite", "brokerage": 20},
     {"id": "CRYPTO", "name": "Crypto", "venues": "Spot pairs, priced in USD", "currency": "USD", "symbol": "₿",
      "tz": "UTC", "hours": {"open": None, "close": None, "days": "Every day, 24 hours"},

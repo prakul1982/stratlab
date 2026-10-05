@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
+import { LoanCheck } from "./LoanCheck";
 import { asOf, money } from "../../lib/format";
 import { AsOf, Empty, Loading, Modal } from "../../components/ui";
 import { ChartEmpty, XYChart } from "../../components/Charts";
@@ -36,7 +37,9 @@ type Prepay = {
 const inr = (v: number | null | undefined) => money(v, "INR", 0);
 const day = (iso: string | null | undefined) => asOf(iso) ?? "–";
 
-type Field = { k: string; label: string; type: "money" | "rate" | "date" | "int" | "num" | "text" | "select"; options?: [string, string][]; optional?: boolean; hint?: string };
+type Field = { k: string; label: string; type: "money" | "rate" | "date" | "int" | "num" | "text" | "select"; options?: [string, string][]; optional?: boolean; hint?: string;
+  /** asked only for a floating-rate loan */ floating?: boolean };
+const isFloating = (form: Record<string, string>) => !!form.benchmark && form.benchmark !== "fixed";
 const NAME: Field = { k: "name", label: "Name (optional)", type: "text", optional: true };
 const AS_OF: Field = { k: "as_of", label: "Value as of", type: "date", optional: true };
 /** What each kind of entry asks for. */
@@ -70,8 +73,13 @@ const FORM: Record<Kind, { title: string; fields: Field[]; note?: string }> = {
   loan: { title: "Loan or card", fields: [NAME, { k: "loan_type", label: "Kind", type: "select", options: [["home", "Home loan"], ["car", "Car loan"], ["personal", "Personal loan"], ["education", "Education loan"], ["credit_card", "Credit card"], ["other", "Other loan"]] },
     { k: "lender", label: "Lender (optional)", type: "text", optional: true }, { k: "principal", label: "Amount borrowed, or owed on a card (₹)", type: "money" },
     { k: "rate", label: "Interest rate (% a year)", type: "rate" }, { k: "tenure_months", label: "Tenure in months (empty for a card)", type: "int", optional: true },
-    { k: "start", label: "Loan start date", type: "date", optional: true }],
-    note: "With a tenure, the EMI, the balance owed today and this year's interest are worked out on reducing balance, the first EMI a month after the start." },
+    { k: "start", label: "Loan start date", type: "date", optional: true },
+    { k: "benchmark", label: "Rate type", type: "select", options: [["fixed", "Fixed"], ["repo", "Floating: repo-linked"], ["tbill", "Floating: T-bill-linked"], ["mclr", "Floating: MCLR"], ["other", "Floating: other internal rate"]] },
+    { k: "spread", label: "Spread over the benchmark (points, optional)", type: "rate", optional: true, hint: "2.75", floating: true },
+    { k: "reset_months", label: "Rate resets every", type: "select", options: [["3", "3 months"], ["1", "Month"], ["6", "6 months"], ["12", "12 months"]], floating: true },
+    { k: "last_reset", label: "Last reset date (optional)", type: "date", optional: true, floating: true },
+    { k: "current_rate", label: "Rate on your latest statement (% a year, optional)", type: "rate", optional: true, floating: true }],
+    note: "With a tenure, the EMI, the balance owed today and this year's interest are worked out on reducing balance, the first EMI a month after the start. For a floating rate, the loan check below compares your statement's rate with the benchmark." },
   policy: { title: "Insurance policy", fields: [NAME, { k: "policy_type", label: "Kind", type: "select", options: [["term", "Term"], ["health", "Health"], ["life", "Life"], ["vehicle", "Vehicle"], ["other", "Other"]] },
     { k: "insurer", label: "Insurer", type: "text" }, { k: "sum_assured", label: "Sum assured (₹)", type: "money", optional: true }, { k: "premium", label: "Premium (₹)", type: "money" },
     { k: "frequency", label: "Paid", type: "select", options: [["yearly", "Every year"], ["half-yearly", "Every six months"], ["quarterly", "Every quarter"], ["monthly", "Every month"], ["single", "Once"]] },
@@ -91,11 +99,12 @@ function body(kind: Kind, form: Record<string, string>) {
   const out: Record<string, string | number> = { kind };
   for (const f of FORM[kind].fields) {
     const v = (form[f.k] ?? "").trim();
-    if (!v) continue;
-    if (f.type === "money" || f.type === "rate" || f.type === "num" || f.type === "int" || (f.type === "select" && f.k === "purity")) {
+    if (!v || (f.floating && !isFloating(form))) continue;
+    const whole = f.k === "purity" || f.k === "reset_months";
+    if (f.type === "money" || f.type === "rate" || f.type === "num" || f.type === "int" || (f.type === "select" && whole)) {
       const n = Number(v.replace(/,/g, ""));
       if (!Number.isFinite(n)) throw new Error(`${f.label}: enter a number.`);
-      out[f.k] = f.type === "int" || f.k === "purity" ? Math.round(n) : n;
+      out[f.k] = f.type === "int" || whole ? Math.round(n) : n;
     } else out[f.k] = v;
   }
   return out;
@@ -113,7 +122,7 @@ function EntryForm({ kind, start, busy, onSave, onCancel, saveLabel }: { kind: K
   return (
     <div className="stack" style={{ gap: 12 }}>
       <div className="nw-form">
-        {spec.fields.map((f) => (
+        {spec.fields.filter((f) => !f.floating || isFloating(form)).map((f) => (
           <label key={f.k} className="field">{f.label}
             {f.type === "select"
               ? <select value={form[f.k] ?? ""} onChange={(e) => setForm({ ...form, [f.k]: e.target.value })}>{f.options!.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
@@ -335,6 +344,8 @@ export function NetWorthPage() {
               <p className="tiny muted" style={{ margin: 0 }}>Balances owed as of {day(view.as_of)}, worked out from the amount, rate, tenure and start date you entered (reducing balance, monthly EMIs). Your lender's statement is the final word.</p>
             </section>
           )}
+
+          {view.liabilities.length > 0 && <LoanCheck version={`${view.count}|${view.liabilities.map((l) => JSON.stringify(l.entry)).join("|")}`} />}
 
           {view.insurance.policies.length > 0 && (
             <section className="card stack" style={{ gap: 12 }}>

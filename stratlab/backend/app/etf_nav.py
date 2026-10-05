@@ -1,12 +1,13 @@
 """Indian ETFs' market price against their NAV: the gap between what a unit trades at and what it holds, as a percent.
 
 Two values to compare with:
-- the indicative NAV (iNAV) the exchange publishes for each ETF through market hours, from its holdings' live prices;
 - the last NAV the fund house published (the industry body's daily NAV file, which money_mf_nav.py already reads),
-  matched to the ETF by its ISIN.
+  matched to the ETF by its ISIN, else the last NAV the exchange's ETF list gives with its date;
+- the indicative NAV (iNAV), the estimate from the holdings' live prices, when a source gives one.
 
-The exchange's ETF list (price, iNAV and ISIN of every ETF, one call) is read every few minutes while the market is
-open and kept in one app_settings row. After each close the day's closing price is stored with that day's NAV (filled
+The exchange's ETF list (price and last NAV of every ETF, one call; checked live in October 2026, its "nav" is the
+published NAV, not an iNAV) is read every few minutes while the market is open and kept in one app_settings row. It
+carries no ISIN: those come from the exchange's ETF securities file (read once a day). After each close the day's closing price is stored with that day's NAV (filled
 in when the evening NAV file has it), one row a day, so each ETF has a 30-day history of the gap.
 
 Facts and arithmetic only: "trades 4.2% above its iNAV", with the time of each number. Nothing here calls a price high
@@ -26,7 +27,7 @@ from .newsletter import job as news_job
 from .plans import allows
 from .responses import err, ok
 
-LIVE_KEY = "etfnav:live"           # {"read": when we read it, "as_of": the exchange's time, "rows": {symbol: [name, isin, price, inav, underlying]}}
+LIVE_KEY = "etfnav:live"           # {"read", "as_of", "rows": {symbol: [name, isin, price, inav, underlying, nav, nav date]}}
 DAY_KEY = "etfnav:day:"            # etfnav:day:<YYYY-MM-DD> = {symbol: [close, that day's NAV or None]}
 KEEP_DAYS = 30                     # trading days of history kept
 FILL_DAYS = 5                      # days back whose missing NAVs are still looked for
@@ -36,10 +37,16 @@ LIVE_EVERY = 240                   # seconds between reads of the exchange's lis
 RETRY = 1800                       # with nothing stored, wait this long between tries outside market hours
 CLOSE_AT = "15:45"                 # India time: the day's closing prices are recorded after this
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
-NOTE = ("Price is the last traded price on the exchange. The indicative NAV (iNAV) is the exchange's estimate of what "
-        "one unit holds, worked out through market hours from its holdings' prices; the NAV is the fund house's own "
-        "figure, published each evening for that day. A gap is the price's distance from either, as a percent. "
-        "Figures as of the times shown.")
+NOTE = ("Price is the last traded price on the exchange. The NAV is the fund house's own figure for what one unit "
+        "holds, published each evening for that day, so through the day the price moves while the NAV stays at the "
+        "last close. A gap is the price's distance from the NAV, as a percent. Figures as of the times shown.")
+# said only when a source gave a real indicative NAV (the exchange's list gives none)
+INAV_NOTE = (" The indicative NAV (iNAV) is the estimate of what one unit holds, worked out through market hours from "
+             "the holdings' prices; a gap to it is shown too.")
+
+
+def note(has_inav: bool) -> str:
+    return NOTE + (INAV_NOTE if has_inav else "")
 
 _cache = TTLCache(max_items=50)
 _lock = threading.Lock()
@@ -106,9 +113,12 @@ def _when(v) -> str | None:
 
 
 def parse_exchange(data) -> dict:
-    """The exchange's ETF list as {"as_of": ISO or None, "rows": {symbol: {name, isin, price, inav, underlying}}}.
-    Rows without a symbol or a price are left out; a missing iNAV stays None."""
+    """The exchange's ETF list as {"as_of": ISO or None, "rows": {symbol: {name, isin, price, inav, underlying, nav,
+    nav_date}}}. Rows without a symbol or a price are left out. The list's "nav" is the fund's last published NAV
+    (it matches the evening NAV file to the paisa, and the answer dates it in "navDate"), not an indicative NAV: an
+    iNAV is read only from a field that says so, and stays None otherwise."""
     items = data.get("data") if isinstance(data, dict) else data
+    nav_day = ((_when(data.get("navDate")) or "")[:10] or None) if isinstance(data, dict) else None
     rows: dict[str, dict] = {}
     for it in items if isinstance(items, list) else []:
         if not isinstance(it, dict):
@@ -118,17 +128,33 @@ def parse_exchange(data) -> dict:
         price = num(it.get("ltP") if it.get("ltP") is not None else it.get("lastPrice"))
         if not SYMBOL.match(sym) or price is None:
             continue
-        inav = num(it.get("nav") if it.get("nav") is not None else it.get("iNavValue"))
+        inav = num(it.get("iNavValue") if it.get("iNavValue") is not None else it.get("inav"))
+        nav = num(it.get("nav"))
         name = " ".join(str(meta.get("companyName") or it.get("companyName") or it.get("assets") or sym).split())[:120]
         under = " ".join(str(it.get("underlyingAsset") or it.get("assets") or "").split())[:120] or None
         rows[sym] = {"name": name, "isin": money_mf_nav._isin(meta.get("isin") or it.get("isin") or ""),
-                     "price": round(price, 4), "inav": round(inav, 4) if inav else None, "underlying": under}
+                     "price": round(price, 4), "inav": round(inav, 4) if inav else None, "underlying": under,
+                     "nav": round(nav, 4) if nav else None, "nav_date": nav_day}
     stamp = data.get("timestamp") if isinstance(data, dict) else None
     return {"as_of": _when(stamp) if stamp else None, "rows": rows}
 
 
+def add_isins(parsed: dict, feed) -> None:
+    """Fill in the ISINs the ETF list doesn't carry (the NAV is matched by ISIN): from the exchange's ETF securities
+    file, else the ones kept from the last read. A list read without them still stands: its iNAV gaps don't need them."""
+    try:
+        isins = feed.etf_securities() if hasattr(feed, "etf_securities") else {}
+    except Exception:
+        isins = {}
+    kept = load_live()["rows"]
+    for sym, r in parsed["rows"].items():
+        if not r["isin"]:
+            r["isin"] = money_mf_nav._isin(isins.get(sym) or (kept.get(sym) or {}).get("isin") or "")
+
+
 def _pack(parsed: dict, read: str) -> str:
-    rows = {s: [r["name"], r["isin"], r["price"], r["inav"], r["underlying"]] for s, r in parsed["rows"].items()}
+    rows = {s: [r["name"], r["isin"], r["price"], r["inav"], r["underlying"], r.get("nav"), r.get("nav_date")]
+            for s, r in parsed["rows"].items()}
     return json.dumps({"read": read, "as_of": parsed["as_of"], "rows": rows}, separators=(",", ":"))
 
 
@@ -144,8 +170,9 @@ def load_live() -> dict:
     rows = {}
     for s, r in (got.get("rows") or {}).items() if isinstance(got, dict) else []:
         try:
-            name, isin, price, inav, under = r
-            rows[s] = {"name": name, "isin": isin, "price": float(price), "inav": float(inav) if inav else None, "underlying": under}
+            name, isin, price, inav, under, nav, nav_day = (list(r) + [None, None])[:7]     # older rows have five
+            rows[s] = {"name": name, "isin": isin, "price": float(price), "inav": float(inav) if inav else None, "underlying": under,
+                       "nav": float(nav) if nav else None, "nav_date": nav_day}
         except (TypeError, ValueError):
             continue
     out = {"read": got.get("read") if isinstance(got, dict) else None, "as_of": got.get("as_of") if isinstance(got, dict) else None,
@@ -162,6 +189,7 @@ def refresh(feed=None, now: datetime | None = None) -> dict:
     parsed = parse_exchange(feed.etf_list())
     if not parsed["rows"]:
         raise ValueError("the exchange's ETF list came back empty")
+    add_isins(parsed, feed)
     now = now or datetime.now(timezone.utc)
     db.set_setting(LIVE_KEY, _pack(parsed, now.isoformat(timespec="seconds")))
     _cache.clear()
@@ -175,8 +203,12 @@ def navs() -> dict:
 
 
 def nav_of(row: dict, data: dict) -> dict | None:
-    """The ETF's scheme in the NAV file, by its ISIN only (a name can match another plan of the same fund)."""
-    return money_mf_nav.find(data, isin=row.get("isin") or "") if row.get("isin") else None
+    """The ETF's scheme in the NAV file, by its ISIN only (a name can match another plan of the same fund); else the
+    last NAV the exchange's list gave, with its date."""
+    sch = money_mf_nav.find(data, isin=row.get("isin") or "") if row.get("isin") else None
+    if sch is None and row.get("nav") and row.get("nav_date"):
+        sch = {"nav": row["nav"], "date": row["nav_date"]}
+    return sch
 
 
 # ---------- the history ----------
@@ -278,7 +310,9 @@ def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
     basis = "iNAV" if inav_gap is not None else "NAV" if nav_gap is not None else None
     g = inav_gap if basis == "iNAV" else nav_gap
     fund = instrument_kinds.fund_of(f"{sym} {r.get('name') or ''} {r.get('underlying') or ''}")
-    return {"symbol": sym, "name": r.get("name") or sym, "underlying": r.get("underlying"), "fund": fund,
+    # the exchange's list names the underlying ("Gold"); the NAV file names the fund ("Nippon India ETF Gold BeES")
+    name = (sch or {}).get("name") or r.get("name") or sym
+    return {"symbol": sym, "name": name, "underlying": r.get("underlying"), "fund": fund,
             "fund_label": instrument_kinds.FUND_LABELS.get(fund, "ETF"), "price": r["price"], "price_at": as_of,
             "inav": r.get("inav"), "inav_gap": inav_gap, "nav": nav, "nav_date": nav_day, "nav_gap": nav_gap,
             "gap": g, "basis": basis, "text": f"{sym} {words(g, 'indicative NAV' if basis == 'iNAV' else 'last NAV')}" if basis else None}
@@ -300,7 +334,8 @@ def table() -> dict:
     rows.sort(key=lambda v: (v["gap"] is None, -abs(v["gap"] or 0), v["symbol"]))
     nav_days = sorted({v["nav_date"] for v in rows if v["nav_date"]})
     out = {"rows": rows, "as_of": live["as_of"], "read": live["read"], "nav_as_of": nav_days[-1] if nav_days else None,
-           "count": len(rows), "with_gap": sum(1 for v in rows if v["gap"] is not None), "note": NOTE}
+           "count": len(rows), "with_gap": sum(1 for v in rows if v["gap"] is not None),
+           "note": note(any(v["inav"] is not None for v in rows))}
     _cache.set("table", out, 60)
     return out
 
@@ -313,7 +348,7 @@ def detail(symbol: str) -> dict | None:
     if not r:
         return None
     h = history(sym)
-    return {"row": row_view(sym, r, navs(), live["as_of"]), "history": h, "days": summary(h), "note": NOTE}
+    return {"row": row_view(sym, r, navs(), live["as_of"]), "history": h, "days": summary(h), "note": note(r.get("inav") is not None)}
 
 
 def known(symbol: str) -> bool:
