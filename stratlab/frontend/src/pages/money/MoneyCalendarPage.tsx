@@ -217,7 +217,7 @@ export function MoneyCalendarPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Money</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Money calendar</h1>
-        <p className="page-sub">Tax due dates, results and dividends for your holdings and watchlist, and your own dates, in one place. Subscribe from Google Calendar or Apple Calendar with a private link. Dates only, not advice.</p>
+        <p className="page-sub">Tax due dates, results and dividends for your holdings and watchlist, plus your own dates. Subscribe from any calendar app with a private link.</p>
       </div>
 
       <section className="card stack" style={{ gap: 14 }}>

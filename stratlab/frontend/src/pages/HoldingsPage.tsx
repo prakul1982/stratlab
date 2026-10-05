@@ -122,7 +122,7 @@ export function HoldingsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">My Holdings</span>
         <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your stocks, at today's prices</h1>
-        <p className="page-sub">Upload the holdings file from your broker to see what each position is worth, its gain or loss, today's change, your mix by sector, and what each company has filed. Facts only, not advice. Only you can see your holdings, and you can delete them at any time.</p>
+        <p className="page-sub">Upload your broker's holdings file to see each stock's value, gain or loss and sector mix: facts, not advice. Only you can see it.</p>
       </div>
 
       <section className="card stack" style={{ gap: 14 }}>

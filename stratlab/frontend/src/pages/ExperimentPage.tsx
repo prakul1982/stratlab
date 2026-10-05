@@ -154,7 +154,7 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
   const d = c.data;
   return (
     <div className="card stack" style={{ gap: 12, padding: 20 }}>
-      <div className="spread" style={{ alignItems: "flex-start" }}><h3 className="h3 row" style={{ gap: 0 }}>{c.title}<Info>{HELP[c.id]}</Info></h3><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
+      <div className="spread check-head"><h3 className="h3 row" style={{ gap: 0 }}>{c.title}<Info>{HELP[c.id]}</Info></h3><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
       {c.id === "unseen" && d && (
         <SplitBars built={d.built_ret} unseen={d.unseen_ret}
           builtLabel={`Built on ${yearSpan(d.built_from, d.built_to)} · ${tradeCount(d.built_trades)}`} unseenLabel={`Tested on ${yearSpan(d.unseen_from, d.unseen_to)} · ${tradeCount(d.unseen_trades)}`} />
