@@ -84,6 +84,7 @@ from . import fo_changes_routes
 from . import closing_auction
 from . import replay_routes, signals_routes
 from . import market_events_routes
+from . import mcp_server
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
@@ -304,6 +305,7 @@ app.include_router(vix.router)                 # /trade/vix
 app.include_router(biz_updates.router)         # /research/business-updates, /invest/business-updates
 app.include_router(shareholders.router)        # /research/holders, /invest/holders
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
+app.include_router(mcp_server.router)          # /mcp and /me/assistant: StratLab in your AI assistant
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page

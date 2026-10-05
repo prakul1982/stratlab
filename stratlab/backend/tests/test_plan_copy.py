@@ -75,6 +75,7 @@ CARD_WORDS = {
     "event_reminders": "market event reminders",
     "biz_updates": "business updates in numbers",
     "holders": "named-holder search",
+    "assistant": "in your AI assistant",
 }
 
 
