@@ -1,0 +1,74 @@
+{
+ "data": {
+  "mf_name": "Axis Mutual Fund",
+  "scheme_name": "Axis Midcap Fund",
+  "date_range": "From 01-Sep-2026 to 08-Sep-2026",
+  "nav_groups": [
+   {
+    "nav_name": "Axis Midcap Fund - Direct Plan - Growth",
+    "historical_records": [
+     {
+      "date": "2026-09-01",
+      "nav": 144.46,
+      "upload_time": "2026-09-01T22:37:47.000Z",
+      "upload_time_display": "01 Sep 2026 22:37:47",
+      "repurchase": "",
+      "reissue": "",
+      "Plan": "Direct Plan",
+      "Option": "Growth Option"
+     },
+     {
+      "date": "2026-09-02",
+      "nav": 143.96,
+      "upload_time": "2026-09-02T22:41:11.000Z",
+      "upload_time_display": "02 Sep 2026 22:41:11",
+      "repurchase": "",
+      "reissue": "",
+      "Plan": "Direct Plan",
+      "Option": "Growth Option"
+     },
+     {
+      "date": "2026-09-03",
+      "nav": 144.64,
+      "upload_time": "2026-09-03T22:43:50.000Z",
+      "upload_time_display": "03 Sep 2026 22:43:50",
+      "repurchase": "",
+      "reissue": "",
+      "Plan": "Direct Plan",
+      "Option": "Growth Option"
+     },
+     {
+      "date": "2026-09-04",
+      "nav": 144.13,
+      "upload_time": "2026-09-04T22:23:34.000Z",
+      "upload_time_display": "04 Sep 2026 22:23:34",
+      "repurchase": "",
+      "reissue": "",
+      "Plan": "Direct Plan",
+      "Option": "Growth Option"
+     },
+     {
+      "date": "2026-09-07",
+      "nav": 143.87,
+      "upload_time": "2026-09-07T22:36:32.000Z",
+      "upload_time_display": "07 Sep 2026 22:36:32",
+      "repurchase": "",
+      "reissue": "",
+      "Plan": "Direct Plan",
+      "Option": "Growth Option"
+     },
+     {
+      "date": "2026-09-08",
+      "nav": 144.45,
+      "upload_time": "2026-09-08T22:44:48.000Z",
+      "upload_time_display": "08 Sep 2026 22:44:48",
+      "repurchase": "",
+      "reissue": "",
+      "Plan": "Direct Plan",
+      "Option": "Growth Option"
+     }
+    ]
+   }
+  ]
+ }
+}

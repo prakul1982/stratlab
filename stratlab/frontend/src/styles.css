@@ -1492,3 +1492,5 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .slb-facts dd { margin: 2px 0 0; }
 .mtf-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .pos-tabs { align-self: flex-start; flex-wrap: wrap; }
+/* Test a SIP: the form's fields in a grid that wraps to one column on a phone */
+.sip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; align-items: end; }

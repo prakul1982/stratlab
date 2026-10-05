@@ -159,6 +159,7 @@ export function CompanyPage() {
           <AlertButton region={region} symbol={c.symbol} />
           <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
           <ShareCompanyButton region={region} symbol={c.symbol} />
+          {region === "IN" && <Link className="btn quiet sm" to={`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`}>Test a SIP</Link>}
           {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
           {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
         </div>

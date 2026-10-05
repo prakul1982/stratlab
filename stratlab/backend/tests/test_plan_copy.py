@@ -78,6 +78,10 @@ CARD_WORDS = {
     "assistant": "in your AI assistant",
     "stock_futures": "stock futures history",
     "mtf": "margin funding history",
+    "mf_behaviour": "fund behaviour",
+    "sip_luck": "SIP dip rules",
+    "rates_slab": "after your own tax",
+    "loan_check": "floating-rate loan check",
 }
 
 

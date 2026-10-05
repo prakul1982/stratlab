@@ -79,6 +79,8 @@ const moneyCalendar = () => import("./pages/money/MoneyCalendarPage");
 const MoneyCalendarPage = page(moneyCalendar, "MoneyCalendarPage");
 const UsTaxPage = page(() => import("./pages/money/UsTaxPage"), "UsTaxPage");
 const ItrExportPage = page(() => import("./pages/money/ItrExportPage"), "ItrExportPage");
+const SipTestPage = page(() => import("./pages/money/SipTestPage"), "SipTestPage");
+const RatesPage = page(() => import("./pages/money/RatesPage"), "RatesPage");
 const news = () => import("./pages/NewsPage");
 const NewsPage = page(news, "NewsPage");
 const RotationPage = page(research, "RotationPage");
@@ -227,6 +229,8 @@ function Routed() {
         <Route path="/money/calendar" element={<MoneyCalendarPage />} />
         <Route path="/money/us-tax" element={<UsTaxPage />} />
         <Route path="/money/itr" element={<ItrExportPage />} />
+        <Route path="/money/sip-test" element={<SipTestPage />} />
+        <Route path="/money/rates" element={<RatesPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/research" element={<ResearchHome />} />
         <Route path="/research/themes" element={<ThemesPage />} />

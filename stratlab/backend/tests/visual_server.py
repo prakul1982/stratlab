@@ -78,6 +78,16 @@ def build():
     mp.setattr(money_mf_ter, "fetch_month", lambda m, y: (navs / "ter_disclosure.html").read_text())
     for k, v in (("MIN_ROWS", 1), ("PAUSE", 0), ("BACKGROUND", False), ("BACKFILL", 3)):
         mp.setattr(money_mf_ter, k, v)
+    # a made-up NAV history for the flexi cap fund, for the fund behaviour card's redemption after a fall
+    from app import money_mf_behaviour
+    from tests import fake_mf_history
+    mp.setattr(money_mf_behaviour, "fetch_json", fake_mf_history.fetch)
+    mp.setattr(money_mf_behaviour, "BACKGROUND", False)
+    mp.setattr(money_mf_behaviour, "PAUSE", 0)
+    # the Reserve Bank's Current Rates panel, from a trimmed real copy, for Money → Rates
+    from app import rbi_rates
+    rbi_page = (Path(__file__).parent / "fixtures" / "rates" / "rbi_home_rates.html").read_text()
+    mp.setattr(rbi_rates, "fetch_text", lambda url=rbi_rates.URL: rbi_page)
     etf_gaps(mp)
     closing_auction(mp)
     vix_history(mp)

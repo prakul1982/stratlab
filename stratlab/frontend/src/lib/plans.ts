@@ -22,7 +22,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "chart_replay",
       "event_reminders",
       "biz_updates", "holders",
-      "stock_futures", "mtf"] },
+      "stock_futures", "mtf",
+      "mf_behaviour", "sip_luck", "rates_slab", "loan_check"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
@@ -32,7 +33,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "event_reminders",
       "biz_updates", "holders",
       "assistant",
-      "stock_futures", "mtf"] },
+      "stock_futures", "mtf",
+      "mf_behaviour", "sip_luck", "rates_slab", "loan_check"] },
 };
 
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
@@ -55,8 +57,8 @@ export const FEATURES: Record<PlanId, string[]> = {
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times, with trade notifications and a daily report`,
     "The full trade journal, positioning history with IV percentiles, chart replay practice, closing auction history, F&O change alerts, stock futures history with MWPL alerts, market event reminders and an India VIX entry filter",
     `${L.basic.deepdives_per_month} company deep dives (report card and checklist) and ${L.basic.decks_per_month} decks a month, business updates in numbers and named-holder search`,
-    "Stage 2 scan, watchlist red flags, Watchlist at a glance, market breadth charts and margin funding history, with alerts",
-    "Every mutual fund and net worth entry, fund capital gains and fund costs in rupees, dividends with TDS, and money reminders",
+    "Stage 2 scan, watchlist red flags, Watchlist at a glance, market breadth charts and margin funding history, with alerts, and SIP dip rules with every start month",
+    "Every mutual fund and net worth entry, fund capital gains and fund costs in rupees and your fund behaviour, dividends with TDS, money reminders, deposit rates after your own tax, and a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks`],
   pro: ["Everything in Basic, plus:", "Unlimited backtests, AI builds, deep dives and decks", `Paper trade ${L.pro.live_limit} strategies at a time`,
     "Indian F&O, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
@@ -97,7 +99,11 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["holders", "Named holders above 1%: search a holder across companies and follow their changes"],
   ["assistant", "StratLab in your AI assistant: your data and paper orders in Claude or ChatGPT"],
   ["stock_futures", "Stock futures: each F&O stock's OI, buildup, rollover, basis and MWPL history, with MWPL alerts"],
-  ["mtf", "Margin funding: each stock's and the market's MTF history, with alerts on a funded level"]];
+  ["mtf", "Margin funding: each stock's and the market's MTF history, with alerts on a funded level"],
+  ["mf_behaviour", "Fund behaviour: your return against each fund's in rupees, your SIP record and redemptions after a fall"],
+  ["sip_luck", "SIP test: dip rules, and the same SIP from every start month"],
+  ["rates_slab", "Fixed-income rates after tax at the rate from your own tax estimate"],
+  ["loan_check", "Floating-rate loans: is your rate following its benchmark, and what each change did"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
