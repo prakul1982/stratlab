@@ -22,6 +22,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from kiteconnect import exceptions as kite_exc
 from pydantic import ValidationError
@@ -400,10 +401,12 @@ def _load_errors():
         print("could not load errors:", x)
 
 
+app.add_middleware(db.SettingsMemo)   # innermost: each request reads a setting from the database once
 app.add_middleware(HeavyGate)   # inside the guard: heavy work takes turns, ordinary pages don't wait behind it
 app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
-                   allow_methods=["*"], allow_headers=["*"])
+                   allow_methods=["*"], allow_headers=["*"], max_age=7200)   # a browser asks before each call only every 2 h, not 10 min
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
 # ---------- helpers ----------
@@ -595,6 +598,7 @@ def me(profile=Depends(current_profile)):
         print("lifecycle visit failed:", str(e)[:160])
     plan = profile["_plan"]
     info = plan_info(plan)
+    used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck"))
     return ok({
         "id": profile["id"], "email": profile.get("email"),
         "plan": plan, "plan_info": info, "paid_plan": profile.get("_paid_plan", plan),
@@ -603,10 +607,10 @@ def me(profile=Depends(current_profile)):
         "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                     "renews_or_ends": profile.get("current_period_end"),
                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
-        "usage": {"backtests_used": backtests_used(profile), "backtests_limit": info["backtests_per_month"],
-                  "ai_used": db.count_usage(profile["id"], "ai", month_start_iso()), "ai_limit": info["ai_builds_per_month"],
-                  "deepdive_used": deep_used(profile, "deepdive"), "deepdive_limit": info["deepdives_per_month"],
-                  "deck_used": deep_used(profile, "deck"), "deck_limit": info["decks_per_month"]},
+        "usage": {"backtests_used": used["backtest"], "backtests_limit": info["backtests_per_month"],
+                  "ai_used": used["ai"], "ai_limit": info["ai_builds_per_month"],
+                  "deepdive_used": used["deepdive"], "deepdive_limit": info["deepdives_per_month"],
+                  "deck_used": used["deck"], "deck_limit": info["decks_per_month"]},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
@@ -617,6 +621,17 @@ def me(profile=Depends(current_profile)):
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "is_admin": admin.is_admin(profile),
     })
+
+
+_usage_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="usage-counts")
+
+
+def month_usage(uid: str, kinds: tuple[str, ...]) -> dict[str, int]:
+    """This month's count of each kind of use, the counts asked for at the same time: every page opens with /me, and
+    one database round trip after another made it the slowest call of the first load."""
+    since = month_start_iso()
+    jobs = {k: _usage_pool.submit(db.count_usage, uid, k, since) for k in kinds}
+    return {k: f.result() for k, f in jobs.items()}
 
 
 def data_note() -> dict | None:
@@ -2149,6 +2164,7 @@ def holdings_corp_view(profile, fetch: bool = True) -> dict:
     today = datetime.now(IST).date()
     ind = holdings.indian(h["items"])           # the exchange's corporate actions are for Indian stocks
     syms = [i["symbol"] for i in ind]
+    corp_actions.prefetch("IN", syms)
     checking = _corp_histories(profile["id"], syms, today) if fetch and syms else 0
     cal = corp_actions.load("IN")["rows"]
     acts = {s: corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) for s in syms}
@@ -2323,6 +2339,7 @@ def tax_inputs(profile) -> dict:
     # price of shares held then: a tax P&L of recent years needs no company's history
     need = sorted({t["sym"] for t in trades if t.get("sym") and (t.get("src") != "pnl" or t["d"] <= tax_lots.GF_DATE)})
     if need:
+        corp_actions.prefetch("IN", need)
         _corp_histories(uid, need, today)
         cal = corp_actions.load("IN")["rows"]
         acts = {s: [a for a in corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) if corp_actions.adjusts(a)] for s in need}

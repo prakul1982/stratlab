@@ -12,6 +12,10 @@ import {
   AIRead, Change, CompanySearch, EarningsBars, MarginCascade, MetricsGrid, NewsList, Panel, PriceChart,
   QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
+import { preloadPriceChart } from "../charts/price/lazy";
+import { loadSurveillance } from "../lib/surveillance";
+import { loadEtfGaps } from "../lib/etfGaps";
+import { loadFoChanges } from "../lib/foChanges";
 import { AsOf, Info, Loading } from "../components/ui";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
@@ -113,6 +117,9 @@ export function CompanyPage() {
     let live = true;
     setC(null); setError(null); setResults(null);
     researchApi.company(region, sym).then((x) => live && setC(x)).catch((e) => live && setError((e as Error).message));
+    // what the page shows under the company's name loads alongside it, not after it
+    preloadPriceChart();
+    if (region === "IN") { void loadSurveillance(); void loadEtfGaps(); void loadFoChanges(); }
     api<{ next: ResultRow | null; last: ResultRow | null }>(`/research/results/${region}/${encodeURIComponent(sym)}`)
       .then((x) => live && setResults(x)).catch(() => undefined);      // the calendar is a nice-to-have here
     return () => { live = false; };

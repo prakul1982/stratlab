@@ -274,8 +274,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     fake_db = FakeSupabase()
     monkeypatch.setattr(db, "_client", fake_db)
     db._profiles.clear()
-    from app import invite_rewards, plans
-    plans.forget_free_basic()                   # free Basic time another test gave
+    from app import invite_rewards, plans, pricing
+    plans.forget_free_basic()
+    pricing.forget()                            # prices another test saved                   # free Basic time another test gave
     invite_rewards._touched.clear()
     from app import corp_actions
     corp_actions._empty.clear()                 # company pages another test looked up with nothing found
