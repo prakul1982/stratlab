@@ -26,7 +26,7 @@
   background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); min-width: 0; }
 .k-starter:hover { border-color: var(--ink-2); }
 .k-starter:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.k-title-link { color: inherit; text-decoration: none; }
+.k-title-link { color: inherit; text-decoration: none; display: inline-flex; align-items: center; min-height: 32px; }
 .k-title-link:hover { text-decoration: underline; }
 .k-pin { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; }
 .k-pin:hover { border-color: var(--line-2); color: var(--ink); background: var(--paper); }

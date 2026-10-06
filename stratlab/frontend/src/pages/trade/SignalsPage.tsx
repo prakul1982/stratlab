@@ -108,7 +108,7 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
       <CardHead level={3} title="New signal session" />
       <div className="k-stack">
         {live.length > 1 && (
-          <FormGrid label="Market">
+          <FormGrid label="Pick the instrument">
             <Field label="Market">{(id) => <Select id={id} value={market?.id ?? ""} onChange={(v) => { setMid(v); setInst(null); }} options={live.map((m) => ({ value: m.id, label: m.name }))} />}</Field>
           </FormGrid>
         )}

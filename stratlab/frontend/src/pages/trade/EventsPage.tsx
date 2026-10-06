@@ -53,7 +53,7 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
         <Field label="When" wide>{(id) => <Select id={id} label="When to remind" value={p.days} onChange={(d) => onSave({ days: Number(d) })} options={DAY_OPTS} />}</Field>
       )}
       <CheckField checked={p.money_calendar} onChange={(on) => onSave({ money_calendar: on })}
-        label={<>Also show the kinds I picked in my <Link className="link" to="/money/calendar">Money calendar</Link> and its calendar feed</>} />
+        label={<span>Also show the kinds I picked in my <Link className="link" to="/money/calendar">Money calendar</Link> and its calendar feed</span>} />
     </Card>
   );
 }
