@@ -51,12 +51,27 @@ test("Market events: the dated list, filters, reminders, the Money calendar and 
 
   const errors = await open(page, "/trade/events", "Every event", who);
   await expect(page.getByRole("heading", { name: "Market events", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: "Where this comes from" }).click();
   await expect(page.getByTestId("ev-asof")).toContainText(/Central bank \(MPC\) as of .*Index provider as of/);
+  await page.keyboard.press("Escape");
   const week = page.getByTestId("ev-week");
   await expect(week.getByText("RBI policy decision (MPC)")).toBeVisible();
   await expect(week.getByText(/US consumer prices \(CPI\)/)).toHaveCount(0);      // nine days out
-  // the figure of a past release sits in the folded earlier events
-  await page.getByText(/Earlier events/).click();
+  // the month calendar: a dot for each kind, a day with the MPC decision lists it, and the keyboard moves between days
+  const cal = page.getByRole("group", { name: "Market events", exact: true });
+  const mpc = cal.getByRole("button", { name: /RBI policy decision \(MPC\)/ });
+  if (!(await mpc.count())) await cal.getByRole("button", { name: "Next month" }).click();
+  await expect(mpc.first()).toBeVisible();
+  await expect(cal.getByRole("list", { name: "What the dots mean" })).toContainText("RBI");
+  await mpc.first().click();
+  await expect(cal.locator(".k-cal-panel")).toContainText("RBI policy decision (MPC)");
+  await mpc.first().focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(cal.locator(".k-cal-cell:focus")).toHaveCount(1);
+  await expect(cal.locator(".k-cal-cell:focus")).not.toHaveAttribute("aria-label", /RBI policy decision/);
+
+  // the list view: the figure of a past release
+  await cal.getByRole("radio", { name: "List" }).click();
   await expect(page.getByTestId("ev-figure").filter({ hasText: "CPI inflation 4.82%" }).first()).toBeVisible();
   await expect(page.getByText("The month before: 4.45%").first()).toBeVisible();
 
@@ -68,7 +83,7 @@ test("Market events: the dated list, filters, reminders, the Money calendar and 
 
   // index changes: the table and the badge
   const change = page.getByTestId("ev-index-change").first();
-  await expect(change.getByRole("cell", { name: "Nifty 100" })).toBeVisible();
+  await expect(change.getByRole("rowheader", { name: "Nifty 100" })).toBeVisible();
   await expect(change.getByRole("link", { name: "RELIANCE" })).toBeVisible();
   await sane(page, errors);
 
@@ -77,8 +92,8 @@ test("Market events: the dated list, filters, reminders, the Money calendar and 
   await remind.getByLabel("Remind me of the events I pick").click();       // saved first, then ticked
   await expect(remind.getByLabel("Remind me of the events I pick")).toBeChecked();
   await expect(remind.getByLabel("When to remind")).toBeVisible();
-  await remind.getByTestId("ev-money-cal").click();
-  await expect(remind.getByTestId("ev-money-cal")).toBeChecked();
+  await remind.getByLabel(/Also show the kinds I picked/).click();
+  await expect(remind.getByLabel(/Also show the kinds I picked/)).toBeChecked();
   await expect.poll(async () => (await (await request.get(`${API}/trade/events`, { headers: auth })).json()).prefs).toMatchObject({ remind: true, money_calendar: true });
 
   await page.goto("/money/calendar");
@@ -101,7 +116,8 @@ test("Market events in dark mode", async ({ page, request }, info) => {
   const errors = await open(page, "/trade/events", "Every event", sessionFor(n));
   await expect(page.getByRole("region", { name: "Reminders and your calendar" })).toBeVisible();
   // the figure and the tags stay readable: their text colour differs from the card behind them
-  const [fg, bg] = await page.locator(".ev-tag").first().evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el.closest(".fo-row")!).backgroundColor]);
+  await page.getByRole("radio", { name: "List" }).click();
+  const [fg, bg] = await page.locator(".k-cal-kind").first().evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el.closest(".k-card")!).backgroundColor]);
   expect(fg).not.toBe(bg);
   await sane(page, errors);
   await page.screenshot({ path: `test-results/market-events-dark-${info.project.name}.png`, fullPage: true });
