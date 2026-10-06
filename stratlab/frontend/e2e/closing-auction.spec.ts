@@ -45,6 +45,10 @@ test("Closing auction: stocks by gap, indices, timetable, search and the history
   const errors = await open(page, "/trade/closing-auction", "F&O stocks", sessionFor(n));
   await expect(page.getByRole("heading", { name: "Closing auction", level: 1 })).toBeVisible();
   await expect(page.getByTestId("cas-phase")).not.toBeEmpty();
+  await expect(page.getByRole("region", { name: "Status" })).toBeVisible();
+  const coming = page.getByRole("region", { name: "Rule changes coming" });          // proposals only, with the source
+  await expect(coming).toContainText("consultation paper");
+  await expect(coming.getByRole("link", { name: /consultation paper/ })).toHaveAttribute("href", /^https:/);
 
   const stocks = page.getByRole("region", { name: /F&O stocks/ });
   const rows = stocks.locator("tr[data-cas-stock]");

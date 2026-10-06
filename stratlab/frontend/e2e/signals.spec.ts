@@ -90,8 +90,8 @@ test("signal forward test: the URL, a session, a test signal and a webhook signa
   await expect(page.getByRole("table", { name: "Closed trades" })).toBeVisible();
   await sane(page, errors);
 
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Stop session" }).click();
+  await page.getByRole("dialog", { name: "Stop this session?" }).getByRole("button", { name: "Stop session" }).click();
   await expect(page.getByRole("button", { name: "Delete" })).toBeVisible();
   expect((await request.post(hookUrl, { data: { session: sid, action: "exit" } })).status()).toBe(409);
 

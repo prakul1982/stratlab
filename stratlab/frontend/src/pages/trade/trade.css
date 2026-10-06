@@ -53,3 +53,4 @@
 .k-pad { padding: 14px; }
 .pub-head { font-size: clamp(40px, 7vw, 76px); font-weight: 400; letter-spacing: -.03em; line-height: 1; }
 .k-idea { font-family: var(--serif); font-size: 20px; min-height: 130px; line-height: 1.5; padding: 16px 18px; }
+.k-gap-sm { gap: var(--s2); }

@@ -49,7 +49,7 @@ test("chart replay: a hidden random replay, practice orders, finish into the jou
   await expect(page.getByText("No practice trades yet")).toBeVisible();
   await sane(page, errors);
 
-  await page.getByLabel("Candle size").selectOption("1d");
+  await page.getByRole("group", { name: "Candle size" }).getByRole("button", { name: "Daily" }).click();
   await page.getByRole("button", { name: "Random stock and date" }).click();
   await expect(page.getByTestId("rp-label")).toHaveText("Hidden symbol", { timeout: 30_000 });
   const chart = page.getByTestId("price-chart");

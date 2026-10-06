@@ -1,0 +1,4 @@
+/* F&O changes: the dated list, each line with the circulars under it. */
+.fo-sources { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.fo-sources a { overflow-wrap: anywhere; }
+.fo-page .sf-search { max-width: 240px; }

@@ -1660,12 +1660,12 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByTestId("cash-source")).toContainText("provisional FII/DII figures");
   await expect(main.getByTestId("pcr-source")).toBeVisible();
   // stock futures and options from the same file
-  await main.getByRole("button", { name: "Stock F&O", exact: true }).click();
+  await main.getByRole("radio", { name: "Stock F&O", exact: true }).click();
   await expect(main.getByTestId("part-table")).toHaveAttribute("data-segment", "stk");
   await expect(main.getByText("FII stock futures, net")).toBeVisible();
   await expect(main.getByRole("columnheader", { name: "Stock F&O" })).toBeVisible();
-  await main.getByRole("button", { name: "Index F&O", exact: true }).click();
-  await main.getByRole("button", { name: "Volume", exact: true }).click();
+  await main.getByRole("radio", { name: "Index F&O", exact: true }).click();
+  await main.getByRole("radio", { name: "Volume", exact: true }).click();
   await expect(main.getByRole("columnheader", { name: "Futures bought", exact: true })).toBeVisible();
   await expect(main.getByRole("columnheader", { name: "Futures bought / sold" })).toBeVisible();
   await expect(main.getByText("FII/FPI net")).toBeVisible();
@@ -1680,7 +1680,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(facts.getByText(/IV percentile/)).toBeVisible();
   await expect(facts.locator(".strike-chart svg path").first()).toBeVisible();
   await expect(facts).toContainText("IST");
-  await facts.getByRole("button", { name: "Change", exact: true }).click();
+  await facts.getByRole("radio", { name: "Change", exact: true }).click();
   await expect(facts.locator(".strike-chart svg path").first()).toBeVisible();
   await main.getByRole("group", { name: "Index", exact: true }).getByRole("button", { name: "BANKNIFTY" }).click();
   await expect(main.getByTestId("chain-facts")).toContainText("spot 55,000", { timeout: 30_000 });
@@ -1694,7 +1694,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByTestId("chain-history-source")).toContainText("recorded NIFTY's chain since");
   await main.getByRole("group", { name: "Participant" }).getByRole("button", { name: "Client" }).click();
   await expect(main.getByText("Client: index futures, net (contracts)")).toBeVisible();
-  await main.getByRole("group", { name: "Long share of" }).getByRole("button", { name: "Stock futures" }).click();
+  await main.getByRole("radiogroup", { name: "Long share of" }).getByRole("radio", { name: "Stock futures" }).click();
   await expect(main.getByText("Client: stock futures, long share (% of long + short)")).toBeVisible();
   // an index with nothing recorded yet says so instead of an empty chart
   await main.getByRole("group", { name: "Index for the chain history" }).getByRole("button", { name: "MIDCPNIFTY" }).click();
@@ -1719,15 +1719,15 @@ test("positioning: a missing cash number says why instead of a dash", async ({ p
   await expect(page.getByTestId("cash-status")).toContainText("No cash numbers stored yet. The last try");
 });
 
-test("positioning: a card on the Trade home and the Options page, its own page with no tabs back to Options", async ({ page }, info) => {
+test("positioning: a card on the Trade home, a link from the Options page, its own page with no tabs back to Options", async ({ page }, info) => {
   await sane(page, await open(page, "/trade", "Straddles, strangles"));
   const card = page.getByTestId("positioning-card");
   await expect(card.getByText("FII index futures, net")).toBeVisible({ timeout: 30_000 });
   await expect(card.getByText("NIFTY PCR (open interest)")).toBeVisible();
   await expect(card.getByTestId("pos-card-sides")).toContainText(/% long · [\d.]+% short/);
   await page.goto("/options");
-  await expect(page.getByTestId("positioning-card").getByText("FII/FPI cash, net")).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId("positioning-card").getByRole("link", { name: /Participants, flows and PCR/ }).click();
+  await expect(page.getByTestId("positioning-card"), "the card shows in one place only").toHaveCount(0);       // the Options page links to Positioning instead
+  await page.getByRole("link", { name: "open Positioning" }).click();
   await expect(page).toHaveURL(/\/trade\/positioning$/);
   await expect(page.getByRole("heading", { name: "Positioning", level: 1 })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Options" })).toHaveCount(0);       // its own menu entry, no tabs
