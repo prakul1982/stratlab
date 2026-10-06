@@ -258,6 +258,7 @@ class ReportReq(BaseModel):
 class ScanReq(BaseModel):
     region: Literal["IN", "US"] = "IN"
     set: str = Field("watchlist", max_length=40)          # a preset group id, or "watchlist"
+    scan: str = Field("st_s2", max_length=24)             # a scan_presets id (st_s2 is the Stage 2 + Supertrend scan)
 
 
 class ScanAlertReq(BaseModel):

@@ -2,7 +2,10 @@
 
 Preset lists are well-known indices as of 2025. Index members change from time to time; anything
 the market no longer lists is skipped and reported, and you can always build your own group."""
+import json
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+from pathlib import Path
 
 from .kite_service import NSE_SERIES
 from .research import ResearchError, load
@@ -48,6 +51,37 @@ PRESETS = {
         {"id": "global_metals_energy", "name": "Global metals and energy", "symbols": ["GC=F", "SI=F", "PL=F", "HG=F", "CL=F", "BZ=F", "NG=F"]},
     ],
 }
+
+
+# ---------- the big groups, worked out once a day (scan_presets) rather than read stock by stock ----------
+SP500_FILE = Path(__file__).parent / "data" / "sp500.json"       # a committed list: its source and date are inside; never read from the web
+BIG = {"IN": [{"id": "nifty500", "name": "NIFTY 500"}], "US": [{"id": "sp500", "name": "S&P 500"}]}
+
+
+@lru_cache(maxsize=1)
+def sp500_doc() -> dict:
+    """The committed S&P 500 list: {"name", "source", "as_of", "rows": [[symbol, name, sector, cik]]}."""
+    return json.loads(SP500_FILE.read_text(encoding="utf-8"))
+
+
+def sp500_symbols() -> list[str]:
+    return [r[0] for r in sp500_doc()["rows"]]
+
+
+def sp500_names() -> dict[str, str]:
+    return {r[0]: r[1] for r in sp500_doc()["rows"]}
+
+
+def sp500_ciks() -> dict[str, int]:
+    return {r[0]: int(r[3]) for r in sp500_doc()["rows"] if r[3]}
+
+
+def us_universe() -> list[str]:
+    """Every US stock the app keeps daily jobs for: the S&P 500 and the ready-made groups, once each."""
+    out = list(sp500_symbols())
+    for p in PRESETS["US"]:
+        out += [s for s in p["symbols"] if s not in out]
+    return list(dict.fromkeys(out))
 
 
 def presets(market: str) -> list[dict]:

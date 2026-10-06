@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from . import db, universes
+from . import db, scan_presets, universes
 from .engine.indicators import stage, supertrend
 from .intel.net import TTLCache
 
@@ -109,6 +109,38 @@ def run(registry, market: str, members: list[dict]) -> dict:
     rows.sort(key=lambda r: (RANK.get(r["signal"], 3), -(r["chg"] or 0)))
     return {"rows": rows, "missing": missing, "problems": problems,
             "counts": {k: sum(1 for r in rows if r["signal"] == k) for k in ("fresh", "st_s2", "stage2")}}
+
+
+def run_preset(registry, market: str, members: list[dict], preset: str) -> dict:
+    """One scan preset (scan_presets) over a small group, read live from the daily candles: {"rows" (the stocks that
+    match, most recent match first), "checked", "as_of", "missing", "problems"}. Facts only."""
+    if preset not in scan_presets.BY_ID:
+        raise KeyError(preset)
+    ids, missing = universes.resolve(registry, market, members[:MAX])
+    prov = registry.provider(market)
+
+    def one(iid):
+        try:
+            res = scan_presets.evaluate(_bars(registry, iid), only=[preset])
+            inst = (prov.instrument(iid.split(":", 1)[1]) if prov else None) or {}
+            return iid, res, inst, None
+        except Exception as e:     # one member's data problem mustn't sink the rest
+            return iid, None, {}, f"{iid.split(':', 1)[-1]}: {str(e)[:80] or e.__class__.__name__}"
+
+    rows, problems, checked, days = [], [], 0, []
+    for iid, res, inst, problem in _pool.map(one, ids):
+        if res is None:
+            problems.append(problem or f"{iid.split(':', 1)[-1]}: not enough history")
+            continue
+        checked += 1
+        days.append(res["as_of"])
+        m = res["matches"].get(preset)
+        if m:
+            rows.append({"symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": inst.get("name"), "currency": inst.get("currency"),
+                         "price": res["price"], "chg": res["chg"], "as_of": res["as_of"], "days_ago": m["days_ago"], "day": m["day"],
+                         "detail": m["detail"]})
+    rows.sort(key=lambda r: (r["days_ago"], r["symbol"]))
+    return {"rows": rows, "checked": checked, "as_of": max(days, default=None), "missing": missing, "problems": problems}
 
 
 # ---------- the daily watchlist alert ----------

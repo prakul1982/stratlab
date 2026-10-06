@@ -14,6 +14,7 @@ export { Notice, PlanNote } from "./Notice";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { BarList, Meter } from "./BarList";
 export { Disclosure } from "./Disclosure";
+export { Pager } from "./Pager";
 export { UploadButton } from "./UploadButton";
 export { ChipSet, CheckField } from "./Choices";
 export { EmptyState, ErrorState, Skeleton, type StateAction } from "./States";

@@ -15,6 +15,7 @@ CATALOGUE = [
     {"symbol": "EURUSD=X", "shortname": "EUR/USD", "exchange": "CCY", "quoteType": "CURRENCY"},
     {"symbol": "RELIANCE.NS", "shortname": "RELIANCE INDUSTRIES", "longname": "Reliance Industries Limited", "exchange": "NSI", "quoteType": "EQUITY"},
 ]
+OTHER_PAYERS = {"MSFT", "JPM", "KO", "XOM", "PG", "JNJ", "HD", "CVX", "PEP", "ABBV", "MRK", "WMT", "NVDA", "COST", "V", "MA"}
 TZ = {".L": ("Europe/London", "GBp"), ".DE": ("Europe/Berlin", "EUR"), ".T": ("Asia/Tokyo", "JPY"),
       "=X": ("Europe/London", "USD"), ".NS": ("Asia/Kolkata", "INR")}
 STEP = {"1d": 86400, "60m": 3600, "15m": 900, "5m": 300}
@@ -57,6 +58,12 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
                 div, split = ts[-30] if len(ts) > 30 else ts[0], ts[-300] if len(ts) > 300 else ts[0]
                 res["events"] = {"dividends": {str(div): {"amount": 0.26, "date": div}},
                                  "splits": {str(split): {"date": split, "numerator": 4, "denominator": 1, "splitRatio": "4:1"}}}
+            if "div" in req.url.params.get("events", "") and sym in OTHER_PAYERS and g == 86400 and len(ts) > 40:
+                # a dividend a few days ago (a different day for each company) and, for one, a split: for the US corporate-actions list
+                k = 2 + zlib.crc32(sym.encode()) % 24
+                res["events"] = {"dividends": {str(ts[-k]): {"amount": round(0.3 + (zlib.crc32(sym.encode()) % 90) / 100, 2), "date": ts[-k]}}}
+                if sym == "NVDA":
+                    res["events"]["splits"] = {str(ts[-9]): {"date": ts[-9], "numerator": 10, "denominator": 1, "splitRatio": "10:1"}}
             return httpx.Response(200, json={"chart": {"result": [res], "error": None}})
         return httpx.Response(404)
     return httpx.MockTransport(handler)

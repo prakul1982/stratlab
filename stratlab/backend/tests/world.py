@@ -175,6 +175,31 @@ def surveillance_answers(today=None) -> dict:
             "/content/fo/fo_secban.csv": ban, "/content/equities/sec_list.csv": "\n".join(sec)}
 
 
+MARKET_FLAGS = [
+    ("TCS", "Tata Consultancy Services Limited", "Change in Auditors", "Resignation of the Statutory Auditor with effect from today"),
+    ("INFY", "Infosys Limited", "Change in Directorate", "Resignation of Mr Ramesh as Independent Director"),
+    ("HDFCBANK", "HDFC Bank Limited", "Credit Rating", "The rating agency has downgraded the long-term rating to AA"),
+    ("ITC", "ITC Limited", "Qualified Institutions Placement", "The company has opened its QIP issue"),
+    ("ONGC", "Oil and Natural Gas Corporation Limited", "Disclosure under SEBI Takeover Regulations", "Creation of pledge on promoter shares, Regulation 31"),
+    ("SBIN", "State Bank of India", "Updates", "Board approved raising of funds up to Rs 5000 crore"),
+    ("TATASTEEL", "Tata Steel Limited", "Change in Directorate", "Resignation of the Chief Financial Officer"),
+    ("VEDL", "Vedanta Limited", "Default", "Delay in payment of interest on non-convertible debentures"),
+    ("WIPRO", "Wipro Limited", "Outcome of Board Meeting", "Financial Results for the quarter"),                  # routine: never listed
+]
+
+
+def market_announcements(from_date: str | None) -> list[dict]:
+    """A made-up day of announcements from every company, from the day asked for: about two flagged filings and a routine one."""
+    day = datetime.strptime(from_date, "%d-%m-%Y").date() if from_date else date.today()
+    n = day.toordinal()
+    out = []
+    for k in (n % 8, (n * 3 + 1) % 8, 8):
+        sym, name, desc, text = MARKET_FLAGS[k]
+        out.append({"symbol": sym, "sm_name": name, "desc": desc, "attchmntText": text, "sort_date": f"{day.isoformat()} {10 + k}:15:00",
+                    "seq_id": f"m{n}-{k}", "attchmntFile": f"https://nsearchives.nseindia.com/corporate/{sym}_{n}.pdf"})
+    return out
+
+
 def _nse(sw=None):
     rows = [{"symbol": "RELIANCE", "desc": "Investor Presentation", "attchmntText": "Investor presentation for Q1 FY27",
              "sort_date": "2026-08-01 18:10:05", "seq_id": "1", "attchmntFile": "https://nsearchives.nseindia.com/p.pdf"},
@@ -192,6 +217,8 @@ def _nse(sw=None):
         if desk is not None:           # the stock desks' daily files: F&O and cash bhavcopies, MWPL, SLB, margin trading
             return httpx.Response(desk[0], content=desk[1])
         if r.url.path == "/api/corporate-announcements":
+            if not r.url.params.get("symbol"):          # the whole market's announcements for one day (the red-flag list)
+                return httpx.Response(200, json=market_announcements(r.url.params.get("from_date")))
             return httpx.Response(200, json=rows)
         if r.url.path in ("/api/corporates-pit", "/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
             return _deals_answer(r)

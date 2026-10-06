@@ -92,12 +92,28 @@ def build():
     closing_auction(mp)
     vix_history(mp)
     holders_and_updates(mp)
+    all_company_filings(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
     fx_rates.seed()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     return w
+
+
+def all_company_filings(mp):
+    """The evening reads as they would have left things: the red-flag filings of every company (a made-up exchange list for
+    India, made-up 8-K items and 13D/13G filings for the S&P 500, read from the fake SEC) and the whole US universe's
+    dividends and splits (from the fake price history). The jobs stay off, so the stored rows stay as they are."""
+    from app import corp_actions
+    main.redflags_runner.pause = 0
+    main.redflags_runner.sleep = lambda s: None
+    for region in ("IN", "US"):
+        main.redflags_runner.run(region)
+    mp.setattr(corp_actions, "UNIVERSE_PACE", 0)
+    main.corp_job.start_universe({}, wait=True)
+    mp.setattr(main.redflags_job, "start", lambda: None)
+    mp.setattr(main.corp_job, "start", lambda: None)
 
 
 def holders_and_updates(mp):

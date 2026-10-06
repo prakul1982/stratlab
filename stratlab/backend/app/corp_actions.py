@@ -6,7 +6,9 @@ India: the exchange's corporate-actions list (one call for the whole market, for
 company's own history from the same list (or BSE's, for companies listed only on BSE). When the list is down,
 tracked companies' dividend, bonus and split notices are read from their announcements, with the record date as
 the ex-date (India settles T+1, so the two are the same day).
-US: the dividends and splits in each tracked company's price history. Those are past ex-dates only.
+US: the dividends and splits in each company's price history, for the whole US universe (the S&P 500 and StratLab's own
+groups, one company at a time at a gentle pace) as well as the tracked ones. A price history holds ex-dates that have
+already happened, so the US calendar has recent ex-dates and today's, and no dates ahead.
 
 Each region's calendar is stored as corpact:cal:<region>, a rolling window from four weeks back to two months
 ahead; one company's history (three years) as corpact:hist:<region>:<symbol>. Facts only: the action as the company
@@ -34,6 +36,9 @@ HIST_DAYS = 3 * 366                  # one company's history goes back this far
 HIST_MAX_AGE = 20 * 3600             # a stored history older than this is fetched again when asked for
 MAX_ROWS = 4000
 MAX_LOOKUPS = 80                     # per-company lookups in one refresh
+UNIVERSE_AT = "06:20"                # US, local time: the whole universe's histories are read (several minutes), after the tracked refresh
+UNIVERSE_PACE = 0.8                  # seconds between two companies: a steady pace under the price source's limit
+UNIVERSE_GIVE_UP = 6                 # this many busy answers in a row: the read stops and the stored rows stay
 NOTE = "Dates and amounts as the companies announced them. Not investment advice."
 CUR = {"IN": "₹", "US": "$"}
 KINDS = ("dividend", "bonus", "split", "buyback", "rights", "demerger")
@@ -235,12 +240,21 @@ def from_announcements(symbol: str, items: list[dict], today: date) -> list[dict
 def load(region: str) -> dict:
     cal = db.json_value(db.get_setting(KEY + region), {})
     cal = cal if isinstance(cal, dict) else {}
-    return {"at": cal.get("at"), "rows": [r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("ex_date") and r.get("id")]}
+    return {"at": cal.get("at"), "universe_at": cal.get("universe_at"), "universe": cal.get("universe"),
+            "rows": [r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("ex_date") and r.get("id")]}
 
 
-def save(region: str, rows: list[dict]):
+def save(region: str, rows: list[dict], universe: int | None = None):
+    """Store the calendar. `universe`: how many companies a whole-universe read covered (kept as it was when None)."""
     rows = sorted(rows, key=lambda r: (r["ex_date"], r["symbol"]))[:MAX_ROWS]
-    db.set_setting(KEY + region, json.dumps({"at": datetime.now(ZoneInfo(TZ[region])).isoformat(timespec="minutes"), "rows": rows}))
+    now = datetime.now(ZoneInfo(TZ[region])).isoformat(timespec="minutes")
+    doc = {"at": now, "rows": rows}
+    if universe is not None:
+        doc.update(universe_at=now, universe=universe)
+    else:
+        old = db.json_value(db.get_setting(KEY + region), {})
+        doc.update({k: old.get(k) for k in ("universe_at", "universe") if old.get(k) is not None})
+    db.set_setting(KEY + region, json.dumps(doc))
 
 
 def merge(old: list[dict], new: list[dict], frm: date, today: date, first: bool = False) -> list[dict]:
@@ -381,6 +395,55 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
         merged = merge(old, rows, frm, today, first)
         save(region, merged)
     return {"rows": len(merged), "fresh": sum(1 for r in merged if r.get("fresh")), "problems": problems}
+
+
+def us_universe(tracked=()) -> list[str]:
+    """Every US company the calendar covers: the S&P 500, StratLab's own groups and the companies people track."""
+    from . import universes
+    return sorted(set(universes.us_universe()) | {s.upper() for s in tracked})
+
+
+def refresh_universe(sources: dict, tracked=(), today: date | None = None, pace: float | None = None, sleep=time.sleep,
+                     symbols: list[str] | None = None) -> dict:
+    """Read the dividends and splits of the whole US universe from each company's price history, one at a time, and
+    store the calendar's window and each company's history. A company whose read fails keeps the rows it had; when
+    the source is busy UNIVERSE_GIVE_UP times in a row the read stops with what it has. Names come from the S&P 500 list.
+    {"rows", "read", "failed", "problems"}; the calendar is left alone when nothing could be read."""
+    from . import universes
+    region, today = "US", today or local_today("US")
+    frm, to = today - timedelta(days=KEEP_DAYS), today + timedelta(days=AHEAD_DAYS)     # the whole kept window is read fresh
+    names = universes.sp500_names()
+    pace = UNIVERSE_PACE if pace is None else pace
+    symbols = symbols if symbols is not None else us_universe(tracked)
+    rows, done, problems, busy = [], set(), [], 0
+    for i, sym in enumerate(symbols):
+        if i and pace:
+            sleep(pace)
+        try:
+            got = fetch_history(region, sym, sources, today)
+        except SourceError as e:
+            problems.append(f"{sym}: {str(e)[:100]}")
+            busy = busy + 1 if getattr(e, "busy", False) else 0
+            if busy >= UNIVERSE_GIVE_UP:
+                break
+            continue
+        except (AttributeError, KeyError, TypeError) as e:
+            problems.append(f"{sym}: {str(e)[:100]}")
+            continue
+        busy = 0
+        done.add(sym)
+        got = [{**r, "name": r.get("name") or names.get(sym)} for r in got]
+        hist_save(region, sym, got)
+        rows += [r for r in got if frm.isoformat() <= r["ex_date"] <= to.isoformat()]
+    if not done:
+        return {"rows": None, "read": 0, "failed": len(problems), "problems": problems[:10]}
+    with _lock:
+        cal = load(region)
+        old, first = cal["rows"], not cal["at"]
+        rows += [r for r in old if r["symbol"] not in done and r["ex_date"] >= frm.isoformat()]     # a failed company keeps its rows
+        merged = merge(old, rows, frm, today, first)
+        save(region, merged, universe=len(done))
+    return {"rows": len(merged), "read": len(done), "failed": len(problems), "problems": problems[:10]}
 
 
 def refresh_histories(region: str, sources: dict, symbols: set[str], today: date | None = None, budget: int = 150) -> int:
@@ -583,6 +646,7 @@ class Job:
         self.sources, self.send, self.can_alert = sources, send, can_alert
         self.last: dict[str, str] = {}
         self.status = {"last_run": None, "sent": 0, "last_error": None, "problems": []}
+        self.universe_running, self.universe_retry = False, 0.0
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="corporate-actions").start()
@@ -618,6 +682,9 @@ class Job:
                     who = who if who is not None else results.trackers()
                     self.refresh(region, who, day)
                     sent, ran = sent + self.announce(region, day, who), True
+            if region == "US" and self._universe_due(now):
+                self.start_universe(who if who is not None else results.trackers())
+                ran = True
             day = self.due(f"history-{region}", now, region, HISTORY_AT[region])
             if day:
                 who = who if who is not None else results.trackers()
@@ -630,6 +697,36 @@ class Job:
         if ran:
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
         return sent
+
+    def _universe_due(self, now: datetime) -> bool:
+        """The whole US universe is read once a day from UNIVERSE_AT, and at the first chance when it never has been
+        (a failed first read is tried again half an hour later)."""
+        if self.universe_running or time.time() < self.universe_retry:
+            return False
+        if load("US").get("universe_at") is None:
+            return True
+        return self.due("universe-US", now, "US", UNIVERSE_AT) is not None
+
+    def start_universe(self, who: dict, day: date | None = None, wait: bool = False):
+        """Read the US universe in the background (it takes minutes), so the job's other checks go on meanwhile."""
+        self.universe_running = True
+
+        def work():
+            try:
+                out = refresh_universe(self.sources(), {s for (r, s) in who if r == "US"}, day)
+                self.status["universe"] = {k: out[k] for k in ("rows", "read", "failed")}
+                if not out["read"]:
+                    self.universe_retry = time.time() + 1800
+                self.status["problems"] = out["problems"][:10]
+            except Exception as e:
+                self.universe_retry = time.time() + 1800
+                print("corporate actions universe:", str(e)[:160])
+            finally:
+                self.universe_running = False
+        t = threading.Thread(target=work, daemon=True, name="corp-actions-universe")
+        t.start()
+        if wait:
+            t.join()
 
     def refresh(self, region: str, who: dict | None = None, day: date | None = None) -> dict:
         who = who if who is not None else results.trackers()
@@ -695,13 +792,15 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = ""
     q, kind = _clean_q(q), kind if kind in KINDS else ""
     rows = [r for r in cal["rows"] if (scope == "all" or r["symbol"] in mine) and (not kind or r["kind"] == kind)
             and (not q or q in r["symbol"] or q in str(r.get("name") or "").upper())]
-    t, back = today.isoformat(), (today - timedelta(days=RECENT_DAYS)).isoformat()
+    recent_days = KEEP_DAYS if region == "US" else RECENT_DAYS      # the US calendar has no dates ahead: its list reaches back further
+    t, back = today.isoformat(), (today - timedelta(days=recent_days)).isoformat()
     ahead = sorted((r for r in rows if r["ex_date"] >= t), key=lambda r: (r["ex_date"], r["symbol"] not in mine, r["symbol"]))
     recent = sorted((r for r in rows if back <= r["ex_date"] < t), key=lambda r: (r["ex_date"], r["symbol"]), reverse=True)
     show = lambda rs: [{k: v for k, v in {**r, "mine": r["symbol"] in mine}.items() if k != "fresh"} for r in rs[:limit]]
     return {"region": region, "scope": scope, "kind": kind, "today": t, "updated_at": cal["at"], "ahead": show(ahead), "recent": show(recent),
             "more": max(0, len(ahead) - limit) + max(0, len(recent) - limit), "mine_count": len(mine), "alerts": alerts_on(uid),
-            "kinds": list(KINDS), "ahead_known": region == "IN", "note": NOTE}
+            "kinds": list(KINDS), "ahead_known": region == "IN", "note": NOTE, "recent_days": recent_days,
+            "universe": {"companies": cal.get("universe"), "updated_at": cal.get("universe_at")} if region == "US" else None}
 
 
 def company(region: str, symbol: str, sources: dict | None, today: date | None = None, fetch: bool = True) -> dict:

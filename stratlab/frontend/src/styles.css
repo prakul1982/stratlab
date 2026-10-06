@@ -1904,3 +1904,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-status-row:last-child { border-bottom: 0; }
 .k-status-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 260px; }
 .k-status-t b { font-size: 14.5px; }
+
+/* a long list that comes a page at a time (kit Pager.tsx) */
+.k-pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s2) var(--s3); padding-top: var(--s3); }
+.k-pager .k-small { text-align: center; flex: 1 1 auto; }

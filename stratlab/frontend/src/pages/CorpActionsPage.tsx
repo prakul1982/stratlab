@@ -14,6 +14,7 @@ import { Card, CardHead, CheckField, EmptyState, ErrorState, Field, FormGrid, Pa
 interface CalendarView {
   region: Region; scope: "mine" | "all"; kind: string; today: string; updated_at: string | null; ahead: CorpAction[]; recent: CorpAction[];
   more: number; mine_count: number; alerts: boolean; kinds: ActionKind[]; ahead_known: boolean; note: string;
+  recent_days?: number; universe?: { companies: number | null; updated_at: string | null } | null;
 }
 
 /** Ex-dates in day groups. */
@@ -61,13 +62,17 @@ export function CorpActionsPage() {
     } catch (e) { fail(e); }
   };
   const empty = data && !data.ahead.length && !data.recent.length;
+  const lookBack = (data?.recent_days ?? 14) >= 28 ? "Last four weeks" : "Last two weeks";
 
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfLabel="Updated"
         lede={region === "IN"
           ? "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, as companies announced them to the exchange."
-          : "Dividends and splits of US companies you follow, by ex-date. Dates ahead aren't available for the US yet."} />
+          : "Dividends and splits of the S&P 500 and the US companies you follow, by ex-date. Only ex-dates that have already happened are available for the US."}
+        info={region === "US" ? <>The US list is read once a day from each company's price history: the S&P 500 and StratLab's own groups{data?.universe?.companies ? ` (${data.universe.companies.toLocaleString("en-IN")} companies read)` : ""}, plus any US stock you follow.
+          A price history holds the dividends and splits that have already gone ex, so you see today's and the last four weeks'; announced dates that are still ahead aren't in it. Amounts are per share, as the history records them.</> : undefined}
+        infoLabel="About the US list" />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={setRegion} />
         <Seg label="Which companies" value={scope} onChange={(v) => setParam("scope", v)} options={[{ value: "mine", label: "My stocks" }, { value: "all", label: "All" }]} />
@@ -112,8 +117,8 @@ export function CorpActionsPage() {
           )}
           {/* ex-dates gone by fold under one line, open only when there is nothing ahead to show */}
           {data.recent.length > 0 && (
-            <Card label="Last two weeks">
-              <Earlier label="Last two weeks" count={data.recent.length} open={!data.ahead_known && !data.ahead.length}>
+            <Card label={lookBack}>
+              <Earlier label={lookBack} count={data.recent.length} open={!data.ahead_known && !data.ahead.length}>
                 <DayGroups rows={data.recent} today={data.today} />
               </Earlier>
             </Card>
