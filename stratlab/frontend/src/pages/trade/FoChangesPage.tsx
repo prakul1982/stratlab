@@ -123,7 +123,7 @@ export function FoChangesPage() {
               {a.allowed ? (
                 <CheckField checked={a.on} onChange={setAlert}
                   label={<>Tell me when a change touches a stock on my watchlist or in a running paper session
-                    <Info>Checked twice a trading day, before the open and in the evening. Each change is sent once, by phone notification, Telegram or email, whichever you set up on the Account page.</Info></>} />
+                    <Info>Checked twice a trading day, before the open and in the evening. Each change is sent once, by phone notification, Telegram or email, whichever you set up in Settings.</Info></>} />
               ) : (
                 <p className="k-small">Alerts on these changes for your watchlist and paper sessions are on the {a.plan} plan. <Link className="link" to="/plans">See the {a.plan} plan</Link></p>
               )}

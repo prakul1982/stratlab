@@ -99,7 +99,7 @@ export function ResultsPage() {
           {data && (
             <CheckField checked={data.alerts} onChange={toggleAlerts}
               label={<>Message me on the morning of a results day for my stocks, and when the results are filed
-                <Info>Sent by phone notification or Telegram, whichever you set up on the Account page. If you get the My Stocks newsletter, it lists the week's results dates too.</Info></>} />
+                <Info>Sent by phone notification or Telegram, whichever you set up in Settings. If you get the My Stocks newsletter, it lists the week's results dates too.</Info></>} />
           )}
         </Card>
       )}

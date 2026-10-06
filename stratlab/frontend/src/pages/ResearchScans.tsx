@@ -93,7 +93,7 @@ export function ScanPage() {
             <button className="btn" disabled={busy || !pro || !cur?.count}>{busy ? "Scanning…" : "Scan"}</button>
             {sets && <CheckField checked={sets.alerts} disabled={!pro} onChange={toggleAlerts}
               label={<>Alert me after each close when a watchlist stock newly meets both (ST S2)
-                <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up on the Account page."}</Info></>} />}
+                <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />}
           </FormActions>
         </FormGrid>
       </Card>
@@ -312,7 +312,7 @@ export function FilingsPage() {
         <Card>
           <CheckField checked={data.alerts} onChange={toggleAlerts}
             label={<>Message me each evening when a watchlist stock files a red flag or something to look closer at
-              <Info>{`Checked once a day at ${data.send_at} IST, for the India stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up on the Account page.`}</Info></>} />
+              <Info>{`Checked once a day at ${data.send_at} IST, for the India stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings.`}</Info></>} />
         </Card>
       )}
       {busy && <Card><Skeleton label="Reading each company's filings" lines={4} /></Card>}

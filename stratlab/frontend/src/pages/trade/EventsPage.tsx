@@ -42,7 +42,7 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
       {p.allowed ? (
         <CheckField checked={p.remind} onChange={(on) => onSave({ remind: on })}
           label={<>Remind me of the events I pick
-            <Info>{"Sent once each morning (about 7:30 am India time) by phone notification, Telegram or email, whichever you set up on the Account page."}</Info></>} />
+            <Info>{"Sent once each morning (about 7:30 am India time) by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />
       ) : (
         <p className="k-small">Reminders of these events are on the {p.plan} plan. <Link className="link" to="/plans">See the {p.plan} plan</Link></p>
       )}

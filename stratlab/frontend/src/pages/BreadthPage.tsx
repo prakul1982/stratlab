@@ -182,7 +182,7 @@ function AlertBox({ group }: { group: Group }) {
   return (
     <Card label="Breadth alerts">
       <CardHead title="Alert on the share above the 50-day average"
-        info="Checked once a day, after the counts for the close are in. You get one message each time the share moves from one side of your level to the other, by phone notification, Telegram or email, whichever you set up on the Account page. Up to 5." infoLabel="About breadth alerts" />
+        info="Checked once a day, after the counts for the close are in. You get one message each time the share moves from one side of your level to the other, by phone notification, Telegram or email, whichever you set up in Settings. Up to 5." infoLabel="About breadth alerts" />
       <FormGrid label="New breadth alert" onSubmit={add}>
         <Field label="Alert level" unit="%" inputMode="decimal" value={level} onChange={(e) => setLevel(e.target.value)} aria-invalid={!ok}
           aria-label={`Alert me when the share of ${group.name} stocks above their 50-day average crosses`} />

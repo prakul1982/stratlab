@@ -87,7 +87,7 @@ export function CorpActionsPage() {
         {data && (
           <CheckField checked={data.alerts} onChange={toggleAlerts}
             label={<>Message me when my stocks announce a corporate action, and the evening before an ex-date
-              <Info>Sent by phone notification or Telegram, whichever you set up on the Account page. Your stocks are your watchlist, holdings, notebooks and paper sessions. The My Stocks newsletter lists the week's ex-dates too.</Info></>} />
+              <Info>Sent by phone notification or Telegram, whichever you set up in Settings. Your stocks are your watchlist, holdings, notebooks and paper sessions. The My Stocks newsletter lists the week's ex-dates too.</Info></>} />
         )}
       </Card>
       {error && <ErrorState title="The calendar couldn't be opened" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
