@@ -112,21 +112,25 @@ test("margin funding: the market's book, your stocks, one stock and your own MTF
   const n = phone ? 298 : 295;
   await mine(request, n);
   const errors = await open(page, "/invest/margin-funding", "The market's MTF book", n);
-  await expect(page.getByText(/Funded at the end of/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Margin funding", level: 1 })).toBeVisible();
+  await expect(page.getByText(/Data up to/)).toBeVisible();
+  await expect(page.getByText(/^Funded on \d/).first()).toBeVisible();
+  await expect(page.locator("main")).not.toContainText(/crore\b/);        // Indian units: lakh cr and cr, never "crore" spelled out or "k cr"
   const table = page.getByRole("table", { name: "Margin funding for your stocks" });
   await expect(table.locator("tr[data-stock=SBIN]")).toContainText("1.20%");
   await expect(table.locator("tr[data-stock=GOLDBEES]")).toContainText("No margin funding");
   await table.getByRole("link", { name: "RELIANCE" }).click();
   const one = page.locator("#mtf-one");
   await expect(one.getByRole("heading", { name: "RELIANCE: margin funded" })).toBeVisible();
-  await expect(one.getByText(/crore is margin funded on/)).toBeVisible();
+  await expect(one.getByText(/^Funded on \d/)).toBeVisible();
+  await expect(one.getByText(/of shares issued/).first()).toBeVisible();
 
   const calc = page.locator("#mtf-cost");
-  await calc.getByLabel("Buy price (₹ a share)").fill("1000");
-  await calc.getByLabel("Shares").fill("100");
-  await calc.getByLabel("Days the funding is open").fill("60");
-  await calc.getByLabel("Price now (₹, optional)").fill("1100");
-  await calc.getByLabel("Margin the broker asks you to keep (%, optional)").fill("20");
+  await calc.getByRole("textbox", { name: /^Buy price/ }).fill("1000");
+  await calc.getByRole("textbox", { name: /^Shares/ }).fill("100");
+  await calc.getByRole("textbox", { name: /^Days held/ }).fill("60");
+  await calc.getByRole("textbox", { name: /^Price now/ }).fill("1100");
+  await calc.getByRole("textbox", { name: /^Margin to keep/ }).fill("20");
   await calc.getByRole("button", { name: "Work it out" }).click();
   const out = page.getByTestId("mtf-cost-out");
   await expect(out).toContainText("₹75,000");                 // 75% of ₹1,00,000 funded
