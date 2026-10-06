@@ -122,7 +122,7 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
   );
 }
 
-const START: Record<keyof CostIn, string> = { buy: "", qty: "", margin_pct: "25", rate_pct: "15", days: "30", charges: "", price: "", maint_pct: "" };
+const START: Record<keyof CostIn, string> = { buy: "1000", qty: "100", margin_pct: "25", rate_pct: "15", days: "30", charges: "", price: "", maint_pct: "" };
 
 function Calculator() {
   const { fail } = useApp();
@@ -130,14 +130,17 @@ function Calculator() {
   const [out, setOut] = useState<CostOut | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof CostIn) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
-  const run = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const run = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const quiet = !e;
     const n = (k: keyof CostIn) => (f[k].trim() === "" ? null : Number(f[k]));
     const body = { buy: n("buy"), qty: n("qty"), margin_pct: n("margin_pct"), rate_pct: n("rate_pct"), days: n("days"), charges: n("charges") ?? 0,
       price: n("price"), maint_pct: n("maint_pct") ?? 0 } as CostIn;
     setBusy(true);
-    try { setOut(await desksApi.cost(body)); } catch (err) { fail(err); } finally { setBusy(false); }
+    try { setOut(await desksApi.cost(body)); } catch (err) { if (!quiet) fail(err); } finally { setBusy(false); }
   };
+  // the example position is worked out on arrival, so the card opens with an answer rather than an empty form
+  useEffect(() => { void run(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   const days = Number(f.days) || 0;
   return (
     <Card id="mtf-cost">
