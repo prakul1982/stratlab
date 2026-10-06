@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { FAMILIES, NAV_GROUPS } from "../src/lib/navGroups";
+import { NAV } from "../src/lib/nav";
 
 // Signed in as the site owner (the fake database's admin-token), with the tour already seen.
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
@@ -674,7 +674,7 @@ async function menu(page: Page, phone: boolean) {
   return side;
 }
 
-test("the menu: a space's few short groups, Scans and Watchlist each one entry with tabs, old links still open", async ({ page }, info) => {
+test("the menu: a space's groups, the one you are in is open, group titles open their pages, old links still open", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   // the owner's account is shared with every other test: keep this test's space choices out of it
   await page.route("**/me/prefs", (r) => (r.request().method() === "PUT" ? r.fulfill({ json: { prefs: {} } }) : r.fallback()));
@@ -686,19 +686,23 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
     await r.fulfill({ response: res, json: { ...me, prefs: { ...(me.prefs || {}), level: me.prefs?.level ?? "some", focus: me.prefs?.focus ?? "invest" } } });
   });
   const errors = await open(page, "/research", "Companies");
-  await page.evaluate(() => { localStorage.removeItem("stratlab.side.shut"); localStorage.removeItem("stratlab.view.scans"); localStorage.setItem("stratlab.space", "invest"); });
+  await page.evaluate(() => { localStorage.removeItem("stratlab.side.groups"); localStorage.setItem("stratlab.space", "invest"); });
   await page.reload();
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
   const space = side.getByRole("radiogroup", { name: "Space" });
-  await expect(space.getByRole("radio")).toHaveText(["Trade", "Invest", "Money", "All"]);
+  await expect(space.getByRole("radio")).toHaveText(["Mine", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
-  // Invest: its home, then two short groups; the other spaces' groups wait behind the switcher
-  for (const g of ["Research", "Watch"]) await expect(main.getByRole("button", { name: g, exact: true })).toBeVisible();
-  for (const g of ["Notebooks", "Trading", "Money"]) await expect(main.getByRole("button", { name: g, exact: true })).toHaveCount(0);
+  // Invest: its home, then its five groups; the other spaces' groups wait behind the switcher
+  await expect(main.locator(".side-group .side-title")).toHaveText(NAV.invest.groups.map((g) => g.label));
+  for (const g of ["Practise", "Build and test", "Tax", "Plan"]) await expect(main.getByRole("link", { name: g, exact: true })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
-  await expect(main.locator(".side-nav a")).toHaveText(["Companies", "News", "Scans", ...NAV_GROUPS.Invest.map((e) => e.label), "Watchlist", "Alerts"]);
-  for (const gone of ["Stage 2 trend scan", "Sector rotation", "Red flags", "Watchlist at a glance"]) await expect(side.getByRole("link", { name: gone })).toHaveCount(0);
+  // the group holding the page you are on is open and the others are folded; every page of every group is a menu entry
+  await expect(main.locator('[data-group="companies"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
+  for (const g of NAV.invest.groups.slice(1)) await expect(main.locator(`[data-group="${g.id}"] .side-toggle`)).toHaveAttribute("aria-expanded", "false");
+  for (const g of NAV.invest.groups) await expect(main.locator(`[data-group="${g.id}"] .side-nav a`)).toHaveText(g.pages.map((p) => p.label));
+  await expect(main.getByRole("link", { name: "Look up a company" })).toHaveClass(/active/);
+  await expect(main.getByRole("link", { name: "Scans", exact: true })).toHaveCount(0);       // no catch-all "Scans" entry any more
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
   await expect(foot.getByRole("button", { name: /^\d+ of \d+ markets open$/ })).toBeVisible();
@@ -708,47 +712,64 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   expect(scrolls, "one scrolling part in the sidebar").toEqual(["side-groups"]);
   if (phone) for (const el of await side.locator("a, button").all()) {
     const b = await el.boundingBox();
-    if (b && b.height) expect(b.height, `"${(await el.innerText()).slice(0, 30)}" is too small to tap`).toBeGreaterThanOrEqual(32);
+    if (b && b.height) expect(b.height, `"${(await el.innerText().catch(() => "")).slice(0, 30)}" is too small to tap`).toBeGreaterThanOrEqual(32);
   }
 
-  // Scans: one entry, four tabs, each tab its own address
-  await main.getByRole("link", { name: "Scans" }).click();
-  await expect(page).toHaveURL(/\/research\/scan$/);
-  const tabs = page.getByRole("navigation", { name: "Scans" });
-  await expect(tabs.getByRole("link")).toHaveText(FAMILIES.scans.views.map(([, label]) => label));
-  await tabs.getByRole("link", { name: "Sector rotation" }).click();
-  await expect(page).toHaveURL(/\/research\/rotation$/);
-  await expect(tabs.getByRole("link", { name: "Sector rotation" })).toHaveAttribute("aria-current", "page");
-  // the entry reopens the tab you left, and the old addresses still work
-  await page.goto("/research/scans");
-  await expect(page).toHaveURL(/\/research\/rotation$/);
-  await page.goto("/research/filings");
-  await expect(page.getByText("Filings and red flags").first()).toBeVisible({ timeout: 30_000 });
+  // a group's title opens its page of cards, and that group is the open one
+  await main.getByRole("link", { name: "Find stocks", exact: true }).click();
+  await expect(page).toHaveURL(/\/invest\/g\/find-stocks$/);
+  await expect(page.getByTestId("group-card")).toHaveCount(4);
   side = await menu(page, phone);
-  await expect(side.getByRole("link", { name: "Scans" })).toHaveClass(/active/);
-  await expect(side.getByRole("link", { name: "Companies" })).not.toHaveClass(/active/);    // one entry lit at a time
-
-  // Watchlist: the list and "at a glance" are two tabs of one entry
-  await side.getByRole("link", { name: "Watchlist" }).click();
-  await expect(page).toHaveURL(/\/research\/watchlist$/);
-  const views = page.getByRole("navigation", { name: "Watchlist" });
-  await views.getByRole("link", { name: "At a glance" }).click();
-  await expect(page).toHaveURL(/\/research\/investor$/);
+  await expect(side.locator('[data-group="find-stocks"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
+  await expect(side.getByRole("link", { name: "Trend scan" })).toBeVisible();
+  // the pages that used to be tabs are entries now, and each has its own address
+  await side.getByRole("link", { name: "Trend scan" }).click();
+  await expect(page).toHaveURL(/\/research\/scan$/);
+  await expect(page.getByRole("navigation", { name: "Scans" }), "no second row of tabs").toHaveCount(0);
+  await expect(page.locator(".research-nav, .sub-seg")).toHaveCount(0);
+  side = await menu(page, phone);
+  await side.locator('[data-group="market-view"] .side-toggle').click();
+  await side.getByRole("link", { name: "Sector rotation" }).click();
+  await expect(page).toHaveURL(/\/research\/rotation$/);
+  side = await menu(page, phone);
+  await expect(side.getByRole("link", { name: "Sector rotation" })).toHaveClass(/active/);
+  await expect(side.getByRole("link", { name: "Trend scan" })).not.toHaveClass(/active/);    // one entry lit at a time
+  // the old addresses still work
+  await page.goto("/research/scans");
+  await expect(page).toHaveURL(/\/research\/scan$/);
+  await page.goto("/scans");
+  await expect(page).toHaveURL(/\/research\/scan$/);
   await page.goto("/watchlist");
   await expect(page).toHaveURL(/\/research\/watchlist$/);
-  await page.goto("/research/scan");
-  await expect(page.getByText("Stage 2").first()).toBeVisible({ timeout: 30_000 });
+  await page.goto("/all");
+  await expect(page).toHaveURL(/\/mine$/);
+
+  // Watchlist: the list and "at a glance" are two views of one page, a switch inside it
+  await page.goto("/research/watchlist");
+  await expect(page.getByText("Companies you're watching").first()).toBeVisible({ timeout: 30_000 });
+  const views = page.getByRole("radiogroup", { name: "Watchlist view" });
+  await expect(views.getByRole("radio")).toHaveText(["List", "At a glance"]);
+  await views.getByRole("radio", { name: "At a glance" }).click();
+  await expect(page).toHaveURL(/\/research\/investor$/);
+  await expect(page.getByRole("radiogroup", { name: "Watchlist view" }).getByRole("radio", { name: "At a glance" })).toHaveAttribute("aria-checked", "true");
 
   // a group folds, by mouse or keyboard, and stays folded on this device
+  await page.goto("/research/scan");
+  await expect(page.getByText("Stage 2").first()).toBeVisible({ timeout: 30_000 });
   side = await menu(page, phone);
-  const watch = side.getByRole("button", { name: "Watch", exact: true });
-  await expect(watch).toHaveAttribute("aria-expanded", "true");
-  await watch.click();
-  await expect(watch).toHaveAttribute("aria-expanded", "false");
+  const find = side.locator('[data-group="find-stocks"] .side-toggle');
+  await expect(find).toHaveAttribute("aria-expanded", "true");
+  await find.click();
+  await expect(find).toHaveAttribute("aria-expanded", "false");
+  await expect(side.getByRole("link", { name: "Trend scan" })).toBeHidden();
+  const alerts = side.locator('[data-group="watch"] .side-toggle');
+  await expect(alerts).toHaveAttribute("aria-expanded", "true");      // opened earlier, when the watchlist was the page
+  await alerts.click();
+  await expect(alerts).toHaveAttribute("aria-expanded", "false");
   await expect(side.getByRole("link", { name: "Alerts" })).toBeHidden();
   await page.reload();
   side = await menu(page, phone);
-  await expect(side.getByRole("button", { name: "Watch", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(side.locator('[data-group="watch"] .side-toggle')).toHaveAttribute("aria-expanded", "false");
   // the keyboard: Tab from the search button passes the space's home and lands on the first group, with a visible
   // focus ring, and Enter folds it
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
@@ -762,7 +783,7 @@ test("the menu: a space's few short groups, Scans and Watchlist each one entry w
   await page.keyboard.press("Enter");
   await expect(first).toHaveAttribute("aria-expanded", was === "true" ? "false" : "true");
   await page.keyboard.press("Enter");
-  await page.evaluate(() => localStorage.removeItem("stratlab.side.shut"));
+  await page.evaluate(() => localStorage.removeItem("stratlab.side.groups"));
   await sane(page, errors);
 });
 
@@ -821,7 +842,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   await sane(page, errors);
 });
 
-test("the account menu: Account, Admin, the theme, the tour and Sign out, with arrow keys and Esc", async ({ page }, info) => {
+test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All features, Help and Sign out, with arrow keys and Esc", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   let side = await menu(page, phone);
@@ -831,7 +852,9 @@ test("the account menu: Account, Admin, the theme, the tour and Sign out, with a
   await btn.click();
   const acct = page.getByRole("menu", { name: "Account" });
   await expect(acct).toBeVisible();
-  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Admin", /^(Dark|Light) mode$/, "Tour", "Sign out"]);
+  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Settings", "Plan", "Invite friends", "Get the app", "Admin", "All features", "Help", "Sign out"]);
+  for (const [name, href] of [["Settings", "/settings"], ["Plan", "/plans"], ["Invite friends", "/invite"], ["Get the app", "/app"], ["All features", "/features"]])
+    await expect(acct.getByRole("menuitem", { name })).toHaveAttribute("href", href);
   if (phone) {
     for (const el of await acct.getByRole("menuitem").all()) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     const box = (await acct.boundingBox())!;
@@ -853,21 +876,14 @@ test("the account menu: Account, Admin, the theme, the tour and Sign out, with a
   await expect(acct).toHaveCount(0);
   await expect(btn).toBeFocused();
 
-  // the theme flips both ways
-  const theme = () => page.evaluate(() => document.documentElement.dataset.theme ?? "");
+  // the theme moved to Settings (e2e/account.spec.ts flips it both ways)
   await btn.click();
-  const first = (await acct.getByRole("menuitem", { name: /mode$/ }).innerText()).trim();
-  await acct.getByRole("menuitem", { name: /mode$/ }).click();
-  await expect(acct).toHaveCount(0);
-  expect(await theme()).toBe(first === "Dark mode" ? "dark" : "light");
-  await btn.click();
-  await expect(acct.getByRole("menuitem", { name: first === "Dark mode" ? "Light mode" : "Dark mode" })).toBeVisible();
-  await acct.getByRole("menuitem", { name: /mode$/ }).click();
-  expect(await theme()).toBe(first === "Dark mode" ? "light" : "dark");
+  await expect(acct.getByRole("menuitem", { name: /mode$/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
-  // the tour opens from it
+  // Help opens the tour
   await btn.click();
-  await acct.getByRole("menuitem", { name: "Tour" }).click();
+  await acct.getByRole("menuitem", { name: "Help" }).click();
   await expect(page.getByRole("tablist", { name: "Tour steps" })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /^(Close|Skip|Done)/ }).first().click({ timeout: 2000 }).catch(() => undefined);
@@ -1105,7 +1121,7 @@ test("deals and insider trades: a dated table on the company page and the deep d
   await expect(table).toContainText("Index Fund One");
   await expect(table).not.toContainText("Mukesh Shah Family Trust");
   const text = await panel.innerText();
-  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub|nseindia/i);      // "Screener" alone is the Scans tab
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub|nseindia/i);      // "Screener" alone is a menu entry
   expect(text).not.toMatch(/\b(signal|smart money|buy|sell|accumulate|avoid)\b/i);
   if (phone) await touchable(page);
   await sane(page, errors);
@@ -1585,17 +1601,18 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await ranges.getByRole("radio", { name: "3M" }).click();
   await expect(ranges.getByRole("radio", { name: "3M" })).toHaveAttribute("aria-checked", "true");
   await page.getByLabel("Group of stocks").selectOption("us_large");
-  await expect(page.getByText("Scans · United States")).toBeVisible();
+  await expect(page.getByText("Market view · United States")).toBeVisible();
   await expect(charts.getByRole("heading", { name: /^SPY \(an S&P 500 fund\)/ })).toBeVisible();
   const text = await page.locator("main").innerText();
-  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub|nseindia/i);      // "Screener" alone is the Scans tab
+  expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub|nseindia/i);      // "Screener" alone is a menu entry
   expect(text).not.toMatch(/\b(buy|sell|bullish|bearish|you should|accumulate|overbought|oversold)\b/i);
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
 
-  // the Scans tabs and the Invest home lead here
+  // the breadcrumb menu of a neighbouring page and the Invest home lead here
   await page.goto("/research/rotation");
-  await page.getByRole("navigation", { name: "Scans" }).getByRole("link", { name: "Market breadth" }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: /Sector rotation/ }).click();
+  await page.getByRole("menu", { name: /Pages near Sector rotation/ }).getByRole("menuitem", { name: "Market breadth" }).click();
   await expect(page).toHaveURL(/\/invest\/breadth/);
   await page.goto("/invest");
   await expect(page.getByTestId("breadth-card")).toContainText("Above 50-day average");

@@ -5,7 +5,7 @@ import {
   RANGES, breadthApi, count, delta, savePick, savedPick, share, shortDay,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type RangeId, type SectorTable, type Today,
 } from "../lib/breadth";
-import { ResearchNav, Panel } from "../components/Research";
+import { RegionSwitch, Panel } from "../components/Research";
 import { LineChart, PairBars } from "../components/Charts";
 import { AsOf, Info, Loading } from "../components/ui";
 
@@ -46,9 +46,9 @@ export function BreadthPage() {
   const g = data?.group;
   return (
     <div className="stack breadth" style={{ gap: 24 }}>
-      <ResearchNav region={g?.region ?? "IN"} />
+      <RegionSwitch region={g?.region ?? "IN"} />
       <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Scans · {g?.region === "US" ? "United States" : "India"}</span>
+        <span className="eyebrow">Market view · {g?.region === "US" ? "United States" : "India"}</span>
         <h1 className="page-title">Market breadth</h1>
         <p className="page-sub">How many stocks in a group rose or fell, sit above their averages, or made new highs and lows, day by day,
           from daily closes. Every stock counts once: facts about what happened, not a forecast.</p>

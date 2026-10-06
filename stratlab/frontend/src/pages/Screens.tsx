@@ -7,7 +7,7 @@ import {
   NO_FILTERS, conditionCount, screensApi, type Bound, type Filters, type RangeId, type SavedPage, type SavedScreen,
   type ScreenMeta, type ScreenResult, type ScreenRow,
 } from "../lib/screens";
-import { ResearchNav } from "../components/Research";
+import { RegionSwitch } from "../components/Research";
 import { AsOf, Info, Loading } from "../components/ui";
 import { Trash } from "../components/Icons";
 import { SurvBadges } from "../components/Surveillance";
@@ -138,7 +138,7 @@ export function ScreensPage() {
 
   return (
     <div className="stack" style={{ gap: 22 }}>
-      <ResearchNav region={region} setRegion={pickRegion} />
+      <RegionSwitch region={region} setRegion={pickRegion} />
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Research · {REGION_NAME[region]} · Screens</span>
         <h1 className="page-title">Filter companies by plain facts</h1>

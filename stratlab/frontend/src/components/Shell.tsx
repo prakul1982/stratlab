@@ -4,8 +4,11 @@ import { useApp } from "../lib/app";
 import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
 import { AccountMenu, MarketsNow } from "./SideMenus";
-import { FAMILIES, NAV_GROUPS, familyOf } from "../lib/navGroups";
-import { ALL_GROUPS, ALL_HOME, SPACE_IDS, SPACES, spaceOf, type GroupId, type SpaceView } from "../lib/spaces";
+import { NAV, groupPath, locate, locateGroup, type NavPage } from "../lib/nav";
+import { SPACE_IDS, SPACES, homeOf, spaceOf, type SpaceView } from "../lib/spaces";
+import { usePersisted } from "../lib/persist";
+import { usePins } from "../lib/pins";
+import { PageBreadcrumb } from "./PageBreadcrumb";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
@@ -15,23 +18,24 @@ const Tour = lazy(() => import("./Tour").then((m) => ({ default: m.Tour })));
 export const TOUR_SEEN = "stratlab.tour.v1";
 const tourSeen = () => { try { return localStorage.getItem(TOUR_SEEN) === "1"; } catch { return true; } };
 
-/** The menu lists this many notebooks (pinned first, then the latest); the rest are one tap away on the notebooks page. */
+/** The menu lists this many notebooks (pinned first, then the latest) under Notebooks; the rest are one tap away on the notebooks page. */
 const SIDE_NOTEBOOKS = 6;
 
-/** Icons a menu entry kept as data (NAV_GROUPS) can name. */
+/** Icons a menu entry can name (NavPage.icon). */
 const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, bell: Bell, lens: Lens, news: News, pin: Pin, pulse: Pulse, layers: Layers, library: Library, upload: Upload, search: Search, compass: Compass, wallet: Wallet, calendar: Calendar };
-const SHUT_KEY = "stratlab.side.shut";
-/** Which menu groups you closed, remembered on this device. */
-function readShut(): Partial<Record<GroupId, boolean>> {
-  try { return JSON.parse(localStorage.getItem(SHUT_KEY) || "{}") ?? {}; } catch { return {}; }
-}
-function saveShut(v: Partial<Record<GroupId, boolean>>) { try { localStorage.setItem(SHUT_KEY, JSON.stringify(v)); } catch { /* private mode */ } }
-
+/** Which menu groups are open, remembered on this device. */
+const OPEN_KEY = "stratlab.side.groups";
+const NO_GROUPS: Record<string, boolean> = {};
+/** The pages Mine's own menu links to: opening one keeps Mine's menu showing. */
+const MINE_LINKS = ["/news"];
+/** Pages that belong to the person, not to a space (Account, Settings, the assistant, the app, invites): they open Mine's menu. */
+const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, theme, setTheme, me, level, focus, space, setSpace } = useApp();
+  const { notebooks, markets, me, level, focus, space, setSpace } = useApp();
   const [open, setOpen] = useState(false);
-  const [shut, setShut] = useState(readShut);
+  const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(OPEN_KEY, NO_GROUPS);
+  const pins = usePins();
   const [tour, setTour] = useState(false);
   const [search, setSearch] = useState(false);
   useEffect(() => {
@@ -59,57 +63,38 @@ export function Shell({ children }: { children: ReactNode }) {
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [open]);
-  // a link into another space shows that space's menu, so where you are is always in it ("All" already shows it)
-  const here = spaceOf(loc.pathname);
-  useEffect(() => { if (here && space !== "all" && here !== space) setSpace(here, false); }, [here]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  const path = loc.pathname;
+  const at = locate(path);
+  const onGroup = locateGroup(path);
+  // a link into another space shows that space's menu, so where you are is always in it. Mine keeps its own menu on the
+  // pages it links to (pinned pages, Briefs, Connected accounts): that is what it is for.
+  const here = spaceOf(path);
+  const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to));
+  useEffect(() => {
+    if (MINE_PAGES.includes(path)) { if (space !== "mine") setSpace("mine", false); return; }
+    if (!here) return;
+    if (space === "mine" ? !keepsMine : here !== space) setSpace(here, false);
+  }, [here, path]);   // eslint-disable-line react-hooks/exhaustive-deps
   // pinned first, then the latest; the one you have open always stays in the list
-  const openId = loc.pathname.match(/^\/n\/([^/]+)/)?.[1];
+  const openId = path.match(/^\/n\/([^/]+)/)?.[1];
   const sideNotebooks = notebooks && [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
     .filter((n, i) => i < SIDE_NOTEBOOKS || n.id === openId);
 
-  const path = loc.pathname;
-  const fam = familyOf(path);
   const item = (to: string, icon: ReactNode, label: string, active?: boolean, title?: string) => (
     <NavLink key={to} to={to} title={title} {...(active === undefined ? {} : { className: () => (active ? "active" : ""), "aria-current": active ? "page" as const : false })}>{icon}{label}</NavLink>
   );
-  // entries kept as data (NAV_GROUPS), each with its named icon
-  const navItems = (entries: typeof NAV_GROUPS.Money) => entries.map((e) => {
-    const Icon = ICONS[e.icon ?? ""] ?? Compass;
-    return item(e.to, <Icon />, e.label, undefined, e.title);
-  });
-  // a few short groups instead of one long list; pages that share a section switch with tabs on the page
-  const groups: Record<GroupId, { label: string; items: ReactNode[]; on: boolean }> = {
-    research: { label: "Research", on: (/^\/(research|news)/.test(path) && fam !== "watch") || NAV_GROUPS.Invest.some((e) => path.startsWith(e.to)), items: [
-      item("/research", <Lens />, "Companies", path.startsWith("/research") && !fam),
-      item("/news", <News />, "News"),
-      item(FAMILIES.scans.home, <Search />, "Scans", fam === "scans" && !NAV_GROUPS.Invest.some((e) => path.startsWith(e.to)), "Trend scan, screener, sector rotation and red flags"),
-      ...navItems(NAV_GROUPS.Invest),
-    ] },
-    money: { label: "Money", on: SPACES.money.paths.test(path) && path !== SPACES.money.home, items: navItems(NAV_GROUPS.Money) },
-    watch: { label: "Watch", on: fam === "watch" || path === "/alerts", items: [
-      item(FAMILIES.watch.home, <Pin />, "Watchlist", fam === "watch", "Your watchlist, as a list or every company at a glance"),
-      item("/alerts", <Bell />, "Alerts"),
-    ] },
-    notebooks: { label: "Notebooks", on: path.startsWith("/n/") || path === "/notebooks", items: [] },
-    trading: { label: "Trading", on: /^\/(paper|options|import|library|trade\/)/.test(path), items: [
-      item("/options", <Layers />, "Options"),
-      item("/paper", <Pulse />, "Paper trading"),
-      item("/library", <Library />, "Strategy library"),
-      item("/import", <Upload />, "Import a strategy"),
-      ...navItems(NAV_GROUPS.Trade),
-    ] },
+  const pageLink = (p: NavPage) => {
+    const Icon = ICONS[p.icon] ?? Compass;
+    return item(p.to, <Icon />, p.label, at?.page.to === p.to, p.line);
   };
-  // one space's groups, or every group (Trade's first) folded until opened
-  const order: GroupId[] = space === "all" ? ALL_GROUPS : SPACES[space].groups;
-  const isShut = (g: GroupId) => shut[g] ?? space === "all";
-  const toggle = (g: GroupId) => setShut((s) => { const next = { ...s, [g]: !isShut(g) }; saveShut(next); return next; });
-  // opening a page in a closed group opens that group, so where you are is always in view
-  const activeGroup = order.find((g) => groups[g].on);
-  useEffect(() => { if (activeGroup && isShut(activeGroup)) toggle(activeGroup); }, [activeGroup, space]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the group holding the page showing is open and stays open; the others are as the person left them
+  const activeGroup = space !== "mine" ? (onGroup?.space === space ? onGroup.group.id : at?.space === space ? at.group.id : null) : null;
+  const isOpen = (g: string) => openGroups[g] ?? false;
+  const toggle = (g: string) => setOpenGroups((cur) => ({ ...cur, [g]: !(cur[g] ?? false) }));
+  useEffect(() => { if (activeGroup && !isOpen(activeGroup)) setOpenGroups((cur) => ({ ...cur, [activeGroup]: true })); }, [activeGroup]);   // eslint-disable-line react-hooks/exhaustive-deps
   const allNotebooks = "/notebooks";
   const notebookList = (
-    <>
+    <div className="side-list side-nbs">
       {notebooks === null && <span className="small muted side-note">Loading…</span>}
       {notebooks?.length === 0 && <span className="small muted side-note">None yet.</span>}
       {sideNotebooks?.map((n) => {
@@ -126,19 +111,67 @@ export function Shell({ children }: { children: ReactNode }) {
         );
       })}
       {!!notebooks?.length && <Link to={allNotebooks} className="nb-more">{notebooks.length > SIDE_NOTEBOOKS ? `All ${notebooks.length} notebooks` : "All notebooks"}</Link>}
+    </div>
+  );
+  // the notebooks list shows under Notebooks while you are in a notebook (or the list), so it never makes the menu long
+  const inNotebooks = path === allNotebooks || path.startsWith("/n/") || path === "/new";
+  const spaceGroups = space === "mine" ? null : NAV[space].groups.map((g) => {
+    const shutNow = !isOpen(g.id);
+    const here = onGroup?.space === space && onGroup.group.id === g.id;
+    return (
+      <section key={g.id} className="side-group" data-group={g.id}>
+        <div className="side-head">
+          <button className="side-toggle" aria-expanded={!shutNow} aria-controls={`side-${g.id}`} aria-label="Open or close this group" onClick={() => toggle(g.id)}>
+            <span className="side-chev" aria-hidden="true"><Chevron size={12} /></span>
+          </button>
+          <Link to={groupPath(space, g)} className={`side-title${here ? " active" : ""}`} aria-current={here ? "page" : undefined} title={`${g.label}: everything in this group`}>{g.label}</Link>
+        </div>
+        <div id={`side-${g.id}`} className="side-list side-nav" hidden={shutNow}>
+          {g.pages.map((p) => (
+            <div key={p.to} className="side-entry">
+              {pageLink(p)}
+              {p.to === "/notebooks" && inNotebooks && notebookList}
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  });
+  const minePart = (
+    <>
+      <section className="side-group" data-group="pinned">
+        <div className="side-head"><span className="side-title plain">Pinned</span></div>
+        <div className="side-list side-nav" id="side-pinned">
+          {pins.pins.map((l) => pageLink(l.page))}
+          {!pins.pins.length && <span className="small muted side-note-wrap">Pin a page from the menu in its breadcrumb at the top of the page.</span>}
+        </div>
+      </section>
+      <section className="side-group" data-group="mine-more">
+        <div className="side-list side-nav">
+          {item("/news", <News />, "Briefs", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
+          {item("/settings#accounts", <Wallet />, "Connected accounts", path === "/settings" && loc.hash === "#accounts", "Your holdings, funds and tradebooks: the files StratLab reads")}
+          {item("/assistant", <Sparkle />, "AI assistant", path === "/assistant", "Use StratLab in Claude or ChatGPT")}
+        </div>
+      </section>
     </>
   );
+  const goSpace = (s: SpaceView) => {
+    setOpen(false);
+    if (s !== space) setSpace(s);
+    nav(homeOf(s, focus));
+  };
+  const homeLabel = space === "mine" ? "My space" : `${SPACES[space].label} home`;
   const sidebar = (
-    <aside className={`sidebar${open ? " open" : ""}`} aria-label="Notebooks and navigation">
+    <aside className={`sidebar${open ? " open" : ""}`} aria-label="Navigation">
       <div className="side-top">
         <div className="side-brand">
           <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
           <button className="side-close" aria-label="Close menu" onClick={() => setOpen(false)}><Close size={18} /></button>
         </div>
-        <SpaceSwitch space={space} onPick={(s) => setSpace(s)} />
-        {space === "invest" || (space === "all" && focus === "invest")
+        <SpaceSwitch space={space} onPick={goSpace} />
+        {space === "invest" || (space === "mine" && focus === "invest")
           ? <button className="side-new" onClick={() => nav("/research")}><Lens size={16} />Look up a company</button>
-          : space === "money" || (space === "all" && focus === "money")
+          : space === "money" || (space === "mine" && focus === "money")
           ? <button className="side-new" onClick={() => nav("/holdings")}><Book size={16} />Add your holdings</button>
           : <button className="side-new" onClick={() => nav("/new")}><Plus size={16} />New notebook</button>}
         <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
@@ -147,29 +180,13 @@ export function Shell({ children }: { children: ReactNode }) {
       </div>
       <nav className="side-groups" aria-label="Main">
         <div className="side-list">
-          <NavLink to={space === "all" ? ALL_HOME : SPACES[space].home} end><Compass size={16} />{space === "all" ? "All" : SPACES[space].label} home</NavLink>
+          <NavLink to={homeOf(space)} end><Compass size={16} />{homeLabel}</NavLink>
         </div>
-        {order.map((g) => {
-          const { label, items } = groups[g];
-          const shutNow = isShut(g);
-          return (
-            <section key={g} className="side-group" data-group={g}>
-              <div className="side-head">
-                <button className="side-toggle" aria-expanded={!shutNow} aria-controls={`side-${g}`} onClick={() => toggle(g)}>
-                  {label}<span className="side-chev" aria-hidden="true"><Chevron size={12} /></span>
-                </button>
-                {g === "notebooks" && <Link to="/new" className="side-act" aria-label="New notebook" title="New notebook"><Plus size={15} /></Link>}
-              </div>
-              <div id={`side-${g}`} className={`side-list ${g === "notebooks" ? "side-nbs" : "side-nav"}`} hidden={shutNow}>
-                {g === "notebooks" ? notebookList : items}
-              </div>
-            </section>
-          );
-        })}
+        {spaceGroups ?? minePart}
       </nav>
       <div className="side-foot">
         <MarketsNow markets={markets} />
-        <AccountMenu me={me} dark={dark} onTheme={() => setTheme(dark ? "light" : "dark")} onTour={() => { setOpen(false); setTour(true); }} onGo={() => setOpen(false)} />
+        <AccountMenu me={me} onTour={() => { setOpen(false); setTour(true); }} onGo={() => setOpen(false)} />
       </div>
     </aside>
   );
@@ -186,7 +203,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main"><div className="page">{children}</div></main>
+      <main className="main"><div className="page"><PageBreadcrumb />{children}</div></main>
       <Suspense fallback={null}>
         {tour && <Tour onClose={() => setTour(false)} />}
         {search && <SearchPalette onClose={() => setSearch(false)} />}
@@ -197,11 +214,11 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 
-/** Trade · Invest · Money · All at the top of the menu: which space's menu shows. Every page stays reachable from
- * any of them (search, links, "All"). */
+/** Mine · Trade · Invest · Money at the top of the menu: which space's menu shows. A click goes to that space's home (the
+ * active one too). Every page stays reachable from any of them (search, links, the breadcrumb). */
 function SpaceSwitch({ space, onPick }: { space: SpaceView; onPick: (s: SpaceView) => void }) {
-  const views: [SpaceView, string, string][] = [...SPACE_IDS.map((s) => [s, SPACES[s].label, SPACES[s].what] as [SpaceView, string, string]),
-    ["all", "All", "Every menu group, folded"]];
+  const views: [SpaceView, string, string][] = [["mine", "Mine", "Your own space: your money, the markets and what is coming up"],
+    ...SPACE_IDS.map((s) => [s, SPACES[s].label, SPACES[s].what] as [SpaceView, string, string])];
   return (
     <div className="space-switch" role="radiogroup" aria-label="Space">
       {views.map(([v, label, what]) => (

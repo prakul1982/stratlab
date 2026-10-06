@@ -72,7 +72,7 @@ test("chart replay: a hidden random replay, practice orders, finish into the jou
   await page.getByRole("button", { name: "Flat" }).click();
   await expect(page.getByTestId("rp-position")).toHaveText("None");
   await expect(page.getByTestId("rp-closed")).toHaveText(/^1 \([01] won\)$/);
-  await page.getByRole("button", { name: "Play" }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Pause" }).click();
   await sane(page, errors);

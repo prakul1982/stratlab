@@ -19,3 +19,5 @@ export { EmptyState, ErrorState, Skeleton, type StateAction } from "./States";
 export { ChartFrame } from "./ChartFrame";
 export { ResultBlock } from "./ResultBlock";
 export { LinkCard } from "./LinkCard";
+export { Spark } from "./Spark";
+export { Breadcrumb, type Crumb, type Sibling } from "./Breadcrumb";

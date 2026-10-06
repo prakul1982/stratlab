@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "../lib/api";
 import { inWords, marketState } from "../lib/marketHours";
 import type { Market, Me } from "../lib/types";
-import { Close, Compass, LogOut, Moon, Shield, Sun, Updown, User } from "./Icons";
+import { Close, Compass, Download, Layers, LogOut, Pencil, Share, Shield, Updown, User, Wallet } from "./Icons";
 
 // The two small menus at the foot of the sidebar: which markets are open, and the account. Each is one line until
 // opened; opened, it floats above the line (a sheet from the bottom on a phone) and closes with Esc or a click outside.
@@ -86,8 +86,8 @@ export function MarketsNow({ markets }: { markets: Market[] }) {
   );
 }
 
-/** The person's initials button, with the plan, opening Account, Admin, the theme, the tour and Sign out. */
-export function AccountMenu({ me, dark, onTheme, onTour, onGo }: { me: Me | null; dark: boolean; onTheme: () => void; onTour: () => void; onGo: () => void }) {
+/** The person's initials button, with the plan, opening Account, Settings, Plan, Invite, Get the app, All features, Help and Sign out. */
+export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () => void; onGo: () => void }) {
   const { open, setOpen, btn, panel } = usePop();
   const id = useId();
   const email = me?.email ?? "";
@@ -117,10 +117,14 @@ export function AccountMenu({ me, dark, onTheme, onTour, onGo }: { me: Me | null
         <div ref={panel} id={id} className="side-pop acct-pop" role="menu" aria-label="Account" onKeyDown={keys}>
           {email && <div className="side-pop-head" role="presentation"><span className="muted acct-email">{email}</span></div>}
           <Link role="menuitem" to="/account" onClick={done(onGo)}><User size={16} />Account{plan && <span className="plan-tag">{plan}</span>}</Link>
-          {me?.is_admin && <Link role="menuitem" to="/admin" onClick={done(onGo)}><Shield size={16} />Admin</Link>}
+          <Link role="menuitem" to="/settings" onClick={done(onGo)}><Pencil size={16} />Settings</Link>
+          <Link role="menuitem" to="/plans" onClick={done(onGo)}><Wallet size={16} />Plan</Link>
+          <Link role="menuitem" to="/invite" onClick={done(onGo)}><Share size={16} />Invite friends</Link>
+          <Link role="menuitem" to="/app" onClick={done(onGo)}><Download size={16} />Get the app</Link>
           <hr />
-          <button role="menuitem" onClick={done(onTheme)}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? "Light mode" : "Dark mode"}</button>
-          <button role="menuitem" onClick={done(onTour)}><Compass size={16} />Tour</button>
+          {me?.is_admin && <Link role="menuitem" to="/admin" onClick={done(onGo)}><Shield size={16} />Admin</Link>}
+          <Link role="menuitem" to="/features" onClick={done(onGo)}><Layers size={16} />All features</Link>
+          <button role="menuitem" onClick={done(onTour)}><Compass size={16} />Help</button>
           <hr />
           <button role="menuitem" onClick={done(() => supabase.auth.signOut())}><LogOut size={16} />Sign out</button>
         </div>

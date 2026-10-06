@@ -71,8 +71,10 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   await expect(head).toContainText("Price vs last NAV");
   await expect(head).not.toContainText("iNAV");                                          // none published: no empty columns
   await expect(rows.last()).toHaveAttribute("data-etf", "BANKBEES");                    // no published NAV: no gap, last
-  // the scans' tabs lead here too
-  await expect(page.getByRole("navigation", { name: "Scans" }).getByRole("link", { name: "ETF vs NAV" })).toBeVisible();
+  // the page sits in Invest › Market view, in the breadcrumb at the top
+  const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(crumb.getByRole("link", { name: "Market view" })).toHaveAttribute("href", "/invest/g/market-view");
+  await expect(crumb.getByRole("button", { name: /ETF vs NAV/ })).toBeVisible();
 
   await page.getByRole("button", { name: /^Gold/ }).click();
   await expect(rows).toHaveCount(1);

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { safeHref } from "../lib/format";
-import { ResearchNav } from "../components/Research";
+import { RegionSwitch } from "../components/Research";
 import { bizChange, bizValue, periodName } from "../components/BizUpdates";
 import { Info, Loading } from "../components/ui";
 
@@ -38,9 +38,9 @@ export function BizUpdatesPage() {
 
   return (
     <div className="stack biz-page" style={{ gap: 24 }}>
-      <ResearchNav region="IN" />
+      <RegionSwitch region="IN" />
       <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Scans · India</span>
+        <span className="eyebrow">Company news · India</span>
         <h1 className="page-title">Business updates</h1>
         <p className="page-sub">Monthly sales from automakers and quarterly deposits and advances from banks and lenders, as each company filed them
           with the exchange, read into numbers with the change on the previous period and on the year. Facts, not advice.</p>

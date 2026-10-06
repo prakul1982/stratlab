@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { safeHref } from "../lib/format";
-import { ResearchNav } from "../components/Research";
+import { RegionSwitch } from "../components/Research";
 import { changeText, quarterEnd, shares, type HolderChange } from "../components/NamedHolders";
 import { Info, Loading } from "../components/ui";
 
@@ -76,9 +76,9 @@ export function HoldersPage() {
 
   return (
     <div className="stack holders-page" style={{ gap: 24 }}>
-      <ResearchNav region="IN" />
+      <RegionSwitch region="IN" />
       <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Scans · India</span>
+        <span className="eyebrow">Company news · India</span>
         <h1 className="page-title">Named holders across companies</h1>
         <p className="page-sub">Every quarter, each listed company names its promoter group and every public holder above 1% in its shareholding
           pattern. Search a name to see the companies it appears in, and what changed since the quarter before. Facts as filed, not advice.</p>

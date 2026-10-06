@@ -5,7 +5,7 @@ import { axisInr, CRORE, inr, inrCompact, pct, pctPlain, signed, signedInrCompac
 import { LineChart } from "../components/Charts";
 import { Loading } from "../components/ui";
 import {
-  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, LinkCard, PageHeader, ResultBlock, Seg, Skeleton, Stat, StatRow, StockPicker,
+  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, LinkCard, PageHeader, ResultBlock, Seg, Skeleton, Spark, Stat, StatRow, StockPicker,
   TilePicker, type TileGroup,
 } from "../components/kit";
 
@@ -123,6 +123,26 @@ function Body() {
 
       <Spec name="TilePicker" rule="Replaces long dropdowns. One choice across the groups.">
         <Card><CardHead title="What are you adding?" /><TilePicker label="Asset type" groups={TILES} value={tile} onChange={setTile} /></Card>
+      </Spec>
+
+      <Spec name="Breadcrumb" rule="The trail at the top of every page: space, group, page. The last part opens the pages beside it and the pin switch.">
+          <Card>
+            <Breadcrumb trail={[{ label: "Invest", to: "/invest" }, { label: "Market view", to: "/invest/g/market-view" }]} page="Margin funding"
+              siblings={[{ to: "/research/pulse", label: "Market pulse" }, { to: "/invest/breadth", label: "Market breadth" }, { to: "/invest/margin-funding", label: "Margin funding", current: true }]}
+              seeAll={{ label: "All of Market view", to: "/invest/g/market-view" }} pinned={false} onTogglePin={() => undefined} />
+            <Breadcrumb trail={[{ label: "Invest", to: "/invest" }, { label: "Market view", to: "/invest/g/market-view" }]} />
+          </Card>
+      </Spec>
+
+      <Spec name="Spark" rule="A line of recent real values, no axes. Up and down colour it; neutral where a rise is not good news.">
+        <Card>
+          <StatRow>
+            <Stat label="NIFTY 50" value="25,420" delta={<Delta value={0.4}>+0.40%</Delta>} />
+            <Spark values={BOOK.slice(0, 20)} tone="up" label="Example, rising" area />
+            <Spark values={[...BOOK.slice(0, 20)].reverse()} tone="down" label="Example, falling" />
+            <Spark values={BOOK.slice(0, 20)} label="Example, neutral" />
+          </StatRow>
+        </Card>
       </Spec>
 
       <Spec name="DataTable" rule="Numbers right-aligned, hover row, scrolls inside its own box, one message when empty.">

@@ -63,7 +63,7 @@ test("a new user's first session, from the invite link to the plans", async ({ p
   await welcome.getByRole("button", { name: /All of it/ }).click();
   await level(page);
   await expect(page.getByText("Your first steps")).toBeVisible({ timeout: 30_000 });
-  await expect(page, "all of it opens the All home").toHaveURL(/\/all$/);
+  await expect(page, "all of it opens My space").toHaveURL(/\/mine$/);
   await expect.poll(async () => (await (await request.get(`${API}/me/referrals`, { headers: auth })).json()).code, "the newcomer has a link of their own").toBeTruthy();
   expect(new URL(page.url()).search, "the invite code leaves the address").toBe("");
   await check(page, errors, phone);

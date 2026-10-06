@@ -1,3 +1,5 @@
+import { ALL_PAGES, NAV } from "./nav";
+
 /** Everything StratLab can do, with the words people might search for. Used by search and the home page grid.
  * `to` is a route; "@notebook", "@market" and "@verdict" mean the notebook you're in (or your latest one). */
 export interface Feature {
@@ -103,12 +105,43 @@ export const FEATURES: Feature[] = [
     words: "invite friends referral link free month share" },
 ];
 
+/** Features that only name a page already in the menu (lib/nav.ts) add their words to that page instead of listing twice.
+ * These stay on their own: they are a part of a page with a name people look for. */
+const OWN_ROW = ["options_greeks", "risk", "deepdive"];
+
+const EXTRA: Feature[] = [
+  { id: "features", title: "All features", what: "Every page by space and group, with what it is for in a line.", to: "/features",
+    words: "all features pages list everything index menu map sitemap browse what can stratlab do where is" },
+  { id: "mine_home", title: "My space", what: "Your net worth, today's change, the markets, what is coming up and your watchlist, in the order you choose.", to: "/mine",
+    words: "mine my space home customise customize pinned dashboard today pnl net worth coming up" },
+];
+
+/** What search looks through: every page in the menu (by its name, its one-liner and the everyday words for it, such as "MTF"
+ * or "borrowed money" for Margin funding), then the features that are not a page of their own. */
+const SEARCHABLE: Feature[] = (() => {
+  const merged = new Map<string, string[]>();
+  const alone: Feature[] = [];
+  for (const f of FEATURES) {
+    if (!OWN_ROW.includes(f.id) && ALL_PAGES.some((l) => l.page.to === f.to)) merged.set(f.to, [...(merged.get(f.to) ?? []), f.words]);
+    else alone.push(f);
+  }
+  const pages: Feature[] = ALL_PAGES.map(({ space, group, page }) => ({
+    id: `page:${page.to}`, title: page.label, what: page.line, to: page.to,
+    words: [page.words, ...(merged.get(page.to) ?? []), NAV[space].label, group.label].join(" "),
+  }));
+  return [...pages, ...alone, ...EXTRA];
+})();
+
 export function match(q: string, limit = 6): Feature[] {
-  const words = q.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  const text = q.toLowerCase().trim();
+  const words = text.split(/\s+/).filter((w) => w.length > 1);
   if (!words.length) return [];
-  const scored = FEATURES.map((f) => {
-    const hay = `${f.title} ${f.words}`.toLowerCase();
-    const s = words.reduce((n, w) => n + (hay.includes(w) ? (f.title.toLowerCase().includes(w) ? 3 : 1) : 0), 0);
+  const scored = SEARCHABLE.map((f) => {
+    const title = f.title.toLowerCase();
+    const hay = `${title} ${f.words}`.toLowerCase();
+    let s = words.reduce((n, w) => n + (hay.includes(w) ? (title.includes(w) ? 3 : 1) : 0), 0);
+    if (words.length > 1 && hay.includes(text)) s += 4;       // the whole phrase ("borrowed money") counts for more than its words
+    if (title === text) s += 6;
     return [s, f] as const;
   }).filter(([s]) => s > 0);
   return scored.sort((a, b) => b[0] - a[0]).slice(0, limit).map(([, f]) => f);
