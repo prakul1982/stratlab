@@ -17,7 +17,7 @@ export type Timetable = { since: string; open: string; cas_stocks_continuous_end
   auction: [string, string] | null; order_entry: [string, string] | null; derivatives_close: string; settlement_fixed_by: string; source: string };
 export type CasView = {
   phase: Phase; today: string; trading_day: boolean; timetable: Timetable; day: string | null; fresh: boolean; read: string | null;
-  as_of: string | null; status: string | null; message: string | null; eligible: number; stocks: CasStock[]; indices: CasIndex[];
+  as_of: string | null; from_stored?: boolean; next: { day: string; today: boolean; from: string; to: string } | null; status: string | null; message: string | null; eligible: number; stocks: CasStock[]; indices: CasIndex[];
   expiry: { series: string[]; settlement: string; proposal: string; positions: CasPosition[] };
   history: { allowed: boolean; plan: string; days: number }; sources: Record<string, string>; note: string;
 };

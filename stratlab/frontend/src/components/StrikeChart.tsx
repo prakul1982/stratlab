@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "../pages/trade/options.css";
 import { contracts, contractsShort, signed, strike as strikeText, type StrikeRow } from "../lib/positioning";
 
 /* Open interest by strike as a butterfly: one row per strike, calls to the left of the strike column and puts to the
@@ -44,8 +45,8 @@ export function StrikeChart({ rows, mode, spot, label }: { rows: StrikeRow[]; mo
   const h = hover != null ? list[hover] : null;
 
   return (
-    <div ref={wrap} className="strike-chart" style={{ position: "relative" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={label} onPointerLeave={() => setHover(null)} style={{ touchAction: "pan-y" }}>
+    <div ref={wrap} className="strike-chart k-strike-chart">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={label} onPointerLeave={() => setHover(null)}>
         <text x={cx0 - 4} y={14} textAnchor="end" fontFamily="var(--sans)" fontSize={12} fill="var(--muted)">Calls{mode === "chg" ? ": change" : ""}</text>
         <text x={cx1 + 4} y={14} fontFamily="var(--sans)" fontSize={12} fill="var(--muted)">Puts{mode === "chg" ? ": change" : ""}</text>
         <text x={(cx0 + cx1) / 2} y={14} textAnchor="middle" fontFamily="var(--sans)" fontSize={12} fill="var(--muted)">Strike</text>
@@ -62,7 +63,7 @@ export function StrikeChart({ rows, mode, spot, label }: { rows: StrikeRow[]; mo
                 if (v == null || v === 0) return null;
                 return <path key={s} d={barPath(zero[s], reach(s, v), at + (ROW - BAR) / 2, BAR)} fill={`var(--pos-${s})`} opacity={v < 0 ? 0.55 : 1} />;
               })}
-              <text x={(cx0 + cx1) / 2} y={at + ROW / 2 + 4} textAnchor="middle" fontFamily="var(--sans)" fontSize={11.5} style={{ fontVariantNumeric: "tabular-nums" }}
+              <text x={(cx0 + cx1) / 2} y={at + ROW / 2 + 4} textAnchor="middle" fontFamily="var(--sans)" fontSize={11.5}
                 fill={r.strike === nearest ? "var(--ink)" : "var(--muted)"} fontWeight={r.strike === nearest ? 600 : 400}>{strikeText(r.strike)}</text>
             </g>
           );
@@ -71,11 +72,11 @@ export function StrikeChart({ rows, mode, spot, label }: { rows: StrikeRow[]; mo
       {h && (
         <div className="strike-tip ch-num" role="status" style={{ top: Math.min(y(hover!) + ROW + 4, H - 70), left: "50%" }}>
           <div className="muted">Strike {strikeText(h.strike)}{h.strike === nearest ? " · nearest the spot" : ""}</div>
-          <div className="row" style={{ gap: 6 }}><span className="key-line" style={{ background: "var(--pos-call)" }} /><b>{contracts(h.call_oi)}</b> calls <span className="muted">({signed(h.call_chg)})</span></div>
-          <div className="row" style={{ gap: 6 }}><span className="key-line" style={{ background: "var(--pos-put)" }} /><b>{contracts(h.put_oi)}</b> puts <span className="muted">({signed(h.put_chg)})</span></div>
+          <div className="k-row"><span className="key-line call" /><b>{contracts(h.call_oi)}</b> calls <span className="muted">({signed(h.call_chg)})</span></div>
+          <div className="k-row"><span className="key-line put" /><b>{contracts(h.put_oi)}</b> puts <span className="muted">({signed(h.put_chg)})</span></div>
         </div>
       )}
-      <p className="tiny muted" style={{ marginTop: 4 }}>
+      <p className="k-note">
         Scale: the longest bar is {contractsShort(max)} contracts{mode === "chg" ? ". Bars growing outward: open interest added; inward (lighter): open interest cut" : ""}.
       </p>
     </div>

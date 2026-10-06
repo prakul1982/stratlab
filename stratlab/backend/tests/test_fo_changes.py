@@ -213,8 +213,12 @@ def test_the_view_in_words_with_badges_and_no_advice(w):
     assert exide["date"] == exide["expiry"] and exide["upcoming"] and exide["series_label"] == "Nov 2026"
     assert exide["text"] == f"EXIDEIND leaves F&O. The Nov 2026 series, expiring {F._day(exide['expiry'])}, is the last one the contract file lists."
     assert rows["lot:NIFTY:2026-12:75>65"]["text"].startswith("NIFTY's lot size goes from 75 to 65 from the Dec 2026 series")
-    circ = next(e for e in v["events"] if e["source"] == "circular" and e["kind"] == "exit")
-    assert circ["text"] == "Exchange circular FAOP/71001: Exclusion of EXIDEIND and NUVAMA from F&O segment"
+    # the circular about the exits is the source of their lines, not a second line
+    assert not [e for e in v["events"] if e["source"] == "circular" and e["kind"] == "exit"]
+    src = exide["sources"][0]
+    assert (src["no"], src["subject"], src["url"]) == ("FAOP/71001", "Exclusion of EXIDEIND and NUVAMA from F&O segment", "https://example.invalid/FAOP71001.pdf")
+    assert exide["sources"][-1]["subject"] == "The exchange's F&O contract file"
+    assert [e for e in v["events"] if e["source"] == "circular" and e["kind"] == "expiry"][0]["sources"][0]["no"] == "FAOP/71004"   # its own line
     assert [e["date"] for e in v["events"]] == sorted((e["date"] for e in v["events"]), reverse=True)
     exp = date.fromisoformat(exide["expiry"])
     assert v["badges"]["EXIDEIND"][0]["short"] == f"Leaves F&O after {exp.day} {exp:%b}"
@@ -318,3 +322,59 @@ def test_listed_expiries_come_from_the_contract_list_when_there_is_one(w):
         r = rows[0]
         assert ex(r["name"].upper(), r["expiry"][:7]).isoformat() >= r["expiry"]
     assert ex("NOSUCH", "2026-07") == F.rule_expiry("2026-07")
+
+
+# ---------- a stock listed to the far month is not leaving ----------
+def _file(months, rows):
+    head = "UNDERLYING,SYMBOL," + ",".join(months)
+    body = ["NIFTY 50,NIFTY," + ",".join(["65"] * len(months)), "Derivatives on Individual Securities,Symbol," + "," * (len(months) - 1)]
+    for sym, vals in rows.items():
+        body.append(f"{sym} LTD,{sym}," + ",".join(vals + [""] * (len(months) - len(vals))))
+    return "\n".join([head] + body) + "\n"
+
+
+def test_december_as_the_far_month_is_not_a_removal():
+    """Listed through DEC-26 in a file whose monthly series run to JAN-27 (JAN not yet filled in for stocks) every stock
+    would read as "leaving on 29 Dec". Only the stocks that stop before the far month can be leaving; and when most of
+    them stop there, the column is simply not filled in and nobody is reported."""
+    months = ["OCT-26", "NOV-26", "DEC-26"]
+    stocks = {f"STK{i:02d}": ["100", "100", "100"] for i in range(40)}
+    stocks["IEX"] = ["100", "100"]                                    # stops one month short of the far month: leaving
+    stocks["BAJAJHLDNG"] = ["100"]
+    lots = F.read_lots(_file(months, stocks))
+    got = {(e["kind"], e["symbol"], e["series"]) for e in F.derive(lots, RULE)}
+    assert got == {("exit", "IEX", "2026-11"), ("exit", "BAJAJHLDNG", "2026-10")}
+    assert not any(e["series"] == "2026-12" and e["kind"] == "exit" for e in F.derive(lots, RULE))   # never "leaves 29 Dec"
+    # the same stocks with a fourth month in the file that no stock has yet: all of them stop early, so none is reported
+    wide = F.read_lots(_file(months + ["JAN-27"], stocks))
+    assert F.far_month(wide["months"]) == "2026-12"                    # the far month is the third monthly series
+    nobody = F.read_lots(_file(["NOV-26", "DEC-26", "JAN-27"], {f"STK{i:02d}": ["100", "100"] for i in range(40)}))
+    assert [e for e in F.derive(nobody, RULE) if e["kind"] == "exit"] == []
+
+
+def test_the_live_file_gives_the_three_real_leavers_and_each_rests_on_the_exclusion_circular(w, monkeypatch):
+    from pathlib import Path
+    fix = Path(__file__).parent / "fixtures" / "fo_changes"
+    feed = Feed(lots=(fix / "fo_mktlots_live_2026-10-05.csv").read_text(), circulars=json.loads((fix / "circulars_live_2026-10-05.json").read_text()))
+    today = date(2026, 10, 5)
+    F.refresh(feed, today, sleep=lambda s: None)
+    v = F.view(today)
+    leaving = {e["symbol"]: e for e in v["events"] if e["kind"] == "exit" and e["source"] != "circular"}
+    assert set(leaving) == {"BAJAJHLDNG", "IEX", "IREDA"}
+    assert not [e for e in v["events"] if e["kind"] == "exit" and e["series"] == "2026-12"]
+    assert any(s["no"] == "NSE/FAOP/76497" and s["url"].endswith("FAOP76497.pdf") for s in leaving["IEX"]["sources"])
+    assert leaving["IEX"]["text"].startswith("IEX leaves F&O.")
+
+
+def test_a_false_exit_stored_by_an_earlier_run_is_not_shown(w):
+    """Events kept before the fix: a stock still listed through the far month, "leaving" with December as its last series."""
+    F.refresh(Feed(lots=X.sample(NEW)), DAY2, sleep=lambda s: None)
+    events = F.load_events()
+    events.append({"kind": "exit", "symbol": "INFY", "segment": "stock", "series": "2026-12", "expiry": "2026-12-29", "lot": 1200,
+                   "id": "exit:INFY:2026-12", "seen": "2026-10-03"})
+    db.set_setting(F.EVENTS_KEY, json.dumps(events))
+    F._cache.clear()
+    v = F.view(DAY2)
+    assert "exit:INFY:2026-12" not in {e["id"] for e in v["events"]}
+    assert not any(b["kind"] == "exit" for b in v["badges"].get("INFY", []))
+    assert "exit:EXIDEIND:2026-11" in {e["id"] for e in v["events"]}           # a real one stays

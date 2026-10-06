@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { pct, signClass } from "../lib/format";
+import { inr, money, pct } from "../lib/format";
+import { eyebrowOf } from "../lib/eyebrow";
 import { RegionSwitch } from "../components/Research";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
-import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/research";
-import { AsOf, Loading } from "../components/ui";
+import { saveRegion, savedRegion, type Region } from "../lib/research";
+import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, Stat, StatRow } from "../components/kit";
 
 type Row = {
   symbol: string; name: string; problem: string | null; price: number | null; chg: number | null; stage: number | null;
@@ -20,7 +21,7 @@ const SIGNAL: Record<string, string> = { fresh: "Fresh ST S2", st_s2: "ST S2", s
 const attention = (r: Row) => (r.red ?? 0) * 3 + (r.checks?.fail ?? 0) + (r.fund_raise ? 1 : 0) + (r.card && r.card.score < 40 ? 1 : 0);
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="inv-cell"><span className="tiny muted">{label}</span><div className="small">{children}</div></div>;
+  return <div className="inv-cell"><span className="k-note">{label}</span><div className="k-small">{children}</div></div>;
 }
 
 export function InvestorHomePage() {
@@ -30,14 +31,17 @@ export function InvestorHomePage() {
   const [at, setAt] = useState<string | null>(null);
   const [order, setOrder] = useState<"list" | "attention">("attention");
   const [region, setRegion] = useState<Region>(savedRegion);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
   const us = region === "US";
   const place = us ? "US" : "India";
 
   useEffect(() => {
     if (!pro) return;
-    setRows(null);
-    api<{ rows: Row[]; as_of?: string | null }>(`/research/investor?region=${region}`).then((x) => { setRows(x.rows); setAt(x.as_of ?? null); }).catch(fail);
-  }, [pro, fail, region]);
+    setRows(null); setError(null);
+    api<{ rows: Row[]; as_of?: string | null }>(`/research/investor?region=${region}`).then((x) => { setRows(x.rows); setAt(x.as_of ?? null); })
+      .catch((e) => { setError((e as Error).message); fail(e); });
+  }, [pro, fail, region, tries]);
   const pick = (r: Region) => { saveRegion(r); setRegion(r); };
 
   const shown = useMemo(() => (rows && order === "attention" ? [...rows].sort((a, b) => attention(b) - attention(a)) : rows), [rows, order]);
@@ -46,57 +50,50 @@ export function InvestorHomePage() {
   const leading = rows?.filter((r) => r.sector?.quadrant === "leading").length ?? 0;
 
   return (
-    <div className="stack" style={{ gap: 24 }}>
+    <div className="k-page">
+      <PageHeader eyebrow={eyebrowOf("/research/watchlist")} title="Your watchlist, all in one place" asOf={rows ? at : undefined} asOfLabel="Checked"
+        lede={`For each ${place} watchlist company: the price trend, where its sector sits in the rotation, ${us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. Facts to read, not advice.`} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pick} /><RouteSeg label="Watchlist view" views={WATCH_VIEWS} /></div>
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Investor home · {REGION_NAME[region]}</span>
-        <h1 className="page-title">Your watchlist, all in one place</h1>
-        <p className="page-sub">For each {place} watchlist company: the price trend, where its sector sits in the rotation, {us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. A place to see what needs a closer look, not advice.</p>
-        {rows && <AsOf parts={[["Checked", at]]} />}
-      </div>
-      {!pro && <div className="banner"><span>Watchlist at a glance is on the Basic plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
-      {pro && !rows && <Loading label="Checking each watchlist company" />}
+      {!pro && <PlanNote>Watchlist at a glance is on the Basic plan.</PlanNote>}
+      {pro && error && <ErrorState title="The watchlist couldn't be checked" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
+      {pro && !rows && !error && <Card><Skeleton label="Checking each watchlist company" lines={4} /></Card>}
       {rows && rows.length === 0 && (
-        <div className="card dashed stack" style={{ gap: 10, alignItems: "flex-start" }}>
-          <p className="muted">Your watchlist has no {place} stocks yet. Open a company and press <b>Watch</b>: it shows up here with its trend, sector and checklist.</p>
-          <Link to={`/research?region=${region}`} className="btn sm">Find a company</Link>
-        </div>
+        <Card>
+          <EmptyState title={`Your watchlist has no ${place} stocks yet`} action={{ label: "Find a company", to: `/research?region=${region}` }}>
+            Open a company and press Watch: it shows up here with its trend, sector and checklist.
+          </EmptyState>
+        </Card>
       )}
       {rows && rows.length > 0 && (
         <>
-          <div className="stat-row">
-            <div className="stat"><span className="tiny muted">Companies</span><b className="num">{rows.length}</b></div>
-            <div className="stat"><span className="tiny muted">In Stage 2</span><b className="num">{s2}</b></div>
-            <div className="stat"><span className="tiny muted">Sector leading the market</span><b className="num">{leading}</b></div>
-            {!us && <div className="stat"><span className="tiny muted">With red-flag filings</span><b className="num">{flagged}</b></div>}
+          <Card>
+            <StatRow label="Your watchlist in numbers">
+              <Stat item label="Companies" value={String(rows.length)} />
+              <Stat item label="In Stage 2" value={String(s2)} />
+              <Stat item label="Sector leading the market" value={String(leading)} />
+              {!us && <Stat item label="With red-flag filings" value={String(flagged)} />}
+            </StatRow>
+          </Card>
+          <div className="k-toolbar">
+            <Seg label="Order" value={order} onChange={(v) => setOrder(v as "list" | "attention")} options={[{ value: "attention", label: "Most flags first" }, { value: "list", label: "Watchlist order" }]} />
           </div>
-          <div className="seg" role="radiogroup" aria-label="Order" style={{ alignSelf: "flex-start" }}>
-            <button role="radio" aria-checked={order === "attention"} aria-pressed={order === "attention"} onClick={() => setOrder("attention")}>Needs a look first</button>
-            <button role="radio" aria-checked={order === "list"} aria-pressed={order === "list"} onClick={() => setOrder("list")}>Watchlist order</button>
-          </div>
-          <div className="stack" style={{ gap: 14 }}>
-            {shown!.map((r) => (
-              <section key={r.symbol} className="card stack" style={{ gap: 12 }}>
-                <div className="spread" style={{ gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
-                  <div className="stack" style={{ gap: 2, minWidth: 0 }}>
-                    <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}><b>{r.name}</b></Link>
-                    <span className="tiny muted mono">{r.symbol}</span>
-                  </div>
-                  {r.price != null && <span className="mono small">{us ? "$" : "₹"}{r.price.toLocaleString(us ? "en-US" : "en-IN", { maximumFractionDigits: 2 })} <span className={signClass(r.chg)}>{r.chg == null ? "" : pct(r.chg)}</span></span>}
-                </div>
-                {r.problem && <p className="tiny muted" style={{ margin: 0 }}>Company numbers unavailable: {r.problem}</p>}
-                <div className="inv-grid">
-                  <Cell label="Trend">{r.stage == null ? "–" : <>Stage {r.stage} · Supertrend {r.st_up ? "up" : "down"}{r.signal && <> · <span className="badge fact">{SIGNAL[r.signal]}</span></>}</>}</Cell>
-                  <Cell label="Sector">{r.sector ? <>{r.sector.name}{r.sector.quadrant && <> · <span className="badge fact">{QUAD[r.sector.quadrant]}</span></>}</> : "–"}</Cell>
-                  {!us && <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span>{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · fund raise filed" : ""}</Cell>}
-                  <Cell label="Checklist">{r.checks ? <><b>{r.checks.pass} pass</b> · {r.checks.watch} watch · {r.checks.fail} fail</> : "–"}</Cell>
-                  <Cell label="Management report card">{r.card ? `${r.card.met} of ${r.card.met + r.card.missed} targets met` : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>Not checked yet</Link>}</Cell>
-                </div>
-                {r.fails.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>Failed checks: {r.fails.join(" · ")}</p>}
-              </section>
-            ))}
-          </div>
-          <p className="small muted" style={{ maxWidth: "80ch" }}>Checks use fixed rules shown on each company's deep dive. The report card appears once someone has checked that company's past calls. Nothing here is investment advice.</p>
+          {shown!.map((r) => (
+            <Card key={r.symbol}>
+              <CardHead level={3} title={<Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>{r.name}</Link>}
+                actions={r.price != null ? <><span className="k-small">{us ? money(r.price, "USD", 2) : inr(r.price, 2)}</span>{r.chg != null && <Delta value={r.chg} tone="neutral">{pct(r.chg)}</Delta>}</> : undefined} />
+              <span className="k-note">{r.symbol}</span>
+              {r.problem && <p className="k-note">Company numbers unavailable: {r.problem}</p>}
+              <div className="inv-stat-cells">
+                <Cell label="Trend">{r.stage == null ? "–" : <>Stage {r.stage} · Supertrend {r.st_up ? "up" : "down"}{r.signal && <> · <Badge tone="plain" dot={false}>{SIGNAL[r.signal]}</Badge></>}</>}</Cell>
+                <Cell label="Sector">{r.sector ? <>{r.sector.name}{r.sector.quadrant && <> · <Badge tone="plain" dot={false}>{QUAD[r.sector.quadrant]}</Badge></>}</> : "–"}</Cell>
+                {!us && <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span>{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · fund raise filed" : ""}</Cell>}
+                <Cell label="Checklist">{r.checks ? <><b>{r.checks.pass} pass</b> · {r.checks.watch} watch · {r.checks.fail} fail</> : "–"}</Cell>
+                <Cell label="Management report card">{r.card ? `${r.card.met} of ${r.card.met + r.card.missed} targets met` : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>Not checked yet</Link>}</Cell>
+              </div>
+              {r.fails.length > 0 && <p className="k-note">Failed checks: {r.fails.join(" · ")}</p>}
+            </Card>
+          ))}
+          <p className="k-note inv-text">Checks use fixed rules shown on each company's deep dive. The report card appears once someone has checked that company's past calls. Nothing here is investment advice.</p>
         </>
       )}
     </div>

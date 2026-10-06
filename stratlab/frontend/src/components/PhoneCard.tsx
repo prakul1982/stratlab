@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { canInstall, disablePush, enablePush, install, installed, isIos, onInstallChange, pushOnHere, pushSupported } from "../lib/pwa";
+import { Badge, Card, CardHead } from "./kit";
 
 /** Put StratLab on the home screen and get trade alerts and the daily report as phone notifications. */
 export function PhoneCard() {
@@ -33,24 +34,26 @@ export function PhoneCard() {
   };
 
   return (
-    <section className="card stack" style={{ gap: 12 }}>
-      <h2 className="h2">On your phone</h2>
-      {installed() ? <p className="small muted">StratLab is installed on this device.</p> : (
-        <>
-          <p className="small muted">Install StratLab like an app: its own icon, full screen, and notifications without Telegram.</p>
-          {canInstall() ? <button className="btn outline sm" style={{ alignSelf: "flex-start" }} onClick={() => install()}>Install StratLab</button>
-            : <p className="small">{isIos() ? "On an iPhone: tap Share, then Add to Home Screen." : "In Chrome or Edge: open the browser menu and choose Install app (or Add to Home screen)."}</p>}
-        </>
-      )}
-      <div className="stack" style={{ gap: 6 }}>
-        <b style={{ fontSize: 14.5 }}>Notifications on this device</b>
-        <span className="small muted">Sends {what}. Works in Chrome, Edge and Firefox, and on an iPhone once StratLab is on the Home Screen.</span>
-        {on ? <div className="row wrap" style={{ gap: 8 }}>
-            <button className="btn outline sm" disabled={busy} onClick={test}>Send a test</button>
-            <button className="btn quiet sm" disabled={busy} onClick={turnOff}>Turn off here</button>
+    <>
+      <Card label="Install StratLab">
+        <CardHead title="Install StratLab" actions={installed() ? <Badge tone="ok">Installed</Badge> : undefined} />
+        {installed() ? <p className="k-small k-muted">StratLab is installed on this device.</p> : (
+          <>
+            <p className="k-small k-muted">Install StratLab like an app: its own icon, full screen, and notifications without Telegram.</p>
+            {canInstall() ? <button type="button" className="btn outline k-btn-end" onClick={() => void install()}>Install StratLab</button>
+              : <p className="k-small">{isIos() ? "On an iPhone: tap Share, then Add to Home Screen." : "In Chrome or Edge: open the browser menu and choose Install app (or Add to Home screen)."}</p>}
+          </>
+        )}
+      </Card>
+      <Card label="Notifications on this device">
+        <CardHead title="Notifications on this device" actions={on ? <Badge tone="ok">On</Badge> : undefined} />
+        <p className="k-small k-muted">Sends {what}. Works in Chrome, Edge and Firefox, and on an iPhone once StratLab is on the Home Screen.</p>
+        {on ? <div className="k-row">
+            <button type="button" className="btn outline" disabled={busy} onClick={() => void test()}>Send a test</button>
+            <button type="button" className="btn quiet" disabled={busy} onClick={() => void turnOff()}>Turn off here</button>
           </div>
-          : <button className="btn sm" style={{ alignSelf: "flex-start" }} disabled={busy || (!pushSupported() && !isIos())} onClick={turnOn}>{busy ? "Turning on…" : "Turn on notifications"}</button>}
-      </div>
-    </section>
+          : <button type="button" className="btn k-btn-end" disabled={busy || (!pushSupported() && !isIos())} onClick={() => void turnOn()}>{busy ? "Turning on…" : "Turn on notifications"}</button>}
+      </Card>
+    </>
   );
 }

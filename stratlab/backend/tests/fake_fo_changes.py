@@ -31,7 +31,8 @@ def circulars(today: date | None = None) -> dict:
     t = today or date.today()
     day = lambda n: (t - timedelta(days=n)).strftime("%B %d, %Y")  # noqa: E731
     return {"data": [
-        {"circDisplayNo": "FAOP/71001", "cirDisplayDate": day(2), "sub": "Exclusion of EXIDEIND and NUVAMA from F&O segment"},
+        {"circDisplayNo": "FAOP/71001", "cirDisplayDate": day(2), "sub": "Exclusion of EXIDEIND and NUVAMA from F&O segment",
+         "circFilelink": "https://example.invalid/FAOP71001.pdf"},
         {"circDisplayNo": "FAOP/71003", "cirDisplayDate": day(5), "sub": "Revision in market lot of derivative contracts on indices"},
         {"circDisplayNo": "FAOP/71004", "cirDisplayDate": day(9), "sub": "Change in expiry day of NIFTY weekly options contracts"},
         {"circDisplayNo": "LIST/71006", "cirDisplayDate": day(3), "sub": "Listing of new debentures"},

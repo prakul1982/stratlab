@@ -310,6 +310,8 @@ app.include_router(replay_routes.router)      # /trade/replay: chart replay prac
 app.include_router(signals_routes.router)     # /trade/signals: forward-testing outside signals
 app.include_router(signals_routes.hook_router)  # /hooks/signal/<token>: the signal webhook (no sign-in)
 app.include_router(market_events_routes.router)  # /trade/events
+from . import email_previews as _email_previews  # noqa: E402
+app.include_router(_email_previews.router)       # /admin/email-previews
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
@@ -793,12 +795,9 @@ def send_email_confirmation(profile=Depends(current_profile)):
         err(503, "email_off", "Email isn't set up on the server yet.")
     throttle(profile, "email_confirm", 5, 3600, "You've asked for 5 confirmation emails this hour. Try again later.")
     link = alerts.confirm_url(profile["id"], to)
-    text = (f"Confirm that StratLab may send newsletters to {to}:\n\n{link}\n\n"
-            "The link works for 3 days. If you didn't ask for this, ignore this email.")
-    html = (f"<p>Confirm that StratLab may send newsletters to {html_escape(to)}:</p>"
-            f"<p><a href=\"{html_escape(link)}\">Confirm my email</a></p>"
-            "<p>The link works for 3 days. If you didn't ask for this, ignore this email.</p>")
+    from . import email_previews as previews
     try:
+        _, html, text = previews.confirm_email(to, link)
         alerts.send_email(to, "Confirm your StratLab email", text, html=html)
     except Exception as e:
         err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
@@ -4286,7 +4285,9 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
     if not alerts.email_ready():
         err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
     try:
-        alerts.send_email(to, "StratLab test email", "Your StratLab alert emails are working. Problems found by the daily check will arrive like this.")
+        from . import email_previews as previews
+        _, html, text = previews.test_email()
+        alerts.send_email(to, "StratLab test email", text, html=html)
     except Exception as e:
         why = public_text(str(e))[:200]
         if "unreachable" in why.lower() or "timed out" in why.lower():

@@ -47,7 +47,7 @@ test("India VIX on Positioning: today, the day's line, the past year and NIFTY A
   const errors = await open(page, "/trade/positioning", "India VIX");
   const panel = page.getByTestId("vix-panel");
   await panel.scrollIntoViewIfNeeded();
-  await expect(panel.locator("#vix-h")).toContainText("India VIX");
+  await expect(panel.getByRole("heading", { name: "India VIX", level: 2 })).toContainText("India VIX");
   const figs = panel.getByTestId("vix-figs");
   await expect(figs).toContainText("15.03");
   await expect(panel.getByTestId("vix-change")).toHaveText("+0.57 (+3.94%) from 14.46");

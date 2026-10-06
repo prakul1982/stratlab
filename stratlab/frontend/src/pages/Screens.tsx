@@ -1,30 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { pct, price } from "../lib/format";
-import { REGION_NAME, useRegion, type Region } from "../lib/research";
+import { CRORE, inrCompact, pct, price } from "../lib/format";
+import { eyebrowOf } from "../lib/eyebrow";
+import { REGION_NAME, bigMoney, useRegion, type Region } from "../lib/research";
 import {
   NO_FILTERS, conditionCount, screensApi, type Bound, type Filters, type RangeId, type SavedPage, type SavedScreen,
   type ScreenMeta, type ScreenResult, type ScreenRow,
 } from "../lib/screens";
 import { RegionSwitch } from "../components/Research";
-import { AsOf, Info, Loading } from "../components/ui";
 import { Trash } from "../components/Icons";
 import { SurvBadges } from "../components/Surveillance";
+import {
+  Card, CardHead, ChipSet, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Skeleton,
+  type Column,
+} from "../components/kit";
 
 type Draft = Partial<Record<RangeId, { min: string; max: string }>>;
-type Col = { id: keyof ScreenRow; label: string; short?: string; help?: string; cell: (r: ScreenRow, region: Region) => string; india?: boolean };
+type Col = { id: keyof ScreenRow; label: string; short?: string; cell: (r: ScreenRow, region: Region) => string; india?: boolean; text?: boolean };
 
 const num = (v: number | null, dp = 1, unit = "") => (v == null ? "–" : `${v.toFixed(dp)}${unit}`);
-function cap(v: number | null, region: Region): string {
-  if (v == null) return "–";
-  if (region === "IN") return `₹${Math.round(v).toLocaleString("en-IN")} cr`;
-  return v >= 1e6 ? `$${(v / 1e6).toFixed(2)} T` : v >= 1000 ? `$${(v / 1000).toFixed(1)} B` : `$${Math.round(v)} M`;
-}
+/** A market value: Indian figures arrive in crore, US ones in millions of dollars. */
+const cap = (v: number | null, region: Region) => (v == null ? "–" : region === "IN" ? inrCompact(v * CRORE) : bigMoney(v * 1e6, "USD"));
 
 const COLS: Col[] = [
-  { id: "name", label: "Company", cell: (r) => r.name },
-  { id: "sector", label: "Sector", cell: (r) => r.sector ?? "–" },
+  { id: "name", label: "Company", cell: (r) => r.name, text: true },
+  { id: "sector", label: "Sector", cell: (r) => r.sector ?? "–", text: true },
   { id: "market_cap", label: "Market value", cell: (r, g) => cap(r.market_cap, g) },
   { id: "price", label: "Last price", cell: (r, g) => (r.price == null ? "–" : price(r.price, g === "IN" ? "INR" : "USD")) },
   { id: "from_high", label: "vs 52-week high", cell: (r) => (r.from_high == null ? "–" : pct(r.from_high)) },
@@ -57,6 +58,15 @@ function fromDraft(d: Draft): { ranges: Partial<Record<RangeId, Bound>>; bad: Se
     if (b.min != null || b.max != null) ranges[k] = b;
   }
   return { ranges, bad };
+}
+
+/** One filter: its name with its (i), and the control under it. */
+function Group({ title, help, children }: { title: string; help?: string; children: ReactNode }) {
+  return (
+    <FieldGroup label={title} info={help} infoLabel={`What is ${title}?`}>
+      {children}
+    </FieldGroup>
+  );
 }
 
 /** Companies filtered by plain facts, in a table. No ranking, scores or picks: the user's own conditions, sorted
@@ -135,23 +145,23 @@ export function ScreensPage() {
   const n = conditionCount(current);
   const full = !!saved && saved.count >= saved.limit;
   const help = meta?.help ?? {};
+  const tableCols: Column<ScreenRow>[] = cols.map((c) => c.id === "name"
+    ? { key: c.id, header: c.short ?? c.label, rowHeader: true, wrap: true, sortable: true, cell: (r: ScreenRow) => (
+      <><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link> <span className="k-note">{r.symbol}</span>
+        {r.surveillance && r.surveillance.length > 0 && <> <SurvBadges region={region} symbol={r.symbol} codes={r.surveillance} /></>}</>) }
+    : { key: c.id, header: c.short ?? c.label, numeric: !c.text, sortable: true, cell: (r: ScreenRow) => c.cell(r, region) });
 
   return (
-    <div className="stack" style={{ gap: 22 }}>
-      <RegionSwitch region={region} setRegion={pickRegion} />
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Research · {REGION_NAME[region]} · Screens</span>
-        <h1 className="page-title">Filter companies by plain facts</h1>
-        <p className="page-sub">Pick the conditions; see every company that meets them. Nothing here ranks or scores companies: the list is alphabetical unless you sort by a column. Facts from reported results, exchange filings and daily prices, not advice.</p>
-      </div>
+    <div className="k-page">
+      <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel="Prices as of"
+        info={out?.index_at ? <>List gathered as of {out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
+        lede="Pick the conditions; see every company that meets them. Nothing here ranks or scores companies: the list is alphabetical unless you sort by a column." />
+      <div className="k-toolbar"><RegionSwitch region={region} setRegion={pickRegion} /></div>
 
       {saved && saved.items.length > 0 && (
-        <section className="card stack" style={{ gap: 10 }} aria-label="Your saved screens">
-          <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
-            <h2 className="h2" style={{ fontSize: 18 }}>Your screens</h2>
-            <span className="small muted">{saved.count} of {saved.limit} saved</span>
-          </div>
-          <div className="row wrap" style={{ gap: 8 }}>
+        <Card label="Your saved screens">
+          <CardHead title="Your screens" actions={<span className="k-note">{saved.count} of {saved.limit} saved</span>} />
+          <div className="k-row">
             {saved.items.map((s) => (
               <span key={s.id} className="saved-screen">
                 <button className={`btn quiet sm${open?.id === s.id ? " on" : ""}`} aria-pressed={open?.id === s.id} onClick={() => load(s)}
@@ -160,154 +170,106 @@ export function ScreensPage() {
               </span>
             ))}
           </div>
-        </section>
+        </Card>
       )}
 
-      <div className="screens-grid">
-        <section className="card stack screens-filters" style={{ gap: 16 }} aria-label="Filters">
-          <div className="spread" style={{ gap: 8 }}>
-            <button className="btn quiet sm screens-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>
-              {showFilters ? "Hide filters" : "Show filters"}{n ? ` (${n})` : ""}</button>
-            <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "name" && !desc}>Clear</button>
-          </div>
-          {!meta ? <Loading label="Loading the filters" /> : showFilters && <>
-            <Group title="Sector" help={help.sector}>
-              {meta.sectors.length === 0 ? <p className="small muted">No companies gathered yet.</p>
-                : <div className="chips">{meta.sectors.map((s) =>
-                  <button key={s} className="chip-btn" aria-pressed={filters.sector.includes(s)} onClick={() => toggle("sector", s)}>{s}</button>)}</div>}
-            </Group>
-            <Group title="Company size (market value)" help={help.cap}>
-              <div className="chips">{meta.cap.map((c) =>
-                <button key={c.id} className="chip-btn" aria-pressed={filters.cap.includes(c.id)} onClick={() => toggle("cap", c.id)}>{c.label}</button>)}</div>
-            </Group>
-            {meta.ranges.map((r) => (
-              <Group key={r.id} title={r.label} help={r.help}>
-                <div className="range-row">
-                  <label className="field"><span className="hint">At least</span>
-                    <input inputMode="decimal" value={draft[r.id]?.min ?? ""} placeholder="Any" aria-label={`${r.label}: at least`}
-                      aria-invalid={bad.has(`${r.id}.min`)} onChange={(e) => setBound(r.id, "min", e.target.value)} /></label>
-                  <label className="field"><span className="hint">At most</span>
-                    <input inputMode="decimal" value={draft[r.id]?.max ?? ""} placeholder="Any" aria-label={`${r.label}: at most`}
-                      aria-invalid={bad.has(`${r.id}.max`)} onChange={(e) => setBound(r.id, "max", e.target.value)} /></label>
-                  <span className="hint range-unit">{r.unit === "%" ? "%" : "times"}</span>
-                </div>
-                {(bad.has(`${r.id}.min`) || bad.has(`${r.id}.max`)) && <span className="hint neg">Enter a plain number, like 15 or -10.</span>}
+      <div className="k-split2">
+        <div className="inv-sticky">
+          <Card label="Filters">
+            <CardHead title="Filters" actions={<>
+              <button className="btn quiet sm inv-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>{showFilters ? "Hide filters" : "Show filters"}{n ? ` (${n})` : ""}</button>
+              <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "name" && !desc}>Clear</button></>} />
+            {!meta ? <Skeleton label="Loading the filters" lines={4} /> : showFilters && <>
+              <Group title="Sector" help={help.sector}>
+                {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>
+                  : <ChipSet label="Sector" options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector} onToggle={(v) => toggle("sector", v)} />}
               </Group>
-            ))}
-            <Group title="Stage" help={help.stage}>
-              <div className="chips">{meta.stages.map((s) =>
-                <button key={s.id} className="chip-btn" aria-pressed={filters.stage.includes(s.id)} onClick={() => toggle("stage", s.id)}>{s.label}</button>)}</div>
-            </Group>
-            {meta.red_flags && (
-              <Group title="Recent red-flag filings" help={help.red_flags}>
-                <div className="seg" role="radiogroup" aria-label="Recent red-flag filings">
-                  {([[null, "Either"], ["no", "None"], ["yes", "At least one"]] as const).map(([v, label]) => (
-                    <button key={label} role="radio" aria-checked={filters.red_flags === v} aria-pressed={filters.red_flags === v}
-                      onClick={() => setFilters((f) => ({ ...f, red_flags: v }))}>{label}</button>
-                  ))}
-                </div>
+              <Group title="Company size (market value)" help={help.cap}>
+                <ChipSet label="Company size" options={meta.cap.map((c) => ({ value: c.id, label: c.label }))} on={filters.cap} onToggle={(v) => toggle("cap", v as Filters["cap"][number])} />
               </Group>
-            )}
-            {meta.insider && (
-              <Group title="Promoter or insider bought" help={help.insider_buy}>
-                <div className="seg" role="radiogroup" aria-label="Promoter or insider bought">
-                  {([[null, "Either"], ["yes", "Yes"], ["no", "No"]] as const).map(([v, label]) => (
-                    <button key={label} role="radio" aria-checked={(filters.insider_buy ?? null) === v} aria-pressed={(filters.insider_buy ?? null) === v}
-                      onClick={() => setFilters((f) => ({ ...f, insider_buy: v }))}>{label}</button>
-                  ))}
-                </div>
-                <label className="field"><span className="hint">On the open market, in the last</span>
-                  <select aria-label="Promoter or insider bought: in the last" value={filters.insider_days ?? meta.insider.default}
-                    onChange={(e) => setFilters((f) => ({ ...f, insider_days: Number(e.target.value) }))}>
-                    {meta.insider.days.map((d) => <option key={d} value={d}>{d} days</option>)}
-                  </select></label>
+              {meta.ranges.map((r) => (
+                <Group key={r.id} title={r.label} help={r.help}>
+                  <div className="inv-bounds">
+                    <Field label="At least" inputMode="decimal" value={draft[r.id]?.min ?? ""} placeholder="Any" aria-label={`${r.label}: at least`}
+                      aria-invalid={bad.has(`${r.id}.min`)} onChange={(e) => setBound(r.id, "min", e.target.value)} />
+                    <Field label="At most" inputMode="decimal" value={draft[r.id]?.max ?? ""} placeholder="Any" aria-label={`${r.label}: at most`}
+                      aria-invalid={bad.has(`${r.id}.max`)} onChange={(e) => setBound(r.id, "max", e.target.value)} />
+                    <span className="k-unit">{r.unit === "%" ? "%" : "times"}</span>
+                  </div>
+                  {(bad.has(`${r.id}.min`) || bad.has(`${r.id}.max`)) && <span className="k-note k-down">Enter a plain number, like 15 or -10.</span>}
+                </Group>
+              ))}
+              <Group title="Stage" help={help.stage}>
+                <ChipSet label="Stage" options={meta.stages.map((s) => ({ value: String(s.id), label: s.label }))} on={filters.stage.map(String)}
+                  onToggle={(v) => toggle("stage", meta.stages.find((s) => String(s.id) === v)!.id as Filters["stage"][number])} />
               </Group>
-            )}
-            {meta.surveillance && (
-              <Group title="Exchange surveillance" help={help.surveillance}>
-                <div className="seg" role="radiogroup" aria-label="Exchange surveillance">
-                  {([[null, "Either"], ["on", "On a list"], ["off", "On none"]] as const).map(([v, label]) => (
-                    <button key={label} role="radio" aria-checked={(filters.surveillance ?? null) === v} aria-pressed={(filters.surveillance ?? null) === v}
-                      onClick={() => setFilters((f) => ({ ...f, surveillance: v }))}>{label}</button>
-                  ))}
-                </div>
-                {filters.surveillance && <>
-                  <span className="hint">Which lists (none picked means any)</span>
-                  <div className="chips">{meta.surveillance.lists.map((l) => {
-                    const on = (filters.surv_lists ?? []).includes(l.id);
-                    return <button key={l.id} className="chip-btn" aria-pressed={on} onClick={() => setFilters((f) => ({
-                      ...f, surv_lists: on ? (f.surv_lists ?? []).filter((x) => x !== l.id) : [...(f.surv_lists ?? []), l.id] }))}>{l.label}</button>;
-                  })}</div>
-                </>}
-              </Group>
-            )}
-          </>}
-        </section>
+              {meta.red_flags && (
+                <Group title="Recent red-flag filings" help={help.red_flags}>
+                  <Seg label="Recent red-flag filings" value={filters.red_flags ?? "either"} onChange={(v) => setFilters((f) => ({ ...f, red_flags: v === "either" ? null : (v as "yes" | "no") }))}
+                    options={[{ value: "either", label: "Either" }, { value: "no", label: "None" }, { value: "yes", label: "At least one" }]} />
+                </Group>
+              )}
+              {meta.insider && (
+                <Group title="Promoter or insider bought" help={help.insider_buy}>
+                  <Seg label="Promoter or insider bought" value={filters.insider_buy ?? "either"} onChange={(v) => setFilters((f) => ({ ...f, insider_buy: v === "either" ? null : (v as "yes" | "no") }))}
+                    options={[{ value: "either", label: "Either" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }]} />
+                  <Field label="On the open market, in the last">
+                    {(id) => <Select id={id} label="Promoter or insider bought: in the last" value={filters.insider_days ?? meta.insider!.default}
+                      onChange={(v) => setFilters((f) => ({ ...f, insider_days: Number(v) }))} options={meta.insider!.days.map((d) => ({ value: d, label: `${d} days` }))} />}
+                  </Field>
+                </Group>
+              )}
+              {meta.surveillance && (
+                <Group title="Exchange surveillance" help={help.surveillance}>
+                  <Seg label="Exchange surveillance" value={filters.surveillance ?? "either"} onChange={(v) => setFilters((f) => ({ ...f, surveillance: v === "either" ? null : (v as "on" | "off") }))}
+                    options={[{ value: "either", label: "Either" }, { value: "on", label: "On a list" }, { value: "off", label: "On none" }]} />
+                  {filters.surveillance && (
+                    <FieldGroup label="Which lists (none picked means any)">
+                      <ChipSet label="Surveillance lists" options={meta.surveillance.lists.map((l) => ({ value: l.id, label: l.label }))} on={filters.surv_lists ?? []}
+                        onToggle={(v) => setFilters((f) => ({ ...f, surv_lists: (f.surv_lists ?? []).includes(v) ? (f.surv_lists ?? []).filter((x) => x !== v) : [...(f.surv_lists ?? []), v] }))} />
+                    </FieldGroup>
+                  )}
+                </Group>
+              )}
+            </>}
+          </Card>
+        </div>
 
-        <section className="stack" style={{ gap: 14, minWidth: 0 }} aria-label="Companies that match">
-          <div className="card stack" style={{ gap: 12 }}>
-            <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-              <span className="small">{out ? <><b>{out.total.toLocaleString()}</b> of {out.indexed.toLocaleString()} companies match</> : "Checking…"}
-                {loading && <span className="spin" style={{ display: "inline-block", marginLeft: 8, verticalAlign: "middle" }} />}</span>
-              <div className="row wrap" style={{ gap: 8 }}>
-                <label className="field sort-field"><span className="hint">Sort by</span>
-                  <select value={sort} onChange={(e) => { setSort(e.target.value); setDesc(false); }} aria-label="Sort by">
-                    {cols.map((c) => <option key={c.id} value={c.id}>{c.short ?? c.label}</option>)}
-                  </select></label>
-                <button className="btn quiet sm" style={{ alignSelf: "flex-end" }} onClick={() => setDesc((d) => !d)}>
-                  {desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button>
-              </div>
-            </div>
-            <AsOf parts={[["Prices", out?.as_of], ["List gathered", out?.index_at]]} />
-            {error && <p className="small neg" role="alert">{error}</p>}
-            {out && out.indexed === 0 && <p className="small muted">StratLab is still gathering company numbers for {REGION_NAME[region]}. Check back in a little while.</p>}
-            {out && out.indexed > 0 && out.total === 0 && <p className="small muted">No company meets every condition. Try widening one of them.</p>}
+        <div className="k-stack">
+          <Card label="Companies that match">
+            <CardHead title={out ? `${out.total.toLocaleString()} of ${out.indexed.toLocaleString()} companies match` : "Checking…"}
+              actions={<>
+                <Select label="Sort by" small value={sort} onChange={(v) => { setSort(v); setDesc(false); }} options={cols.map((c) => ({ value: c.id, label: c.short ?? c.label }))} />
+                <button className="btn quiet sm" onClick={() => setDesc((d) => !d)}>{desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button></>} />
+            {error && <ErrorState title="The companies couldn't be read" action={{ label: "Try again", onClick: () => run(0) }}>{error}</ErrorState>}
+            {out && out.indexed === 0 && <EmptyState title="Still gathering company numbers">StratLab is still gathering company numbers for {REGION_NAME[region]}. Check back in a little while.</EmptyState>}
+            {out && out.indexed > 0 && out.total === 0 && <EmptyState title="No company meets every condition.">Try widening one of them.</EmptyState>}
             {rows.length > 0 && (
-              <div className="table-wrap screens-table">
-                <table>
-                  <thead><tr>{cols.map((c) => (
-                    <th key={c.id} aria-sort={sort === c.id ? (desc ? "descending" : "ascending") : "none"}>
-                      <button className="th-sort" onClick={() => sortBy(c.id)}>{c.short ?? c.label}{sort === c.id ? (desc ? " ↓" : " ↑") : ""}</button>
-                    </th>))}</tr></thead>
-                  <tbody>{rows.map((r) => (
-                    <tr key={r.symbol}>{cols.map((c) => c.id === "name"
-                      ? <td key={c.id}><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link> <span className="tiny muted">{r.symbol}</span>
-                        {r.surveillance && r.surveillance.length > 0 && <> <SurvBadges region={region} symbol={r.symbol} codes={r.surveillance} /></>}</td>
-                      : <td key={c.id} className={c.id === "sector" ? "" : "num"}>{c.cell(r, region)}</td>)}</tr>))}
-                  </tbody>
-                </table>
+              <div className="screens-table">
+                <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} sticky columns={tableCols} sort={{ key: sort, desc, onSort: sortBy }} />
               </div>
             )}
-            {out && rows.length < out.total && <button className="btn quiet sm" style={{ alignSelf: "center" }} disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString()} left)</button>}
-          </div>
+            {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString()} left)</button>}
+          </Card>
 
-          <div className="card stack" style={{ gap: 10 }}>
-            <h2 className="h2" style={{ fontSize: 18 }}>{open ? `Screen: ${open.name}` : "Save this screen"}<Info>{"Saved screens keep your conditions. Turn on the weekly email to hear on Saturday mornings which companies newly meet them. Your plan sets how many you can keep."}</Info></h2>
-            <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
-              <label className="field" style={{ flex: "1 1 220px" }}><span>Name</span>
-                <input value={name} maxLength={60} placeholder="Like: Low debt, growing revenue" onChange={(e) => setName(e.target.value)} /></label>
-              <label className="row small" style={{ gap: 8, minHeight: 44 }}>
-                <input type="checkbox" checked={weekly} onChange={(e) => setWeekly(e.target.checked)} />Weekly email of new matches</label>
-            </div>
-            <div className="row wrap" style={{ gap: 8 }}>
-              {open && <button className="btn sm" disabled={saving} onClick={() => save(false)}>Update “{open.name}”</button>}
-              <button className={`btn sm${open ? " quiet" : ""}`} disabled={saving || full} onClick={() => save(true)}>{open ? "Save as a new screen" : "Save screen"}</button>
-            </div>
-            {full && <p className="small muted">Your plan keeps {saved?.limit} saved screen{saved?.limit === 1 ? "" : "s"}. Delete one to save another, or <Link className="link" to="/plans">see plans</Link>.</p>}
-            {weekly && saved?.email && !saved.email_confirmed && <p className="hint">The email goes out once you've confirmed {saved.email} in <Link className="link" to="/account#newsletters">Account</Link>.</p>}
-          </div>
-        </section>
+          <Card>
+            <CardHead title={open ? `Screen: ${open.name}` : "Save this screen"} info="Saved screens keep your conditions. Turn on the weekly email to hear on Saturday mornings which companies newly meet them. Your plan sets how many you can keep." />
+            <FormGrid label="Save this screen" onSubmit={(e) => e.preventDefault()}>
+              <Field label="Name" maxLength={60} placeholder="Like: Low debt, growing revenue" value={name} onChange={(e) => setName(e.target.value)} />
+              <FieldGroup label="Email">
+                <CheckField label="Weekly email of new matches" checked={weekly} onChange={setWeekly} />
+              </FieldGroup>
+              <FormActions>
+                {open && <button type="button" className="btn" disabled={saving} onClick={() => save(false)}>Update “{open.name}”</button>}
+                <button type="button" className={`btn${open ? " quiet" : ""}`} disabled={saving || full} onClick={() => save(true)}>{open ? "Save as a new screen" : "Save screen"}</button>
+              </FormActions>
+            </FormGrid>
+            {full && <p className="k-small k-muted">Your plan keeps {saved?.limit} saved screen{saved?.limit === 1 ? "" : "s"}. Delete one to save another, or <Link className="link" to="/plans">see plans</Link>.</p>}
+            {weekly && saved?.email && !saved.email_confirmed && <Notice>The email goes out once you've confirmed {saved.email} in <Link className="link" to="/settings#newsletters">Settings</Link>.</Notice>}
+          </Card>
+        </div>
       </div>
-      <p className="hint">Companies appear here once StratLab has gathered their reported numbers; the list grows through the day. A blank means the company doesn't report that number. Not investment advice.</p>
-    </div>
-  );
-}
-
-function Group({ title, help, children }: { title: string; help?: string; children: React.ReactNode }) {
-  return (
-    <div className="stack" style={{ gap: 8 }}>
-      <span className="small" style={{ fontWeight: 600 }}>{title}{help && <Info label={`What is ${title}?`}>{help}</Info>}</span>
-      {children}
+      <p className="k-note inv-text">Companies appear here once StratLab has gathered their reported numbers; the list grows through the day. A blank means the company doesn't report that number. Not investment advice.</p>
     </div>
   );
 }

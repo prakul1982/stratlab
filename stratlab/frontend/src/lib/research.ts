@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "./api";
-import { currencySymbol } from "./format";
+import { CRORE, currencySymbol, inrCompact } from "./format";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
@@ -123,14 +123,11 @@ export function useWatchlist() {
 }
 
 /* ---------- formatting ---------- */
-/** Big money: $4.31T, $12.4B, ₹19.05L Cr, ₹8,500 Cr. */
+/** Big money in the units people say: $4.31T, $12.4B, ₹1.51 lakh cr, ₹8,500 cr. */
 export function bigMoney(v: number | null | undefined, currency: string): string {
   if (v == null || !Number.isFinite(v)) return "–";
   const s = currencySymbol(currency);
-  if (currency === "INR") {
-    const cr = v / 1e7;
-    return cr >= 1e5 ? `${s}${(cr / 1e5).toFixed(2)}L Cr` : `${s}${Math.round(cr).toLocaleString("en-IN")} Cr`;
-  }
+  if (currency === "INR") return inrCompact(v);
   const a = Math.abs(v);
   if (a >= 1e12) return `${s}${(v / 1e12).toFixed(2)}T`;
   if (a >= 1e9) return `${s}${(v / 1e9).toFixed(1)}B`;
@@ -160,8 +157,8 @@ export function scaleFor(values: (number | null | undefined)[], us: boolean, uni
     if (max >= 10000 && min >= 500) return make(1000, `${cur} billion`, 2, "en-US");
     return { k: 1, unit: `${cur} million`, fmt: (x) => (x == null ? "–" : x.toLocaleString("en-US", { maximumFractionDigits: 2 })) };
   }
-  if (max >= 100000 && min >= 50000) return make(100000, "₹ lakh crore", 2, "en-IN");
-  return { k: 1, unit: "₹ crore", fmt: (x) => (x == null ? "–" : x.toLocaleString("en-IN", { maximumFractionDigits: 2 })) };
+  if (max >= 100000 && min >= 50000) return make(100000, "₹ lakh cr", 2, "en-IN");
+  return { k: 1, unit: "₹ cr", fmt: (x) => (x == null ? "–" : x.toLocaleString("en-IN", { maximumFractionDigits: 2 })) };
 }
 
 /** A trend value in its unit: "₹ Cr" values are already crores, "USD" values are dollars. */
@@ -182,9 +179,7 @@ export function metricText(m: MetricItem, currency: string): string {
   if (m.unit === "%") return `${v.toFixed(1)}%`;
   if (m.unit === "%±") return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%`;
   if (m.unit === "money") return `${currencySymbol(currency)}${v.toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: 2 })}`;
-  if (m.unit === "cr") return Math.abs(v) >= 100000   // a lakh crore and up, as it's usually said
-    ? `₹${(v / 100000).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lakh Cr`
-    : `₹${Math.round(v).toLocaleString("en-IN")} Cr`;
+  if (m.unit === "cr") return inrCompact(v * CRORE);        // the figure is in crore: ₹925 cr, ₹1.51 lakh cr
   return v.toFixed(Math.abs(v) >= 100 ? 0 : 2);
 }
 

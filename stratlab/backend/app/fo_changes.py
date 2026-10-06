@@ -215,6 +215,41 @@ def _event(kind: str, sym: str | None, **kw) -> dict:
     return {"kind": kind, "symbol": sym, **kw}
 
 
+MAX_LEAVERS = 12                     # more stocks than this "leaving" at once is a column not yet filled, not an exclusion
+MAX_LEAVER_SHARE = 0.05              # ... and so is more than this share of all the stocks
+
+
+def far_month(months: list[str]) -> str | None:
+    """The last month a stock's futures are normally listed for: the third of the monthly series (near, next, far). A
+    stock listed up to it, December in the October to December file, is not leaving: that is the far month."""
+    serial = serial_months(months)
+    return serial[min(2, len(serial) - 1)] if serial else None
+
+
+def leavers(lots: dict) -> dict[str, str]:
+    """{symbol: its last listed series} for the stocks whose listing stops before the far month, as one copy of the
+    contract file shows it. A stock is read as leaving only when few of them stop early: when many do, the file's
+    newest month is simply not filled in yet (every stock would "leave"), and none is reported from it. The exchange's
+    exclusion circular is what confirms a leaver; this is the file's side of it."""
+    months = lots["months"]
+    far = far_month(months)
+    if not far:
+        return {}
+    serial = serial_months(months)
+    out = {}
+    stocks = 0
+    for sym, r in lots["rows"].items():
+        if r["index"]:
+            continue
+        stocks += 1
+        near = [m for m in serial if m in r["lots"]]
+        if near and near[-1] < far:
+            out[sym] = near[-1]
+    if len(out) > max(MAX_LEAVERS, int(stocks * MAX_LEAVER_SHARE)):
+        return {}
+    return out
+
+
 def derive(lots: dict, expiry) -> list[dict]:
     """The changes one copy of the contract file shows by itself: stocks whose later months are blank (leaving
     after their last listed series), stocks listed only from a later month (entering), and lots that differ from
@@ -222,15 +257,16 @@ def derive(lots: dict, expiry) -> list[dict]:
     out = []
     months = lots["months"]
     serial = serial_months(months)            # entering and leaving are read on the monthly series only
+    going = leavers(lots)
     for sym, r in sorted(lots["rows"].items()):
         have = [m for m in months if m in r["lots"]]
         near = [m for m in serial if m in r["lots"]]
         seg = "index" if r["index"] else "stock"
         if not have:
             continue
-        if near and near[-1] != serial[-1]:
-            out.append(_event("exit", sym, segment=seg, series=near[-1], expiry=expiry(sym, near[-1]).isoformat(),
-                              lot=r["lots"][near[-1]], id=f"exit:{sym}:{near[-1]}"))
+        if sym in going:
+            out.append(_event("exit", sym, segment=seg, series=going[sym], expiry=expiry(sym, going[sym]).isoformat(),
+                              lot=r["lots"][going[sym]], id=f"exit:{sym}:{going[sym]}"))
         if near and near[0] != serial[0]:
             before = expiry(sym, _next_month(near[0], -1))
             out.append(_event("entry", sym, segment=seg, series=near[0], effective=_after(before).isoformat(),
@@ -297,7 +333,7 @@ def read_circulars(data, known: set[str] | None = None) -> list[dict]:
         syms = sorted(words & known)
         day = iso_day(c["date"])
         out.append({"id": f"circ:{c['id']}", "kind": kind, "symbol": syms[0] if len(syms) == 1 else None, "symbols": syms[:20],
-                    "date": day, "subject": subject, "no": c.get("no") or "", "source": "circular"})
+                    "date": day, "subject": subject, "no": c.get("no") or "", "source": "circular", "url": c.get("url") or ""})
     return out
 
 
@@ -375,24 +411,84 @@ def load_state() -> dict:
     return st
 
 
+def still_leaving(events: list[dict], st: dict) -> list[dict]:
+    """The stored changes, without the "leaving" ones the newest copy of the contract file does not bear out: a stock
+    listed to the far month (December in the October to December file) was never leaving, and an earlier run, reading a
+    month not yet filled in, may have said so. A stock gone from the file altogether did leave, and stays."""
+    lots = st.get("lots") if isinstance(st.get("lots"), dict) else {}
+    rows, months = lots.get("rows") or {}, lots.get("months") or []
+    if not rows or not months:
+        return events
+    going = leavers({"months": months, "rows": rows})
+    out = []
+    for e in events:
+        if e.get("kind") == "exit" and e.get("source") != "circular" and e.get("symbol") in rows and going.get(e["symbol"]) != e.get("series"):
+            continue
+        out.append(e)
+    return out
+
+
+SOURCE_DAYS = (150, 10)               # a circular is the source of a change published up to this long before it applies (and a few days after)
+
+
+def sources_for(e: dict, circs: list[dict]) -> list[dict]:
+    """The circulars a change rests on: those of its kind that name its symbol, or name none (the exchange's "two
+    securities" circulars list them in an attachment), published shortly before it applies."""
+    try:
+        when = date.fromisoformat(_when(e))
+    except ValueError:
+        return []
+    out = []
+    for c in circs:
+        if c["kind"] != e.get("kind"):
+            continue
+        named = set(c.get("symbols") or [])
+        if named and e.get("symbol") not in named:
+            continue
+        try:
+            d = date.fromisoformat(str(c.get("date") or "")[:10])
+        except ValueError:
+            continue
+        if when - timedelta(days=SOURCE_DAYS[0]) <= d <= when + timedelta(days=SOURCE_DAYS[1]):
+            out.append(c)
+    return sorted(out, key=lambda c: c["date"], reverse=True)[:3]
+
+
+def source_of(c: dict) -> dict:
+    return {"no": c.get("no") or "", "subject": c.get("subject") or "", "url": c.get("url") or "", "date": c.get("date")}
+
+
 def view(today: date | None = None) -> dict:
-    """The page's answer: every change kept (newest date first) in words, the badges for the stocks they touch, and
-    each source's date."""
+    """The page's answer: every change kept (newest date first) as one line in words with the circulars it rests on
+    under it, the badges for the stocks they touch, and each source's date. A circular about a change the contract file
+    shows is a source of that line, not a second line; one about expiry days, sessions or anything else is its own."""
     today = today or ist_now().date()
-    rows, badges = [], {}
-    for e in load_events():
+    st = load_state()
+    events = still_leaving(load_events(), st)
+    circs = [e for e in events if e.get("source") == "circular"]
+    lots = st.get("lots") if isinstance(st.get("lots"), dict) else {}
+    file_source = {"no": "", "subject": "The exchange's F&O contract file", "url": "", "date": lots.get("as_of")}
+    used, rows, badges = set(), [], {}
+    for e in events:
         row = {k: e.get(k) for k in ("id", "kind", "symbol", "symbols", "segment", "series", "expiry", "effective", "was", "now",
                                      "lot", "seen", "source", "no", "subject", "within")}
         row.update(date=_when(e), text=text_of(e), series_label=series_name(e["series"]) if e.get("series") else None)
         row["upcoming"] = row["date"] >= today.isoformat()
+        if e.get("source") == "circular":
+            row["sources"] = [source_of(e)]
+        else:
+            got = sources_for(e, circs)
+            used.update(c["id"] for c in got)
+            row["sources"] = [source_of(c) for c in got] + [file_source]
         rows.append(row)
         b = badge_of(e, today)
         if b:
             badges.setdefault(e["symbol"], []).append(b)
+    # a circular of a kind the contract file reports shows once, as a source, when some line already rests on it
+    rows = [r for r in rows if not (r.get("source") == "circular" and r["kind"] in ("exit", "entry", "lot") and r["id"] in used)]
     rows.sort(key=lambda r: (r["date"], r["id"]), reverse=True)
     for sym, bs in badges.items():
         bs.sort(key=lambda b: ({"exit": 0, "lot": 1, "entry": 2}.get(b["kind"], 3), b["date"]))
-    st = load_state()
     sources = []
     for part, label in (("lots", "Contract file"), ("circulars", "Circulars")):
         p = st.get(part) if isinstance(st.get(part), dict) else {}
@@ -454,6 +550,10 @@ def refresh(feed, today: date | None = None, now: datetime | None = None, expiry
         log = db.json_value(db.get_setting(EVENTS_KEY), [])
         log = [e for e in log if isinstance(e, dict) and e.get("id")] if isinstance(log, list) else []
         have = {e["id"] for e in log}
+        links = {e["id"]: e.get("url") for e in found if e.get("source") == "circular" and e.get("url")}
+        for e in log:                                   # a circular kept before its link was read gets the link
+            if e.get("source") == "circular" and not e.get("url") and links.get(e["id"]):
+                e["url"] = links[e["id"]]
         new = []
         for e in found:
             if e["id"] in have:

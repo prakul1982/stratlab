@@ -313,6 +313,36 @@ def positions_at_settlement(profile: dict, indices: dict, stocks: dict, today: d
     return out
 
 
+def next_window(local: datetime, trading: bool, phase: str) -> dict | None:
+    """When the next closing auction runs: today while it has not ended, else the next trading day, with the window the
+    timetable of that day gives (None when no timetable has an auction yet)."""
+    day = local.date()
+    if not (trading and phase in ("before", "transition", "entry", "matching")):
+        day += timedelta(days=1)
+        for _ in range(14):
+            if is_trading_day("IN", day):
+                break
+            day += timedelta(days=1)
+        else:
+            return None
+    auction = S.describe(day).get("auction")
+    if not auction:
+        return None
+    return {"day": day.isoformat(), "today": day == local.date(), "from": auction[0], "to": auction[1]}
+
+
+def stored_stocks(day: str, got: dict) -> list[dict]:
+    """A stored day's stocks as the page's rows (reference price, final price and quantity, the gap), widest gap first."""
+    out = []
+    for sym, v in (got.get("stocks") or {}).items():
+        if not isinstance(v, list) or len(v) < 3:
+            continue
+        row = stock_view(sym, {"ref": v[0], "final": v[1], "final_qty": v[2]}, "closed")
+        out.append(row)
+    out.sort(key=lambda r: (r["gap"] is None, -abs(r["gap"] or 0), r["symbol"]))
+    return out
+
+
 def view(profile: dict, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     local = now.astimezone(IST)
@@ -324,16 +354,28 @@ def view(profile: dict, now: datetime | None = None) -> dict:
     stocks = [stock_view(s, r, phase) for s, r in live["stocks"].items()] if live["stocks"] else []
     stocks.sort(key=lambda v: (v["gap"] is None, -abs(v["gap"] or 0), v["symbol"]))
     indices = [index_view(n, r, live["start"].get(n)) for n, r in live["indices"].items()]
+    shown_day, from_stored = live.get("day"), False
+    # nothing read lately (a holiday, a new server, the stored read cleared): the last stored auction is the page, not an empty one
+    days = _days()
+    if not stocks and days:
+        shown_day = max(days)
+        stocks = stored_stocks(shown_day, days[shown_day])
+        indices = [{"name": n, "value": pos(v[1]), "prev_close": None, "indicative": None, "status": None, "start": pos(v[0]),
+                    "gap": None, "close_gap": gap(v[1], v[0])}
+                   for n, v in (days[shown_day].get("indices") or {}).items() if isinstance(v, list) and len(v) >= 2]
+        from_stored = True
     expiring = expiry_today(today) if trading else []
+    nxt = next_window(local, trading, phase)
     return {"phase": phase, "today": today.isoformat(), "trading_day": trading, "timetable": S.describe(today),
-            "day": live.get("day"), "fresh": fresh, "read": live.get("read"), "as_of": live.get("as_of"),
+            "day": shown_day, "fresh": fresh, "read": live.get("read"), "as_of": live.get("as_of") if not from_stored else None,
+            "from_stored": from_stored, "next": nxt,
             "status": live.get("status"), "message": live.get("message"), "eligible": len(live.get("eligible") or []),
             "stocks": stocks, "indices": indices,
             "expiry": {"series": expiring, "settlement": SETTLEMENT, "proposal": PROPOSAL,
                        "positions": positions_at_settlement(profile, live["indices"], live["stocks"], today)
                        if expiring or fresh else []},
             "history": {"allowed": allows(profile["_plan"], "cas_history"), "plan": PLANS[FEATURE_PLAN["cas_history"]]["name"],
-                        "days": len(_days())},
+                        "days": len(days)},
             "sources": S.SOURCES, "note": NOTE}
 
 

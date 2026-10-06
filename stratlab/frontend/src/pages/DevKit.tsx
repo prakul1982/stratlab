@@ -5,7 +5,7 @@ import { axisInr, CRORE, inr, inrCompact, pct, pctPlain, signed, signedInrCompac
 import { LineChart } from "../components/Charts";
 import { Loading } from "../components/ui";
 import {
-  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, ResultBlock, Seg, Skeleton, Spark, Stat, StatRow, StockPicker,
+  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, LinkCard, PageHeader, ResultBlock, Seg, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
   TilePicker, type TileGroup,
 } from "../components/kit";
 
@@ -24,6 +24,7 @@ const TILES: TileGroup[] = [
   { title: "Retirement", tiles: [{ value: "epf", title: "EPF", sub: "From your passbook", icon: ICONS.ret }, { value: "ppf", title: "PPF", sub: "7.1% a year", icon: ICONS.ret }, { value: "nps", title: "NPS", sub: "Tier I and II", icon: ICONS.ret }] },
   { title: "Gold, property and other", tiles: [{ value: "gold", title: "Gold", sub: "Grams or value", icon: ICONS.gold }, { value: "loan", title: "Loan or card", sub: "Balance left", icon: ICONS.loan }] },
 ];
+const HOLDERS = ["Life Insurance Corporation of India", "SBI Mutual Fund", "Vanguard Total International", "Nippon Life India"];
 const DAYS = Array.from({ length: 30 }, (_, i) => new Date(Date.UTC(2026, 8, 1 + i)).toISOString().slice(0, 10));
 const BOOK = DAYS.map((_, i) => 142.5e3 + i * 290 + Math.sin(i / 2.2) * 600);   // in crore: 1.42 to 1.51 lakh crore
 const STOCKS = [{ s: "RELIANCE", n: "Reliance Industries", f: 2418, c: 42, p: 0.21 }, { s: "HDFCBANK", n: "HDFC Bank", f: 1906, c: -18, p: 0.17 }, { s: "TATAMOTORS", n: "Tata Motors", f: 1377, c: 61, p: 0.48 }];
@@ -52,7 +53,7 @@ function Body() {
         asOf="2026-09-30" info="A page's data date goes here, with where the numbers come from." actions={<Seg label="Theme" options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }, { value: "system", label: "System" }]} value={theme} onChange={(v) => setTheme(v as "light" | "dark" | "system")} />} />
 
       <Spec name="Page header" rule="Where you are, the title, one line on what it is for, and when the data is from.">
-        <Card><PageHeader eyebrow="Invest · Research" title="Margin funding" lede="How much of the market is bought with money brokers lend, and what your own position costs." asOf="2026-09-30" info="Source note." /></Card>
+        <Card><PageHeader eyebrow="Invest · Market view" title="Margin funding" lede="How much of the market is bought with money brokers lend, and what your own position costs." asOf="2026-09-30" info="Source note." /></Card>
         <Card><PageHeader eyebrow="Money · Tax" title="Tax report" /></Card>
       </Spec>
 
@@ -81,6 +82,10 @@ function Body() {
         <Row><Seg label="Frequency" options={[{ value: "daily", label: "Daily" }, { value: "weekly", label: "Weekly" }, { value: "off", label: "Off" }]} value={freq} onChange={setFreq} />
           <Seg label="Two choices" options={[{ value: "a", label: "Table" }, { value: "b", label: "Chart" }]} value="a" onChange={() => undefined} />
           <Seg label="With one off" options={[{ value: "a", label: "1M" }, { value: "b", label: "1Y", disabled: true }]} value="a" onChange={() => undefined} /></Row>
+      </Spec>
+
+      <Spec name="LinkCard" rule="A whole card that is one link: title, one line, a small note such as when it was last updated.">
+        <div className="k-linkcards"><LinkCard to="/holdings" title="My Holdings" note="Updated 2 days ago">Your shares, from a file or typed in.</LinkCard><LinkCard to="/money/mutual-funds" title="Mutual funds">Your statement.</LinkCard></div>
       </Spec>
 
       <Spec name="ChipBar" rule="Many choices in one scrolling row; + Custom adds a number and unit and remembers it on this device.">
@@ -117,7 +122,11 @@ function Body() {
         </div>
       </Spec>
 
-      <Spec name="TilePicker" rule="Replaces long dropdowns. One choice across the groups.">
+      <Spec name="Suggest" rule="A box for a name that is not a listed company (a fund, a person): suggestions after three letters, the same keys and look as StockPicker.">
+        <Card><Field label="Holder">{(id) => <Suggest id={id} placeholder="Type three letters of a name" load={async (q) => HOLDERS.filter((h) => h.toLowerCase().includes(q.toLowerCase())).map((h) => ({ key: h, label: h, note: "12 companies" }))} onPick={() => undefined} />}</Field></Card>
+      </Spec>
+
+      <Spec name="TilePicker"rule="Replaces long dropdowns. One choice across the groups.">
         <Card><CardHead title="What are you adding?" /><TilePicker label="Asset type" groups={TILES} value={tile} onChange={setTile} /></Card>
       </Spec>
 
@@ -148,7 +157,10 @@ function Body() {
             { key: "f", header: "Funded", numeric: true, cell: (r) => inrCompact(r.f * CRORE) },
             { key: "c", header: "Change", info: "Since the day before.", numeric: true, cell: (r) => signedInrCompact(r.c * CRORE) },
             { key: "p", header: "Of shares issued", numeric: true, cell: (r) => pctPlain(r.p, 2) }]} />
-          <DataTable label="Empty table" rows={[] as typeof STOCKS} rowKey={(r) => r.s} empty="No stocks yet." columns={[{ key: "s", header: "Stock", cell: (r) => r.s }, { key: "f", header: "Funded", numeric: true, cell: (r) => r.f }]} />
+          <DataTable label="Long table, header stays in view" sticky rows={Array.from({ length: 24 }, (_, i) => ({ s: `STOCK${i + 1}`, f: 100 + i * 17 }))} rowKey={(r) => r.s}
+            columns={[{ key: "s", header: "Stock", rowHeader: true, sortable: true, cell: (r) => <b>{r.s}</b> }, { key: "f", header: "Funded", numeric: true, sortable: true, cell: (r) => inrCompact(r.f * CRORE) }]}
+            sort={{ key: "f", desc: true, onSort: () => undefined }} />
+          <DataTable label="Empty table"rows={[] as typeof STOCKS} rowKey={(r) => r.s} empty="No stocks yet." columns={[{ key: "s", header: "Stock", cell: (r) => r.s }, { key: "f", header: "Funded", numeric: true, cell: (r) => r.f }]} />
         </Card>
       </Spec>
 

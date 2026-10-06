@@ -23,7 +23,7 @@ export const FOCUSES: [Focus, string, string][] = [
 
 /** Asked once, after the first sign-in (and again to anyone who answered only one of the two old questions): one short
  * step. The experience level sits above the choices, already set to the middle one; picking what you came for answers
- * both. Neither hides anything, and both can be changed on the Account page. */
+ * both. Neither hides anything, and both can be changed in Settings. */
 export function LevelPrompt({ onDone }: { onDone: () => void }) {
   const { level, focus, savePrefs } = useApp();
   const [lvl, setLvl] = useState<Level>(level ?? "some");
@@ -39,7 +39,7 @@ export function LevelPrompt({ onDone }: { onDone: () => void }) {
   };
   return (
     <Modal title="What brings you here?" onClose={() => pick(focus ?? "both")}>
-      <p className="muted" style={{ marginBottom: 14 }}>StratLab has three spaces: Trade, Invest and Money. We'll open the one you pick. The others stay one tap away, and you can change this any time on the Account page.</p>
+      <p className="muted" style={{ marginBottom: 14 }}>StratLab has three spaces: Trade, Invest and Money. We'll open the one you pick. The others stay one tap away, and you can change this any time in Settings.</p>
       <div className="stack" style={{ gap: 6, marginBottom: 14 }}>
         <span className="small muted">How much have you done?</span>
         <div className="seg seg-even" role="radiogroup" aria-label="Experience" style={{ alignSelf: "flex-start" }}>

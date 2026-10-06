@@ -49,7 +49,7 @@ test("chart replay: a hidden random replay, practice orders, finish into the jou
   await expect(page.getByText("No practice trades yet")).toBeVisible();
   await sane(page, errors);
 
-  await page.getByLabel("Candle size").selectOption("1d");
+  await page.getByRole("group", { name: "Candle size" }).getByRole("button", { name: "Daily" }).click();
   await page.getByRole("button", { name: "Random stock and date" }).click();
   await expect(page.getByTestId("rp-label")).toHaveText("Hidden symbol", { timeout: 30_000 });
   const chart = page.getByTestId("price-chart");
@@ -84,13 +84,13 @@ test("chart replay: a hidden random replay, practice orders, finish into the jou
   await sane(page, errors);
 
   await page.goto("/trade/journal");
-  const which = page.getByRole("group", { name: "Which trades" });
-  await expect(which.getByRole("button", { name: "Practice (1)" })).toBeVisible({ timeout: 30_000 });
-  await which.getByRole("button", { name: "Practice (1)" }).click();
+  const which = page.getByRole("radiogroup", { name: "Which trades" });
+  await expect(which.getByRole("radio", { name: "Practice (1)" })).toBeVisible({ timeout: 30_000 });
+  await which.getByRole("radio", { name: "Practice (1)" }).click();
   await expect(page.getByRole("heading", { name: "1 closed trade" })).toBeVisible();
   await expect(page.getByText("Chart replay", { exact: true }).first()).toBeVisible();
-  await which.getByRole("button", { name: "Real trades (0)" }).click();
+  await which.getByRole("radio", { name: "Real trades (0)" }).click();
   await expect(page.getByText("No real trades yet")).toBeVisible();
-  await which.getByRole("button", { name: "Both" }).click();
+  await which.getByRole("radio", { name: "Both" }).click();
   expect(errors).toEqual([]);
 });

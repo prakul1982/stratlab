@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref } from "../lib/format";
-import { Loading } from "./ui";
+import { DataTable, ErrorState, Skeleton } from "./kit";
 
 /* Named holders above 1% from the quarterly shareholding pattern (shareholders.py): the promoter group's members and
  * every public holder above 1%, by stake size, with the change since the quarter before. Names and numbers as filed. */
@@ -59,33 +59,27 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
   }, [symbol]);
 
   if (none) return null;
-  if (error) return wrap(<p className="small muted" style={{ margin: 0 }}>{error}</p>);
-  if (!v) return wrap(<Loading label="Reading the shareholding filing" />);
+  if (error) return wrap(<ErrorState title="The shareholding filing couldn't be read">{error}</ErrorState>);
+  if (!v) return wrap(<Skeleton label="Reading the shareholding filing" lines={3} />);
   const list = all ? v.holders : v.holders.slice(0, 12);
   const right = v.search ? <Link className="btn quiet sm" to="/invest/holders">Search a holder</Link> : null;
   return wrap(
-    <div className="stack named-holders" style={{ gap: 12 }}>
-      <span className="small">Quarter to <b>{quarterEnd(v.quarter)}</b>{v.prev_quarter ? <> · changes since {quarterEnd(v.prev_quarter)}</> : null}
+    <div className="k-stack named-holders">
+      <span className="k-small">Quarter to <b>{quarterEnd(v.quarter)}</b>{v.prev_quarter ? <> · changes since {quarterEnd(v.prev_quarter)}</> : null}
         {v.url && <> · <a className="link" href={safeHref(v.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a></>}</span>
-      {v.holders.length === 0 ? <p className="small muted" style={{ margin: 0 }}>The filing names no holder above 1%.</p> : (
-        <div className="table-wrap">
-          <table className="holders-table" aria-label={`${v.symbol} named holders`}>
-            <thead><tr><th style={{ textAlign: "left" }}>Holder</th><th>Shares</th><th>Stake</th><th>Since last quarter</th></tr></thead>
-            <tbody>{list.map((h) => (
-              <tr key={`${h.group}-${h.name}`} data-holder={h.name}>
-                <td style={{ textAlign: "left" }}><span className="holder-name">{h.name}</span>
-                  <div className="tiny muted">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</div></td>
-                <td className="num">{shares(h.shares)}</td>
-                <td className="num">{h.pct.toFixed(2)}%</td>
-                <td className="num small">{changeText(h.change, h.pct_change)}{h.prev_pct != null && h.change !== "same" && <div className="tiny muted">was {h.prev_pct.toFixed(2)}%</div>}</td>
-              </tr>))}
-            </tbody>
-          </table>
-        </div>
+      {v.holders.length === 0 ? <p className="k-small k-muted">The filing names no holder above 1%.</p> : (
+        <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} sticky={list.length > 14} rowAttrs={(h) => ({ "data-holder": h.name })}
+          columns={[
+            { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (h) => <><span className="holder-name">{h.name}</span><span className="k-sub-line">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</span></> },
+            { key: "s", header: "Shares", numeric: true, cell: (h) => shares(h.shares) },
+            { key: "p", header: "Stake", numeric: true, cell: (h) => `${h.pct.toFixed(2)}%` },
+            { key: "c", header: "Since last quarter", numeric: true, cell: (h) => <>{changeText(h.change, h.pct_change)}{h.prev_pct != null && h.change !== "same" && <span className="k-sub-line">was {h.prev_pct.toFixed(2)}%</span>}</> },
+          ]} />
       )}
-      {v.holders.length > list.length && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setAll(true)}>Show all {v.holders.length}</button>}
-      {v.dropped.length > 0 && <p className="small" style={{ margin: 0 }}><span className="muted">Listed last quarter, not this one (below 1%, or sold):</span>{" "}
+      {v.holders.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {v.holders.length}</button>}
+      {v.dropped.length > 0 && <p className="k-small"><span className="k-muted">Listed last quarter, not this one (below 1%, or sold):</span>{" "}
         {v.dropped.map((d) => `${d.name} (${d.prev_pct.toFixed(2)}%)`).join("; ")}</p>}
-      <p className="tiny muted" style={{ margin: 0 }}>{v.note}{!v.search && <> Searching a holder across companies and following one is on the <Link className="link" to="/plans">Basic plan</Link>.</>}</p>
+      <p className="k-note">{v.note}{!v.search && <> Searching a holder across companies and following one is on the <Link className="link" to="/plans">Basic plan</Link>.</>}</p>
     </div>, right);
 }
+

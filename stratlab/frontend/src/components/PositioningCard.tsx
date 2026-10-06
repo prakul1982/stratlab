@@ -6,6 +6,7 @@ import { crore, dayName, missingWhy, ratio, sides, signed, type Summary } from "
 import { vixChange, vixNum } from "../lib/vix";
 import { Fig, PanelSkel } from "./ui";
 import { useVix } from "./VixPanel";
+import "../pages/trade/trade.css";
 
 /** The newest positioning numbers in a few lines (FII index futures, the FII and DII cash flows, NIFTY's PCR, India
  * VIX), for the Trade home and the Options page. */
@@ -17,8 +18,8 @@ export function PositioningCard() {
   const fii = s && s !== "error" ? s.participants.oi.find((r) => r.id === "fii") : undefined;
   const nifty = s && s !== "error" ? s.pcr?.find((r) => r.name === "NIFTY") : undefined;
   return (
-    <section className="card stack pos-card" style={{ gap: 10 }} aria-labelledby="pos-card-h" data-testid="positioning-card">
-      <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
+    <section className="card stack pos-card k-gap-sm" aria-labelledby="pos-card-h" data-testid="positioning-card">
+      <div className="k-spread">
         <h2 id="pos-card-h" className="h3">Positioning</h2>
         <Link to="/trade/positioning" className="link">Participants, flows and PCR →</Link>
       </div>

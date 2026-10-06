@@ -224,7 +224,7 @@ def test_receipts_always_go_once_per_payment(w, outbox):
     assert lifecycle.receipt(p, {**inv, "number": "SL/2026-27/0008", "payment_id": "pay_8"}, "pro", "month")
     assert len(outbox) == 2
     m = outbox[0]
-    assert m["subject"] == "Receipt: StratLab Pro plan" and "INR 2,999.00" in m["text"] and "SL/2026-27/0007" in m["text"]
+    assert m["subject"] == "Receipt: StratLab Pro plan" and "₹2,999.00" in m["text"] and "SL/2026-27/0007" in m["text"]
     assert m["headers"] is None and "unsubscribe" not in m["text"] and "sent even with tips" in m["text"]
     assert lifecycle.plan_ended(p, "sub_1", "pro") and not lifecycle.plan_ended(p, "sub_1", "pro")
     assert outbox[-1]["subject"] == "Your StratLab plan has changed to Free"

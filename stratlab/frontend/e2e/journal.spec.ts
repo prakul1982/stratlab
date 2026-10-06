@@ -97,6 +97,34 @@ test("trade journal: import a tax P&L, the checks, a hand-added trade, a journal
   await expect(trades.getByText("Breakout")).toBeVisible();
   await expect(trades.getByText(/^\+1\.\d+R$/)).toBeVisible();                        // ₹1,000 less charges on ₹500 of risk
 
+  // the segment filter: only the options trades, then back; the tax report's totals sit under the trades
+  const segs = page.getByRole("group", { name: "Segment" });
+  await expect(segs.getByRole("button", { name: /^Options \(/ })).toBeVisible();
+  await segs.getByRole("button", { name: /^Options \(/ }).click();
+  await expect(page.getByRole("heading", { name: /^\d+ closed trades?$/ })).not.toHaveText("16 closed trades");
+  await expect(page.getByRole("table", { name: "Trades" }).locator("tbody tr").first()).toContainText("Options");
+  await segs.getByRole("button", { name: "All" }).click();
+  await expect(page.getByRole("heading", { name: "16 closed trades" })).toBeVisible();
+
+  // another market is its own set, in dollars
+  await page.getByRole("button", { name: "Add a trade by hand" }).click();
+  const us = page.getByRole("dialog", { name: "Add a trade" });
+  await us.getByLabel("Symbol").fill("AAPL");
+  await us.getByLabel("Segment").selectOption("us");
+  await us.getByLabel("Quantity").fill("5");
+  await us.getByLabel("Entry price").fill("200");
+  await us.getByLabel("Exit price").fill("210");
+  await us.getByRole("button", { name: "Add trade" }).click();
+  await expect(page.getByText("Trade added.").first()).toBeVisible();
+  const market = page.getByRole("radiogroup", { name: "Market" });
+  await expect(market.getByRole("radio", { name: /^India/ })).toBeChecked();
+  await market.getByRole("radio", { name: /^US stocks/ }).click();
+  await expect(page.getByRole("heading", { name: "1 closed trade" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Trades" })).toContainText("$50");
+  await expect(page.getByRole("table", { name: "Trades" })).not.toContainText("₹");
+  await market.getByRole("radio", { name: /^India/ }).click();
+  await expect(page.getByRole("heading", { name: "16 closed trades" })).toBeVisible();
+
   await page.getByLabel("Break the P&L down by").selectOption("tag");
   await expect(page.getByRole("table", { name: "P&L by setup" }).getByText("Breakout")).toBeVisible();
   await expect(page.getByText(/1 of 16 trades have a planned stop/)).toBeVisible();
@@ -109,8 +137,8 @@ test("trade journal: import a tax P&L, the checks, a hand-added trade, a journal
 
   await page.goto("/trade/journal");
   await expect(page.getByRole("heading", { name: "16 closed trades" })).toBeVisible({ timeout: 20_000 });
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete my journal" }).click();
+  await page.getByRole("dialog", { name: "Delete my journal?" }).getByRole("button", { name: "Delete my journal" }).click();
   await expect(page.getByText("Your journal is deleted.")).toBeVisible();
   await expect(page.getByText("No trades yet")).toBeVisible();
   await sane(page, errors);

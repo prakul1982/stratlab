@@ -114,11 +114,12 @@ test("charts: breadth's linked charts show a tooltip, switch series, zoom togeth
     await page.keyboard.press("Escape");
     await expect(reset).toHaveCount(0);
   }
-  // the table view lists the points in view
-  await ad.getByRole("button", { name: /as a table/ }).click();
-  await expect(ad.getByTestId("chart-table").locator("tbody tr").first()).toBeVisible();
-  await ad.getByRole("button", { name: /as a table/ }).click();
-  await expect(ad.getByTestId("chart-table")).toHaveCount(0);
+  // the card's Table switch lists the days
+  const card = grid.locator("section.k-card").first();
+  await card.getByRole("button", { name: "Table" }).click();
+  await expect(card.getByRole("table").locator("tbody tr").first()).toBeVisible();
+  await card.getByRole("button", { name: "Table" }).click();
+  await expect(card.getByRole("table")).toHaveCount(0);
   await sane(page, errors, phone);
 });
 

@@ -10,13 +10,23 @@ import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import type { OptionGreeks } from "../lib/greeks";
 import { moneyCompact } from "../lib/chartFormat";
-import { Block, More } from "../components/More";
-import { Info, Loading } from "../components/ui";
+import { More } from "../components/More";
+import { Info } from "../components/ui";
 import { track } from "../lib/analytics";
-import { PositioningCard } from "../components/PositioningCard";
 import { Earlier } from "../components/Earlier";
 import { FoBadges } from "../components/FoBadges";
 import { foSymbol } from "../lib/foChanges";
+import {
+  Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, Disclosure, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Skeleton,
+  Stat, StatRow, TilePicker, type Column, type TileGroup,
+} from "../components/kit";
+import "./trade/trade.css";
+import "./trade/options.css";
+import "./trade/paper.css";
+
+/* /options: build an option structure (straddle, strangle, condor, any legs), see its numbers at the live bid and ask, and
+ * paper trade it. Built from the kit (components/kit): a picker for what to trade, settings written as sentences, a
+ * summary of the most it can make and lose, and the advanced settings folded away. */
 
 const DRAFT = "stratlab.options.draft.v1";
 
@@ -31,41 +41,31 @@ const loadDraft = (): OptionStrategy => {
 const inr = (v: number | null | undefined, dp = 0) => money(v, "INR", dp);
 const expiryName = (e: string) => new Date(e + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" });
 
-function Num({ label, value, onChange, min = 0, max, step = 1, width = 110, suffix, help }: {
-  label: ReactNode; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; width?: number; suffix?: string; help?: string;
+/** A number box that keeps what is typed until it is a number in range. */
+function NumField({ label, value, onChange, min = 0, max, step = 1, unit, info }: {
+  label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; unit?: string; info?: ReactNode;
 }) {
   const [txt, setTxt] = useState(String(value));
   useEffect(() => setTxt(String(value)), [value]);
   return (
-    <label className="field" style={{ width }}>
-      <span className="row" style={{ gap: 0 }}>{label}{help && <Info>{help}</Info>}</span>
-      <span className="row" style={{ gap: 6 }}>
-        <input type="number" inputMode="decimal" value={txt} min={min} max={max} step={step} style={{ minWidth: 0, flex: 1 }}
-          onChange={(e) => { setTxt(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= min && (max == null || n <= max)) onChange(n); }} />
-        {suffix && <span className="small muted">{suffix}</span>}
-      </span>
-    </label>
+    <Field label={label} info={info} unit={unit} type="number" inputMode="decimal" value={txt} min={min} max={max} step={step}
+      onChange={(e) => { setTxt(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= min && (max == null || n <= max)) onChange(n); }} />
   );
 }
 
-function Time({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return <label className="field" style={{ width: 130 }}><span>{label}</span><input type="time" value={value} onChange={(e) => e.target.value && onChange(e.target.value)} /></label>;
-}
-
-function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string }) {
-  return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map(([v, n]) => <button key={v} type="button" aria-pressed={v === value} onClick={() => onChange(v)}>{n}</button>)}
-    </div>
-  );
-}
-
-/** A small number box for a leg's rule, keeping what's typed until it's a number in range. */
-function RuleNum({ label, value, onChange, min, max, step, width = 72 }: { label: string; value: number; onChange: (v: number) => void; min: number; max: number; step: number; width?: number }) {
+/** A small number box inside a sentence. */
+function InNum({ label, value, onChange, min = 0, max, step = 1 }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number }) {
   const [txt, setTxt] = useState(String(value));
   useEffect(() => setTxt(String(value)), [value]);
-  return <input aria-label={label} type="number" inputMode="decimal" value={txt} min={min} max={max} step={step} style={{ width }}
-    onChange={(e) => { setTxt(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= min && n <= max) onChange(n); }} />;
+  return (
+    <input className="k-input k-in num" aria-label={label} type="number" inputMode="decimal" value={txt} min={min} max={max} step={step}
+      onChange={(e) => { setTxt(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= min && (max == null || n <= max)) onChange(n); }} />
+  );
+}
+
+/** A time box inside a sentence. */
+function InTime({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return <input className="k-input k-in time" aria-label={label} type="time" value={value} onChange={(e) => e.target.value && onChange(e.target.value)} />;
 }
 
 /** How a leg's strike is picked, and the number(s) the rule needs. */
@@ -73,67 +73,55 @@ function PickCell({ l, i, unit, upd, rules }: { l: OptLeg; i: number; unit: "poi
   const pick = l.pick ?? "offset";
   const n = (k: keyof OptLeg, d: number) => (l[k] as number | undefined) ?? d;
   return (
-    <div className="row wrap leg-pick" style={{ gap: 6 }}>
-      <select aria-label={`Leg ${i + 1} strike by`} value={pick} onChange={(e) => upd(i, { pick: e.target.value as StrikePick })}>
-        {PICKS.map(([v, name]) => <option key={v} value={v} disabled={v !== "offset" && !rules && v !== pick}>{name}{v !== "offset" && !rules ? " (Pro)" : ""}</option>)}
-      </select>
-      {pick === "offset" && <RuleNum label={`Leg ${i + 1} distance from the money`} value={l.offset} min={-5000} max={5000} step={unit === "points" ? 50 : 1}
-        onChange={(v) => upd(i, { offset: v })} />}
-      {pick === "offset" && <span className="tiny muted">{unit}</span>}
-      {(pick === "delta" || pick === "delta_range") && <RuleNum label={`Leg ${i + 1} delta`} value={n("delta", 0.2)} min={0.01} max={0.99} step={0.05}
-        onChange={(v) => upd(i, { delta: v })} />}
-      {pick === "delta_range" && <><span className="tiny muted">to</span><RuleNum label={`Leg ${i + 1} delta, high end`} value={n("deltaTo", 0.3)} min={0.01} max={0.99} step={0.05}
-        onChange={(v) => upd(i, { deltaTo: v })} /></>}
+    <div className="k-leg-pick">
+      <Select small label={`Leg ${i + 1} strike by`} value={pick} onChange={(v) => upd(i, { pick: v as StrikePick })}
+        options={PICKS.map(([v, name]) => ({ value: v, label: `${name}${v !== "offset" && !rules ? " (Pro)" : ""}`, disabled: v !== "offset" && !rules && v !== pick }))} />
+      {pick === "offset" && <InNum label={`Leg ${i + 1} distance from the money`} value={l.offset} min={-5000} max={5000} step={unit === "points" ? 50 : 1} onChange={(v) => upd(i, { offset: v })} />}
+      {pick === "offset" && <span className="k-note">{unit}</span>}
+      {(pick === "delta" || pick === "delta_range") && <InNum label={`Leg ${i + 1} delta`} value={n("delta", 0.2)} min={0.01} max={0.99} step={0.05} onChange={(v) => upd(i, { delta: v })} />}
+      {pick === "delta_range" && <><span className="k-note">to</span><InNum label={`Leg ${i + 1} delta, high end`} value={n("deltaTo", 0.3)} min={0.01} max={0.99} step={0.05} onChange={(v) => upd(i, { deltaTo: v })} /></>}
       {pick === "premium" && <>
-        <select aria-label={`Leg ${i + 1} premium match`} value={l.premiumOp ?? "near"} onChange={(e) => upd(i, { premiumOp: e.target.value as OptLeg["premiumOp"] })}>
-          <option value="near">nearest</option><option value="gte">at or above</option><option value="lte">at or below</option></select>
-        <span className="tiny muted">₹</span><RuleNum label={`Leg ${i + 1} premium`} value={n("premium", 50)} min={0.05} max={1000000} step={5} width={84}
-          onChange={(v) => upd(i, { premium: v })} /></>}
-      {pick === "straddle_pct" && <><RuleNum label={`Leg ${i + 1} share of the straddle`} value={n("pct", 20)} min={1} max={200} step={5}
-        onChange={(v) => upd(i, { pct: v })} /><span className="tiny muted">% of ATM straddle</span></>}
+        <Select small label={`Leg ${i + 1} premium match`} value={l.premiumOp ?? "near"} onChange={(v) => upd(i, { premiumOp: v as OptLeg["premiumOp"] })}
+          options={[{ value: "near", label: "nearest" }, { value: "gte", label: "at or above" }, { value: "lte", label: "at or below" }]} />
+        <span className="k-note">₹</span><InNum label={`Leg ${i + 1} premium`} value={n("premium", 50)} min={0.05} max={1000000} step={5} onChange={(v) => upd(i, { premium: v })} /></>}
+      {pick === "straddle_pct" && <><InNum label={`Leg ${i + 1} share of the straddle`} value={n("pct", 20)} min={1} max={200} step={5} onChange={(v) => upd(i, { pct: v })} /><span className="k-note">% of ATM straddle</span></>}
     </div>
   );
 }
+
+type LegRow = { l: OptLeg; i: number };
 
 function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs: OptLeg[]) => void; preview: OptPreview | null; rules: boolean }) {
   const upd = (i: number, p: Partial<OptLeg>) => set(s.legs.map((l, j) => (j === i ? { ...l, ...p } : l)));
   const unit = s.offsetUnit === "points" ? "points" : "strikes";
   const picks = preview ? preview.legs.map((p, i) => [i, p.pick] as const).filter(([, w]) => !!w) : [];
   const usesRules = s.legs.some((l) => (l.pick ?? "offset") !== "offset");
+  const rows: LegRow[] = s.legs.map((l, i) => ({ l, i }));
+  const cols: Column<LegRow>[] = [
+    { key: "side", header: "Buy or sell", cell: ({ l, i }) => <Select small label={`Leg ${i + 1} buy or sell`} value={l.side} onChange={(v) => upd(i, { side: v as OptLeg["side"] })} options={[{ value: "sell", label: "Sell" }, { value: "buy", label: "Buy" }]} /> },
+    { key: "opt", header: "Type", cell: ({ l, i }) => <Select small label={`Leg ${i + 1} call or put`} value={l.opt} onChange={(v) => upd(i, { opt: v as OptLeg["opt"] })} options={[{ value: "CE", label: "Call (CE)" }, { value: "PE", label: "Put (PE)" }]} /> },
+    { key: "by", header: "Strike by", info: HELP.optStrikeRule, cell: ({ l, i }) => <PickCell l={l} i={i} unit={unit} upd={upd} rules={rules} /> },
+    { key: "lots", header: "Lots", cell: ({ l, i }) => <input className="k-input sm k-in num" aria-label={`Leg ${i + 1} lots`} type="number" min={1} max={50} value={l.lots}
+      onChange={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) upd(i, { lots: n }); }} /> },
+    ...(preview ? [
+      { key: "strike", header: "Strike", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.strike ?? (p?.pick ? "none fits" : "not listed"); } },
+      { key: "fill", header: "Fill now", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.fill != null ? price(p.fill, "INR") : "no quote"; } },
+    ] : []),
+    { key: "x", header: <span className="sr-only">Remove</span>, action: true, cell: ({ i }) => (s.legs.length > 1 ? <button type="button" className="chip-x" aria-label={`Remove leg ${i + 1}`} onClick={() => set(s.legs.filter((_, j) => j !== i))}>×</button> : null) },
+  ];
   return (
-    <div className="stack" style={{ gap: 8 }}>
-      <div className="table-wrap" style={{ margin: 0 }}>
-        <table className="legs">
-          <thead><tr><th>Buy or sell</th><th>Type</th><th>Strike by<Info>{HELP.optStrikeRule}</Info></th><th>Lots</th>
-            {preview && <><th>Strike</th><th>Fill now</th></>}<th /></tr></thead>
-          <tbody>{s.legs.map((l, i) => {
-            const p = preview?.legs[i];
-            return (
-              <tr key={i}>
-                <td><select aria-label={`Leg ${i + 1} buy or sell`} value={l.side} onChange={(e) => upd(i, { side: e.target.value as OptLeg["side"] })}>
-                  <option value="sell">Sell</option><option value="buy">Buy</option></select></td>
-                <td><select aria-label={`Leg ${i + 1} call or put`} value={l.opt} onChange={(e) => upd(i, { opt: e.target.value as OptLeg["opt"] })}>
-                  <option value="CE">Call (CE)</option><option value="PE">Put (PE)</option></select></td>
-                <td><PickCell l={l} i={i} unit={unit} upd={upd} rules={rules} /></td>
-                <td><input aria-label={`Leg ${i + 1} lots`} type="number" min={1} max={50} value={l.lots}
-                  onChange={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) upd(i, { lots: n }); }} /></td>
-                {preview && <><td className="mono">{p?.strike ?? (p?.pick ? "none fits" : "not listed")}</td><td className="mono">{p?.fill != null ? price(p.fill, "INR") : "no quote"}</td></>}
-                <td>{s.legs.length > 1 && <button className="chip-x" aria-label={`Remove leg ${i + 1}`} onClick={() => set(s.legs.filter((_, j) => j !== i))}>×</button>}</td>
-              </tr>
-            );
-          })}</tbody>
-        </table>
-      </div>
+    <div className="k-stack">
+      <DataTable label="Legs" columns={cols} rows={rows} rowKey={({ i }) => String(i)} />
       {picks.length > 0 && (
-        <ul className="small muted leg-picks" data-testid="leg-picks">
+        <ul className="k-list muted" data-testid="leg-picks">
           {picks.map(([i, w]) => <li key={i}>Leg {i + 1}: {w}</li>)}
         </ul>
       )}
-      {usesRules && <p className="tiny muted" style={{ maxWidth: "70ch" }}>
+      {usesRules && <p className="k-note">
         A rule picks its strike from the live quotes when the session enters (and at each re-centre), so the strike can differ from the one shown now.
         Deltas are the pricing model's estimates.{!rules && " Picking strikes by delta or premium is on the Pro plan; Price it now shows what a rule would pick."}
       </p>}
-      {s.legs.length < 8 && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }}
+      {s.legs.length < 8 && <button type="button" className="btn quiet sm k-btn-end"
         onClick={() => set([...s.legs, { side: "buy", opt: "CE", offset: s.offsetUnit === "points" ? 500 : 6, lots: 1 }])}>Add a leg</button>}
     </div>
   );
@@ -145,33 +133,33 @@ const asOf = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB"
 
 /** What opening and closing the structure once costs, line by line, and what that does to its numbers. */
 function Charges({ c }: { c: OptCharges }) {
+  type Line = { key: string; label: string; amount: number };
+  const cols: Column<Line>[] = [
+    { key: "label", header: "Charge", rowHeader: true, cell: (r) => r.label },
+    { key: "amount", header: "Amount", numeric: true, cell: (r) => inr(r.amount, 2) },
+  ];
   return (
-    <div className="stack opt-charges" style={{ gap: 10 }} data-testid="opt-charges">
-      <div className="opt-stats">
-        <div><span className="eyebrow">Charges to open and close</span><b className="mono">{inr(c.total, 2)}</b></div>
-        <div><span className="eyebrow">Share of the premium</span><b className="mono">{share(c.pct_of_premium)}</b></div>
-        <div><span className="eyebrow">Share of the most it can make</span><b className="mono">{c.max_profit == null ? "No ceiling" : share(c.pct_of_max_profit)}</b></div>
+    <div className="k-stack" data-testid="opt-charges">
+      <StatRow label="Charges">
+        <Stat label="Charges to open and close" value={inr(c.total, 2)} />
+        <Stat label="Share of the premium" value={share(c.pct_of_premium)} />
+        <Stat label="Share of the most it can make" value={c.max_profit == null ? "No ceiling" : share(c.pct_of_max_profit)} />
         {c.credit
-          ? <div><span className="eyebrow">Premium kept after charges</span><b className="mono">{inr(c.premium_after, 2)}</b></div>
-          : <div><span className="eyebrow">Most it can make after charges</span><b className="mono">{c.max_profit_after == null ? "Unlimited" : inr(c.max_profit_after, 2)}</b></div>}
-      </div>
-      <details className="opt-charge-lines">
-        <summary className="small">Charges line by line</summary>
-        <table className="small">
-          <tbody>
-            {c.items.map((i) => <tr key={i.key}><td>{i.label}</td><td className="mono num">{inr(i.amount, 2)}</td></tr>)}
-            <tr><td><b>Total</b></td><td className="mono num"><b>{inr(c.total, 2)}</b></td></tr>
-          </tbody>
-        </table>
-        <p className="small muted">
+          ? <Stat label="Premium kept after charges" value={inr(c.premium_after, 2)} />
+          : <Stat label="Most it can make after charges" value={c.max_profit_after == null ? "Unlimited" : inr(c.max_profit_after, 2)} />}
+      </StatRow>
+      <Disclosure className="opt-charge-lines" summary="Charges line by line">
+        <DataTable label="Charges line by line" columns={cols} rows={c.items} rowKey={(r) => r.key} foot={{ label: "Total", amount: inr(c.total, 2) }} />
+        <p className="k-note">
           {c.orders} orders at {inr(c.brokerage_per_order)} brokerage each{c.freeze ? `; orders above ${c.freeze.toLocaleString("en-IN")} units go in slices, each one an order` : ""}.
           Every leg opened and closed once at the fill shown. Rates as of {asOf(c.rates_as_of)}.
         </p>
-      </details>
+      </Disclosure>
     </div>
   );
 }
 
+/** The priced structure: a summary card (most it can make and lose, breakevens, margin), then the payoff and the charges. */
 function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
   const { me } = useApp();
   const f = useMemo(() => payoff(p), [p]);
@@ -205,42 +193,49 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
     ...before.map((x) => ({ x, label: "Breakeven", kind: "breakeven" as const })),
     ...(c ? c.breakevens_after.map((x) => ({ x, label: "Breakeven after charges", kind: "other" as const })) : [])];
   return (
-    <div className="stack" style={{ gap: 10 }}>
-      <div className="opt-stats">
-        <div><span className="eyebrow">{f.credit >= 0 ? "Premium collected" : "Premium paid"}</span><b className="mono">{inr(Math.abs(f.credit))}</b></div>
-        <div data-testid="opt-max-profit"><span className="eyebrow">Most it can make</span><b className="mono pos">{best == null ? "Unlimited" : inr(best)}</b>
-          {c && c.max_profit_after != null && <span className="small muted">{inr(c.max_profit_after)} after charges</span>}</div>
-        <div data-testid="opt-max-loss"><span className="eyebrow">Most it can lose</span><b className="mono neg">{worst == null ? "Unlimited" : inr(worst)}</b>
-          {c && c.max_loss_after != null && <span className="small muted">{inr(c.max_loss_after)} after charges</span>}</div>
-        <div><span className="eyebrow">Margin needed</span><b className="mono">{p.margin != null ? inr(p.margin) : "Not available"}</b></div>
-      </div>
-      {p.model && rows.length > 0 ? (
-        <ModelPanel model={p.model} rows={rows} xs={f.xs} expiry={curves} markers={markers} charges={c ? c.total : null}
-          chargesLabel="the round trip's charges" whatif={whatif} plan="Pro" name={s.underlying} testId="opt-model"
-          ariaLabel="Profit or loss at expiry and today across prices" />
-      ) : (
-        <PayoffChart ariaLabel="Profit or loss at expiry across prices" height={220} xs={f.xs} testId="payoff-chart"
-          format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
-          curves={curves} markers={markers} />
-      )}
-      <p className="small muted" data-testid="opt-breakevens">
-        At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
-        {before.length > 0 && <>Breaks even at {points(before)}{c ? " before charges" : ""}. </>}
-        {c && (c.breakevens_after.length > 0 ? <>After charges: {points(c.breakevens_after)}. </> : <>After charges it doesn't break even at any price. </>)}
-        {bestOut != null && <>The most it can make is reached at {bestOut}, outside the chart. </>}
-        {worstOut != null && <>The most it can lose is reached at {worstOut}, outside the chart. </>}
-        Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.
-        {p.model && rows.length > 0 && " The today line is the pricing model's value of the position now, at each option's current IV; it is an estimate, not a quote."}
-      </p>
-      {c && <Charges c={c} />}
-      {whatif && p.model && rows.length > 0 && (
-        <details className="opt-charge-lines" data-testid="roll-fold" onToggle={(e) => setRollOpen((e.target as HTMLDetailsElement).open)}>
-          <summary className="small">Roll a leg: preview</summary>
-          {rollOpen && <RollPreview legs={rows.map(({ label, held }) => ({ label, held }))} exchange={s.exchange} underlying={s.underlying}
-            expiry={p.expiry} strikes={p.strikes} expiries={p.expiries ?? [p.expiry]} step={p.step} brokerage={s.costs.brokerage} freeze={p.freeze} />}
-        </details>
-      )}
-    </div>
+    <>
+      <Card label="Summary">
+        <CardHead title="Summary" info="Worked out at expiry from the fills shown, with the legs held to the end. Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes." infoLabel="About this summary" />
+        <StatRow label="Priced structure">
+          <Stat label={f.credit >= 0 ? "Premium collected" : "Premium paid"} value={inr(Math.abs(f.credit))} />
+          <div data-testid="opt-max-profit"><Stat label="Most it can make" value={best == null ? "Unlimited" : inr(best)} tone={best == null ? undefined : "up"}
+            note={c && c.max_profit_after != null ? `${inr(c.max_profit_after)} after charges` : undefined} /></div>
+          <div data-testid="opt-max-loss"><Stat label="Most it can lose" value={worst == null ? "Unlimited" : inr(worst)} tone={worst == null ? undefined : "down"}
+            note={c && c.max_loss_after != null ? `${inr(c.max_loss_after)} after charges` : undefined} /></div>
+          <div data-testid="opt-be-stat"><Stat label="Breakevens" value={before.length ? points(before) : "None"}
+            note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after)} after charges` : "none after charges") : undefined} /></div>
+          <Stat label="Margin needed" value={p.margin != null ? inr(p.margin) : "Not available"} />
+        </StatRow>
+      </Card>
+      <Card label="Payoff">
+        <CardHead title="Profit or loss across prices" />
+        {p.model && rows.length > 0 ? (
+          <ModelPanel model={p.model} rows={rows} xs={f.xs} expiry={curves} markers={markers} charges={c ? c.total : null}
+            chargesLabel="the round trip's charges" whatif={whatif} plan="Pro" name={s.underlying} testId="opt-model"
+            ariaLabel="Profit or loss at expiry and today across prices" />
+        ) : (
+          <PayoffChart ariaLabel="Profit or loss at expiry across prices" height={220} xs={f.xs} testId="payoff-chart"
+            format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
+            curves={curves} markers={markers} />
+        )}
+        <p className="k-note" data-testid="opt-breakevens">
+          At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
+          {before.length > 0 && <>Breaks even at {points(before)}{c ? " before charges" : ""}. </>}
+          {c && (c.breakevens_after.length > 0 ? <>After charges: {points(c.breakevens_after)}. </> : <>After charges it doesn't break even at any price. </>)}
+          {bestOut != null && <>The most it can make is reached at {bestOut}, outside the chart. </>}
+          {worstOut != null && <>The most it can lose is reached at {worstOut}, outside the chart. </>}
+          Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.
+          {p.model && rows.length > 0 && " The today line is the pricing model's value of the position now, at each option's current IV; it is an estimate, not a quote."}
+        </p>
+        {c && <Charges c={c} />}
+        {whatif && p.model && rows.length > 0 && (
+          <Disclosure className="opt-charge-lines" testId="roll-fold" summary="Roll a leg: preview" onToggle={setRollOpen}>
+            {rollOpen && <RollPreview legs={rows.map(({ label, held }) => ({ label, held }))} exchange={s.exchange} underlying={s.underlying}
+              expiry={p.expiry} strikes={p.strikes} expiries={p.expiries ?? [p.expiry]} step={p.step} brokerage={s.costs.brokerage} freeze={p.freeze} />}
+          </Disclosure>
+        )}
+      </Card>
+    </>
   );
 }
 
@@ -254,64 +249,54 @@ function Chain({ s }: { s: OptionStrategy }) {
     catch (e) { fail(e); } finally { setBusy(false); }
   };
   const [view, setView] = useState<"quotes" | "greeks">("quotes");
+  type CRow = OptChain["rows"][number];
   const q = (x: { bid: number | null; ask: number | null; ltp: number | null } | null) => x ? `${x.bid ?? "–"} / ${x.ask ?? "–"}` : "–";
   const greeks = view === "greeks" && !!chain?.model;
+  const g = (side: "ce_g" | "pe_g", f: (g: OptionGreeks) => string, key: string, header: string): Column<CRow> => ({
+    key: `${side}${key}`, header, numeric: true, cell: (r) => { const x = r[side]; return x?.iv ? f(x) : "–"; } });
+  const n = (v: number, dp: number) => (v < 0 ? "−" : "") + Math.abs(v).toFixed(dp);
+  const greekCols: Column<CRow>[] = [
+    g("ce_g", (x) => `${(x.iv! * 100).toFixed(1)}%${x.iv_from === "atm" ? "*" : ""}`, "iv", "Call IV"), g("ce_g", (x) => n(x.delta!, 2), "d", "Call delta"),
+    g("ce_g", (x) => String(+x.gamma!.toPrecision(2)), "g", "Call gamma"), g("ce_g", (x) => n(x.theta!, 2), "t", "Call theta"), g("ce_g", (x) => n(x.vega!, 2), "v", "Call vega"),
+    { key: "k", header: "Strike", numeric: true, cell: (r) => <b>{r.strike}</b> },
+    g("pe_g", (x) => `${(x.iv! * 100).toFixed(1)}%${x.iv_from === "atm" ? "*" : ""}`, "iv", "Put IV"), g("pe_g", (x) => n(x.delta!, 2), "d", "Put delta"),
+    g("pe_g", (x) => String(+x.gamma!.toPrecision(2)), "g", "Put gamma"), g("pe_g", (x) => n(x.theta!, 2), "t", "Put theta"), g("pe_g", (x) => n(x.vega!, 2), "v", "Put vega"),
+  ];
+  const quoteCols: Column<CRow>[] = [
+    { key: "cq", header: "Call bid / ask", numeric: true, cell: (r) => q(r.ce) }, { key: "co", header: "Call OI", numeric: true, cell: (r) => r.ce?.oi?.toLocaleString("en-IN") ?? "–" },
+    { key: "k", header: "Strike", numeric: true, cell: (r) => <b>{r.strike}</b> },
+    { key: "pq", header: "Put bid / ask", numeric: true, cell: (r) => q(r.pe) }, { key: "po", header: "Put OI", numeric: true, cell: (r) => r.pe?.oi?.toLocaleString("en-IN") ?? "–" },
+  ];
+  const atm = (r: CRow): Record<string, string> => (r.strike === chain?.atm ? { "data-atm": "1", className: "atm" } : {});
   return (
-    <details className="card chain" onToggle={(e) => (e.target as HTMLDetailsElement).open && !chain && load()}>
-      <summary className="h3">Option chain<span className="small muted" style={{ fontWeight: 400, marginLeft: 8 }}>bid / ask, IV and Greeks, live</span></summary>
-      {busy && <Loading label="Loading the chain" />}
-      {chain && (
-        <div className="stack" style={{ gap: 8, marginTop: 12 }}>
-          <div className="spread small" style={{ flexWrap: "wrap", gap: 8 }}><span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
-            <span className="row" style={{ gap: 8 }}>
-              {chain.model && <Seg label="Chain columns" value={view} options={[["quotes", "Bid / ask"], ["greeks", "IV and Greeks"]]} onChange={setView} />}
-              <button className="btn quiet sm" onClick={load}>Refresh</button></span></div>
-          <div className="table-wrap" style={{ margin: 0 }}>
-            {greeks ? (
-              <table className="chain-t chain-g small" data-testid="chain-greeks">
-                <thead>
-                  <tr><th colSpan={5}>Calls</th><th /><th colSpan={5}>Puts</th></tr>
-                  <tr><th>IV</th><th>Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th><th>Strike</th><th>IV</th><th>Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th></tr>
-                </thead>
-                <tbody>{chain.rows.map((r) => (
-                  <tr key={r.strike} className={r.strike === chain.atm ? "atm" : ""}>
-                    <ChainGreeks g={r.ce_g} />
-                    <td className="mono"><b>{r.strike}</b></td>
-                    <ChainGreeks g={r.pe_g} />
-                  </tr>
-                ))}</tbody>
-              </table>
-            ) : (
-              <table className="chain-t">
-                <thead><tr><th>Call bid / ask</th><th>Call OI</th><th>Strike</th><th>Put bid / ask</th><th>Put OI</th></tr></thead>
-                <tbody>{chain.rows.map((r) => (
-                  <tr key={r.strike} className={r.strike === chain.atm ? "atm" : ""}>
-                    <td className="mono">{q(r.ce)}</td><td className="mono muted">{r.ce?.oi?.toLocaleString("en-IN") ?? "–"}</td>
-                    <td className="mono"><b>{r.strike}</b></td>
-                    <td className="mono">{q(r.pe)}</td><td className="mono muted">{r.pe?.oi?.toLocaleString("en-IN") ?? "–"}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            )}
+    <Card label="Option chain" testId="chain-card">
+      <Disclosure className="chain" summary={<><b>Option chain</b><span className="k-note">bid / ask, IV and Greeks, live</span></>} onToggle={(o) => { if (o && !chain) void load(); }}>
+        {busy && <Skeleton label="Loading the chain" />}
+        {chain && (
+          <div className="k-stack">
+            <div className="k-spread k-small">
+              <span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
+              <span className="k-row">
+                {chain.model && <Seg label="Chain columns" value={view} options={[{ value: "quotes", label: "Bid / ask" }, { value: "greeks", label: "IV and Greeks" }]} onChange={(v) => setView(v as "quotes" | "greeks")} />}
+                <button type="button" className="btn quiet sm" onClick={load}>Refresh</button>
+              </span>
+            </div>
+            <div data-testid={greeks ? "chain-greeks" : "chain-quotes"}>
+              <DataTable label={greeks ? "Option chain, IV and Greeks" : "Option chain, bid and ask"} columns={greeks ? greekCols : quoteCols} rows={chain.rows} rowKey={(r) => String(r.strike)} rowAttrs={atm} />
+            </div>
+            {greeks && chain.model && <ModelInputs m={chain.model} extra="Per option; an asterisk marks an IV taken from the at-the-money strike." />}
           </div>
-          {greeks && chain.model && <ModelInputs m={chain.model} extra="Per option; an asterisk marks an IV taken from the at-the-money strike." />}
-        </div>
-      )}
-    </details>
+        )}
+      </Disclosure>
+    </Card>
   );
 }
 
-/** One side of a chain row in the Greeks view: IV, delta, gamma, theta per day and vega per vol point (per option). */
-function ChainGreeks({ g }: { g?: OptionGreeks | null }) {
-  if (!g?.iv) return <><td className="muted">–</td><td /><td /><td /><td /></>;
-  const n = (v: number, dp: number) => (v < 0 ? "−" : "") + Math.abs(v).toFixed(dp);
-  return (
-    <>
-      <td className="mono">{(g.iv * 100).toFixed(1)}%{g.iv_from === "atm" ? "*" : ""}</td><td className="mono">{n(g.delta!, 2)}</td>
-      <td className="mono">{+g.gamma!.toPrecision(2)}</td><td className="mono">{n(g.theta!, 2)}</td><td className="mono">{n(g.vega!, 2)}</td>
-    </>
-  );
-}
+/** The structures as tiles, in the groups people look for them in. */
+const TILE_GROUPS: { title: string; ids: string[] }[] = [
+  { title: "Sell premium", ids: ["short_straddle", "short_strangle", "iron_fly", "iron_condor"] },
+  { title: "Buy a move, or a spread", ids: ["long_straddle", "bull_call_spread", "bear_put_spread", "buy_call", "buy_put", "sell_call", "sell_put"] },
+];
 
 export function OptionsPage() {
   const { fail, notify, refreshMe, notebooks, me } = useApp();
@@ -324,6 +309,8 @@ export function OptionsPage() {
   const [preview, setPreview] = useState<OptPreview | null>(null);
   const [pricing, setPricing] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [confirmStart, setConfirmStart] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [rows, setRows] = useState<LiveRow[] | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const live = (rows ?? []).filter((x) => x.status === "running" || x.status === "paused");     // the stopped ones fold away
@@ -344,7 +331,8 @@ export function OptionsPage() {
 
   const patch = useCallback((p: Partial<OptionStrategy>) => { setS((x) => ({ ...x, ...p })); setPreview(null); }, []);
   const und = unds?.find((u) => u.exchange === s.exchange && u.name === s.underlying);
-  const popular = unds?.length ? unds.filter((u) => u.popular) : POPULAR_FALLBACK.map((u) => ({ ...u, venue: u.exchange === "BFO" ? "BSE" : u.exchange === "MCX" ? "MCX" : u.exchange === "CDS" ? "NSE currency" : "NSE" }));
+  const popular = (unds?.length ? unds.filter((u) => u.popular) : POPULAR_FALLBACK.map((u) => ({ ...u, venue: u.exchange === "BFO" ? "BSE" : u.exchange === "MCX" ? "MCX" : u.exchange === "CDS" ? "NSE currency" : "NSE" }))).slice(0, 5);
+  const onPopular = popular.some((u) => u.exchange === s.exchange && u.name === s.underlying);
   const pickUnderlying = (exchange: OptionStrategy["exchange"], name: string) => {
     const t = s.exchange !== exchange ? sessionFor(exchange) : null;
     const st = STRUCTURES.find((x) => x.id === s.structure);
@@ -352,6 +340,7 @@ export function OptionsPage() {
       name: `${name} ${st ? st.name.toLowerCase() : "options"}` });
   };
   const pickStructure = (id: string) => {
+    if (id === "custom") { patch({ structure: "custom" }); return; }
     const st = STRUCTURES.find((x) => x.id === id)!;
     patch({ structure: id, offsetUnit: st.unit, legs: st.legs.map((l) => ({ ...l })), name: `${s.underlying} ${st.name.toLowerCase()}` });
   };
@@ -362,9 +351,9 @@ export function OptionsPage() {
     try { setPreview(await api<OptPreview>("/options/preview", { method: "POST", body: { strategy: s } })); }
     catch (e) { fail(e); } finally { setPricing(false); }
   };
+  const startWhen = s.signal ? `whenever "${s.signal.name}" signals a trade (from ${s.timing.entry})` : `at ${s.timing.entry}`;
   const start = async () => {
-    const when = s.signal ? `whenever "${s.signal.name}" signals a trade (from ${s.timing.entry})` : `at ${s.timing.entry}`;
-    if (!confirm(`Start paper trading "${s.name}"? It enters ${when} on market days with fake money, on live ${s.underlying} option prices.${s.vix ? " Entries wait while India VIX is outside your band." : ""}`)) return;
+    setConfirmStart(false);
     setStarting(true);
     try {
       const snap = await api<{ id: string }>("/options/sessions", { method: "POST", body: { strategy: s } });
@@ -416,235 +405,193 @@ export function OptionsPage() {
   const setRc = (p: Partial<OptionStrategy["recenter"]>) => patch({ recenter: { ...rc, ...p } });
   const setZ = (p: Partial<OptionStrategy["sizing"]>) => patch({ sizing: { ...z, ...p } });
   const setC = (p: Partial<OptionStrategy["costs"]>) => patch({ costs: { ...c, ...p } });
-  const lossOpts: [OptionStrategy["risk"]["stopType"], string][] = [["none", "Off"], ["amount", "₹"], ["credit_pct", "% of premium"]];
-  const MAIN = ["short_straddle", "short_strangle", "iron_fly", "iron_condor"];
-  const inMain = MAIN.includes(s.structure);
+  const lossOpts = [{ value: "none", label: "Off" }, { value: "amount", label: "₹" }, { value: "credit_pct", label: "% of premium" }];
   const legsText = s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + "× " : ""}${legRule(l, s.offsetUnit)} ${l.opt}`).join(" · ");
   const vf = s.vix;
+  const expiryNames: Record<string, string> = { current: "the nearest expiry", next: "the next expiry", month: "the monthly expiry" };
+  const exp = und?.expiries?.[s.expiry === "next" ? 1 : 0];
+  const stopWord = r.stopType === "none" ? "" : `, stopping out if the loss reaches ${r.stopType === "amount" ? inr(r.stop) : `${r.stop}% of the premium`}`;
+  const tgtWord = r.tgtType === "none" ? "" : ` and taking profit at ${r.tgtType === "amount" ? inr(r.tgt) : `${r.tgt}% of the premium`}`;
+  const words = `${s.name}: ${legsText}, on ${expiryNames[s.expiry] ?? `the ${s.expiry} expiry`}. ${s.signal ? `Enters whenever "${s.signal.name}" signals a trade, from ${t.entry} to ${t.lastEntry}` : `Enters at ${t.entry}, no later than ${t.lastEntry}`}, and exits by ${t.squareoff}${stopWord}${tgtWord}.`;
+  const tileGroups: TileGroup[] = [
+    ...TILE_GROUPS.map((g) => ({ title: g.title, tiles: g.ids.map((id) => { const x = STRUCTURES.find((y) => y.id === id)!; return { value: id, title: x.name, sub: x.hint }; }) })),
+    { title: "Your own", tiles: [{ value: "custom", title: "Custom legs", sub: "Choose each leg yourself" }] },
+  ];
 
   return (
-    <div className="stack opt-page" style={{ gap: 20 }}>
-      <div className="stack" style={{ gap: 6 }}>
-        <span className="eyebrow">Trade · options</span>
-        <h1 className="page-title">Options<Info>{HELP.options}</Info></h1>
-        <p className="muted" style={{ maxWidth: "62ch" }}>Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask.</p>
-        <p className="small muted row wrap" style={{ gap: 6 }}><span className="pill soon-pill">Backtesting coming soon</span><Info>{HELP.optBacktest}</Info></p>
-      </div>
+    <div className="k-page k-narrow">
+      <PageHeader eyebrow="Trade · Practise" title="Options builder" info={HELP.options} infoLabel="About options"
+        lede="Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask."
+        actions={<><Badge tone="plain" dot={false}>Backtesting coming soon</Badge><Info label="About options backtesting">{HELP.optBacktest}</Info></>} />
 
-      {offline && <div className="banner">{offline}</div>}
+      {offline && <Notice tone="warn">{offline}</Notice>}
       {notes.length > 0 && (
-        <div className="banner stack" style={{ gap: 6 }}>
+        <Notice actions={<button type="button" className="btn quiet sm" onClick={() => setNotes([])}>Got it</button>}>
           <b>Imported. Check these before you start:</b>
-          <ul style={{ margin: 0, paddingLeft: 18 }}>{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
-          <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setNotes([])}>Got it</button>
-        </div>
+          <ul className="k-list">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+        </Notice>
       )}
 
-      <section className="card stack opt-form" style={{ gap: 18 }} aria-label="Set up the structure">
-        <Block title="1. What to trade">
-        <div className="opt-row">
-          <span className="opt-label">Trade</span>
-          <div className="row wrap" style={{ gap: 8 }}>
-            {popular.slice(0, 5).map((u) => {
-              const on = u.exchange === s.exchange && u.name === s.underlying;
-              return <button key={u.exchange + u.name} className={`chip${on ? " on" : ""}`} aria-pressed={on} onClick={() => pickUnderlying(u.exchange, u.name)}>{u.name}</button>;
-            })}
-            {!!unds?.length && (
-              <span className={`chip-select${popular.slice(0, 5).some((u) => u.exchange === s.exchange && u.name === s.underlying) ? "" : " on"}`}><select aria-label="Other underlyings" value={popular.slice(0, 5).some((u) => u.exchange === s.exchange && u.name === s.underlying) ? "" : `${s.exchange}:${s.underlying}`}
-                onChange={(e) => { if (e.target.value) { const [ex, n] = e.target.value.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); } }}>
-                <option value="">More…</option>
-                {unds.map((u) => <option key={u.exchange + u.name} value={`${u.exchange}:${u.name}`}>{u.name} ({u.venue})</option>)}
-              </select></span>
-            )}
-          </div>
-        </div>
-
-        <div className="opt-row">
-          <span className="opt-label">Expiry</span>
-          <div className="row wrap" style={{ gap: 8 }}>
-            <Seg label="Expiry" value={["current", "next", "month"].includes(s.expiry) ? s.expiry : "date"}
-              options={[["current", "Nearest"], ["next", "Next"], ["month", "Monthly"]]} onChange={(v) => patch({ expiry: v })} />
-            {und && <span className="small muted">lot {und.lot}</span>}
-          </div>
-        </div>
-        </Block>
-
-        <Block title="2. Structure">
-
-        <div className="opt-row">
-          <span className="opt-label">Structure</span>
-          <div className="row wrap" style={{ gap: 8 }}>
-            {MAIN.map((id) => { const x = STRUCTURES.find((y) => y.id === id)!; return (
-              <button key={id} title={x.hint} className={`chip${s.structure === id ? " on" : ""}`} aria-pressed={s.structure === id} onClick={() => pickStructure(id)}>{x.name}</button>); })}
-            <span className={`chip-select${inMain ? "" : " on"}`}><select aria-label="Other structures" value={inMain ? "" : s.structure}
-              onChange={(e) => { const v = e.target.value; if (v === "custom") patch({ structure: "custom" }); else if (v) pickStructure(v); }}>
-              <option value="">More…</option>
-              {STRUCTURES.filter((x) => !MAIN.includes(x.id)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-              <option value="custom">Custom legs</option>
-            </select></span>
-          </div>
-        </div>
-
-        <details className="legs-box" open={s.structure === "custom" || undefined}>
-          <summary><span className="small">{legsText}</span><span className="small link-ish">Edit legs</span></summary>
-          <div className="stack" style={{ gap: 10, marginTop: 12 }}>
-            <div className="row" style={{ gap: 8, alignItems: "center" }}>
-              <span className="small muted">Distance in</span>
-              <Seg label="Distance unit" value={s.offsetUnit} options={[["strikes", "Strikes"], ["points", "Points"]]}
-                onChange={(v) => patch({ offsetUnit: v, legs: s.legs.map((l) => ({ ...l, offset: v === "points" ? l.offset * (preview?.step ?? 50) : Math.round(l.offset / (preview?.step ?? 50)) })) })} />
+      <Card label="Set up the structure">
+        <CardHead title="What to trade" actions={<>
+          <button type="button" className="btn quiet sm" onClick={exportIt}>Export</button>
+          <button type="button" className="btn quiet sm" onClick={() => setConfirmReset(true)}>Start over</button>
+          <Link to="/import" className="btn quiet sm">Import a structure</Link>
+        </>} />
+        <div className="k-struct">
+          <FieldGroup label="Underlying" wide>
+            <div className="k-row">
+              <ChipBar label="Underlying" value={onPopular ? `${s.exchange}:${s.underlying}` : ""} onChange={(v) => { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); }}
+                options={popular.map((u) => ({ value: `${u.exchange}:${u.name}`, label: u.name }))} />
+              {!!unds?.length && (
+                <Select small label="Other underlyings" value={onPopular ? "" : `${s.exchange}:${s.underlying}`}
+                  onChange={(v) => { if (v) { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); } }}
+                  options={[{ value: "", label: "More…" }, ...unds.map((u) => ({ value: `${u.exchange}:${u.name}`, label: `${u.name} (${u.venue})` }))]} />
+              )}
             </div>
-            <LegsEditor s={s} preview={preview} rules={rulesOk} set={(legs) => patch({ legs, structure: "custom" })} />
-          </div>
-        </details>
-        </Block>
-
-        <Block title="3. When and how much risk">
-
-        <div className="opt-row">
-          <span className="opt-label">Enter</span>
-          <div className="stack" style={{ gap: 10 }}>
-            <Seg label="When to enter" value={ruleMode ? "rules" : "time"}
-              options={[["time", "At a set time"], ["rules", "When a notebook's rules say so"]]}
-              onChange={(v) => { setRuleMode(v === "rules"); if (v === "time") patch({ signal: null }); }} />
-            {ruleMode && <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
-              <span className="chip-select">
-                <select aria-label="Notebook with the rules" value={s.signal?.notebook ?? ""} disabled={sigBusy} onChange={(e) => pickRules(e.target.value)}>
-                  <option value="">{s.signal ? s.signal.name : "Use a notebook's rules…"}</option>
-                  {(notebooks ?? []).filter((n) => n.id !== s.signal?.notebook).map((n) => (
-                    <option key={n.id} value={n.id}>{n.name}{n.tf ? ` (${n.tf})` : ""}</option>))}
-                </select>
-              </span>
-              {s.signal && <Seg label="Short signals" value={s.signal.short}
-                options={[["mirror", "Short signals: swap calls and puts"], ["none", "Long signals only"]]}
-                onChange={(v) => patch({ signal: { ...s.signal!, short: v } })} />}
-            </div>}
-            {ruleMode && !s.signal && <p className="small muted">Pick a notebook with rules on 5-minute, 15-minute or hourly candles, for example a 7 EMA crossover on NIFTY 50.</p>}
-            {s.signal && <p className="small muted" style={{ maxWidth: "70ch" }}>
-              The rules of <b>{s.signal.name}</b> run on {s.underlying}'s own {sigTf} candles. When they go long, this enters the legs above
-              {s.signal.short === "mirror" ? "; when they go short, it enters the same legs with calls and puts swapped" : ""}. When they exit, the options are closed.
-              Your stop, target and square-off below still apply, and one signal is traded once.
-            </p>}
-          </div>
-        </div>
-
-        <div className="opt-row" data-testid="vix-filter">
-          <span className="opt-label">India VIX</span>
-          <div className="stack" style={{ gap: 8 }}>
-            <label className="row small" style={{ gap: 8 }}>
-              <input type="checkbox" checked={!!vf} disabled={!vixOk && !vf} onChange={(e) => patch({ vix: e.target.checked ? { min: 11, max: 18 } : null })} />
-              Enter only while India VIX is in a band{!vixOk && " (Basic)"}<Info>{HELP.optVix}</Info>
-            </label>
-            {vf && (
-              <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
-                <Num label="Lowest (0 = none)" value={vf.min} max={100} step={0.5} width={140} onChange={(v) => patch({ vix: { ...vf, min: v } })} />
-                <Num label="Highest (0 = none)" value={vf.max} max={100} step={0.5} width={140} onChange={(v) => patch({ vix: { ...vf, max: v } })} />
+          </FieldGroup>
+          <FieldGroup label="Expiry" info="Nearest is the first expiry still to come; Next is the one after; Monthly is the last expiry of the month.">
+            <div className="k-expiry">
+              <Seg label="Expiry" value={["current", "next", "month"].includes(s.expiry) ? s.expiry : "date"}
+                options={[{ value: "current", label: "Nearest" }, { value: "next", label: "Next" }, { value: "month", label: "Monthly" }]} onChange={(v) => patch({ expiry: v })} />
+              {und && <span className="k-note">{exp && s.expiry !== "month" ? `${expiryName(exp)} · ` : ""}lot {und.lot}</span>}
+            </div>
+          </FieldGroup>
+          <FieldGroup label="Strategy" wide>
+            <TilePicker label="Strategy" groups={tileGroups} value={s.structure} onChange={pickStructure} />
+          </FieldGroup>
+          <Disclosure className="legs-box" open={s.structure === "custom" || undefined}
+            summary={<><span className="k-small">{legsText}</span><span className="k-small link-ish">Edit legs</span></>}>
+            <div className="k-stack">
+              <div className="k-row">
+                <span className="k-small k-muted">Distance in</span>
+                <Seg label="Distance unit" value={s.offsetUnit} options={[{ value: "strikes", label: "Strikes" }, { value: "points", label: "Points" }]}
+                  onChange={(v) => patch({ offsetUnit: v as "strikes" | "points", legs: s.legs.map((l) => ({ ...l, offset: v === "points" ? l.offset * (preview?.step ?? 50) : Math.round(l.offset / (preview?.step ?? 50)) })) })} />
               </div>
-            )}
-            {vf && !vf.min && !vf.max && <span className="hint">Set a lowest or a highest value, or turn the filter off.</span>}
-            {vf && vf.min > 0 && vf.max > 0 && vf.min >= vf.max && <span className="hint">The lowest value has to be below the highest.</span>}
-          </div>
-        </div>
-
-        <div className="opt-grid">
-          <Time label={s.signal ? "Earliest entry" : "Enter at"} value={t.entry} onChange={(v) => setTiming({ entry: v })} />
-          <Time label="Last entry" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />
-          <Time label="Square off" value={t.squareoff} onChange={(v) => setTiming({ squareoff: v })} />
-          <Num label="Units" value={z.lots} min={1} max={1000} width={120} onChange={(v) => setZ({ lots: Math.round(v) })} />
-        </div>
-
-        <div className="opt-grid two">
-          <div className="stack" style={{ gap: 6 }}>
-            <span className="opt-lbl">Stop loss<Info>{HELP.optRisk}</Info></span>
-            <div className="row wrap" style={{ gap: 8 }}>
-              <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => setRisk({ stopType: v })} />
-              {r.stopType !== "none" && <input className="input" style={{ width: 110 }} type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
+              <LegsEditor s={s} preview={preview} rules={rulesOk} set={(legs) => patch({ legs, structure: "custom" })} />
             </div>
-          </div>
-          <div className="stack" style={{ gap: 6 }}>
-            <span className="opt-lbl">Target</span>
-            <div className="row wrap" style={{ gap: 8 }}>
-              <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => setRisk({ tgtType: v })} />
-              {r.tgtType !== "none" && <input className="input" style={{ width: 110 }} type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}
-            </div>
+          </Disclosure>
+        </div>
+      </Card>
+
+      <Card label="When it trades">
+        <CardHead title="When it trades" info={HELP.optRisk} infoLabel="About stops and targets" />
+        <p className="k-plain" data-testid="opt-words">{words}</p>
+        <div className="k-stack">
+          <p className="k-sentence">
+            <b>Enter</b>
+            <Seg label="When to enter" value={ruleMode ? "rules" : "time"}
+              options={[{ value: "time", label: "At a set time" }, { value: "rules", label: "When a notebook's rules say so" }]}
+              onChange={(v) => { setRuleMode(v === "rules"); if (v === "time") patch({ signal: null }); }} />
+          </p>
+          {ruleMode ? (
+            <>
+              <p className="k-sentence">
+                <b>Enter when</b>{" "}
+                <Select small label="Notebook with the rules" value={s.signal?.notebook ?? ""} disabled={sigBusy} onChange={pickRules}
+                  options={[{ value: "", label: s.signal ? s.signal.name : "Use a notebook's rules…" },
+                    ...(notebooks ?? []).filter((n) => n.id !== s.signal?.notebook).map((n) => ({ value: n.id, label: `${n.name}${n.tf ? ` (${n.tf})` : ""}` }))]} />{" "}
+                signals a trade, from <InTime label="Earliest entry" value={t.entry} onChange={(v) => setTiming({ entry: v })} /> to <InTime label="Last entry" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />.
+              </p>
+              {s.signal && <Seg label="Short signals" value={s.signal.short}
+                options={[{ value: "mirror", label: "Short signals: swap calls and puts" }, { value: "none", label: "Long signals only" }]}
+                onChange={(v) => patch({ signal: { ...s.signal!, short: v as "mirror" | "none" } })} />}
+              {!s.signal && <p className="k-note">Pick a notebook with rules on 5-minute, 15-minute or hourly candles, for example a 7 EMA crossover on NIFTY 50.</p>}
+              {s.signal && <p className="k-note">
+                The rules of <b>{s.signal.name}</b> run on {s.underlying}'s own {sigTf} candles. When they go long, this enters the legs above
+                {s.signal.short === "mirror" ? "; when they go short, it enters the same legs with calls and puts swapped" : ""}. When they exit, the options are closed.
+                Your stop, target and square-off below still apply, and one signal is traded once.
+              </p>}
+            </>
+          ) : (
+            <p className="k-sentence"><b>Enter at</b> <InTime label="Enter at" value={t.entry} onChange={(v) => setTiming({ entry: v })} /> on market days, no later than <InTime label="Last entry" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />.</p>
+          )}
+          <p className="k-sentence">
+            <b>Exit at</b> <InTime label="Square off" value={t.squareoff} onChange={(v) => setTiming({ squareoff: v })} /> at the latest, or sooner if the loss reaches
+            <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => setRisk({ stopType: v as OptionStrategy["risk"]["stopType"] })} />
+            {r.stopType !== "none" && <input className="k-input k-in num" type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
+            {" "}or the gain reaches
+            <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => setRisk({ tgtType: v as OptionStrategy["risk"]["tgtType"] })} />
+            {r.tgtType !== "none" && <input className="k-input k-in num" type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}.
+          </p>
+          <p className="k-sentence"><b>Trade</b> <InNum label="Units" value={z.lots} min={1} max={1000} onChange={(v) => setZ({ lots: Math.round(v) })} /> unit{z.lots === 1 ? "" : "s"} of the structure.{und ? ` A lot is ${und.lot} ${s.underlying}.` : ""}</p>
+          <div className="k-sentence" data-testid="vix-filter">
+            <CheckField label={<>Enter only while India VIX is between{!vixOk && " (Basic)"}</>} checked={!!vf} disabled={!vixOk && !vf} onChange={(on) => patch({ vix: on ? { min: 11, max: 18 } : null })} />
+            {vf && <> <InNum label="Lowest (0 = none)" value={vf.min} max={100} step={0.5} onChange={(v) => patch({ vix: { ...vf, min: v } })} /> and
+              <InNum label="Highest (0 = none)" value={vf.max} max={100} step={0.5} onChange={(v) => patch({ vix: { ...vf, max: v } })} />.</>}
+            <Info>{HELP.optVix}</Info>
+            {vf && !vf.min && !vf.max && <span className="k-note"> Set a lowest or a highest value, or turn the filter off.</span>}
+            {vf && vf.min > 0 && vf.max > 0 && vf.min >= vf.max && <span className="k-note"> The lowest value has to be below the highest.</span>}
           </div>
         </div>
-        </Block>
-
         <More id="options" what="entries a day, daily loss cap, trailing, re-centring, sizing, costs"
           on={[t.maxEntries > 1, t.cooldown > 0, r.dailyLoss > 0, hasShort && r.legStopPct > 0, r.trailAfter > 0, hasShort && rc.enabled, z.mode === "margin", c.brokerage > 0 && c.brokerage !== 20].filter(Boolean).length}>
-          <div className="stack" style={{ gap: 18 }}>
-            <div className="opt-grid">
-              <Num label="Entries a day" value={t.maxEntries} min={1} max={20} width={120} onChange={(v) => setTiming({ maxEntries: Math.round(v) })} />
-              <Num label="Wait after a trade" value={t.cooldown} max={600} suffix="min" width={140} onChange={(v) => setTiming({ cooldown: Math.round(v) })} />
-              <Num label="Daily loss cap (₹)" value={r.dailyLoss} step={1000} width={150} onChange={(v) => setRisk({ dailyLoss: v })} />
-              {hasShort && <Num label="Sold-leg stop +%" value={r.legStopPct} step={5} width={140} help={HELP.optLegStop} onChange={(v) => setRisk({ legStopPct: v })} />}
-            </div>
-            <div className="opt-grid">
-              <Num label="Trail once up (₹)" value={r.trailAfter} step={500} width={150} help={HELP.optTrail} onChange={(v) => setRisk({ trailAfter: v })} />
-              <Num label="…giving back (₹)" value={r.trailBy} step={500} width={150} onChange={(v) => setRisk({ trailBy: v })} />
-            </div>
+          <FormGrid label="More settings">
+            <NumField label="Entries a day" value={t.maxEntries} min={1} max={20} onChange={(v) => setTiming({ maxEntries: Math.round(v) })} />
+            <NumField label="Wait after a trade" value={t.cooldown} max={600} unit="min" onChange={(v) => setTiming({ cooldown: Math.round(v) })} />
+            <NumField label="Daily loss cap" value={r.dailyLoss} step={1000} unit="₹" onChange={(v) => setRisk({ dailyLoss: v })} />
+            {hasShort && <NumField label="Sold-leg stop" value={r.legStopPct} step={5} unit="+ %" info={HELP.optLegStop} onChange={(v) => setRisk({ legStopPct: v })} />}
+            <NumField label="Trail once up" value={r.trailAfter} step={500} unit="₹" info={HELP.optTrail} onChange={(v) => setRisk({ trailAfter: v })} />
+            <NumField label="…giving back" value={r.trailBy} step={500} unit="₹" onChange={(v) => setRisk({ trailBy: v })} />
+            <FieldGroup label="Size" info={HELP.optSize}>
+              <Seg label="Sizing" value={z.mode} options={[{ value: "lots", label: "Fixed units" }, { value: "margin", label: "Fit to margin" }]} onChange={(v) => setZ({ mode: v as "lots" | "margin" })} />
+            </FieldGroup>
+            <NumField label="Paper capital" value={z.capital} min={1000} step={50000} unit="₹" onChange={(v) => setZ({ capital: v })} />
+            <NumField label="Brokerage per order" value={c.brokerage} max={1000} unit="₹" onChange={(v) => setC({ brokerage: v })} />
+            <NumField label="Extra slippage" value={c.slippageTicks} max={100} unit="ticks" onChange={(v) => setC({ slippageTicks: Math.round(v) })} />
+            <NumField label="Freeze limit" value={c.freeze} max={100000} info={HELP.optFreeze} onChange={(v) => setC({ freeze: Math.round(v) })} />
             {hasShort && (
-              <div className="stack" style={{ gap: 10 }}>
-                <label className="row small" style={{ gap: 8 }}><input type="checkbox" checked={rc.enabled} onChange={(e) => setRc({ enabled: e.target.checked })} />
-                  Re-centre when the market moves<Info>{HELP.optRecenter}</Info></label>
-                {rc.enabled && (
-                  <div className="opt-grid">
-                    <Num label="Check every" value={rc.every} min={5} max={240} suffix="min" width={130} onChange={(v) => setRc({ every: Math.round(v) })} />
-                    <Num label="After moving" value={rc.threshold} min={0.5} max={50} step={0.5} suffix="strikes" width={150} onChange={(v) => setRc({ threshold: v })} />
-                    <div className="stack" style={{ gap: 6 }}><span className="opt-lbl">Roll</span>
-                      <Seg label="What rolls" value={rc.roll} options={[["shorts", "Sold legs"], ["all", "All legs"]]} onChange={(v) => setRc({ roll: v })} /></div>
-                  </div>
-                )}
-              </div>
+              <div className="k-field wide"><CheckField label={<>Re-centre when the market moves<Info>{HELP.optRecenter}</Info></>} checked={rc.enabled} onChange={(on) => setRc({ enabled: on })} /></div>
             )}
-            <div className="opt-grid">
-              <div className="stack" style={{ gap: 6 }}><span className="opt-lbl">Size<Info>{HELP.optSize}</Info></span>
-                <Seg label="Sizing" value={z.mode} options={[["lots", "Fixed units"], ["margin", "Fit to margin"]]} onChange={(v) => setZ({ mode: v })} /></div>
-              <Num label="Paper capital (₹)" value={z.capital} min={1000} step={50000} width={160} onChange={(v) => setZ({ capital: v })} />
-            </div>
-            <div className="opt-grid">
-              <Num label="Brokerage / order (₹)" value={c.brokerage} max={1000} width={150} onChange={(v) => setC({ brokerage: v })} />
-              <Num label="Extra slippage" value={c.slippageTicks} max={100} suffix="ticks" width={140} onChange={(v) => setC({ slippageTicks: Math.round(v) })} />
-              <Num label="Freeze limit" value={c.freeze} max={100000} width={130} help={HELP.optFreeze} onChange={(v) => setC({ freeze: Math.round(v) })} />
-            </div>
-            {!c.freeze && und?.freeze ? <span className="hint">Freeze limit 0 uses the exchange's: {und.freeze.toLocaleString("en-IN")} for {und.name}.</span> : null}
-          </div>
+            {hasShort && rc.enabled && <>
+              <NumField label="Check every" value={rc.every} min={5} max={240} unit="min" onChange={(v) => setRc({ every: Math.round(v) })} />
+              <NumField label="After moving" value={rc.threshold} min={0.5} max={50} step={0.5} unit="strikes" onChange={(v) => setRc({ threshold: v })} />
+              <FieldGroup label="Roll"><Seg label="What rolls" value={rc.roll} options={[{ value: "shorts", label: "Sold legs" }, { value: "all", label: "All legs" }]} onChange={(v) => setRc({ roll: v as "shorts" | "all" })} /></FieldGroup>
+            </>}
+          </FormGrid>
+          {!c.freeze && und?.freeze ? <span className="k-note">Freeze limit 0 uses the exchange's: {und.freeze.toLocaleString("en-IN")} for {und.name}.</span> : null}
         </More>
-      </section>
+      </Card>
 
-      <section className="card stack" style={{ gap: 14 }} aria-label="Price and start">
-        <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
-          <label className="field" style={{ flex: "1 1 220px" }}>Name<input value={s.name} maxLength={80} onChange={(e) => patch({ name: e.target.value })} /></label>
-          <button className="btn quiet" disabled={pricing || !!offline} onClick={price_}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
-          <button className="btn blue" disabled={starting || !!offline || (ruleMode && !s.signal)} onClick={start}>{starting ? "Starting…" : "Start paper trading"}</button>
-        </div>
+      <Card label="Price and start">
+        <CardHead title="Price it, then start" />
+        <FormGrid label="Price and start" onSubmit={(e) => { e.preventDefault(); void price_(); }}>
+          <Field label="Name" wide maxLength={80} value={s.name} onChange={(e) => patch({ name: e.target.value })} />
+          <FormActions>
+            <button type="submit" className="btn quiet" disabled={pricing || !!offline}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
+            <button type="button" className="btn blue" disabled={starting || !!offline || (ruleMode && !s.signal)} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : "Start paper trading"}</button>
+          </FormActions>
+        </FormGrid>
         {preview && (
-          <div className="stack" style={{ gap: 10 }}>
-            <span className="small muted">{s.underlying} {price(preview.spot, "INR")} · ATM {preview.atm} · expiry {expiryName(preview.expiry)} · lot {preview.lot} · {preview.units} unit{preview.units === 1 ? "" : "s"}{s.sizing.mode === "margin" && preview.margin_one ? ` (${inr(preview.margin_one)} margin each)` : ""}</span>
-            {preview.units === 0 ? <p className="neg small">Not enough capital for one unit at today's margin.</p> : <Payoff p={preview} s={s} />}
-          </div>
+          <p className="k-note">{s.underlying} {price(preview.spot, "INR")} · ATM {preview.atm} · expiry {expiryName(preview.expiry)} · lot {preview.lot} · {preview.units} unit{preview.units === 1 ? "" : "s"}{s.sizing.mode === "margin" && preview.margin_one ? ` (${inr(preview.margin_one)} margin each)` : ""}</p>
         )}
-      </section>
+        {preview && preview.units === 0 && <Notice tone="warn">Not enough capital for one unit at today's margin.</Notice>}
+      </Card>
+      {preview && preview.units !== 0 && <Payoff p={preview} s={s} />}
 
-      <div className="opt-extras one">
-        <Chain key={`${s.exchange}${s.underlying}${s.expiry}`} s={s} />
-      </div>
-      <div className="row" style={{ gap: 8 }}>
-        <button className="btn quiet sm" onClick={exportIt}>Export</button>
-        <button className="btn quiet sm" onClick={() => { if (confirm("Start over with a fresh short straddle?")) { setS(blankOptions()); setPreview(null); } }}>Start over</button>
-        <Link to="/import" className="btn quiet sm">Import a structure</Link>
-      </div>
+      <Chain key={`${s.exchange}${s.underlying}${s.expiry}`} s={s} />
 
-      <PositioningCard />
+      <p className="k-link-line">Where the market is positioned, by participant and strike: <Link className="link" to="/trade/positioning">open Positioning</Link>.</p>
 
       {rows && rows.length > 0 && (
-        <section className="stack" style={{ gap: 10 }} aria-labelledby="o-sess">
-          <h2 id="o-sess" className="h3">Your options sessions</h2>
-          {live.length ? <OptSessionCards rows={live} /> : <p className="small muted">None running.</p>}
+        <Card label="Your options sessions">
+          <CardHead title="Your options sessions" />
+          {live.length ? <OptSessionCards rows={live} /> : <p className="k-small k-muted">None running.</p>}
           <Earlier label="Stopped sessions" count={rows.length - live.length}>
             <OptSessionCards rows={rows.filter((x) => !live.includes(x))} />
           </Earlier>
-        </section>
+        </Card>
+      )}
+
+      {confirmStart && (
+        <ConfirmDialog title={`Start paper trading "${s.name}"?`} confirmLabel="Start paper trading" danger={false} onConfirm={start} onClose={() => setConfirmStart(false)}>
+          It enters {startWhen} on market days with fake money, on live {s.underlying} option prices.{s.vix ? " Entries wait while India VIX is outside your band." : ""}
+        </ConfirmDialog>
+      )}
+      {confirmReset && (
+        <ConfirmDialog title="Start over?" confirmLabel="Start over" onConfirm={() => { setS(blankOptions()); setPreview(null); setConfirmReset(false); }} onClose={() => setConfirmReset(false)}>
+          This replaces what you have set up with a fresh short straddle.
+        </ConfirmDialog>
       )}
     </div>
   );
@@ -653,13 +600,13 @@ export function OptionsPage() {
 /** Options sessions as a row of cards, each opening its page. */
 function OptSessionCards({ rows }: { rows: LiveRow[] }) {
   return (
-    <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+    <div className="k-sessions">
       {rows.map((x) => (
-        <Link key={x.id} to={`/options/s/${x.id}`} className="card" style={{ flex: "none", minWidth: 200, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+        <Link key={x.id} to={`/options/s/${x.id}`} className="k-sess-link">
           <b>{x.name}</b>
-          <span className="small muted">{new Date(x.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+          <span className="k-note">{new Date(x.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
           <FoBadges region="IN" symbol={foSymbol(x.instrument)} plain />
-          <span className={`badge ${x.status}`} style={{ alignSelf: "flex-start" }}>{x.status}</span>
+          <Badge tone={x.status === "running" ? "ok" : x.status === "paused" ? "warn" : "plain"}>{x.status}</Badge>
         </Link>
       ))}
     </div>

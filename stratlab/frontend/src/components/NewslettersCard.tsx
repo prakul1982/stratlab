@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { HELP } from "../lib/help";
 import type { Cadence, NewsletterPrefs } from "../lib/news";
-import { Info } from "./ui";
 import { track } from "../lib/analytics";
+import { Badge, Card, CardHead, ErrorState, Notice, Seg, Skeleton } from "./kit";
 
 type Key = "market_in" | "market_us" | "my_stocks";
 const ROWS: [Key, string][] = [["market_in", "Market brief: India"], ["market_us", "Market brief: US"], ["my_stocks", "My stocks"]];
@@ -19,14 +19,13 @@ function needs(p: NewsletterPrefs, key: Key, c: Cadence): string | null {
   return c === "daily" && p.allowed?.market_daily === false ? "Basic" : null;
 }
 
-/** Account → Newsletters: how often each brief is emailed, and where to. Saves on each change. */
+/** Settings → Notifications → Newsletters: how often each brief is emailed, and where to. Saves on each change. */
 export function NewslettersCard() {
   const { notify, fail } = useApp();
   const [prefs, setPrefs] = useState<NewsletterPrefs | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [busy, setBusy] = useState<Key | "confirm" | null>(null);
   const loc = useLocation();
-  const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -38,7 +37,7 @@ export function NewslettersCard() {
 
   // the News page links here: bring the card into view once it has its final height
   useEffect(() => {
-    if (loc.hash === "#newsletters" && state !== "loading") ref.current?.scrollIntoView({ block: "start" });
+    if (loc.hash === "#newsletters" && state !== "loading") document.getElementById("newsletters")?.scrollIntoView({ block: "start" });
   }, [loc.hash, state]);
 
   const set = async (key: Key, c: Cadence) => {
@@ -62,42 +61,33 @@ export function NewslettersCard() {
   };
 
   return (
-    <section ref={ref} id="newsletters" className="card stack" style={{ gap: 12 }}>
-      <div className="spread">
-        <h2 className="h2 row" style={{ gap: 0 }}>Newsletters<Info>{HELP.newsletters}</Info></h2>
-        <Link to="/news" className="btn quiet sm">Read past issues</Link>
-      </div>
-      {state === "loading" && <p className="small muted">Loading your newsletter settings…</p>}
-      {state === "missing" && <p className="small muted">Newsletter settings aren't available yet. Check back soon.</p>}
-      {state === "error" && <p className="small muted">Couldn't load your newsletter settings. Reload the page to try again.</p>}
+    <Card id="newsletters" label="Newsletters">
+      <CardHead title="Newsletters" info={HELP.newsletters} actions={<Link to="/news" className="btn quiet sm">Read past issues</Link>} />
+      {state === "loading" && <Skeleton label="Loading your newsletter settings" lines={3} />}
+      {state === "missing" && <p className="k-small k-muted">Newsletter settings aren't available yet. Check back soon.</p>}
+      {state === "error" && <ErrorState title="Couldn't load your newsletter settings">Reload the page to try again.</ErrorState>}
       {state === "ready" && prefs && <>
-        <div className="stack" style={{ gap: 0 }}>
+        <div>
           {ROWS.map(([key, title]) => (
-            <div key={key} className="nl-row">
-              <b style={{ fontSize: 15 }}>{title}</b>
-              <div className="seg" role="radiogroup" aria-label={title}>
-                {CHOICES.map(([c, name]) => {
+            <div key={key} className="k-line-row">
+              <b>{title}</b>
+              <Seg label={title} value={prefs[key]} onChange={(v) => void set(key, v as Cadence)}
+                options={CHOICES.map(([c, name]) => {
                   const plan = needs(prefs, key, c);
-                  return (
-                    <button key={c} role="radio" aria-checked={prefs[key] === c} aria-pressed={prefs[key] === c}
-                      disabled={!!plan || busy === key} title={plan ? `On the ${plan} plan` : undefined} onClick={() => set(key, c)}>
-                      {name}{plan && <span className="badge next">{plan}</span>}
-                    </button>
-                  );
-                })}
-              </div>
+                  return { value: c, label: plan ? `${name} · ${plan}` : name, disabled: !!plan || busy === key };
+                })} />
             </div>
           ))}
         </div>
         {prefs.email ? (
-          <div className="row wrap" style={{ gap: "8px 12px" }}>
-            <span className="small" style={{ overflowWrap: "anywhere" }}>Sent to <b>{prefs.email}</b></span>
-            {prefs.confirmed ? <span className="badge pass">Confirmed</span>
-              : <button className="btn outline sm" disabled={busy === "confirm"} onClick={confirmEmail}>{busy === "confirm" ? "Sending…" : "Confirm this email"}</button>}
+          <div className="k-row">
+            <span className="k-small">Sent to <b>{prefs.email}</b></span>
+            {prefs.confirmed ? <Badge tone="ok">Confirmed</Badge>
+              : <button type="button" className="btn outline sm" disabled={busy === "confirm"} onClick={() => void confirmEmail()}>{busy === "confirm" ? "Sending…" : "Confirm this email"}</button>}
           </div>
-        ) : <p className="small muted">There's no email on your account yet, so issues only show on the News page.</p>}
-        {prefs.email && !prefs.confirmed && <p className="hint">Newsletters start once you've confirmed the email.</p>}
+        ) : <p className="k-small k-muted">There's no email on your account yet, so issues only show on the News page.</p>}
+        {prefs.email && !prefs.confirmed && <Notice>Newsletters start once you've confirmed the email.</Notice>}
       </>}
-    </section>
+    </Card>
   );
 }

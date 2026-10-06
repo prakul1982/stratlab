@@ -12,7 +12,9 @@ import { InstrumentSearch } from "../components/InstrumentSearch";
 import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
 import { Pin, Search, Upload } from "../components/Icons";
-import { Info, Loading, VerdictBadge } from "../components/ui";
+import { VerdictBadge } from "../components/ui";
+import { Badge, Card, CardHead, ChipBar, EmptyState, Notice, PageHeader, Seg, Skeleton } from "../components/kit";
+import "./trade/trade.css";
 
 export type Where = { market: string; instrument: Instrument | null };
 
@@ -49,33 +51,27 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
   const soon = markets.filter((m) => m.status === "soon");
   const market = markets.find((m) => m.id === where.market);
   return (
-    <section className="card stack" style={{ gap: 16 }} aria-labelledby="where-h">
-      <h2 id="where-h" className="h2 row" style={{ gap: 0 }}>1. Where do you want to test it?<Info>{HELP.markets}</Info></h2>
-      <div className="seg" role="radiogroup" aria-label="Market">
-        {usable.map((m) => (
-          <button key={m.id} role="radio" aria-checked={where.market === m.id} aria-pressed={where.market === m.id}
-            onClick={() => setWhere({ market: m.id, instrument: null })}>
-            {m.symbol === "+" ? "" : m.symbol + " "}{m.name}{m.status === "offline" ? " (offline)" : ""}
-          </button>
-        ))}
-      </div>
-      {soon.length > 0 && <p className="hint">Coming soon: {soon.map((m) => m.name).join(", ")}. Until then, use "Your own data" with a CSV.</p>}
+    <Card label="Where to test">
+      <CardHead title="1. Where do you want to test it?" info={HELP.markets} infoLabel="About markets" />
+      <ChipBar label="Market" value={where.market} onChange={(id) => setWhere({ market: id, instrument: null })}
+        options={usable.map((m) => ({ value: m.id, label: `${m.symbol === "+" ? "" : m.symbol + " "}${m.name}${m.status === "offline" ? " (offline)" : ""}` }))} />
+      {soon.length > 0 && <p className="k-note">Coming soon: {soon.map((m) => m.name).join(", ")}. Until then, use "Your own data" with a CSV.</p>}
       {where.market === "CSV" ? (
-        <p className="small muted">You'll upload your CSV of candles right after the notebook is created.</p>
+        <p className="k-small k-muted">You'll upload your CSV of candles right after the notebook is created.</p>
       ) : where.instrument ? (
-        <div className="row wrap" style={{ gap: 10 }}>
-          <span className="pill" style={{ fontSize: 15 }}>✓ {where.instrument.symbol} · {market?.name}</span>
-          <button className="link" onClick={() => setWhere({ ...where, instrument: null })}>Pick another</button>
+        <div className="k-row">
+          <Badge tone="ok">{where.instrument.symbol} · {market?.name}</Badge>
+          <button type="button" className="btn quiet sm" onClick={() => setWhere({ ...where, instrument: null })}>Pick another</button>
           {(() => { const to = sipTestLink({ ...where.instrument, market: where.instrument.market ?? where.market });
-            return to ? <Link className="link" to={to}>Test as a SIP instead</Link> : null; })()}
+            return to ? <Link className="btn quiet sm" to={to}>Test as a SIP instead</Link> : null; })()}
         </div>
       ) : market && market.status === "live" ? (
         <InstrumentSearch market={market} compact onPick={(i) => setWhere({ market: where.market, instrument: i })} />
       ) : market ? (
-        <p className="small" style={{ color: "var(--orange-ink)" }}>{market.name} data is offline right now. Pick another market, or write your idea now and choose later.</p>
+        <Notice tone="warn">{market.name} data is offline right now. Pick another market, or write your idea now and choose later.</Notice>
       ) : null}
-      {!where.instrument && where.market !== "CSV" && <p className="hint">Optional: if your idea names a stock or coin, we'll find it for you.</p>}
-    </section>
+      {!where.instrument && where.market !== "CSV" && <p className="k-note">Optional: if your idea names a stock or coin, we'll find it for you.</p>}
+    </Card>
   );
 }
 
@@ -92,12 +88,12 @@ function Starters({ where }: { where?: Where | null }) {
     });
   };
   return (
-    <div className="explore-grid">
+    <div className="k-starters">
       {STARTERS.map((st, i) => (
-        <button key={st.title} className="card explore-card" onClick={() => start(i)}>
-          <span className={`badge ${i < 2 ? "next" : "warn"}`} style={{ alignSelf: "flex-start" }}>{st.level}</span>
-          <b style={{ fontSize: 16 }}>{st.title}</b>
-          <span className="small muted">{st.why}</span>
+        <button key={st.title} type="button" className="k-starter" onClick={() => start(i)}>
+          <Badge tone={i < 2 ? "ok" : "warn"} dot={false}>{st.level}</Badge>
+          <b>{st.title}</b>
+          <span className="k-small k-muted">{st.why}</span>
         </button>
       ))}
     </div>
@@ -157,51 +153,41 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
   useEffect(() => { if (where.market) try { localStorage.setItem(LAST_MARKET, where.market); } catch { /* private mode */ } }, [where.market]);
   const create = useCreateNotebook(where);
   return (
-    <div className="stack page-narrow" style={{ gap: 28 }}>
-      <div className="stack" style={{ gap: 10 }}>
-        <div className="spread" style={{ flexWrap: "wrap", gap: 10, minHeight: 36 }}>
-          <span className="eyebrow">New notebook</span>
-          {!hide.includes("import") && <button className="btn outline sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }}>
-            <Upload size={16} />Import a strategy
-          </button>}
-        </div>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-          What trading idea do you want to test?
-        </h1>
-        <p className="muted" style={{ fontSize: 17 }}>Write it the way you'd explain it to a friend. We'll turn it into exact rules and ask about anything that's missing.</p>
-        {new URLSearchParams(loc.search).get("then") === "group" && !prefill?.symbol && (
-          <p className="edit-hint">Testing on a group: describe the rules here (or name the group, like "on NIFTY 50 stocks"). Next you'll pick the stocks or coins.</p>
-        )}
-        {prefill?.symbol ? (
-          <p className="edit-hint">From Research: testing {prefill.text ? "an idea" : "a strategy"} on {prefill.symbol}. Check the rules below, then build.</p>
-        ) : (
-          <p className="small muted">Not sure what to test? <Link to="/research" className="link">Research a company first</Link>: its AI read suggests ideas you can test in one click.</p>
-        )}
-      </div>
-      <ol className="how" aria-label="How StratLab works">
-        <li><b>1. Describe it</b><span>In plain words. We turn it into rules you can read and edit.</span></li>
-        <li><b>2. Test it honestly</b><span>On years of real prices, after real costs, with four checks for luck.</span></li>
-        <li><b>3. Trade it on paper</b><span>If the verdict says the edge is real, watch it live with fake money.</span></li>
+    <div className="k-page k-narrow">
+      <PageHeader eyebrow="Trade · Build and test" title="What trading idea do you want to test?"
+        lede="Write it the way you'd explain it to a friend. We'll turn it into exact rules and ask about anything that's missing."
+        actions={!hide.includes("import") ? <button type="button" className="btn quiet sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }}>
+          <Upload size={16} />Import a strategy
+        </button> : undefined} />
+      {new URLSearchParams(loc.search).get("then") === "group" && !prefill?.symbol && (
+        <Notice>Testing on a group: describe the rules here (or name the group, like "on NIFTY 50 stocks"). Next you'll pick the stocks or coins.</Notice>
+      )}
+      {prefill?.symbol ? (
+        <Notice>From Research: testing {prefill.text ? "an idea" : "a strategy"} on {prefill.symbol}. Check the rules below, then build.</Notice>
+      ) : (
+        <p className="k-small k-muted">Not sure what to test? <Link to="/research" className="link">Research a company first</Link>: its AI read suggests ideas you can test in one click.</p>
+      )}
+      <ol className="k-routes" aria-label="How StratLab works">
+        <li><b>1. Describe it</b><span className="k-small k-muted">In plain words. We turn it into rules you can read and edit.</span></li>
+        <li><b>2. Test it honestly</b><span className="k-small k-muted">On years of real prices, after real costs, with four checks for luck.</span></li>
+        <li><b>3. Trade it on paper</b><span className="k-small k-muted">If the verdict says the edge is real, watch it live with fake money.</span></li>
       </ol>
       <WhereToTest where={where} setWhere={setWhere} />
-      <section className="card stack" style={{ gap: 14 }} aria-labelledby="idea-h">
-        <h2 id="idea-h" className="h2">2. Describe your idea</h2>
+      <Card label="Describe your idea">
+        <CardHead title="2. Describe your idea" />
         <IdeaComposer key={prefill?.text ?? ""} initial={prefill?.text ?? ""} onBuilt={create} market={where.market} symbol={where.instrument?.symbol} />
-      </section>
+      </Card>
       {importing && (
-        <section ref={importRef} className="card stack" style={{ gap: 14 }} aria-labelledby="import-h">
-          <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-            <h2 id="import-h" className="h2 row" style={{ gap: 10 }}><Upload size={20} />Import a strategy</h2>
-            <button className="btn quiet sm" onClick={() => setImporting(false)}>Close</button>
-          </div>
-          <p className="small muted">A StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker, or a written description. It becomes a notebook you can test like any other.</p>
+        <section ref={importRef} className="k-card" aria-label="Import a strategy">
+          <CardHead title="Import a strategy" actions={<button type="button" className="btn quiet sm" onClick={() => setImporting(false)}>Close</button>}
+            info="A StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker, or a written description. It becomes a notebook you can test like any other." />
           <ImportStrategy onBuilt={create} market={where.market} />
         </section>
       )}
-      <div className="stack">
-        <h2 className="h2">Or start from a classic idea</h2>
+      <section className="k-stack" aria-label="Classic ideas">
+        <h2 className="k-card-title">Or start from a classic idea</h2>
         <Starters where={where} />
-      </div>
+      </section>
       <Explore title="More you can do" hide={hide} />
     </div>
   );
@@ -226,7 +212,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
     // pinned first; within each group keep the server's most-recent-first order unless sorting by name or verdict
     return [...rows].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (sort === "recent" ? 0 : key(a).localeCompare(key(b))));
   }, [notebooks, q, sort]);
-  if (notebooks === null) return <Loading label="Opening your notebooks" />;
+  if (notebooks === null) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" /><Card><Skeleton label="Opening your notebooks" /></Card></div>;
   if (notebooks.length === 0) return <NewNotebook hide={hide} />;
 
   const togglePin = async (id: string, pinned: boolean) => {
@@ -234,47 +220,35 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
   };
 
   return (
-    <div className="stack" style={{ gap: 24 }}>
-      <div className="spread" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 14 }}>
-        <div className="stack" style={{ gap: 8 }}>
-          <span className="eyebrow">Trade · your lab</span>
-          <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em" }}>Your notebooks</h1>
-        </div>
-        <div className="row wrap" style={{ gap: 10 }}>
-          <button className="btn" onClick={() => nav("/new")}>Test a new idea</button>
-        </div>
-      </div>
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title="Your notebooks"
+        lede="Each notebook holds one idea: its rules, every test run on real prices after costs, and the verdict."
+        actions={<button type="button" className="btn" onClick={() => nav("/new")}>Test a new idea</button>} />
       {notebooks.length > 3 && (
-        <div className="row wrap" style={{ gap: 10 }}>
-          <label className="search-box" style={{ flex: "1 1 260px" }}>
+        <div className="k-toolbar">
+          <label className="k-search">
             <Search size={18} />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a notebook: name, stock or question" aria-label="Search notebooks" />
           </label>
-          <div className="seg" role="radiogroup" aria-label="Sort notebooks">
-            {([["recent", "Recent"], ["name", "Name"], ["verdict", "Best verdict"]] as [Sort, string][]).map(([k, label]) => (
-              <button key={k} role="radio" aria-checked={sort === k} aria-pressed={sort === k} onClick={() => setSort(k)}>{label}</button>
-            ))}
-          </div>
+          <Seg label="Sort notebooks" options={[{ value: "recent", label: "Recent" }, { value: "name", label: "Name" }, { value: "verdict", label: "Best verdict" }]} value={sort} onChange={(v) => setSort(v as Sort)} />
         </div>
       )}
-      {shown.length === 0 && <p className="muted">No notebooks match "{q}".</p>}
-      <div className="grid2">
+      {shown.length === 0 && <EmptyState title={`No notebooks match "${q}"`}>Try a stock symbol or a word from the question.</EmptyState>}
+      <div className="k-cards">
         {shown.map((n) => {
           const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : "No instrument yet";
           const count = n.summary?.experiments ?? 0;
           return (
-            <div key={n.id} className="card stack nb-card" style={{ gap: 12, position: "relative" }}>
-              <button className={`pin-btn${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
-                title={n.pinned ? "Unpin" : "Pin to the top"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>
-              <button className="nb-card-body stack" style={{ gap: 12 }} onClick={() => nav(`/n/${n.id}`)}>
-                <span className="eyebrow" style={{ paddingRight: 36 }}>{n.name} · {inst}</span>
-                <span className="serif" style={{ fontSize: 22, lineHeight: 1.25 }}>{n.question || n.name}</span>
-                <div className="spread" style={{ flexWrap: "wrap" }}>
-                  <VerdictBadge v={n.summary?.last_verdict} />
-                  <span className="small muted">{count} experiment{count === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
-                </div>
-              </button>
-            </div>
+            <Card key={n.id} label={n.name}>
+              <CardHead level={3} title={<Link to={`/n/${n.id}`} className="k-title-link">{n.question || n.name}</Link>}
+                actions={<button type="button" className={`k-pin${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
+                  title={n.pinned ? "Unpin" : "Pin to the top"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>} />
+              <span className="k-eyebrow">{n.name} · {inst}</span>
+              <div className="k-spread">
+                <VerdictBadge v={n.summary?.last_verdict} />
+                <span className="k-note">{count} experiment{count === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
+              </div>
+            </Card>
           );
         })}
       </div>

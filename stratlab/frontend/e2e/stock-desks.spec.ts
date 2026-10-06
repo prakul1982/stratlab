@@ -101,7 +101,7 @@ test("stock lending fees: your holdings and watchlist, and one stock day by day"
   await expect(one.getByRole("heading", { name: "RELIANCE: lending fees that traded" })).toBeVisible();
   await expect(one.getByRole("table", { name: "RELIANCE lending in the last 30 days" })).toBeVisible();
   await page.getByLabel("Look up a stock").fill("tcs");
-  await page.getByRole("button", { name: "Show fees" }).click();
+  await page.getByLabel("Look up a stock").press("Enter");
   await expect(page.locator("#slb-one").getByText("No lending traded in TCS in the last 90 days.")).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/stock-lending-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);

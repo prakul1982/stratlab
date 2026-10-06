@@ -89,7 +89,8 @@ const PAGES: [string, string][] = [
   ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
-  ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
+  ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
+  ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
 
@@ -586,7 +587,7 @@ test("alerts: set one on a company page, then edit and delete it on the Alerts p
   const dialog = page.getByRole("dialog", { name: "Alert on RELIANCE" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Price level (₹)").fill("1");
-  await dialog.getByLabel("Note for yourself (optional)").fill(tag);
+  await dialog.getByLabel("Note for yourself").fill(tag);
   if (info.project.name === "phone") await touchable(page);
   await dialog.getByRole("button", { name: "Set alert" }).click();
   await expect(page.getByText(/already above ₹1/).first()).toBeVisible();   // the price is far above: it waits for a cross
@@ -616,7 +617,7 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   await page.getByLabel("Stock").fill("TCS");
   await page.getByLabel("Alert me when").selectOption("move_either");
   await page.getByLabel("Move in a day (%)").fill("4");
-  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  await page.getByLabel("Note for yourself").fill(tag);
   await page.getByLabel(/Repeat/).check();
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "Set alert" }).click();
@@ -641,7 +642,7 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   const dialog = page.getByRole("dialog", { name: "Set an alert" });
   await expect(dialog.getByLabel("Stock")).toHaveValue("IN:RELIANCE");
   await dialog.getByLabel("Alert me when", { exact: true }).selectOption("high52");
-  await dialog.getByLabel("Note for yourself (optional)").fill(tag);
+  await dialog.getByLabel("Note for yourself").fill(tag);
   if (info.project.name === "phone") await touchable(page);
   await dialog.getByRole("button", { name: "Set alert" }).click();
   await expect(page.getByText("Alert set on RELIANCE.")).toBeVisible();
@@ -841,7 +842,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   await sane(page, errors);
 });
 
-test("the account menu: Account, Admin, the theme, the tour and Sign out, with arrow keys and Esc", async ({ page }, info) => {
+test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All features, Help and Sign out, with arrow keys and Esc", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   let side = await menu(page, phone);
@@ -851,7 +852,9 @@ test("the account menu: Account, Admin, the theme, the tour and Sign out, with a
   await btn.click();
   const acct = page.getByRole("menu", { name: "Account" });
   await expect(acct).toBeVisible();
-  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Admin", "All features", /^(Dark|Light) mode$/, "Tour", "Sign out"]);
+  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Settings", "Plan", "Invite friends", "Get the app", "Admin", "All features", "Help", "Sign out"]);
+  for (const [name, href] of [["Settings", "/settings"], ["Plan", "/plans"], ["Invite friends", "/invite"], ["Get the app", "/app"], ["All features", "/features"]])
+    await expect(acct.getByRole("menuitem", { name })).toHaveAttribute("href", href);
   if (phone) {
     for (const el of await acct.getByRole("menuitem").all()) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     const box = (await acct.boundingBox())!;
@@ -873,21 +876,14 @@ test("the account menu: Account, Admin, the theme, the tour and Sign out, with a
   await expect(acct).toHaveCount(0);
   await expect(btn).toBeFocused();
 
-  // the theme flips both ways
-  const theme = () => page.evaluate(() => document.documentElement.dataset.theme ?? "");
+  // the theme moved to Settings (e2e/account.spec.ts flips it both ways)
   await btn.click();
-  const first = (await acct.getByRole("menuitem", { name: /mode$/ }).innerText()).trim();
-  await acct.getByRole("menuitem", { name: /mode$/ }).click();
-  await expect(acct).toHaveCount(0);
-  expect(await theme()).toBe(first === "Dark mode" ? "dark" : "light");
-  await btn.click();
-  await expect(acct.getByRole("menuitem", { name: first === "Dark mode" ? "Light mode" : "Dark mode" })).toBeVisible();
-  await acct.getByRole("menuitem", { name: /mode$/ }).click();
-  expect(await theme()).toBe(first === "Dark mode" ? "light" : "dark");
+  await expect(acct.getByRole("menuitem", { name: /mode$/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
-  // the tour opens from it
+  // Help opens the tour
   await btn.click();
-  await acct.getByRole("menuitem", { name: "Tour" }).click();
+  await acct.getByRole("menuitem", { name: "Help" }).click();
   await expect(page.getByRole("tablist", { name: "Tour steps" })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /^(Close|Skip|Done)/ }).first().click({ timeout: 2000 }).catch(() => undefined);
@@ -975,10 +971,10 @@ for (const [path, ready] of [["/research/IN/RELIANCE", "Reliance"], ["/research/
   });
 }
 
-test("account: your invite link, how many friends joined, and sharing it", async ({ page }, info) => {
+test("invite: your invite link, how many friends joined, and sharing it", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   await watchSharing(page);
-  const errors = await open(page, "/account", "Invite friends");
+  const errors = await open(page, "/invite", "Invite friends");
   await expect(page.getByTestId("friends-joined")).toHaveText(/^6 friends joined · 3 free months earned$/);
   await expect(page.getByTestId("invite-reward-line")).toHaveText("Invite friends, both get a month of Basic. When a friend joins with your link and uses "
     + "StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends "
@@ -1045,9 +1041,12 @@ test("admin: invite rewards waiting for review are approved or rejected", async 
 });
 
 test("account: free Basic from invites shows on the plan", async ({ page }, info) => {
-  const errors = await open(page, "/account", "Invite friends", sessionAs("load-3", "u-load-3", "load3@example.com"));
+  const errors = await open(page, "/account", "Plan and usage", sessionAs("load-3", "u-load-3", "load3@example.com"));
   await expect(page.getByText("Free Basic from invites")).toBeVisible();
   await expect(page.getByText("Basic (free from invites)")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+  await page.goto("/invite");
   await expect(page.getByTestId("friends-joined")).toHaveText("0 friends joined · 1 free month earned");
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
@@ -1142,7 +1141,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   await page.getByLabel("Stock").fill("RELIANCE");
   await page.getByLabel("Alert me when").selectOption("deal");
   await expect(page.getByText("Checked once each evening against that day's exchange disclosures.", { exact: false })).toBeVisible();
-  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  await page.getByLabel("Note for yourself").fill(tag);
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "Set alert" }).click();
   const row = page.locator(".alert-row", { hasText: tag });
@@ -1225,7 +1224,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   await page.getByLabel("Stock").fill("INFY");
   await page.getByLabel("Alert me when").selectOption("surveillance");
   await expect(page.getByText("Checked twice each trading day against the exchange's surveillance lists", { exact: false })).toBeVisible();
-  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  await page.getByLabel("Note for yourself").fill(tag);
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "Set alert" }).click();
   const row = page.locator(".alert-row", { hasText: tag });
@@ -1581,7 +1580,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await charts.getByRole("heading", { name: "McClellan oscillator" }).getByRole("button", { name: "What does this mean?" }).click();
   await expect(page.getByRole("note")).toContainText("39-day");
   // the sector table and the counts behind the charts
-  await expect(page.locator("table.bx-heat tbody tr").first()).toBeVisible();
+  await expect(page.locator(".bx-heat tbody tr").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "The last 20 trading days" })).toBeVisible();
   // a hover shows the day's numbers on the bars
   await charts.locator("svg[aria-label^='New 52-week highs']").hover();
@@ -1598,11 +1597,13 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   if (info.project.name === "phone") await touchable(page);
 
   // a shorter range, then another group (the US), keep the page whole
-  const ranges = page.getByRole("radiogroup", { name: "Time range" });
-  await ranges.getByRole("radio", { name: "3M" }).click();
-  await expect(ranges.getByRole("radio", { name: "3M" })).toHaveAttribute("aria-checked", "true");
+  const ranges = page.getByRole("group", { name: "Time range" });
+  const ticks = () => charts.locator(".ch").first().locator("svg.ch-svg text.ch-tick").allTextContents();
+  const before = (await ticks()).join("|");
+  await ranges.getByRole("button", { name: "3M" }).click();
+  await expect.poll(async () => (await ticks()).join("|"), "the 3M button redraws the charts").not.toBe(before);
+  await expect(ranges.getByRole("button", { name: "3M" })).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel("Group of stocks").selectOption("us_large");
-  await expect(page.getByText("Market view · United States")).toBeVisible();
   await expect(charts.getByRole("heading", { name: /^SPY \(an S&P 500 fund\)/ })).toBeVisible();
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub|nseindia/i);      // "Screener" alone is a menu entry
@@ -1629,7 +1630,7 @@ test("market breadth on the Free plan: today's numbers, and the charts behind Ba
   const errors = await open(page, "/invest/breadth", "Rose / fell", sessionAs("free-token", "u-free", "free@example.com"));
   await expect(page.getByTestId("breadth-locked")).toContainText("on the Basic plan");
   await expect(page.getByTestId("breadth-charts")).toHaveCount(0);
-  await expect(page.getByRole("radiogroup", { name: "Time range" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Time range" })).toHaveCount(0);
   await sane(page, errors);
 });
 
@@ -1660,12 +1661,12 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByTestId("cash-source")).toContainText("provisional FII/DII figures");
   await expect(main.getByTestId("pcr-source")).toBeVisible();
   // stock futures and options from the same file
-  await main.getByRole("button", { name: "Stock F&O", exact: true }).click();
+  await main.getByRole("radio", { name: "Stock F&O", exact: true }).click();
   await expect(main.getByTestId("part-table")).toHaveAttribute("data-segment", "stk");
   await expect(main.getByText("FII stock futures, net")).toBeVisible();
   await expect(main.getByRole("columnheader", { name: "Stock F&O" })).toBeVisible();
-  await main.getByRole("button", { name: "Index F&O", exact: true }).click();
-  await main.getByRole("button", { name: "Volume", exact: true }).click();
+  await main.getByRole("radio", { name: "Index F&O", exact: true }).click();
+  await main.getByRole("radio", { name: "Volume", exact: true }).click();
   await expect(main.getByRole("columnheader", { name: "Futures bought", exact: true })).toBeVisible();
   await expect(main.getByRole("columnheader", { name: "Futures bought / sold" })).toBeVisible();
   await expect(main.getByText("FII/FPI net")).toBeVisible();
@@ -1680,7 +1681,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(facts.getByText(/IV percentile/)).toBeVisible();
   await expect(facts.locator(".strike-chart svg path").first()).toBeVisible();
   await expect(facts).toContainText("IST");
-  await facts.getByRole("button", { name: "Change", exact: true }).click();
+  await facts.getByRole("radio", { name: "Change", exact: true }).click();
   await expect(facts.locator(".strike-chart svg path").first()).toBeVisible();
   await main.getByRole("group", { name: "Index", exact: true }).getByRole("button", { name: "BANKNIFTY" }).click();
   await expect(main.getByTestId("chain-facts")).toContainText("spot 55,000", { timeout: 30_000 });
@@ -1694,7 +1695,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByTestId("chain-history-source")).toContainText("recorded NIFTY's chain since");
   await main.getByRole("group", { name: "Participant" }).getByRole("button", { name: "Client" }).click();
   await expect(main.getByText("Client: index futures, net (contracts)")).toBeVisible();
-  await main.getByRole("group", { name: "Long share of" }).getByRole("button", { name: "Stock futures" }).click();
+  await main.getByRole("radiogroup", { name: "Long share of" }).getByRole("radio", { name: "Stock futures" }).click();
   await expect(main.getByText("Client: stock futures, long share (% of long + short)")).toBeVisible();
   // an index with nothing recorded yet says so instead of an empty chart
   await main.getByRole("group", { name: "Index for the chain history" }).getByRole("button", { name: "MIDCPNIFTY" }).click();
@@ -1719,15 +1720,15 @@ test("positioning: a missing cash number says why instead of a dash", async ({ p
   await expect(page.getByTestId("cash-status")).toContainText("No cash numbers stored yet. The last try");
 });
 
-test("positioning: a card on the Trade home and the Options page, its own page with no tabs back to Options", async ({ page }, info) => {
+test("positioning: a card on the Trade home, a link from the Options page, its own page with no tabs back to Options", async ({ page }, info) => {
   await sane(page, await open(page, "/trade", "Straddles, strangles"));
   const card = page.getByTestId("positioning-card");
   await expect(card.getByText("FII index futures, net")).toBeVisible({ timeout: 30_000 });
   await expect(card.getByText("NIFTY PCR (open interest)")).toBeVisible();
   await expect(card.getByTestId("pos-card-sides")).toContainText(/% long · [\d.]+% short/);
   await page.goto("/options");
-  await expect(page.getByTestId("positioning-card").getByText("FII/FPI cash, net")).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId("positioning-card").getByRole("link", { name: /Participants, flows and PCR/ }).click();
+  await expect(page.getByTestId("positioning-card"), "the card shows in one place only").toHaveCount(0);       // the Options page links to Positioning instead
+  await page.getByRole("link", { name: "open Positioning" }).click();
   await expect(page).toHaveURL(/\/trade\/positioning$/);
   await expect(page.getByRole("heading", { name: "Positioning", level: 1 })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Options" })).toHaveCount(0);       // its own menu entry, no tabs

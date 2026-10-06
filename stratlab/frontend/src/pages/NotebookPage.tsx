@@ -7,14 +7,20 @@ import { riskForCurrency, usesPro } from "../lib/rules";
 import type { Experiment, Instrument, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
 import { track, trackBacktest } from "../lib/analytics";
+import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
 import { GapsCard, type GapInfo } from "../components/Gaps";
 import { Copy, Download, Pin, Pulse, Sparkle, Trash } from "../components/Icons";
 import { MoreMenu } from "../components/MoreMenu";
 import { RulesCard } from "../components/Rules";
-import { AutoGrow, Info, Loading, Modal, VerdictBadge } from "../components/ui";
+import { AutoGrow, Info, Modal, VerdictBadge } from "../components/ui";
+import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, PageHeader, Skeleton, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
 import { IdeaComposer } from "../components/IdeaComposer";
+import "./trade/trade.css";
+
+/* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
+ * (components/kit); the two-column layout with the lab notes beside it stays. */
 
 const PERIODS: Record<Tf, number[]> = {
   "1d": [182, 365, 730, 1095, 1825, 3650], "1h": [30, 90, 180, 365, 730], "15m": [30, 60, 90, 180, 365], "5m": [15, 30, 60, 120],
@@ -67,21 +73,6 @@ function marketName(inst: Instrument | null, markets: { id: string; name: string
   return markets.find((m) => m.id === inst.market)?.name ?? (inst.market === "IN" ? "India" : inst.market);
 }
 
-function ExperimentRow({ e, to }: { e: Experiment; to: string }) {
-  const unseen = e.verdict.checks.find((c) => c.id === "unseen")?.data;
-  return (
-    <Link to={to} className="exp-row">
-      <span className="mono" style={{ fontSize: 15, fontWeight: 500 }}>v{e.v}</span>
-      <span className="stack" style={{ gap: 2, minWidth: 0 }}>
-        <b style={{ fontSize: 16 }}>{e.label}</b>
-        <span className="small muted">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)} · {e.stats.n} trade{e.stats.n === 1 ? "" : "s"}</span>
-      </span>
-      <span className="nums">{pct(e.stats.ret)} overall{unseen ? <><br />{pct(unseen.unseen_ret)} unseen</> : null}</span>
-      <VerdictBadge v={e.verdict.verdict} />
-    </Link>
-  );
-}
-
 export function NotebookPage() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -90,11 +81,12 @@ export function NotebookPage() {
   const canExport = !!me?.plan_info.features?.export;
   const { nb, patch, saving, setNb, flush } = useNotebook(id);
   const [gaps, setGaps] = useState<GapInfo | null>((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null);
-  const [days, setDays] = useState(365);
+  const [days, setDays] = useState("365");
   const [label, setLabel] = useState("");
   const [running, setRunning] = useState(false);
   const [rewrite, setRewrite] = useState(false);
   const [groupStart, setGroupStart] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [fast, setFast] = useState({ ticks: false, maxSpreadPct: 0, minPrice: 0 });
   const notesRef = useRef<HTMLTextAreaElement>(null);
 
@@ -119,7 +111,7 @@ export function NotebookPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!nb) return <Loading label="Opening notebook" />;
+  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Notebook" /><Card><Skeleton label="Opening notebook" /></Card></div>;
   const s = nb.strategy;
   const inst = nb.instrument && "symbol" in nb.instrument ? nb.instrument : null;
   const group = nb.group && nb.group.members?.length ? nb.group : null;
@@ -127,7 +119,9 @@ export function NotebookPage() {
   const currency = group ? (market?.currency ?? "") : inst?.currency || (inst?.market === "IN" || !inst ? "INR" : "");
   const maxDays = market?.max_days?.[s.tf] ?? 3650;
   const periods = PERIODS[s.tf].filter((d) => d <= maxDays);
-  const period = periods.includes(days) ? days : periods[Math.min(1, periods.length - 1)] ?? 365;
+  const picked = spanDays(days) ?? Number(days);
+  const period = periods.includes(picked) || spanDays(days) != null ? picked : periods[Math.min(1, periods.length - 1)] ?? 365;
+  const periodValue = periods.includes(period) ? String(period) : days;
   const isUpload = inst?.market === "CSV";
   const experiments = [...(nb.experiments || [])].reverse();
   const nextV = ((nb.experiments ?? []).slice(-1)[0]?.v ?? 0) + 1;
@@ -163,7 +157,7 @@ export function NotebookPage() {
   runRef.current = run;
 
   const del = async () => {
-    if (!confirm(`Delete the notebook "${nb.name}" and all its experiments? This can't be undone.`)) return;
+    setRemoving(false);
     try { await api(`/notebooks/${nb.id}`, { method: "DELETE" }); await refreshNotebooks(); nav("/notebooks"); } catch (e) { fail(e); }
   };
 
@@ -222,7 +216,7 @@ export function NotebookPage() {
 
   const suggestions = last?.verdict.suggestions ?? [];
   const apply = (action: string) => {
-    if (action === "longer_period") setDays(periods[periods.length - 1]);
+    if (action === "longer_period") setDays(String(periods[periods.length - 1]));
     else if (action === "other_instrument") nav(`/n/${nb.id}/market`);
     else if (action === "paper_trade") paperTrade();
     else if (action === "note") notesRef.current?.focus();
@@ -240,24 +234,43 @@ export function NotebookPage() {
   ];
   const nextStep = steps.findIndex((x) => !x.done);
 
+  const cols: Column<Experiment>[] = [
+    { key: "v", header: "Run", rowHeader: true, cell: (e) => <Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>v{e.v}</b></Link> },
+    { key: "what", header: "What changed", wrap: true, cell: (e) => <><b>{e.label}</b><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)} · {e.stats.n} trade{e.stats.n === 1 ? "" : "s"}</span></> },
+    { key: "ret", header: "Overall", numeric: true, cell: (e) => pct(e.stats.ret) },
+    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? pct(u.unseen_ret) : "–"; } },
+    { key: "verdict", header: "Verdict", cell: (e) => <VerdictBadge v={e.verdict.verdict} /> },
+  ];
+
   return (
     <div className="nb-grid">
-      <div className="stack" style={{ gap: 32, minWidth: 0 }}>
-        <div className="stack" style={{ gap: 14 }}>
-          <div className="spread" style={{ flexWrap: "wrap" }}>
-            <span className="eyebrow row" style={{ gap: 0, minWidth: 0, flex: 1 }}>Notebook ·&nbsp;
-              <input className="nb-name" aria-label="Notebook name (click to rename)" title="Click to rename" value={nb.name} maxLength={80}
-                size={Math.max(8, Math.min(nb.name.length + 1, 48))}
-                onChange={(e) => patch({ name: e.target.value })} onBlur={(e) => { if (!e.target.value.trim()) patch({ name: "Untitled notebook" }, true); }}
-                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-              <Info>{HELP.notebook}</Info></span>
-            <span className="small muted" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>
-          </div>
-          <AutoGrow className="question" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
-            placeholder="The question you want answered, e.g. Does buying NIFTY on RSI dips beat just holding it?" onChange={(e) => patch({ question: e.target.value })} />
-          <div className="row" style={{ gap: 10 }}>
+      <div className="k-page">
+        <PageHeader eyebrow="Trade · Build and test" title={nb.name}
+          lede={nb.question || "Write the question this notebook should answer."}
+          actions={<span className="k-note" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>} />
+
+        <Card label="About this notebook">
+          <CardHead title="About this notebook" info={HELP.notebook} infoLabel="About notebooks" actions={<>
+            <button type="button" className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
+            <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade</button>
+            <button type="button" className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
+            <MoreMenu align="right" items={[
+              { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
+              { label: `Export${canExport ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
+              { label: "Delete notebook", icon: <Trash size={16} />, run: () => setRemoving(true), danger: true },
+            ]} />
+          </>} />
+          <FormGrid label="Notebook name and question">
+            <Field label="Notebook name" maxLength={80} value={nb.name} onChange={(e) => patch({ name: e.target.value })}
+              onBlur={(e) => { if (!e.target.value.trim()) patch({ name: "Untitled notebook" }, true); }} />
+            <Field label="The question this notebook tests" wide>{(fid) => (
+              <AutoGrow id={fid} className="k-textarea" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
+                placeholder="The question you want answered, e.g. Does buying NIFTY on RSI dips beat just holding it?" onChange={(e) => patch({ question: e.target.value })} />
+            )}</Field>
+          </FormGrid>
+          <div className="k-row">
             <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`} aria-label={group ? `Testing on the group ${group.name}. Change it` : inst ? `Testing on ${inst.symbol}. Change market or instrument` : "Pick what to test it on"}>
-              <span className="eyebrow" style={{ fontSize: 11 }}>{inst || group ? "Testing on" : "Not chosen yet"}</span>
+              <span className="k-eyebrow">{inst || group ? "Testing on" : "Not chosen yet"}</span>
               <span className="market-btn-main">
                 {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span></>
                   : inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
@@ -265,20 +278,9 @@ export function NotebookPage() {
               </span>
               <span className="market-btn-cta">{inst || group ? "Change" : "Choose"} →</span>
             </Link>
-            <Info>{HELP.market}</Info>
             {sipTestLink(inst) && <Link className="btn quiet sm" to={sipTestLink(inst)!}>Test as a SIP</Link>}
           </div>
-          <div className="toolbar" role="toolbar" aria-label="Notebook actions">
-            <button className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
-            <button className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade</button>
-            <button className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
-            <MoreMenu items={[
-              { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
-              { label: `Export${canExport ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
-              { label: "Delete notebook", icon: <Trash size={16} />, run: del, danger: true },
-            ]} />
-          </div>
-        </div>
+        </Card>
 
         {nextStep !== -1 && (
           <ol className="steps" aria-label="Getting started">
@@ -302,84 +304,73 @@ export function NotebookPage() {
 
         <RulesCard s={s} currency={currency} onChange={setStrategy} />
 
-        <section className="stack" aria-labelledby="exp-h" style={{ gap: 16 }}>
-          <div className="spread" style={{ flexWrap: "wrap" }}>
-            <h2 id="exp-h" className="h2 row" style={{ gap: 0 }}>Experiments<Info>{HELP.experiments}</Info></h2>
-            {nb.experiments.length >= 2 && <Link className="link" to={`/n/${nb.id}/compare`}>Compare experiments →</Link>}
-          </div>
-          <div className="card stack" style={{ gap: 18 }}>
-            {!isUpload && (
-              <div className="stack" style={{ gap: 8 }}>
-                <span className="label row" style={{ gap: 0 }}>Test period<Info>{HELP.period}</Info></span>
-                <div className="seg" role="group" aria-label="Test period">
-                  {periods.map((d) => <button key={d} aria-pressed={d === period} onClick={() => setDays(d)}>{periodName(d)}</button>)}
-                </div>
-              </div>
-            )}
-            <div className="stack" style={{ gap: 8 }}>
-              <label className="label" htmlFor="exp-label">What's different this time? <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
-              <div className="row wrap" style={{ gap: 10 }}>
-                <input id="exp-label" className="input" style={{ flex: "1 1 240px" }} value={label} maxLength={120}
-                  placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
-                <button className="btn blue" disabled={running} onClick={run}>{running ? "Running 4 honesty checks…" : `Run experiment v${nextV}`}</button>
-                <span className="small muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>
-                <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
-              </div>
+        <Card id="exp-h" label="Experiments">
+          <CardHead title="Experiments" info={HELP.experiments} infoLabel="About experiments"
+            actions={nb.experiments.length >= 2 ? <Link className="link" to={`/n/${nb.id}/compare`}>Compare experiments →</Link> : undefined} />
+          {!isUpload && (
+            <div className="k-field">
+              <div className="k-label-row"><span className="k-lbl">Test period</span><Info label="About the test period">{HELP.period} Add your own with + Custom: any whole number of days, weeks, months or years up to the {maxDays.toLocaleString("en-IN")} days stored for {TF_NAME[s.tf].toLowerCase()} candles here.</Info></div>
+              <ChipBar label="Test period" value={periodValue} onChange={setDays}
+                options={periods.map((d) => ({ value: String(d), label: periodName(d) }))}
+                custom={{ storageKey: `stratlab.chips.period.${me?.id ?? "anon"}`, units: SPAN_UNITS, defaultUnit: "months", validate: spanCheck(maxDays, 5) }} />
             </div>
-            <p className="hint">
-              {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month. ` : ""}
-              Takes a few seconds.
-            </p>
-          </div>
+          )}
+          <FormGrid label="Run an experiment" onSubmit={(e) => { e.preventDefault(); void run(); }}>
+            <Field label="What's different this time?" optional wide maxLength={120} value={label} placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
+            <FormActions>
+              <button type="submit" className="btn blue" disabled={running}>{running ? "Running 4 honesty checks…" : `Run experiment v${nextV}`}</button>
+              <span className="k-small k-muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>
+              <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
+            </FormActions>
+          </FormGrid>
+          <p className="k-note">
+            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month. ` : ""}
+            Takes a few seconds.
+          </p>
           {experiments.length === 0
-            ? <p className="muted">No experiments yet. Your first run shows whether the idea holds up.</p>
-            : <div className="stack" style={{ gap: 10 }}>{experiments.map((e) => <ExperimentRow key={e.v} e={e} to={`/n/${nb.id}/e/${e.v}`} />)}</div>}
-        </section>
+            ? <EmptyState title="No experiments yet">Your first run shows whether the idea holds up.</EmptyState>
+            : <DataTable label="Experiments" columns={cols} rows={experiments} rowKey={(e) => String(e.v)} />}
+        </Card>
       </div>
 
-      <aside className="stack" style={{ gap: 18 }}>
-        <section className="card stack" style={{ gap: 8 }}>
-          <h2 className="h3 row" style={{ gap: 0 }}>Lab notes<Info>{HELP.labNotes}</Info></h2>
+      <aside className="k-page">
+        <Card label="Lab notes">
+          <CardHead title="Lab notes" level={3} info={HELP.labNotes} infoLabel="About lab notes" />
           <label className="sr-only" htmlFor="notes">Lab notes</label>
           <textarea id="notes" ref={notesRef} className="lab-note" value={nb.notes ?? ""} maxLength={4000}
             placeholder="What did you notice? What do you want to try next?" onChange={(e) => patch({ notes: e.target.value })} />
-        </section>
+        </Card>
         {suggestions.length > 0 && (
-          <section className="card stack" style={{ gap: 10 }}>
-            <h2 className="h3 row" style={{ gap: 0 }}>Worth testing next<Info>{HELP.nextSteps}</Info></h2>
+          <Card label="Worth testing next">
+            <CardHead title="Worth testing next" level={3} info={HELP.nextSteps} infoLabel="About next steps" />
             {suggestions.map((sg) => (
-              <button key={sg.action} className="btn quiet" style={{ justifyContent: "flex-start", whiteSpace: "normal", textAlign: "left", padding: "10px 14px" }}
-                onClick={() => apply(sg.action)}>{sg.text}</button>
+              <button type="button" key={sg.action} className="btn quiet k-choice-btn" onClick={() => apply(sg.action)}>{sg.text}</button>
             ))}
-          </section>
+          </Card>
         )}
       </aside>
 
       {groupStart && group && (
         <Modal title="Paper trade this group" onClose={() => setGroupStart(false)}>
-          <div className="stack" style={{ gap: 16 }}>
-            <p className="muted">{group.name}: {group.members.length} instruments, up to {group.maxOpen} open at once, on {TF_NAME[s.tf]} candles, with fake money.</p>
+          <div className="k-stack">
+            <p className="k-small k-muted">{group.name}: {group.members.length} instruments, up to {group.maxOpen} open at once, on {TF_NAME[s.tf]} candles, with fake money.</p>
             {group.market === "IN" && (
-              <label className="row" style={{ gap: 10, alignItems: "flex-start" }}>
-                <input type="checkbox" style={{ width: 20, height: 20, marginTop: 2 }} checked={fast.ticks} onChange={(e) => setFast({ ...fast, ticks: e.target.checked })} />
-                <span className="stack" style={{ gap: 2 }}><b>Faster entries</b>
-                  <span className="small muted">Check the entry rules on the live price every 15 seconds, and enter as soon as they hold, instead of waiting for the candle to close. Exits still wait for the close. A backtest can't see inside a candle, so paper results will differ from it.</span></span>
-              </label>
+              <div className="k-stack k-tight">
+                <CheckField label={<b>Faster entries</b>} checked={fast.ticks} onChange={(on) => setFast({ ...fast, ticks: on })} />
+                <span className="k-note">Check the entry rules on the live price every 15 seconds, and enter as soon as they hold, instead of waiting for the candle to close. Exits still wait for the close. A backtest can't see inside a candle, so paper results will differ from it.</span>
+              </div>
             )}
-            <div className="row wrap" style={{ gap: 16 }}>
+            <FormGrid label="Group limits">
               {group.market === "IN" && (
-                <label className="field" style={{ width: 200 }}>Skip if the spread is over (% of price)
-                  <input className="input" type="number" min={0} max={5} step={0.05} value={fast.maxSpreadPct || ""} placeholder="Off"
-                    onChange={(e) => setFast({ ...fast, maxSpreadPct: Math.max(0, Math.min(5, +e.target.value || 0)) })} /></label>
+                <Field label="Skip if the spread is over" unit="% of price" info="The spread is the gap between the best bid and ask. With a spread limit set, an entry is skipped when the order book is too thin or unknown; the session counts how many were skipped." type="number" min={0} max={5} step={0.05}
+                  value={fast.maxSpreadPct || ""} placeholder="Off" onChange={(e) => setFast({ ...fast, maxSpreadPct: Math.max(0, Math.min(5, +e.target.value || 0)) })} />
               )}
-              <label className="field" style={{ width: 200 }}>Skip anything cheaper than
-                <input className="input" type="number" min={0} step={1} value={fast.minPrice || ""} placeholder="Off"
-                  onChange={(e) => setFast({ ...fast, minPrice: Math.max(0, +e.target.value || 0) })} /></label>
-            </div>
-            {group.market === "IN" && <p className="small muted">The spread is the gap between the best bid and ask. 0.1% suits large, liquid stocks. With a spread limit set, an entry is skipped when the order book is too thin or unknown; the session counts how many were skipped.</p>}
-            <div className="row" style={{ gap: 10, justifyContent: "flex-end" }}>
-              <button className="btn quiet" onClick={() => setGroupStart(false)}>Cancel</button>
-              <button className="btn blue" onClick={() => { setGroupStart(false); startGroup(); }}>Start paper trading</button>
+              <Field label="Skip anything cheaper than" type="number" min={0} step={1} value={fast.minPrice || ""} placeholder="Off"
+                onChange={(e) => setFast({ ...fast, minPrice: Math.max(0, +e.target.value || 0) })} />
+            </FormGrid>
+            <div className="k-row">
+              <button type="button" className="btn blue" onClick={() => { setGroupStart(false); startGroup(); }}>Start paper trading</button>
+              <button type="button" className="btn quiet" onClick={() => setGroupStart(false)}>Cancel</button>
             </div>
           </div>
         </Modal>
@@ -387,13 +378,19 @@ export function NotebookPage() {
 
       {rewrite && (
         <Modal title="Describe the idea again" onClose={() => setRewrite(false)}>
-          <p className="muted" style={{ marginBottom: 14 }}>This replaces the rules in this notebook. Your experiments stay as they are.</p>
+          <p className="k-small k-muted">This replaces the rules in this notebook. Your experiments stay as they are.</p>
           <IdeaComposer busyLabel="Replace the rules" autoFocus onBuilt={async (b) => {
             patch({ strategy: { ...b.strategy, name: nb.name }, ...(b.instrument && !inst ? { instrument: b.instrument, instrumentId: b.instrument.id } : {}) }, true);
             setGaps(b.gaps);
             setRewrite(false);
           }} />
         </Modal>
+      )}
+
+      {removing && (
+        <ConfirmDialog title={`Delete the notebook "${nb.name}"?`} confirmLabel="Delete notebook" onConfirm={del} onClose={() => setRemoving(false)}>
+          This removes the notebook and all its experiments. It can't be undone.
+        </ConfirmDialog>
       )}
     </div>
   );

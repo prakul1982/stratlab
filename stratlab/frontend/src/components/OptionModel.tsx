@@ -8,6 +8,9 @@ import { curve, legGreeks, NO_MOVE, scenario, type GreekModel, type ModelLeg, ty
 import type { HeldLeg } from "../lib/options";
 import type { OptChain, OptRoll } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "./Charts";
+import { DataTable, Field, FormActions, FormGrid, Select, Stat, StatRow, type Column } from "./kit";
+import "../pages/trade/trade.css";
+import "../pages/trade/options.css";
 
 /* The pricing model's view of an options position, shared by the builder and the session page:
  *  - each leg's IV and Greeks, and the net Greeks of the whole position (every plan);
@@ -27,6 +30,7 @@ const pts = (x: number) => Math.round(x).toLocaleString("en-IN");
 const dayWord = (d: number) => `${+d.toFixed(2)} day${Math.abs(d - 1) < 1e-9 ? "" : "s"}`;
 const pctIv = (v: number) => `${(v * 100).toFixed(1)}%`;
 const shortDate = (e: string) => new Date(e + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const tone = (v: number) => (v === 0 ? undefined : v > 0 ? ("up" as const) : ("down" as const));
 
 /** A value that follows `value` at most every `ms` and always settles on the last one: the sliders re-price while
  * they're dragged without re-pricing on every pixel. */
@@ -44,7 +48,7 @@ export function useSmooth<T>(value: T, ms = 50): T {
 export function ModelInputs({ m, extra }: { m: GreekModel; extra?: string }) {
   const time = new Date(m.as_of).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
   return (
-    <p className="small muted model-inputs" data-testid="model-inputs">
+    <p className="k-note model-inputs" data-testid="model-inputs">
       Model estimates, not prices: Black-76 on the forward {m.forward.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
       {m.forward_from === "parity" ? ` (from put-call parity at ${pts(m.atm ?? m.spot)})` : " (the spot: the at-the-money pair had no prices)"}, IV from each
       option's bid-ask middle{m.atm_iv ? ` (at the money ${pctIv(m.atm_iv)})` : ""}, {dayWord(m.days)} to the {shortDate(m.expiry)} expiry, rate {+(m.rate * 100).toFixed(2)}%,
@@ -60,45 +64,37 @@ function Slider({ id, label, value, min, max, step, show, onChange }: {
 }) {
   return (
     <label className="whatif-slider">
-      <span className="spread"><span className="small">{label}</span><b className="mono small" data-testid={`${id}-value`}>{show}</b></span>
+      <span className="k-spread"><span className="k-small">{label}</span><b className="k-small" data-testid={`${id}-value`}>{show}</b></span>
       <input type="range" data-testid={id} aria-label={label} min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)} />
     </label>
   );
 }
 
+type GRow = { row: ModelRow | null; label: string };
+
 /** Each leg's IV and Greeks per option, and the position's net (× quantity, sold legs negative). */
 function GreeksTable({ rows, spot, w, r, net }: { rows: ModelRow[]; spot: number; w: WhatIf; r: number; net: NetGreeks | null }) {
+  const data: GRow[] = [...rows.map((row) => ({ row, label: row.label })), ...(net ? [{ row: null, label: "Net" }] : [])];
+  const leg = (x: GRow) => {
+    const row = x.row;
+    if (!row) return null;
+    const g = row.m ? legGreeks(row.m, spot, w, r) : null;
+    const s = row.g;
+    const v = g ?? (s?.iv ? { iv: s.iv, delta: s.delta!, gamma: s.gamma!, theta: s.theta!, vega: s.vega! } : null);
+    return { v, atm: s?.iv_from === "atm" };
+  };
+  const cols: Column<GRow>[] = [
+    { key: "leg", header: "Leg", rowHeader: true, cell: (x) => (x.row ? x.label : <><b>Net</b> <span className="k-muted">(× quantity)</span></>) },
+    { key: "iv", header: "IV", numeric: true, cell: (x) => { const l = leg(x); return l ? (l.v ? `${l.v.iv > 0 ? pctIv(l.v.iv) : "expired"}${l.atm ? "*" : ""}` : "No price, so no IV") : ""; } },
+    { key: "delta", header: "Delta", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.v ? signed(l.v.delta, 3) : "") : <b data-testid="net-delta">{net ? signed(net.delta, 1) : ""}</b>; } },
+    { key: "gamma", header: "Gamma", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.v ? sig(l.v.gamma) : "") : <b data-testid="net-gamma">{net ? sig(net.gamma) : ""}</b>; } },
+    { key: "theta", header: "Theta / day", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.v ? inr(l.v.theta, 2) : "") : <b data-testid="net-theta">{net ? inr(net.theta) : ""}</b>; } },
+    { key: "vega", header: "Vega / vol pt", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.v ? inr(l.v.vega, 2) : "") : <b data-testid="net-vega">{net ? inr(net.vega) : ""}</b>; } },
+  ];
   return (
-    <div className="table-wrap" style={{ margin: 0 }}>
-      <table className="greeks-t small" data-testid="greeks-table">
-        <thead><tr><th>Leg</th><th>IV</th><th>Delta</th><th>Gamma</th><th>Theta / day</th><th>Vega / vol pt</th></tr></thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const g = row.m ? legGreeks(row.m, spot, w, r) : null;
-            const s = row.g;
-            const v = g ?? (s?.iv ? { iv: s.iv, delta: s.delta!, gamma: s.gamma!, theta: s.theta!, vega: s.vega! } : null);
-            return (
-              <tr key={i}>
-                <td>{row.label}</td>
-                {v ? <>
-                  <td className="mono">{v.iv > 0 ? pctIv(v.iv) : "expired"}{s?.iv_from === "atm" ? "*" : ""}</td>
-                  <td className="mono">{signed(v.delta, 3)}</td><td className="mono">{sig(v.gamma)}</td>
-                  <td className="mono">{inr(v.theta, 2)}</td><td className="mono">{inr(v.vega, 2)}</td>
-                </> : <td colSpan={5} className="muted">No price, so no IV</td>}
-              </tr>
-            );
-          })}
-          {net && (
-            <tr className="greeks-net" data-testid="greeks-net">
-              <td><b>Net</b> <span className="muted">(× quantity)</span></td><td />
-              <td className="mono" data-testid="net-delta"><b>{signed(net.delta, 1)}</b></td>
-              <td className="mono" data-testid="net-gamma"><b>{sig(net.gamma)}</b></td>
-              <td className="mono" data-testid="net-theta"><b>{inr(net.theta)}</b></td>
-              <td className="mono" data-testid="net-vega"><b>{inr(net.vega)}</b></td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+    <div data-testid="greeks-table">
+      <DataTable label="Greeks by leg" columns={cols} rows={data} rowKey={(x) => x.label + (x.row ? "" : "net")}
+        rowAttrs={(x): Record<string, string> => (x.row ? {} : { "data-testid": "greeks-net", "data-net": "1" })} />
     </div>
   );
 }
@@ -137,11 +133,11 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
   const missing = rows.filter((x) => !x.m).map((x) => x.label);
 
   return (
-    <div className="stack" style={{ gap: 12 }} data-testid={testId}>
+    <div className="k-stack" data-testid={testId}>
       {whatif ? (
-        <div className="whatif card-inset stack" style={{ gap: 10 }} data-testid="whatif">
-          <div className="spread"><span className="eyebrow">What if</span>
-            <button className="btn quiet sm" data-testid="whatif-reset" disabled={raw === NO_MOVE} onClick={() => setRaw(NO_MOVE)}>Reset</button></div>
+        <div className="whatif k-whatif" data-testid="whatif">
+          <div className="k-spread"><span className="k-eyebrow">What if</span>
+            <button type="button" className="btn quiet sm" data-testid="whatif-reset" disabled={raw === NO_MOVE} onClick={() => setRaw(NO_MOVE)}>Reset</button></div>
           <div className="whatif-grid">
             <Slider id="whatif-spot" label={`${name} moves`} value={raw.spotPct} min={-10} max={10} step={0.25}
               show={`${raw.spotPct > 0 ? "+" : raw.spotPct < 0 ? MINUS : ""}${Math.abs(raw.spotPct)}% · ${pts(model.spot * (1 + raw.spotPct / 100))}`}
@@ -153,25 +149,27 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
           </div>
         </div>
       ) : (
-        <p className="small muted" data-testid="whatif-locked">What-if sliders (move the underlying, shift IV, pass days) and the roll preview are on the {plan} plan.{" "}
+        <p className="k-small k-muted" data-testid="whatif-locked">What-if sliders (move the underlying, shift IV, pass days) and the roll preview are on the {plan} plan.{" "}
           <Link to="/plans">See plans</Link></p>
       )}
       {sc && complete && (
-        <div className="opt-stats" data-testid="whatif-pnl">
-          <div><span className="eyebrow">Model P&amp;L{moved ? ", what-if" : " now"}</span><b className={`mono ${sc.pnl + base >= 0 ? "pos" : "neg"}`}>{inr(sc.pnl + base)}</b>
-            <span className="small muted">{charges != null ? `${inr(sc.pnl + base - charges)} after ${chargesLabel}` : "before charges"}</span></div>
-          <div><span className="eyebrow">Net delta</span><b className="mono">{signed(sc.delta, 1)}</b><span className="small muted">₹ per point</span></div>
-          <div><span className="eyebrow">Net theta</span><b className="mono">{inr(sc.theta)}</b><span className="small muted">a day</span></div>
-          <div><span className="eyebrow">Net vega</span><b className="mono">{inr(sc.vega)}</b><span className="small muted">per vol point</span></div>
+        <div data-testid="whatif-pnl">
+          <StatRow label="Model figures">
+            <Stat label={`Model P&L${moved ? ", what-if" : " now"}`} value={inr(sc.pnl + base)} tone={sc.pnl + base >= 0 ? "up" : "down"}
+              note={charges != null ? `${inr(sc.pnl + base - charges)} after ${chargesLabel}` : "before charges"} />
+            <Stat label="Net delta" value={signed(sc.delta, 1)} note="₹ per point" />
+            <Stat label="Net theta" value={inr(sc.theta)} note="a day" />
+            <Stat label="Net vega" value={inr(sc.vega)} note="per vol point" />
+          </StatRow>
         </div>
       )}
       <PayoffChart ariaLabel={ariaLabel} height={240} xs={xs} testId="payoff-chart" curves={curves} markers={allMarkers}
         format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => pts(x)} />
-      <div className="stack" style={{ gap: 6 }}>
-        <span className="eyebrow">Greeks, model estimate{settings ? ` (${settings})` : ""}</span>
+      <div className="k-stack k-tight">
+        <span className="k-eyebrow">Greeks, model estimate{settings ? ` (${settings})` : ""}</span>
         <GreeksTable rows={rows} spot={model.spot} w={{ ...w, days }} r={r} net={complete && sc ? sc : null} />
-        {!complete && <p className="small muted">{missing.join(", ")}: no price right now, so the model can't value {missing.length === 1 ? "it" : "them"} and the net Greeks and the today curve wait for one.</p>}
-        {rows.some((x) => x.g?.iv_from === "atm") && <p className="small muted">* IV of the at-the-money strike: this option's own price gives none.</p>}
+        {!complete && <p className="k-note">{missing.join(", ")}: no price right now, so the model can't value {missing.length === 1 ? "it" : "them"} and the net Greeks and the today curve wait for one.</p>}
+        {rows.some((x) => x.g?.iv_from === "atm") && <p className="k-note">* IV of the at-the-money strike: this option's own price gives none.</p>}
         <ModelInputs m={model} extra={moved ? `What-if: ${settings}; IV floored at 0.5%.` : undefined} />
       </div>
     </div>
@@ -211,7 +209,7 @@ export function RollPreview({ legs, exchange, underlying, expiry, strikes, expir
     setRes(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legKey, choices, expiry]);
-  if (!leg || !choices || !to) return <p className="small muted">Loading the strikes…</p>;
+  if (!leg || !choices || !to) return <p className="k-small k-muted">Loading the strikes…</p>;
   const run = async () => {
     setBusy(true);
     try {
@@ -222,44 +220,43 @@ export function RollPreview({ legs, exchange, underlying, expiry, strikes, expir
   };
   const same = to.strike === leg.strike && to.expiry === expiry;
   return (
-    <div className="stack" style={{ gap: 12 }} data-testid="roll-preview">
-      <div className="opt-grid">
-        <label className="field" style={{ minWidth: 170 }}>Leg<select aria-label="Leg to roll" value={i} onChange={(e) => setI(+e.target.value)}>
-          {legs.map((l, j) => <option key={j} value={j}>{l.label}</option>)}</select></label>
-        <label className="field" style={{ width: 130 }}>New strike<select aria-label="New strike" value={to.strike} onChange={(e) => { setTo({ ...to, strike: +e.target.value }); setRes(null); }}>
-          {choices.strikes.map((k) => <option key={k} value={k}>{k.toLocaleString("en-IN")}</option>)}</select></label>
-        <label className="field" style={{ width: 150 }}>Expiry<select aria-label="New expiry" value={to.expiry} onChange={(e) => { setTo({ ...to, expiry: e.target.value }); setRes(null); }}>
-          {choices.expiries.map((x) => <option key={x} value={x}>{shortDate(x)}{x === expiry ? " (same)" : ""}</option>)}</select></label>
-        <button className="btn quiet" disabled={busy || same} onClick={run}>{busy ? "Pricing…" : "Preview the roll"}</button>
-      </div>
-      {same && <p className="small muted">Pick another strike or expiry for this leg.</p>}
+    <div className="k-stack" data-testid="roll-preview">
+      <FormGrid label="Roll a leg" onSubmit={(e) => { e.preventDefault(); void run(); }}>
+        <Field label="Leg to roll">{(id) => <Select id={id} value={i} onChange={(v) => setI(+v)} options={legs.map((l, j) => ({ value: j, label: l.label }))} />}</Field>
+        <Field label="New strike">{(id) => <Select id={id} value={to.strike} onChange={(v) => { setTo({ ...to, strike: +v }); setRes(null); }}
+          options={choices.strikes.map((k) => ({ value: k, label: k.toLocaleString("en-IN") }))} />}</Field>
+        <Field label="New expiry">{(id) => <Select id={id} value={to.expiry} onChange={(v) => { setTo({ ...to, expiry: v }); setRes(null); }}
+          options={choices.expiries.map((x) => ({ value: x, label: `${shortDate(x)}${x === expiry ? " (same)" : ""}` }))} />}</Field>
+        <FormActions><button type="submit" className="btn quiet" disabled={busy || same}>{busy ? "Pricing…" : "Preview the roll"}</button></FormActions>
+      </FormGrid>
+      {same && <p className="k-note">Pick another strike or expiry for this leg.</p>}
       {res && <RollResult r={res} />}
     </div>
   );
 }
 
 function RollResult({ r }: { r: OptRoll }) {
-  const rows: [string, keyof NetGreeks, (v: number) => string][] = [["Delta (₹ per point)", "delta", (v) => signed(v, 1)], ["Gamma", "gamma", (v) => sig(v)],
-    ["Theta (₹ a day)", "theta", (v) => inr(v)], ["Vega (₹ per vol point)", "vega", (v) => inr(v)]];
+  type GR = { key: keyof NetGreeks; label: string; f: (v: number) => string };
+  const rows: GR[] = [{ label: "Delta (₹ per point)", key: "delta", f: (v) => signed(v, 1) }, { label: "Gamma", key: "gamma", f: (v) => sig(v) },
+    { label: "Theta (₹ a day)", key: "theta", f: (v) => inr(v) }, { label: "Vega (₹ per vol point)", key: "vega", f: (v) => inr(v) }];
   const c = r.close, o = r.open;
+  const cols: Column<GR>[] = [
+    { key: "g", header: "Net Greeks, model estimate", rowHeader: true, cell: (x) => x.label },
+    { key: "b", header: "Before", numeric: true, cell: (x) => x.f(r.before[x.key]) },
+    { key: "a", header: "After", numeric: true, cell: (x) => x.f(r.after[x.key]) },
+    { key: "c", header: "Change", numeric: true, cell: (x) => x.f(r.after[x.key] - r.before[x.key]) },
+  ];
   return (
-    <div className="stack" style={{ gap: 10 }} data-testid="roll-result">
-      <p className="small">Closes the {SIDE[o.side]} {pts(c.strike)} {c.opt} ({shortDate(c.expiry)}) at {inr(c.px, 2)} and opens a {SIDE[o.side]} {pts(o.strike)} {o.opt} ({shortDate(o.expiry)}) at {inr(o.px, 2)}, at today's bid and ask.</p>
-      <div className="opt-stats">
-        <div><span className="eyebrow">Premium {r.premium >= 0 ? "taken in" : "paid out"}</span><b className={`mono ${r.premium >= 0 ? "pos" : "neg"}`}>{inr(r.premium, 2)}</b></div>
-        <div><span className="eyebrow">Charges, two orders</span><b className="mono">{inr(r.charges.total, 2)}</b></div>
-        <div data-testid="roll-net"><span className="eyebrow">After charges</span><b className={`mono ${r.net >= 0 ? "pos" : "neg"}`}>{inr(r.net, 2)}</b></div>
-        <div><span className="eyebrow">New leg's IV</span><b className="mono">{o.iv ? pctIv(o.iv) : "–"}</b></div>
-      </div>
-      <div className="table-wrap" style={{ margin: 0 }}>
-        <table className="small greeks-t">
-          <thead><tr><th>Net Greeks, model estimate</th><th>Before</th><th>After</th><th>Change</th></tr></thead>
-          <tbody>{rows.map(([label, k, f]) => (
-            <tr key={k} data-testid={`roll-${k}`}><td>{label}</td><td className="mono">{f(r.before[k])}</td><td className="mono">{f(r.after[k])}</td><td className="mono">{f(r.after[k] - r.before[k])}</td></tr>
-          ))}</tbody>
-        </table>
-      </div>
-      {!r.complete && <p className="small muted">A leg has no price right now, so the net Greeks leave it out.</p>}
+    <div className="k-stack" data-testid="roll-result">
+      <p className="k-small">Closes the {SIDE[o.side]} {pts(c.strike)} {c.opt} ({shortDate(c.expiry)}) at {inr(c.px, 2)} and opens a {SIDE[o.side]} {pts(o.strike)} {o.opt} ({shortDate(o.expiry)}) at {inr(o.px, 2)}, at today's bid and ask.</p>
+      <StatRow label="Roll result">
+        <Stat label={`Premium ${r.premium >= 0 ? "taken in" : "paid out"}`} value={inr(r.premium, 2)} tone={tone(r.premium)} />
+        <Stat label="Charges, two orders" value={inr(r.charges.total, 2)} />
+        <div data-testid="roll-net"><Stat label="After charges" value={inr(r.net, 2)} tone={tone(r.net)} /></div>
+        <Stat label="New leg's IV" value={o.iv ? pctIv(o.iv) : "–"} />
+      </StatRow>
+      <DataTable label="Net Greeks before and after" columns={cols} rows={rows} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-testid": `roll-${x.key}` })} />
+      {!r.complete && <p className="k-note">A leg has no price right now, so the net Greeks leave it out.</p>}
       <ModelInputs m={r.model_to} extra={r.model_to.expiry !== r.model.expiry ? `The other legs: the ${shortDate(r.model.expiry)} expiry, ${dayWord(r.model.days)} left, forward ${pts(r.model.forward)}.` : undefined} />
     </div>
   );

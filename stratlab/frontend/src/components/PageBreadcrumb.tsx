@@ -4,6 +4,9 @@ import { MINE_HOME } from "../lib/spaces";
 import { NAV, groupPath, locate, locateGroup } from "../lib/nav";
 import { usePins } from "../lib/pins";
 
+/** The personal pages that are not in a space: "Mine › Settings". */
+const PERSONAL: Record<string, string> = { "/account": "Account", "/settings": "Settings", "/assistant": "AI assistant", "/app": "Get the app", "/invite": "Invite friends" };
+
 /** The breadcrumb for the page showing, drawn from the one map of pages (lib/nav.ts): "Space › Group › Page ▾". It sits
  * at the top of every page that is in the menu, so no page needs its own row of tabs. */
 export function PageBreadcrumb() {
@@ -11,6 +14,7 @@ export function PageBreadcrumb() {
   const pins = usePins();
   if (pathname === MINE_HOME) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} />;
   if (pathname === "/features") return <Breadcrumb trail={[{ label: "StratLab", to: "/" }]} page="All features" />;
+  if (PERSONAL[pathname]) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} page={PERSONAL[pathname]} />;
   const g = locateGroup(pathname);
   if (g) return <Breadcrumb trail={[{ label: NAV[g.space].label, to: NAV[g.space].home }, { label: g.group.label, to: groupPath(g.space, g.group) }]} />;
   const at = locate(pathname);

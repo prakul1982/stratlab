@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
+import { eyebrowOf } from "../lib/eyebrow";
 import { axisInr, CRORE, inr, inrCompact, pct, pctPlain, signedInrCompact } from "../lib/format";
 import { dayText, desksApi, sharesShort, type CostIn, type CostOut, type MtfChange, type MtfOne, type MtfPage } from "../lib/stockDesks";
 import { LineChart } from "../components/Charts";
@@ -192,7 +193,7 @@ export function MarginFundingPage() {
   const reason = p && p.status.reason && p.status.status !== "ok" ? p.status.reason : null;
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Invest · Research" title="Margin funding"
+      <PageHeader eyebrow={eyebrowOf("/invest/margin-funding")} title="Margin funding"
         lede="How much of the market is bought with money brokers lend under the margin trading facility (MTF), and what your own position costs."
         asOf={p?.status.as_of} info={p ? <>{p.note} Source: {p.source}.</> : undefined} infoLabel="Where the numbers come from" />
       {error ? <ErrorState title="The margin funding numbers couldn't be read" action={{ label: "Try again", onClick: load }}>{error}</ErrorState>

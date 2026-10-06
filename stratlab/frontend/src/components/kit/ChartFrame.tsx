@@ -8,8 +8,8 @@ import { Seg, type Choice } from "./Seg";
  * ranges, a ChipBar for more) and a "Table" switch that swaps the chart for the same numbers as a table. Put a StatRow
  * in `stats` to show the headline figures above the chart; `actions` adds a card's own buttons after Table; `footer` is for one line under it. The chart inside should
  * be drawn with its own range buttons and table switch turned off (`ranges={false} table={false}`): this frame has them. */
-export function ChartFrame<R>({ title, info, id, label, ranges, range, onRange, table, actions, stats, footer, children }: {
-  title: ReactNode; info?: ReactNode; id?: string; label?: string; ranges?: Choice[]; range?: string; onRange?: (v: string) => void; actions?: ReactNode;
+export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range, onRange, table, actions, stats, footer, children }: {
+  title: ReactNode; info?: ReactNode; infoLabel?: string; id?: string; label?: string; ranges?: Choice[]; range?: string; onRange?: (v: string) => void; actions?: ReactNode;
   table?: { label: string; columns: Column<R>[]; rows: R[]; rowKey: (r: R) => string; empty?: ReactNode };
   stats?: ReactNode; footer?: ReactNode; children: ReactNode;
 }) {
@@ -18,7 +18,7 @@ export function ChartFrame<R>({ title, info, id, label, ranges, range, onRange, 
     ? (ranges.length <= 4 ? <Seg label="Range" options={ranges} value={range} onChange={onRange} /> : <ChipBar label="Range" options={ranges} value={range} onChange={onRange} />) : null;
   return (
     <Card id={id} label={label}>
-      <CardHead title={title} info={info} actions={<>
+      <CardHead title={title} info={info} infoLabel={infoLabel} actions={<>
         {rangeBar}
         {table && <button type="button" className="btn quiet sm" aria-pressed={asTable} onClick={() => setAsTable((x) => !x)}>Table</button>}
         {actions}

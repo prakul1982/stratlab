@@ -11,7 +11,7 @@ import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from .. import alerts, db, newsletter_prefs
+from .. import alerts, db, email_kit as kit, newsletter_prefs
 from ..plans import access_plan, allows
 from . import content, write
 
@@ -83,6 +83,7 @@ def make_issue(facts: dict, scope: str) -> dict:
     issue = {"id": issue_id(facts["kind"], scope, facts["day"], facts["weekly"]), "kind": facts["kind"],
              "region": facts.get("region"), "day": facts["day"], "weekly": facts["weekly"], "subject": write.subject(facts),
              "sections": write.sections(facts), "summary": s["text"], "ai": s["ai"],
+             "title": write.headline(facts), "label": write.type_label(facts), "indices": facts.get("indices") or [],
              "at": datetime.now(ZoneInfo("Asia/Kolkata")).isoformat(timespec="minutes")}
     if facts["kind"] == "my_stocks":
         issue["uid"] = facts["uid"]
@@ -158,11 +159,9 @@ def deliver(profile: dict, issue: dict, what: str) -> bool:
     sent = False
     to = address(profile)
     if to and confirmed(profile) and alerts.email_ready():
-        unsub = alerts.unsubscribe_url(profile["id"], what)
-        html, text = (x.replace(write.UNSUBSCRIBE, unsub) for x in (issue["html"], issue["text"]))
+        html, text, headers = kit.finish(issue["html"], issue["text"], profile["id"], what)
         try:
-            alerts.send_email(to, issue["subject"], text, html=html,
-                              headers=alerts.list_unsubscribe_headers(profile["id"], what))
+            alerts.send_email(to, issue["subject"], text, html=html, headers=headers)
             sent = True
         except Exception as e:
             print("newsletter email failed:", str(e)[:160])
