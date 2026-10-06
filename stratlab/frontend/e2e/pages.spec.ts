@@ -698,8 +698,8 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   for (const g of ["Practise", "Build and test", "Tax", "Plan"]) await expect(main.getByRole("link", { name: g, exact: true })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
   // the group holding the page you are on is open and the others are folded; every page of every group is a menu entry
-  await expect(main.getByRole("button", { name: "Companies", exact: true })).toHaveAttribute("aria-expanded", "true");
-  for (const g of NAV.invest.groups.slice(1)) await expect(main.getByRole("button", { name: g.label, exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(main.locator('[data-group="companies"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
+  for (const g of NAV.invest.groups.slice(1)) await expect(main.locator(`[data-group="${g.id}"] .side-toggle`)).toHaveAttribute("aria-expanded", "false");
   for (const g of NAV.invest.groups) await expect(main.locator(`[data-group="${g.id}"] .side-nav a`)).toHaveText(g.pages.map((p) => p.label));
   await expect(main.getByRole("link", { name: "Look up a company" })).toHaveClass(/active/);
   await expect(main.getByRole("link", { name: "Scans", exact: true })).toHaveCount(0);       // no catch-all "Scans" entry any more
@@ -720,7 +720,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   await expect(page).toHaveURL(/\/invest\/g\/find-stocks$/);
   await expect(page.getByTestId("group-card")).toHaveCount(4);
   side = await menu(page, phone);
-  await expect(side.getByRole("button", { name: "Find stocks", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(side.locator('[data-group="find-stocks"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
   await expect(side.getByRole("link", { name: "Trend scan" })).toBeVisible();
   // the pages that used to be tabs are entries now, and each has its own address
   await side.getByRole("link", { name: "Trend scan" }).click();
@@ -728,7 +728,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   await expect(page.getByRole("navigation", { name: "Scans" }), "no second row of tabs").toHaveCount(0);
   await expect(page.locator(".research-nav, .sub-seg")).toHaveCount(0);
   side = await menu(page, phone);
-  await side.getByRole("button", { name: "Market view", exact: true }).click();
+  await side.locator('[data-group="market-view"] .side-toggle').click();
   await side.getByRole("link", { name: "Sector rotation" }).click();
   await expect(page).toHaveURL(/\/research\/rotation$/);
   side = await menu(page, phone);
@@ -757,19 +757,19 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   await page.goto("/research/scan");
   await expect(page.getByText("Stage 2").first()).toBeVisible({ timeout: 30_000 });
   side = await menu(page, phone);
-  const find = side.getByRole("button", { name: "Find stocks", exact: true });
+  const find = side.locator('[data-group="find-stocks"] .side-toggle');
   await expect(find).toHaveAttribute("aria-expanded", "true");
   await find.click();
   await expect(find).toHaveAttribute("aria-expanded", "false");
   await expect(side.getByRole("link", { name: "Trend scan" })).toBeHidden();
-  const alerts = side.getByRole("button", { name: "Watch", exact: true });
+  const alerts = side.locator('[data-group="watch"] .side-toggle');
+  await expect(alerts).toHaveAttribute("aria-expanded", "true");      // opened earlier, when the watchlist was the page
   await alerts.click();
-  await expect(alerts).toHaveAttribute("aria-expanded", "true");
-  await expect(side.getByRole("link", { name: "Alerts" })).toBeVisible();
-  await alerts.click();
+  await expect(alerts).toHaveAttribute("aria-expanded", "false");
+  await expect(side.getByRole("link", { name: "Alerts" })).toBeHidden();
   await page.reload();
   side = await menu(page, phone);
-  await expect(side.getByRole("button", { name: "Watch", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(side.locator('[data-group="watch"] .side-toggle')).toHaveAttribute("aria-expanded", "false");
   // the keyboard: Tab from the search button passes the space's home and lands on the first group, with a visible
   // focus ring, and Enter folds it
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
@@ -852,7 +852,7 @@ test("the account menu: Account, Admin, the theme, the tour and Sign out, with a
   await btn.click();
   const acct = page.getByRole("menu", { name: "Account" });
   await expect(acct).toBeVisible();
-  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Admin", /^(Dark|Light) mode$/, "Tour", "Sign out"]);
+  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Admin", "All features", /^(Dark|Light) mode$/, "Tour", "Sign out"]);
   if (phone) {
     for (const el of await acct.getByRole("menuitem").all()) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     const box = (await acct.boundingBox())!;

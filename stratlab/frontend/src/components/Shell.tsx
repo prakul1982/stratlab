@@ -119,7 +119,7 @@ export function Shell({ children }: { children: ReactNode }) {
     return (
       <section key={g.id} className="side-group" data-group={g.id}>
         <div className="side-head">
-          <button className="side-toggle" aria-expanded={!shutNow} aria-controls={`side-${g.id}`} aria-label={g.label} onClick={() => toggle(g.id)}>
+          <button className="side-toggle" aria-expanded={!shutNow} aria-controls={`side-${g.id}`} aria-label="Open or close this group" onClick={() => toggle(g.id)}>
             <span className="side-chev" aria-hidden="true"><Chevron size={12} /></span>
           </button>
           <Link to={groupPath(space, g)} className={`side-title${here ? " active" : ""}`} aria-current={here ? "page" : undefined} title={`${g.label}: everything in this group`}>{g.label}</Link>

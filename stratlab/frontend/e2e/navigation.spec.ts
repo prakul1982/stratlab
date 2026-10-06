@@ -30,6 +30,11 @@ async function sideMenu(page: Page, phone: boolean) {
   return side;
 }
 
+/** On a phone, close the drawer if it is open. */
+async function closeMenu(page: Page, phone: boolean) {
+  if (phone && (await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Close menu" }).click();
+}
+
 test("a group's title opens its page: one card for each feature, with its name, a line on what it is for and a link", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/invest/g/market-view");
@@ -50,15 +55,15 @@ test("a group's title opens its page: one card for each feature, with its name, 
   await expect(crumb.getByRole("link", { name: "Invest", exact: true })).toHaveAttribute("href", "/invest");
   const side = await sideMenu(page, phone);
   await expect(side.locator('[data-group="market-view"] .side-title')).toHaveClass(/active/);
-  await expect(side.getByRole("button", { name: "Market view", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(side.locator('[data-group="market-view"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
   if (SHOTS) {
-    if (phone) await page.getByRole("button", { name: "Close menu" }).click();
+    await closeMenu(page, phone);
     for (const scheme of ["dark", "light"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.screenshot({ path: `${SHOTS}/group-${phone ? "400" : "1300"}-${scheme}.png`, fullPage: true });
     }
   }
-  if (phone) await page.getByRole("button", { name: "Close menu" }).click().catch(() => undefined);
+  await closeMenu(page, phone);
   await cards.filter({ hasText: "Margin funding" }).getByRole("link", { name: "Open Margin funding" }).click();
   await expect(page).toHaveURL(/\/invest\/margin-funding$/);
   expect(errors).toEqual([]);
@@ -73,7 +78,7 @@ test("every page has a breadcrumb: space, group and page, and the page's menu li
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(crumb).toHaveText(/Invest\s*›\s*Market view\s*›\s*Margin funding/, { timeout: 30_000 });
   if (SHOTS) {
-    if (phone) await page.getByRole("button", { name: "Close menu" }).click().catch(() => undefined);
+    await closeMenu(page, phone);
     for (const scheme of ["dark", "light"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       await crumb.getByRole("button", { name: /Margin funding/ }).click();
@@ -111,6 +116,7 @@ test("every page has a breadcrumb: space, group and page, and the page's menu li
   ] as const) {
     await page.goto(path);
     await expect(page.getByRole("navigation", { name: "Breadcrumb" }), path).toHaveText(trail, { timeout: 30_000 });
+    await page.waitForLoadState("networkidle");      // let the page's own requests finish before the next address
   }
   expect(errors).toEqual([]);
 });

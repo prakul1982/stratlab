@@ -35,7 +35,10 @@ const prefs = async (request: APIRequestContext, u: Who) => (await (await reques
 
 /** On a phone the menu is a drawer: open it. */
 async function menu(page: Page, phone: boolean) {
-  if (phone && !(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
+  if (phone) await expect(async () => {
+      if (!(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
+      await expect(page.locator("aside.sidebar.open")).toBeInViewport({ timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
   const side = page.locator("aside.sidebar");
   await expect(side.getByRole("navigation", { name: "Main" })).toBeVisible();
   return side;
@@ -129,7 +132,7 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await page.goto("/research/pulse");
   side = await menu(page, phone);
   await expect(side.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
-  await expect(side.getByRole("button", { name: "Market view", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(side.locator('[data-group="market-view"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
   await sane(page, errors, phone);
 });
 
