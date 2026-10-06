@@ -33,6 +33,7 @@ from .newsletter import job as news_job
 HIST_KEY = "breadth:hist:"            # breadth:hist:<group> = {"fields": [...], "rows": [[day, ...], ...], "at"}
 SECTOR_KEY = "breadth:sectors:"       # breadth:sectors:<group> = {"days": [...], "sectors": {name: {"a": [...], "n": [...]}}}
 MEMBERS_KEY = "breadth:members:"      # the last good list of a group's stocks
+BASE_KEY = "breadth:base:"            # breadth:base:<region> = {"day", "stocks": {symbol: base_row}} for the intraday view
 STATUS_KEY = "breadth:status"         # {region: {ran_at, as_of, stocks, loaded, failed, last_error}}
 
 MAS = (20, 50, 200)
@@ -167,6 +168,19 @@ def stock_flags(bars: list[dict], through: str | None = None) -> pd.DataFrame | 
     return out[list(FIELDS)]
 
 
+def base_row(bars: list[dict], through: str | None = None) -> list | None:
+    """What the intraday view needs of a stock's finished days: [last close, closes counted, sum of the last 19, 49 and
+    199 closes] (a sum is None while the stock has fewer closes than that). Today's price then makes the 20-, 50- and
+    200-day averages as (sum + price) / n."""
+    df = _frame(bars, through)
+    if df is None:
+        return None
+    c = df["c"]
+    n = len(c)
+    sums = [round(float(c.iloc[-k:].sum()), 4) if n >= k else None for k in (19, 49, 199)]
+    return [round(float(c.iloc[-1]), 4), n, *sums]
+
+
 # ---------- adding stocks up ----------
 class Tally:
     """Each group's counts, added up one stock at a time (so a whole market never sits in memory at once), and each
@@ -232,6 +246,18 @@ def load_hist(group: str) -> dict[str, list]:
 def save_hist(group: str, rows: dict[str, list]):
     db.set_setting(HIST_KEY + group, json.dumps({"fields": list(COLS), "at": _now(),
                                                  "rows": [[d, *rows[d]] for d in sorted(rows)]}))
+
+
+def save_base(region: str, day: str, stocks: dict[str, list]):
+    db.set_setting(BASE_KEY + region, json.dumps({"day": day, "at": _now(), "stocks": stocks}))
+
+
+def load_base(region: str) -> dict:
+    try:
+        raw = db.json_value(db.get_setting(BASE_KEY + region), {})
+    except Exception:
+        return {}
+    return raw if isinstance(raw.get("stocks"), dict) and raw.get("day") else {}
 
 
 def load_sectors(group: str) -> dict:
@@ -397,6 +423,7 @@ class Runner:
         except Exception:
             sec = {}
         tally, loaded, failed, streak, last_error = Tally(), 0, 0, 0, None
+        bases: dict[str, list] = {}                              # each stock's finished days, for the intraday view
         scans: dict[str, dict[str, dict | None]] = {}            # group -> {symbol: scan_presets.evaluate answer}
         scan_secs, scan_groups = 0.0, set(scan_presets.STORED.values())
         for i, (sym, gs) in enumerate(sorted(by_stock.items())):
@@ -414,6 +441,9 @@ class Runner:
             if flags is None:
                 continue
             loaded += 1
+            base = base_row(bars, through)
+            if base:
+                bases[sym] = base
             for g in gs:
                 tally.add(g, flags, sec.get(sym), sector_from)
             mine = [g for g in gs if g in scan_groups]
@@ -443,6 +473,11 @@ class Runner:
             out[g] = {"days": len(rows), "stocks": tally.stocks.get(g, 0), "members": len(who[g]),
                       "as_of": max(rows) if rows else None}
         as_of = max((v["as_of"] for v in out.values() if v["as_of"]), default=None)
+        if bases:
+            try:
+                save_base(region, through, bases)
+            except Exception as e:      # the intraday view rebuilds it when it needs to
+                print("breadth base save:", region, str(e)[:120])
         for g, found in scans.items():
             try:
                 scan_presets.save(g, scan_presets.build(found))

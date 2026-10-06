@@ -2,15 +2,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  breadthApi, count, delta, savePick, savedPick, share, shortDay,
-  type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type SectorTable, type Today,
+  breadthApi, count, delta, liveSeries, liveTitle, savePick, savedPick, share, shortDay,
+  type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LineChart, PairBars } from "../components/Charts";
 import { Info } from "../components/ui";
 import {
-  Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Skeleton, Stat, StatRow,
+  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
   type Column,
 } from "../components/kit";
 
@@ -106,7 +106,8 @@ export function BreadthPage() {
               </Card>
             ) : (
               <>
-                <Headline t={data.today} help={help} />
+                {data.live && <LiveCard live={data.live} group={data.group} />}
+                <Headline t={data.today} help={help} lastClose={!!data.live} />
                 {data.locked ? (
                   <div data-testid="breadth-locked"><PlanNote>Today's numbers are on every plan. The history, charts and the sector table are on the {data.plan_needed} plan.</PlanNote></div>
                 ) : shown && <>
@@ -122,7 +123,63 @@ export function BreadthPage() {
 }
 
 /* ---------- today's numbers ---------- */
-function Headline({ t, help }: { t: Today; help: Record<string, string> }) {
+const LIVE_INFO = "Worked out every 15 minutes while the market is open, from live prices: each stock's price against yesterday's close "
+  + "(rose, fell, unchanged), and against its 20-, 50- and 200-day averages with the live price counted as the latest close. "
+  + "The numbers for the close, further down, are worked out after the market shuts and are not changed by these.";
+
+/** While the market is open: the counts so far today, with a line through the day. When live prices can't be read it says so
+ * in words and the last close below stands. */
+function LiveCard({ live, group }: { live: LiveView; group: Group }) {
+  if (live.state !== "live" || !live.latest) {
+    return (
+      <Card label="Breadth today" testId="breadth-live-off">
+        <CardHead title="Today, live" info={LIVE_INFO} infoLabel="About the live numbers" />
+        <Notice tone="warn" role="status">{live.message ?? "Live prices aren't available right now. The numbers below are the last close."}</Notice>
+      </Card>
+    );
+  }
+  const s = liveSeries(live);
+  const l = live.latest;
+  const several = s.times.length > 1;
+  const at = (i: number) => `${group.name}, ${s.times[i]}`;
+  return (
+    <div className="k-page" data-testid="breadth-live">
+      <Card label="Breadth today, live">
+        <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<Badge tone="live">Live</Badge>} />
+        <StatRow>
+          <Stat label="Rose / fell" value={<>{count(l.adv)} <span className="k-muted">/</span> {count(l.dec)}</>} note={`${count(l.unch)} unchanged · against yesterday's close`} />
+          <Stat label="Above 20-day average" value={share(l.pct20)} />
+          <Stat label="Above 50-day average" value={share(l.pct50)} />
+          <Stat label="Above 200-day average" value={share(l.pct200)} />
+          {l.idx != null && <Stat label={group.index_name} value={l.idx.toLocaleString("en-IN", { maximumFractionDigits: 2 })} note="latest level" />}
+        </StatRow>
+        {!several && <p className="k-note">A point is added every {live.every_minutes} minutes while the market is open, so the line through the day starts after the second.</p>}
+      </Card>
+      {several && (
+        <div className="k-cols">
+          <ChartFrame title="Rose and fell through the day" info="How many stocks are above and below yesterday's close at each point." infoLabel="What does this mean?"
+            table={{ label: "Rose and fell through the day", columns: [{ key: "t", header: "Time", rowHeader: true, cell: (i: number) => s.times[i] },
+              { key: "a", header: "Rose", numeric: true, cell: (i: number) => count(s.adv[i]) }, { key: "d", header: "Fell", numeric: true, cell: (i: number) => count(s.dec[i]) }],
+              rows: s.times.map((_, i) => s.times.length - 1 - i), rowKey: (i: number) => s.times[i] }}>
+            <LineChart lines={[{ values: s.adv, color: A, label: "Rose", width: 2 }, { values: s.dec, color: B, label: "Fell", width: 2 }]} legend labels={s.times.map((_, i) => at(i))}
+              axisLabels={s.times} ranges={false} table={false} height={200} format={fmtInt} ariaLabel={`Stocks that rose and fell today, ${s.times[0]} to ${s.times[s.times.length - 1]}`} />
+          </ChartFrame>
+          <ChartFrame title="Share above their averages through the day" info="The share of stocks above their 20-, 50- and 200-day averages at each point, with the live price as the latest close." infoLabel="What does this mean?"
+            table={{ label: "Share above their averages through the day", columns: [{ key: "t", header: "Time", rowHeader: true, cell: (i: number) => s.times[i] },
+              { key: "p20", header: "20-day", numeric: true, cell: (i: number) => share(s.pct20[i]) }, { key: "p50", header: "50-day", numeric: true, cell: (i: number) => share(s.pct50[i]) },
+              { key: "p200", header: "200-day", numeric: true, cell: (i: number) => share(s.pct200[i]) }],
+              rows: s.times.map((_, i) => s.times.length - 1 - i), rowKey: (i: number) => s.times[i] }}>
+            <LineChart lines={[{ values: s.pct20, color: "var(--ink-2)", label: "20-day", width: 2 }, { values: s.pct50, color: A, label: "50-day", width: 2 }, { values: s.pct200, color: B, label: "200-day", width: 2 }]} legend
+              labels={s.times.map((_, i) => at(i))} axisLabels={s.times} ranges={false} table={false} height={200} format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`}
+              ariaLabel={`Share of stocks above their 20-, 50- and 200-day averages today, ${s.times[0]} to ${s.times[s.times.length - 1]}`} />
+          </ChartFrame>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Headline({ t, help, lastClose }: { t: Today; help: Record<string, string>; lastClose?: boolean }) {
   const vs = t.prev_day ? ` vs ${shortDay(t.prev_day)}` : "";
   const lab = (label: string, info?: string) => <>{label}{info && <Info label={`About ${label.toLowerCase()}`}>{info}</Info>}</>;
   const chg = (v: number | null | undefined, unit: "" | "pts", dp: number) => {
@@ -139,7 +196,7 @@ function Headline({ t, help }: { t: Today; help: Record<string, string> }) {
   };
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
-      <CardHead title={`Today's numbers · ${shortDay(t.day)}`} />
+      <CardHead title={lastClose ? `Last close · ${shortDay(t.day)}` : `Today's numbers · ${shortDay(t.day)}`} />
       <StatRow>
         <Stat label={lab("Rose / fell", help.ad)} value={<>{count(t.adv.value)} <span className="k-muted">/</span> {count(t.dec.value)}</>}
           note={<>Ratio {t.ad_ratio.value == null ? "–" : t.ad_ratio.value.toFixed(2)} · {count(t.unch.value)} unchanged · {count(t.stocks.value)} stocks{pair("adv", "dec") ? ` · ${pair("adv", "dec")}` : ""}</>} />

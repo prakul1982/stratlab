@@ -38,22 +38,50 @@ AI_PER_DAY = 400                # AI reads a day across everyone (each filing is
 KEEP_READS = 40                 # filings kept per company (three years of monthly updates)
 MAX_FIGURES = 12
 CHART_MONTHS = 24
+BACKFILL_MONTHS = 13            # a company with fewer months stored has its older updates read too, two a day
+USER_STOCKS = 150               # stocks from people's holdings and watchlists the daily job reads, beyond the sector lists
 JOB_DAYS = 45                   # the daily job reads updates filed this recently
 RUN_AT = "19:30"                # India time: after the day's monthly updates (the 1st of the month, mostly by noon)
 SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&\-_.]{0,19}$")
 NOTE = ("Figures as the company filed them with the exchange, copied from its own document; each one links to the filing "
         "with the page and the line it's on. Changes are arithmetic on those filed figures. Facts, not advice.")
 
-# the companies the sector view lists, alphabetically: the ones that file monthly or quarterly business updates
+# the companies the sector view lists, alphabetically: the ones that file monthly or quarterly business updates. A sector's
+# "span" is how most of its companies file (month or quarter); each figure carries its own span when it is read.
 SECTORS: dict[str, dict] = {
     "autos": {"label": "Automakers' monthly sales", "span": "month", "symbols": [
-        ("ASHOKLEY", "Ashok Leyland"), ("BAJAJ-AUTO", "Bajaj Auto"), ("EICHERMOT", "Eicher Motors"), ("ESCORTS", "Escorts Kubota"),
-        ("HEROMOTOCO", "Hero MotoCorp"), ("M&M", "Mahindra & Mahindra"), ("MARUTI", "Maruti Suzuki India"),
+        ("ASHOKLEY", "Ashok Leyland"), ("ATULAUTO", "Atul Auto"), ("BAJAJ-AUTO", "Bajaj Auto"), ("EICHERMOT", "Eicher Motors"),
+        ("ESCORTS", "Escorts Kubota"), ("FORCEMOT", "Force Motors"), ("HEROMOTOCO", "Hero MotoCorp"), ("HYUNDAI", "Hyundai Motor India"),
+        ("M&M", "Mahindra & Mahindra"), ("MARUTI", "Maruti Suzuki India"), ("OLECTRA", "Olectra Greentech"),
         ("TMCV", "Tata Motors (commercial vehicles)"), ("TMPV", "Tata Motors Passenger Vehicles"), ("TVSMOTOR", "TVS Motor Company")]},
+    "cement": {"label": "Cement: volumes", "span": "quarter", "symbols": [
+        ("ACC", "ACC"), ("AMBUJACEM", "Ambuja Cements"), ("DALBHARAT", "Dalmia Bharat"), ("JKCEMENT", "JK Cement"),
+        ("JKLAKSHMI", "JK Lakshmi Cement"), ("RAMCOCEM", "The Ramco Cements"), ("SHREECEM", "Shree Cement"),
+        ("ULTRACEMCO", "UltraTech Cement")]},
+    "airlines": {"label": "Airlines and airports: traffic", "span": "month", "symbols": [
+        ("ADANIPORTS", "Adani Ports and SEZ"), ("GMRAIRPORT", "GMR Airports"), ("INDIGO", "InterGlobe Aviation"),
+        ("SPICEJET", "SpiceJet")]},
+    "power": {"label": "Power: generation and sales", "span": "month", "symbols": [
+        ("ADANIPOWER", "Adani Power"), ("CESC", "CESC"), ("JSWENERGY", "JSW Energy"), ("NHPC", "NHPC"), ("NTPC", "NTPC"),
+        ("POWERGRID", "Power Grid Corporation of India"), ("TATAPOWER", "Tata Power Company"), ("TORNTPOWER", "Torrent Power")]},
+    "telecom": {"label": "Telecom: quarterly operating numbers", "span": "quarter", "symbols": [
+        ("BHARTIARTL", "Bharti Airtel"), ("INDUSTOWER", "Indus Towers"), ("TATACOMM", "Tata Communications"),
+        ("IDEA", "Vodafone Idea")]},
+    "metals": {"label": "Metals and mining: production and sales", "span": "month", "symbols": [
+        ("COALINDIA", "Coal India"), ("HINDALCO", "Hindalco Industries"), ("HINDZINC", "Hindustan Zinc"),
+        ("JINDALSTEL", "Jindal Steel"), ("JSWSTEEL", "JSW Steel"), ("NMDC", "NMDC"), ("SAIL", "Steel Authority of India"),
+        ("TATASTEEL", "Tata Steel"), ("VEDL", "Vedanta")]},
+    "retail": {"label": "Retail: quarterly business updates", "span": "quarter", "symbols": [
+        ("ABFRL", "Aditya Birla Fashion and Retail"), ("BATAINDIA", "Bata India"), ("DMART", "Avenue Supermarts"),
+        ("JUBLFOOD", "Jubilant FoodWorks"), ("SHOPERSTOP", "Shoppers Stop"), ("TITAN", "Titan Company"),
+        ("TRENT", "Trent"), ("VMART", "V-Mart Retail")]},
     "lenders": {"label": "Banks' and lenders' quarterly updates", "span": "quarter", "symbols": [
         ("AUBANK", "AU Small Finance Bank"), ("BAJFINANCE", "Bajaj Finance"), ("BANDHANBNK", "Bandhan Bank"),
-        ("FEDERALBNK", "The Federal Bank"), ("HDFCBANK", "HDFC Bank"), ("IDFCFIRSTB", "IDFC First Bank"),
-        ("INDUSINDBK", "IndusInd Bank"), ("RBLBANK", "RBL Bank"), ("YESBANK", "Yes Bank")]},
+        ("BANKBARODA", "Bank of Baroda"), ("CANBK", "Canara Bank"), ("CHOLAFIN", "Cholamandalam Investment and Finance"),
+        ("CUB", "City Union Bank"), ("FEDERALBNK", "The Federal Bank"), ("HDFCBANK", "HDFC Bank"),
+        ("IDFCFIRSTB", "IDFC First Bank"), ("INDUSINDBK", "IndusInd Bank"), ("KARURVYSYA", "Karur Vysya Bank"),
+        ("KOTAKBANK", "Kotak Mahindra Bank"), ("PNB", "Punjab National Bank"), ("RBLBANK", "RBL Bank"),
+        ("SBIN", "State Bank of India"), ("UNIONBANK", "Union Bank of India"), ("YESBANK", "Yes Bank")]},
 }
 
 _cache = TTLCache(max_items=500)
@@ -78,9 +106,16 @@ UPDATE = re.compile(
     rf"\bsales (?:in|for) (?:the month of )?{MONTHS}\b|\bauto sales\b|"
     r"provisional (?:business|figures|numbers|data|update)|operational (?:update|performance)|traffic (?:figures|update|data)|"
     r"(?:quarterly|q[1-4]) business update|pre-?quarter(?:ly)? update|monthly sales|\bsales (?:in|for) (?:q[1-4]|the quarter)|"
-    r"wholesales? and retail sales|\b(?:production|sales|exports?)\b[^.]{0,30}\bfigures\b", re.I)
+    r"wholesales? and retail sales|\b(?:production|sales|exports?)\b[^.]{0,30}\bfigures\b|"
+    r"(?:power|electricity) (?:generation|sales)(?: (?:figures|data|update|numbers))?\b|\bgeneration (?:figures|data|update)|"
+    r"\b(?:cargo|container|passenger|aircraft) (?:volumes?|traffic|movements?|throughput)\b|\bcement (?:sales|volumes?|despatch\w*)|"
+    r"\b(?:crude steel|steel|coal|iron ore|aluminium|zinc) (?:production|output|sales|despatch\w*|offtake)\b|"
+    r"\bproduction (?:and|&) (?:sales|deliver\w+|despatch\w*)|\boperat(?:ing|ional) (?:statistics|data|metrics|highlights|numbers|report)\b|"
+    r"\bkey operating (?:data|metrics)|\bstore (?:count|network|additions?)|\bnew stores\b|\bassets under management\b|"
+    r"\bdeposits? and advances\b|\bbusiness (?:highlights|performance|numbers)\b|\bsubscriber (?:base|numbers|additions?)\b|"
+    r"\bcapacity utili[sz]ation\b", re.I)
 # the file name says it when the subject is a generic "General Updates"
-UPDATE_FILE = re.compile(r"salesupdate|(?:" + MONTHS + r")salesrelease|salesdata|salesvolume|sales(?:" + MONTHS + r")|productionvolume|prod(?:uction)?(?:" + MONTHS +
+UPDATE_FILE = re.compile(r"operat(?:ing|ional)update|businessupdate|generationupdate|trafficupdate|productionupdate|salesupdate|(?:" + MONTHS + r")salesrelease|salesdata|salesvolume|sales(?:" + MONTHS + r")|productionvolume|prod(?:uction)?(?:" + MONTHS +
                          r")|businessupdate|financialupdate|financialdisclosure|initial(?:financial|final)disclosure", re.I)
 NOT_UPDATE = re.compile(r"\bsale of\b|slump sale|offer for sale|sales tax|record date|trading window|newspaper|"
                         r"transcript|recording|schedule of (?:analyst|investor|meet)", re.I)
@@ -114,19 +149,38 @@ SALES_TEXT = re.compile(r"\b(?:sales|sold|despatch\w*|dispatch\w*|production)\b[
 
 def _row(i: dict, maybe: bool = False) -> dict:
     return {"id": str(i.get("id")), "at": i["at"], "title": (i.get("text") or i.get("subject") or "")[:200], "url": i["url"],
-            "maybe": maybe}
+            "maybe": maybe, "exchange": "BSE" if i.get("exchange") == "BSE" or "bseindia.com" in str(i.get("url")) else "NSE"}
+
+
+def once_a_day(rows: list[dict]) -> list[dict]:
+    """The same update filed on NSE and on BSE counts once, as NSE's. On a day, BSE rows are kept only beyond as many as
+    NSE has (a company filing two different updates on a day on BSE alone still shows both)."""
+    nse_on: dict[str, int] = {}
+    for r in rows:
+        if r["exchange"] == "NSE":
+            nse_on[r["at"][:10]] = nse_on.get(r["at"][:10], 0) + 1
+    out, bse_seen = [], {}
+    for r in rows:
+        if r["exchange"] == "BSE":
+            d = r["at"][:10]
+            bse_seen[d] = bse_seen.get(d, 0) + 1
+            if bse_seen[d] <= nse_on.get(d, 0):
+                continue
+        out.append(r)
+    return out
 
 
 def updates(items: list[dict]) -> list[dict]:
-    """The business-update filings among a company's filings, newest first, with a PDF on the exchange's archive."""
-    return [_row(i) for i in items if i.get("at") and docs.allowed(i.get("url")) and is_update(i)]
+    """The business-update filings among a company's filings (NSE's and BSE's), newest first, with a PDF on an
+    exchange's archive."""
+    return once_a_day([_row(i) for i in items if i.get("at") and docs.allowed(i.get("url")) and is_update(i)])
 
 
 def candidates(items: list[dict]) -> list[dict]:
     """The updates, and the filings that may be one (opened to check before they count), newest first."""
     out = [_row(i, maybe=not is_update(i)) for i in items
            if i.get("at") and docs.allowed(i.get("url")) and (is_update(i) or maybe_update(i))]
-    return sorted(out, key=lambda r: r["at"], reverse=True)
+    return once_a_day(sorted(out, key=lambda r: r["at"], reverse=True))
 
 
 # ---------- reading one filing ----------
@@ -281,7 +335,7 @@ def known_measures(reads: dict) -> list[str]:
 
 def read_one(symbol: str, item: dict, docs_api, ai, known: list[str]) -> dict:
     """One filing read into figures: {"at", "title", "url", "read_at", "period", "span", "figures", "problem"}."""
-    out = {"at": item["at"], "title": item["title"], "url": item["url"],
+    out = {"at": item["at"], "title": item["title"], "url": item["url"], "exchange": item.get("exchange") or "NSE",
            "read_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "period": None, "span": None, "figures": [], "problem": None}
     try:
         pages = pages_of(docs_api, item["url"])
@@ -295,7 +349,7 @@ def read_one(symbol: str, item: dict, docs_api, ai, known: list[str]) -> dict:
     if len(body.strip()) < 40:
         out["problem"] = "The filing holds no readable text."
         return out
-    head = (f"COMPANY: {symbol} (NSE)\nFILED: {item['at'][:10]}\nFILING: {item['title'][:160]}\n"
+    head = (f"COMPANY: {symbol} ({out['exchange']})\nFILED: {item['at'][:10]}\nFILING: {item['title'][:160]}\n"
             f"KNOWN MEASURES: {'; '.join(known) or '(none yet)'}\n\nDOCUMENT:\n")
     raw = complete(EXTRACT, head + body, gemini=ai[0] if ai else None, anthropic=ai[1] if ai else None, max_tokens=2000, kind="long")
     try:
@@ -400,7 +454,7 @@ def series(reads: dict) -> list[dict]:
             m = metrics.setdefault(k, {"key": k, "metric": f["metric"], "segment": f.get("segment"), "unit": f["unit"],
                                        "basis": f["basis"], "span": r.get("span") or "month", "headline": False, "points": {}})
             m["metric"], m["headline"] = f["metric"], m["headline"] or bool(f.get("headline"))
-            src = {"at": r["at"], "url": r["url"], "page": f.get("page"), "quote": f.get("quote")}
+            src = {"at": r["at"], "url": r["url"], "page": f.get("page"), "quote": f.get("quote"), "exchange": r.get("exchange") or "NSE"}
             m["points"][p] = {"period": p, "value": f["value"], "filed_later": False, "source": src}
             if f.get("prior") is not None:
                 py = shift(p, -12)
@@ -497,7 +551,8 @@ def view(symbol: str, items: list[dict] | None, allowed: bool, problems: list[st
     known = {f["id"] for f in found}
     for fid, r in reads.items():                       # read earlier (or a press release found to be one)
         if fid not in known and not r.get("skip"):
-            found.append({"id": fid, "at": r["at"], "title": r["title"], "url": r["url"], "maybe": False})
+            found.append({"id": fid, "at": r["at"], "title": r["title"], "url": r["url"], "maybe": False,
+                          "exchange": r.get("exchange") or "NSE"})
     found.sort(key=lambda f: f["at"], reverse=True)
     filings = [{**f, "read": f["id"] in reads, "period": reads.get(f["id"], {}).get("period"),
                 "problem": reads.get(f["id"], {}).get("problem")} for f in found[:30]]
@@ -507,23 +562,125 @@ def view(symbol: str, items: list[dict] | None, allowed: bool, problems: list[st
             "metrics": metrics, "headline": words(headline(metrics)) if metrics else None, "problems": problems or [], "note": NOTE}
 
 
+def _headline_row(sym: str, name: str, reads: dict, span: str | None = None) -> dict:
+    """One company's line: its latest headline figure with the changes, the filing it came from and how many filings
+    were read into figures."""
+    ms = series(reads)
+    h = headline(ms)
+    src = h["latest"]["source"] if h else None
+    return {"symbol": sym, "name": name, "metric": h["metric"] if h else None, "unit": h["unit"] if h else None,
+            "span": h["span"] if h else span, "period": h["latest"]["period"] if h else None,
+            "value": h["latest"]["value"] if h else None, "change_prev": h["change_prev"] if h else None,
+            "change_year": h["change_year"] if h else None, "step": h["step"] if h else None,
+            "filed": src["at"] if src else None, "url": src["url"] if src else None,
+            "page": src.get("page") if src else None, "exchange": src.get("exchange") if src else None,
+            "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]] if h else [],
+            "reads": sum(1 for r in reads.values() if not r.get("skip")),
+            "read_ok": sum(1 for r in reads.values() if r.get("figures") and r.get("period"))}
+
+
 def sector_view(sector: str) -> dict:
     """Every company in a sector list, alphabetical: its latest headline figure, the change on the previous period and
     on the year, and when it was filed. No ranking."""
     s = SECTORS[sector]
-    rows = []
-    for sym, name in s["symbols"]:
-        ms = series(stored(sym))
-        h = headline(ms)
-        rows.append({"symbol": sym, "name": name, "metric": h["metric"] if h else None, "unit": h["unit"] if h else None,
-                     "span": h["span"] if h else s["span"], "period": h["latest"]["period"] if h else None,
-                     "value": h["latest"]["value"] if h else None, "change_prev": h["change_prev"] if h else None,
-                     "change_year": h["change_year"] if h else None, "step": h["step"] if h else None,
-                     "filed": h["latest"]["source"]["at"] if h else None, "url": h["latest"]["source"]["url"] if h else None,
-                     "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]] if h else []})
+    rows = [_headline_row(sym, name, stored(sym), s["span"]) for sym, name in s["symbols"]]
     rows.sort(key=lambda r: r["name"].upper())
     return {"sector": sector, "label": s["label"], "rows": rows, "sectors": [{"id": k, "label": v["label"]} for k, v in SECTORS.items()],
             "note": NOTE + " Companies are listed alphabetically; each total is the company's own, so their definitions differ."}
+
+
+COMPARE_MONTHS = 13
+
+
+def compare_view(sector: str, months: int = COMPARE_MONTHS) -> dict:
+    """The sector's companies side by side, month by month: each company's headline figure for each of the last
+    `months` months with the change on the same month a year earlier, and a link to the filing it came from. A quarterly
+    company has a figure in its quarter's last month only. Columns are alphabetical; nothing is ranked."""
+    s = SECTORS[sector]
+    cols, newest = [], ""
+    for sym, name in s["symbols"]:
+        h = headline(series(stored(sym)))
+        if not h:
+            cols.append({"symbol": sym, "name": name, "metric": None, "unit": None, "step": None, "points": {}})
+            continue
+        byp = {p["period"]: p for p in h["points"]}
+        pts = {}
+        for per, p in byp.items():
+            ago = byp.get(shift(per, -12))
+            src = p["source"]
+            pts[per] = {"value": p["value"], "year_change": change(p["value"], ago["value"], h["unit"]) if ago else None,
+                        "url": src["url"], "page": src.get("page"), "exchange": src.get("exchange"), "filed": src["at"][:10],
+                        "year_ago": ago["value"] if ago else None}
+        newest = max(newest, max(pts))
+        cols.append({"symbol": sym, "name": name, "metric": h["metric"], "unit": h["unit"], "step": h["step"], "points": pts})
+    cols.sort(key=lambda c: c["name"].upper())
+    periods = [shift(newest, -i) for i in range(months)] if newest else []
+    shown = [c for c in cols if any(p in c["points"] for p in periods)]
+    for c in shown:
+        c["points"] = {p: v for p, v in c["points"].items() if p in periods}
+    return {"sector": sector, "label": s["label"], "periods": periods, "companies": shown,
+            "without": [c["name"] for c in cols if c not in shown], "sectors": [{"id": k, "label": v["label"]} for k, v in SECTORS.items()],
+            "note": NOTE + " Each column is one company's own headline figure in its own unit; changes are on the same month a "
+                           "year earlier. Quarterly filers show a figure in the last month of each quarter."}
+
+
+def my_symbols(uid: str) -> list[tuple[str, str]]:
+    """[(symbol, "holding" or "watchlist")] for the user's Indian stocks, holdings first, each once."""
+    from . import holdings
+    from .intel import filings
+    out, seen = [], set()
+    for kind, got in (("holding", lambda: holdings.symbols(uid)), ("watchlist", lambda: filings.watchlist_symbols(uid))):
+        try:
+            syms = got()
+        except Exception:
+            syms = []
+        for sym in syms:
+            sym = str(sym).upper()
+            if sym and sym not in seen and SYMBOL.match(sym):
+                seen.add(sym)
+                out.append((sym, kind))
+    return out
+
+
+def my_view(uid: str) -> dict:
+    """"My stocks": the user's holdings and then watchlist stocks that have business updates read into figures, each as
+    the sector view's line. Stocks with none read yet are named, not hidden."""
+    names = {sym: name for v in SECTORS.values() for sym, name in v["symbols"]}
+    rows, without = [], []
+    for sym, kind in my_symbols(uid):
+        reads = stored(sym)
+        row = _headline_row(sym, names.get(sym, sym), reads)
+        if row["value"] is None:
+            without.append({"symbol": sym, "name": row["name"], "kind": kind})
+            continue
+        rows.append({**row, "kind": kind})
+    return {"rows": rows, "without": without, "sectors": [{"id": k, "label": v["label"]} for k, v in SECTORS.items()],
+            "note": NOTE + " Your holdings are listed first, then your watchlist; each stock's total is its own company's."}
+
+
+def reliability() -> dict:
+    """How well each company's filings read into checked figures, from what is stored: for each company the filings read,
+    those that gave at least one figure confirmed against the document, and a plain verdict; the same per sector."""
+    sectors, companies = [], []
+    for sid, sec in SECTORS.items():
+        rows = []
+        for sym, name in sec["symbols"]:
+            reads = [r for r in stored(sym).values() if not r.get("skip")]
+            ok = sum(1 for r in reads if r.get("figures") and r.get("period"))
+            problems = sorted({r["problem"] for r in reads if r.get("problem")})[:3]
+            share = ok / len(reads) if reads else None
+            verdict = ("not read yet" if not reads else "reads reliably" if len(reads) >= 3 and share >= 0.8
+                       else "reads partly" if ok else "does not read")
+            rows.append({"symbol": sym, "name": name, "sector": sid, "filings_read": len(reads), "with_figures": ok,
+                         "share": None if share is None else round(share * 100), "verdict": verdict, "problems": problems})
+        got = [r for r in rows if r["filings_read"]]
+        total, good = sum(r["filings_read"] for r in got), sum(r["with_figures"] for r in got)
+        sectors.append({"sector": sid, "label": sec["label"], "companies": len(rows), "companies_read": len(got),
+                        "reliable": sum(1 for r in rows if r["verdict"] == "reads reliably"), "filings_read": total,
+                        "with_figures": good, "share": round(good / total * 100) if total else None})
+        companies += rows
+    return {"sectors": sectors, "companies": companies,
+            "rule": "Reads reliably: at least 3 filings read and at least 80% of them gave a figure confirmed against the document."}
 
 
 def latest_line(symbol: str, since: str | None = None) -> str | None:
@@ -554,6 +711,24 @@ def alert_rows(symbol: str, items: list[dict], since: str) -> list[dict]:
     line = latest_line(symbol)
     return [{"kind": "bizupdate", "symbol": symbol, "id": f"bu:{u['id']}", "filed": u["at"][:10], "title": u["title"],
              "text": line} for u in updates(items) if u["at"] >= since]
+
+
+def user_symbols() -> list[str]:
+    """Indian stocks in the most holdings and watchlists, beyond the sector lists (up to USER_STOCKS), so "My stocks"
+    has figures to show."""
+    from .holdings import KEY as HOLD
+    listed = {s for v in SECTORS.values() for s, _ in v["symbols"]}
+    count: dict[str, int] = {}
+    try:
+        for prefix in (HOLD, "watchlist:"):
+            for _, raw in db.all_settings_with_prefix(prefix):
+                for i in (db.json_value(raw, {}).get("items") or []):
+                    sym = str(i.get("symbol") or "").upper() if isinstance(i, dict) else ""
+                    if sym and sym not in listed and SYMBOL.match(sym) and i.get("region", "IN") == "IN" and not sym.isdigit():
+                        count[sym] = count.get(sym, 0) + 1
+    except Exception:
+        return []
+    return [s for s, _ in sorted(count.items(), key=lambda kv: (-kv[1], kv[0]))[:USER_STOCKS]]
 
 
 class Job:
@@ -590,16 +765,18 @@ class Job:
     def run(self, now: datetime) -> dict:
         feed, docs_api, ai = _wire["feed"](), _wire["docs"](), _wire["ai"]() if _wire["ai"] else None
         since = (now.astimezone(IST) - timedelta(days=JOB_DAYS)).date().isoformat()
-        symbols = sorted({s for v in SECTORS.values() for s, _ in v["symbols"]} | set(self.alert_symbols()))
+        symbols = sorted({s for v in SECTORS.values() for s, _ in v["symbols"]} | set(self.alert_symbols())
+                         | set(user_symbols()))
         rows, read, problems = [], 0, []
         for sym in symbols:
             try:
-                items = feed.announcements(sym)
+                items = feed_items(feed, sym)
             except SourceError as e:
                 problems.append(f"{sym}: {e}")
                 continue
             try:
-                got = read_new(sym, items, docs_api, ai, limit=3, since=since)
+                short = len({r.get("period") for r in stored(sym).values() if r.get("period")}) < BACKFILL_MONTHS
+                got = read_new(sym, items, docs_api, ai, limit=2 if short else 3, since=None if short else since)
             except Exception as e:                          # the AI being down mustn't stop the alerts on filings
                 got = {"read": 0, "problems": [str(e)[:120]]}
             read += got["read"]
@@ -633,9 +810,15 @@ def _symbol(symbol: str) -> str:
     return sym
 
 
+def feed_items(feed, sym: str, days: int = LOOKBACK_DAYS) -> list[dict]:
+    """A company's filings from every exchange it files on (NSE and BSE) when the feed can say, else the feed's own."""
+    both = getattr(feed, "announcements_both", None)
+    return both(sym, days) if both else feed.announcements(sym, days)
+
+
 def _items(sym: str) -> tuple[list[dict], list[str]]:
     try:
-        return _wire["feed"]().announcements(sym, LOOKBACK_DAYS), []
+        return feed_items(_wire["feed"](), sym), []
     except SourceError as e:
         return [], [str(e)]
 
@@ -667,9 +850,17 @@ def business_updates_read(symbol: str, profile=Depends(current_profile)):
 
 @router.get("/invest/business-updates")
 def business_updates_sector(sector: str = "autos", profile=Depends(current_profile)):
-    """A sector's monthly or quarterly figures side by side, alphabetical. Basic and up."""
+    """A sector's latest figures side by side, alphabetical, and the month-by-month comparison. Basic and up."""
     if sector not in SECTORS:
         err(404, "no_sector", "That sector isn't on the list.")
     if not _allowed(profile):
         err(402, "upgrade_required", f"The sector view of business updates is on the {PLANS[FEATURE_PLAN['biz_updates']]['name']} plan.")
-    return ok(sector_view(sector))
+    return ok({**sector_view(sector), "compare": compare_view(sector)})
+
+
+@router.get("/invest/business-updates/mine")
+def business_updates_mine(profile=Depends(current_profile)):
+    """The business updates of the user's own stocks: holdings first, then watchlist. Basic and up."""
+    if not _allowed(profile):
+        err(402, "upgrade_required", f"Business updates for your stocks are on the {PLANS[FEATURE_PLAN['biz_updates']]['name']} plan.")
+    return ok(my_view(profile["id"]))

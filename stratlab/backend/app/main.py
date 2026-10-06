@@ -75,7 +75,7 @@ from .options.data import OptionsData, freeze as freeze_limit
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import breadth, redflags, redflags_routes, scan_presets
+from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -83,7 +83,7 @@ from . import corp_actions
 from . import surveillance
 from . import etf_nav
 from . import vix
-from . import biz_updates, shareholders
+from . import biz_updates, library_seed, shareholders
 from . import positioning
 from . import fo_changes_routes
 from . import closing_auction
@@ -280,6 +280,8 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start()
     screen_job.start()
     breadth_job.start()
+    threading.Thread(target=library_seed_once, daemon=True, name="library-seed-once").start()
+    breadth_live_job.start()          # breadth every ~15 minutes while the Indian market is open
     etf_job.start()
     closing_auction_job.start()       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
     vix_job.start()
@@ -2681,8 +2683,8 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
 
 
 @app.get("/library")
-def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", profile=Depends(current_profile)):
-    shown = [e for e in library.all_entries() if library.visible(e, profile["id"])]
+def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", official: bool = False, profile=Depends(current_profile)):
+    shown = [e for e in library.all_entries() if library.visible(e, profile["id"]) and (e.get("official") or not official)]
     rows = library.search(shown, market.upper()[:10], verdict[:12], q[:80], sort)
     return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows),
             "reasons": library.REASONS}
@@ -3019,6 +3021,10 @@ breadth_runner = breadth.Runner(lambda r, s, d: breadth_load(r, s, d), lambda r,
                                 lambda name: filings_feed.index_members(name), lambda: filings_feed.all_equities(),
                                 after=lambda r, g, now: breadth_alerts(r, g, now))
 breadth_job = breadth.Job(breadth_runner, lambda r: kite.ready() if r == "IN" else True)
+breadth_live_runner = breadth_live.Live(
+    lambda syms: kite.quote(syms), kite.ready,
+    lambda region, now: breadth_live.rebuild_base(lambda r, s, d: breadth_load(r, s, d), region, now))
+breadth_live_job = breadth_live.LiveJob(breadth_live_runner)
 
 
 @app.get("/invest/breadth")
@@ -3030,6 +3036,7 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
         err(400, "bad_range", "Pick a time range from the list.")
     out = breadth.view(group, range, full=allows(profile["_plan"], "breadth"), brief=brief)
     out["plan_needed"] = PLANS[FEATURE_PLAN["breadth"]]["name"]
+    out["live"] = None if brief else breadth_live.view(group, ready=kite.ready())
     return ok(out)
 
 
@@ -3100,10 +3107,17 @@ def admin_redflags_run(region: str = "IN", _=Depends(admin.admin_profile)):
     return {"started": True, "region": region, "state": redflags.state(region)}
 
 
+@app.get("/admin/business-updates/reliability")
+def admin_biz_reliability(_=Depends(admin.admin_profile)):
+    """Which sectors and companies read into checked figures, from the filings read so far."""
+    return biz_updates.reliability()
+
+
 @app.get("/admin/breadth")
 def admin_breadth(_=Depends(admin.admin_profile)):
     """Each market's last breadth run, and whether one is going now."""
-    return {"status": breadth.status(), "job": breadth_job.status, "running": breadth_runner.running}
+    return {"status": breadth.status(), "job": breadth_job.status, "running": breadth_runner.running,
+            "live": breadth_live.status(), "live_job": breadth_live_job.status}
 
 
 @app.get("/admin/storage")
@@ -4354,6 +4368,54 @@ def admin_end_promo(who=Depends(admin.admin_profile)):
     set_promo(None)
     log.info("admin %s ended the free offer", who.get("email"))
     return {"until": None}
+
+
+_seeding = threading.Lock()
+
+
+@app.post("/admin/library/seed")
+def admin_library_seed(only: str = "", _=Depends(admin.admin_profile)):
+    """Run StratLab's own strategies through the backtest and verdict and publish them to the library (again: the same
+    entries are updated in place). In the background; GET /admin/library/seed says how it went."""
+    if not _seeding.acquire(blocking=False):
+        err(409, "busy", "The StratLab strategies are being run already.")
+    slugs = [s for s in only.split(",") if s in library_seed.STRATEGIES] or None
+
+    def work():
+        try:
+            _seed_result.update(started=db.now_iso(), result=None, error=None)
+            _seed_result["result"] = library_seed.seed(markets, only=slugs)
+        except Exception as e:
+            _seed_result["error"] = str(e)[:200]
+        finally:
+            _seed_result["finished"] = db.now_iso()
+            _seeding.release()
+    threading.Thread(target=work, daemon=True, name="library-seed").start()
+    return {"started": True, "strategies": slugs or list(library_seed.STRATEGIES)}
+
+
+_seed_result: dict = {}
+
+
+@app.get("/admin/library/seed")
+def admin_library_seed_status(_=Depends(admin.admin_profile)):
+    return {"running": _seeding.locked(), **_seed_result, "official": len(library_seed.seeded())}
+
+
+def library_seed_once():
+    """A while after starting: StratLab's own strategies are published once, when the library has none yet and market
+    data is up. (After that the admin button refreshes them.)"""
+    time.sleep(1500)
+    try:
+        if library_seed.seeded() or not kite.ready() or not _seeding.acquire(blocking=False):
+            return
+        try:
+            _seed_result.update(started=db.now_iso(), result=library_seed.seed(markets), error=None)
+        finally:
+            _seed_result["finished"] = db.now_iso()
+            _seeding.release()
+    except Exception as e:
+        print("library seed:", str(e)[:160])
 
 
 @app.get("/admin/library")
