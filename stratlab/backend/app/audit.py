@@ -171,9 +171,11 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
     # years whose annual report has no revenue line at all (US filings): no sales that year, not a figure we missed
     none_filed = set(nums.get("no_revenue") or [])
     stopped = [y["year"] for y in years[first:] if y["year"] in none_filed and y.get("profit") is not None]
-    if years and len(no_sales) == len(years) and all(y.get("profit") is not None for y in years):
+    us = p.get("region") == "US"        # US filings say whether a year had no revenue line: without that it is a figure we didn't read
+    if years and len(no_sales) == len(years) and all(y.get("profit") is not None for y in years) and (not us or set(no_sales) <= none_filed):
         out.append(_issue("fact", "Numbers", NO_REVENUE))         # a company with no sales yet (in development, a shell)
-    elif missing and missing == before and all(y.get("profit") is not None for y in years[:first]):
+    elif (missing and missing == before and all(y.get("profit") is not None for y in years[:first])
+          and (not us or set(before) <= none_filed)):
         out.append(_issue("fact", "Numbers", f"No revenue before {years[first]['year']}: sales began then"))
     elif missing:
         if stopped:
