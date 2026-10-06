@@ -114,7 +114,7 @@ def test_meetings_tell_earnings_calls_from_investor_meetings():
              _item("2026-07-01T10:00", "XYZ Ltd has informed the Exchange about Schedule of meet"),
              _item("2026-06-01T10:00", "Outcome of board meeting: financial results", subject="Outcome of Board Meeting"),
              _item("2023-01-01T10:00", "Audio recording of the earnings call")]                 # before the window
-    assert deepdive.meetings(items, "2024-10-05T00:00") == {"meets": 2, "calls": 0, "filed": 3}
+    assert deepdive.meetings(items, "2024-10-05T00:00") == {"meets": 2, "calls": 0, "calls_due": 0, "filed": 3}
     items.insert(0, _item("2026-08-12T10:00", "XYZ Ltd has informed the Exchange about Audio Recording"))
     assert deepdive.meetings(items, "2024-10-05T00:00")["calls"] == 1
 

@@ -195,7 +195,7 @@ def _filing_alert_ok(profile: dict) -> bool:
     return allows(access_plan(profile), "filings") and bool(alerts.jobs_for(profile, "", ""))
 
 
-filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), lambda s: bse_code(s))
+filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), lambda s: bse_code(s), lambda s: bse_twin(s))
 filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                    can_alert=_filing_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
@@ -312,6 +312,8 @@ app.include_router(signals_routes.hook_router)  # /hooks/signal/<token>: the sig
 app.include_router(market_events_routes.router)  # /trade/events
 from . import email_previews as _email_previews  # noqa: E402
 app.include_router(_email_previews.router)       # /admin/email-previews
+from . import admin_jobs as _admin_jobs  # noqa: E402
+app.include_router(_admin_jobs.router)           # /admin/jobs: every background job, for Admin -> Data and jobs
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
@@ -1708,7 +1710,7 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
 
 def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]:
     """(Stage and Supertrend on daily candles, or None; and when None, why): "untraded" (not on the exchange's
-    trading list, or no trades in the window: suspended), "new" (under 30 days of prices), "stale" (no trade for a
+    trading list, or no trades in the window: suspended), "new" (under 30 days of prices), "sparse" (an older share that trades on fewer than 30 days), "stale" (no trade for a
     month) or "error" (the price source didn't answer: try again later)."""
     if market == "US":                    # share classes and preferred series are written with a dash for prices: BRK-B, BAC-PL
         sym = sec.price_symbol(sym)
@@ -1743,7 +1745,17 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
         got = scan.analyse(bars)
     except Exception:
         return None, "error"
-    return (got, None) if got else (None, "new" if len(bars) < 30 else None)
+    if got:
+        return got, None
+    if len(bars) >= 30:
+        return None, None
+    # under 30 candles: a new listing, or an old share that trades on a handful of days a year (the broker's candles
+    # skip days without a trade), told apart by how long ago its first candle is: 30 trading days is about six weeks
+    try:
+        first = datetime.fromisoformat(str(bars[0].get("t"))[:10]).date()
+        return None, "new" if (datetime.now(IST).date() - first).days <= 60 else "sparse"
+    except (TypeError, ValueError):
+        return None, "new"
 
 
 def price_trend(sym: str, market: str = "IN") -> dict | None:
@@ -3658,6 +3670,18 @@ def holiday_job():
         time.sleep(24 * 3600)
 
 
+@app.post("/admin/etf-gaps/refresh")
+def admin_etf_gaps_refresh(_=Depends(admin.admin_profile)):
+    """Read the exchange's ETF list now (the job reads it every few minutes in market hours) and say how many ETFs it gave."""
+    try:
+        parsed = etf_nav.refresh(filings_feed)
+    except Exception as e:
+        etf_job.status["last_error"] = str(e)[:200]
+        err(502, "etf_list_unavailable", f"The exchange's ETF list couldn't be read: {public_text(str(e)[:160])}")
+    etf_job.status.update(read=datetime.now(timezone.utc).isoformat(timespec="minutes"), last_error=None)
+    return {"etfs": len(parsed["rows"]), "as_of": parsed["as_of"], "job": etf_job.status}
+
+
 @app.post("/admin/holidays/refresh")
 def admin_holidays_refresh(_=Depends(admin.admin_profile)):
     """Fetch the exchange's holiday list now instead of waiting for the daily run."""
@@ -3899,6 +3923,22 @@ def bse_code(sym: str) -> str | None:
             return hit.get("bse_code") if hit["exchange"] == "BSE" else None
     _load_bse_map()                           # the broker offline: the saved BSE-only list
     return next((c for c, v in _bse_map.items() if str(v.get("ts") or "").upper() == s), None)
+
+
+def bse_twin(sym: str) -> str | None:
+    """The BSE scrip code of an NSE company's other listing (same symbol, else the same company name); None when the
+    broker is offline or the company isn't on BSE."""
+    if not kite.ready():
+        return None
+    s = (sym or "").strip().upper()
+    try:
+        hit = kite.by_symbol(s, "BSE")
+        if not hit:
+            nse = kite.equity(s)
+            hit = nse and kite.equity_by_name(nse.get("name") or "")
+        return hit.get("bse_code") if hit and hit.get("exchange") == "BSE" and hit.get("type") == "EQ" else None
+    except Exception:
+        return None
 
 
 def bse_symbol(code: str) -> str:

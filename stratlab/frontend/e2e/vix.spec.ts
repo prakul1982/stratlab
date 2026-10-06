@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // India VIX: the panel on Positioning (value and change, the day's range, where it sits in the past year, NIFTY ATM IV,
-// today's line and the year's closes) and its tile on the Trade home's positioning card, on desktop and phone. The fake
+// today's line and the year's closes), on desktop and phone; the Trade home only links to it. The fake
 // world serves the exchange's real index list and one-day chart, trimmed (backend/tests/fixtures/vix: India VIX 15.03,
 // up 0.57 from 14.46), and a made-up year of daily closes (backend/tests/fake_vix.py).
 const ADVICE = /\b(buy|sell|hold|avoid|cheap|expensive|bullish|bearish|expected move|probability of profit)\b/i;
@@ -68,15 +68,18 @@ test("India VIX on Positioning: today, the day's line, the past year and NIFTY A
   if (SHOTS) await panel.screenshot({ path: `${SHOTS}/vix-panel-${info.project.name}.png` });
 });
 
-test("India VIX on the Trade home's positioning card", async ({ page }, info) => {
+test("the Trade home has no positioning card, only a link to the Positioning page", async ({ page }, info) => {
   const errors = await open(page, "/trade", "Test an idea, then trade it on paper");
-  const card = page.getByTestId("positioning-card");
-  await card.scrollIntoViewIfNeeded();
-  await expect(card.getByTestId("pos-card-vix")).toHaveText("15.03");
-  await expect(card).toContainText("+0.57 (+3.94%)");
-  await sane(page, errors, "[data-testid=positioning-card]");
-  // the theme flips without anything going unreadable: the tile keeps its text colour token
-  await page.emulateMedia({ colorScheme: "dark" });
-  await expect(card.getByTestId("pos-card-vix")).toBeVisible();
-  if (SHOTS) await card.screenshot({ path: `${SHOTS}/vix-card-${info.project.name}.png` });
+  await expect(page.getByTestId("positioning-card"), "the numbers show on the Positioning page only").toHaveCount(0);
+  const link = page.getByTestId("positioning-link").getByRole("link", { name: "Positioning" });
+  await link.scrollIntoViewIfNeeded();
+  if (SHOTS) {
+    await page.emulateMedia({ colorScheme: info.project.name === "phone" ? "light" : "dark" });
+    await page.screenshot({ path: `${SHOTS}/trade-home-${info.project.name === "phone" ? "400-light" : "1300-dark"}.png`, fullPage: true });
+  }
+  await link.click();
+  await expect(page).toHaveURL(/\/trade\/positioning$/);
+  await expect(page.getByRole("heading", { name: "Positioning", level: 1 })).toBeVisible();
+  await expect(page.getByTestId("vix-figs")).toBeVisible({ timeout: 30_000 });
+  await sane(page, errors);
 });

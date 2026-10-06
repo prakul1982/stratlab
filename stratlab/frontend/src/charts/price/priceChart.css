@@ -28,6 +28,8 @@
 .pc-btn:disabled { opacity: .45; cursor: not-allowed; }
 .pc-btn.icon { width: 34px; padding: 0; justify-content: center; }
 .pc-btn svg { width: 16px; height: 16px; flex: none; }
+.pc-tf { min-width: 0; max-width: 100%; }
+.pc-tf .k-chipwrap { gap: 6px; }
 .pc-seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--card); }
 .pc-seg .pc-btn { border: 0; border-radius: 0; min-height: 32px; padding: 0 9px; }
 .pc-seg .pc-btn + .pc-btn { border-left: 1px solid var(--line); }

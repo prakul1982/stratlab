@@ -28,7 +28,7 @@ def test_malformed_filing_link_is_read_as_words_not_an_error():
     assert deepdive._file_words(BAD[0]["url"]).strip()
     kinds = [d["kind"] for d in deepdive.documents(BAD)]
     assert "presentation" in kinds and "transcript" in kinds
-    assert deepdive.meetings(BAD, "2026-01-01T00:00") == {"meets": 1, "calls": 1, "filed": 2}
+    assert deepdive.meetings(BAD, "2026-01-01T00:00") == {"meets": 1, "calls": 1, "calls_due": 1, "filed": 2}
 
 
 # ---------- one check that throws can't hold the background audit on the same company forever ----------

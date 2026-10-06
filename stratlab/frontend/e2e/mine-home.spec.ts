@@ -12,14 +12,14 @@ type Who = ReturnType<typeof who>;
 const auth = (u: Who) => ({ Authorization: `Bearer ${u.token}` });
 const SHOTS = process.env.E2E_SHOTS;
 
-async function signIn(page: Page, u: Who, path: string) {
+async function signIn(page: Page, u: Who, path: string, meta: Record<string, unknown> = {}) {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.route("**/*", (r) => {
     const host = new URL(r.request().url()).hostname;
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
-  const session = { ...base, access_token: u.token, user: { id: u.id, aud: "authenticated", email: u.email, role: "authenticated", app_metadata: {}, user_metadata: {} } };
+  const session = { ...base, access_token: u.token, user: { id: u.id, aud: "authenticated", email: u.email, role: "authenticated", app_metadata: {}, user_metadata: meta } };
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, session);
   await page.goto(path);
   return errors;
@@ -185,4 +185,46 @@ test("my space: the menu has My space, Pinned, Briefs, Connected accounts and AI
   if (phone) await page.getByRole("button", { name: "Open menu" }).click();
   await expect(side.locator('[data-group="pinned"]')).toContainText("Pin a page from the menu in its breadcrumb");
   await sane(page, errors, phone);
+});
+
+test("my space: greets by first name, writes the dollar rate without a rupee sign, labels gold, and keeps room for the net worth history", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  // the owner's net worth with no history yet: the card keeps its space and says why
+  await page.route((u) => u.pathname === "/money/net-worth", async (r) => {
+    const res = await r.fetch();
+    const body = await res.json();
+    await r.fulfill({ response: res, json: { ...body, history: [], history_allowed: true } });
+  });
+  const errors = await signIn(page, ADMIN, "/mine", { full_name: "owner sharma" });
+  await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 1500 }).catch(() => undefined);
+  await page.getByRole("button", { name: /All of it/ }).click({ timeout: 2000 }).catch(() => undefined);
+  await page.goto("/mine");
+  const home = page.getByTestId("mine-home");
+  await expect(home.getByRole("heading", { level: 1 })).toHaveText(/^Good (morning|afternoon|evening), Owner$/);
+  await expect(page.locator(".k-skel-box")).toHaveCount(0, { timeout: 30_000 });
+  // USD/INR is a rate, not an amount of rupees; gold says what it is priced in
+  const fx = page.locator('.mine-mkt[data-market="usdinr"]');
+  await expect(fx).not.toContainText("₹");
+  const v = fx.locator(".mine-mkt-v");
+  if (await v.count()) await expect(v).toHaveText(/^\d[\d,]*\.\d{2}$/);
+  await expect(page.locator('.mine-mkt[data-market="gold"] .k-stat-k')).toContainText("$/oz");
+  const nw = page.getByTestId("mine-networth");
+  await expect(nw.getByTestId("mine-nw-placeholder")).toContainText("History starts after your first month");
+  await expect(nw.locator("svg.k-spark")).toHaveCount(0);
+  await sane(page, errors, phone);
+  if (SHOTS) {
+    await page.emulateMedia({ colorScheme: phone ? "light" : "dark" });
+    await page.screenshot({ path: `${SHOTS}/my-space-${phone ? "400-light" : "1300-dark"}.png`, fullPage: true });
+  }
+});
+
+test("the AI assistant, Get the app and Invite friends pages drop 'Mine ·' from their eyebrow (the breadcrumb says Mine)", async ({ page }) => {
+  const errors = await signIn(page, ADMIN, "/assistant");
+  for (const [path, title] of [["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"]]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("main .k-eyebrow").first()).toHaveText(title);
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Mine");
+  }
+  expect(errors).toEqual([]);
 });

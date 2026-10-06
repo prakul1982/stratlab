@@ -14,7 +14,6 @@ import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
-import { PositioningCard } from "../components/PositioningCard";
 import { Explore } from "../components/Explore";
 import { CompanySearch } from "../components/CompanySearch";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Receipt, Search, Wallet } from "../components/Icons";
@@ -106,7 +105,7 @@ export function TradeHome() {
       </Head>
       <NextIdea />
       <ToolStrip label="Trade tools" tools={tools} />
-      <PositioningCard />
+      <p className="k-small k-muted" data-testid="positioning-link">FII and DII flows, futures positions, PCR and India VIX are on <Link className="link" to="/trade/positioning">Positioning</Link>.</p>
       <Explore title="More you can do" hide={TRADE_LINKED} order="trade" />
     </div>
   );

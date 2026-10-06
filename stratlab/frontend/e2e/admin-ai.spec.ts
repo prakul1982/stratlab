@@ -98,7 +98,7 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
       : path === "/admin/ai/rerank" ? { ...v, started: ["groq", "mistral"] } : v;
     await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(out) });
   });
-  const errors = await open(page, "/admin?tab=services", "Who is asked, in order");
+  const errors = await open(page, "/admin/system", "Who is asked, in order");
   const panel = page.locator("section[aria-label='AI']");
   const groq = panel.locator(".ai-provider", { hasText: "Groq" });
   await expect(groq.getByText("llama-3.3-70b-versatile").first()).toBeVisible();
@@ -141,7 +141,7 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
 });
 
 test("admin: with no AI keys, the panel says so and lists every free provider with where to get a key", async ({ page }, info) => {
-  const errors = await open(page, "/admin?tab=services", "More free providers you can add");
+  const errors = await open(page, "/admin/system", "More free providers you can add");
   const panel = page.locator("section[aria-label='AI']");
   await expect(panel.getByText("No AI keys yet")).toBeVisible();
   await expect(panel.getByText("GROQ_API_KEY")).toBeVisible();

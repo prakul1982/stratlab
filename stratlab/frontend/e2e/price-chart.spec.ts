@@ -197,8 +197,7 @@ test("price chart on a company page: types, indicators, drawings, zoom, full scr
   expect(chunks.length, "the chart's code loads in its own file").toBe(1);
   await exercise(page, chart, phone, "IN:RELIANCE");
   // timeframes: hourly candles, then scroll back until older ones load
-  if (phone) await chart.getByLabel("Timeframe (phone)").selectOption("1h");
-  else await chart.getByRole("radio", { name: "1h" }).click();
+  await chart.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: "1 hour", exact: true }).click();
   await expect(chart).toHaveAttribute("data-loaded", "1h", { timeout: 20_000 });
   await expect(chart).toHaveAttribute("data-more", "true");
   const n = await num(chart, "bars");

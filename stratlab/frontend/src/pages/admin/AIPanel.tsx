@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
-import { useApp } from "../lib/app";
-import { ago } from "../lib/format";
+import { api } from "../../lib/api";
+import { useApp } from "../../lib/app";
+import { ago } from "../../lib/format";
+import { Badge, Card, CardHead, Light, Skeleton } from "../../components/kit";
 
 // Admin only: provider names are fine here (never on public pages).
 type Model = {
@@ -35,8 +36,8 @@ function until(t: number | null) {
   if (s < 86400) return `in ${Math.round(s / 3600)} h`;
   return `on ${new Date(t * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
 }
-const BADGE: Record<Provider["state"], [string, string]> = {
-  ok: ["pass", "OK"], warn: ["warn", "Check"], fail: ["fail", "Problem"], idle: ["fact", "Not tested"], off: ["fact", "No key"],
+const STATE: Record<Provider["state"], ["ok" | "warn" | "bad" | null, string]> = {
+  ok: ["ok", "OK"], warn: ["warn", "Check"], fail: ["bad", "Problem"], idle: [null, "Not tested"], off: [null, "No key"],
 };
 const SKIPPED: Record<string, string> = {
   "not a chat model": "not chat models", "not English-first": "built for another language", "too small": "too small",
@@ -90,32 +91,30 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
   const reused = v && v.cache.hits + v.cache.misses ? Math.round((v.cache.hits * 100) / (v.cache.hits + v.cache.misses)) : null;
 
   return (
-    <section className="card stack" style={{ gap: 12 }} aria-label="AI">
-      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-        <h2 className="h2">AI</h2>
-        <div className="row wrap" style={{ gap: 8 }}>
-          <button className="btn quiet sm" disabled={!!busy || !on.length} onClick={testAll}>{busy === "test" ? "Testing…" : "Test every provider"}</button>
-          <button className="btn quiet sm" disabled={!!busy || !on.length || !!probing} onClick={() => rerank()}>
+    <Card label="AI">
+      <CardHead title="AI"
+        actions={<>
+          <button type="button" className="btn quiet sm" disabled={!!busy || !on.length} onClick={testAll}>{busy === "test" ? "Testing…" : "Test every provider"}</button>
+          <button type="button" className="btn quiet sm" disabled={!!busy || !on.length || !!probing} onClick={() => rerank()}>
             {probing ? "Measuring…" : busy === "rerank-all" ? "Starting…" : "Re-rank models"}</button>
-        </div>
-      </div>
-      {!v ? <p className="small muted">Loading…</p> : (
+        </>} />
+      {!v ? <Skeleton label="Loading the AI providers" lines={3} /> : (
         <>
-          <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>
+          <p className="k-small k-muted">
             {on.length} of {v.providers.length} providers set up. Each one's models are measured with a short test every {v.rerank_every_hours} hours
             {lastRank ? ` (last ${ago(iso(lastRank))})` : " (not yet)"}, and the ones that answer correctly and fast are used. A provider that fails,
             runs out of free quota or is rate limited is skipped until it's back.{reused != null && ` ${reused}% of questions since the last restart were answered from the cache.`}
           </p>
-          {!on.length && <p className="small" style={{ margin: 0 }}><b>No AI keys yet</b>, so the idea builder and research reads are off. Groq and Google Gemini are the quickest to set up (below).</p>}
-          {v.last_failure && <p className="small" role="status" style={{ margin: 0, color: "var(--orange-ink)" }}>
+          {!on.length && <p className="k-small"><b>No AI keys yet</b>, so the idea builder and research reads are off. Groq and Google Gemini are the quickest to set up (below).</p>}
+          {v.last_failure && <p className="k-small adm-warn-t" role="status">
             Last time nothing could answer ({ago(iso(v.last_failure.at))}, {v.routes[v.last_failure.task]?.label.toLowerCase() ?? v.last_failure.task}): {v.last_failure.detail}</p>}
 
           {on.length > 0 && (
-            <div className="stack small" style={{ gap: 6 }} aria-label="Routing order">
+            <div className="k-stack k-small" aria-label="Routing order">
               <b>Who is asked, in order</b>
               {Object.entries(v.routes).map(([task, r]) => (
-                <span key={task}><b>{r.label}</b> <span className="muted">(at most {r.budget_s} s): </span>
-                  <span className="muted">{r.steps.length ? r.steps.slice(0, 5).map((s) => `${s.label} · ${s.model}${s.ready ? "" : " (paused)"}`).join(" → ") : "–"}
+                <span key={task}><b>{r.label}</b> <span className="k-muted">(at most {r.budget_s} s): </span>
+                  <span className="k-muted">{r.steps.length ? r.steps.slice(0, 5).map((s) => `${s.label} · ${s.model}${s.ready ? "" : " (paused)"}`).join(" → ") : "–"}
                     {r.steps.length > 5 ? ` → ${r.steps.length - 5} more` : ""}</span></span>
               ))}
             </div>
@@ -124,16 +123,16 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
           {on.map((p) => <ProviderBlock key={p.name} p={p} test={tests?.[p.name]} busy={busy} rerank={rerank} pin={pin} block={block} />)}
 
           {off.length > 0 && (
-            <div className="stack" style={{ gap: 6 }} aria-label="More free providers">
-              <b className="small">More free providers you can add</b>
-              <p className="small muted" style={{ margin: 0 }}>Each one is optional. Add the variables in Railway → Variables, redeploy, then press Re-rank models.</p>
+            <div className="k-stack" aria-label="More free providers">
+              <b className="k-small">More free providers you can add</b>
+              <p className="k-small k-muted">Each one is optional. Add the variables in Railway → Variables, redeploy, then press Re-rank models.</p>
               {off.map((p) => (
                 <div key={p.name} className="ai-missing">
-                  <div className="stack" style={{ gap: 2, minWidth: 0 }}>
-                    <span className="small"><b>{p.label}</b>{p.terms === "prototype" && <span className="badge warn" style={{ marginLeft: 8 }}>Prototyping tier</span>}
-                      {p.terms === "paid" && <span className="badge warn" style={{ marginLeft: 8 }}>Paid</span>}</span>
-                    <span className="small muted">{p.free}{p.note ? ` ${p.note}` : ""}</span>
-                    <span className="small muted">Set <span className="mono">{p.missing.join(" and ")}</span>.</span>
+                  <div className="k-stack adm-grow">
+                    <span className="k-small"><b>{p.label}</b>{p.terms === "prototype" && <> <Badge tone="warn" dot={false}>Prototyping tier</Badge></>}
+                      {p.terms === "paid" && <> <Badge tone="warn" dot={false}>Paid</Badge></>}</span>
+                    <span className="k-small k-muted">{p.free}{p.note ? ` ${p.note}` : ""}</span>
+                    <span className="k-small k-muted">Set <span className="adm-mono">{p.missing.join(" and ")}</span>.</span>
                   </div>
                   <a className="btn quiet sm" href={p.key_url} target="_blank" rel="noopener noreferrer">Get a key</a>
                 </div>
@@ -142,7 +141,7 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
           )}
         </>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -150,67 +149,67 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
   p: Provider; test?: TestRow; busy: string | null; rerank: (name: string) => void;
   pin: (p: Provider, model: string | null) => void; block: (p: Provider, model: string, on: boolean) => void;
 }) {
-  const [cls, word] = BADGE[p.state];
+  const [light, word] = STATE[p.state];
   const skipped = Object.entries(p.skipped || {}).map(([why, n]) => `${n} ${SKIPPED[why] ?? why}`).join(", ");
   const left = p.quota.remaining;
   return (
     <div className="ai-provider" aria-label={p.label}>
-      <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
-        <span className="row wrap" style={{ gap: 8 }}>
-          <b style={{ fontSize: 14.5 }}>{p.label}</b>
-          <span className={`badge ${cls}`}>{word}</span>
-          {p.terms === "prototype" && <span className="badge warn" title="The free tier is meant for prototyping, so it's asked after every other free provider">Prototyping tier</span>}
-          {p.terms === "paid" && <span className="badge warn">Paid, asked last</span>}
+      <div className="k-spread">
+        <span className="k-row">
+          <b>{p.label}</b>
+          {light ? <Light state={light} word={word} /> : <Badge>{word}</Badge>}
+          {p.terms === "prototype" && <Badge tone="warn" dot={false}>Prototyping tier</Badge>}
+          {p.terms === "paid" && <Badge tone="warn" dot={false}>Paid, asked last</Badge>}
         </span>
-        <button className="btn quiet sm" disabled={!!busy || p.probing} onClick={() => rerank(p.name)} aria-label={`Re-rank ${p.label} models`}>
+        <button type="button" className="btn quiet sm" disabled={!!busy || p.probing} onClick={() => rerank(p.name)} aria-label={`Re-rank ${p.label} models`}>
           {p.probing ? "Measuring…" : "Re-rank"}</button>
       </div>
-      <span className="small muted">{p.state_text}</span>
-      {test && <span className="small" role="status">Test: {test.ok ? `answered with ${test.model} in ${(test.ms / 1000).toFixed(1)} s` : test.error}</span>}
-      {p.quota.limited && p.quota.reset_at && <span className="small">Free quota resets {until(p.quota.reset_at)}.</span>}
+      <span className="k-small k-muted">{p.state_text}</span>
+      {test && <span className="k-small" role="status">Test: {test.ok ? `answered with ${test.model} in ${(test.ms / 1000).toFixed(1)} s` : test.error}</span>}
+      {p.quota.limited && p.quota.reset_at && <span className="k-small">Free quota resets {until(p.quota.reset_at)}.</span>}
       {left && (left.requests != null || left.tokens != null) && (
-        <span className="small muted">Left this period: {[left.requests != null && `${left.requests.toLocaleString("en-IN")} requests`, left.tokens != null && `${left.tokens.toLocaleString("en-IN")} tokens`].filter(Boolean).join(", ")}
+        <span className="k-small k-muted">Left this period: {[left.requests != null && `${left.requests.toLocaleString("en-IN")} requests`, left.tokens != null && `${left.tokens.toLocaleString("en-IN")} tokens`].filter(Boolean).join(", ")}
           {p.quota.remaining_at ? ` (as of ${ago(iso(p.quota.remaining_at))})` : ""}</span>
       )}
-      <span className="small muted">Free limit: {p.free}{p.note ? ` ${p.note}` : ""}</span>
-      <span className="small muted">
+      <span className="k-small k-muted">Free limit: {p.free}{p.note ? ` ${p.note}` : ""}</span>
+      <span className="k-small k-muted">
         {p.ranked_at ? `Measured ${ago(iso(p.ranked_at))}${p.discovered != null ? `: ${p.discovered} models listed${skipped ? `, left out ${skipped}` : ""}` : ""}.` : "Not measured yet: its known-good models are used until then."}
         {p.rank_error ? ` ${p.rank_error}.` : ""}
       </span>
       {p.pinned && (
-        <span className="small row wrap" style={{ gap: 8 }}>
-          <span>Pinned to <span className="mono">{p.pinned}</span>{p.pinned_by === "railway" ? ` by ${p.model_variable} in Railway` : ""}.</span>
-          {p.pinned_by === "admin" && <button className="btn quiet sm" disabled={!!busy} onClick={() => pin(p, null)}>Unpin</button>}
+        <span className="k-small k-row">
+          <span>Pinned to <span className="adm-mono">{p.pinned}</span>{p.pinned_by === "railway" ? ` by ${p.model_variable} in Railway` : ""}.</span>
+          {p.pinned_by === "admin" && <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => pin(p, null)}>Unpin</button>}
         </span>
       )}
-      <div className="stack" style={{ gap: 0 }} aria-label={`${p.label} models`}>
+      <div className="k-stack" aria-label={`${p.label} models`}>
         {p.models.map((m) => (
           <div key={m.id} className="ai-model">
-            <div className="stack" style={{ gap: 2, minWidth: 0 }}>
-              <span className="small">
-                {m.in_use ? <b>#{m.rank} </b> : <span className="muted">not in use </span>}
-                <span className="mono ai-id">{m.id}</span>
-                {m.pinned && <span className="badge next" style={{ marginLeft: 6 }}>Pinned</span>}
-                {m.blocked && <span className="badge fail" style={{ marginLeft: 6 }}>Blocked</span>}
+            <div className="k-stack adm-grow">
+              <span className="k-small">
+                {m.in_use ? <b>#{m.rank} </b> : <span className="k-muted">not in use </span>}
+                <span className="adm-mono ai-id">{m.id}</span>
+                {m.pinned && <> <Badge tone="ok" dot={false}>Pinned</Badge></>}
+                {m.blocked && <> <Badge tone="warn" dot={false}>Blocked</Badge></>}
               </span>
-              <span className="small muted">
+              <span className="k-small k-muted">
                 {m.success != null ? `${m.success}% of ${m.tries} answered well` : "no answers yet"} · median {secs(m.median_ms)}
                 {m.thinks ? " · reasons first" : ""}
                 {m.open_until ? ` · paused ${until(m.open_until)} (${m.open_reason})` : ""}
                 {m.last_error ? ` · last problem: ${m.last_error}` : m.probe.error ? ` · test: ${m.probe.error}` : ""}
               </span>
             </div>
-            <span className="row" style={{ gap: 6 }}>
-              {!m.blocked && !m.pinned && <button className="btn quiet sm" disabled={!!busy} onClick={() => pin(p, m.id)} aria-label={`Pin ${m.id}`}>Pin</button>}
-              <button className="btn quiet sm" disabled={!!busy} onClick={() => block(p, m.id, !m.blocked)} aria-label={`${m.blocked ? "Unblock" : "Block"} ${m.id}`}>
+            <span className="k-row">
+              {!m.blocked && !m.pinned && <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => pin(p, m.id)} aria-label={`Pin ${m.id}`}>Pin</button>}
+              <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => block(p, m.id, !m.blocked)} aria-label={`${m.blocked ? "Unblock" : "Block"} ${m.id}`}>
                 {m.blocked ? "Unblock" : "Block"}</button>
             </span>
           </div>
         ))}
         {p.blocked.filter((b) => !p.models.some((m) => m.id === b)).map((b) => (
           <div key={b} className="ai-model">
-            <span className="small"><span className="mono ai-id">{b}</span> <span className="badge fail">Blocked</span></span>
-            <button className="btn quiet sm" disabled={!!busy} onClick={() => block(p, b, false)} aria-label={`Unblock ${b}`}>Unblock</button>
+            <span className="k-small"><span className="adm-mono ai-id">{b}</span> <Badge tone="warn" dot={false}>Blocked</Badge></span>
+            <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => block(p, b, false)} aria-label={`Unblock ${b}`}>Unblock</button>
           </div>
         ))}
       </div>
