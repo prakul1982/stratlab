@@ -1874,3 +1874,33 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-custom li:last-child { border-bottom: 0; }
 .mine-custom label { display: flex; align-items: center; gap: var(--s2); min-height: 34px; cursor: pointer; }
 .mine-move { display: flex; gap: 6px; }
+.mine-nw-ph { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--s2); min-height: 92px; padding: var(--s3); border-radius: var(--r-ctl); background: var(--paper-2); overflow: hidden; }
+.mine-nw-ph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mine-nw-ph .grid { stroke: var(--line); stroke-width: 1; fill: none; vector-effect: non-scaling-stroke; }
+.mine-nw-ph .base { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 3 5; fill: none; opacity: .6; vector-effect: non-scaling-stroke; }
+.mine-nw-ph circle { fill: var(--muted); opacity: .7; }
+.mine-nw-ph > span { position: relative; }
+
+/* health lights and status rows (kit Health.tsx): Admin's Overview and its status lists */
+.k-light { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-note); font-weight: 600; white-space: nowrap; }
+.k-hl { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--up); }
+.k-light.warn .k-hl { background: var(--orange); }
+.k-light.bad .k-hl { background: var(--down); }
+.k-light.ok { color: var(--ink-2); }
+.k-light.warn { color: var(--orange-ink); }
+.k-light.bad { color: var(--down); }
+.k-health { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s2); }
+.k-health-i { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--s2) var(--s3); border-radius: var(--r-ctl); background: var(--paper-2); border: 1px solid transparent; color: inherit; text-decoration: none; min-width: 0; }
+.k-health-cell { display: flex; min-width: 0; }
+.k-health-cell > .k-health-i { flex: 1 1 auto; }
+.k-health-i b { font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-health-i.warn { border-color: var(--orange-soft); }
+.k-health-i.bad { border-color: var(--down); }
+a.k-health-i:hover { border-color: var(--line-2); }
+a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.k-health-d { font-size: var(--t-note); color: var(--muted); overflow-wrap: anywhere; }
+.k-status-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.k-status-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.k-status-row:last-child { border-bottom: 0; }
+.k-status-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 260px; }
+.k-status-t b { font-size: 14.5px; }

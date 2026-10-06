@@ -5,7 +5,7 @@ import { axisInr, CRORE, inr, inrCompact, pct, pctPlain, signed, signedInrCompac
 import { LineChart } from "../components/Charts";
 import { Loading } from "../components/ui";
 import {
-  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, LinkCard, PageHeader, ResultBlock, Seg, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
+  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, HealthGrid, HealthTile, LinkCard, StatusList, StatusRow, PageHeader, ResultBlock, Seg, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
   TilePicker, type TileGroup,
 } from "../components/kit";
 
@@ -147,6 +147,21 @@ function Body() {
             <Spark values={[...BOOK.slice(0, 20)].reverse()} tone="down" label="Example, falling" />
             <Spark values={BOOK.slice(0, 20)} label="Example, neutral" />
           </StatRow>
+        </Card>
+      </Spec>
+
+      <Spec name="HealthGrid and StatusList" rule="A light is green, amber or red and always carries its word. One tile per service or feed; a status list for a card's own rows.">
+        <Card>
+          <HealthGrid label="Example health">
+            <HealthTile state="ok" label="Prices" detail="live · 4s ago" />
+            <HealthTile state="ok" label="Broker login" detail="today 08:00" />
+            <HealthTile state="warn" label="ETF NAV" detail="old format · Run now" to="/admin/data" />
+            <HealthTile state="bad" label="Closing auction" detail="read failed 12 min ago" />
+          </HealthGrid>
+          <StatusList label="Example statuses">
+            <StatusRow state="ok" label="Alerts to you" detail="Emailed to owner@example.com" />
+            <StatusRow state="warn" label="Option chain recording" detail="Off" />
+          </StatusList>
         </Card>
       </Spec>
 

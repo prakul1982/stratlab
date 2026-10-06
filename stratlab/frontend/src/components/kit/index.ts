@@ -23,3 +23,4 @@ export { LinkCard } from "./LinkCard";
 export { Spark } from "./Spark";
 export { Breadcrumb, type Crumb, type Sibling } from "./Breadcrumb";
 export { Calendar, type CalEvent, type CalKind } from "./Calendar";
+export { Light, HealthGrid, HealthTile, StatusList, StatusRow, type HealthState } from "./Health";

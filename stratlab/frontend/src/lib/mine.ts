@@ -22,8 +22,8 @@ export const MARKET_TILES: MarketTile[] = [
   { id: "sensex", label: "SENSEX", from: { research: ["IN", "^BSESN"] }, fmt: grouped("en-IN") },
   { id: "banknifty", label: "BANK NIFTY", from: { research: ["IN", "^NSEBANK"] }, fmt: grouped("en-IN") },
   { id: "sp500", label: "S&P 500", from: { research: ["US", "^GSPC"] }, fmt: grouped("en-US") },
-  { id: "usdinr", label: "USD/INR", from: { instrument: "FX:USDINR=X" }, fmt: fixed(2, "₹"), neutral: true },
-  { id: "gold", label: "Gold", from: { instrument: "CMDTY:GC=F" }, fmt: fixed(0, "$"), neutral: true, unit: "per ounce" },
+  { id: "usdinr", label: "USD/INR", from: { instrument: "FX:USDINR=X" }, fmt: fixed(2), neutral: true },
+  { id: "gold", label: "Gold", from: { instrument: "CMDTY:GC=F" }, fmt: fixed(0, "$"), neutral: true, unit: "$/oz" },
 ];
 
 export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null }

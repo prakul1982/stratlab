@@ -90,8 +90,8 @@ const PAGES: [string, string][] = [
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
-  ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
-  ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
+  ["/admin", "Needs your attention"], ["/admin/data", "Background jobs"], ["/admin/system", "Check every feature"], ["/admin/users", "Paper trading now"],
+  ["/admin/money", "Prices outside India"], ["/admin/quality", "Rates and rules"], ["/admin/emails", "Confirm your email"],
 ];
 
 for (const [path, ready] of PAGES) {
@@ -235,8 +235,8 @@ test("invoices: in Account for the customer, with the GST setup in Admin", async
   let errors = await open(page, "/account", "Invoices");
   await expect(page.getByText("Details on your invoices")).toBeVisible();
   await sane(page, errors);
-  errors = await open(page, "/admin?tab=billing", "LUT ARN");
-  await expect(page.getByText(/Financial year \d{4}-\d{2}/)).toBeVisible();
+  errors = await open(page, "/admin/money", "LUT ARN");
+  await expect(page.getByText(/financial year \d{4}-\d{2}/i).first()).toBeVisible();
   await sane(page, errors);
 });
 
@@ -1011,23 +1011,23 @@ test("an invite link is remembered through sign-in, sent once, and taken out of 
   await sane(page, errors);
 });
 
-test("admin: invite counts in the Users tab", async ({ page }, info) => {
-  const errors = await open(page, "/admin?tab=users", "Paper trading now");
-  await expect(page.getByRole("cell", { name: "Invited", exact: true })).toHaveCount(0);           // a click away, so the table fits a laptop
+test("admin: invite counts in Users and growth", async ({ page }, info) => {
+  const errors = await open(page, "/admin/users", "Paper trading now");
+  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /^Invited/ })).toHaveCount(0);           // a click away, so the table fits a laptop
   await page.getByTestId("cols-admin-users").click();
-  await expect(page.getByRole("cell", { name: "Invited", exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Free months", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /^Invited/ })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /^Free months/ })).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });
 
 test("admin: invite rewards waiting for review are approved or rejected", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  const errors = await open(page, "/admin?tab=users", "Invite rewards");
+  const errors = await open(page, "/admin/users", "Invite rewards");
   const panel = page.getByTestId("invite-rewards");
   await expect(panel.getByText("Waiting for your review")).toBeVisible();
   await expect(panel.locator("tr", { hasText: "load3@example.com" })).toBeVisible();          // given
-  await expect(panel.locator("th", { hasText: "Reward" })).toBeVisible();
+  await expect(panel.getByRole("columnheader", { name: /^Reward/ })).toBeVisible();
   await expect(panel.locator("tr", { hasText: "load3@example.com" }).getByTestId("reward-type")).toHaveText("Use");
   await expect(panel.locator("tr", { hasText: "load6@example.com" }).getByTestId("reward-type")).toHaveText("Payment");
   await expect(panel.locator("tr", { hasText: "load5@example.com" }).getByTestId("reward-type")).toHaveText("Waiting to subscribe");
@@ -1288,12 +1288,12 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
 });
 
 test("admin: exchange holidays show every market's source, coverage and next holiday", async ({ page }, info) => {
-  const errors = await open(page, "/admin?tab=checks", "Exchange holidays");
+  const errors = await open(page, "/admin/data", "Exchange holidays");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
   const panel = page.locator("section", { has: page.getByRole("heading", { name: "Exchange holidays" }) });
-  const table = panel.locator("table.holiday-cover");
+  const table = panel.getByRole("table", { name: "Holidays by market" });
   for (const name of ["India (NSE/BSE)", "MCX", "Currency F&O", "US", "UK", "Europe", "Japan", "Commodities", "Crypto", "Forex"])
-    await expect(table.getByRole("cell", { name, exact: true })).toBeVisible();
+    await expect(table.getByRole("rowheader", { name, exact: true })).toBeVisible();
   await expect(table.getByText("No exchange holidays (24/7 / weekdays)")).toHaveCount(2);
   await expect(table.getByText("Built-in calendar rules")).toHaveCount(5);
   await expect(table.getByText("Exchange's own list, read daily")).toHaveCount(3);
@@ -1303,28 +1303,31 @@ test("admin: exchange holidays show every market's source, coverage and next hol
 });
 
 test("admin: rates and rules show each area's review, the source watch and every rule", async ({ page }, info) => {
-  const errors = await open(page, "/admin?tab=checks", "Rates and rules");
+  const errors = await open(page, "/admin/quality", "Rates and rules");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
   const panel = page.getByTestId("rules-panel");
   for (const area of ["Trading costs", "Income tax", "Interest rates", "Market rules", "Surveillance lists"])
-    await expect(panel.getByRole("cell", { name: area, exact: true })).toBeVisible();
+    await expect(panel.getByRole("rowheader", { name: area, exact: true })).toBeVisible();
   for (const src of ["SEC fee rate", "PPF rate", "NSE quantity freeze limits"]) await expect(panel.getByText(src, { exact: true })).toBeVisible();
   await panel.getByRole("button", { name: /Show all \d+ rules/ }).click();
-  await expect(panel.getByRole("cell", { name: "US SEC fee (Section 31)" })).toBeVisible();
+  await expect(panel.getByRole("rowheader", { name: /US SEC fee \(Section 31\)/ })).toBeVisible();
   await expect(panel.getByText("$20.60 a million on sells")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });
 
-test("admin: fund costs (TER) shows the last read and reads again on request", async ({ page }, info) => {
+test("admin: fund costs (TER) shows its last read in Data and jobs and reads again on request", async ({ page }, info) => {
   let reads = 0;
   await page.route((u) => u.pathname === "/admin/ter/read", (r) => { reads++; return r.fallback(); });
-  const errors = await open(page, "/admin?tab=checks", "Fund costs (TER)");
-  const panel = page.getByRole("region", { name: "Fund costs (TER)" });
-  await expect(panel.getByText(/Last good read .* · 3 schemes for/)).toBeVisible({ timeout: 30_000 });
-  await panel.getByRole("button", { name: "Read now" }).click();
+  const errors = await open(page, "/admin/data", "Fund costs (TER)");
+  const row = page.getByRole("row", { name: /Fund costs \(TER\)/ });
+  await expect(row.getByRole("button", { name: "Read now: Fund costs (TER)" })).toBeVisible({ timeout: 30_000 });
+  await row.getByRole("button", { name: "Log of Fund costs (TER)" }).click();
+  await expect(page.getByRole("dialog", { name: "Fund costs (TER): log" })).toContainText(/3 schemes for/, { timeout: 30_000 });
+  await page.keyboard.press("Escape");
+  await row.getByRole("button", { name: "Read now: Fund costs (TER)" }).click();
   await expect.poll(() => reads).toBe(1);
-  await expect(panel.getByRole("button", { name: "Read now" })).toBeEnabled({ timeout: 30_000 });
+  await expect(row.getByRole("button", { name: "Read now: Fund costs (TER)" })).toBeEnabled({ timeout: 30_000 });
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });
@@ -1348,13 +1351,13 @@ test("admin: the whole-market audit tells facts and companies not checked yet ap
     const india = body ? (body.region ?? "IN") === "IN" : new URL(req.url()).searchParams.get("region") !== "US";
     await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state(retrying && india, india)) });
   });
-  const errors = await open(page, "/admin?tab=checks", "Whole market: India");
+  const errors = await open(page, "/admin/quality", "Whole market: India");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);   // asked once, if not yet
   const india = page.locator("section", { hasText: "Whole market: India" });
   await expect(india.getByText("0 gaps · 0 errors · 1 fact · 2 not checked yet")).toBeVisible();
-  await india.getByRole("radio", { name: "Facts" }).click();
+  await india.getByRole("button", { name: "Facts", exact: true }).click();
   await expect(india.getByText("Only 2 years of annual results so far")).toBeVisible();
-  await india.getByRole("radio", { name: "Not checked yet" }).click();
+  await india.getByRole("button", { name: "Not checked yet", exact: true }).click();
   await expect(india.getByText("Tiny Co Ltd")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await india.getByRole("button", { name: "Re-check the 2 not checked yet" }).click();
@@ -1385,7 +1388,7 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
     }
     await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(us ? { ...s, bse: undefined, rows: [], summary: summary(0), full: { ...(s.full as object), running: false } } : s) });
   });
-  const errors = await open(page, "/admin?tab=checks", "Whole market: India");
+  const errors = await open(page, "/admin/quality", "Whole market: India");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 3000 }).catch(() => undefined);
   const india = page.locator("section", { hasText: "Whole market: India" });
   // paused, and why; a clear Start button
@@ -1401,21 +1404,27 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByRole("button", { name: "Pause the India check" })).toBeVisible();
   await expect.poll(() => sent).toEqual([{ region: "IN", on: true }]);
   // an error row: its reason, and a re-check of that one company
-  await india.getByRole("radio", { name: "Errors" }).click();
+  await india.getByRole("button", { name: "Errors", exact: true }).click();
   await expect(india.getByText("Revenue or profit missing for Mar 2024")).toBeVisible();
   await india.getByRole("button", { name: "Re-check Acme Ltd" }).click();
   await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", recheck: "ACME" });
   // the monthly check can be switched off
   await india.getByRole("checkbox", { name: "Full re-check on the 1st of each month" }).click();
   await expect(india.getByText("Only new listings, until you reset")).toBeVisible();
-  // reset asks first: dismissed does nothing, accepted clears and starts from 0
-  page.once("dialog", (d) => d.dismiss());
+  // reset asks first, in the page (never the browser's own box): Cancel does nothing, confirming clears and starts from 0
+  const boxes: string[] = [];
+  page.on("dialog", (d) => { boxes.push(d.message()); void d.dismiss(); });
   await india.getByRole("button", { name: "Reset and check everything again" }).click();
+  const ask = page.getByRole("dialog", { name: "Check every India company again?" });
+  await expect(ask).toContainText("This clears every stored result for India");
+  await ask.getByRole("button", { name: "Cancel" }).click();
+  await expect(ask).toHaveCount(0);
   expect(sent.some((b) => b.reset)).toBe(false);
-  page.once("dialog", (d) => { expect(d.message()).toContain("Clear every stored result for India"); d.accept(); });
   await india.getByRole("button", { name: "Reset and check everything again" }).click();
+  await page.getByRole("dialog", { name: "Check every India company again?" }).getByRole("button", { name: "Reset and check again" }).click();
   await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", reset: true });
   await expect(india.getByText(/Full check: 0 of 5,058 done/)).toBeVisible();
+  expect(boxes, "no browser box opened").toEqual([]);
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });
@@ -1714,18 +1723,14 @@ test("positioning: a missing cash number says why instead of a dash", async ({ p
     const body = await res.json();
     await r.fulfill({ response: res, json: { ...body, cash: { status: "none", as_of: null, expected: "2026-10-01", reason } } });
   });
-  await sane(page, await open(page, "/trade", "Straddles, strangles"));
-  await expect(page.getByTestId("pos-card-cash-reason")).toContainText("refused the request (403)", { timeout: 30_000 });
-  await page.goto("/trade/positioning");
+  await sane(page, await open(page, "/trade/positioning", "Positioning"));
   await expect(page.getByTestId("cash-status")).toContainText("No cash numbers stored yet. The last try");
 });
 
-test("positioning: a card on the Trade home, a link from the Options page, its own page with no tabs back to Options", async ({ page }, info) => {
+test("positioning: a link on the Trade home (no card), a link from the Options page, its own page with no tabs back to Options", async ({ page }, info) => {
   await sane(page, await open(page, "/trade", "Straddles, strangles"));
-  const card = page.getByTestId("positioning-card");
-  await expect(card.getByText("FII index futures, net")).toBeVisible({ timeout: 30_000 });
-  await expect(card.getByText("NIFTY PCR (open interest)")).toBeVisible();
-  await expect(card.getByTestId("pos-card-sides")).toContainText(/% long · [\d.]+% short/);
+  await expect(page.getByTestId("positioning-card"), "the numbers show on the Positioning page only").toHaveCount(0);
+  await expect(page.getByTestId("positioning-link").getByRole("link", { name: "Positioning" })).toHaveAttribute("href", "/trade/positioning");
   await page.goto("/options");
   await expect(page.getByTestId("positioning-card"), "the card shows in one place only").toHaveCount(0);       // the Options page links to Positioning instead
   await page.getByRole("link", { name: "open Positioning" }).click();

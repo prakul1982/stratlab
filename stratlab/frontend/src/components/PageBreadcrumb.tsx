@@ -14,6 +14,7 @@ export function PageBreadcrumb() {
   const pins = usePins();
   if (pathname === MINE_HOME) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} />;
   if (pathname === "/features") return <Breadcrumb trail={[{ label: "StratLab", to: "/" }]} page="All features" />;
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} page="Admin" />;
   if (PERSONAL[pathname]) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} page={PERSONAL[pathname]} />;
   const g = locateGroup(pathname);
   if (g) return <Breadcrumb trail={[{ label: NAV[g.space].label, to: NAV[g.space].home }, { label: g.group.label, to: groupPath(g.space, g.group) }]} />;

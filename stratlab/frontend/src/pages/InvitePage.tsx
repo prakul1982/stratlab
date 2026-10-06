@@ -5,7 +5,7 @@ import { PageHeader } from "../components/kit";
 export function InvitePage() {
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Mine · Invite friends" title="Invite friends" lede="Share your link. When a friend joins and uses StratLab, you both get a month of Basic." />
+      <PageHeader eyebrow="Invite friends" title="Invite friends" lede="Share your link. When a friend joins and uses StratLab, you both get a month of Basic." />
       <InviteCard />
     </div>
   );

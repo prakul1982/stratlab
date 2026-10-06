@@ -44,8 +44,7 @@ async function seed(request: import("@playwright/test").APIRequestContext) {
   const paper = await post("/live/sessions", { strategy: EMA, instrument: "CRYPTO:BTC-USD" });
   const card = await post("/cards/company/IN/RELIANCE", {});
   const app = ["/", "/trade", "/invest", "/money", "/notebooks", "/new", `/n/${nb.id}`, `/n/${nb.id}/market`, `/n/${nb.id}/compare`, `/n/${nb.id}/e/1`, "/import",
-    "/library", "/options", "/trade/positioning", "/paper", `/paper/${paper.id}`, "/plans", "/account", "/settings", "/settings#experience", "/settings#accounts", "/settings#check", "/assistant", "/app", "/invite", "/admin", "/admin?tab=services", "/admin?tab=checks",
-    "/admin?tab=users", "/admin?tab=billing", "/news", "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar", "/alerts", "/research", "/research/themes", "/research/pulse",
+    "/library", "/options", "/trade/positioning", "/paper", `/paper/${paper.id}`, "/plans", "/account", "/settings", "/settings#experience", "/settings#accounts", "/settings#check", "/assistant", "/app", "/invite", "/admin", "/admin/users", "/admin/money", "/admin/data", "/admin/quality", "/admin/system", "/admin/emails", "/admin/emails/market_in", "/admin?tab=services", "/news", "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar", "/alerts", "/research", "/research/themes", "/research/pulse",
     "/research/compare", "/research/watchlist", "/research/scan", "/research/screens", "/research/rotation", "/research/filings", "/invest/breadth", "/invest/etf-gaps",
     "/research/results", "/research/investor", "/research/IN/RELIANCE", "/research/US/AAPL", "/research/IN/RELIANCE/deep",
     "/research/US/AAPL/deep",
@@ -104,7 +103,8 @@ async function sweep(browser: Browser, vp: (typeof VIEWPORTS)[number]) {
     }, [session, signedIn, vp.theme] as const);
     const page = await ctx.newPage();
     let errors: string[] = [];
-    page.on("pageerror", (e) => errors.push(e.message));
+    // the sweep's own sign-in script also runs inside Admin's sandboxed email frame, which rightly refuses it localStorage
+    page.on("pageerror", (e) => { if (!/allow-same-origin/.test(e.message)) errors.push(e.message); });
     // a refused request the page answers in words (an AI read that couldn't be written) is the page working; a crash isn't
     page.on("console", (m) => { if (m.type() === "error" && !/status of 4\d\d/.test(m.text())) errors.push(m.text()); });
     for (const r of routes.filter((x) => x.signedIn === signedIn)) {

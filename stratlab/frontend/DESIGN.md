@@ -43,6 +43,7 @@ The dark values are written twice in `styles.css` (explicit dark and "follow the
 | A box of content | `Card` + `CardHead` (title, (i), actions on the right in the same row); `compact` when it has little to say | `section.card` + `h2.h3` |
 | A headline number | `Stat` in a `StatRow` (sans, with note, optional `Delta`) | `Fig` / `.space-fig` (mono) |
 | A change | `Delta` (▲/▼ pill). `tone="neutral"` where a rise is not good news | colouring the number |
+| A service or feed's health | `HealthGrid` + `HealthTile` (green, amber or red light, always with its word OK / Check / Problem); `StatusList` + `StatusRow` for a card's own rows | colour-only dots |
 | A status | `Badge` (`ok`, `warn`, `plain`, `live`), always with its word | colour alone |
 | 2 to 4 choices | `Seg` | 5+ buttons; stretched full-width segs |
 | Many choices (timeframes, ranges) | `ChipBar` (`custom` adds "+ Custom", remembered per `storageKey`) | rows of fixed buttons |
