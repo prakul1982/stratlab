@@ -1175,6 +1175,31 @@ class IndiaFilings:
         except SourceError:
             return items
 
+    def announcements_both(self, symbol: str, days: int = LOOKBACK_DAYS) -> list[dict]:
+        """A company's filings from both exchanges it is listed on, each row marked with its `exchange` ("NSE" or
+        "BSE"), newest first. A BSE-only company has BSE's alone. When one exchange doesn't answer the other's rows
+        stand; only when neither answers is the error raised."""
+        code = self.code_of(symbol)
+        if code:
+            return [{**i, "exchange": "BSE"} for i in self.bse.announcements(code, days)]
+        rows: list[dict] = []
+        err: SourceError | None = None
+        try:
+            rows += [{**i, "exchange": "NSE"} for i in self.nse.announcements(symbol, days)]
+        except SourceError as e:
+            err = e
+        twin = None
+        try:
+            twin = self.twin_of(symbol) if self.twin_of else None
+            if twin:
+                rows += [{**i, "exchange": "BSE"} for i in self.bse.announcements(twin, days)]
+        except SourceError:
+            pass                              # BSE not answering: NSE's rows stand
+        if not rows and err:               # NSE did not answer and BSE has nothing to add
+            raise err
+        rows.sort(key=lambda x: x["at"], reverse=True)
+        return rows
+
     def industry(self, symbol: str) -> list[str]:
         code = self.code_of(symbol)
         return self.bse.industry(code) if code else self.nse.industry(symbol)

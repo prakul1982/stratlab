@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { safeHref } from "../lib/format";
+import { bizChange, bizValue, filedOn, periodName } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
 import { DataTable, EmptyState, Notice, Skeleton } from "./kit";
@@ -9,13 +10,14 @@ import { DataTable, EmptyState, Notice, Skeleton } from "./kit";
  * and page each comes from, the change on the previous month or quarter and on the year, and a 24-month chart. Filed
  * figures only; no estimates and no "beat" or "miss". */
 
-export interface BizPoint { period: string; value: number; filed_later: boolean; source: { at: string; url: string; page: number | null; quote: string | null } }
+export type Exchange = "NSE" | "BSE";
+export interface BizPoint { period: string; value: number; filed_later: boolean; source: { at: string; url: string; page: number | null; quote: string | null; exchange?: Exchange } }
 export interface BizMetric {
   key: string; metric: string; segment: string | null; unit: string; basis: string; span: "month" | "quarter"; headline: boolean;
   latest: BizPoint; prev: BizPoint | null; year_ago: BizPoint | null; step: "month" | "quarter";
   change_prev: number | null; change_year: number | null; points: BizPoint[];
 }
-export interface BizFiling { id: string; at: string; title: string; url: string; read: boolean; period: string | null; problem: string | null }
+export interface BizFiling { id: string; at: string; title: string; url: string; read: boolean; period: string | null; problem: string | null; exchange?: Exchange }
 export interface BizView {
   symbol: string; filings: BizFiling[]; unread: number; allowed: boolean; metrics: BizMetric[]; headline: string | null;
   problems: string[]; note: string; just_read?: number;
@@ -26,38 +28,12 @@ export const bizApi = {
   read: (symbol: string) => api<BizView>(`/research/business-updates/${encodeURIComponent(symbol)}/read`, { method: "POST" }),
 };
 
-/** "Sep 2026", or "Q2 FY27" for a quarter (Indian financial year). */
-export function periodName(p: string, span: "month" | "quarter" = "month") {
-  const [y, m] = p.split("-").map(Number);
-  if (!y || !m) return p;
-  if (span === "quarter") {
-    const q = ({ 6: 1, 9: 2, 12: 3, 3: 4 } as Record<number, number>)[m];
-    if (q) return `Q${q} FY${String((m >= 4 ? y + 1 : y) % 100).padStart(2, "0")}`;
-  }
-  return `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${y}`;
-}
-
-/** 2,36,013 units, ₹33,275 billion, 34.2%: the unit as filed, Indian digit grouping. */
-export function bizValue(v: number | null | undefined, unit: string | null) {
-  if (v == null || !Number.isFinite(v)) return "–";
-  const n = v.toLocaleString("en-IN", { maximumFractionDigits: 2 });
-  const u = (unit ?? "").trim();
-  if (u === "%") return `${n}%`;
-  if (u.startsWith("₹")) return `₹${n} ${u.slice(1).trim()}`.trim();
-  return `${n} ${u}`.trim();
-}
-
-/** "+24.4%", or "+1.2 pts" for a figure that is itself a percent. Plain text, no colour: a change, not a verdict. */
-export function bizChange(c: number | null | undefined, unit: string | null) {
-  if (c == null) return "–";
-  const s = c > 0 ? "+" : c < 0 ? "−" : "";
-  return (unit ?? "").includes("%") ? `${s}${Math.abs(c).toFixed(2)} pts` : `${s}${Math.abs(c).toFixed(1)}%`;
-}
-
 function day(iso: string) {
   const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
+
+export { bizChange, bizValue, filedOn, periodName };
 
 export function BizChart({ m, label }: { m: BizMetric; label?: string }) {
   const pts = m.points;
@@ -113,7 +89,7 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
               { key: "p", header: "On the previous", numeric: true, cell: (m) => <>{bizChange(m.change_prev, m.unit)}{m.prev && <span className="k-sub-line">vs {periodName(m.prev.period, m.span)}</span>}</> },
               { key: "y", header: "On the year", numeric: true, cell: (m) => <>{bizChange(m.change_year, m.unit)}{m.year_ago && <span className="k-sub-line">vs {periodName(m.year_ago.period, m.span)}</span>}</> },
               { key: "s", header: "Source", wrap: true, cell: (m) => (
-                <><a className="link" href={safeHref(m.latest.source.url)} target="_blank" rel="noopener noreferrer">Filing{m.latest.source.page ? `, p. ${m.latest.source.page}` : ""} ↗</a>
+                <><a className="link" href={safeHref(m.latest.source.url)} target="_blank" rel="noopener noreferrer">{m.latest.source.exchange ?? "Exchange"} filing{m.latest.source.page ? `, p. ${m.latest.source.page}` : ""} ↗</a>
                   {m.latest.source.quote && <span className="k-sub-line inv-clamp" title={m.latest.source.quote}>“{m.latest.source.quote}”</span>}</>) },
             ]} />
           {chosen && <BizChart m={chosen} />}
@@ -131,7 +107,7 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
           {files.map((f) => (
             <li key={f.id} className="k-spread">
               <span><span className="k-note">{day(f.at)}</span> {f.title}</span>
-              <a className="link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a>
+              <a className="link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">{f.exchange ?? "Exchange"} filing ↗</a>
             </li>))}
         </ul>
       ) : <EmptyState title="No update filings yet">They are listed here as the company files them.</EmptyState>}

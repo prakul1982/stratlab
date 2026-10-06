@@ -103,7 +103,7 @@ test("named holders: search a name, see each company alphabetically, follow", as
 test("business updates: automakers side by side, alphabetical", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/invest/business-updates", "Automakers' monthly sales", phone ? 292 : 289);
-  const rows = page.getByRole("table", { name: "Automakers' monthly sales" }).locator("tbody tr");
+  const rows = page.getByRole("table", { name: "Automakers' monthly sales", exact: true }).locator("tbody tr");
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toHaveAttribute("data-company", "MARUTI");
   await expect(rows.nth(0)).toContainText("2,36,013 units");
@@ -112,6 +112,6 @@ test("business updates: automakers side by side, alphabetical", async ({ page },
   await expect(page.getByText(/Not read yet: Ashok Leyland/)).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/business-updates-page-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);
-  await page.getByRole("radio", { name: "Banks' and lenders' quarterly updates" }).click();
+  await page.getByRole("button", { name: "Banks' and lenders' quarterly updates" }).click();
   await expect(page.getByText("No update in this list has been read into numbers yet.")).toBeVisible();
 });

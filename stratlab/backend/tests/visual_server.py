@@ -92,6 +92,8 @@ def build():
     closing_auction(mp)
     vix_history(mp)
     holders_and_updates(mp)
+    live_breadth(mp)
+    library_seeds()
     all_company_filings(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
@@ -132,6 +134,48 @@ def holders_and_updates(mp):
         B.save(sym, item["id"], B.read_one(sym, item, docs, None, []))
     mp.setattr(main.biz_job, "start", lambda: None)
     mp.setattr(main.holders_job, "start", lambda: None)
+    # more sectors: a made-up year for two cement makers; the browser tests' Basic users' holdings and watchlist for My stocks
+    fake_biz.seed(("ULTRACEMCO", "AMBUJACEM"))
+    import json
+    from app import db, holdings
+    for uid in ("u-load-289", "u-load-292"):
+        holdings.save(uid, [{"symbol": "MARUTI", "qty": 10, "avg": 11000.0}, {"symbol": "TCS", "qty": 5, "avg": 3500.0}], "manual")
+        db.set_setting(f"watchlist:{uid}", json.dumps({"items": [{"symbol": "TVSMOTOR", "region": "IN"}, {"symbol": "ULTRACEMCO", "region": "IN"},
+                                                                  {"symbol": "MARUTI", "region": "IN"}, {"symbol": "AAPL", "region": "US"}]}))
+
+
+def live_breadth(mp):
+    """The market is open for the whole run, with today's points stored for two groups (a third has none, so the page shows
+    what it says when live prices aren't there). The job stays off, so the stored points stay as they are."""
+    import json
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from app import breadth_live as BL, db
+    mp.setattr(BL, "is_open", lambda region, now: region == "IN")
+    mp.setattr(BL, "STALE_AFTER", 10**9)
+    mp.setattr(main.breadth_live_job, "start", lambda: None)
+    day = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+    times = ["09:30", "09:45", "10:00", "10:15", "10:30", "10:45"]
+    for g, scale in (("nifty500", 5), ("nifty50", 1)):
+        pts = []
+        for i, t in enumerate(times):
+            adv, dec = (230 + 14 * i) * scale, (170 - 9 * i) * scale
+            pts.append([t, adv, dec, 12 * scale, 210 * scale + 6 * i, 400 * scale, 190 * scale + 5 * i, 400 * scale, 160 * scale + 2 * i, 380 * scale,
+                        24000.5 + 22 * i if g == "nifty500" else 25100.0 + 15 * i])
+        db.set_setting(BL.LIVE_KEY + g, json.dumps({"day": day, "fields": list(BL.FIELDS), "points": pts}))
+
+
+def library_seeds():
+    """StratLab's own strategies in the library, run on small stand-ins for the standard groups (the fake market's prices)."""
+    from app import library_seed, universes
+    keep, days = universes.PRESETS, dict(library_seed.DAYS)
+    try:
+        universes.PRESETS = {m: [{**p, "symbols": p["symbols"][:5]} for p in ps] for m, ps in keep.items()}
+        library_seed.DAYS.update({"1d": 600, "15m": 30})
+        library_seed.seed(main.markets, gap=0)
+    finally:
+        universes.PRESETS = keep
+        library_seed.DAYS.update(days)
 
 
 def invite_rewards():

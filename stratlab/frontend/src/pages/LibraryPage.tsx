@@ -7,7 +7,7 @@ import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
-import { Card, CardHead, ConfirmDialog, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat } from "../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat } from "../components/kit";
 import "./trade/trade.css";
 
 export interface LibEntry {
@@ -17,6 +17,8 @@ export interface LibEntry {
   verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number };
   stats: { ret: number | null; buy_hold: number | null; mdd: number | null; trades: number | null; unseen: number | null };
   published_at: string; copies: number; mine: boolean; reported?: boolean; hidden?: boolean;
+  /** StratLab's own entries: run by StratLab through its own backtest and verdict. */
+  official?: boolean; badge?: string;
 }
 
 const VERDICTS: [string, string][] = [["", "Any verdict"], ["edge", "Likely a real edge"], ["mixed", "Mixed evidence"], ["not_enough", "Not enough evidence"], ["luck", "Probably luck"], ["no_edge", "No edge here"]];
@@ -46,6 +48,7 @@ export function LibraryPage() {
   const [market, setMarket] = useState("");
   const [verdict, setVerdict] = useState("");
   const [sort, setSort] = useState("best");
+  const [official, setOfficial] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [reporting, setReporting] = useState<{ id: string; reason: string } | null>(null);
@@ -54,13 +57,13 @@ export function LibraryPage() {
 
   useEffect(() => {
     const t = window.setTimeout(() => {
-      const p = new URLSearchParams({ q, market, verdict, sort });
+      const p = new URLSearchParams({ q, market, verdict, sort, ...(official ? { official: "true" } : {}) });
       setFailed(false);
       api<{ entries: LibEntry[]; total: number; reasons?: Record<string, string> }>(`/library?${p}`)
         .then((r) => { setRows(r.entries); setTotal(r.total); if (r.reasons) setReasons(r.reasons); }).catch((e) => { setRows([]); setFailed(true); fail(e); });
     }, 200);
     return () => window.clearTimeout(t);
-  }, [q, market, verdict, sort, fail, again]);
+  }, [q, market, verdict, sort, official, fail, again]);
 
   const copy = async (e: LibEntry) => {
     setBusy(e.id);
@@ -89,18 +92,19 @@ export function LibraryPage() {
     } catch (x) { fail(x); } finally { setBusy(null); }
   };
   const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
-  const filtered = !!(q || market || verdict);
+  const filtered = !!(q || market || verdict || official);
 
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title="Strategy library"
-        lede="Real rules with honest verdicts, published by other traders. Copy one and test it yourself: a verdict here is a starting point, not a promise."
+        lede="Real rules with honest verdicts, published by other traders and by StratLab itself. Copy one and test it yourself: a verdict here describes the past, not what comes next."
         info="Strategies people published from their own experiments, each with the verdict it earned: the lucky ones are shown as plainly as the real edges. Copy any of them into a notebook of your own and re-test it on your market and dates. Publish yours from a verdict: Share verdict → Publish to the library." infoLabel="About the library" />
       <Card label="Find a strategy">
         <div className="k-toolbar">
           <label className="k-search"><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search strategies: RSI, BANKNIFTY, breakout, Supertrend…" aria-label="Search the library" /></label>
           <Select label="Market" value={market} onChange={setMarket} options={[{ value: "", label: "Every market" }, ...live.map((m) => ({ value: m.id, label: m.name }))]} />
           <Select label="Verdict" value={verdict} onChange={setVerdict} options={VERDICTS.map(([value, label]) => ({ value, label }))} />
+          <Seg label="Whose" options={[{ value: "all", label: "Everyone's" }, { value: "official", label: "StratLab's own" }]} value={official ? "official" : "all"} onChange={(v) => setOfficial(v === "official")} />
           <Seg label="Sort" options={[{ value: "best", label: "Best verdict" }, { value: "new", label: "Newest" }, { value: "copied", label: "Most copied" }]} value={sort} onChange={setSort} />
         </div>
       </Card>
@@ -119,7 +123,7 @@ export function LibraryPage() {
                   <div className="k-stack k-tight">
                     <span className="k-eyebrow">{e.group ? `${e.group.name} (${e.group.members?.length ?? "group"})` : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>
                     <CardHead title={e.name} level={3} />
-                    <span className="k-note">by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span>
+                    <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
                   </div>
                   <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{e.verdict.passed} of {e.verdict.total} checks passed</span></div>
                   {e.description && <p className="k-small">{e.description}</p>}
