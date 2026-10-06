@@ -75,7 +75,7 @@ from .options.data import OptionsData, freeze as freeze_limit
 from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import breadth
+from . import breadth, redflags, redflags_routes, scan_presets
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -206,6 +206,9 @@ results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_h
 # corporate actions: the exchange's list for India, the price history's dividends and splits for the US
 money_calendar_job = money_calendar.Job()
 corp_job = corp_actions.Job(lambda: {"in": filings_feed, "us": research_hub.yahoo})
+# red-flag filings of every company (India: the exchange's list; US: the SEC's 8-K items) and US 13D/13G holders, read each evening
+redflags_runner = redflags.Runner(lambda: {"in": filings_feed, "sec": sec_feed})
+redflags_job = redflags.Job(redflags_runner)
 # the exchange's surveillance lists, twice a trading day; stocks entering or leaving one fire the stock alerts
 surv_job = surveillance.Job(lambda: filings_feed, lambda changes, now: stock_alerts.fire_events(
     [{**c, "kind": "surveillance"} for c in changes], now, _alert_limit))
@@ -259,6 +262,7 @@ async def lifespan(app: FastAPI):
     newsletter_job.start()
     results_job.start()
     corp_job.start()
+    redflags_job.start()
     money_calendar_job.start()
     surv_job.start()
     lifecycle_job.start()
@@ -322,6 +326,7 @@ app.include_router(closing_auction.router)     # /trade/closing-auction
 app.include_router(vix.router)                 # /trade/vix
 app.include_router(biz_updates.router)         # /research/business-updates, /invest/business-updates
 app.include_router(shareholders.router)        # /research/holders, /invest/holders
+app.include_router(redflags_routes.router)     # /research/redflags, /research/holders-us
 app.include_router(stock_futures.router)       # /trade/stock-futures
 app.include_router(slb.router)                 # /invest/stock-lending
 app.include_router(mtf.router)                 # /invest/margin-funding
@@ -1260,26 +1265,74 @@ def scan_members(profile, region: str, set_id: str) -> tuple[str, list[dict]]:
 @app.get("/research/scan/sets")
 def scan_sets(region: str = "IN", profile=Depends(current_profile)):
     region = "US" if region.upper() == "US" else "IN"
+    big = []
+    for b in universes.BIG[region]:        # the groups worked out once a day: their size is what the last run checked
+        doc = scan_presets.load(b["id"])
+        big.append({"id": b["id"], "name": b["name"], "count": (doc or {}).get("checked", 0), "stored": True, "as_of": (doc or {}).get("as_of")})
     return {"sets": [{"id": "watchlist", "name": "Your watchlist", "count": len(scan.watchlist_members(profile["id"], region))}]
-            + [{"id": p["id"], "name": p["name"], "count": p["count"]} for p in universes.presets(region)],
+            + [{"id": p["id"], "name": p["name"], "count": p["count"]} for p in universes.presets(region)] + big,
             "alerts": scan.alert_on(profile["id"]), "template": scan.ST_S2, "fresh_days": scan.FRESH,
+            "scans": scan_presets.listing(),
             "rotation_sets": [{"id": k, "name": v["name"]} for k, v in rotation.index_sets(region).items()]}
+
+
+def _scan_names(region: str, symbols: list[str]) -> dict[str, dict]:
+    """{symbol: {"name", "currency"}} for the rows of a stored scan: the S&P 500's list for the US, the instrument list for India."""
+    out = {}
+    if region == "US":
+        names = universes.sp500_names()
+        return {s: {"name": names.get(s), "currency": "USD"} for s in symbols}
+    for s in symbols:
+        inst = None
+        try:
+            inst = kite.equity(s)
+        except Exception:
+            pass
+        out[s] = {"name": (inst or {}).get("name"), "currency": "INR"}
+    return out
+
+
+def _stored_scan(profile, region: str, group: str, preset: str, name: str) -> dict:
+    """A preset's matches in a big group, from the daily run's stored answer: one read, no price requests."""
+    got = scan_presets.stored_view(group, preset)
+    if got is None or not got["checked"]:
+        err(404, "not_stored", f"{name} hasn't been checked yet: it is read once a day after the market closes. Try a smaller group for now.")
+    rows = got["rows"][:SCAN_ROWS]
+    names = _scan_names(region, [r["symbol"] for r in rows])
+    return {"rows": [{**r, **names.get(r["symbol"], {})} for r in rows], "matches": len(got["rows"]), "checked": got["checked"], "as_of": got["as_of"],
+            "updated_at": got["at"], "missing": [], "problems": [], "stored": True}
+
+
+SCAN_ROWS = 300       # the most rows one scan answer carries (the count of all matches is given beside them)
 
 
 @app.post("/research/scan")
 def run_scan(req: ScanReq, profile=Depends(current_profile)):
-    """Stage and Supertrend for every stock in a group, fresh ST S2 signals first. Facts, never advice."""
-    need(profile, "scans", "Stage 2 + Supertrend scans")
+    """A trend scan over a group: the Stage 2 + Supertrend scan (fresh signals first), or one of the preset rule sets
+    (52-week high breakout, golden cross, ...), each stock's match stated as a fact with its date. Never advice."""
+    need(profile, "scans", "Trend scans")
+    if req.scan != "st_s2" and req.scan not in scan_presets.BY_ID:
+        err(404, "not_found", "That scan isn't available.")
+    big = next((b for b in universes.BIG[req.region] if b["id"] == req.set), None)
+    if big:
+        preset = scan_presets.BY_ID[req.scan]
+        out = _stored_scan(profile, req.region, big["id"], req.scan, big["name"])
+        return ok({"kind": "preset", "scan": req.scan, "scan_name": preset["name"], "name": big["name"], "market": req.region, **out})
     name, members = scan_members(profile, req.region, req.set)
     if not members:
         err(400, "empty", "Your watchlist has no stocks in this market yet. Star a few companies in Research first.")
     prov = markets.provider(req.region)
     if prov is None or not prov.ready():
         raise KiteNotReady("Market data for this market is offline right now.")
-    key = ("scan", req.region, tuple(_member_key(m) for m in members))
+    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members))
     out = _results.get(key)
     if out is None:                       # the same group gives everyone the same answer until prices move
-        out = scan.run(markets, req.region, members)
+        if req.scan == "st_s2":
+            out = {"kind": "st_s2", **scan.run(markets, req.region, members)}
+        else:
+            got = scan.run_preset(markets, req.region, members, req.scan)
+            out = {"kind": "preset", "scan": req.scan, "scan_name": scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
+                   "stored": False, **got}
         _results.set(key, out, 300)
     out = dict(out)
     out["problems"] = [public_text(x) for x in out["problems"]]          # data-source errors can name the source
@@ -1587,10 +1640,15 @@ def corp_actions_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
 
 
 @app.post("/admin/corp-actions/refresh")
-def admin_corp_actions_refresh(_=Depends(admin.admin_profile)):
-    """Refresh both regions' corporate-actions calendars now, and say what each feed answered."""
+def admin_corp_actions_refresh(universe: bool = False, _=Depends(admin.admin_profile)):
+    """Refresh both regions' corporate-actions calendars now, and say what each feed answered. With `universe`, also
+    start the read of the whole US universe in the background (it takes several minutes)."""
     who = results_calendar.trackers()
-    return {region: corp_job.refresh(region, who) for region in corp_actions.REGIONS} | {"job": corp_job.status}
+    out = {region: corp_job.refresh(region, who) for region in corp_actions.REGIONS} | {"job": corp_job.status}
+    if universe and not corp_job.universe_running:
+        corp_job.start_universe(who)
+        out["universe_started"] = True
+    return out
 
 
 # ---------- company deep dive: business, capex and growth (Pro, India) ----------
@@ -3022,6 +3080,24 @@ def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.ad
             breadth._set_status(region, last_error=str(e)[:200], failed_at=breadth._now())
     threading.Thread(target=work, daemon=True, name="breadth-now").start()
     return {"started": True, "region": region, "status": breadth.status()}
+
+
+@app.post("/admin/redflags/run")
+def admin_redflags_run(region: str = "IN", _=Depends(admin.admin_profile)):
+    """Read a region's red-flag filings now, in the background (India: the exchange's announcements; US: 8-K items and 13D/13G)."""
+    if region not in redflags.REGIONS:
+        err(400, "bad_region", "India (IN) or the US.")
+    if redflags_runner.running:
+        err(409, "busy", "A red-flag read is already going.")
+
+    def work():
+        try:
+            redflags_runner.run(region)
+        except Exception as e:
+            print("red-flag read failed:", region, str(e)[:160])
+            redflags._set_state(region, last_error=str(e)[:200], failed_at=redflags._now())
+    threading.Thread(target=work, daemon=True, name="redflags-now").start()
+    return {"started": True, "region": region, "state": redflags.state(region)}
 
 
 @app.get("/admin/breadth")

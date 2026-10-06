@@ -55,6 +55,7 @@ def rows() -> list[dict]:
         ok = {r: v for r, v in s.items() if isinstance(v, dict) and v.get("ran_at")}
         failed = [(r, v) for r, v in s.items() if isinstance(v, dict) and v.get("failed_at") and (not v.get("ran_at") or v["failed_at"] > v["ran_at"])]
         log = [f"{r}: {v.get('loaded', 0)} stocks read, prices to {v.get('as_of')}" + (f", {v['failed']} failed" if v.get("failed") else "") for r, v in ok.items()]
+        log += [f"{r}: trend scans of {v['scan_stocks']} stocks took {v['scan_seconds']} s" for r, v in ok.items() if v.get("scan_stocks")]
         err = "; ".join(f"{r}: {v.get('last_error')}" for r, v in failed if v.get("last_error")) or None
         return _row("breadth", "Market breadth", "India about 6:30 PM IST, US about 5:45 PM New York time, on trading days",
                     max((v["ran_at"] for v in ok.values()), default=None), err, log,
@@ -62,6 +63,18 @@ def rows() -> list[dict]:
                     running=m.breadth_runner.running,
                     note="The first run reads two years of prices: a few minutes for the US, 20 to 25 minutes for India (it needs the day's broker login).")
     add("Market breadth", breadth)
+
+    def redflags():
+        st = {r: m.redflags.state(r) for r in m.redflags.REGIONS}
+        done = {r: v for r, v in st.items() if v.get("at")}
+        failed = [(r, v) for r, v in st.items() if v.get("failed_at") and (not v.get("at") or v["failed_at"] > v["at"])]
+        log = [f"{r}: read to {v.get('through')}" + (f", {v['companies']} companies" if v.get("companies") else "") for r, v in done.items()]
+        err = "; ".join(f"{r}: {v.get('last_error')}" for r, v in failed if v.get("last_error")) or None
+        return _row("redflags", "Red flags across companies", "India about 9 PM IST, US about 7:30 PM New York time, on trading days",
+                    max((v["at"] for v in done.values()), default=None), err, log,
+                    [{"label": "Run India", "path": "/admin/redflags/run?region=IN"}, {"label": "Run US", "path": "/admin/redflags/run?region=US"}],
+                    running=bool(m.redflags_runner.running))
+    add("Red flags across companies", redflags)
 
     def positioning():
         st = _plain(m.positioning_job)
@@ -101,7 +114,10 @@ def rows() -> list[dict]:
     def corp():
         st = _plain(m.corp_job)
         return _row("corp", "Corporate actions", "India 7:20 AM and 6:40 PM IST, US 6:10 AM New York time", st.get("last_run"),
-                    st.get("last_error"), _problems(st), [{"label": "Run now", "path": "/admin/corp-actions/refresh"}])
+                    st.get("last_error"), _problems(st), [{"label": "Run now", "path": "/admin/corp-actions/refresh"},
+                                                           {"label": "Read the whole US universe", "path": "/admin/corp-actions/refresh?universe=true"}],
+                    running=bool(getattr(m.corp_job, "universe_running", False)),
+                    note="The US list covers the S&P 500 and StratLab's own groups, read from price histories at 6:20 AM New York time (several minutes).")
     add("Corporate actions", corp)
 
     def events():

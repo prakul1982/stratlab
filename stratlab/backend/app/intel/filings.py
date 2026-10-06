@@ -100,6 +100,31 @@ def normalise(raw: list[dict]) -> list[dict]:
     return out
 
 
+def flagged_rows(raw: list[dict]) -> list[dict]:
+    """The red and amber announcements in the exchange's list for the whole market (rows of every company), each with
+    its company's symbol and name: {id, symbol, company, at, category, label, severity, subject, url}. Routine
+    filings are left out; the id is the same each time the same filing is read."""
+    import zlib
+    out, seen = [], set()
+    for r in raw if isinstance(raw, list) else []:
+        if not isinstance(r, dict):
+            continue
+        sym = str(r.get("symbol") or "").strip().upper()
+        if not re.fullmatch(r"[A-Z0-9&\-._]{1,20}", sym):
+            continue
+        for it in normalise([r]):
+            if it["severity"] == "info":
+                continue
+            fid = f"{sym}|{it['at']}|{zlib.crc32(it['subject'].encode()):08x}"
+            if fid in seen:
+                continue
+            seen.add(fid)
+            out.append({"id": fid, "symbol": sym, "company": str(r.get("sm_name") or r.get("comp") or "").strip()[:80] or None,
+                        "at": it["at"], "category": it["category"], "label": it["label"], "severity": it["severity"],
+                        "subject": it["subject"][:160], "url": it["url"]})
+    return out
+
+
 def summarise(items: list[dict], now: datetime | None = None) -> dict:
     """The last-3-months view: red flags, whether a fund raise happened, and counts by category."""
     now = now or ist_now()
@@ -594,6 +619,23 @@ class NSEFilings:
         items = normalise(rows or [])
         self.cache.set(key, items, 1800)
         return items
+
+    def market_flags(self, day) -> list[dict]:
+        """The red and amber filings of every NSE company on one day (flagged_rows), from the exchange's list for the
+        whole market: one call a day. A day still in progress is read again after a few minutes."""
+        key = ("market", day.isoformat())
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        text = day.strftime("%d-%m-%Y")
+        data = self._get("/api/corporate-announcements", {"index": "equities", "from_date": text, "to_date": text},
+                         referer="https://www.nseindia.com/companies-listing/corporate-filings-announcements")
+        rows = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(rows, list):
+            raise SourceError(self.name, "The exchange's announcements list wasn't in the expected shape.")
+        out = flagged_rows(rows)
+        self.cache.set(key, out, 900)
+        return out
 
     def board_meetings(self, frm: datetime, to: datetime) -> list[dict]:
         """Every board meeting companies told the exchange about between two dates, as the exchange lists them
