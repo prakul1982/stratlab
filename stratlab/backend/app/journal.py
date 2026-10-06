@@ -48,7 +48,18 @@ SHUFFLES = 1000
 CHUNK = 2_000_000                 # numbers in one reshuffle block, so a long journal never builds a huge array
 BSE_INDEX = {"SENSEX", "BANKEX", "SENSEX50"}
 SEGMENTS = {"eq_delivery": "Equity delivery", "eq_intraday": "Equity intraday", "fut": "Futures", "opt": "Options",
-            "com": "Commodity", "cur": "Currency"}
+            "com": "Commodity", "cur": "Currency", "us": "US stocks", "crypto": "Crypto"}
+# The markets a journal can hold. Each has its own currency, so its stats are worked out apart (a dollar is never added to
+# a rupee). India covers every segment but the last two; US stocks and crypto are added by hand (no Indian charges apply,
+# so their charges are the ones entered, else none).
+MARKETS = {"in": {"label": "India", "currency": "INR", "symbol": "₹"},
+           "us": {"label": "US stocks", "currency": "USD", "symbol": "$"},
+           "crypto": {"label": "Crypto", "currency": "USD", "symbol": "$"}}
+OTHER_SEGMENTS = ("us", "crypto")
+
+
+def market_of(segment: str) -> str:
+    return segment if segment in OTHER_SEGMENTS else "in"
 EMOTIONS = ["Calm", "Confident", "Focused", "Anxious", "Fearful", "Greedy", "Impatient", "Bored", "Frustrated", "Euphoric",
             "Revenge"]
 MISTAKES = ["Entered early", "Entered late", "Chased the price", "No stop", "Moved my stop", "Exited early",
@@ -655,7 +666,9 @@ def manual_trades(manual: list[dict], s: dict, src: str = "manual") -> list[dict
     out = []
     for m in manual:
         info = classify(m["sym"], m.get("exchange", ""))
-        if m.get("segment") in ("fut", "opt", "com", "cur") and info["group"] == "eq":
+        if m.get("segment") in OTHER_SEGMENTS:
+            info = {"u": clean_symbol(m["sym"]), "group": m["segment"], "kind": None, "opt": False}
+        elif m.get("segment") in ("fut", "opt", "com", "cur") and info["group"] == "eq":
             info = {**info, "group": m["segment"], "kind": {"fut": "in_fut", "opt": "in_opt", "com": "in_mcx_fut", "cur": "in_cds_fut"}[m["segment"]]}
         intraday = m["ed"] == m["xd"]
         kind = "in_eq_mis" if info["kind"] == "in_eq" and intraday else info["kind"]
@@ -663,6 +676,8 @@ def manual_trades(manual: list[dict], s: dict, src: str = "manual") -> list[dict
         gross = sign * (m["exit"] - m["entry"]) * qty
         if _num(m.get("charges")) is not None:
             charges, src_c = float(m["charges"]), "you" if src == "manual" else "replay"
+        elif info["kind"] is None:
+            charges, src_c = 0.0, "none"
         else:
             brk = _brokerage(kind, s)
             buy_px, sell_px = (m["entry"], m["exit"]) if sign > 0 else (m["exit"], m["entry"])
@@ -940,11 +955,11 @@ def _rupee_dds(pnls: np.ndarray, rng) -> np.ndarray:
     return np.concatenate(out)
 
 
-def money(v: float) -> str:
-    return "₹" + f"{abs(v):,.0f}"
+def money(v: float, sym: str = "₹") -> str:
+    return sym + f"{abs(v):,.0f}"
 
 
-def check_drawdown(nets: list[float], capital: float | None) -> dict:
+def check_drawdown(nets: list[float], capital: float | None, sym: str = "₹") -> dict:
     """The backtest's bad-luck drawdown check on real trades: as a % of the capital the user entered, else in rupees."""
     if capital:
         c = V.check_shuffle([{"pnl": v} for v in nets], capital, who="Your trades", whose="your trades'")
@@ -958,15 +973,15 @@ def check_drawdown(nets: list[float], capital: float | None) -> dict:
     yours, p95, worst = _dd(nets, None)[0], float(np.percentile(dds, 95)), float(dds.max())
     if p95 > max(1.5 * yours, yours + 1):
         status = "warn"
-        detail = f"Your trades fell {money(yours)} at worst from a high, but with worse luck the same trades could have fallen {money(p95)}."
+        detail = f"Your trades fell {money(yours, sym)} at worst from a high, but with worse luck the same trades could have fallen {money(p95, sym)}."
     else:
         status = "pass"
-        detail = f"Even with worse luck, falls stay around {money(p95)}, close to your trades' {money(yours)}."
+        detail = f"Even with worse luck, falls stay around {money(p95, sym)}, close to your trades' {money(yours, sym)}."
     return {"id": "shuffle", "title": "Bad-luck drawdown", "status": status, "detail": detail,
             "data": {"yours": yours, "p95": p95, "worst": worst, "runs": SHUFFLES, "unit": "rupees"}}
 
 
-def check_costs(ts: list[dict]) -> dict:
+def check_costs(ts: list[dict], sym: str = "₹") -> dict:
     """Cost sensitivity: would the result survive charges twice as high (a costlier broker, more slippage)?"""
     gross, charges = sum(t["gross"] for t in ts), sum(t["charges"] for t in ts)
     net, doubled = gross - charges, gross - 2 * charges
@@ -976,22 +991,22 @@ def check_costs(ts: list[dict]) -> dict:
     if not ts:
         return {"id": "costs", "title": title, "status": "skip", "detail": "No trades yet.", "data": None}
     if gross <= 0:
-        status, detail = "fail", f"Before charges your trades already lost {money(gross)}; charges of {money(charges)} added to it."
+        status, detail = "fail", f"Before charges your trades already lost {money(gross, sym)}; charges of {money(charges, sym)} added to it."
     elif net <= 0:
-        status, detail = "fail", f"Charges of {money(charges)} turned a gross profit of {money(gross)} into a loss."
+        status, detail = "fail", f"Charges of {money(charges, sym)} turned a gross profit of {money(gross, sym)} into a loss."
     elif doubled > 0:
-        status, detail = "pass", f"Charges took {data['pct']:.0f}% of the gross profit. Even with charges doubled, your trades would still be {money(doubled)} up."
+        status, detail = "pass", f"Charges took {data['pct']:.0f}% of the gross profit. Even with charges doubled, your trades would still be {money(doubled, sym)} up."
     else:
         status, detail = "warn", f"Charges took {data['pct']:.0f}% of the gross profit. With charges doubled, the profit would be gone."
     return {"id": "costs", "title": title, "status": status, "detail": detail, "data": data}
 
 
-def verdict(ts: list[dict], capital: float | None = None) -> dict:
+def verdict(ts: list[dict], capital: float | None = None, sym: str = "₹") -> dict:
     """The four checks on real trades and a verdict in the backtest verdict's words: enough trades (the verdict's own
     check), luck or edge, bad-luck drawdown, and cost sensitivity. The nearby-settings check needs rules to nudge, so
     it doesn't apply to real trades."""
     nets = [t["net"] for t in ts]
-    checks = [V.check_sample(len(ts)), check_luck(nets), check_drawdown(nets, capital), check_costs(ts)]
+    checks = [V.check_sample(len(ts)), check_luck(nets), check_drawdown(nets, capital, sym), check_costs(ts, sym)]
     return decide(checks, len(ts), sum(nets), sum(1 for v in nets if v > 0))
 
 
