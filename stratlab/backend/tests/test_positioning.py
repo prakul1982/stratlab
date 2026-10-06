@@ -402,7 +402,8 @@ def test_chain_view_live_with_change_and_iv_stats(w):
     days = FP.weekdays_before(today, 25)
     FP.record_days(db.add_option_snapshot, "NIFTY", days)
     P.Runner(lambda: main.filings_feed, pace=0).chain_backfill(today, days=60)
-    v = P.chain_view(main.options_data, "NIFTY", "current", full=True)
+    now = P.ist_now()                                # one clock for both views: a live chain's IV moves with the time to expiry
+    v = P.chain_view(main.options_data, "NIFTY", "current", full=True, now=now)
     assert v["source"] == "live" and v["spot"] and v["rows"] and v["max_pain"] and v["atm_iv"]
     assert v["top"]["call"]["strike"] > v["spot"] > v["top"]["put"]["strike"]
     assert v["iv"]["days"] >= P.IV_MIN_DAYS and v["iv"]["percentile"] is not None
@@ -411,7 +412,7 @@ def test_chain_view_live_with_change_and_iv_stats(w):
         row = next(r for r in v["rows"] if r["strike"] == v["atm"])
         was = next(r for r in prev["chain"] if r[0] == v["atm"])
         assert row["call_chg"] == row["call_oi"] - was[4]
-    free = P.chain_view(main.options_data, "NIFTY", "current", full=False)
+    free = P.chain_view(main.options_data, "NIFTY", "current", full=False, now=now)
     assert free["iv"] is None and free["atm_iv"] == v["atm_iv"]
 
 
