@@ -2,12 +2,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../lib/api";
 
 export type Suggestion = { symbol: string; id: string; name: string; exchange: string; market: "IN" | "US" };
-type Market = "IN" | "US" | "ALL";
+export type Market = "IN" | "US" | "ALL";
 
 const cache = new Map<string, Suggestion[]>();
 
 /** Listed companies for what's typed, up to 8 (the same answer is reused while the page is open). */
-async function suggestions(q: string, market: Market): Promise<Suggestion[]> {
+export async function suggestions(q: string, market: Market): Promise<Suggestion[]> {
   const key = `${market}:${q.toUpperCase()}`;
   const hit = cache.get(key);
   if (hit) return hit;

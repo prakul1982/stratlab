@@ -106,3 +106,64 @@ export function asOf(iso: string | null | undefined): string | null {
   return day ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
     : d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
+
+/* ---------- Indian rupee formatting (the one place; see DESIGN.md "Numbers") ----------
+ * Everything here takes rupees. For a figure already in crore, multiply by CRORE first. Missing or non-finite values
+ * give "–". The minus is always the real minus sign (U+2212). */
+export const CRORE = 1e7;
+const LAKH = 1e5;
+const LAKH_CRORE = 1e12;
+const nf = (v: number, dp: number) => v.toLocaleString("en-IN", { maximumFractionDigits: dp, minimumFractionDigits: 0 });
+const ok = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);
+
+/** Full rupees in Indian grouping: ₹1,00,000. Whole rupees unless you ask for paise: inr(1849.3, 2) is ₹1,849.30. */
+export function inr(v: number | null | undefined, dp = 0): string {
+  if (!ok(v)) return "–";
+  const s = Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: dp, minimumFractionDigits: dp });
+  return `${v < 0 && /[1-9]/.test(s) ? "−" : ""}₹${s}`;
+}
+
+/** A scaled figure with the digits it needs: 1.51, 12.4, 925, 3,472. Returns the number's text and its rounded value. */
+function scaled(x: number): { text: string; n: number } {
+  const dp = x >= 100 ? 0 : x >= 10 ? 1 : 2;
+  const n = Number(x.toFixed(dp));
+  return { text: nf(n, dp), n };
+}
+
+/** Compact rupees in Indian units: ₹925, ₹5.2 lakh, ₹3,472 cr, ₹1.51 lakh cr. */
+export function inrCompact(v: number | null | undefined): string {
+  if (!ok(v)) return "–";
+  const a = Math.abs(v), sign = v < 0 ? "−" : "";
+  const cr = a >= CRORE ? scaled(a / CRORE) : null;
+  if (a >= LAKH_CRORE || (cr && cr.n >= LAKH)) return `${sign}₹${scaled(a / LAKH_CRORE).text} lakh cr`;
+  if (cr) return `${sign}₹${cr.text} cr`;
+  if (a >= LAKH) return `${sign}₹${scaled(a / LAKH).text} lakh`;
+  return `${sign}₹${nf(Math.round(a), 0)}`;
+}
+
+/** The same, with a leading + for gains: +₹296 cr, −₹18 cr. */
+export function signedInrCompact(v: number | null | undefined): string {
+  if (!ok(v)) return "–";
+  return `${v > 0 ? "+" : ""}${inrCompact(v)}`;
+}
+
+/** A rupee chart axis: ₹1.45L cr, ₹3,472 cr, ₹5.2L, ₹925. Up to three decimals, so close ticks stay different. */
+export function axisInr(v: number | null | undefined): string {
+  if (!ok(v)) return "–";
+  const a = Math.abs(v), sign = v < 0 ? "−" : "";
+  if (a >= LAKH_CRORE) return `${sign}₹${nf(a / LAKH_CRORE, 3)}L cr`;
+  if (a >= CRORE) return `${sign}₹${nf(a / CRORE, 2)} cr`;
+  if (a >= LAKH) return `${sign}₹${nf(a / LAKH, 2)}L`;
+  return `${sign}₹${nf(a, 0)}`;
+}
+
+/** A percentage with no sign: 0.21%. (`pct` above is the signed one.) */
+export function pctPlain(v: number | null | undefined, dp = 1): string {
+  return ok(v) ? `${v.toFixed(dp)}%` : "–";
+}
+
+/** A plain number with its sign, in Indian grouping: +1,234 / −5. */
+export function signed(v: number | null | undefined, dp = 0): string {
+  if (!ok(v)) return "–";
+  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${nf(Math.abs(v), dp)}`;
+}
