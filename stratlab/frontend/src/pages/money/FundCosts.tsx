@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
-import { dateOnly, money } from "../../lib/format";
-import { AsOf, Info } from "../../components/ui";
+import { asOf as asOfText, dateOnly, inr, pctPlain } from "../../lib/format";
+import { Info } from "../../components/ui";
+import { Card, CardHead, DataTable, Disclosure, EmptyState, PlanNote, Stat, StatRow, type Column } from "../../components/kit";
 
 // What each fund held costs a year: its expense ratio (TER) and its parts, the rupees on the current value, both plans
 // side by side, the TER since the first units still held were bought, and category changes. Facts only.
@@ -20,8 +20,7 @@ type Costs = {
   read_at: string | null; assumptions: string[]; disclaimer: string; as_of: string;
 };
 
-const inr = (v: number | null | undefined) => money(v, "INR", 0);
-const ter = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(2)}%`);
+const ter = (v: number | null | undefined) => pctPlain(v, 2);
 const PLAN: Record<string, string> = { direct: "Direct plan", regular: "Regular plan" };
 
 export function FundCosts({ version }: { version: string }) {
@@ -40,76 +39,63 @@ export function FundCosts({ version }: { version: string }) {
     return () => window.clearTimeout(t);
   }, [c, tick]);
 
-  const note = (text: string) => <section className="card stack" style={{ gap: 6 }} aria-label="Fund costs"><h2 className="h2">What your funds cost</h2><p className="small muted" style={{ margin: 0 }} role="status">{text}</p></section>;
-  if (failed) return note("Fund costs couldn't be loaded just now. Reload the page to try again.");
-  if (c?.state === "reading") return note("Costs are being read; check back shortly.");
-  if (c?.state === "unavailable") return note("Fund costs aren't available right now. They are read again every few hours.");
+  const note = (title: string, text: string, retry?: boolean) => (
+    <Card label="Fund costs"><CardHead title="What your funds cost" />
+      <EmptyState title={title} action={retry ? { label: "Try again", onClick: () => setTick((n) => n + 1) } : undefined}>{text}</EmptyState></Card>
+  );
+  if (failed) return note("Fund costs couldn't be loaded", "Fund costs couldn't be loaded just now. Reload the page to try again.", true);
+  if (c?.state === "reading") return note("Reading each fund's costs", "Costs are being read; check back shortly.");
+  if (c?.state === "unavailable") return note("Fund costs aren't available", "Fund costs aren't available right now. They are read again every few hours.");
   if (!c || !c.total) return null;
   const t = c.total;
+  const cols: Column<Cost>[] = [
+    { key: "scheme", header: "Scheme", rowHeader: true, wrap: true, cell: (s) => (
+      <>
+        <b>{s.name}</b>
+        <span className="k-sub-line">{s.plan ? PLAN[s.plan] : "Plan not in the name"} · listed as {s.matched}{s.category ? ` · ${s.category}` : ""}</span>
+        {(s.category_changes ?? []).map((g) => (
+          <span key={g.date} className="k-sub-line">Category changed on {dateOnly(g.date)}{g.recat_2026 ? " (2026 recategorisation)" : ""}: was {g.from}.</span>
+        ))}
+        {s.parts && s.parts.length > 0 && (
+          <Disclosure summary="Parts of the TER"><ul className="k-list muted">{s.parts.map((p) => <li key={p.key}>{p.label}: {ter(p.pct)}</li>)}</ul></Disclosure>
+        )}
+      </>) },
+    { key: "ter", header: "TER", numeric: true, cell: (s) => ter(s.ter) },
+    ...(c.full ? [
+      { key: "year", header: "A year", numeric: true, cell: (s: Cost) => inr(s.cost_year) },
+      { key: "direct", header: "Direct TER", numeric: true, cell: (s: Cost) => <>{ter(s.direct?.total)}{s.plan === "direct" && <span className="k-sub-line">yours</span>}</> },
+      { key: "regular", header: "Regular TER", numeric: true, cell: (s: Cost) => <>{ter(s.regular?.total)}{s.plan === "regular" && <span className="k-sub-line">yours</span>}</> },
+      { key: "gap", header: "Gap a year", numeric: true, cell: (s: Cost) => (s.gap_pp == null ? "–" : <>{inr(s.gap_year)}<span className="k-sub-line">{Math.abs(s.gap_pp).toFixed(2)} pts</span></>) },
+    ] : []),
+    { key: "since", header: c.full ? "Since you bought" : "As of", wrap: true, cell: (s) => (
+      <>
+        {!c.full && dateOnly(s.ter_date)}
+        {c.full && (s.since ? (
+          <>
+            {ter(s.since.then)} to {ter(s.since.now)}{s.since.change_pp != null && s.since.change_pp !== 0 ? ` (${s.since.change_pp > 0 ? "+" : "−"}${Math.abs(s.since.change_pp).toFixed(2)} pts)` : ", no change"}
+            <span className="k-sub-line">{s.since.history_starts_late ? `History starts ${dateOnly(s.since.from)}; your first units held were bought ${dateOnly(s.since.first_buy)}` : `From ${dateOnly(s.since.first_buy)}`} · {s.since.count} change{s.since.count === 1 ? "" : "s"}</span>
+          </>
+        ) : <span className="k-muted">No history yet</span>)}
+        {c.full && <span className="k-sub-line">TER as of {dateOnly(s.ter_date)}</span>}
+      </>) },
+  ];
   return (
-    <section className="card stack" style={{ gap: 12 }} aria-label="Fund costs">
-      <div className="stack" style={{ gap: 4 }}>
-        <h2 className="h2">What your funds cost</h2>
-        <p className="small muted" style={{ margin: 0 }}>Each fund's total expense ratio (TER) as published, and what it comes to in rupees a year on your current value.</p>
-      </div>
-      <div className="stat-row">
-        <div className="stat"><span className="tiny muted">Expense ratios, a year <Info label="How the yearly cost is worked out">Each fund's current value times its plan's TER, added up. The TER is taken out of the fund a little each day, so the NAV and your value are already after it.</Info></span><b className="num">{inr(t.cost_year)}</b><span className="tiny muted">on {inr(t.value)} in {t.funds} fund{t.funds === 1 ? "" : "s"}</span></div>
-        <div className="stat"><span className="tiny muted">Average TER, by value</span><b className="num">{ter(t.weighted_ter)}</b></div>
-      </div>
-      {c.schemes.length > 0 && (
-        <div className="table-wrap">
-          <table aria-label="Fund costs">
-            <thead><tr><th style={{ textAlign: "left" }}>Scheme</th><th>TER</th>{c.full && <><th>A year</th><th>Direct TER</th><th>Regular TER</th><th>Gap a year</th></>}<th style={{ textAlign: "left" }}>{c.full ? "Since you bought" : "As of"}</th></tr></thead>
-            <tbody>{c.schemes.map((s) => (
-              <tr key={s.key}>
-                <td style={{ textAlign: "left", minWidth: 220, whiteSpace: "normal" }}>
-                  <b>{s.name}</b>
-                  <div className="tiny muted">{s.plan ? PLAN[s.plan] : "Plan not in the name"} · listed as {s.matched}{s.category ? ` · ${s.category}` : ""}</div>
-                  {(s.category_changes ?? []).map((g) => (
-                    <div key={g.date} className="tiny">Category changed on {dateOnly(g.date)}{g.recat_2026 ? " (2026 recategorisation)" : ""}: was {g.from}.</div>
-                  ))}
-                  {s.parts && s.parts.length > 0 && (
-                    <details className="tiny">
-                      <summary style={{ minHeight: 32, display: "flex", alignItems: "center", cursor: "pointer" }}>Parts of the TER</summary>
-                      <ul className="muted" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
-                        {s.parts.map((p) => <li key={p.key}>{p.label}: {ter(p.pct)}</li>)}
-                      </ul>
-                    </details>
-                  )}
-                </td>
-                <td className="num">{ter(s.ter)}</td>
-                {c.full && <>
-                  <td className="num">{inr(s.cost_year)}</td>
-                  <td className="num">{ter(s.direct?.total)}{s.plan === "direct" && <div className="tiny muted">yours</div>}</td>
-                  <td className="num">{ter(s.regular?.total)}{s.plan === "regular" && <div className="tiny muted">yours</div>}</td>
-                  <td className="num">{s.gap_pp == null ? "–" : <>{inr(s.gap_year)}<div className="tiny muted">{Math.abs(s.gap_pp).toFixed(2)} pts</div></>}</td>
-                </>}
-                <td style={{ textAlign: "left", minWidth: 180, whiteSpace: "normal" }} className="tiny">
-                  {!c.full && dateOnly(s.ter_date)}
-                  {c.full && (s.since ? (
-                    <>
-                      {ter(s.since.then)} to {ter(s.since.now)}{s.since.change_pp != null && s.since.change_pp !== 0 ? ` (${s.since.change_pp > 0 ? "+" : "−"}${Math.abs(s.since.change_pp).toFixed(2)} pts)` : ", no change"}
-                      <div className="muted">{s.since.history_starts_late ? `History starts ${dateOnly(s.since.from)}; your first units held were bought ${dateOnly(s.since.first_buy)}` : `From ${dateOnly(s.since.first_buy)}`} · {s.since.count} change{s.since.count === 1 ? "" : "s"}</div>
-                    </>
-                  ) : <span className="muted">No history yet</span>)}
-                  {c.full && <div className="muted">TER as of {dateOnly(s.ter_date)}</div>}
-                </td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-      {c.full && <p className="tiny muted" style={{ margin: 0 }}>Every scheme has a direct and a regular plan with their own TER. The gap is the regular plan's TER less the direct plan's, as a yearly amount on your current value in this scheme.</p>}
-      {c.unmatched.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>Not found in the TER disclosure yet: {c.unmatched.map((u) => u.name).join(", ")}.</p>}
-      {!c.full && (
-        <div className="banner"><span>Each TER's parts, the rupees per fund, both plans side by side, TER changes since you bought and category changes are on the {c.plan} plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>
-      )}
-      <AsOf parts={[["TERs read", c.read_at]]} />
-      <details className="small">
-        <summary className="tiny" style={{ minHeight: 32, display: "flex", alignItems: "center", cursor: "pointer" }}>How fund costs are worked out</summary>
-        <ul className="tiny muted" style={{ margin: "6px 0 0", paddingLeft: 18 }}>{c.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
-        <p className="tiny muted" style={{ margin: "6px 0 0" }}>{c.disclaimer} As of {dateOnly(c.as_of)}.</p>
-      </details>
-    </section>
+    <Card label="Fund costs">
+      <CardHead title="What your funds cost" info="Each fund's total expense ratio (TER) as published, and what it comes to in rupees a year on your current value." />
+      <StatRow>
+        <Stat label={<>Expense ratios, a year <Info label="How the yearly cost is worked out">Each fund's current value times its plan's TER, added up. The TER is taken out of the fund a little each day, so the NAV and your value are already after it.</Info></>}
+          value={inr(t.cost_year)} note={`on ${inr(t.value)} in ${t.funds} fund${t.funds === 1 ? "" : "s"}`} />
+        <Stat label="Average TER, by value" value={ter(t.weighted_ter)} />
+      </StatRow>
+      {c.schemes.length > 0 && <DataTable label="Fund costs" columns={cols} rows={c.schemes} rowKey={(s) => s.key} />}
+      {c.full && <p className="k-note">Every scheme has a direct and a regular plan with their own TER. The gap is the regular plan's TER less the direct plan's, as a yearly amount on your current value in this scheme.</p>}
+      {c.unmatched.length > 0 && <p className="k-note">Not found in the TER disclosure yet: {c.unmatched.map((u) => u.name).join(", ")}.</p>}
+      {!c.full && <PlanNote>Each TER's parts, the rupees per fund, both plans side by side, TER changes since you bought and category changes are on the {c.plan} plan.</PlanNote>}
+      {c.read_at && <p className="k-note">TERs read {asOfText(c.read_at)}.</p>}
+      <Disclosure summary="How fund costs are worked out">
+        <ul className="k-list muted">{c.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+        <p className="k-note">{c.disclaimer} As of {dateOnly(c.as_of)}.</p>
+      </Disclosure>
+    </Card>
   );
 }

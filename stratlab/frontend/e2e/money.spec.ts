@@ -63,7 +63,7 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   const errors = await open(page, "/money/calendar", "Tax due dates, results and dividends", n);
   const list = page.getByRole("list", { name: "Money dates" });
   // the next 90 days in view; the past week's dates folded under one line below them
-  const card = page.locator("section", { has: page.getByRole("group", { name: "View" }) });
+  const card = page.locator("section", { has: page.getByRole("radiogroup", { name: "View" }) });
   const past = card.locator("details.earlier", { hasText: "The past week" });
   if (await past.count()) {
     await expect(past).not.toHaveAttribute("open", "");
@@ -91,7 +91,7 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: "Your events" }).click();
 
   // the month: today's cell opens its dates below
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Month" }).click();
+  await page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Month" }).click();
   const month = page.locator(".mc-month");
   await expect(month).toBeVisible();
   await month.locator(".mc-cell.today").click();
@@ -117,8 +117,8 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   expect(body).toContain("SUMMARY:Rent goes up");
   expect(body).not.toContain("Amount:");
   if (info.project.name === "phone") await touchable(page);
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Turn off" }).click();
+  await page.getByRole("dialog", { name: "Turn the link off?" }).getByRole("button", { name: "Turn it off" }).click();
   await expect(page.getByRole("button", { name: "Make a private link" })).toBeVisible();
   expect((await request.get(url)).status()).toBe(404);
   await sane(page, errors);

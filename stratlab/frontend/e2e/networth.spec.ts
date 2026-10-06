@@ -59,7 +59,8 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   const errors = await open(page, "/money/net-worth", "Nothing added yet", who);
   if (info.project.name === "desktop") await expect(page.getByRole("link", { name: "Net worth" }).first()).toBeVisible();   // in the menu
 
-  const kind = page.getByLabel("What is it?");
+  const kinds = page.getByRole("radiogroup", { name: "What is it?" });
+  const kind = (name: string) => kinds.getByRole("radio", { name }).click();
   await page.getByLabel("Amount (₹)").fill("2,50,000");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("Savings and cash added.")).toBeVisible();
@@ -67,10 +68,10 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   await expect(totals.getByText("₹2,50,000").first()).toBeVisible();
 
   const year = new Date();
-  await kind.selectOption("fd");
-  await page.getByLabel("Name (optional)").fill("Bank FD");
+  await kind("Fixed deposit");
+  await page.getByLabel(/^Name/).fill("Bank FD");
   await page.getByLabel("Amount deposited (₹)").fill("100000");
-  await page.getByLabel("Interest rate (% a year)").fill("7");
+  await page.getByLabel("Interest rate").fill("7");
   await page.getByLabel("Start date").fill(iso(new Date(year.getFullYear() - 1, year.getMonth(), 1)));
   await page.getByLabel("Maturity date").fill(iso(new Date(year.getFullYear() + 1, year.getMonth(), 1)));
   await page.getByRole("button", { name: "Add", exact: true }).click();
@@ -79,17 +80,17 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   await expect(assets.getByText(/Matures .*: ₹1,14,/)).toBeVisible();                   // two years at 7%, every quarter
   await expect(assets.getByText(/interest to maturity ₹14,\d{3}, ₹\d{1,2},\d{3} after tax at 31\.2%/)).toBeVisible();   // the default 30% slab with cess
 
-  await kind.selectOption("loan");
+  await kind("Loan or card");
   await page.getByLabel("Kind").selectOption("home");
-  await page.getByLabel("Amount borrowed, or owed on a card (₹)").fill("3000000");
-  await page.getByLabel("Interest rate (% a year)").fill("8.5");
-  await page.getByLabel("Tenure in months (empty for a card)").fill("240");
+  await page.getByLabel("Amount borrowed (₹)").fill("3000000");
+  await page.getByLabel("Interest rate").fill("8.5");
+  await page.getByRole("textbox", { name: /^Tenure/ }).fill("240");
   await page.getByLabel("Loan start date").fill(iso(new Date(year.getFullYear() - 2, 0, 10)));
   await page.getByRole("button", { name: "Add", exact: true }).click();
   const loans = page.getByRole("table", { name: "Loans" });
   await expect(loans.getByText("₹26,035")).toBeVisible();                              // the EMI on ₹30 lakh, 20 years at 8.5%
 
-  await kind.selectOption("policy");
+  await kind("Insurance policy");
   await page.getByLabel("Insurer").fill("Some Insurer");
   await page.getByLabel("Premium (₹)").fill("15000");
   const due = new Date(); due.setDate(due.getDate() + 20);
@@ -122,8 +123,8 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   await edit.getByRole("button", { name: "Save" }).click();
   await expect(assets.getByText(/Matures .*: ₹2,29,/)).toBeVisible();
 
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete my net worth data" }).click();
+  await page.getByRole("dialog", { name: "Delete my net worth data?" }).getByRole("button", { name: "Delete my net worth data" }).click();
   await expect(page.getByText("Nothing added yet")).toBeVisible();
   await expect(page.getByText("Your net worth data is deleted.")).toBeVisible();
   await sane(page, errors);

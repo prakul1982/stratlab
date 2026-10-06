@@ -18,9 +18,9 @@ export function Delta({ value, children, tone = "auto" }: { value: number | null
 
 /** One figure: a small label, a big number (the page's sans font, never mono) and a note under it. `tone` colours the
  * number up or down; `delta` puts a Delta pill in the note line. */
-export function Stat({ label, value, note, delta, tone }: { label: ReactNode; value: ReactNode; note?: ReactNode; delta?: ReactNode; tone?: "up" | "down" }) {
+export function Stat({ label, value, note, delta, tone, item }: { label: ReactNode; value: ReactNode; note?: ReactNode; delta?: ReactNode; tone?: "up" | "down"; item?: boolean }) {
   return (
-    <div className="k-stat">
+    <div className="k-stat" role={item ? "listitem" : undefined}>
       <span className="k-stat-k">{label}</span>
       <span className={`k-stat-v${tone ? ` k-${tone}` : ""}`}>{value}</span>
       {(delta || note) && <span className="k-stat-d">{delta}{delta && note ? " " : ""}{note}</span>}
@@ -29,6 +29,6 @@ export function Stat({ label, value, note, delta, tone }: { label: ReactNode; va
 }
 
 /** Stats side by side; they wrap to the width (about three across on a desktop card, one on a phone). */
-export function StatRow({ children }: { children: ReactNode }) {
-  return <div className="k-stats">{children}</div>;
+export function StatRow({ children, label }: { children: ReactNode; label?: string }) {
+  return <div className="k-stats" role={label ? "list" : undefined} aria-label={label}>{children}</div>;
 }

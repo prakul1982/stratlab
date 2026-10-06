@@ -8,8 +8,10 @@ const initials = (s: Suggestion) => s.symbol.replace(/[^A-Za-z0-9]/g, "").slice(
  * pressing Enter on an exact symbol you typed, calls `onPick(symbol, region)`.
  * `value` is the symbol the page is showing now; the box shows it until you type. Give it an `id` (a Field does) so
  * its label points at it. */
-export function StockPicker({ value = "", onPick, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus }: {
+export function StockPicker({ value = "", onPick, onText, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus }: {
   value?: string; onPick: (symbol: string, region: "IN" | "US") => void; market?: Market; id?: string; placeholder?: string; clearOnPick?: boolean; autoFocus?: boolean;
+  /** Called with the text as it is typed, for a form that accepts an exact symbol typed without picking. */
+  onText?: (text: string) => void;
 }) {
   const auto = useId();
   const fid = id ?? auto;
@@ -62,7 +64,7 @@ export function StockPicker({ value = "", onPick, market = "IN", id, placeholder
       <svg className="lens" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
       <input ref={box} id={fid} className="k-input" value={text} placeholder={placeholder} autoFocus={autoFocus} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={40}
         role="combobox" aria-expanded={shown} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={shown && rows[on] ? `${fid}-o${on}` : undefined}
-        onChange={(e) => { setTyped(true); setText(e.target.value); }} onKeyDown={key}
+        onChange={(e) => { setTyped(true); setText(e.target.value); onText?.(e.target.value); }} onKeyDown={key}
         onFocus={() => { if (typed && rows.length) setOpen(true); }} onBlur={() => window.setTimeout(() => setOpen(false), 120)} />
       <ul id={listId} role="listbox" aria-label="Suggestions" className="k-suggest" hidden={!shown}>
         {shown && rows.map((r, i) => (

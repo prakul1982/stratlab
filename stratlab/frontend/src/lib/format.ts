@@ -162,6 +162,12 @@ export function pctPlain(v: number | null | undefined, dp = 1): string {
   return ok(v) ? `${v.toFixed(dp)}%` : "–";
 }
 
+/** Up or down for a gain or loss that is the user's own (a holding's profit, a fund's gain): for a Stat's `tone`, or
+ * `k-${signTone(v)}` as a class. Nothing for zero or a missing value. Never use it on a market-wide change. */
+export function signTone(v: number | null | undefined): "up" | "down" | undefined {
+  return ok(v) ? (v > 0 ? "up" : v < 0 ? "down" : undefined) : undefined;
+}
+
 /** A plain number with its sign, in Indian grouping: +1,234 / −5. */
 export function signed(v: number | null | undefined, dp = 0): string {
   if (!ok(v)) return "–";
