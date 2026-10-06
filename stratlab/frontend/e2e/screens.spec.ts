@@ -44,7 +44,7 @@ async function seed(request: import("@playwright/test").APIRequestContext) {
   const paper = await post("/live/sessions", { strategy: EMA, instrument: "CRYPTO:BTC-USD" });
   const card = await post("/cards/company/IN/RELIANCE", {});
   const app = ["/", "/trade", "/invest", "/money", "/notebooks", "/new", `/n/${nb.id}`, `/n/${nb.id}/market`, `/n/${nb.id}/compare`, `/n/${nb.id}/e/1`, "/import",
-    "/library", "/options", "/trade/positioning", "/paper", `/paper/${paper.id}`, "/plans", "/account", "/admin", "/admin?tab=services", "/admin?tab=checks",
+    "/library", "/options", "/trade/positioning", "/paper", `/paper/${paper.id}`, "/plans", "/account", "/settings", "/settings#experience", "/settings#accounts", "/settings#check", "/assistant", "/app", "/invite", "/admin", "/admin?tab=services", "/admin?tab=checks",
     "/admin?tab=users", "/admin?tab=billing", "/news", "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar", "/alerts", "/research", "/research/themes", "/research/pulse",
     "/research/compare", "/research/watchlist", "/research/scan", "/research/screens", "/research/rotation", "/research/filings", "/invest/breadth", "/invest/etf-gaps",
     "/research/results", "/research/investor", "/research/IN/RELIANCE", "/research/US/AAPL", "/research/IN/RELIANCE/deep",
@@ -52,7 +52,7 @@ async function seed(request: import("@playwright/test").APIRequestContext) {
     // corporate actions (the calendar, both scopes and the US), a company with a bonus and dividend ahead and deals,
     // and Admin's Users tab, which holds the invite rewards waiting for review
     "/research/corporate-actions", "/research/corporate-actions?scope=all", "/research/corporate-actions?region=US&scope=all",
-    "/research/IN/TCS", "/research/IN/TCS/deep", "/account#invite"].map((p) => ({ url: WEB + p, label: p, signedIn: true }));
+    "/research/IN/TCS", "/research/IN/TCS/deep", "/invite"].map((p) => ({ url: WEB + p, label: p, signedIn: true }));
   const open = ["/terms", "/privacy", "/refunds", "/contact", `/verdict/${verdict.token}`].map((p) => ({ url: WEB + p, label: p, signedIn: false }));
   const landing = { url: WEB + "/", label: "/ (signed out)", signedIn: false };
   const api = ["/stocks/in/RELIANCE", "/stocks/us/AAPL", `/c/${card.token}`].map((p) => ({ url: API + p, label: p, signedIn: false }));

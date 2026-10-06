@@ -16,7 +16,7 @@ interface Row { key: string; icon: ReactNode; title: string; sub?: string; space
 interface Ask { action: string; text?: string; market?: string | null; symbol?: string | null; page?: string | null; answer?: string; title?: string | null; fallback?: boolean }
 
 const PAGES: Record<string, string> = { paper: "/paper", options: "/options", library: "/library", research: "/research", import: "/import",
-  notebooks: "/notebooks", new: "/new", trade: "/trade", invest: "/invest", money: "/money", account: "/account", plans: "/plans", themes: "/research/themes", pulse: "/research/pulse", watchlist: "/research/watchlist" };
+  notebooks: "/notebooks", new: "/new", trade: "/trade", invest: "/invest", money: "/money", account: "/account", settings: "/settings", plans: "/plans", themes: "/research/themes", pulse: "/research/pulse", watchlist: "/research/watchlist" };
 const HISTORY = { "1d": 1825, "1h": 365 } as Record<string, number>;
 
 const LAST_MARKET = "stratlab.lastMarket";

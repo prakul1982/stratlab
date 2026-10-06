@@ -49,7 +49,7 @@ export function NewsPage() {
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Newsletters</span>
         <h1 className="page-title">News</h1>
-        <p className="page-sub">A short brief after each market close, for India, the US and the companies you follow. Want it by email? Turn it on in <Link className="link" to="/account#newsletters">Account → Newsletters</Link>.</p>
+        <p className="page-sub">A short brief after each market close, for India, the US and the companies you follow. Want it by email? Turn it on in <Link className="link" to="/settings#newsletters">Settings → Notifications</Link>.</p>
         <div className="seg" role="radiogroup" aria-label="Which brief" style={{ alignSelf: "flex-start", maxWidth: "100%" }}>
           {TABS.map(([t, title]) => <button key={t} role="radio" aria-checked={tab === t} aria-pressed={tab === t} onClick={() => choose(t)}>{title}</button>)}
         </div>
@@ -65,7 +65,7 @@ export function NewsPage() {
         : !rows.length ? (
           <div className="card dashed stack empty" style={{ gap: 14 }}>
             <p style={{ fontSize: 17 }}>No issues yet — the first one arrives after the next market close.</p>
-            <Link to="/account#newsletters" className="btn outline">Newsletter settings</Link>
+            <Link to="/settings#newsletters" className="btn outline">Newsletter settings</Link>
           </div>
         ) : (
           <div className={`news-grid${picked ? " reading" : ""}`}>

@@ -184,7 +184,7 @@ function AlertBox({ group }: { group: Group }) {
           ))}
         </ul>
       )}
-      {alerts && !alerts.channels.length && <p className="tiny muted">Set up a phone, Telegram or a confirmed email on the <Link className="link" to="/account">Account page</Link> for alerts to reach you.</p>}
+      {alerts && !alerts.channels.length && <p className="tiny muted">Set up a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link> for alerts to reach you.</p>}
     </section>
   );
 }

@@ -294,7 +294,7 @@ export function ScreensPage() {
               <button className={`btn sm${open ? " quiet" : ""}`} disabled={saving || full} onClick={() => save(true)}>{open ? "Save as a new screen" : "Save screen"}</button>
             </div>
             {full && <p className="small muted">Your plan keeps {saved?.limit} saved screen{saved?.limit === 1 ? "" : "s"}. Delete one to save another, or <Link className="link" to="/plans">see plans</Link>.</p>}
-            {weekly && saved?.email && !saved.email_confirmed && <p className="hint">The email goes out once you've confirmed {saved.email} in <Link className="link" to="/account#newsletters">Account</Link>.</p>}
+            {weekly && saved?.email && !saved.email_confirmed && <p className="hint">The email goes out once you've confirmed {saved.email} in <Link className="link" to="/settings#newsletters">Settings</Link>.</p>}
           </div>
         </section>
       </div>

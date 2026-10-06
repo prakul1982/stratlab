@@ -5,7 +5,7 @@ import { axisInr, CRORE, inr, inrCompact, pct, pctPlain, signed, signedInrCompac
 import { LineChart } from "../components/Charts";
 import { Loading } from "../components/ui";
 import {
-  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, ResultBlock, Seg, Skeleton, Stat, StatRow, StockPicker,
+  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, LinkCard, PageHeader, ResultBlock, Seg, Skeleton, Stat, StatRow, StockPicker,
   TilePicker, type TileGroup,
 } from "../components/kit";
 
@@ -81,6 +81,10 @@ function Body() {
         <Row><Seg label="Frequency" options={[{ value: "daily", label: "Daily" }, { value: "weekly", label: "Weekly" }, { value: "off", label: "Off" }]} value={freq} onChange={setFreq} />
           <Seg label="Two choices" options={[{ value: "a", label: "Table" }, { value: "b", label: "Chart" }]} value="a" onChange={() => undefined} />
           <Seg label="With one off" options={[{ value: "a", label: "1M" }, { value: "b", label: "1Y", disabled: true }]} value="a" onChange={() => undefined} /></Row>
+      </Spec>
+
+      <Spec name="LinkCard" rule="A whole card that is one link: title, one line, a small note such as when it was last updated.">
+        <div className="k-linkcards"><LinkCard to="/holdings" title="My Holdings" note="Updated 2 days ago">Your shares, from a file or typed in.</LinkCard><LinkCard to="/money/mutual-funds" title="Mutual funds">Your statement.</LinkCard></div>
       </Spec>
 
       <Spec name="ChipBar" rule="Many choices in one scrolling row; + Custom adds a number and unit and remembers it on this device.">

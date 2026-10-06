@@ -18,3 +18,4 @@ export { ChipSet, CheckField } from "./Choices";
 export { EmptyState, ErrorState, Skeleton, type StateAction } from "./States";
 export { ChartFrame } from "./ChartFrame";
 export { ResultBlock } from "./ResultBlock";
+export { LinkCard } from "./LinkCard";

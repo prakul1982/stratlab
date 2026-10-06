@@ -51,8 +51,8 @@ export function AlertsPage() {
           <p className="small muted">{page.channels.length
             ? `Sent by ${page.channels.map((c) => CHANNEL_NAME[c] ?? c).join(", ")}. At most a few messages an hour: alerts that fire faster wait and go out together.`
             : "Nothing reaches you yet: alerts only show here until you turn on phone notifications or Telegram, or confirm your email."}
-            {" "}<Link className="link" to="/account">Account settings</Link></p>
-          {page.email && !page.email_confirmed && <p className="hint">Email goes out once you've confirmed {page.email} in Account (Newsletters).</p>}
+            {" "}<Link className="link" to="/settings#notifications">Where alerts go and what to send</Link></p>
+          {page.email && !page.email_confirmed && <p className="hint">Email goes out once you've confirmed {page.email} in Settings (Notifications).</p>}
           {adding && <div className="card dashed"><AlertForm onSaved={(r) => { setPage(r); setAdding(false); }} />
             <button className="btn quiet sm" style={{ marginTop: 10 }} onClick={() => setAdding(false)}>Cancel</button></div>}
         </section>

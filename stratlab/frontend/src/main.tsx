@@ -55,6 +55,11 @@ const ReplayPage = page(() => import("./pages/trade/ReplayPage"), "ReplayPage");
 const SignalsPage = page(() => import("./pages/trade/SignalsPage"), "SignalsPage");
 const PlansPage = page(() => import("./pages/PlansPage"), "PlansPage");
 const AccountPage = page(() => import("./pages/AccountPage"), "AccountPage");
+// Account and Settings step 3a: the pages that used to be sections of Account
+const SettingsPage = page(() => import("./pages/SettingsPage"), "SettingsPage");
+const AssistantPage = page(() => import("./pages/AssistantPage"), "AssistantPage");
+const AppPage = page(() => import("./pages/AppPage"), "AppPage");
+const InvitePage = page(() => import("./pages/InvitePage"), "InvitePage");
 const AdminPage = page(() => import("./pages/AdminPage"), "AdminPage");
 const LibraryPage = page(() => import("./pages/LibraryPage"), "LibraryPage");
 const CompareExperiments = page(() => import("./pages/CompareExperiments"), "CompareExperiments");
@@ -152,7 +157,7 @@ function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; ba
   return (
     <div className="banner">
       <span>Indian market data is offline: today's data login hasn't completed. {others}</span>
-      <Link to="/account" className="btn sm quiet">Run a connection check</Link>
+      <Link to="/settings#check" className="btn sm quiet">Run a connection check</Link>
     </div>
   );
 }
@@ -222,6 +227,11 @@ function Routed() {
         <Route path="/trade/events" element={<EventsPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/account" element={<AccountPage />} />
+        {/* Account and Settings step 3a: new routes */}
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/assistant" element={<AssistantPage />} />
+        <Route path="/app" element={<AppPage />} />
+        <Route path="/invite" element={<InvitePage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/holdings" element={<HoldingsPage />} />
