@@ -4,8 +4,10 @@ import { refName, opSay } from "../lib/rules";
 import type { Cond, Experiment, Strategy } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
-import { Empty, Info, Loading, VerdictBadge } from "../components/ui";
+import { VerdictBadge } from "../components/ui";
+import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, PageHeader, Select, Skeleton, type Column } from "../components/kit";
 import { useNotebook } from "./NotebookPage";
+import "./trade/trade.css";
 
 const condText = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
 
@@ -42,22 +44,24 @@ function changes(a: Experiment, b: Experiment): string[] {
   return out;
 }
 
+type Line = { label: string; a: string; b: string; winA: boolean; winB: boolean };
+
+/* /n/:id/compare: two experiments side by side: what changed, the return curves and the numbers. Built from the kit. */
 export function CompareExperiments() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const nav = useNavigate();
   const { nb } = useNotebook(id);
-  if (!nb) return <Loading label="Opening the notebook" />;
+  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Compare experiments" /><Card><Skeleton label="Opening the notebook" /></Card></div>;
   const exps = nb.experiments;
   const va = Number(params.get("a")), vb = Number(params.get("b"));
   const a = exps.find((e) => e.v === va) ?? exps[exps.length - 2], b = exps.find((e) => e.v === vb) ?? exps[exps.length - 1];
   if (!a || !b || a.v === b.v) return (
-    <div className="stack" style={{ gap: 16 }}>
-      <Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>
-      <Empty title="Nothing to compare yet">
-        <p className="muted">Comparing needs two runs of this notebook. {exps.length ? "It has one so far: change one thing and run it again." : "It has none yet."}</p>
-        <Link to={`/n/${nb.id}`} className="btn">{exps.length ? "Change the rules and run again" : "Run the first test"}</Link>
-      </Empty>
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
+      <EmptyState title="Nothing to compare yet" action={{ label: exps.length ? "Change the rules and run again" : "Run the first test", to: `/n/${nb.id}` }}>
+        Comparing needs two runs of this notebook. {exps.length ? "It has one so far: change one thing and run it again." : "It has none yet."}
+      </EmptyState>
     </div>
   );
   const pick = (k: "a" | "b", v: number) => { const p = new URLSearchParams(params); p.set(k, String(v)); nav(`?${p}`, { replace: true }); };
@@ -75,7 +79,7 @@ export function CompareExperiments() {
   const lbl = dates.map((d) => new Date(d).toLocaleDateString("en-GB", { timeZone: tz, month: "short", year: "2-digit" }));
   const diff = changes(a, b);
   const cur = b.instrument?.currency;
-  const rows: [string, (e: Experiment) => string, (e: Experiment) => number | null, boolean][] = [
+  const defs: [string, (e: Experiment) => string, (e: Experiment) => number | null, boolean][] = [
     ["Return after costs", (e) => pct(e.stats.ret), (e) => e.stats.ret, true],
     ["Yearly return", (e) => pct(e.stats.cagr), (e) => e.stats.cagr, true],
     ["Worst drop", (e) => pct(-Math.abs(e.stats.mdd)), (e) => -Math.abs(e.stats.mdd), true],
@@ -86,60 +90,52 @@ export function CompareExperiments() {
     ["Checks passed", (e) => `${e.verdict.passed} of ${e.verdict.total}`, (e) => e.verdict.passed, true],
     ["Buy and hold", (e) => pct(e.stats.buy_hold_ret), () => null, false],
   ];
+  const lines: Line[] = defs.map(([label, show, score, better]) => {
+    const x = score(a), y = score(b);
+    return { label, a: show(a), b: show(b), winA: better && x != null && y != null && x > y, winB: better && x != null && y != null && y > x };
+  });
+  const cols: Column<Line>[] = [
+    { key: "m", header: "Measure", rowHeader: true, cell: (l) => l.label },
+    { key: "a", header: `v${a.v}`, numeric: true, cell: (l) => (l.winA ? <b>{l.a}</b> : l.a) },
+    { key: "b", header: `v${b.v}`, numeric: true, cell: (l) => (l.winB ? <b>{l.b}</b> : l.b) },
+  ];
+  const opts = exps.map((e) => ({ value: e.v, label: `v${e.v} · ${e.label}` }));
   return (
-    <div className="stack" style={{ gap: 24 }}>
-      <Link to={`/n/${nb.id}`} className="link" style={{ textDecoration: "none" }}>← {nb.name}</Link>
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Compare experiments</span>
-        <h1 className="page-title">v{a.v} against v{b.v}</h1>
-        <div className="row wrap" style={{ gap: 12 }}>
-          {(["a", "b"] as const).map((k) => (
-            <label key={k} className="field" style={{ minWidth: 220 }}>{k === "a" ? "Before" : "After"}
-              <select value={(k === "a" ? a : b).v} onChange={(e) => pick(k, Number(e.target.value))}>
-                {exps.map((e) => <option key={e.v} value={e.v}>v{e.v} · {e.label}</option>)}
-              </select>
-            </label>
-          ))}
-        </div>
-      </div>
-      <div className="grid2">
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title={`v${a.v} against v${b.v}`} lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
+      <Card label="Pick two runs">
+        <FormGrid label="Pick two runs">
+          <Field label="Before">{(fid) => <Select id={fid} value={a.v} onChange={(v) => pick("a", Number(v))} options={opts} />}</Field>
+          <Field label="After">{(fid) => <Select id={fid} value={b.v} onChange={(v) => pick("b", Number(v))} options={opts} />}</Field>
+        </FormGrid>
+      </Card>
+      <div className="k-two">
         {[a, b].map((e) => (
-          <Link key={e.v} to={`/n/${nb.id}/e/${e.v}`} className="card stack" style={{ gap: 8, textDecoration: "none", color: "inherit" }}>
-            <span className="eyebrow">v{e.v} · {e.label}</span>
+          <Card key={e.v} label={`v${e.v}`}>
+            <span className="k-eyebrow">v{e.v} · {e.label}</span>
             <div><VerdictBadge v={e.verdict.verdict} /></div>
-            <span className="serif" style={{ fontSize: 22, lineHeight: 1.25 }}>{e.verdict.headline}</span>
-            <span className="small muted">{e.verdict.summary}</span>
-          </Link>
+            <CardHead level={3} title={<Link to={`/n/${nb.id}/e/${e.v}`} className="k-title-link">{e.verdict.headline}</Link>} />
+            <span className="k-small k-muted">{e.verdict.summary}</span>
+          </Card>
         ))}
       </div>
-      <section className="card stack" style={{ gap: 10 }}>
-        <h2 className="h3 row" style={{ gap: 0 }}>What changed<Info>Every difference in the setup between the two experiments. If more than one thing changed, you can't tell which one made the difference: change one thing at a time.</Info></h2>
-        {diff.length === 0 ? <p className="small muted">Same setup. The results differ only if the prices did (a later run includes newer candles).</p>
-          : <ul className="bullets small">{diff.map((d) => <li key={d}>{d}</li>)}</ul>}
-        {diff.length > 2 && <p className="hint">Several things changed at once, so it's hard to say which one mattered.</p>}
-      </section>
-      <section className="card stack" style={{ gap: 12 }}>
-        <h2 className="h3">Return over the test</h2>
+      <Card label="What changed">
+        <CardHead level={3} title="What changed" info="Every difference in the setup between the two experiments. If more than one thing changed, you can't tell which one made the difference: change one thing at a time." infoLabel="About what changed" />
+        {diff.length === 0 ? <p className="k-small k-muted">Same setup. The results differ only if the prices did (a later run includes newer candles).</p>
+          : <ul className="k-list">{diff.map((d) => <li key={d}>{d}</li>)}</ul>}
+        {diff.length > 2 && <p className="k-note">Several things changed at once, so it's hard to say which one mattered.</p>}
+      </Card>
+      <Card label="Return over the test">
+        <CardHead level={3} title="Return over the test" />
         <XYChart ariaLabel="Both experiments' return over time" height={260} times={dates} labels={lbl}
           series={[{ id: "a", values: dates.map((d) => ra.get(d) ?? null), color: "var(--muted)", width: 1.5, dash: "5 4", label: `v${a.v} · ${a.label}` },
             { id: "b", values: dates.map((d) => rb.get(d) ?? null), color: "var(--series-1)", label: `v${b.v} · ${b.label}` }]}
           format={(v) => pct(v)} axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
-      </section>
-      <section className="card" style={{ padding: 0 }}>
-        <div className="table-wrap" style={{ margin: 0 }}>
-          <table className="cmp-table">
-            <thead><tr><th>Measure</th><th>v{a.v}</th><th>v{b.v}</th></tr></thead>
-            <tbody>{rows.map(([label, show, score, better]) => {
-              const x = score(a), y = score(b);
-              const winB = better && x != null && y != null && y > x, winA = better && x != null && y != null && x > y;
-              return <tr key={label}><td>{label}</td>
-                <td className="num" style={{ fontWeight: winA ? 700 : 400 }}>{show(a)}</td>
-                <td className="num" style={{ fontWeight: winB ? 700 : 400 }}>{show(b)}</td></tr>;
-            })}</tbody>
-          </table>
-        </div>
-      </section>
-      <p className="hint">Bold marks the better of the two on each line. A better backtest isn't proof: trust the verdict's honesty checks, not the return alone.</p>
+      </Card>
+      <Card label="The numbers">
+        <CardHead level={3} title="The numbers" info="Bold marks the larger of the two on each line. A higher backtest figure is not proof: the verdict's honesty checks are what test for luck." infoLabel="About this table" />
+        <DataTable label="Compared numbers" columns={cols} rows={lines} rowKey={(l) => l.label} />
+      </Card>
     </div>
   );
 }

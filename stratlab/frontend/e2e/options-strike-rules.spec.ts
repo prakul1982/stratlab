@@ -101,7 +101,7 @@ test("options builder: legs picked by delta and premium, and the India VIX entry
   const picks = page.getByTestId("leg-picks");
   await expect(picks).toContainText("Leg 1: CE 25,400 picked: model delta 0.21, nearest to 0.20");
   await expect(picks).toContainText("Leg 2: PE 24,650 picked: premium ₹49.60, nearest to ₹50.00");
-  await expect(page.locator("table.legs tbody tr").first()).toContainText("25400");
+  await expect(page.locator("table[aria-label=\"Legs\"] tbody tr").first()).toContainText("25400");
   const sent = previews[previews.length - 1].strategy;
   expect(sent.legs.map((l) => l.pick)).toEqual(["delta", "premium"]);
   expect(sent.vix).toEqual({ min: 11, max: 20 });

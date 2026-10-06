@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import "../pages/trade/trade.css";
 
 /** A small "More" menu for actions that don't need to be on show all the time. */
 export function MoreMenu({ items, label = "More", icon, buttonClass = "btn quiet sm", align = "left" }: {
@@ -19,7 +20,7 @@ export function MoreMenu({ items, label = "More", icon, buttonClass = "btn quiet
     <div className="more-menu" ref={box}>
       <button className={buttonClass} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{icon}{label}<span className="more-caret" aria-hidden /></button>
       {open && (
-        <div className="more-pop" role="menu" style={align === "right" ? { left: "auto", right: 0 } : undefined}>
+        <div className={`more-pop${align === "right" ? " right" : ""}`} role="menu">
           {items.map((it) => (
             <button key={it.label} role="menuitem" className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}>{it.icon}{it.label}</button>
           ))}

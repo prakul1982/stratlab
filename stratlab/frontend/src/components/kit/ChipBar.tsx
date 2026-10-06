@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { Choice } from "./Seg";
 
 export type CustomUnit = { value: string; label: string; plural?: string };
+/** What a custom entry becomes: the choice to use, or why it cannot be used (shown under the row, in words). */
+export type CustomCheck = { value: string; label?: string } | { error: string };
 
 function load(key: string): Choice[] {
   try {
@@ -18,12 +20,13 @@ function save(key: string, list: Choice[]) {
  * (the chip's value is "35 minutes"-style text: `${n} ${unit.value}`). */
 export function ChipBar({ label, options, value, onChange, custom }: {
   label: string; options: Choice[]; value: string; onChange: (v: string) => void;
-  custom?: { storageKey: string; units: CustomUnit[]; defaultUnit?: string; max?: number };
+  custom?: { storageKey: string; units: CustomUnit[]; defaultUnit?: string; max?: number; validate?: (n: number, unit: string) => CustomCheck };
 }) {
   const [mine, setMine] = useState<Choice[]>(() => (custom ? load(custom.storageKey) : []));
   const [open, setOpen] = useState(false);
   const [n, setN] = useState("");
   const [unit, setUnit] = useState(custom?.defaultUnit ?? custom?.units[0]?.value ?? "");
+  const [problem, setProblem] = useState<string | null>(null);
   const num = useRef<HTMLInputElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (open) num.current?.focus(); }, [open]);
@@ -35,7 +38,13 @@ export function ChipBar({ label, options, value, onChange, custom }: {
     if (!custom || !valid) return;
     const u = custom.units.find((x) => x.value === unit);
     if (!u) return;
-    const opt: Choice = { value: `${count} ${u.value}`, label: `${count} ${count === 1 ? u.label : u.plural ?? u.label}` };
+    let opt: Choice = { value: `${count} ${u.value}`, label: `${count} ${count === 1 ? u.label : u.plural ?? u.label}` };
+    if (custom.validate) {
+      const r = custom.validate(count, u.value);
+      if ("error" in r) { setProblem(r.error); return; }
+      opt = { value: r.value, label: r.label ?? opt.label };
+    }
+    setProblem(null);
     if (!all.some((o) => o.value === opt.value)) {
       const next = [...mine, opt].slice(-(custom.max ?? 8));
       setMine(next);
@@ -55,12 +64,13 @@ export function ChipBar({ label, options, value, onChange, custom }: {
       {custom && open && (
         <div className="k-custom" role="group" aria-label="Custom choice">
           <input ref={num} className="k-input" inputMode="numeric" placeholder="35" value={n} aria-label="How many" aria-invalid={n !== "" && !valid}
-            onChange={(e) => setN(e.target.value.replace(/\D/g, "").slice(0, 3))}
+            onChange={(e) => { setN(e.target.value.replace(/\D/g, "").slice(0, 3)); setProblem(null); }}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } else if (e.key === "Escape") { e.preventDefault(); setOpen(false); opener.current?.focus(); } }} />
-          <select className="k-input" aria-label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)}>
+          <select className="k-input" aria-label="Unit" value={unit} onChange={(e) => { setUnit(e.target.value); setProblem(null); }}>
             {custom.units.map((u) => <option key={u.value} value={u.value}>{u.plural ?? u.label}</option>)}
           </select>
           <button type="button" className="btn sm" disabled={!valid} onClick={add}>Use this</button>
+          {problem && <span className="k-note k-down" role="alert">{problem}</span>}
         </div>
       )}
     </div>

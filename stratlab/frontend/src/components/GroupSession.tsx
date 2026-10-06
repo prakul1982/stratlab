@@ -1,10 +1,15 @@
-import { money, price, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
+import { useState } from "react";
+import { money, price, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { HELP } from "../lib/help";
+import { upDown } from "../lib/tradeUi";
 import { ChartEmpty, LineChart } from "./Charts";
+import { ChartFrame, Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, Notice, Stat, StatRow, type Column } from "./kit";
 import { moneyCompact } from "../lib/chartFormat";
 import { Info } from "./ui";
 import { Earlier, splitToday } from "./Earlier";
 import { OrderList } from "./OrderList";
+import "../pages/trade/trade.css";
+import "../pages/trade/paper.css";
 
 export interface GroupSnapshot {
   id: string; name: string; kind: "group"; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
@@ -18,8 +23,11 @@ export interface GroupSnapshot {
     today: number; trades: number; wins: number; skipped?: { spread: number; price: number } };
   fast?: { ticks?: boolean; maxSpreadPct?: number; minPrice?: number };
 }
+type Member = GroupSnapshot["members"][number];
+const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
 
 export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; onStop: () => void; onDelete: () => void }) {
+  const [ask, setAsk] = useState<"stop" | "delete" | null>(null);
   const running = snap.status === "running";
   const cur = snap.instrument.currency || (snap.instrument.market === "IN" ? "INR" : "");
   const tz = tzOf(snap.instrument as never);
@@ -28,87 +36,88 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
   const { today, earlier } = splitToday(snap.events, (e) => e.t, tz);     // today's orders in view, the earlier ones folded
   const closedPnl = earlier.reduce((n, e) => n + (e.pnl ?? 0), 0);
   const feed = !running ? "" : snap.feed_connected ? (snap.last_tick_at ? "Live prices" : "Waiting for the market to open") : "Reconnecting to prices";
-  const stats: [string, string, number | null][] = [
-    ["Open positions", `${a.open} of ${a.max_open}`, null],
-    ["Today", money(a.today, cur), a.today],
-    ["Closed trades", `${money(a.realised, cur)} · ${a.trades}`, a.realised],
-    ["Paper account", money(a.equity, cur), a.equity - a.capital],
+  const holdCols: Column<Member>[] = [
+    { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
+    { key: "side", header: "Side", cell: (m) => (m.position!.side === "short" ? "Short" : "Long") },
+    { key: "qty", header: "Qty", numeric: true, cell: (m) => qty(m.position!.qty) },
+    { key: "entry", header: "Entry", numeric: true, cell: (m) => price(m.position!.entry, cur) },
+    { key: "now", header: "Now", numeric: true, cell: (m) => price(m.price, cur) },
+    { key: "stop", header: "Stop", numeric: true, cell: (m) => (m.position!.stop ? price(m.position!.stop, cur) : "–") },
+    { key: "tgt", header: "Target", numeric: true, cell: (m) => (m.position!.target ? price(m.position!.target, cur) : "–") },
+    { key: "pnl", header: "P&L", numeric: true, cell: (m) => <span className={upDown(m.position!.unrealised)}>{money(m.position!.unrealised, cur)}</span> },
   ];
+  const allCols: Column<Member>[] = [
+    { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
+    { key: "price", header: "Price", numeric: true, cell: (m) => price(m.price, cur) },
+    ...(snap.fast?.maxSpreadPct ? [{ key: "spread", header: "Spread", numeric: true, cell: (m: Member) => (m.spread == null ? "–" : `${m.spread.toFixed(2)}%`) }] : []),
+    { key: "trades", header: "Trades", numeric: true, cell: (m) => m.trades },
+    { key: "skipped", header: "Skipped", numeric: true, cell: (m) => m.skipped || "–" },
+    { key: "pnl", header: "Closed P&L", numeric: true, cell: (m) => <span className={upDown(m.pnl)}>{money(m.pnl, cur)}</span> },
+  ];
+  const f = snap.fast || {}, sk = a.skipped || { spread: 0, price: 0 };
+  const on = [f.ticks && "faster entries on the live price", f.maxSpreadPct && `spread limit ${f.maxSpreadPct}%`, f.minPrice && `nothing under ${price(f.minPrice, cur)}`].filter(Boolean);
+  const skipped = [sk.spread && `${sk.spread} for a wide or unknown spread`, sk.price && `${sk.price} for price`].filter(Boolean);
   return (
-    <div className="stack" style={{ gap: 20 }}>
-      <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div className="stack" style={{ gap: 6 }}>
-          <span className="eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
-          <h2 className="serif" style={{ fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em" }}>{snap.name}</h2>
+    <div className="k-page">
+      <div className="k-spread k-session-head">
+        <div className="k-stack k-tight">
+          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
+          <h2 className="k-session-name">{snap.name}</h2>
         </div>
-        <div className="row" style={{ gap: 12 }}>
-          {running && <span className="row small" style={{ gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: snap.feed_connected && snap.last_tick_at ? "var(--blue)" : "var(--dash)" }} />{feed}<Info>{HELP.feed}</Info></span>}
-          {running ? <button className="btn danger" onClick={onStop}>Stop session</button>
-            : <><span className={`badge ${snap.status}`}>{snap.status}</span><button className="btn danger sm" onClick={onDelete}>Delete</button></>}
+        <div className="k-row">
+          {running && <span className="k-row"><Badge tone={snap.feed_connected && snap.last_tick_at ? "live" : "plain"}>{feed}</Badge><Info>{HELP.feed}</Info></span>}
+          {running ? <button type="button" className="btn danger" onClick={() => setAsk("stop")}>Stop session</button>
+            : <><Badge tone="plain">{snap.status}</Badge><button type="button" className="btn danger sm" onClick={() => setAsk("delete")}>Delete</button></>}
         </div>
       </div>
-      {!running && snap.stop_reason && <div className="banner">Stopped: {snap.stop_reason}</div>}
-      {running && a.halted && <div className="banner">The group's daily loss cap was hit: everything was closed and nothing new opens until tomorrow.</div>}
-      {snap.skipped.length > 0 && <p className="hint">Left out (not enough live history): {snap.skipped.join(" · ")}</p>}
-      {(() => {
-        const f = snap.fast || {}, sk = a.skipped || { spread: 0, price: 0 };
-        const on = [f.ticks && "faster entries on the live price", f.maxSpreadPct && `spread limit ${f.maxSpreadPct}%`, f.minPrice && `nothing under ${price(f.minPrice, cur)}`].filter(Boolean);
-        if (!on.length) return null;
-        const skipped = [sk.spread && `${sk.spread} for a wide or unknown spread`, sk.price && `${sk.price} for price`].filter(Boolean);
-        return <p className="hint">On: {on.join(" · ")}.{skipped.length ? ` Entries skipped: ${skipped.join(", ")}.` : ""}</p>;
-      })()}
-      <div className="stats-grid opt-stats">
-        {stats.map(([k, v, n]) => <div key={k} className="card"><span className="eyebrow">{k}</span><b className={`mono ${signClass(n)}`} style={{ fontSize: 20 }}>{v}</b></div>)}
-      </div>
-      <div className="nb-grid" style={{ gap: 16 }}>
-        <div className="stack" style={{ gap: 16, minWidth: 0 }}>
-          <section className="card stack" style={{ gap: 10 }}>
-            <h3 className="h3">Open positions</h3>
-            {holding.length === 0 ? <p className="muted">{running ? "None right now. Positions open as the rules fire, up to " + a.max_open + " at once." : "None."}</p> : (
-              <div className="table-wrap"><table>
-                <thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Now</th><th>Stop</th><th>Target</th><th>P&amp;L</th></tr></thead>
-                <tbody>{holding.map((m) => (
-                  <tr key={m.id}><td className="mono">{m.symbol}</td><td>{m.position!.side === "short" ? "Short" : "Long"}</td><td className="mono">{qty(m.position!.qty)}</td>
-                    <td className="mono">{price(m.position!.entry, cur)}</td><td className="mono">{price(m.price, cur)}</td>
-                    <td className="mono">{m.position!.stop ? price(m.position!.stop, cur) : "–"}</td><td className="mono">{m.position!.target ? price(m.position!.target, cur) : "–"}</td>
-                    <td className={`mono ${signClass(m.position!.unrealised)}`}>{money(m.position!.unrealised, cur)}</td></tr>
-                ))}</tbody>
-              </table></div>
-            )}
-          </section>
-          <section className="card stack" style={{ gap: 10 }}>
-            <h3 className="h3">Paper equity</h3>
+      {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
+      {running && a.halted && <Notice tone="warn">The group's daily loss cap was hit: everything was closed and nothing new opens until tomorrow.</Notice>}
+      {snap.skipped.length > 0 && <p className="k-note">Left out (not enough live history): {snap.skipped.join(" · ")}</p>}
+      {on.length > 0 && <p className="k-note">On: {on.join(" · ")}.{skipped.length ? ` Entries skipped: ${skipped.join(", ")}.` : ""}</p>}
+      <Card label="The account">
+        <StatRow label="Group account">
+          <Stat item label="Open positions" value={`${a.open} of ${a.max_open}`} />
+          <Stat item label="Today" value={money(a.today, cur)} tone={tone(a.today)} />
+          <Stat item label="Closed trades" value={money(a.realised, cur)} tone={tone(a.realised)} note={`${a.trades} trade${a.trades === 1 ? "" : "s"}`} />
+          <Stat item label="Paper account" value={money(a.equity, cur)} tone={tone(a.equity - a.capital)} note="Fake money" />
+        </StatRow>
+      </Card>
+      <div className="nb-grid">
+        <div className="k-page">
+          <Card label="Open positions">
+            <CardHead level={3} title="Open positions" />
+            {holding.length === 0 ? <p className="k-small k-muted">{running ? "None right now. Positions open as the rules fire, up to " + a.max_open + " at once." : "None."}</p>
+              : <DataTable label="Open positions" columns={holdCols} rows={holding} rowKey={(m) => m.id} />}
+          </Card>
+          <ChartFrame title="Paper equity">
             {snap.equity_curve.length > 1 ? (
               <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, true))} height={170} times={snap.equity_curve.map((p) => p.t)} tz={tz}
                 format={(v) => money(v, cur)} axisFormat={(v) => moneyCompact(v, cur ?? "INR")} baseline={a.capital}
                 lines={[{ label: "Account", values: snap.equity_curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
             ) : <ChartEmpty height={170}>Fills in as candles close.</ChartEmpty>}
-          </section>
+          </ChartFrame>
           {snap.members.length > 0 && (
-            <details className="card">
-              <summary className="h3">Every member ({snap.members.length})</summary>
-              <div className="table-wrap" style={{ marginTop: 10 }}><table>
-                <thead><tr><th>Symbol</th><th>Price</th>{snap.fast?.maxSpreadPct ? <th>Spread</th> : null}<th>Trades</th><th>Skipped</th><th>Closed P&amp;L</th></tr></thead>
-                <tbody>{snap.members.map((m) => (
-                  <tr key={m.id}><td className="mono">{m.symbol}</td><td className="mono">{price(m.price, cur)}</td>
-                    {snap.fast?.maxSpreadPct ? <td className="mono">{m.spread == null ? "–" : `${m.spread.toFixed(2)}%`}</td> : null}
-                    <td className="mono">{m.trades}</td><td className="mono">{m.skipped || "–"}</td>
-                    <td className={`mono ${signClass(m.pnl)}`}>{money(m.pnl, cur)}</td></tr>
-                ))}</tbody>
-              </table></div>
-            </details>
+            <Card label="Every member">
+              <Disclosure summary={`Every member (${snap.members.length})`}>
+                <DataTable label="Every member" columns={allCols} rows={snap.members} rowKey={(m) => m.id} />
+              </Disclosure>
+            </Card>
           )}
         </div>
-        <section className="card stack" style={{ gap: 10, alignSelf: "start" }} aria-labelledby="g-orders">
-          <h3 id="g-orders" className="h3">Orders today</h3>
+        <Card label="Orders today">
+          <CardHead level={3} title="Orders today" />
           {today.length ? <OrderList events={today} cur={cur} tz={tz} newest />
-            : <p className="muted small">{snap.events.length ? "No orders today." : "None yet."}</p>}
-          <Earlier label="Earlier orders" count={earlier.length} className="in-card"
-            note={<><span className={signClass(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
+            : <p className="k-small k-muted">{snap.events.length ? "No orders today." : "None yet."}</p>}
+          <Earlier label="Earlier orders" count={earlier.length} className="in-card" open
+            note={<><span className={upDown(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
             <OrderList events={earlier} cur={cur} tz={tz} newest />
           </Earlier>
-        </section>
+        </Card>
       </div>
+      {ask === "stop" && <ConfirmDialog title="Stop this session?" confirmLabel="Stop session" onConfirm={() => { setAsk(null); onStop(); }} onClose={() => setAsk(null)}>
+        Open paper positions are left as they are, and it can't be restarted.</ConfirmDialog>}
+      {ask === "delete" && <ConfirmDialog title={`Delete "${snap.name}"?`} confirmLabel="Delete session" onConfirm={() => { setAsk(null); onDelete(); }} onClose={() => setAsk(null)}>
+        Its orders go with it. This can't be undone.</ConfirmDialog>}
     </div>
   );
 }

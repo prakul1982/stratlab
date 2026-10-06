@@ -68,11 +68,10 @@ test("options session, flat before the open: one line for today, the earlier tra
   const fold = page.locator("details.earlier", { hasText: "Earlier trades" });
   await expect(fold.locator("summary")).toContainText("Earlier trades (20)");
   await expect(fold.locator("summary")).toContainText("₹24,500 after costs · 19 won");
-  await expect(fold).not.toHaveAttribute("open", "");
-  await expect(fold.locator("table")).toHaveCount(0);                    // folded: the history isn't drawn
+  await expect(fold).toHaveAttribute("open", "");                        // open by default: the earlier trades are the history people look for
+  await expect(fold.locator("table")).toHaveCount(0);                    // each trade is one line; its orders open on a tap
   await noSideScroll(page);
   await page.screenshot({ path: `test-results/stale-options-flat-${info.project.name}.png`, fullPage: true });
-  await fold.locator("summary").click();
   await expect(fold.locator(".trade-line")).toHaveCount(20);
   await expect(fold.locator(".trade-line").first()).toContainText(/20 Sep/);   // newest first
   await noSideScroll(page);

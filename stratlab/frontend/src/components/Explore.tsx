@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { FEATURES, GOAL_ORDER, GOALS, resolve, type Goal } from "../lib/features";
 import { Search } from "./Icons";
+import "../pages/trade/trade.css";
 
 const OPEN_KEY = "stratlab.explore.open";
 
@@ -25,16 +26,16 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
     else nav(dest);
   };
   return (
-    <section className="stack" style={{ gap: 18 }} aria-labelledby="explore-h">
-      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
+    <section className="k-stack k-explore" aria-labelledby="explore-h">
+      <div className="k-spread">
         <h2 id="explore-h" className="h2">{title}</h2>
         <button className="btn quiet sm" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}><Search size={16} />Search everything</button>
       </div>
       {goals.slice(0, all ? goals.length : 1).map((g) => {
         const items = shown.filter((f) => f.goal === g);
         return (
-          <div key={g} className="stack" style={{ gap: 10 }}>
-            <div className="stack" style={{ gap: 2 }}>
+          <div key={g} className="k-stack">
+            <div className="k-stack k-tight">
               <b>{GOALS[g].title}</b>
               <span className="small muted">{GOALS[g].sub}</span>
             </div>
@@ -51,7 +52,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
         );
       })}
       {goals.length > 1 && (
-        <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} aria-expanded={all} onClick={() => showAll(!all)}>
+        <button className="btn quiet sm k-btn-end" aria-expanded={all} onClick={() => showAll(!all)}>
           {all ? "Show less" : `Show ${shown.filter((f) => goals.slice(1).includes(f.goal!)).length} more tools`}
         </button>
       )}

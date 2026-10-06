@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, pct, periodName, price, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
-import type { Basket, Check, Experiment, Notebook, WalkForward } from "../lib/types";
+import { money, pct, periodName, price, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { upDown, checkTone } from "../lib/tradeUi";
+import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
 import { pctTick, moneyCompact } from "../lib/chartFormat";
 import { instrumentLoader, PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
-import { Info, Loading, Modal, STATUS_NAME } from "../components/ui";
+import { Info, Modal, STATUS_NAME } from "../components/ui";
+import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
@@ -15,6 +17,10 @@ import { MoreMenu } from "../components/MoreMenu";
 import { track } from "../lib/analytics";
 import { siteUrl } from "../lib/share";
 import { Book, Globe, Layers, Pencil, Pulse, Share, Trash } from "../components/Icons";
+import "./trade/trade.css";
+
+/* /n/:id/e/:v: one experiment's verdict, its four checks, the money, every trade and the extra tests. Built from the
+ * kit (components/kit); the big verdict headline and the checks grid keep their own layout. */
 
 const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 
@@ -36,64 +42,47 @@ function WalkForwardInner({ nb, e }: { nb: Notebook; e: Experiment }) {
     finally { setBusy(false); }
   };
   const s = w?.series;
+  const cols: Column<WFWindow>[] = [
+    { key: "tuned", header: "Tuned on", cell: (x) => `${shortDate(x.train_from)} – ${shortDate(x.train_to)}` },
+    { key: "traded", header: "Then traded", cell: (x) => `${shortDate(x.test_from)} – ${shortDate(x.test_to)}` },
+    { key: "set", header: "Settings picked", wrap: true, cell: (x) => x.chosen.map((c) => `${c.label} ${c.value}${c.value === c.yours ? "" : ` (yours ${c.yours})`}`).join(" · ") },
+    { key: "train", header: "Tuned return", numeric: true, cell: (x) => <span className={upDown(x.train_ret)}>{pct(x.train_ret)}</span> },
+    { key: "test", header: "Unseen return", numeric: true, cell: (x) => <b className={upDown(x.test_ret)}>{pct(x.test_ret)}</b> },
+    { key: "fixed", header: "Yours, unseen", numeric: true, cell: (x) => <span className={upDown(x.fixed_ret)}>{pct(x.fixed_ret)}</span> },
+  ];
   return (
-    <section className="card stack" style={{ gap: 14 }}>
-      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
-        <h2 className="h2 row" style={{ gap: 0 }}>Walk-forward test<Info>{HELP.walkforward}</Info></h2>
-        <button className="btn quiet sm" disabled={busy} onClick={run}>{busy ? "Walking forward…" : w ? "Run again" : "Run a walk-forward test"}</button>
-      </div>
-      {!w && <p className="small muted">Would this idea still work if you kept re-tuning it? Walk-forward tunes the settings on the past, trades them on the next stretch it never saw, then slides forward and repeats. It's the strictest test of a tuned strategy. Counts as one experiment.</p>}
+    <Card label="Walk-forward test">
+      <CardHead title="Walk-forward test" info={HELP.walkforward} infoLabel="About the walk-forward test"
+        actions={<button type="button" className="btn quiet sm" disabled={busy} onClick={run}>{busy ? "Walking forward…" : w ? "Run again" : "Run a walk-forward test"}</button>} />
+      {!w && <p className="k-small k-muted">Would this idea still work if you kept re-tuning it? Walk-forward tunes the settings on the past, trades them on the next stretch it never saw, then slides forward and repeats. It's the strictest test of a tuned strategy. Counts as one experiment.</p>}
       {w && <>
-        <div className="row wrap" style={{ gap: 12 }}>
-          <span className={`badge ${w.status}`}>{STATUS_NAME[w.status]}</span>
-          <span className="serif" style={{ fontSize: 22 }}>{w.headline}</span>
-        </div>
-        <p className="small" style={{ maxWidth: "80ch" }}>{w.detail}</p>
+        <div className="k-row"><Badge tone={checkTone(w.status)}>{STATUS_NAME[w.status]}</Badge><span className="k-sub">{w.headline}</span></div>
+        <p className="k-small">{w.detail}</p>
         {w.windows.length > 0 && <>
-          <div className="stats-grid">
+          <StatRow label="Walk-forward results">
             {([["Walk-forward return", w.wf_ret!, "Tuned on the past each time, traded only on unseen blocks."],
               ["Your settings, same blocks", w.fixed_ret!, "Your exact settings, never re-tuned, over the same unseen blocks."],
               ["Buy and hold, same span", w.buy_hold_ret!, "Just buying and holding over the same unseen span."]] as [string, number, string][]).map(([k, v, h]) => (
-              <div key={k} className="card stack" style={{ gap: 4, padding: "14px 16px" }}>
-                <span className={`serif ${signClass(v)}`} style={{ fontSize: 24, lineHeight: 1.15 }}>{pct(v)}</span>
-                <span className="small muted row" style={{ gap: 0 }}>{k}<Info>{h}</Info></span>
-              </div>
+              <Stat key={k} item label={<>{k}<Info>{h}</Info></>} value={pct(v)} tone={v > 0 ? "up" : v < 0 ? "down" : undefined} />
             ))}
-            <div className="card stack" style={{ gap: 4, padding: "14px 16px" }}>
-              <span className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>{w.profitable} of {w.total}</span>
-              <span className="small muted row" style={{ gap: 0 }}>Unseen blocks in profit<Info>{`Each block was traded with settings chosen only from the data before it. ${w.trades} trades in all.`}</Info></span>
-            </div>
-          </div>
-          {s && s.t.length > 1 && <>
+            <Stat item label={<>Unseen blocks in profit<Info>{`Each block was traded with settings chosen only from the data before it. ${w.trades} trades in all.`}</Info></>} value={`${w.profitable} of ${w.total}`} />
+          </StatRow>
+          {s && s.t.length > 1 && (
             <XYChart ariaLabel="Walk-forward return against your fixed settings" height={220} times={s.t} tz={tzOf(e.instrument)}
               series={[{ id: "wf", values: s.wf, color: "var(--series-1)", label: "Walk-forward (re-tuned each block)" },
                 { id: "fixed", values: s.fixed, color: "var(--muted)", width: 1.5, dash: "5 4", label: "Your settings, never re-tuned" }]}
               format={(v) => pct(v)} axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
-          </>}
-          <p className="hint">
+          )}
+          <p className="k-note">
             Each step tried {w.grid_size} nearby settings around your {w.tuned?.join(" and ")} on the past and kept the best.
             {w.efficiency != null && ` Unseen blocks earned ${Math.round(w.efficiency * 100)}% of the yearly return the tuning showed`}
-            {w.efficiency != null && (w.efficiency >= 0.5 ? " (50% or more is healthy)." : " (under 50% means the tuning flatters it).")}
+            {w.efficiency != null && (w.efficiency >= 0.5 ? " (50% or more means most of it carried over)." : " (under 50% means the tuning flattered it).")}
             {w.settings_used! > 3 && " The best settings kept changing, which suggests they're fitting noise."}
           </p>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Tuned on</th><th>Then traded</th><th>Settings picked</th><th>Tuned return</th><th>Unseen return</th><th>Yours, unseen</th></tr></thead>
-              <tbody>{w.windows.map((x) => (
-                <tr key={x.test_from}>
-                  <td>{shortDate(x.train_from)} – {shortDate(x.train_to)}</td>
-                  <td>{shortDate(x.test_from)} – {shortDate(x.test_to)}</td>
-                  <td className="num">{x.chosen.map((c) => `${c.label} ${c.value}${c.value === c.yours ? "" : ` (yours ${c.yours})`}`).join(" · ")}</td>
-                  <td className={`num ${signClass(x.train_ret)}`}>{pct(x.train_ret)}</td>
-                  <td className={`num ${signClass(x.test_ret)}`} style={{ fontWeight: 700 }}>{pct(x.test_ret)}</td>
-                  <td className={`num ${signClass(x.fixed_ret)}`}>{pct(x.fixed_ret)}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
+          <DataTable label="Walk-forward windows" columns={cols} rows={w.windows} rowKey={(x) => x.test_from} />
         </>}
       </>}
-    </section>
+    </Card>
   );
 }
 
@@ -117,33 +106,25 @@ function BasketInner({ nb, e }: { nb: Notebook; e: Experiment }) {
     catch (err) { fail(err); }
     finally { setBusy(false); }
   };
+  const cols: Column<BasketRow>[] = [
+    { key: "sym", header: "Instrument", rowHeader: true, cell: (r) => <b title={r.name || undefined}>{r.symbol}</b> },
+    { key: "ret", header: "Return", numeric: true, cell: (r) => (r.error ? "" : r.n ? <span className={upDown(r.ret)}>{pct(r.ret!)}</span> : "No trades") },
+    { key: "bh", header: "Buy and hold", numeric: true, cell: (r) => (r.error ? "" : pct(r.buy_hold!)) },
+    { key: "n", header: "Trades", numeric: true, cell: (r) => (r.error ? "" : r.n) },
+    { key: "win", header: "Win rate", numeric: true, cell: (r) => (r.error ? "" : r.n ? `${r.win!.toFixed(0)}%` : "–") },
+    { key: "mdd", header: "Worst fall", numeric: true, cell: (r) => (r.error ? "" : r.n ? pct(-Math.abs(r.mdd!)) : "–") },
+  ];
   return (
-    <section className="card stack" style={{ gap: 12 }}>
-      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
-        <h2 className="h2 row" style={{ gap: 0 }}>Does it work on similar {peers}?<Info>{HELP.basket}</Info></h2>
-        <button className="btn quiet sm" disabled={busy} onClick={run}>{busy ? `Testing ${peers}…` : b ? "Run again" : `Test on 10 similar ${peers}`}</button>
-      </div>
-      {!b && <p className="small muted">An edge that only works on one chart is often luck. This runs the same rules over the same period on about 10 well-known {peers} and counts how many make money. Counts as one experiment.</p>}
+    <Card label="Similar instruments">
+      <CardHead title={`Does it work on similar ${peers}?`} info={HELP.basket} infoLabel="About this test"
+        actions={<button type="button" className="btn quiet sm" disabled={busy} onClick={run}>{busy ? `Testing ${peers}…` : b ? "Run again" : `Test on 10 similar ${peers}`}</button>} />
+      {!b && <p className="k-small k-muted">An edge that only works on one chart is often luck. This runs the same rules over the same period on about 10 well-known {peers} and counts how many make money. Counts as one experiment.</p>}
       {b && <>
-        <div className="row wrap" style={{ gap: 12 }}>
-          <span className={`badge ${b.status}`}>{STATUS_NAME[b.status]}</span>
-          <span className="serif" style={{ fontSize: 20 }}>{b.headline}</span>
-        </div>
-        {b.tested > 0 && <p className="small muted">Median return {pct(b.median_ret ?? 0)} · beat buy and hold on {b.beat_buy_hold} of {b.tested}.</p>}
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Instrument</th><th>Return</th><th>Buy and hold</th><th>Trades</th><th>Win rate</th><th>Worst fall</th></tr></thead>
-            <tbody>{b.rows.map((r) => r.error
-              ? <tr key={r.id}><td>{r.symbol}</td><td colSpan={5} className="muted">{r.error}</td></tr>
-              : <tr key={r.id}><td title={r.name || undefined}>{r.symbol}</td>
-                  <td className={`num ${signClass(r.n ? r.ret! : null)}`}>{r.n ? pct(r.ret!) : "No trades"}</td>
-                  <td className="num">{pct(r.buy_hold!)}</td><td className="num">{r.n}</td>
-                  <td className="num">{r.n ? `${r.win!.toFixed(0)}%` : "–"}</td><td className="num">{r.n ? pct(-Math.abs(r.mdd!)) : "–"}</td></tr>)}
-            </tbody>
-          </table>
-        </div>
+        <div className="k-row"><Badge tone={checkTone(b.status)}>{STATUS_NAME[b.status]}</Badge><span className="k-sub">{b.headline}</span></div>
+        {b.tested > 0 && <p className="k-small k-muted">Median return {pct(b.median_ret ?? 0)} · beat buy and hold on {b.beat_buy_hold} of {b.tested}.</p>}
+        <DataTable label="Similar instruments" columns={cols} rows={b.rows} rowKey={(r) => r.id} rowNote={(r) => r.error || undefined} />
       </>}
-    </section>
+    </Card>
   );
 }
 
@@ -153,8 +134,8 @@ const tradeCount = (n: number) => `${n} trade${n === 1 ? "" : "s"}`;
 function CheckCard({ c, cur }: { c: Check; cur: string }) {
   const d = c.data;
   return (
-    <div className="card stack" style={{ gap: 12, padding: 20 }}>
-      <div className="spread check-head"><h3 className="h3 row" style={{ gap: 0 }}>{c.title}<Info>{HELP[c.id]}</Info></h3><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
+    <Card label={c.title}>
+      <CardHead level={3} title={c.title} info={HELP[c.id]} infoLabel={`About ${c.title.toLowerCase()}`} actions={<Badge tone={checkTone(c.status)}>{STATUS_NAME[c.status]}</Badge>} />
       {c.id === "unseen" && d && (
         <SplitBars built={d.built_ret} unseen={d.unseen_ret}
           builtLabel={`Built on ${yearSpan(d.built_from, d.built_to)} · ${tradeCount(d.built_trades)}`} unseenLabel={`Tested on ${yearSpan(d.unseen_from, d.unseen_to)} · ${tradeCount(d.unseen_trades)}`} />
@@ -162,46 +143,39 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
       {c.id === "nearby" && d && (
         <>
           <Heatmap grid={d.grid} yours={d.yours} label={`Returns for ${d.total} nearby settings; ${d.profitable} profitable`} />
-          <div className="mono spread" style={{ fontSize: 11.5, color: "var(--muted)" }}>
+          <div className="k-spread k-note">
             <span>{d.col_label} {d.cols[0]} → {d.cols[d.cols.length - 1]}</span>
             {d.row_label && <span>{d.row_label} {d.rows[0]} → {d.rows[d.rows.length - 1]}</span>}
           </div>
-          <p className="small muted"><b style={{ color: "var(--ink)" }}>{d.profitable} of {d.total}</b> nearby settings made money. Yours is outlined.</p>
+          <p className="k-small k-muted"><b className="k-ink">{d.profitable} of {d.total}</b> nearby settings made money. Yours is outlined.</p>
         </>
       )}
       {c.id === "shuffle" && d && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
-      {c.id === "sample" && d && <div className="serif" style={{ fontSize: 56, lineHeight: 1, letterSpacing: "-0.03em" }}>{d.trades}</div>}
-      <p className="small muted" style={{ lineHeight: 1.5 }}>{c.detail}</p>
-      {c.id === "sample" && <span className="hint">Under 15 trades, luck dominates. 30 or more is a fair sample.</span>}
-      {c.id === "shuffle" && d && <span className="hint">From {d.runs.toLocaleString()} reshuffles of your trades{cur ? ", after costs" : ""}.</span>}
-    </div>
+      {c.id === "sample" && d && <div className="k-big">{d.trades}</div>}
+      <p className="k-small k-muted">{c.detail}</p>
+      {c.id === "sample" && <span className="k-note">Under 15 trades, luck dominates. 30 or more is a fair sample.</span>}
+      {c.id === "shuffle" && d && <span className="k-note">From {d.runs.toLocaleString()} reshuffles of your trades{cur ? ", after costs" : ""}.</span>}
+    </Card>
   );
 }
 
 /** How each member of a group did, best first. */
 function GroupMembers({ e, cur }: { e: Experiment; cur: string }) {
   const g = e.group!;
+  const cols: Column<(typeof g.members)[number]>[] = [
+    { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
+    { key: "n", header: "Trades", numeric: true, cell: (m) => m.trades },
+    { key: "win", header: "Win rate", numeric: true, cell: (m) => (m.win == null ? "–" : `${m.win.toFixed(0)}%`) },
+    { key: "pnl", header: "P&L after costs", numeric: true, cell: (m) => <span className={upDown(m.pnl)}>{money(m.pnl, cur)}</span> },
+    { key: "bh", header: "Buy and hold", numeric: true, cell: (m) => (m.buy_hold == null ? "–" : <span className={upDown(m.buy_hold)}>{pct(m.buy_hold)}</span>) },
+  ];
   return (
-    <section className="card stack" style={{ gap: 12 }}>
-      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-        <h2 className="h2 row" style={{ gap: 0 }}>{g.name}: one by one<Info>{HELP.group}</Info></h2>
-        <span className="small muted">Up to {g.max_open} positions at once · most at once: {g.most_open}</span>
-      </div>
-      {g.skipped.length > 0 && <p className="hint">Left out ({g.skipped.length}): {g.skipped.slice(0, 6).join(" · ")}{g.skipped.length > 6 ? " …" : ""}</p>}
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Symbol</th><th>Trades</th><th>Win rate</th><th>P&amp;L after costs</th><th>Buy and hold</th></tr></thead>
-          <tbody>{g.members.map((m) => (
-            <tr key={m.id}>
-              <td className="num" style={{ textAlign: "left" }}>{m.symbol}</td><td className="num">{m.trades}</td>
-              <td className="num">{m.win == null ? "–" : `${m.win.toFixed(0)}%`}</td>
-              <td className={`num ${signClass(m.pnl)}`}>{money(m.pnl, cur)}</td>
-              <td className={`num ${signClass(m.buy_hold)}`}>{m.buy_hold == null ? "–" : pct(m.buy_hold)}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-    </section>
+    <Card label="Group members">
+      <CardHead title={`${g.name}: one by one`} info={HELP.group} infoLabel="About the group"
+        actions={<span className="k-note">Up to {g.max_open} positions at once · most at once: {g.most_open}</span>} />
+      {g.skipped.length > 0 && <p className="k-note">Left out ({g.skipped.length}): {g.skipped.slice(0, 6).join(" · ")}{g.skipped.length > 6 ? " …" : ""}</p>}
+      <DataTable label="Group members" columns={cols} rows={g.members} rowKey={(m) => m.id} />
+    </Card>
   );
 }
 
@@ -236,8 +210,9 @@ function TradesChart({ e, cur }: { e: Experiment; cur: string }) {
 function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const nav = useNavigate();
   const { fail, refreshNotebooks } = useApp();
+  const [removing, setRemoving] = useState(false);
   const remove = async () => {
-    if (!confirm(`Delete experiment v${e.v} ("${e.label}")? The notebook and its other experiments stay. This can't be undone.`)) return;
+    setRemoving(false);
     try {
       await api(`/notebooks/${nb.id}/experiments/${e.v}`, { method: "DELETE" });
       await refreshNotebooks();
@@ -254,21 +229,43 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const allTrades = [...e.trades].reverse();
   const twoWay = e.strategy.side === "both" || e.strategy.side === "short" || e.trades.some((t) => t.side === "short");
 
+  const tradeCols: Column<Trade>[] = [
+    ...(e.group ? [{ key: "sym", header: "Symbol", rowHeader: true, cell: (t: Trade) => <b>{t.symbol}</b> }] : []),
+    { key: "open", header: "Opened", cell: (t) => when(t.entry_t, tz, intraday) },
+    { key: "close", header: "Closed", cell: (t) => (t.exit_t ? when(t.exit_t, tz, intraday) : "Still open") },
+    ...(twoWay ? [{ key: "side", header: "Side", cell: (t: Trade) => (t.side === "short" ? "Short" : "Long") }] : []),
+    { key: "qty", header: "Qty", numeric: true, cell: (t) => qty(t.qty) },
+    { key: "in", header: "In", numeric: true, cell: (t) => price(t.entry, cur) },
+    { key: "out", header: "Out", numeric: true, cell: (t) => price(t.exit, cur) },
+    { key: "pnl", header: "P&L", numeric: true, cell: (t) => <span className={upDown(t.pnl)}>{money(t.pnl, cur)}</span> },
+    { key: "ret", header: "Return", numeric: true, cell: (t) => <span className={upDown(t.ret)}>{pct(t.ret, 2)}</span> },
+    { key: "why", header: "Why it closed", wrap: true, cell: (t) => t.why },
+  ];
+  const stats: [string, string, number | null, string][] = [
+    ["Total return", pct(st.ret), st.ret, HELP.totalReturn],
+    ["Buy and hold", pct(st.buy_hold_ret), st.buy_hold_ret, HELP.buyHold],
+    ["Worst fall", pct(st.mdd), st.mdd, HELP.worstFall],
+    ["Win rate", st.n ? `${st.win.toFixed(0)}%` : "–", null, HELP.winRate],
+    ["Profit factor", st.pf == null ? "∞" : st.n ? st.pf.toFixed(2) : "–", null, HELP.profitFactor],
+    ["Sharpe ratio", st.sharpe.toFixed(2), null, HELP.sharpe],
+    ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
+    ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString()} candles`, null, HELP.period],
+  ];
+
   return (
-    <div className="stack" style={{ gap: 28 }}>
-      <div className="spread" style={{ flexWrap: "wrap" }}>
-        <Link to={`/n/${nb.id}`} className="link" style={{ textDecoration: "none" }}>← {nb.name}</Link>
-        <div className="row wrap" style={{ gap: 10 }}>
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title={nb.name}
+        lede={<><Link to={`/n/${nb.id}`} className="link">← Back to the notebook</Link> · {e.label} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(String(new Date(e.range.from).getFullYear()), String(new Date(e.range.to).getFullYear()))} · {tradeCount(st.n)}</>}
+        actions={<>
           <ShareMenu nb={nb} e={e} />
-          <button className="btn" onClick={() => nav(`/n/${nb.id}`)}>Next experiment →</button>
-        </div>
-      </div>
-      <div className="toolbar" role="toolbar" aria-label="What next">
-        <span className="small muted" style={{ alignSelf: "center" }}>Next:</span>
-        <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "edit_rules" } })}><Pencil size={17} />Change the rules</button>
-        <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "paper_trade" } })}><Pulse size={17} />Paper trade it</button>
+          <button type="button" className="btn" onClick={() => nav(`/n/${nb.id}`)}>Next experiment →</button>
+        </>} />
+      <div className="k-toolbar" role="toolbar" aria-label="What next">
+        <span className="k-small k-muted">Next:</span>
+        <button type="button" className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "edit_rules" } })}><Pencil size={17} />Change the rules</button>
+        <button type="button" className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "paper_trade" } })}><Pulse size={17} />Paper trade it</button>
         {nb.experiments.some((x) => x.v < e.v) && (
-          <button className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/compare?a=${Math.max(...nb.experiments.filter((x) => x.v < e.v).map((x) => x.v))}&b=${e.v}`)}>Compare with the previous run</button>
+          <button type="button" className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/compare?a=${Math.max(...nb.experiments.filter((x) => x.v < e.v).map((x) => x.v))}&b=${e.v}`)}>Compare with the previous run</button>
         )}
         {/* the less common next steps wait behind More, so the verdict isn't buried under a row of buttons */}
         <MoreMenu items={[
@@ -277,42 +274,35 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           ...((e.instrument.market ?? nb.instrument?.market) === "IN" && !nb.group
             ? [{ label: "Trade it with options", icon: <Layers size={17} />, run: () => nav(`/options?enter=rules&nb=${nb.id}`) }] : []),
           { label: "Write a lab note", icon: <Book size={17} />, run: () => nav(`/n/${nb.id}`, { state: { action: "note" } }) },
-          { label: "Delete this experiment", icon: <Trash size={17} />, run: remove, danger: true },
+          { label: "Delete this experiment", icon: <Trash size={17} />, run: () => setRemoving(true), danger: true },
         ]} />
       </div>
       {(st.skipped_size ?? 0) > 0 && (
-        <div className="banner">
-          <span>{st.skipped_size} entry signal{st.skipped_size === 1 ? " was" : "s were"} skipped because one {e.instrument.market === "MCX" || e.instrument.market === "CDS" || e.instrument.fno ? "lot" : "unit"} cost more than the capital allowed for a trade
-            {(e.instrument.market === "MCX" || e.instrument.market === "CDS") && e.instrument.lot_units ? ` (a ${e.instrument.symbol} lot is ${e.instrument.lot_units} × the price)` : ""}.
-            Raise the capital{e.instrument.market === "MCX" ? ", use leverage (futures margin) or pick a mini contract" : e.instrument.market === "CDS" ? " or use leverage (futures margin)" : ""} under Size in the rules.</span>
-        </div>
+        <Notice tone="warn">
+          {st.skipped_size} entry signal{st.skipped_size === 1 ? " was" : "s were"} skipped because one {e.instrument.market === "MCX" || e.instrument.market === "CDS" || e.instrument.fno ? "lot" : "unit"} cost more than the capital allowed for a trade
+          {(e.instrument.market === "MCX" || e.instrument.market === "CDS") && e.instrument.lot_units ? ` (a ${e.instrument.symbol} lot is ${e.instrument.lot_units} × the price)` : ""}.
+          Raise the capital{e.instrument.market === "MCX" ? ", use leverage (futures margin) or pick a mini contract" : e.instrument.market === "CDS" ? " or use leverage (futures margin)" : ""} under Size in the rules.
+        </Notice>
       )}
 
-      <section className="row" style={{ gap: 40, alignItems: "flex-end", paddingBottom: 26, borderBottom: "1px solid var(--line-2)", flexWrap: "wrap" }}>
-        <div className="stack" style={{ gap: 12, flex: "1 1 520px", minWidth: 0 }}>
-          <span className="eyebrow">
-            {e.label} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(String(new Date(e.range.from).getFullYear()), String(new Date(e.range.to).getFullYear()))} · {tradeCount(st.n)}
-          </span>
-          <h1 className={`verdict-head ${v.verdict}`}>{v.headline}<Info label="How is the verdict decided?">{HELP.verdict}</Info></h1>
-          <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, color: "var(--ink-2)", maxWidth: 820 }}>{v.summary}</p>
+      <section className="k-verdict-hero" aria-label="The verdict">
+        <div className="k-stack">
+          <h2 className={`verdict-head ${v.verdict}`}>{v.headline}<Info label="How is the verdict decided?">{HELP.verdict}</Info></h2>
+          <p className="k-lede">{v.summary}</p>
         </div>
-        <div className="card stack" style={{ gap: 10, width: 250, flex: "none", padding: 20 }}>
-          <span className="small muted row" style={{ fontWeight: 600, gap: 0 }}>Strength of evidence<Info>{HELP.strength}</Info></span>
-          <div className="dots" aria-label={`${v.passed} of ${v.total} checks passed`}>
+        <Card label="Strength of evidence">
+          <CardHead level={3} title="Strength of evidence" info={HELP.strength} infoLabel="About the strength of evidence" />
+          <div className="dots" role="img" aria-label={`${v.passed} of ${v.total} checks passed`}>
             {Array.from({ length: v.total }, (_, k) => <span key={k} className={k < v.passed ? "on" : ""} />)}
           </div>
-          <span className="mono">{v.passed} of {v.total} checks passed</span>
-        </div>
+          <span className="k-small">{v.passed} of {v.total} checks passed</span>
+        </Card>
       </section>
 
-      <section className="grid4">{v.checks.map((c) => <CheckCard key={c.id} c={c} cur={cur} />)}</section>
+      <section className="k-checks" aria-label="The four checks">{v.checks.map((c) => <CheckCard key={c.id} c={c} cur={cur} />)}</section>
 
-      <section className="row" style={{ gap: 16, alignItems: "stretch", flexWrap: "wrap" }}>
-        <div className="card stack" style={{ flex: "1 1 520px", minWidth: 0, gap: 12 }}>
-          <div className="spread" style={{ flexWrap: "wrap" }}>
-            <h2 className="h2 row" style={{ gap: 0 }}>Where the money came from, and went<Info>{HELP.equity}</Info></h2>
-            <span className="mono small muted">{money(cap, cur)} start</span>
-          </div>
+      <section className="k-money">
+        <ChartFrame title="Where the money came from, and went" info={HELP.equity} label="Account value" actions={<span className="k-note">{money(cap, cur)} start</span>}>
           <XYChart ariaLabel="Account value over the test, with the unseen part shaded" times={e.series.t} tz={tz} height={260} compare
             format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} refs={[{ v: cap }]} split={e.series.split}
             splitNotes={unseen ? [`tuned on these years: ${pct(unseen.built_ret, 0)}`, `never seen: ${pct(unseen.unseen_ret, 0)}`] : undefined}
@@ -320,81 +310,60 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
               { id: "strategy", label: "Strategy", values: e.series.equity, color: "var(--ink)", width: 2 },
               { id: "hold", label: "Buy and hold", values: e.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" },
             ]} />
-        </div>
-        <div className="card stack" style={{ flex: "1 1 300px", gap: 12 }}>
-          <div className="spread" style={{ flexWrap: "wrap", gap: "4px 12px" }}><h2 className="h2 row" style={{ gap: 0, whiteSpace: "nowrap" }}>What you'd keep<Info>{HELP.keep}</Info></h2><span className="small muted">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span></div>
-          <div className="costs-table">
-            <div><span>Profit before costs</span><span>{money(e.costs.gross_pnl, cur)}</span></div>
-            {e.costs.items.map((i) => <div key={i.label} className="sub"><span>{i.label}</span><span>−{money(i.amount, cur)}</span></div>)}
-            {e.costs.tax.amount != null && <div className="sub"><span>Tax estimate</span><span>−{money(e.costs.tax.amount, cur)}</span></div>}
-            <div className="total"><span>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</span><span className={signClass(e.costs.kept)}>{money(e.costs.kept, cur)}</span></div>
+        </ChartFrame>
+        <Card label="What you'd keep">
+          <CardHead title="What you'd keep" info={HELP.keep} infoLabel="About costs" actions={<span className="k-note">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span>} />
+          <div className="k-rows" role="list" aria-label="Profit and costs">
+            <div role="listitem"><span>Profit before costs</span><b>{money(e.costs.gross_pnl, cur)}</b></div>
+            {e.costs.items.map((i) => <div role="listitem" key={i.label}><span>{i.label}</span><b>−{money(i.amount, cur)}</b></div>)}
+            {e.costs.tax.amount != null && <div role="listitem"><span>Tax estimate</span><b>−{money(e.costs.tax.amount, cur)}</b></div>}
+            <div role="listitem" className="hl"><span>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</span><b className={upDown(e.costs.kept)}>{money(e.costs.kept, cur)}</b></div>
           </div>
-          <p className="hint">{e.costs.tax.note}</p>
-        </div>
+          <p className="k-note">{e.costs.tax.note}</p>
+        </Card>
       </section>
 
       {e.group && <GroupMembers e={e} cur={cur} />}
-      {!e.group && <section className="card stack" style={{ gap: 12 }}>
-        <div className="spread" style={{ flexWrap: "wrap" }}>
-          <h2 className="h2 row" style={{ gap: 0 }}>Price and trades<Info>{HELP.priceChart}</Info></h2>
-          <span className="small muted">▲ buy &nbsp; ▼ sell</span>
-        </div>
-        <TradesChart e={e} cur={cur} />
-      </section>}
+      {!e.group && (
+        <Card label="Price and trades">
+          <CardHead title="Price and trades" info={HELP.priceChart} infoLabel="About this chart" actions={<span className="k-note">▲ buy &nbsp; ▼ sell</span>} />
+          <TradesChart e={e} cur={cur} />
+        </Card>
+      )}
 
-      <section className="stats-grid">
-        {[
-          ["Total return", pct(st.ret), st.ret, HELP.totalReturn],
-          ["Buy and hold", pct(st.buy_hold_ret), st.buy_hold_ret, HELP.buyHold],
-          ["Worst fall", pct(st.mdd), st.mdd, HELP.worstFall],
-          ["Win rate", st.n ? `${st.win.toFixed(0)}%` : "–", null, HELP.winRate],
-          ["Profit factor", st.pf == null ? "∞" : st.n ? st.pf.toFixed(2) : "–", null, HELP.profitFactor],
-          ["Sharpe ratio", st.sharpe.toFixed(2), null, HELP.sharpe],
-          ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
-          ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString()} candles`, null, HELP.period],
-        ].map(([k, val, sign, help]) => (
-          <div key={k as string} className="card stack" style={{ gap: 4, padding: "16px 18px" }}>
-            <span className={`serif ${signClass(sign as number | null)}`} style={{ fontSize: 26, lineHeight: 1.15 }}>{val as string}</span>
-            <span className="small muted row" style={{ gap: 0 }}>{k as string}<Info label={`What is ${k}?`}>{help as string}</Info></span>
-          </div>
-        ))}
-      </section>
+      <Card label="The numbers">
+        <CardHead title="The numbers" />
+        <StatRow label="Experiment results">
+          {stats.map(([k, val, sign, help]) => (
+            <Stat key={k} item label={<>{k}<Info label={`What is ${k}?`}>{help}</Info></>} value={val} tone={sign == null || sign === 0 ? undefined : sign > 0 ? "up" : "down"} />
+          ))}
+        </StatRow>
+      </Card>
 
-      <section className="card">
-        <div className="spread" style={{ marginBottom: 12 }}>
-          <h2 className="h2 row" style={{ gap: 0 }}>Every trade<Info>{HELP.trades}</Info></h2>
-          <span className="small muted">{e.trades.length} shown, after costs{e.trades_trimmed ? ` (the ${e.trades_trimmed} earlier ones were cleared to save space; run it again to see every trade)` : ""}</span>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead><tr>{e.group && <th>Symbol</th>}<th>Opened</th><th>Closed</th>{twoWay && <th>Side</th>}<th>Qty</th><th>In</th><th>Out</th><th>P&amp;L</th><th>Return</th><th>Why it closed</th></tr></thead>
-            <tbody>
-              {allTrades.length === 0 && <tr><td colSpan={10} className="muted" style={{ textAlign: "center", padding: 24 }}>No trades in this period.</td></tr>}
-              {allTrades.map((t, k) => (
-                <tr key={k}>
-                  {e.group && <td className="num" style={{ textAlign: "left" }}>{t.symbol}</td>}
-                  <td>{when(t.entry_t, tz, intraday)}</td><td>{t.exit_t ? when(t.exit_t, tz, intraday) : "Still open"}</td>
-                  {twoWay && <td>{t.side === "short" ? "Short" : "Long"}</td>}
-                  <td className="num">{qty(t.qty)}</td><td className="num">{price(t.entry, cur)}</td><td className="num">{price(t.exit, cur)}</td>
-                  <td className={`num ${signClass(t.pnl)}`}>{money(t.pnl, cur)}</td><td className={`num ${signClass(t.ret)}`}>{pct(t.ret, 2)}</td><td>{t.why}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <Card label="Every trade">
+        <CardHead title="Every trade" info={HELP.trades} infoLabel="About the trades"
+          actions={<span className="k-note">{e.trades.length} shown, after costs{e.trades_trimmed ? ` (the ${e.trades_trimmed} earlier ones were cleared to save space; run it again to see every trade)` : ""}</span>} />
+        <DataTable label="Every trade" columns={tradeCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period." />
+      </Card>
 
       <WalkForwardCheck key={`wf${e.v}`} nb={nb} e={e} />
 
       <BasketCheck key={e.v} nb={nb} e={e} />
 
-      <section className="card dashed row wrap" style={{ gap: 14 }}>
-        <h2 className="serif" style={{ fontSize: 20, fontWeight: 600, fontStyle: "italic", marginRight: 8 }}>What to try next</h2>
-        {v.suggestions.map((sg) => (
-          <button key={sg.action} className="btn quiet" style={{ whiteSpace: "normal", textAlign: "left", height: "auto", minHeight: 40 }} onClick={() => nav(`/n/${nb.id}`, { state: { action: sg.action } })}>{sg.text}</button>
-        ))}
-      </section>
-      <p className="small muted">Paper trading and research only. Past results don't predict future returns, and nothing here is investment advice.</p>
+      <Card label="What to try next">
+        <CardHead title="What to try next" />
+        <div className="k-row">
+          {v.suggestions.map((sg) => (
+            <button type="button" key={sg.action} className="btn quiet k-choice-btn" onClick={() => nav(`/n/${nb.id}`, { state: { action: sg.action } })}>{sg.text}</button>
+          ))}
+        </div>
+      </Card>
+      <p className="k-note">Paper trading and research only. Past results don't predict future returns, and nothing here is investment advice.</p>
+      {removing && (
+        <ConfirmDialog title={`Delete experiment v${e.v}?`} confirmLabel="Delete experiment" onConfirm={remove} onClose={() => setRemoving(false)}>
+          "{e.label}" is removed. The notebook and its other experiments stay. This can't be undone.
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
@@ -402,9 +371,9 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 export function ExperimentPage() {
   const { id, v } = useParams();
   const { nb } = useNotebook(id);
-  if (!nb) return <Loading label="Opening experiment" />;
+  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><Card><Skeleton label="Opening experiment" /></Card></div>;
   const e = nb.experiments.find((x) => String(x.v) === v);
-  if (!e) return <div className="stack"><p>That experiment wasn't found.</p><Link to={`/n/${nb.id}`}>Back to the notebook</Link></div>;
+  if (!e) return <div className="k-page"><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
   return <ExperimentView nb={nb} e={e} />;
 }
 
@@ -415,6 +384,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
   const [token, setToken] = useState<string | null>(e.public ?? null);
   const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
   const link = token ? `${siteUrl()}/v/${token}` : null;
+  const [ask, setAsk] = useState<"link" | "library" | null>(null);
   const image = async () => {
     try {
       const r = await shareVerdict(nb, e, dark ? "dark" : "light", link);
@@ -435,7 +405,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
   };
   const copy = async () => { if (!link) return; try { await navigator.clipboard.writeText(link); notify("Link copied."); } catch { notify(link); } };
   const off = async () => {
-    if (!confirm("Turn off the public link? Anyone who has it will see that it's gone.")) return;
+    setAsk(null);
     try { await api(`/notebooks/${nb.id}/experiments/${e.v}/share`, { method: "DELETE" }); setToken(null); notify("Public link turned off."); } catch (x) { fail(x); }
   };
   const nav = useNavigate();
@@ -453,7 +423,8 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
     } catch (x) { fail(x); }
   };
   const unpublish = async () => {
-    if (!lib || !confirm("Take this strategy out of the library? Copies people already made stay theirs.")) return;
+    setAsk(null);
+    if (!lib) return;
     try { await api(`/library/${lib}`, { method: "DELETE" }); setLib(null); notify("Taken out of the library."); } catch (x) { fail(x); }
   };
   return (
@@ -462,26 +433,32 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
         { label: "Share the card as an image", icon: <Share size={16} />, run: image },
         ...(token ? [
           { label: "Copy the public link", run: copy },
-          { label: "Turn off the public link", run: off, danger: true },
+          { label: "Turn off the public link", run: () => setAsk("link"), danger: true },
         ] : [{ label: "Make a public link", run: makeLink }]),
         ...(upload ? [] : lib ? [
           { label: "Update it in the strategy library", run: () => setPublishing(true) },
-          { label: "Take it out of the library", run: unpublish, danger: true },
+          { label: "Take it out of the library", run: () => setAsk("library"), danger: true },
         ] : [{ label: "Publish to the strategy library", run: () => setPublishing(true) }]),
       ]} />
       {publishing && (
         <Modal title={lib ? "Update in the strategy library" : "Publish to the strategy library"} onClose={() => setPublishing(false)}>
-          <div className="stack" style={{ gap: 14 }}>
-            <p className="muted">Other traders will see these rules, this verdict ({e.verdict.headline.replace(/\.$/, "")}) and its numbers, and can copy the rules to test themselves. Your email and notes are never shown.</p>
-            <label className="field">What's the idea? (optional)<textarea className="input" rows={3} maxLength={600} value={desc} onChange={(x) => setDesc(x.target.value)} placeholder="A few words on why it might work, or what you learned." /></label>
-            <label className="field">Show it as by (optional)<input className="input" maxLength={40} value={author} onChange={(x) => setAuthor(x.target.value)} placeholder="A StratLab user" /></label>
-            <div className="row" style={{ gap: 10, justifyContent: "flex-end" }}>
-              <button className="btn quiet" onClick={() => setPublishing(false)}>Cancel</button>
-              <button className="btn blue" onClick={publish}>{lib ? "Update" : "Publish"}</button>
-            </div>
+          <div className="k-stack">
+            <p className="k-small k-muted">Other traders will see these rules, this verdict ({e.verdict.headline.replace(/\.$/, "")}) and its numbers, and can copy the rules to test themselves. Your email and notes are never shown.</p>
+            <FormGrid label="Publish">
+              <Field label="What's the idea?" optional wide>{(id) => (
+                <textarea id={id} className="k-textarea" rows={3} maxLength={600} value={desc} onChange={(x) => setDesc(x.target.value)} placeholder="A few words on why it might work, or what you learned." />
+              )}</Field>
+              <Field label="Show it as by" optional wide maxLength={40} value={author} onChange={(x) => setAuthor(x.target.value)} placeholder="A StratLab user" />
+              <FormActions>
+                <button type="button" className="btn blue" onClick={publish}>{lib ? "Update" : "Publish"}</button>
+                <button type="button" className="btn quiet" onClick={() => setPublishing(false)}>Cancel</button>
+              </FormActions>
+            </FormGrid>
           </div>
         </Modal>
       )}
+      {ask === "link" && <ConfirmDialog title="Turn off the public link?" confirmLabel="Turn it off" onConfirm={off} onClose={() => setAsk(null)}>Anyone who has it will see that it's gone.</ConfirmDialog>}
+      {ask === "library" && <ConfirmDialog title="Take this strategy out of the library?" confirmLabel="Take it out" onConfirm={unpublish} onClose={() => setAsk(null)}>Copies people already made stay theirs.</ConfirmDialog>}
     </>
   );
 }

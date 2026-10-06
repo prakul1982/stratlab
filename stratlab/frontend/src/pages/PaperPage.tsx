@@ -1,14 +1,16 @@
 import { RiskOverview } from "../components/RiskOverview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, pct, price, qty, signClass, TF_NAME, tzOf, when } from "../lib/format";
+import { money, pct, price, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { upDown } from "../lib/tradeUi";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
 import type { PriceLevel } from "../charts/price/engine";
-import { Empty, Info, Loading } from "../components/ui";
+import { Info } from "../components/ui";
+import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, EmptyState, ErrorState, Notice, PageHeader, Skeleton } from "../components/kit";
 import { HELP } from "../lib/help";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
 import { SurvBadges, survRegion } from "../components/Surveillance";
@@ -17,6 +19,13 @@ import { foSymbol } from "../lib/foChanges";
 import { Earlier, splitToday } from "../components/Earlier";
 import { OrderList, type PaperOrder } from "../components/OrderList";
 import { moneyCompact } from "../lib/chartFormat";
+import "./trade/trade.css";
+import "./trade/paper.css";
+
+/* /paper and /paper/:sid: every paper session as a row of cards, and the open one's chart, account and orders. Built from
+ * the kit (components/kit). */
+
+const statusTone = (s: string) => (s === "running" ? "ok" : s === "paused" ? "warn" : "plain") as "ok" | "warn" | "plain";
 
 /** The session's candles, updated in place every few seconds: the forming candle grows from the ticks seen so far. */
 function LiveChart({ snap, cur }: { snap: LiveSnapshot; cur: string }) {
@@ -43,6 +52,7 @@ function LiveChart({ snap, cur }: { snap: LiveSnapshot; cur: string }) {
 function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
   const { fail, refreshMe } = useApp();
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
+  const [ask, setAsk] = useState<"stop" | "delete" | null>(null);
 
   const load = useCallback(async () => {
     try { setSnap(await api<LiveSnapshot>(`/live/sessions/${sid}`)); } catch (e) { fail(e); }
@@ -55,14 +65,12 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     return () => window.clearInterval(t);
   }, [load]);
 
-  if (!snap) return <Loading label="Connecting to the session" />;
+  if (!snap) return <Card><Skeleton label="Connecting to the session" /></Card>;
   if ((snap as unknown as GroupSnapshot).kind === "group") {
     const g = snap as unknown as GroupSnapshot;
     return <GroupSession snap={g}
-      onStop={async () => { if (!confirm("Stop this session? Open paper positions are left as they are, and it can't be restarted.")) return;
-        try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); } }}
-      onDelete={async () => { if (!confirm(`Delete "${g.name}" and its orders? This can't be undone.`)) return;
-        try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); } }} />;
+      onStop={async () => { try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); } }}
+      onDelete={async () => { try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); } }} />;
   }
   const running = snap.status === "running";
   const cur = snap.instrument.currency || (snap.instrument.market === "IN" || !snap.instrument.market ? "INR" : "");
@@ -70,7 +78,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   const intraday = snap.strategy.tf !== "1d";
   const a = snap.account;
   const alwaysOpen = snap.instrument.market === "CRYPTO";
-  // orders: today's in view, the earlier ones folded
+  // orders: today's in view, the earlier ones open under them
   const orders: PaperOrder[] = snap.events.map((e) => ({ ...e, sym: snap.instrument.symbol }));
   const { today, earlier } = splitToday(orders, (e) => e.t, tz);
   const closedPnl = earlier.reduce((n, e) => n + (e.pnl ?? 0), 0);
@@ -79,75 +87,81 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     : "Reconnecting to prices";
 
   const stop = async () => {
-    if (!confirm("Stop this session? Open paper positions are left as they are, and it can't be restarted.")) return;
+    setAsk(null);
     try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); }
   };
 
   const remove = async () => {
-    if (!confirm(`Delete "${snap.name}" and its orders? This can't be undone.`)) return;
+    setAsk(null);
     try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); }
   };
 
+  const rows: [string, string, number | null, string | null][] = [
+    ["Equity", money(a.equity, cur), null, HELP.equityLive],
+    ["Return", pct((a.equity / a.capital - 1) * 100, 2), a.equity - a.capital, null],
+    ["Cash", money(a.cash, cur), null, HELP.cash],
+    ["Open position", a.qty ? `${qty(a.qty)} at ${price(a.entry ?? 0, cur)}` : "None", null, null],
+    ["Unrealised P&L", money(a.unrealised, cur), a.unrealised, HELP.unrealised],
+    ["Realised P&L", money(a.realised, cur), a.realised, HELP.realised],
+    ["Closed trades", a.trades ? `${a.trades} (${a.wins} won)` : "0", null, null],
+  ];
+
   return (
-    <div className="stack" style={{ gap: 20 }}>
-      <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div className="stack" style={{ gap: 6 }}>
-          <span className="eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
-          <SurvBadges region={survRegion(snap.instrument)} symbol={snap.instrument.symbol} />
-          <FoBadges region={survRegion(snap.instrument)} symbol={foSymbol(snap.instrument)} />
-          <h2 className="serif" style={{ fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em" }}>{snap.name}</h2>
+    <div className="k-page">
+      <div className="k-spread k-session-head">
+        <div className="k-stack k-tight">
+          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
+          <div className="k-row">
+            <SurvBadges region={survRegion(snap.instrument)} symbol={snap.instrument.symbol} />
+            <FoBadges region={survRegion(snap.instrument)} symbol={foSymbol(snap.instrument)} />
+          </div>
+          <h2 className="k-session-name">{snap.name}</h2>
         </div>
-        <div className="row" style={{ gap: 12 }}>
-          {running && <span className="row small" style={{ gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: snap.feed_connected && snap.last_tick_at ? "var(--blue)" : "var(--dash)" }} />{feed}<Info>{HELP.feed}</Info></span>}
-          {running ? <button className="btn danger" onClick={stop}>Stop session</button>
-            : <><span className={`badge ${snap.status}`}>{snap.status}</span><button className="btn danger sm" onClick={remove}>Delete</button></>}
+        <div className="k-row">
+          {running && <span className="k-row"><Badge tone={snap.feed_connected && snap.last_tick_at ? "live" : "plain"}>{feed}</Badge><Info>{HELP.feed}</Info></span>}
+          {running ? <button type="button" className="btn danger" onClick={() => setAsk("stop")}>Stop session</button>
+            : <><Badge tone={statusTone(snap.status)}>{snap.status}</Badge><button type="button" className="btn danger sm" onClick={() => setAsk("delete")}>Delete</button></>}
         </div>
       </div>
-      {!running && snap.stop_reason && <div className="banner">Stopped: {snap.stop_reason}</div>}
+      {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
 
-      <div className="nb-grid" style={{ gap: 16 }}>
-        <div className="stack" style={{ gap: 16, minWidth: 0 }}>
-          <section className="card stack" style={{ gap: 10 }}>
-            <div className="spread"><h3 className="h3">Live chart</h3>
-              {snap.last_price != null && <span className="mono small">{snap.instrument.symbol} {price(snap.last_price, cur)}</span>}</div>
-            {snap.bars.length ? <LiveChart snap={snap} cur={cur} /> : <p className="muted">The chart fills in as candles close.</p>}
-          </section>
-          <section className="card stack" style={{ gap: 10 }}>
-            <h3 className="h3 row" style={{ gap: 0 }}>Paper equity<Info>{HELP.equityLive}</Info></h3>
+      <div className="nb-grid">
+        <div className="k-page">
+          <Card label="Live chart">
+            <CardHead level={3} title="Live chart" actions={snap.last_price != null ? <span className="k-small">{snap.instrument.symbol} {price(snap.last_price, cur)}</span> : undefined} />
+            {snap.bars.length ? <LiveChart snap={snap} cur={cur} /> : <p className="k-small k-muted">The chart fills in as candles close.</p>}
+          </Card>
+          <ChartFrame title="Paper equity" info={HELP.equityLive}>
             {snap.equity_curve.length > 1 ? (
               <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, intraday))} times={snap.equity_curve.map((p) => p.t)} tz={tz} height={160}
                 format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} baseline={a.capital} lines={[{ label: "Equity", values: snap.equity_curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
             ) : <ChartEmpty height={160}>Your equity curve starts after the first closed candle.</ChartEmpty>}
-          </section>
+          </ChartFrame>
         </div>
-        <div className="stack" style={{ gap: 16 }}>
-          <section className="card stack" style={{ gap: 0 }}>
-            <div className="spread" style={{ marginBottom: 8 }}><h3 className="h3">Account</h3><span className="small muted">Fake money</span></div>
-            {([
-              ["Equity", money(a.equity, cur), null, HELP.equityLive],
-              ["Return", pct((a.equity / a.capital - 1) * 100, 2), a.equity - a.capital, null],
-              ["Cash", money(a.cash, cur), null, HELP.cash],
-              ["Open position", a.qty ? `${qty(a.qty)} at ${price(a.entry ?? 0, cur)}` : "None", null, null],
-              ["Unrealised P&L", money(a.unrealised, cur), a.unrealised, HELP.unrealised],
-              ["Realised P&L", money(a.realised, cur), a.realised, HELP.realised],
-              ["Closed trades", a.trades ? `${a.trades} (${a.wins} won)` : "0", null, null],
-            ] as [string, string, number | null, string | null][]).map(([k, v, sign, help]) => (
-              <div key={k} className="spread" style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
-                <span className="muted row" style={{ gap: 0 }}>{k}{help && <Info label={`What is ${k}?`}>{help}</Info>}</span><b className={`mono ${signClass(sign)}`}>{v}</b>
-              </div>
-            ))}
-          </section>
-          <section className="card stack" style={{ gap: 10 }} aria-labelledby="p-orders">
-            <h3 id="p-orders" className="h3">Orders today</h3>
+        <div className="k-page">
+          <Card label="Account">
+            <CardHead level={3} title="Account" actions={<span className="k-note">Fake money</span>} />
+            <div className="k-rows" role="list" aria-label="Paper account">
+              {rows.map(([k, v, sign, help]) => (
+                <div key={k} role="listitem"><span>{k}{help && <Info label={`What is ${k}?`}>{help}</Info>}</span><b className={upDown(sign)}>{v}</b></div>
+              ))}
+            </div>
+          </Card>
+          <Card label="Orders today">
+            <CardHead level={3} title="Orders today" />
             {today.length ? <OrderList events={today} cur={cur} tz={tz} newest />
-              : <p className="small muted">{!snap.events.length ? "No orders yet. They appear when your rules fire on a closed candle." : "No orders today."}</p>}
-            <Earlier label="Earlier orders" count={earlier.length} className="in-card"
-              note={<><span className={signClass(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
+              : <p className="k-small k-muted">{!snap.events.length ? "No orders yet. They appear when your rules fire on a closed candle." : "No orders today."}</p>}
+            <Earlier label="Earlier orders" count={earlier.length} className="in-card" open
+              note={<><span className={upDown(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
               <OrderList events={earlier} cur={cur} tz={tz} newest />
             </Earlier>
-          </section>
+          </Card>
         </div>
       </div>
+      {ask === "stop" && <ConfirmDialog title="Stop this session?" confirmLabel="Stop session" onConfirm={stop} onClose={() => setAsk(null)}>
+        Open paper positions are left as they are, and it can't be restarted.</ConfirmDialog>}
+      {ask === "delete" && <ConfirmDialog title={`Delete "${snap.name}"?`} confirmLabel="Delete session" onConfirm={remove} onClose={() => setAsk(null)}>
+        Its orders go with it. This can't be undone.</ConfirmDialog>}
     </div>
   );
 }
@@ -155,16 +169,14 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
 /** Sessions as a row of cards, the open one outlined. */
 function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open: (r: LiveRow) => void }) {
   return (
-    <div className="row" style={{ gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+    <div className="k-sessions">
       {rows.map((r) => (
-        <button key={r.id} className="card" onClick={() => open(r)} aria-current={r.id === sid}
-          style={{ flex: "none", minWidth: 210, textAlign: "left", cursor: "pointer", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4,
-            border: r.id === sid ? "2px solid var(--ink)" : undefined }}>
+        <button type="button" key={r.id} className="k-sess" onClick={() => open(r)} aria-current={r.id === sid}>
           <b>{r.name}</b>
-          <span className="small muted">{r.instrument.symbol} · {new Date(r.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+          <span className="k-note">{r.instrument.symbol} · {new Date(r.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
           <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
           <FoBadges region={survRegion(r.instrument)} symbol={foSymbol(r.instrument)} plain />
-          <span className={`badge ${r.status}`} style={{ alignSelf: "flex-start" }}>{r.status}</span>
+          <Badge tone={statusTone(r.status)}>{r.status}</Badge>
         </button>
       ))}
     </div>
@@ -176,8 +188,10 @@ export function PaperPage() {
   const nav = useNavigate();
   const { me, fail } = useApp();
   const [rows, setRows] = useState<LiveRow[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const load = useCallback(async () => {
-    try { setRows(await api<LiveRow[]>("/live/sessions")); } catch (e) { fail(e); setRows([]); }
+    try { setRows(await api<LiveRow[]>("/live/sessions")); setFailed(false); } catch (e) { fail(e); setFailed(true); setRows([]); }
   }, [fail]);
   useEffect(() => { load(); }, [load, sid]);
 
@@ -185,7 +199,7 @@ export function PaperPage() {
   const current = (rows ?? []).filter((r) => !stopped.includes(r));     // running and paused first; the stopped ones folded
   const open = (r: LiveRow) => nav(r.instrument?.type === "OPTIONS" ? `/options/s/${r.id}` : (r.instrument as { signal?: boolean })?.signal ? `/trade/signals/${r.id}` : `/paper/${r.id}`);
   const clearStopped = async () => {
-    if (!confirm(`Delete ${stopped.length} stopped session${stopped.length === 1 ? "" : "s"} and their orders? Running ones stay. This can't be undone.`)) return;
+    setClearing(false);
     try {
       await api("/live/sessions", { method: "DELETE" });
       if (sid && stopped.some((r) => r.id === sid)) nav("/paper");
@@ -201,33 +215,37 @@ export function PaperPage() {
   }
 
   return (
-    <div className="stack" style={{ gap: 24 }}>
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Trade · paper trading</span>
-        <h1 className="page-title">Paper trading<Info>{HELP.paper}</Info></h1>
-        <p className="page-sub">Your rules on live prices, with fake money. Each market runs in its own hours; crypto never closes.</p>
-        {sub && <span className="page-chip">{sub}</span>}
-      </div>
-      {rows === null ? <Loading /> : rows.length === 0 ? (
-        <Empty title="No paper trades yet">
-          <p className="muted">Open a notebook and choose <b>Paper trade</b>. Best once a verdict says the edge looks real.</p>
-          <Link to="/notebooks" className="btn">Go to your notebooks</Link>
-        </Empty>
-      ) : (
-        <div className="stack" style={{ gap: 12 }}>
-          {current.length ? <SessionCards rows={current} sid={sid} open={open} />
-            : <p className="muted">None running. {stopped.length === 1 ? "The stopped one is" : "Stopped ones are"} below.</p>}
-          <Earlier label="Stopped sessions" count={stopped.length} open={!!sid && stopped.some((r) => r.id === sid)}>
-            <SessionCards rows={stopped} sid={sid} open={open} />
-            <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={clearStopped}>Clear stopped sessions</button>
-          </Earlier>
-        </div>
-      )}
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Practise" title="Paper trading" info={HELP.paper} infoLabel="About paper trading"
+        lede="Your rules on live prices, with fake money. Each market runs in its own hours; crypto never closes."
+        actions={sub ? <Badge tone="plain" dot={false}>{sub}</Badge> : undefined} />
+      {rows === null ? <Card><Skeleton label="Opening your sessions" /></Card>
+        : failed ? <ErrorState title="Your sessions couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
+        : rows.length === 0 ? (
+          <EmptyState title="No paper trades yet" action={{ label: "Go to your notebooks", to: "/notebooks" }}>
+            Open a notebook and choose Paper trade. A session runs its rules on live prices with fake money.
+          </EmptyState>
+        ) : (
+          <Card label="Your sessions">
+            <CardHead title="Your sessions" />
+            {current.length ? <SessionCards rows={current} sid={sid} open={open} />
+              : <p className="k-small k-muted">None running. {stopped.length === 1 ? "The stopped one is" : "Stopped ones are"} below.</p>}
+            <Earlier label="Stopped sessions" count={stopped.length} open={!!sid && stopped.some((r) => r.id === sid)}>
+              <SessionCards rows={stopped} sid={sid} open={open} />
+              <button type="button" className="btn quiet sm k-btn-end" onClick={() => setClearing(true)}>Clear stopped sessions</button>
+            </Earlier>
+          </Card>
+        )}
       {!sid && rows && rows.some((r) => r.status === "running") && (
         <RiskOverview onOpen={(id, kind) => nav(kind === "options" ? `/options/s/${id}` : `/paper/${id}`)} />
       )}
       {sid && <SessionView sid={sid} onStopped={load} onDeleted={() => { nav("/paper"); load(); }} />}
-      {!sid && rows && rows.length > 0 && <p className="muted">Pick a session above to see its chart, account and orders.</p>}
+      {!sid && rows && rows.length > 0 && <p className="k-small k-muted">Pick a session above to see its chart, account and orders.</p>}
+      {clearing && (
+        <ConfirmDialog title={`Delete ${stopped.length} stopped session${stopped.length === 1 ? "" : "s"}?`} confirmLabel="Delete stopped sessions" onConfirm={clearStopped} onClose={() => setClearing(false)}>
+          Their orders go with them. Running ones stay. This can't be undone.
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
