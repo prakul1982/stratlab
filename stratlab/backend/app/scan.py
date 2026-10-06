@@ -64,6 +64,7 @@ def analyse(bars: list[dict]) -> dict | None:
         "st_up": st_up, "st_days": flip + 1, "st_level": None if pd.isna(st.iloc[-1]) else float(st.iloc[-1]),
         "signal": "fresh" if in_s2 and flip + 1 <= FRESH else "st_s2" if in_s2 else "stage2" if stage_now == 2 else None,
         "t": bars[-1]["t"], "recent": [float(x) for x in c.iloc[-5:]],
+        "day_low": float(df["l"].iloc[-1]), "day_high": float(df["h"].iloc[-1]),    # the last session's range
     }
 
 

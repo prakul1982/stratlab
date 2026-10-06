@@ -6,11 +6,12 @@ whether to buy. Reads are stored in the database and shared, so a company costs 
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
 from .docs import pdf_links, quote_found, ranked_windows, windows
+from .intel.filings import ist_now
 from .intel.net import num
 
 KEEP = 7 * 86400              # a document read is reused for a week
@@ -100,10 +101,16 @@ def _cagr(vals: list, years: int) -> float | None:
     return ((v[-1] / v[-1 - years]) ** (1 / years) - 1) * 100
 
 
+def _year_key(col: str) -> str:
+    """A year column without its short-period tag: the results table writes a company's first, part-year report as
+    "Mar 2024 3m" where its balance sheet and cash flow say "Mar 2024"."""
+    return re.sub(r"\s+\d+m$", "", str(col).strip())
+
+
 def _align(cols_a: list[str], vals_a: list, cols_b: list[str]) -> list:
     """Values of series A at the columns of table B (None where A has no such year)."""
-    m = dict(zip(cols_a, vals_a))
-    return [m.get(c) for c in cols_b]
+    m = {_year_key(c): v for c, v in zip(cols_a, vals_a)}
+    return [m.get(_year_key(c)) for c in cols_b]
 
 
 def numbers(p: dict) -> dict:
@@ -128,7 +135,7 @@ def numbers(p: dict) -> dict:
 
     years = []
     for i, y in enumerate(ycols):
-        capex = None          # estimated: growth in fixed assets and work in progress, plus the year's depreciation
+        capex, cut = None, False          # estimated: growth in fixed assets and work in progress, plus the year's depreciation
         if not bank and reported and reported[i] is not None:
             capex = abs(reported[i])
         elif not bank and i > 0 and fa[i] is not None and fa[i - 1] is not None:
@@ -136,12 +143,12 @@ def numbers(p: dict) -> dict:
             d_dep = dep[i] if i < len(dep) and dep[i] is not None else 0
             capex = (fa[i] - fa[i - 1]) + d_cwip + d_dep
             if capex < 0:     # assets sold, written down or reclassified that year: the estimate means nothing
-                capex = None
+                capex, cut = None, True
         s = sales[i] if i < len(sales) else None
         c = cfo[i] if cfo else None
         years.append({"year": y, "sales": s, "profit": profit[i] if i < len(profit) else None, "opm": opm[i] if i < len(opm) else None,
                       "capex": round(capex, 1) if capex is not None else None,
-                      "capex_pct_sales": round(capex / s * 100, 1) if capex is not None and s else None,
+                      "capex_pct_sales": round(capex / s * 100, 1) if capex is not None and s else None, "capex_cut": cut,
                       "cfo": c, "cfi": cfi[i] if cfi else None,
                       "fcf": round(c - capex, 1) if c is not None and capex is not None else None,
                       "debt": debt[i] if debt else None})
@@ -226,6 +233,8 @@ MEET = re.compile(r"analysts?/institutional investor meet|con\.? ?call|earnings 
 MEET_SUBJECT = re.compile(r"analysts?\s*/\s*institutional investors? meet\s*/\s*con\.? ?call updates?", re.I)
 CALL = re.compile(r"earnings? (?:conference )?call|conference call|con\.? ?call|concall|results? call|post[- ]results?|"
                   r"investors?(?: and analysts?)? call|analysts?(?: and investors?)? call|audio|recording|\btran?scr?i?pts?\b", re.I)
+CALL_GRACE_DAYS = 7      # an earnings call this recent may not have its transcript filed yet
+
 # a deck or transcript for shareholders' resolutions (an AGM, a postal ballot) isn't the business presentation or a call
 NOT_DECK = re.compile(r"postal ballot|general meeting|\b[ae]gm\b|shareholders?'*s? approval", re.I)
 
@@ -286,7 +295,10 @@ def meetings(items: list[dict], since: str) -> dict:
     meets = [i for i in recent if (i.get("category") == "concall" or TRANSCRIPT.search(f"{i.get('subject') or ''} {i.get('text') or ''}"))
              and not _agm(f"{i.get('subject') or ''} {i.get('text') or ''}")]
     calls = [i for i in meets if CALL.search(f"{MEET_SUBJECT.sub(' ', i.get('subject') or '')} {i.get('text') or ''} {_file_words(i.get('url'))}")]
-    return {"meets": len(meets), "calls": len(calls), "filed": len(recent)}
+    # a call is told about a few days ahead and its transcript is due five working days after: one from the last week
+    # has no transcript to find yet
+    fresh = (ist_now() - timedelta(days=CALL_GRACE_DAYS)).strftime("%Y-%m-%dT%H:%M")
+    return {"meets": len(meets), "calls": len(calls), "calls_due": sum(i["at"] < fresh for i in calls), "filed": len(recent)}
 
 
 # ---------- the document reads ----------

@@ -237,7 +237,7 @@ class Screener(Source):
         missing = self.cache.get(("missing", sym))
         if missing:                              # asked recently and the site has no such company
             raise SourceError(self.name, missing)
-        last = None
+        last, reloaded = None, False
         base = f"/company/{sym}/"
         for attempt in (0, 1):
             pages = {}
@@ -251,7 +251,25 @@ class Screener(Source):
                 if p:
                     pages[kind] = p
             if pages:
-                return _pick(pages)
+                got = _pick(pages)
+                if (got.get("pl") or {}).get("cols") or reloaded or self.cache.get(("reloaded", sym)):
+                    return got
+                # a company page that came without its results tables (a partial page under load) isn't kept for hours:
+                # asked once more, fresh. A company with no results yet gets the same answer twice.
+                reloaded = True
+                self.cache.set(("reloaded", sym), True, 3600)      # a company without results yet: not asked twice each time
+                for kind, path in (("consolidated", base + "consolidated/"), ("standalone", base)):
+                    self.cache.set((path, (), "text"), None, 0)
+                    self.cache.set(("parsed", path), None, 0)
+                pages = {}
+                for kind, path in (("consolidated", base + "consolidated/"), ("standalone", base)):
+                    try:
+                        p = self._page(path)
+                    except SourceError:
+                        continue
+                    if p:
+                        pages[kind] = p
+                return _pick(pages) if pages else got
             new = self.RENAMED.get(sym) if attempt == 0 else None
             if not new:
                 break
