@@ -134,7 +134,7 @@ export function LegalPage() {
     <div className="legal">
       <header className="legal-head">
         <Link to="/" aria-label="StratLab home"><Logo size={30} /></Link>
-        <nav className="row wrap legal-links" style={{ gap: 14 }} aria-label="Policies">
+        <nav className="row wrap legal-links" aria-label="Policies">
           {LEGAL_PAGES.map((p) => <Link key={p.path} className={`small ${p.path === page.path ? "" : "muted"}`} to={p.path}
             aria-current={p.path === page.path ? "page" : undefined}>{p.title}</Link>)}
         </nav>

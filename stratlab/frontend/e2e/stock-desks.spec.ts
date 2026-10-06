@@ -56,7 +56,7 @@ async function mine(request: APIRequestContext, n: number) {
 
 test("stock futures: every F&O stock's buildup, rollover, basis and MWPL use, and one stock's history", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  const errors = await open(page, "/trade/positioning/stocks", "trading days stored", phone ? 286 : 283);
+  const errors = await open(page, "/trade/positioning/stocks", "trading days of history", phone ? 286 : 283);
   const table = page.getByRole("table", { name: "Stock futures by stock" });
   const rows = table.locator("tbody tr");
   await expect(rows).toHaveCount(9);
@@ -64,7 +64,7 @@ test("stock futures: every F&O stock's buildup, rollover, basis and MWPL use, an
   await expect(table.locator("tr[data-stock=RELIANCE]")).toContainText("Long buildup");
   await expect(table.locator("tr[data-stock=AMBUJACEM]")).toContainText("F&O ban");
   await expect(page.getByRole("radiogroup", { name: "Positioning view" }).getByRole("radio", { name: "Index and participants" })).toBeVisible();
-  await expect(page.getByTestId("sf-status")).toContainText("trading days stored");
+  await expect(page.getByTestId("sf-status")).toContainText("trading days of history");
 
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^MWPL 80%\+/ }).click();
   await expect(table.locator("tr[data-stock=SAIL], tr[data-stock=AMBUJACEM]")).not.toHaveCount(0);
@@ -77,7 +77,7 @@ test("stock futures: every F&O stock's buildup, rollover, basis and MWPL use, an
   await expect(page).toHaveURL(/s=RELIANCE/);
   const panel = page.locator("#sf-detail");
   await expect(panel.getByRole("heading", { name: "RELIANCE futures" })).toBeVisible();
-  await expect(panel.getByText(/long buildup, \d+ stored days in a row/)).toBeVisible();
+  await expect(panel.getByText(/long buildup, \d+ days in a row/)).toBeVisible();
   await expect(panel.getByRole("img", { name: /RELIANCE futures open interest by day/ })).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/stock-futures-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);

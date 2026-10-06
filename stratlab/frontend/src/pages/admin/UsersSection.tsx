@@ -194,7 +194,7 @@ export function UsersSection() {
         <CardHead title="Launch offer" actions={until ? <Badge tone="ok">On</Badge> : <Badge>Off</Badge>} />
         {until ? (
           <div className="k-spread">
-            <span>Every user has every Pro feature free until <b>{new Date(until).toLocaleString()}</b>. Then plans apply again by themselves.</span>
+            <span>Every user has every Pro feature free until <b>{new Date(until).toLocaleString("en-GB")}</b>. Then plans apply again by themselves.</span>
             <button type="button" className="btn quiet sm danger" onClick={() => setPromo("end")}>End now</button>
           </div>
         ) : (

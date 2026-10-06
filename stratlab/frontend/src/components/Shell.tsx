@@ -196,7 +196,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className="topbar">
         <button className="icon-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Menu /></button>
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
-        <span className="row" style={{ gap: 4 }}>
+        <span className="row tight">
           <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
           <button className="icon-btn" aria-label="New notebook" onClick={() => nav("/new")}><Plus /></button>
         </span>

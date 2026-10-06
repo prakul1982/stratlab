@@ -79,7 +79,7 @@ function Detail({ symbol, t, onClose }: { symbol: string; t: FutTable; onClose: 
           <p className="k-small">
             On {dayText(r.as_of)} the near futures closed at ₹{r.px?.toLocaleString("en-IN")} ({signedPct(r.pc)}) and open interest
             {r.oc == null ? " was unchanged" : ` ${r.oc >= 0 ? "rose" : "fell"} ${Math.abs(r.oc).toFixed(2)}%`}
-            {r.b ? `: ${t.labels[r.b].toLowerCase()}${r.streak && r.streak > 1 ? `, ${r.streak} stored days in a row` : ""}` : ""}.
+            {r.b ? `: ${t.labels[r.b].toLowerCase()}${r.streak && r.streak > 1 ? `, ${r.streak} days in a row` : ""}` : ""}.
           </p>
           <StatRow label={`${symbol} figures`}>
             <Stat label="Open interest" value={sharesShort(r.oi)} note={`near ${sharesShort(r.n)} · next ${sharesShort(r.x)} · far ${sharesShort(r.f)}`} />
@@ -97,7 +97,7 @@ function Detail({ symbol, t, onClose }: { symbol: string; t: FutTable; onClose: 
               <ChipBar label="History range" value={range} onChange={setRange}
                 options={[["1m", "1M"], ["3m", "3M"], ["6m", "6M"], ["1y", "1Y"]].map(([value, label]) => ({ value, label }))}
                 custom={{ storageKey: `stratlab.chips.stockfutures.${me?.id ?? "anon"}`, units: SPAN_UNITS, defaultUnit: "months", validate: spanCheck(366, 5) }} />
-              {h.length < 2 ? <ChartEmpty height={180}>Not enough stored days to draw yet.</ChartEmpty> : (
+              {h.length < 2 ? <ChartEmpty height={180}>Not enough days yet to draw.</ChartEmpty> : (
                 <div className="k-two">
                   <div className="k-stack">
                     <h3 className="k-sub">Open interest (shares)</h3>
@@ -190,7 +190,7 @@ export function StockFuturesPage() {
             {statusText(t.status, "the F&O files")}
             <Info label="Where the numbers come from">{t.note} Source: {t.source}.</Info>
           </p>
-          {!t.rows.length ? <EmptyState title="Nothing stored yet">{t.status.reason ?? "The exchange's evening files appear here once they are read."}</EmptyState> : (
+          {!t.rows.length ? <EmptyState title="Nothing yet">{t.status.reason ?? "The exchange's evening files appear here once they are read."}</EmptyState> : (
             <>
               <ChipBar label="Show" value={filter} onChange={(v) => setFilter(v as Filter)}
                 options={(["all", ...BUILDUPS, "mwpl", "roll"] as Filter[]).map((f) => ({ value: f, label: `${f === "all" ? "All" : f === "mwpl" ? `MWPL ${t.watch_at}%+` : f === "roll" ? "Expiry week" : t.labels[f]} (${count(f)})` }))} />
@@ -202,8 +202,8 @@ export function StockFuturesPage() {
               </div>
               <DataTable label="Stock futures by stock" columns={cols} rows={rows} rowKey={(r) => r.symbol} rowAttrs={(r): Record<string, string> => ({ "data-stock": r.symbol, ...(pick === r.symbol ? { "data-on": "1" } : {}) })} empty="No stock matches that." />
               <p className="k-note">
-                {t.full ? <>Pick a stock for its stored history and an alert when its MWPL use crosses 80%.</>
-                  : <>Each stock's stored history and MWPL alerts are on the <Link className="link" to="/plans">{t.plan_needed} plan</Link>.</>}
+                {t.full ? <>Pick a stock for its history and an alert when its MWPL use crosses 80%.</>
+                  : <>Each stock's history and MWPL alerts are on the <Link className="link" to="/plans">{t.plan_needed} plan</Link>.</>}
                 {" "}The buildup words describe what price and open interest did on the day, nothing more.
               </p>
             </>

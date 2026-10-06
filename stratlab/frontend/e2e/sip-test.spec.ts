@@ -68,7 +68,7 @@ test("test a SIP: from a company page, a split, the spread over start months and
   await expect(list.getByText("INFY", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   // a second stock: the shares split evenly and must add up to 100
-  await page.getByPlaceholder(/Search any NSE or BSE stock/).fill("TCS");
+  await page.getByPlaceholder(/Search a stock, index or F&O/).fill("TCS");
   await page.locator(".results button", { hasText: "TCS" }).first().click();
   await expect(page.getByLabel("Share for TCS (%)")).toHaveValue("50");
   await page.getByLabel("Share for INFY (%)").fill("70");
@@ -117,7 +117,7 @@ test("test as a SIP: from the new-notebook flow, with the instrument and setting
   const n = phone ? 290 : 287;
   await request.put(`${API}/me/prefs`, { headers: { Authorization: `Bearer load-${n}` }, data: { focus: "both", level: "some", space: "all" } });
   const errors = await open(page, "/new", "What trading idea do you want to test?", n);
-  await page.getByPlaceholder(/Search any NSE or BSE stock/).first().fill("INFY");
+  await page.getByPlaceholder(/Search a stock, index or F&O/).first().fill("INFY");
   await page.locator(".results button", { hasText: "INFY" }).first().click();
   await page.getByRole("link", { name: "Test as a SIP instead" }).click();
   await expect(page).toHaveURL(/\/money\/sip-test\?symbol=INFY/);

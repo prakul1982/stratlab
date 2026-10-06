@@ -59,7 +59,7 @@ test("India VIX on Positioning: today, the day's line, the past year and NIFTY A
   const year = panel.getByTestId("vix-year");
   await expect(year.locator("svg.ch-svg")).toBeVisible();
   await expect(year.getByRole("button", { name: "Series: India VIX", exact: true })).toBeVisible();
-  await expect(panel.getByTestId("vix-source")).toContainText(/trading days stored/);
+  await expect(panel.getByTestId("vix-source")).toContainText(/trading days of history/);
   await expect(panel.getByTestId("vix-source")).toContainText("Facts, not advice.");
   // the panel's own width on a phone
   const box = (await panel.boundingBox())!;

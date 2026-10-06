@@ -9,6 +9,7 @@ import { evDay, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
 import { AsOf, Fig, Loading, PanelSkel, VerdictBadge } from "../components/ui";
+import { Card, CardHead, PageHeader, Seg } from "../components/kit";
 import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
@@ -39,13 +40,7 @@ function Top() {
 
 /** A space home's heading: the space's name, one question or title, one line under it. */
 function Head({ eyebrow, title, children }: { eyebrow: string; title: string; children: ReactNode }) {
-  return (
-    <header className="space-head">
-      <span className="eyebrow">{eyebrow}</span>
-      <h1 className="serif">{title}</h1>
-      <p className="muted">{children}</p>
-    </header>
-  );
+  return <PageHeader eyebrow={eyebrow} title={title} lede={children} />;
 }
 
 /** One tool on a space's strip. `status`: a live line (e.g. "2 running"); null while it loads (a placeholder of the
@@ -58,7 +53,7 @@ function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
   return (
     <nav className="space-strip" aria-label={label}>
       {tools.map((t) => (
-        <Link key={t.to} to={t.to} className={`card space-card${t.lead ? " space-card-lead" : ""}`} {...t.data}>
+        <Link key={t.to} to={t.to} className={`k-linkcard space-card${t.lead ? " space-card-lead" : ""}`} {...t.data}>
           <span className="space-card-title">{t.icon}<b>{t.title}</b></span>
           <span className="small muted space-card-line">{t.line}</span>
           {t.status === null ? <span className="space-card-foot" aria-hidden="true"><span className="skel" /></span>
@@ -115,34 +110,28 @@ export function TradeHome() {
  * notebooks to pick up again. */
 function NextIdea({ count = 3 }: { count?: number }) {
   const { notebooks } = useApp();
-  if (notebooks === null) return <section className="card space-next" aria-busy="true"><PanelSkel lines={3} label="Opening your notebooks" /></section>;
+  if (notebooks === null) return <Card className="space-next"><PanelSkel lines={3} label="Opening your notebooks" /></Card>;
   if (!notebooks.length) return (
-    <section className="card space-next" aria-labelledby="next-h">
-      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
-        <h2 id="next-h" className="h3">Start here: your first notebook</h2>
-        <Link to="/new" className="btn">Test your first idea</Link>
-      </div>
+    <Card className="space-next" label="Start here">
+      <CardHead title="Start here: your first notebook" actions={<Link to="/new" className="btn">Test your first idea</Link>} />
       <ol className="how" aria-label="How a test goes">
         <li><b>1. Describe it</b><span>In plain words. It becomes rules you can read and edit.</span></li>
         <li><b>2. Test it honestly</b><span>On years of real prices, after costs, with four checks for luck.</span></li>
         <li><b>3. Trade it on paper</b><span>If the edge holds up, run it live with fake money.</span></li>
       </ol>
-    </section>
+    </Card>
   );
   const recent = [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned)).slice(0, count);
   return (
-    <section className="card space-next" aria-labelledby="next-h">
-      <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
-        <h2 id="next-h" className="h3">Pick up where you left off</h2>
-        <div className="row wrap" style={{ gap: 8 }}>
-          <Link to="/notebooks" className="btn quiet sm">All {notebooks.length} notebook{notebooks.length === 1 ? "" : "s"}</Link>
-          <Link to="/new" className="btn sm">Test a new idea</Link>
-        </div>
-      </div>
+    <Card className="space-next" label="Pick up where you left off">
+      <CardHead title="Pick up where you left off" actions={<>
+        <Link to="/notebooks" className="btn quiet sm">All {notebooks.length} notebook{notebooks.length === 1 ? "" : "s"}</Link>
+        <Link to="/new" className="btn sm">Test a new idea</Link>
+      </>} />
       <div className="space-recent">
         {recent.map((n) => (
           <Link key={n.id} to={`/n/${n.id}`} className="space-recent-row">
-            <span className="stack" style={{ gap: 2, minWidth: 0 }}>
+            <span className="k-stack tight space-recent-text">
               <b className="space-recent-name">{n.name}</b>
               <span className="tiny muted">{n.instrument && "symbol" in n.instrument ? `${n.instrument.symbol} · ` : ""}{n.summary?.experiments ?? 0} run{n.summary?.experiments === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
             </span>
@@ -150,7 +139,7 @@ function NextIdea({ count = 3 }: { count?: number }) {
           </Link>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -176,16 +165,14 @@ export function InvestHome() {
       <Head eyebrow="Invest · your research desk" title="Which company do you want to look into?">
         The numbers, the business in its own words, red flags and whether management delivers. Facts, not tips.
       </Head>
-      <section className="card stack space-next" aria-label="Find a company">
-        <div className="seg" role="radiogroup" aria-label="Market" style={{ alignSelf: "flex-start" }}>
-          {(["IN", "US"] as const).map((r) => <button key={r} role="radio" aria-checked={region === r} aria-pressed={region === r} onClick={() => setRegion(r)}>{r === "IN" ? "₹ India" : "$ United States"}</button>)}
-        </div>
+      <Card className="space-next" label="Find a company">
+        <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
         <CompanySearch region={region} autoFocus />
-        <div className="row wrap" style={{ gap: 8 }}>
-          <span className="small muted">Popular:</span>
+        <div className="k-row">
+          <span className="k-small k-muted">Popular:</span>
           {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}
         </div>
-      </section>
+      </Card>
       <ToolStrip label="Invest tools" tools={tools} />
       <NextEvents />
       <div className="grid2 space-panels">
@@ -207,17 +194,14 @@ function NextEvents({ limit = 3, testId = "invest-events" }: { limit?: number; t
   const next = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && e.kind !== "holiday").slice(0, limit) : null;
   if (next && !next.length) return null;
   return (
-    <section className="card stack" style={{ gap: 8 }} aria-labelledby="inv-events-h" data-testid={testId}>
-      <div className="spread" style={{ gap: 8 }}>
-        <h2 id="inv-events-h" className="h3">Coming up</h2>
-        <Link to="/trade/events" className="link small">Market events →</Link>
-      </div>
+    <Card testId={testId} label="Coming up">
+      <CardHead title="Coming up" actions={<Link to="/trade/events" className="link small">Market events →</Link>} />
       {next === null ? <PanelSkel label="Reading the market events" lines={1} /> : (
         <div className="space-events">
           {next.map((e) => <span key={e.id} className="small"><span className="muted">{evDay(e.date)}</span> {e.title}</span>)}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -231,7 +215,7 @@ function WatchPanel() {
       {items === null ? <PanelSkel label="Opening your watchlist" />
         : !regions.length ? <p className="small muted">Press Watch on any company to keep it here, with live prices.</p>
         : regions.map((r) => (
-          <div key={r} className="stack" style={{ gap: 6 }}>
+          <div key={r} className="k-stack snug">
             {regions.length > 1 && <span className="eyebrow">{REGION_NAME[r]}</span>}
             <QuoteGrid region={r} symbols={by(r).slice(0, 6).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
           </div>
@@ -261,7 +245,7 @@ function ResultsToday() {
     <Panel title="Results today" right={<Link to="/research/results" className="link">Calendar →</Link>}>
       {rows === null ? <PanelSkel label="Checking results dates" />
         : rows.today.length ? (
-          <div className="stack" style={{ gap: 6 }}>
+          <div className="k-stack snug">
             {rows.today.slice(0, 6).map((r) => (
               <Link key={`${r.region}-${r.symbol}`} className="space-line" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}>
                 <b>{r.symbol}</b><span className="small muted">{r.out ? "Results filed" : r.purpose}{r.when ? `, ${r.when}` : ""}</span>
@@ -291,7 +275,7 @@ function RedFlags() {
         : !data.rows.length ? <p className="small muted">Your watchlist has no India stocks yet: their filings show here.</p>
         : !flagged.length ? <p className="small muted">No red flags filed by your {data.rows.length} India watchlist compan{data.rows.length === 1 ? "y" : "ies"} lately.</p>
         : (
-          <div className="stack" style={{ gap: 8 }}>
+          <div className="k-stack snug">
             {flagged.slice(0, 5).map((r) => (
               <div key={r.symbol} className="space-line">
                 <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
@@ -331,11 +315,11 @@ export function MoneyHome() {
         <TaxSummary />
       </div>
       {rest.length > 0 && (
-        <section className="stack" style={{ gap: 10 }} aria-labelledby="money-tools">
-          <h2 id="money-tools" className="h2">More in Money</h2>
+        <section className="k-stack" aria-labelledby="money-tools">
+          <h2 id="money-tools" className="k-card-title">More in Money</h2>
           <div className="explore-grid">
             {rest.map((e) => (
-              <Link key={e.to} to={e.to} className="card explore-card" data-money={e.to}><b>{e.label}</b><span className="small muted">{e.blurb ?? e.title}</span></Link>
+              <Link key={e.to} to={e.to} className="k-linkcard explore-card" data-money={e.to}><b>{e.label}</b><span className="small muted">{e.blurb ?? e.title}</span></Link>
             ))}
           </div>
         </section>
@@ -352,13 +336,13 @@ function HoldingsSummary() {
       {h === null ? <PanelSkel figs label="Adding up your holdings" />
         : h === "error" ? <p className="small muted">Your holdings couldn't be opened just now. <Link className="link" to="/holdings">Try the page</Link>.</p>
         : !h.rows.length ? (
-          <div className="stack" style={{ gap: 10, alignItems: "flex-start" }}>
+          <div className="k-stack start">
             <p className="small muted">No holdings yet. Bring the holdings file your broker gives you, or add stocks by hand.</p>
             <Link to="/holdings" className="btn sm">Add your holdings</Link>
           </div>
         ) : (
-          <div className="stack" style={{ gap: 10 }} data-testid="holdings-summary">
-            <div className="space-figs">
+          <div className="k-stack" data-testid="holdings-summary">
+            <div className="k-stats">
               <Fig label={`Value · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />
               <Fig label="Gain or loss" tone={signClass(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
                 note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signClass(h.totals.pnl)} missing="Needs the buy prices" />
@@ -381,13 +365,13 @@ function TaxSummary() {
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !t.trades ? (
-          <div className="stack" style={{ gap: 10, alignItems: "flex-start" }}>
+          <div className="k-stack start">
             <p className="small muted">Upload your broker's tradebooks to see this financial year's capital gains and the tax on them.</p>
             <Link to="/tax-report" className="btn sm">Add your tradebooks</Link>
           </div>
         ) : (
-          <div className="stack" style={{ gap: 10 }} data-testid="tax-summary">
-            <div className="space-figs">
+          <div className="k-stack" data-testid="tax-summary">
+            <div className="k-stats">
               <Fig label={`Capital gains tax, ${year?.label ?? "this year"} (estimate)`} value={money(year?.tax_with_cess ?? 0, "INR")} />
               <Fig label="Short-term gains" tone={signClass(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
               <Fig label="Long-term gains" tone={signClass(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />

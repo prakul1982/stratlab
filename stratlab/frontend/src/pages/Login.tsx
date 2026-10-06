@@ -191,11 +191,11 @@ export function Login() {
       <main>
       <section id="top" className="lp-hero ruled">
         <div className="lp-wrap lp-hero-grid">
-          <div className="stack" style={{ gap: 22 }}>
+          <div className="stack g22">
             <span className="eyebrow">Trade · Invest · Money · Indian and US stocks</span>
             <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>
             <p className="serif lp-lede">One place for trading ideas, company research and your own money. Facts and honest tests, never tips.</p>
-            <div className="row wrap" style={{ gap: 12 }}>
+            <div className="row wrap g12">
               {cta()}
               <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>
             </div>
@@ -207,11 +207,11 @@ export function Login() {
       </section>
 
       <section className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
-        <div className="lp-wrap stack" style={{ gap: 24 }}>
+        <div className="lp-wrap stack g24">
           <h2 id="spaces-h" className="serif lp-h3">Three spaces, one place.</h2>
           <div className="lp-spaces">
             {SPACES.map(([id, name, sub, what]) => (
-              <a key={id} href={`#${id}`} className="card lp-space" data-space={id}>
+              <a key={id} href={`#${id}`} className="lp-card lp-space" data-space={id}>
                 <span className="eyebrow">{sub}</span><b className="serif">{name}</b><p className="small muted">{what}</p>
                 <SpaceArt space={id} />
                 <span className="small lp-space-go">See {name} ↓</span>
@@ -222,22 +222,22 @@ export function Login() {
       </section>
 
       <section id="trade" className="lp-sec lp-alt">
-        <div className="lp-wrap stack" style={{ gap: 36 }}>
+        <div className="lp-wrap stack g36">
           <Head eyebrow="Trade · the strategy lab" title="From a sentence to an honest verdict.">
             Most backtests are tuned until the curve looks good. StratLab tests the idea on real prices after real costs, then checks whether the result holds up.
           </Head>
           <ol className="lp-steps">
-            <li className="card"><span className="lp-num">1</span><b>Describe it</b><p className="small muted">"Buy Reliance when it's above its 200-day average and RSI crosses 50."</p></li>
-            <li className="card"><span className="lp-num">2</span><b>Check the rules</b><p className="small muted">Plain-English rules. Tap any highlighted word to change it.</p></li>
-            <li className="card"><span className="lp-num">3</span><b>Get the verdict</b><p className="small muted">Years of real prices, real costs and four honesty checks.</p></li>
-            <li className="card"><span className="lp-num">4</span><b>Paper trade it</b><p className="small muted">When it holds up, run it live with fake money.</p></li>
+            <li className="lp-card"><span className="lp-num">1</span><b>Describe it</b><p className="small muted">"Buy Reliance when it's above its 200-day average and RSI crosses 50."</p></li>
+            <li className="lp-card"><span className="lp-num">2</span><b>Check the rules</b><p className="small muted">Plain-English rules. Tap any highlighted word to change it.</p></li>
+            <li className="lp-card"><span className="lp-num">3</span><b>Get the verdict</b><p className="small muted">Years of real prices, real costs and four honesty checks.</p></li>
+            <li className="lp-card"><span className="lp-num">4</span><b>Paper trade it</b><p className="small muted">When it holds up, run it live with fake money.</p></li>
           </ol>
 
-          <div id="checks" className="stack lp-anchor" style={{ gap: 18 }}>
+          <div id="checks" className="stack lp-anchor g18">
             <h3 className="serif lp-h3">Four questions every strategy has to answer.</h3>
             <div className="lp-checks">
               {CHECKS.map((c) => (
-                <div key={c.title} className="card lp-check">
+                <div key={c.title} className="lp-card lp-check">
                   <div className="lp-art" aria-hidden="true">{c.art}</div>
                   <b className="serif lp-check-t">{c.title}</b>
                   <p className="small muted">{c.body}</p>
@@ -246,11 +246,11 @@ export function Login() {
             </div>
           </div>
 
-          <div className="card lp-travel lp-options">
-            <div className="stack" style={{ gap: 6 }}>
+          <div className="lp-card lp-travel lp-options">
+            <div className="stack g6">
               <span className="eyebrow">Options</span>
-              <b className="serif" style={{ fontSize: 24 }}>Paper trade option structures on live prices.</b>
-              <p className="small muted" style={{ maxWidth: "60ch" }}>Straddles, strangles, condors or any structure up to eight legs, filled at the real bid and ask. See the Greeks, the payoff today beside the one at expiry, and breakevens after charges.</p>
+              <b className="serif lp-opt-title">Paper trade option structures on live prices.</b>
+              <p className="small muted k-measure m60">Straddles, strangles, condors or any structure up to eight legs, filled at the real bid and ask. See the Greeks, the payoff today beside the one at expiry, and breakevens after charges.</p>
             </div>
             <span className="lp-fix">No real orders, ever</span>
           </div>
@@ -259,7 +259,7 @@ export function Login() {
             {TOOLS.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
           </div>
 
-          <div id="markets" className="stack lp-anchor" style={{ gap: 14 }}>
+          <div id="markets" className="stack lp-anchor g14">
             <h3 className="serif lp-h3">Test where you trade.</h3>
             <p className="lp-p">Each market with its own hours, currency, holidays, fees and taxes.</p>
             <div className="lp-markets">
@@ -270,7 +270,7 @@ export function Login() {
       </section>
 
       <section id="invest" className="lp-sec">
-        <div className="lp-wrap stack" style={{ gap: 36 }}>
+        <div className="lp-wrap stack g36">
           <div className="lp-split">
             <Head eyebrow="Invest · research" title="Start with any company, Indian or US.">
               Reported numbers, exchange filings and the company's own documents. Plain numbers, never scores, ratings or calls on the stock.
@@ -284,20 +284,20 @@ export function Login() {
       </section>
 
       <section id="money" className="lp-sec lp-alt">
-        <div className="lp-wrap stack" style={{ gap: 32 }}>
+        <div className="lp-wrap stack g32">
           <Head eyebrow="Money" title="What you own, and what it means at tax time.">
             Bring the files you already have. StratLab keeps them private and reports facts and arithmetic about what you own.
           </Head>
           <div className="lp-money">
             {PORTFOLIO.map(([t, b, tag]) => (
-              <div key={t} className="card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
+              <div key={t} className="lp-card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
             ))}
           </div>
         </div>
       </section>
 
       <section id="alerts" className="lp-sec">
-        <div className="lp-wrap stack" style={{ gap: 32 }}>
+        <div className="lp-wrap stack g32">
           <Head eyebrow="Alerts" title="Hear about it when it happens.">
             On your phone, on Telegram or by email, including every paper trade. Alerts report what happened, never what to do about it.
           </Head>
@@ -321,8 +321,8 @@ export function Login() {
       </section>
 
       <section className="lp-final ruled">
-        <div className="lp-wrap stack" style={{ gap: 20, alignItems: "center", textAlign: "center" }}>
-          <h2 className="serif lp-h2" style={{ maxWidth: "18ch" }}>Find out before your money does.</h2>
+        <div className="lp-wrap stack g20 lp-center">
+          <h2 className="serif lp-h2 lp-final-h">Find out before your money does.</h2>
           <p className="lp-p">Sign in with Google, no card needed. Your home page shows the first steps.</p>
           {cta("Continue with Google")}
         </div>
@@ -330,9 +330,9 @@ export function Login() {
       </main>
 
       <footer className="lp-foot">
-        <div className="lp-wrap spread" style={{ flexWrap: "wrap", gap: 16 }}>
+        <div className="lp-wrap spread wrap g16">
           <Logo size={30} />
-          <p className="small muted" style={{ maxWidth: "70ch" }}>Research and paper trading only. No real orders are placed. Past results don't predict future returns, and nothing on StratLab is investment advice. © {new Date().getFullYear()} StratLab.</p>
+          <p className="small muted k-measure">Research and paper trading only. No real orders are placed. Past results don't predict future returns, and nothing on StratLab is investment advice. © {new Date().getFullYear()} StratLab.</p>
           <LegalLinks />
         </div>
       </footer>
@@ -350,7 +350,7 @@ function Pricing() {
   };
   return (
     <section id="pricing" className="lp-sec">
-      <div className="lp-wrap stack" style={{ gap: 32 }}>
+      <div className="lp-wrap stack g32">
         <Head eyebrow="Pricing" title="Free to start. Pay when you need more.">
           Every market and every space is on the Free plan. Paid plans raise the limits and add the scans, alerts, live tools, history and the deeper tax tools. Cancel any time.
         </Head>
@@ -358,12 +358,12 @@ function Pricing() {
           {PLAN_IDS.map((p) => {
             const pr = price(p);
             return (
-              <div key={p} className={`card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
-                <div className="stack" style={{ gap: 2 }}>
+              <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
+                <div className="stack g2">
                   <h3 className="h2">{PLAN_NAME[p]}</h3>
                   <span className="small muted">{WHO[p]}</span>
                 </div>
-                <div className="stack" style={{ gap: 2 }}>
+                <div className="stack g2">
                   <div className="serif lp-amount">{pr.shown}<span className="small muted"> / month</span></div>
                   {pr.gst && <span className="tiny muted">incl. GST</span>}
                 </div>
@@ -378,7 +378,7 @@ function Pricing() {
             );
           })}
         </div>
-        <p className="small muted" style={{ maxWidth: "80ch" }}>Rupee prices include 18% GST, and every payment gets a GST invoice. Visitors outside India see prices in their own currency. Paying yearly in rupees: Basic ₹{PRICE.basic[1].toLocaleString("en-IN")}, Pro ₹{PRICE.pro[1].toLocaleString("en-IN")}. Paid plans renew each month or year until you cancel, which you can do any time from Account.</p>
+        <p className="small muted k-measure m80">Rupee prices include 18% GST, and every payment gets a GST invoice. Visitors outside India see prices in their own currency. Paying yearly in rupees: Basic ₹{PRICE.basic[1].toLocaleString("en-IN")}, Pro ₹{PRICE.pro[1].toLocaleString("en-IN")}. Paid plans renew each month or year until you cancel, which you can do any time from Account.</p>
       </div>
     </section>
   );
@@ -396,25 +396,25 @@ function HeroDemo() {
   const d = DEMOS[i];
   return (
     <div className="lp-demo" aria-label="Example: an idea, its rules and its verdict">
-      <div className="seg lp-demo-tabs" role="tablist">
+      <div className="lp-demo-tabs" role="tablist">
         {DEMOS.map((x, k) => (
           <button key={x.tab} role="tab" aria-selected={k === i} aria-pressed={k === i} onClick={() => { setI(k); setAuto(false); }}>{x.tab}</button>
         ))}
       </div>
       <div key={i} className="lp-demo-body">
-        <div className="card lp-demo-idea">
+        <div className="lp-card lp-demo-idea">
           <span className="eyebrow">You write</span>
           <p className="serif">"{d.idea}"</p>
         </div>
-        <div className="card lp-demo-rule">
+        <div className="lp-card lp-demo-rule">
           <span className="eyebrow">StratLab reads</span>
           <p>{d.rule.map(([w, tok], k) => tok ? <span key={k} className="lp-tok">{w}</span> : <span key={k}> {w} </span>)}</p>
         </div>
-        <div className="card lp-demo-verdict">
+        <div className="lp-card lp-demo-verdict">
           <span className="eyebrow">{d.meta}</span>
-          <span className="serif lp-verdict" style={{ color: d.tone === "ink" ? "var(--ink)" : `var(--${d.tone})` }}>{d.verdict}</span>
-          <p className="serif" style={{ fontSize: 16, color: "var(--ink-2)" }}>{d.why}</p>
-          <div className="stack small" style={{ gap: 7, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <span className={`serif lp-verdict tone-${d.tone}`}>{d.verdict}</span>
+          <p className="serif lp-why">{d.why}</p>
+          <div className="stack small lp-checklist">
             {d.checks.map(([t, s]) => <div key={t} className="spread"><span>{t}</span><span className={`badge ${s}`}>{STATUS[s]}</span></div>)}
           </div>
           <span className="tiny muted">Sample result</span>
@@ -429,8 +429,8 @@ function SpaceArt({ space }: { space: string }) {
   if (space === "trade") return (
     <div className="lp-space-art" aria-hidden="true">
       <span className="tiny muted mono">BTC/USD · 61 trades</span>
-      <span className="serif lp-space-big" style={{ color: "var(--blue)" }}>Likely a real edge.</span>
-      <span className="row wrap" style={{ gap: 4 }}>
+      <span className="serif lp-space-big">Likely a real edge.</span>
+      <span className="row wrap g4">
         {(["pass", "pass", "warn", "pass"] as Status[]).map((st, k) => <span key={k} className={`badge ${st}`}>{["Unseen", "Nearby", "Drawdown", "Trades"][k]}</span>)}
       </span>
     </div>
@@ -450,7 +450,7 @@ function SpaceArt({ space }: { space: string }) {
       <span className="tiny muted mono">My Holdings · 6 stocks</span>
       <span className="lp-space-rows">
         <span><span className="muted">Value</span><b className="num">₹7,10,215</b></span>
-        <span><span className="muted">Gain or loss</span><b className="num" style={{ color: "var(--blue)" }}>+₹4,49,403</b></span>
+        <span><span className="muted">Gain or loss</span><b className="num lp-blue">+₹4,49,403</b></span>
         <span><span className="muted">Tax this year (estimate)</span><b className="num">₹12,480</b></span>
       </span>
     </div>
@@ -464,19 +464,19 @@ function ResearchMock() {
     ["Debt and cash", "Debt to equity 0.11 · Cash from operations 94% of net profit"],
     ["Margins and returns", "Operating margin 33% → 62% over 5 years · ROE 91.9%"]];
   return (
-    <div className="card lp-rmock" aria-label="Example company research page">
-      <div className="spread" style={{ alignItems: "flex-start" }}>
-        <div className="stack" style={{ gap: 2 }}><span className="eyebrow">NASDAQ · NVDA</span><b className="serif" style={{ fontSize: 26 }}>NVIDIA Corp</b></div>
-        <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}><b className="serif" style={{ fontSize: 26 }}>$183.20</b><span className="badge next">▲ +1.33% today</span></div>
+    <div className="lp-card lp-rmock" aria-label="Example company research page">
+      <div className="spread lp-top">
+        <div className="stack g2"><span className="eyebrow">NASDAQ · NVDA</span><b className="serif lp-rm-title">NVIDIA Corp</b></div>
+        <div className="stack g4 lp-end"><b className="serif lp-rm-title">$183.20</b><span className="badge next">▲ +1.33% today</span></div>
       </div>
       <div className="lp-rfacts">
-        {facts.map(([l, t]) => <div key={l} className="stack" style={{ gap: 1 }}><b className="small">{l}</b><span className="small muted">{t}</span></div>)}
+        {facts.map(([l, t]) => <div key={l} className="stack g1"><b className="small">{l}</b><span className="small muted">{t}</span></div>)}
         <span className="tiny muted">Sample figures. Facts from reported results and prices, not advice.</span>
       </div>
       <div className="lp-ridea">
         <b className="small">Ideas to test on NVDA</b>
         <p className="small">"Buy NVDA when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below, 7% stop loss"</p>
-        <span className="btn blue sm" style={{ alignSelf: "flex-start", pointerEvents: "none" }}>Test this idea →</span>
+        <span className="btn blue sm lp-fake-btn">Test this idea →</span>
       </div>
     </div>
   );

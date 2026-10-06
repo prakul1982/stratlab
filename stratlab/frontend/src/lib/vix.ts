@@ -22,7 +22,7 @@ export function vixChange(q: VixQuote | null): string | null {
 
 /** "Higher than 62% of the past year's closes" or why it can't be said yet. */
 export function vixPercentileLine(p: VixPercentile): string {
-  if (p.percentile == null) return p.days ? `${p.days} days stored; the comparison starts at ${p.need}` : "History not stored yet";
+  if (p.percentile == null) return p.days ? `${p.days} days of history; the comparison starts at ${p.need}` : "No history yet";
   return `Higher than ${Math.round(p.percentile)}% of the past year's closes`;
 }
 

@@ -11,7 +11,7 @@ type FilingCheck = { ok: boolean; symbol: string; count?: number; error?: string
 
 const ERRORS: Column<ServerError>[] = [
   { key: "ref", header: "Ref", rowHeader: true, cell: (x) => <span className="adm-mono">{x.ref}</span> },
-  { key: "at", header: "When", cell: (x) => new Date(x.at).toLocaleString() },
+  { key: "at", header: "When", cell: (x) => new Date(x.at).toLocaleString("en-GB") },
   { key: "req", header: "Request", wrap: true, cell: (x) => <span className="adm-mono">{x.method} {x.path}</span> },
   { key: "err", header: "Error", wrap: true, cell: (x) => <span className="adm-cell">{x.error}</span> },
   { key: "where", header: "Where", wrap: true, cell: (x) => <span className="adm-mono">{x.where}</span> },
@@ -73,7 +73,7 @@ export function SystemSection() {
               actions={<button type="button" className="btn quiet sm" disabled={busy === "filings"} onClick={checkFilings}>{busy === "filings" ? "Asking the exchange…" : "Check filings feed"}</button>} />
             {filing?.ok && <StatusRow state={filing.document?.ok ? "ok" : "warn"} label="Company documents (deep dive)"
               detail={!filing.document ? `No presentation or call transcript among ${filing.symbol}'s filings to try.`
-                : filing.document.ok ? `Read "${filing.document.title}" (${filing.document.kind}): ${filing.document.chars?.toLocaleString()} characters of text. ${filing.documents_found} documents found.`
+                : filing.document.ok ? `Read "${filing.document.title}" (${filing.document.kind}): ${filing.document.chars?.toLocaleString("en-IN")} characters of text. ${filing.documents_found} documents found.`
                   : `Couldn't read "${filing.document.title}": ${filing.document.error}`} />}
           </StatusList>
         )}

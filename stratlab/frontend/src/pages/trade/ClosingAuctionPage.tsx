@@ -31,7 +31,7 @@ function Status({ v }: { v: CasView }) {
         <span className="k-small" data-testid="cas-phase">{PHASE_TEXT[v.phase]}</span>
       </div>
       {n && <p className="k-small" data-testid="cas-next">Next auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> India time.</p>}
-      {v.day && !v.fresh && <p className="k-note">Showing the auction of {asOf(v.day)}{v.from_stored ? ", from the stored days" : ""}.</p>}
+      {v.day && !v.fresh && <p className="k-note">Showing the auction of {asOf(v.day)}{v.from_stored ? ", from an earlier day" : ""}.</p>}
     </Card>
   );
 }
@@ -144,7 +144,7 @@ function Stocks({ v }: { v: CasView }) {
         {v.as_of ? `As of ${asOf(v.as_of)}` : v.read && !v.from_stored ? `Read at ${time(v.read)} India time` : ""}{v.day && !v.fresh ? `${v.as_of || v.read ? " · " : ""}the auction of ${asOf(v.day)}` : ""}
         {" "}· the widest gap first
       </p>
-      {!rows.length ? <EmptyState title={v.stocks.length ? "No stock matches that." : "No auction stored yet"}>{v.stocks.length ? "Try another symbol." : "Each trading day's auction shows here once it has run."}</EmptyState> : (
+      {!rows.length ? <EmptyState title={v.stocks.length ? "No stock matches that." : "No auction recorded yet"}>{v.stocks.length ? "Try another symbol." : "Each trading day's auction shows here once it has run."}</EmptyState> : (
         <>
           <DataTable label="F&O stocks in the closing auction" columns={cols} rows={shown} rowKey={(r) => r.symbol} rowAttrs={attrs} />
           <Earlier key={q.trim() ? "find" : "all"} label="More stocks" count={rest.length} open={!!q.trim()}>
@@ -179,7 +179,7 @@ function History({ v }: { v: CasView }) {
       {!v.history.allowed ? (
         <p className="k-small">60 days of auction closes against the reference price, and each index's close against its value at 15:15, are on the {v.history.plan} plan. <Link className="link" to="/plans">See the {v.history.plan} plan</Link></p>
       ) : error ? <ErrorState title="The history couldn't be read">{error}</ErrorState> : !h ? <Skeleton label="Reading past auctions" /> : !h.days.length ? (
-        <EmptyState title="No auctions stored yet">Each trading day's auction is stored after 15:40.</EmptyState>
+        <EmptyState title="No auctions recorded yet">Each trading day's auction is saved after 15:40.</EmptyState>
       ) : (
         <>
           <p className="k-note">Each day: the final prices against the reference prices (VWAP of 15:00–15:15).</p>
@@ -219,10 +219,8 @@ export function ClosingAuctionPage() {
         <>
           <Status v={v} />
           <Expiry v={v} />
-          <div className="k-two">
-            <Timeline v={v} />
-            <Indices v={v} />
-          </div>
+          <Timeline v={v} />
+          <Indices v={v} />
           <Stocks v={v} />
           <History v={v} />
           <Coming v={v} />

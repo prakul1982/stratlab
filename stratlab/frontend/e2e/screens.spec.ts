@@ -168,3 +168,56 @@ test("the sidebar fits a short laptop, a tablet drawer and a phone drawer: slim 
     await ctx.close();
   }
 });
+
+/** Geometry on a 400px window, in a plain (not "mobile") browser so the page cannot quietly widen itself: the page must not
+ * scroll sideways, and no text may spill out of the box that holds it. Boxes that scroll on purpose (a table, a chip bar)
+ * and chart drawings are left out. */
+async function spills(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const vw = document.documentElement.clientWidth;
+    if (document.documentElement.scrollWidth > vw + 1) out.push(`the page is ${document.documentElement.scrollWidth}px wide on a ${vw}px window`);
+    const label = (el: Element) => `${el.tagName.toLowerCase()}${typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\s+/).join(".") : ""} "${(el.textContent || "").trim().slice(0, 40)}"`;
+    const scrolls = (el: Element) => { for (let p: Element | null = el; p && p !== document.body; p = p.parentElement) if (/(auto|scroll)/.test(getComputedStyle(p).overflowX) || /(auto|scroll)/.test(getComputedStyle(p).overflowY)) return true; return false; };
+    for (const el of Array.from(document.querySelectorAll("body *"))) {
+      if (el.closest("svg, canvas, .sr-only, [hidden], .k-chipbar, .k-tbl-wrap, .info-pop, .popover") || el.matches(".sr-only")) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === "inline" || cs.display === "none" || cs.visibility === "hidden" || !el.clientWidth) continue;
+      const own = [...el.childNodes].filter((n) => n.nodeType === 3 && (n.textContent || "").trim());
+      if (!own.length) continue;                                                                          // its own words only
+      const box = el.getBoundingClientRect();
+      if (box.right <= 1 || box.left >= vw) continue;                                                      // the menu drawer, parked off the screen
+      const range = document.createRange();
+      let right = 0;
+      for (const n of own) { range.selectNodeContents(n); right = Math.max(right, range.getBoundingClientRect().right); }
+      if (right > box.right + 1 && cs.textOverflow !== "ellipsis" && !scrolls(el)) out.push(`text spills out of ${label(el)} (${Math.round(right)}px in a box ending at ${Math.round(box.right)}px)`);
+      if (box.right > vw + 1 && !scrolls(el)) out.push(`${label(el)} reaches ${Math.round(box.right)}px on a ${vw}px window`);
+    }
+    return out.slice(0, 8);
+  });
+}
+
+test("every route at 400px: the page never scrolls sideways and no text spills out of its box", async ({ browser }) => {
+  test.setTimeout(360_000);
+  const found: string[] = [];
+  for (const signedIn of [true, false]) {
+    const ctx = await browser.newContext({ viewport: { width: 400, height: 860 }, colorScheme: "light" });
+    await ctx.route("**/*", (r) => {
+      const host = new URL(r.request().url()).hostname;
+      return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
+    });
+    await ctx.addInitScript(([s, signedIn]) => {
+      if (signedIn) localStorage.setItem("sb-demo-auth-token", JSON.stringify(s));
+      localStorage.setItem("stratlab.tour.v1", "1");
+    }, [session, signedIn] as const);
+    const page = await ctx.newPage();
+    for (const r of routes.filter((x) => x.signedIn === signedIn && x.url.startsWith(WEB))) {
+      await page.goto(r.url);
+      await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
+      await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 15_000 }).catch(() => found.push(`${r.label}: still loading after 15s`));
+      for (const p of await spills(page)) found.push(`${r.label}: ${p}`);
+    }
+    await ctx.close();
+  }
+  expect(found, "geometry problems at 400px").toEqual([]);
+});

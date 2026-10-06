@@ -27,20 +27,19 @@
 .adm-cell { max-width: 380px; overflow-wrap: anywhere; font-size: var(--t-note); }
 .adm-mono { font-family: var(--mono); font-size: var(--t-note); }
 .adm-search { max-width: 340px; flex: 1 1 220px; }
-.adm-narrow { max-width: 560px; }
+
 .adm-num-input { width: 90px; text-align: right; }
-.adm-plan-input { width: 190px; }
+
 .adm-year { width: 110px; }
 .adm-pre { max-height: 160px; }
-.adm-row-end { justify-content: flex-end; }
-.adm-section { display: flex; flex-direction: column; gap: var(--s2); }
+
 .adm-sub { font-size: var(--t-label); font-weight: 600; margin: 0; }
 .adm-log { display: flex; flex-direction: column; gap: var(--s1); margin: 0; padding: 0; list-style: none; font-size: var(--t-label); }
 .adm-log li { padding: 6px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .adm-log li:last-child { border-bottom: 0; }
-.adm-ok { color: var(--ink-2); }
+
 .adm-warn-t { color: var(--orange-ink); }
-.adm-bad-t { color: var(--down); }
+
 .adm-sizes { display: flex; gap: var(--s5); flex-wrap: wrap; align-items: flex-start; }
 .adm-sizes > div { min-width: 220px; flex: 1 1 220px; }
 .adm-sizes .k-rows > div { padding: 6px 0; }

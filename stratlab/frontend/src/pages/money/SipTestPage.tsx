@@ -176,7 +176,7 @@ export function SipTestPage() {
           <Field label="Brokerage an order" unit="₹" type="number" min={0} value={brokerage} onChange={(e) => setBrokerage(e.target.value)} />
           <Field label="Dip rule">{(id) => (
             <Select id={id} value={rule} onChange={(v) => setRule(v as Rule)} disabled={mode === "qty"} options={[
-              { value: "plain", label: "None: invest on schedule" },
+              { value: "plain", label: "None, on schedule" },
               { value: "only_dips", label: `Only on dips${canDip ? "" : " (Basic)"}`, disabled: !canDip },
               { value: "extra_on_dips", label: `Extra on dips${canDip ? "" : " (Basic)"}`, disabled: !canDip }]} />
           )}</Field>
