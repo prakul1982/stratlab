@@ -173,3 +173,17 @@ export function signed(v: number | null | undefined, dp = 0): string {
   if (!ok(v)) return "–";
   return `${v > 0 ? "+" : v < 0 ? "−" : ""}${nf(Math.abs(v), dp)}`;
 }
+
+/** The first name to greet by, from what the sign-in gave the profile (a first or given name, else the first word of the
+ * full name). Nothing when the profile has no name, or what it holds is an email address or has digits in it. A name typed
+ * in capitals or all lower case is written with a capital first letter. */
+export function firstName(meta: Record<string, unknown> | null | undefined): string {
+  const m = meta ?? {};
+  for (const k of ["given_name", "first_name", "full_name", "name"]) {
+    const v = typeof m[k] === "string" ? (m[k] as string).trim() : "";
+    const word = v.split(/\s+/)[0] ?? "";
+    if (!word || /[@\d]/.test(word)) continue;
+    return word === word.toUpperCase() || word === word.toLowerCase() ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : word;
+  }
+  return "";
+}

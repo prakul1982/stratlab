@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, inrCompact, pct, signedInrCompact } from "../lib/format";
+import { asOf, firstName, inrCompact, pct, signedInrCompact } from "../lib/format";
 import { evDay } from "../lib/marketEvents";
 import { inWords, marketState } from "../lib/marketHours";
 import { MARKET_TILES, useComingUp, useMarketStrip, type Up } from "../lib/mine";
@@ -31,8 +31,7 @@ export function MineHome() {
   const layout = useMemo(() => cleanLayout(raw), [raw]);
   const [customise, setCustomise] = useState(false);
   const coming = useComingUp(6);
-  const meta = (session?.user?.user_metadata ?? {}) as Record<string, unknown>;
-  const first = String(meta.full_name ?? meta.name ?? "").trim().split(/\s+/)[0];
+  const first = firstName(session?.user?.user_metadata as Record<string, unknown> | undefined);
   const shown = layout.order.filter((id) => !layout.hidden.includes(id));
 
   // one line: when the market opens or closes, then the next two dates from the calendars
@@ -132,8 +131,23 @@ function NetWorthCard() {
       <Stat label="What you own minus what you owe" value={inrCompact(v.totals.net)}
         delta={diff !== null ? <Delta value={diff}>{signedInrCompact(diff)}</Delta> : undefined}
         note={diff !== null && base ? `since ${asOf(base.d)}` : `As of ${asOf(v.as_of) ?? "today"}`} />
-      {hist.length >= 2 && <Spark values={hist.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />}
+      {hist.length >= 2 ? <Spark values={hist.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
+        : <HistoryPlaceholder allowed={v.history_allowed} />}
     </Card>
+  );
+}
+
+/** The space under the net worth figure while there is no history to draw: a dashed baseline with today's dot, and why. */
+function HistoryPlaceholder({ allowed }: { allowed: boolean }) {
+  return (
+    <div className="mine-nw-ph" data-testid="mine-nw-placeholder">
+      <svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
+        <path className="grid" d="M0 5H100" />
+        <path className="base" d="M2 12H96" />
+        <circle cx="97" cy="12" r="2.2" />
+      </svg>
+      <span className="k-note k-muted">{allowed ? "History starts after your first month" : <>The history chart is on the Basic plan. <Link className="link" to="/plans">See plans</Link></>}</span>
+    </div>
   );
 }
 

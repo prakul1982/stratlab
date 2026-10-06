@@ -8,6 +8,8 @@ import { DRAW_TOOLS, type Drawing, type DrawingKind } from "./drawings";
 import type { ScaleMode } from "./scales";
 import { clampParam, newStudy, STAGE_NAMES, STUDIES, STUDY, studyLabel, type StudyConfig, type StudyType } from "./studies";
 import { aggregate, indexAtOrBefore, merge, parseTime, toBars, type Bar, type RawCandle } from "./transforms";
+import { ChipBar } from "../../components/kit/ChipBar";
+import { CHART_TF_UNITS, chartTfCheck } from "../../lib/intervals";
 import "./priceChart.css";
 
 export type Tf = "5m" | "15m" | "1h" | "1d" | "1w" | "1mo";
@@ -48,6 +50,8 @@ export interface PriceChartProps {
 }
 
 const TF_LABEL: Record<Tf, string> = { "5m": "5m", "15m": "15m", "1h": "1h", "1d": "1D", "1w": "1W", "1mo": "1M" };
+/** The timeframe chips read like the Trade pages' candle sizes: "5 min", "1 hour", "1 day". */
+const TF_CHIP: Record<Tf, string> = { "5m": "5 min", "15m": "15 min", "1h": "1 hour", "1d": "1 day", "1w": "1 week", "1mo": "1 month" };
 const TF_LONG: Record<Tf, string> = { "5m": "5-minute", "15m": "15-minute", "1h": "1-hour", "1d": "Daily", "1w": "Weekly", "1mo": "Monthly" };
 const ALL_TFS: Tf[] = ["5m", "15m", "1h", "1d", "1w", "1mo"];
 const RANGES: { key: RangeKey; tf: Tf; fetch: string }[] = [
@@ -425,14 +429,12 @@ export default function PriceChart(props: PriceChartProps) {
         <select className="pc-sel" aria-label="Chart type" value={shownType} onChange={(ev) => setType(ev.target.value as ChartType)}>
           {CHART_TYPES.filter((c) => !props.closesOnly || ["line", "area", "baseline"].includes(c.type)).map((c) => <option key={c.type} value={c.type}>{c.name}</option>)}
         </select>
-        {tfSelect && <>
-          <div className="pc-seg pc-hide-phone" role="radiogroup" aria-label="Timeframe">
-            {offered.map((t) => <button key={t} type="button" className="pc-btn" role="radio" aria-checked={t === tf} aria-pressed={t === tf} title={TF_LONG[t]} onClick={() => pickTf(t)}>{TF_LABEL[t]}</button>)}
+        {tfSelect && (
+          <div className="pc-tf">
+            <ChipBar label="Timeframe" value={tf} onChange={(v) => pickTf(v as Tf)} options={offered.map((t) => ({ value: t, label: TF_CHIP[t] }))}
+              custom={{ storageKey: "stratlab.chips.pricechart", units: CHART_TF_UNITS, defaultUnit: "min", validate: chartTfCheck(offered) }} />
           </div>
-          <select className="pc-sel pc-only-phone" aria-label="Timeframe (phone)" value={tf} onChange={(ev) => pickTf(ev.target.value as Tf)}>
-            {offered.map((t) => <option key={t} value={t}>{TF_LONG[t]}</option>)}
-          </select>
-        </>}
+        )}
         <div className="pc-wrap">
           <button type="button" className="pc-btn" aria-haspopup="menu" aria-expanded={menu === "studies"} onClick={() => setMenu(menu === "studies" ? null : "studies")}>Indicators</button>
           {menu === "studies" && (

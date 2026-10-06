@@ -242,7 +242,7 @@ function Routed() {
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/app" element={<AppPage />} />
         <Route path="/invite" element={<InvitePage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/*" element={<AdminPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/tax-report" element={<TaxReportPage />} />

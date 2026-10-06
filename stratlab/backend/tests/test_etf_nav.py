@@ -186,6 +186,30 @@ def test_job_survives_the_exchange_being_down(w, monkeypatch):
     assert job.status["last_error"] and db.get_setting("newsjob:etfnav-close") is None      # tried again later
 
 
+# ---------- the admin's "Read now" ----------
+def test_admin_can_read_the_etf_list_now(w, monkeypatch):
+    c = w["client"]
+    feed = Feed()
+    monkeypatch.setattr(main, "filings_feed", feed)
+    E.forget()
+    assert c.post("/admin/etf-gaps/refresh").status_code in (401, 403)
+    assert c.post("/admin/etf-gaps/refresh", headers=headers("pro-token")).status_code in (401, 403)      # not an admin
+    assert feed.calls == 0
+    r = c.post("/admin/etf-gaps/refresh", headers=headers("admin-token"))
+    assert r.status_code == 200 and r.json()["etfs"] == 5 and feed.calls == 1
+    assert E.load_live()["rows"] and main.etf_job.status["last_error"] is None and main.etf_job.status["read"]
+    jobs = {j["id"]: j for j in c.get("/admin/jobs", headers=headers("admin-token")).json()["jobs"]}
+    assert jobs["etf"]["last_run"] and jobs["etf"]["state"] == "ok" and jobs["etf"]["run"][0]["path"] == "/admin/etf-gaps/refresh"
+
+
+def test_admin_etf_read_says_so_when_the_exchange_is_down(w, monkeypatch):
+    c = w["client"]
+    monkeypatch.setattr(main, "filings_feed", Feed(fail=True))
+    r = c.post("/admin/etf-gaps/refresh", headers=headers("admin-token"))
+    assert r.status_code == 502 and not PROVIDERS.search(json.dumps(r.json()))
+    assert main.etf_job.status["last_error"]
+
+
 # ---------- the pages ----------
 def test_routes(w):
     c = w["client"]

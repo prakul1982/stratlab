@@ -312,6 +312,8 @@ app.include_router(signals_routes.hook_router)  # /hooks/signal/<token>: the sig
 app.include_router(market_events_routes.router)  # /trade/events
 from . import email_previews as _email_previews  # noqa: E402
 app.include_router(_email_previews.router)       # /admin/email-previews
+from . import admin_jobs as _admin_jobs  # noqa: E402
+app.include_router(_admin_jobs.router)           # /admin/jobs: every background job, for Admin -> Data and jobs
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
@@ -3656,6 +3658,18 @@ def holiday_job():
         except Exception as e:
             print("holiday refresh failed:", e)
         time.sleep(24 * 3600)
+
+
+@app.post("/admin/etf-gaps/refresh")
+def admin_etf_gaps_refresh(_=Depends(admin.admin_profile)):
+    """Read the exchange's ETF list now (the job reads it every few minutes in market hours) and say how many ETFs it gave."""
+    try:
+        parsed = etf_nav.refresh(filings_feed)
+    except Exception as e:
+        etf_job.status["last_error"] = str(e)[:200]
+        err(502, "etf_list_unavailable", f"The exchange's ETF list couldn't be read: {public_text(str(e)[:160])}")
+    etf_job.status.update(read=datetime.now(timezone.utc).isoformat(timespec="minutes"), last_error=None)
+    return {"etfs": len(parsed["rows"]), "as_of": parsed["as_of"], "job": etf_job.status}
 
 
 @app.post("/admin/holidays/refresh")

@@ -29,6 +29,23 @@ export function candleCheck(allowed: string[] = CANDLE_SIZES.map((c) => c.value)
   };
 }
 
+/** The shared price chart's timeframes: the stored candle sizes plus the weekly and monthly charts made from daily candles. */
+export const CHART_TF_UNITS: CustomUnit[] = [
+  ...CANDLE_UNITS, { value: "w", label: "week", plural: "weeks" }, { value: "mo", label: "month", plural: "months" },
+];
+/** A custom timeframe on the price chart: kept only when it is one the chart offers written another way (60 minutes is
+ * 1 hour, 24 hours or 1 day is 1 day, 7 days is 1 week). Any other size has no candles behind it. */
+export function chartTfCheck(offered: string[]) {
+  const NAME: Record<string, string> = { "5m": "5 min", "15m": "15 min", "1h": "1 hour", "1d": "1 day", "1w": "1 week", "1mo": "1 month" };
+  return (n: number, unit: string): CustomCheck => {
+    const minutes = unit === "min" ? n : unit === "h" ? n * 60 : unit === "d" ? n * 1440 : unit === "w" ? n * 10080 : null;
+    const hit = unit === "mo" ? (n === 1 ? "1mo" : null) : ({ 5: "5m", 15: "15m", 60: "1h", 1440: "1d", 10080: "1w" } as Record<number, string>)[minutes ?? -1] ?? null;
+    if (!hit) return { error: `That size isn't stored. Pick ${offered.map((o) => NAME[o] ?? o).join(", ").replace(/, ([^,]*)$/, " or $1")}.` };
+    if (!offered.includes(hit)) return { error: `${NAME[hit]} candles aren't available on this chart.` };
+    return { value: hit, label: NAME[hit] };
+  };
+}
+
 export const SPAN_UNITS: CustomUnit[] = [
   { value: "days", label: "day", plural: "days" }, { value: "weeks", label: "week", plural: "weeks" },
   { value: "months", label: "month", plural: "months" }, { value: "years", label: "year", plural: "years" },
