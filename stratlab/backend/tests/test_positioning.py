@@ -402,7 +402,9 @@ def test_chain_view_live_with_change_and_iv_stats(w):
     days = FP.weekdays_before(today, 25)
     FP.record_days(db.add_option_snapshot, "NIFTY", days)
     P.Runner(lambda: main.filings_feed, pace=0).chain_backfill(today, days=60)
-    now = P.ist_now()                                # one clock for both views: a live chain's IV moves with the time to expiry
+    # one clock for both views (a live chain's IV moves with the time to expiry), set mid-session so that on an expiry
+    # day the current series hasn't closed yet: after 15:30 there is no time left and no IV to work out
+    now = P.ist_now().replace(hour=11, minute=0, second=0, microsecond=0)
     v = P.chain_view(main.options_data, "NIFTY", "current", full=True, now=now)
     assert v["source"] == "live" and v["spot"] and v["rows"] and v["max_pain"] and v["atm_iv"]
     assert v["top"]["call"]["strike"] > v["spot"] > v["top"]["put"]["strike"]
