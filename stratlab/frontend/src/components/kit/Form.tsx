@@ -40,6 +40,29 @@ export function Field({ label, info, infoLabel, optional, unit, wide, id, childr
   );
 }
 
+/** A label (and its (i)) over a control that brings its own name (a Seg, a search box): the same look as a Field's label. */
+export function FieldGroup({ label, info, infoLabel, wide, children }: { label: string; info?: ReactNode; infoLabel?: string; wide?: boolean; children: ReactNode }) {
+  return (
+    <div className={`k-field${wide ? " wide" : ""}`} role="group" aria-label={label}>
+      <div className="k-label-row"><span className="k-lbl">{label}</span>{info && <Info label={infoLabel ?? `About ${label.toLowerCase()}`}>{info}</Info>}</div>
+      {children}
+    </div>
+  );
+}
+
+/** A dropdown for a short fixed list that is not worth tiles (a financial year, how often): the kit's input look with
+ * a chevron. Put it in a Field (`{(id) => <Select id={id} .../>}`) so its label points at it. `small` for a table cell. */
+export function Select({ id, value, onChange, options, label, disabled, small }: {
+  id?: string; value: string | number; onChange: (v: string) => void; options: { value: string | number; label: string; disabled?: boolean }[];
+  label?: string; disabled?: boolean; small?: boolean;
+}) {
+  return (
+    <select id={id} className={`k-input${small ? " sm" : ""}`} value={value} aria-label={label} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      {options.map((o) => <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>)}
+    </select>
+  );
+}
+
 /** The row under the fields: the main button on its own row, left-aligned, with an optional line beside it. */
 export function FormActions({ children }: { children: ReactNode }) {
   return <div className="k-form-actions">{children}</div>;

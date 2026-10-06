@@ -306,8 +306,8 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByText("RELIANCE", { exact: true })).toBeVisible();
   await expect(table.getByText("TINYCO", { exact: true })).toBeVisible();            // listed only on BSE
   await expect(page.getByText(/your Zerodha Console file/)).toBeVisible();
-  await expect(table.getByRole("cell", { name: "Unrealised P&L", exact: true })).toBeVisible();
-  await expect(table.getByRole("cell", { name: "Trend", exact: true })).toHaveCount(0);                 // the extra columns wait behind a click
+  await expect(table.getByRole("columnheader", { name: "Unrealised P&L", exact: true })).toBeVisible();
+  await expect(table.getByRole("columnheader", { name: "Trend", exact: true })).toHaveCount(0);                 // the extra columns wait behind a click
   if (info.project.name === "desktop") {                                                         // so the table fits a 1280px screen
     await page.setViewportSize({ width: 1280, height: 900 });
     const wrap = await table.evaluate((t) => ({ scroll: t.parentElement!.scrollWidth, width: t.parentElement!.clientWidth }));
@@ -318,7 +318,7 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByText(/red flag/).first()).toBeVisible({ timeout: 30_000 });  // the QIP filing, once the facts arrive
   await expect(table.getByText(/Stage \d/).first()).toBeVisible();
   await page.reload();                                                                           // remembered on this device
-  await expect(table.getByRole("cell", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByRole("columnheader", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Recent filings")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
   await page.getByRole("radio", { name: "Add to them" }).click();
@@ -344,8 +344,8 @@ test("my holdings: edit by hand and delete them all", async ({ page }, info) => 
     source: null, updated_at: null, prices: true, limit: 300, facts_max: 40 };
   await page.route("**/holdings", (r) => r.fulfill({ status: 200, contentType: "application/json",
     body: JSON.stringify(r.request().method() === "DELETE" ? { deleted: true } : empty) }));
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete my holdings" }).click();
+  await page.getByRole("dialog", { name: "Delete my holdings?" }).getByRole("button", { name: "Delete my holdings" }).click();
   await expect(page.getByText("No holdings yet")).toBeVisible();
   await expect(page.getByText("Your holdings are deleted.")).toBeVisible();
   await sane(page, errors);
@@ -375,7 +375,7 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   if (info.project.name === "phone") await touchable(page);
   // the keyboard: down to Reliance, Enter picks it and fills the NSE symbol
   const at = options.findIndex((t) => /Reliance/.test(t));
-  for (let i = 0; i <= at; i++) await box.press("ArrowDown");
+  for (let i = 0; i < at; i++) await box.press("ArrowDown");
   await expect(reliance).toHaveAttribute("aria-selected", "true");
   await box.press("Enter");
   await expect(box).toHaveValue("RELIANCE");
@@ -393,11 +393,10 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   const apple = list.getByRole("option", { name: /Apple Inc/ });
   await expect(apple).toBeVisible();
   await expect(apple.getByText("US", { exact: true })).toBeVisible();
-  await us.press("ArrowDown");
   await us.press("Enter");
   await expect(us).toHaveValue("AAPL");
   await page.getByLabel("Quantity").fill("3");
-  await page.getByLabel("Average price ($, optional)").fill("150");
+  await page.getByLabel(/Average price/).fill("150");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("AAPL added.")).toBeVisible({ timeout: 30_000 });
   await expect(table.getByText("AAPL", { exact: true })).toBeVisible();
@@ -442,9 +441,9 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   const sales = page.getByRole("table", { name: "Realised sales" });
   await expect(sales.getByText("RELIANCE").first()).toBeVisible();
   await expect(sales.getByText("grandfathered")).toBeVisible();                                   // WIPRO, from the tax P&L
-  await expect(sales.getByRole("cell", { name: "Bought", exact: true })).toHaveCount(0);
+  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(0);
   await page.getByTestId("cols-tax-sales").click();
-  await expect(sales.getByRole("cell", { name: "Bought", exact: true })).toBeVisible();
+  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toBeVisible();
   await expect(page.getByRole("table", { name: "Open lots below cost" }).getByText("TCS")).toBeVisible();
   await expect(page.getByText("Shares held on 31 Jan 2018")).toBeVisible();
   await page.getByRole("button", { name: "What is tax-loss harvesting?" }).click();
@@ -463,8 +462,8 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   await page.getByRole("button", { name: "Download PDF summary" }).click();
   expect((await pdf).suggestedFilename()).toBe("stratlab-tax-FY-2024-25.pdf");
 
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete my tax data" }).click();
+  await page.getByRole("dialog", { name: "Delete my tax data?" }).getByRole("button", { name: "Delete my tax data" }).click();
   await expect(page.getByText("Your tax data is deleted.")).toBeVisible();
   await expect(page.getByText("No trades yet")).toBeVisible();
 });
@@ -1461,8 +1460,8 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
 
   await page.goto("/money/mutual-funds");
   await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete my mutual fund data" }).click();
+  await page.getByRole("dialog", { name: "Delete my mutual fund data?" }).getByRole("button", { name: "Delete my mutual fund data" }).click();
   await expect(page.getByText("Your mutual fund data is deleted.")).toBeVisible();
   await expect(page.getByText("No funds yet")).toBeVisible();
 });
@@ -1502,7 +1501,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   if (info.project.name === "phone") await touchable(page);
 
   // advance tax: the four dates, the amounts after TDS and a payment, and reminders
-  await page.getByRole("tab", { name: "Advance tax" }).click();
+  await page.getByRole("radio", { name: "Advance tax" }).click();
   await expect(page.getByRole("list", { name: "Due dates" }).getByRole("listitem")).toHaveCount(4);
   await expect(page.getByLabel("Tax for the year", { exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "TDS for the year" }).fill("50000");
@@ -1524,7 +1523,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await expect(page.getByRole("textbox", { name: "TDS for the year" })).toHaveValue("50000");
 
   // the long-term exemption, with the lots below cost next to it
-  await page.getByRole("tab", { name: "Long-term exemption" }).click();
+  await page.getByRole("radio", { name: "Long-term exemption" }).click();
   const ex = page.getByRole("region", { name: "Long-term exemption" });
   await expect(ex.getByText(/doesn't carry forward/)).toBeVisible();
   await expect(ex.getByLabel("Exemption used")).toBeVisible();

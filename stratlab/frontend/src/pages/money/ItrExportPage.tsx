@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { Loading } from "../../components/ui";
 import { Download } from "../../components/Icons";
 import { track } from "../../lib/analytics";
+import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+
+/* /money/itr: the year's figures from the tax report, tax tools and US stocks, laid out as the ITR-2 and ITR-3 schedules,
+ * to download as a workbook, CSV files or a PDF pack for a CA. Built from the kit (components/kit). */
 
 type Cell = string | number | null;
 type Sheet = { key: string; title: string; count: number; columns?: string[]; rows?: Cell[][]; notes?: string[] };
@@ -20,6 +23,14 @@ const FORMATS: [Format, string, string][] = [
 ];
 const fyLabel = (y: number) => `FY ${y}-${String(y + 1).slice(2)}`;
 const cell = (v: Cell) => (v == null ? "" : typeof v === "number" ? v.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : v);
+
+/** A schedule's table: the columns the server names, numbers on the right, the first column naming the row. */
+function Schedule({ t }: { t: Sheet }) {
+  const columns: Column<{ i: number; r: Cell[] }>[] = (t.columns ?? []).map((c, i) => ({
+    key: String(i), header: c, numeric: i > 0 && (t.rows ?? []).some((r) => typeof r[i] === "number"), rowHeader: i === 0, cell: (x) => cell(x.r[i] ?? null),
+  }));
+  return <DataTable label={t.title} columns={columns} rows={(t.rows ?? []).map((r, i) => ({ i, r }))} rowKey={(x) => String(x.i)} />;
+}
 
 export function ItrExportPage() {
   const { fail } = useApp();
@@ -48,75 +59,61 @@ export function ItrExportPage() {
   };
 
   return (
-    <div className="stack" style={{ gap: 24 }}>
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Money · ITR-ready export</span>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your year, laid out for the return</h1>
-        <p className="page-sub">The figures from your <Link className="link" to="/tax-report">tax report</Link>, <Link className="link" to="/money/tax-tools">tax tools</Link> and <Link className="link" to="/money/us-tax">US stocks</Link>, shaped like the ITR-2 and ITR-3 schedules: Schedule 112A scrip by scrip, Schedule CG, dividends, intraday and F&amp;O turnover, tax paid, foreign income and Schedule FA. Download them as a spreadsheet or one PDF for your CA.</p>
-      </div>
-      <div className="banner tax-note" role="note"><span><b>Not a filed return.</b> {v?.label_text ?? "Prepared by StratLab from your files to help you or your CA fill the return. This is not a filed return, and StratLab files nothing for you."} {v?.check}</span></div>
+    <div className="k-page">
+      <PageHeader eyebrow="Money · Tax" title="Your year, laid out for the return"
+        lede={<>The figures from your <Link className="link" to="/tax-report">tax report</Link>, <Link className="link" to="/money/tax-tools">tax tools</Link> and <Link className="link" to="/money/us-tax">US stocks</Link>, shaped like the ITR-2 and ITR-3 schedules, to download as a spreadsheet or one PDF for your CA.</>}
+        info="Schedule 112A scrip by scrip, Schedule CG, dividends, intraday and F&O turnover, tax paid, foreign income and Schedule FA. Only you can see these figures." infoLabel="What is in the schedules" />
+      <Notice label="Not a filed return"><b>Not a filed return.</b> {v?.label_text ?? "Prepared by StratLab from your files to help you or your CA fill the return. This is not a filed return, and StratLab files nothing for you."} {v?.check}</Notice>
 
-      <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <label className="field" style={{ minWidth: 220 }}>Financial year
-          <select value={v?.fy ?? ""} onChange={(e) => load(Number(e.target.value))} aria-label="Financial year" disabled={!v}>
-            {(v?.years ?? []).map((y) => <option key={y} value={y}>{fyLabel(y)} (AY {y + 1}-{String(y + 2).slice(2)})</option>)}
-          </select>
-        </label>
-      </div>
+      <FormGrid label="Choose the year">
+        <Field label="Financial year">{(id) => (
+          <Select id={id} value={v?.fy ?? ""} disabled={!v} onChange={(x) => load(Number(x))}
+            options={(v?.years ?? []).map((y) => ({ value: y, label: `${fyLabel(y)} (AY ${y + 1}-${String(y + 2).slice(2)})` }))} />
+        )}</Field>
+      </FormGrid>
 
-      {!v && <Loading label="Laying out your schedules" />}
+      {!v && <Card><Skeleton label="Laying out your schedules" /></Card>}
       {v && (
         <>
-          <section className="card stack" style={{ gap: 12 }}>
-            <h2 className="h2">Download for {v.label} (AY {v.ay})</h2>
-            {v.locked && <div className="banner" role="note"><span>The downloads and the full schedules are on the {v.plan} plan. Below is what each schedule would hold. <Link className="link" to="/plans">See plans</Link></span></div>}
-            <div className="itr-downloads">
+          <Card>
+            <CardHead title={`Download for ${v.label} (AY ${v.ay})`} />
+            {v.locked && <PlanNote>The downloads and the full schedules are on the {v.plan} plan. Below is what each schedule would hold.</PlanNote>}
+            <div className="k-downloads">
               {FORMATS.map(([f, label, hint]) => (
-                <button key={f} className={`btn${f === "pdf" ? "" : " quiet"}`} disabled={v.locked || !!getting} onClick={() => download(f)}>
-                  <Download size={16} /><span className="stack" style={{ gap: 0, alignItems: "flex-start", textAlign: "left" }}>
-                    <span>{getting === f ? "Making it…" : label}</span><span className="tiny" style={{ opacity: 0.75, fontWeight: 400 }}>{hint}</span></span>
+                <button key={f} type="button" className={`btn${f === "pdf" ? "" : " quiet"}`} disabled={v.locked || !!getting} onClick={() => download(f)}>
+                  <Download size={16} /><span>{getting === f ? "Making it…" : label}<small>{hint}</small></span>
                 </button>
               ))}
             </div>
-            <dl className="itr-summary" aria-label="Summary">
-              {v.summary.map((s) => <div key={s.label}><dt className="tiny muted">{s.label}</dt><dd className="num">{s.value}</dd></div>)}
-            </dl>
-          </section>
+            <StatRow>{v.summary.map((s) => <Stat key={s.label} label={s.label} value={s.value} />)}</StatRow>
+          </Card>
 
-          <section className="stack" style={{ gap: 12 }} aria-label="Schedules">
+          <section className="k-page" aria-label="Schedules">
             {v.tables.map((t) => (
-              <div key={t.key} className="card stack" style={{ gap: 10 }}>
-                <button className="spread itr-head" aria-expanded={open === t.key} onClick={() => setOpen(open === t.key ? null : t.key)}>
-                  <span className="h2" style={{ textAlign: "left" }}>{t.title}</span>
-                  <span className="tiny muted">{t.count ? `${t.count} line${t.count === 1 ? "" : "s"}` : "nothing this year"}</span>
+              <Card key={t.key}>
+                <button type="button" className="k-fold" aria-expanded={open === t.key} onClick={() => setOpen(open === t.key ? null : t.key)}>
+                  <span className="k-card-title">{t.title}</span>
+                  <span className="k-note">{t.count ? `${t.count} line${t.count === 1 ? "" : "s"}` : "nothing this year"}</span>
                 </button>
                 {open === t.key && !v.locked && t.columns && (
                   <>
-                    {t.rows && t.rows.length > 0 ? (
-                      <div className="table-wrap">
-                        <table aria-label={t.title}>
-                          <thead><tr>{t.columns.map((c, i) => <th key={i} style={i === 0 ? { textAlign: "left" } : undefined}>{c}</th>)}</tr></thead>
-                          <tbody>{t.rows.map((r, i) => (
-                            <tr key={i}>{r.map((x, j) => <td key={j} className={typeof x === "number" ? "num" : undefined} style={j === 0 ? { textAlign: "left" } : undefined}>{cell(x)}</td>)}</tr>
-                          ))}</tbody>
-                        </table>
-                      </div>
-                    ) : <p className="small muted" style={{ margin: 0 }}>Nothing to report in {v.label} from your files.</p>}
-                    {!!t.notes?.length && <ul className="small muted" style={{ margin: 0, paddingLeft: 20 }}>{t.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+                    {t.rows && t.rows.length > 0 ? <Schedule t={t} />
+                      : <EmptyState title={`Nothing to report in ${v.label}`}>Nothing in this schedule from your files for the year. Upload trades on the <Link className="link" to="/tax-report">tax report</Link> to fill it.</EmptyState>}
+                    {!!t.notes?.length && <ul className="k-list muted">{t.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
                   </>
                 )}
-                {open === t.key && v.locked && <p className="small muted" style={{ margin: 0 }}>The full table is on the {v.plan} plan.</p>}
-              </div>
+                {open === t.key && v.locked && <p className="k-small k-muted">The full table is on the {v.plan} plan.</p>}
+              </Card>
             ))}
           </section>
 
-          <section className="card stack" style={{ gap: 10 }}>
-            <h2 className="h2">Where the figures come from</h2>
-            <ul className="small" style={{ margin: 0, paddingLeft: 20 }} aria-label="Sources">{v.sources.map((s, i) => <li key={i}>{s}</li>)}</ul>
-            <h3 className="small" style={{ margin: "6px 0 0" }}>Assumptions</h3>
-            <ul className="small muted" style={{ margin: 0, paddingLeft: 20 }}>{v.assumptions.map((s, i) => <li key={i}>{s}</li>)}</ul>
-            <p className="tiny muted" style={{ margin: 0 }}>StratLab doesn't file returns: filing on someone's behalf needs registration as an e-return intermediary with the Income Tax Department. Upload or type these figures into the return yourself, or hand the pack to your CA.</p>
-          </section>
+          <Card>
+            <CardHead title="Where the figures come from" />
+            <ul className="k-list" aria-label="Sources">{v.sources.map((s, i) => <li key={i}>{s}</li>)}</ul>
+            <h3 className="k-sub">Assumptions</h3>
+            <ul className="k-list muted">{v.assumptions.map((s, i) => <li key={i}>{s}</li>)}</ul>
+            <p className="k-note">StratLab doesn't file returns: filing on someone's behalf needs registration as an e-return intermediary with the Income Tax Department. Upload or type these figures into the return yourself, or hand the pack to your CA.</p>
+          </Card>
         </>
       )}
     </div>

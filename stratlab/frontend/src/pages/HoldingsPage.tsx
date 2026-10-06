@@ -1,16 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, dateOnly, money, pct, price, qty as qtyText, safeHref, signClass } from "../lib/format";
-import { AsOf, Empty, Loading, Modal } from "../components/ui";
-import { Trash, Upload } from "../components/Icons";
+import { ago, dateOnly, inr, money, pct, price, qty as qtyText, safeHref, signTone } from "../lib/format";
+import { Modal } from "../components/ui";
+import { Trash } from "../components/Icons";
 import { track } from "../lib/analytics";
-import { HoldingsActionsPanel } from "../components/CorpActions";
+import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
-import { CompanyCombobox } from "../components/CompanyCombobox";
 import { useMoreColumns } from "../components/MoreColumns";
+import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Seg, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
+
+/* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
+ * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
+ * (components/kit), amounts from lib/format. */
 
 type Row = {
   symbol: string; exchange: string; name: string; sector: string; qty: number; avg: number | null; price: number | null;
@@ -36,18 +40,16 @@ type ImportReply = { broker: string; imported: number; saved: boolean; unmatched
 
 const MAX_MB = 2;
 const BROKERS = "Zerodha (Console or Kite), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
-const inr = (v: number | null | undefined) => money(v, "INR", 0);
 const usd = (v: number | null | undefined) => money(v, "USD", 0);
 const isUS = (r: Row) => r.market === "US";
+const cur = (r: Row) => r.currency ?? "INR";
+const tone = (v: number | null | undefined) => { const t = signTone(v); return t ? `k-${t}` : undefined; };
 
-function Trend({ f }: { f?: Facts }) {
-  if (!f || f.stage == null) return <span className="muted">–</span>;
-  return <>Stage {f.stage} · ST {f.st_up ? "up" : "down"}</>;
-}
+const Trend = ({ f }: { f?: Facts }) => (!f || f.stage == null ? <span className="k-muted">–</span> : <>Stage {f.stage} · ST {f.st_up ? "up" : "down"}</>);
 
 function FilingsCell({ f, allowed, plan }: { f?: Facts; allowed: boolean; plan?: string }) {
-  if (!allowed) return <span className="muted">{plan ?? "Basic"}</span>;
-  if (!f || f.red == null) return <span className="muted">–</span>;
+  if (!allowed) return <span className="k-muted">{plan ?? "Basic"}</span>;
+  if (!f || f.red == null) return <span className="k-muted">–</span>;
   if (f.red) return <span>{f.red} red flag{f.red === 1 ? "" : "s"}</span>;
   return <>{f.amber ? `${f.amber} to look at` : "No red flags"}</>;
 }
@@ -55,14 +57,17 @@ function FilingsCell({ f, allowed, plan }: { f?: Facts; allowed: boolean; plan?:
 export function HoldingsPage() {
   const { fail, notify } = useApp();
   const [view, setView] = useState<View | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactsReply | null>(null);
   const more = useMoreColumns("holdings", 6);     // price detail, sector, trend and filings: one click away, so the table fits a laptop
   const [mode, setMode] = useState<"replace" | "add">("replace");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
   const [edit, setEdit] = useState<Row | null>(null);
+  const [asking, setAsking] = useState(false);
   const [add, setAdd] = useState<{ symbol: string; qty: string; avg: string; market: Mkt }>({ symbol: "", qty: "", avg: "", market: "IN" });
-  const file = useRef<HTMLInputElement>(null);
+  const [picked, setPicked] = useState("");        // the symbol picked from the suggestions (what the box shows until you type)
+  const [boxes, setBoxes] = useState(0);           // a new number empties the stock box
 
   const loadFacts = useCallback((v: View) => {
     setFacts(null);
@@ -70,11 +75,16 @@ export function HoldingsPage() {
   }, []);
   const [actionsAt, setActionsAt] = useState(0);         // reload the corporate actions whenever the holdings change
   const show = useCallback((v: View) => { setView(v); loadFacts(v); setActionsAt((n) => n + 1); }, [loadFacts]);
-  useEffect(() => { api<View>("/holdings").then(show).catch(fail); }, [show, fail]);
+  const load = useCallback(() => {
+    setError(null);
+    api<View>("/holdings").then(show).catch((e) => { setError(e instanceof Error ? e.message : "Your holdings couldn't be read."); fail(e); });
+  }, [show, fail]);
+  useEffect(() => { load(); }, [load]);
 
-  const pick = async (f: File | undefined) => {
+  const pick = async (files: FileList | null, reset: () => void) => {
+    const f = files?.[0];
     if (!f) return;
-    if (f.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); return; }
+    if (f.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); reset(); return; }
     setBusy(true);
     try {
       const data = await dataUrl(f);
@@ -84,7 +94,7 @@ export function HoldingsPage() {
       show(r.holdings);
     } catch (e) { fail(e); } finally {
       setBusy(false);
-      if (file.current) file.current.value = "";
+      reset();
     }
   };
 
@@ -104,215 +114,180 @@ export function HoldingsPage() {
   const addOne = async () => {
     const q = Number(add.qty), a = add.avg.trim() ? Number(add.avg) : null;
     if (!add.symbol.trim() || !(q > 0) || (a != null && !(a >= 0))) { notify("Enter the symbol, a quantity above 0 and, if you like, the average price."); return; }
-    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`)) setAdd({ symbol: "", qty: "", avg: "", market: add.market });
+    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`)) {
+      setAdd({ symbol: "", qty: "", avg: "", market: add.market }); setPicked(""); setBoxes((n) => n + 1);
+    }
   };
 
-  const remove = () => {
-    if (!confirm("Delete my holdings? Every saved position is removed from StratLab. Your broker account isn't touched.")) return;
-    api("/holdings", { method: "DELETE" }).then(() => {
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api("/holdings", { method: "DELETE" });
       setResult(null); setFacts(null);
-      return api<View>("/holdings").then(setView);
-    }).then(() => notify("Your holdings are deleted.")).catch(fail);
+      setView(await api<View>("/holdings"));
+      notify("Your holdings are deleted.");
+    } catch (e) { fail(e); } finally { setBusy(false); setAsking(false); }
   };
 
   const rows = view?.rows ?? [];
   const t = view?.totals;
   const withFilings = facts ? rows.filter((r) => (facts.rows[r.symbol]?.recent.length ?? 0) > 0) : [];
 
-  return (
-    <div className="stack" style={{ gap: 24 }}>
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">My Holdings</span>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your stocks, at today's prices</h1>
-        <p className="page-sub">Upload your broker's holdings file to see each stock's value, gain or loss and sector mix: facts, not advice. Only you can see it.</p>
-      </div>
+  const cols: Column<Row>[] = [
+    { key: "stock", header: "Stock", rowHeader: true, cell: (r) => (
+      <>
+        {r.kind && r.kind !== "stock" ? <b>{r.symbol}</b> : <Link className="link" to={`/research/${isUS(r) ? "US" : "IN"}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>}
+        {r.exchange === "BSE" && <span className="k-note"> BSE</span>}{isUS(r) && <span className="k-note"> US</span>}
+        {r.kind_label && <> <span className={`badge kind-${r.kind}`} title="Instrument type">{r.kind_label}</span></>}
+        <div className="k-note k-clip">{r.name}</div>
+        {!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} />}
+      </>) },
+    { key: "value", header: "Value", numeric: true, cell: (r) => money(r.value ?? r.invested, cur(r), 0) },
+    { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null ? "–" : <span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}<span className="k-sub-line">{pct(r.pnl_pct)}</span></span>) },
+    { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <span className={tone(r.day)}>{money(r.day, cur(r), 0)}<span className="k-sub-line">{pct(r.day_pct, 2)}</span></span>) },
+    { key: "weight", header: "Weight", numeric: true, cell: (r) => (r.weight == null ? "–" : `${r.weight.toFixed(1)}%`) },
+    { key: "qty", header: "Qty", numeric: true, cell: (r) => qtyText(r.qty) },
+    ...(more.on ? [
+      { key: "avg", header: "Avg. price", numeric: true, cell: (r: Row) => price(r.avg, cur(r)) },
+      { key: "price", header: "Price", numeric: true, cell: (r: Row) => price(r.price, cur(r)) },
+      { key: "sector", header: "Sector", cell: (r: Row) => r.sector },
+      { key: "trend", header: "Trend", cell: (r: Row) => <Trend f={facts?.rows[r.symbol]} /> },
+      { key: "filings", header: "Filings, 3 months", cell: (r: Row) => <FilingsCell f={facts?.rows[r.symbol]} allowed={facts?.filings !== false} plan={facts?.filings_plan} /> },
+      { key: "results", header: "Results meeting", cell: (r: Row) => { const f = facts?.rows[r.symbol]; return f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="k-muted">–</span>; } },
+    ] : []),
+    { key: "edit", header: "", action: true, cell: (r) => <button type="button" className="btn quiet sm" onClick={() => setEdit(r)} aria-label={`Edit ${r.symbol}`}>Edit</button> },
+  ];
+  const unmatchedCols: Column<Unmatched & { i: number }>[] = [
+    { key: "line", header: "Line", rowHeader: true, cell: (u) => u.line ?? "–" },
+    { key: "text", header: "What the file says", cell: (u) => u.text || "–" },
+    { key: "why", header: "Why", wrap: true, cell: (u) => <span className="k-muted">{u.reason}</span> },
+  ];
 
-      <section className="card stack" style={{ gap: 14 }}>
-        <div className="stack" style={{ gap: 4 }}>
-          <h2 className="h2">Import from your broker</h2>
-          <p className="small muted" style={{ margin: 0 }}>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here. Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price.</p>
-        </div>
-        <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <label className={`btn${busy ? " disabled" : ""}`} style={{ cursor: busy ? "wait" : "pointer" }}>
-            <Upload size={18} />{busy ? "Reading…" : "Upload holdings file"}
-            <input ref={file} type="file" accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden disabled={busy}
-              onChange={(e) => pick(e.target.files?.[0])} aria-label="Holdings file" />
-          </label>
-          {rows.length > 0 && (
-            <div className="seg" role="radiogroup" aria-label="What the file does">
-              <button role="radio" aria-checked={mode === "replace"} aria-pressed={mode === "replace"} onClick={() => setMode("replace")}>Replace my holdings</button>
-              <button role="radio" aria-checked={mode === "add"} aria-pressed={mode === "add"} onClick={() => setMode("add")}>Add to them</button>
-            </div>
-          )}
+  return (
+    <div className="k-page">
+      <PageHeader eyebrow="Money · What you own" title="Your stocks, at today's prices" asOf={view?.prices_at} asOfLabel="Prices as of"
+        lede="Your broker's holdings file, valued at today's prices: each stock's value, gain or loss, and your sector mix."
+        info="Facts, not advice. Only you can see your holdings." infoLabel="About this page" />
+
+      <Card>
+        <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here. Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price.</>}
+          actions={rows.length > 0 ? <Seg label="What the file does" options={[{ value: "replace", label: "Replace my holdings" }, { value: "add", label: "Add to them" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
+        <div className="k-row">
+          <UploadButton label="Upload holdings file" busy={busy} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
+          <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
         </div>
         {result && (
-          <div className="stack" style={{ gap: 8 }} role="status">
-            <p className="small" style={{ margin: 0 }}>
+          <div className="k-stack" role="status">
+            <p className="k-small">
               <b>{result.broker === "CSV" ? "Read as a CSV file" : `Read as a ${result.broker} file`}:</b>{" "}
               {result.saved ? `${result.imported} stock${result.imported === 1 ? "" : "s"} saved.` : "nothing matched, so your saved holdings are unchanged."}
               {result.unmatched_count > 0 && ` ${result.unmatched_count} line${result.unmatched_count === 1 ? "" : "s"} couldn't be matched (below).`}
             </p>
             {result.over_limit.length > 0 && (
-              <p className="small" style={{ margin: 0 }}>Your plan keeps {result.limit} stocks, so {result.over_limit.length} were left out: {result.over_limit.slice(0, 12).join(", ")}{result.over_limit.length > 12 ? "…" : ""}. <Link className="link" to="/plans">See plans</Link></p>
+              <p className="k-small">Your plan keeps {result.limit} stocks, so {result.over_limit.length} were left out: {result.over_limit.slice(0, 12).join(", ")}{result.over_limit.length > 12 ? "…" : ""}. <Link className="link" to="/plans">See plans</Link></p>
             )}
-            {result.unmatched.length > 0 && (
-              <div className="table-wrap" style={{ margin: 0 }}>
-                <table aria-label="Lines that couldn't be matched">
-                  <thead><tr><th>Line</th><th>What the file says</th><th style={{ textAlign: "left" }}>Why</th></tr></thead>
-                  <tbody>
-                    {result.unmatched.map((u, i) => (
-                      <tr key={i}><td className="num">{u.line ?? "–"}</td><td>{u.text || "–"}</td><td style={{ textAlign: "left", whiteSpace: "normal" }} className="small muted">{u.reason}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {result.unmatched.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>Add any of these by hand below with its NSE symbol or BSE code.</p>}
+            {result.unmatched.length > 0 && <DataTable label="Lines that couldn't be matched" columns={unmatchedCols} rows={result.unmatched.map((u, i) => ({ ...u, i }))} rowKey={(u) => String(u.i)} />}
+            {result.unmatched.length > 0 && <p className="k-note">Add any of these by hand below with its NSE symbol or BSE code.</p>}
           </div>
         )}
-      </section>
+      </Card>
 
-      {!view && <Loading label="Opening your holdings" />}
+      {!view && (error
+        ? <ErrorState title="Your holdings couldn't be read" action={{ label: "Try again", onClick: load }}>{error}</ErrorState>
+        : <Card><Skeleton label="Opening your holdings" /></Card>)}
       {view && rows.length === 0 && (
-        <Empty title="No holdings yet">
-          <p className="muted">Upload your broker's holdings file above, or add stocks one at a time below.</p>
-        </Empty>
+        <EmptyState title="No holdings yet">Upload your broker's holdings file above, or add stocks one at a time below.</EmptyState>
       )}
 
       {view && t && rows.length > 0 && (
         <>
-          <div className="stat-row">
-            <div className="stat"><span className="tiny muted">Current value</span><b className="num">{inr(t.value)}</b></div>
-            <div className="stat"><span className="tiny muted">Invested</span><b className="num">{inr(t.invested)}</b></div>
-            <div className="stat"><span className="tiny muted">Unrealised P&amp;L</span><b className={`num ${signClass(t.pnl)}`}>{t.pnl == null ? "–" : `${inr(t.pnl)} (${pct(t.pnl_pct)})`}</b></div>
-            <div className="stat"><span className="tiny muted">Today</span><b className={`num ${signClass(t.day)}`}>{t.day == null ? "–" : `${inr(t.day)} (${pct(t.day_pct, 2)})`}</b></div>
-          </div>
-          <p className="tiny muted" style={{ margin: "-12px 0 0" }}>
-            {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${view.source === "Manual" ? "your own entries" : view.source === "CSV" ? "a CSV file" : `your ${view.source} file`}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
-            {!view.prices && " · Live prices are offline right now, so values are shown at cost."}
-          </p>
-          {view.us && (
-            <p className="small" style={{ margin: 0 }} aria-label="US stocks">
-              <b>US stocks</b> ({view.us.count}): {usd(view.us.value)} · invested {usd(view.us.invested)}
-              {view.us.pnl != null && <> · <span className={signClass(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}
-              <span className="tiny muted"> · {view.us.in_total && view.usd_inr ? `in the rupee totals above at ₹${view.usd_inr.toFixed(2)} a dollar` : "not in the rupee totals above: the exchange rate isn't available right now"}
-                {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. US stocks aren't part of the tax report, which works out Indian capital gains.</span>
+          <Card>
+            <CardHead title="Where your stocks stand" />
+            <StatRow>
+              <Stat label="Current value" value={inr(t.value)} />
+              <Stat label="Invested" value={inr(t.invested)} />
+              <Stat label="Unrealised P&L" value={t.pnl == null ? "–" : inr(t.pnl)} tone={signTone(t.pnl)} delta={t.pnl == null ? undefined : <Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>} />
+              <Stat label="Today" value={t.day == null ? "–" : inr(t.day)} tone={signTone(t.day)} delta={t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta>} />
+            </StatRow>
+            <p className="k-note">
+              {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${view.source === "Manual" ? "your own entries" : view.source === "CSV" ? "a CSV file" : `your ${view.source} file`}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
+              {!view.prices && " · Live prices are offline right now, so values are shown at cost."}
             </p>
-          )}
-          <AsOf parts={[["Prices", view.prices_at]]} />
+            {view.us && (
+              <p className="k-small" aria-label="US stocks">
+                <b>US stocks</b> ({view.us.count}): {usd(view.us.value)} · invested {usd(view.us.invested)}
+                {view.us.pnl != null && <> · <span className={tone(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}
+                <span className="k-note"> · {view.us.in_total && view.usd_inr ? `in the rupee totals above at ₹${view.usd_inr.toFixed(2)} a dollar` : "not in the rupee totals above: the exchange rate isn't available right now"}
+                  {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. US stocks aren't part of the tax report, which works out Indian capital gains.</span>
+              </p>
+            )}
+          </Card>
           <HoldingsActionsPanel<View> version={actionsAt} onHoldings={setView} />
 
-          <section className="card stack" style={{ gap: 12 }}>
-            <h2 className="h2">By sector</h2>
-            <div className="stack" style={{ gap: 10 }}>
-              {view.allocation.map((a) => (
-                <div key={a.sector} className="seg-row">
-                  <div className="spread small" style={{ gap: 10 }}><span>{a.sector} <span className="muted tiny">· {a.count} stock{a.count === 1 ? "" : "s"}</span></span><span className="num">{a.pct == null ? "–" : `${a.pct.toFixed(1)}%`}</span></div>
-                  <div className="seg-bar"><i style={{ width: `${Math.max(1, Math.min(100, a.pct ?? 0))}%` }} /></div>
-                </div>
-              ))}
-            </div>
-            <p className="tiny muted" style={{ margin: 0 }}>Share of the current value, by the exchange's sector for each company.</p>
-          </section>
+          <Card>
+            <CardHead title="By sector" />
+            <BarList label="Holdings by sector" footnote="Share of the current value, by the exchange's sector for each company."
+              rows={view.allocation.map((a) => ({ key: a.sector, name: a.sector, note: `${a.count} stock${a.count === 1 ? "" : "s"}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
+          </Card>
 
-          <section className="card stack" style={{ gap: 12 }}>
-            <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
-              <h2 className="h2">Positions</h2>
-              <span className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                {!facts && <span className="tiny muted">Checking each stock's trend and filings…</span>}
-                {more.toggle}
-              </span>
-            </div>
-            <div className="table-wrap">
-              <table aria-label="Positions">
-                <thead>
-                  <tr><th>Stock</th><th>Value</th><th>Unrealised P&amp;L</th><th>Today</th><th>Weight</th><th>Qty</th>
-                    {more.on && <><th>Avg. price</th><th>Price</th><th style={{ textAlign: "left" }}>Sector</th>
-                      <th style={{ textAlign: "left" }}>Trend</th><th style={{ textAlign: "left" }}>Filings, 3 months</th><th style={{ textAlign: "left" }}>Results meeting</th></>}<th /></tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const f = facts?.rows[r.symbol];
-                    return (
-                      <tr key={`${r.exchange}:${r.symbol}`}>
-                        <td>{r.kind && r.kind !== "stock" ? <b>{r.symbol}</b> : <Link className="link" to={`/research/${isUS(r) ? "US" : "IN"}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>}{r.exchange === "BSE" && <span className="tiny muted"> BSE</span>}{isUS(r) && <span className="tiny muted"> US</span>}{r.kind_label && <> <span className={`badge kind-${r.kind}`} title="Instrument type">{r.kind_label}</span></>}<div className="tiny muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>{!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} />}</td>
-                        <td className="num">{money(r.value ?? r.invested, r.currency ?? "INR", 0)}</td>
-                        <td className={`num ${signClass(r.pnl)}`}>{r.pnl == null ? "–" : <>{money(r.pnl, r.currency ?? "INR", 0)} <span className="tiny">{pct(r.pnl_pct)}</span></>}</td>
-                        <td className={`num ${signClass(r.day)}`}>{r.day == null ? "–" : <>{money(r.day, r.currency ?? "INR", 0)} <span className="tiny">{pct(r.day_pct, 2)}</span></>}</td>
-                        <td className="num">{r.weight == null ? "–" : `${r.weight.toFixed(1)}%`}</td>
-                        <td className="num">{qtyText(r.qty)}</td>
-                        {more.on && <>
-                          <td className="num">{price(r.avg, r.currency ?? "INR")}</td>
-                          <td className="num">{price(r.price, r.currency ?? "INR")}</td>
-                          <td className="small" style={{ textAlign: "left" }}>{r.sector}</td>
-                          <td style={{ textAlign: "left" }} className="small"><Trend f={f} /></td>
-                          <td style={{ textAlign: "left" }} className="small"><FilingsCell f={f} allowed={facts?.filings !== false} plan={facts?.filings_plan} /></td>
-                          <td style={{ textAlign: "left" }} className="small">{f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="muted">–</span>}</td>
-                        </>}
-                        <td><button className="btn quiet sm" onClick={() => setEdit(r)} aria-label={`Edit ${r.symbol}`}>Edit</button></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-          {facts && facts.count > facts.checked && <p className="tiny muted" style={{ margin: "-12px 0 0" }}>Trend and filings are shown for the {facts.checked} largest positions.</p>}
-          {facts && !facts.filings && (
-            <div className="banner"><span>Red flags, recent filings and results dates come from the filings feature on the {facts.filings_plan} plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>
-          )}
+          <Card>
+            <CardHead title="Positions" actions={<>
+              {!facts && <span className="k-note">Checking each stock's trend and filings…</span>}
+              {more.toggle}
+            </>} />
+            <DataTable label="Positions" columns={cols} rows={rows} rowKey={(r) => `${r.exchange}:${r.symbol}`} />
+            {facts && facts.count > facts.checked && <p className="k-note">Trend and filings are shown for the {facts.checked} largest positions.</p>}
+            {facts && !facts.filings && <PlanNote>Red flags, recent filings and results dates come from the filings feature on the {facts.filings_plan} plan.</PlanNote>}
+          </Card>
 
           {withFilings.length > 0 && (
-            <section className="card stack" style={{ gap: 12 }}>
-              <h2 className="h2">Recent filings</h2>
-              <div className="stack" style={{ gap: 14 }}>
+            <Card>
+              <CardHead title="Recent filings" info={<>From the companies' own exchange filings, sorted by fixed rules you can read on the <Link className="link" to="/research/filings">Red flags</Link> page.</>} />
+              <div className="k-stack">
                 {withFilings.map((r) => {
                   const f = facts!.rows[r.symbol];
                   return (
-                    <div key={r.symbol} className="stack" style={{ gap: 6 }}>
-                      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}><b>{r.symbol}</b>{f.flags.length > 0 && <span className="tiny muted">Last 3 months: {f.flags.join(" · ")}</span>}</div>
+                    <div key={r.symbol} className="k-stack">
+                      <div className="k-row"><b>{r.symbol}</b>{f.flags.length > 0 && <span className="k-note">Last 3 months: {f.flags.join(" · ")}</span>}</div>
                       {f.recent.map((x, i) => (
-                        <div key={i} className="small" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
-                          <span className="mono tiny muted">{dateOnly(x.at)}</span>
-                          <span className="badge fact">{x.label}</span>
-                          {x.url ? <a className="link" href={safeHref(x.url)} target="_blank" rel="noreferrer" style={{ minWidth: 0, overflowWrap: "anywhere" }}>{x.subject || "Filing"}</a> : <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{x.subject}</span>}
+                        <div key={i} className="k-row top k-small">
+                          <span className="k-note">{dateOnly(x.at)}</span>
+                          <Badge dot={false}>{x.label}</Badge>
+                          {x.url ? <a className="link k-any" href={safeHref(x.url)} target="_blank" rel="noreferrer">{x.subject || "Filing"}</a> : <span className="k-any">{x.subject}</span>}
                         </div>
                       ))}
                     </div>
                   );
                 })}
               </div>
-              <p className="tiny muted" style={{ margin: 0 }}>From the companies' own exchange filings, sorted by fixed rules you can read on the <Link className="link" to="/research/filings">Red flags</Link> page.</p>
-            </section>
+            </Card>
           )}
         </>
       )}
 
       {view && (
-        <section className="card stack" style={{ gap: 12 }}>
-          <h2 className="h2">Add a stock by hand</h2>
-          <div className="seg" role="radiogroup" aria-label="Where it's listed" style={{ alignSelf: "flex-start" }}>
-            {(["IN", "US"] as Mkt[]).map((m) => (
-              <button key={m} role="radio" aria-checked={add.market === m} aria-pressed={add.market === m}
-                onClick={() => setAdd({ ...add, market: m, symbol: add.market === m ? add.symbol : "" })}>{m === "IN" ? "India (NSE/BSE)" : "United States"}</button>
-            ))}
-          </div>
-          <div className="holdings-add">
-            <CompanyCombobox label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} market={add.market} value={add.symbol}
-              placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
-              onChange={(t) => setAdd((x) => ({ ...x, symbol: t }))} onPick={(s) => setAdd((x) => ({ ...x, symbol: s.id, market: s.market }))} onEnter={addOne} />
-            <label className="field">Quantity<input value={add.qty} inputMode="decimal" placeholder="10" onChange={(e) => setAdd({ ...add, qty: e.target.value })} /></label>
-            <label className="field">Average price ({add.market === "US" ? "$" : "₹"}, optional)<input value={add.avg} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} onChange={(e) => setAdd({ ...add, avg: e.target.value.replace(/,/g, "") })} /></label>
-            <button className="btn" disabled={busy} onClick={addOne}>Add</button>
-          </div>
-          {add.market === "US" && <p className="tiny muted" style={{ margin: 0 }}>US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. They aren't part of the tax report.</p>}
-        </section>
+        <Card>
+          <CardHead title="Add a stock by hand" actions={
+            <Seg label="Where it's listed" options={[{ value: "IN", label: "India (NSE/BSE)" }, { value: "US", label: "United States" }]} value={add.market}
+              onChange={(m) => { setAdd({ ...add, market: m as Mkt, symbol: add.market === m ? add.symbol : "" }); if (add.market !== m) { setPicked(""); setBoxes((n) => n + 1); } }} />} />
+          <FormGrid onSubmit={(e) => { e.preventDefault(); void addOne(); }}>
+            <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol.">
+              {(id) => <StockPicker key={`${add.market}-${boxes}`} id={id} market={add.market} value={picked} placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
+                onText={(text) => setAdd((x) => ({ ...x, symbol: text }))} onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); }} />}
+            </Field>
+            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} onChange={(e) => setAdd({ ...add, qty: e.target.value })} />
+            <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg}
+              onChange={(e) => setAdd({ ...add, avg: e.target.value.replace(/,/g, "") })} />
+            <FormActions><button type="submit" className="btn" disabled={busy}>Add</button></FormActions>
+          </FormGrid>
+          {add.market === "US" && <p className="k-note">US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. They aren't part of the tax report.</p>}
+        </Card>
       )}
 
       {view && rows.length > 0 && (
-        <section className="stack" style={{ gap: 8 }}>
-          <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Your holdings are stored with your account only, used for this page and your My Stocks newsletter, and never shared. Values use the latest prices; P&amp;L is before charges and taxes. Nothing here is investment advice.</p>
-          <button className="btn danger" style={{ alignSelf: "flex-start" }} onClick={remove}><Trash size={16} />Delete my holdings</button>
+        <section className="k-stack">
+          <p className="k-note">Your holdings are stored with your account only, used for this page and your My Stocks newsletter, and never shared. Values use the latest prices; P&amp;L is before charges and taxes. Nothing here is investment advice.</p>
+          <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my holdings</button>
         </section>
       )}
 
@@ -321,6 +296,7 @@ export function HoldingsPage() {
           onSave={async (q, a) => { if (await save(current().map((x) => (same(x, edit) ? { ...x, qty: q, avg: a } : x)), `${edit.symbol} updated.`)) setEdit(null); }}
           onRemove={async () => { if (await save(current().filter((x) => !same(x, edit)), `${edit.symbol} removed.`)) setEdit(null); }} />
       )}
+      {asking && <ConfirmDialog title="Delete my holdings?" confirmLabel="Delete my holdings" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every saved position is removed from StratLab. Your broker account isn't touched.</ConfirmDialog>}
     </div>
   );
 }
@@ -332,14 +308,14 @@ function EditHolding({ row, busy, onClose, onSave, onRemove }: { row: Row; busy:
   const ok = qn > 0 && (an == null || an >= 0);
   return (
     <Modal title={`Edit ${row.symbol}`} onClose={onClose}>
-      <div className="stack" style={{ gap: 14 }}>
-        <label className="field">Quantity<input value={q} inputMode="decimal" onChange={(e) => setQ(e.target.value)} /></label>
-        <label className="field">Average price ({row.market === "US" ? "$" : "₹"}, optional)<input value={a} inputMode="decimal" onChange={(e) => setA(e.target.value.replace(/,/g, ""))} /></label>
-        <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-          <button className="btn" disabled={busy || !ok} onClick={() => onSave(qn, an)}>Save</button>
-          <button className="btn danger" disabled={busy} onClick={onRemove}><Trash size={16} />Remove from holdings</button>
-        </div>
-      </div>
+      <FormGrid onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(qn, an); }}>
+        <Field label="Quantity" inputMode="decimal" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} onChange={(e) => setA(e.target.value.replace(/,/g, ""))} />
+        <FormActions>
+          <button type="submit" className="btn" disabled={busy || !ok}>Save</button>
+          <button type="button" className="btn danger" disabled={busy} onClick={onRemove}><Trash size={16} />Remove from holdings</button>
+        </FormActions>
+      </FormGrid>
     </Modal>
   );
 }

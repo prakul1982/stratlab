@@ -125,7 +125,7 @@ test("spaces: a deep link opens its own space, without changing the account's ch
   await request.put(`${API}/me/prefs`, { headers: auth(u), data: { level: "some", focus: "invest" } });
   const errors = await signIn(page, u, "/");
   await expect(page).toHaveURL(/\/invest$/, { timeout: 30_000 });
-  for (const [path, ready, name] of [["/holdings", "My Holdings", "Money"], ["/tax-report", "Capital gains on your shares", "Money"], ["/options", "Options", "Trade"],
+  for (const [path, ready, name] of [["/holdings", "Your stocks, at today", "Money"], ["/tax-report", "Capital gains on your shares", "Money"], ["/options", "Options", "Trade"],
     ["/library", "librar", "Trade"], ["/research/IN/TCS", "TCS", "Invest"], ["/alerts", "Your stock alerts", "Invest"], ["/account", "Account", "Invest"]] as const) {
     await page.goto(path);
     await expect(page.locator("main").getByText(ready).first()).toBeVisible({ timeout: 30_000 });

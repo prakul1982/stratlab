@@ -88,7 +88,7 @@ test("loan check: a repo-linked loan against repo + spread, each change's effect
   // the loan form asks the floating-rate questions only for a floating loan
   await page.getByRole("button", { name: /^Edit Home loan/ }).click();
   await expect(page.getByLabel("Rate type")).toHaveValue("repo");
-  await expect(page.getByLabel("Rate on your latest statement (% a year, optional)")).toHaveValue("7.65");
+  await expect(page.getByLabel(/Rate on your latest statement/)).toHaveValue("7.65");
   await page.getByLabel("Rate type").selectOption("fixed");
-  await expect(page.getByLabel("Rate on your latest statement (% a year, optional)")).toHaveCount(0);
+  await expect(page.getByLabel(/Rate on your latest statement/)).toHaveCount(0);
 });
