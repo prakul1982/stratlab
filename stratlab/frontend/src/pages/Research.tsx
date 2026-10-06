@@ -10,7 +10,7 @@ import {
 } from "../lib/research";
 import {
   AIRead, Change, CompanySearch, EarningsBars, MarginCascade, MetricsGrid, NewsList, Panel, PriceChart,
-  QuarterTable, QuoteGrid, Rail52, ResearchNav, Shareholding, SourcesNote, StarButton, TrendBars,
+  QuarterTable, QuoteGrid, Rail52, RegionSwitch, Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
 import { preloadPriceChart } from "../charts/price/lazy";
 import { loadSurveillance } from "../lib/surveillance";
@@ -30,6 +30,7 @@ import { FilingRow, FilingsPanel, SummaryLine, type FilingItem, type FilingSumma
 import { CompanyActions } from "../components/CorpActions";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 import { Earlier } from "../components/Earlier";
+import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 
 /** Hand a company (and optionally an idea) to the New notebook page. */
 function useTestOnStratLab() {
@@ -74,7 +75,7 @@ export function ResearchHome() {
   const mine = (items ?? []).filter((w) => w.region === region);
   return (
     <div className="stack" style={{ gap: 26 }}>
-      <ResearchNav region={region} setRegion={setRegion} />
+      <RegionSwitch region={region} setRegion={setRegion} />
       <Header eyebrow={`Research · ${REGION_NAME[region]}`} title="Find something worth testing"
         sub="Look up any company: price, valuation, growth, news and an AI read. When an idea looks promising, test it honestly on years of real prices in one click." />
       <div className="stack" style={{ gap: 12 }}>
@@ -128,18 +129,18 @@ export function CompanyPage() {
 
   if (error) return (
     <div className="stack" style={{ gap: 20 }}>
-      <ResearchNav region={region} />
+      <RegionSwitch region={region} />
       <div className="card stack" style={{ gap: 12 }}><h1 className="h2">Couldn't open {sym}</h1><p className="muted">{error}</p>
         <CompanySearch region={region} /></div>
     </div>
   );
-  if (!c) return <div className="stack" style={{ gap: 20 }}><ResearchNav region={region} /><Loading label={`Pulling live data for ${sym}`} /></div>;
+  if (!c) return <div className="stack" style={{ gap: 20 }}><RegionSwitch region={region} /><Loading label={`Pulling live data for ${sym}`} /></div>;
 
   const ccy = c.currency || (region === "IN" ? "INR" : "USD");
   const wiki = c.about.wiki;
   return (
     <div className="stack" style={{ gap: 22 }}>
-      <ResearchNav region={region} />
+      <RegionSwitch region={region} />
       <section className="stack" style={{ gap: 16 }}>
         <div className="spread" style={{ alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
           <div className="stack" style={{ gap: 6, minWidth: 0, flex: "1 1 320px" }}>
@@ -279,7 +280,7 @@ export function ThemesPage() {
   const coLink = (t: string) => (t ? `/research/${region}/${encodeURIComponent(t)}` : "");
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={setRegion} />
+      <RegionSwitch region={region} setRegion={setRegion} />
       <Header eyebrow={`Themes · ${REGION_NAME[region]}`} title="Map a theme, find the companies in it"
         sub="Type a sector or trend. The AI maps who's involved along the chain, from raw materials to the end customer, and lists the listed companies linked to each step." />
       <form className="row" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); go(text); }}>
@@ -378,7 +379,7 @@ export function PulsePage() {
   }, [region]);
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={setRegion} />
+      <RegionSwitch region={region} setRegion={setRegion} />
       <Header eyebrow={`Market pulse · ${REGION_NAME[region]}`} title="How the market feels today" sub="Live index levels and headlines, with an AI read of the mood, what's moving and where money is flowing." />
       <section className="card"><IndexStrip indices={data?.indices ?? null} /></section>
       <section className="card stack" style={{ gap: 12 }}>
@@ -453,7 +454,7 @@ export function ComparePage() {
   const labels = res ? Array.from(new Set([...res.a.metrics, ...res.b.metrics].flatMap((g) => g.items.map((i) => i.label)))) : [];
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={setRegion} />
+      <RegionSwitch region={region} setRegion={setRegion} />
       <Header eyebrow={`Compare · ${REGION_NAME[region]}`} title="Two companies, side by side" sub="Pick two companies to line up their numbers, with an AI summary of where they differ." />
       <div className="row wrap" style={{ gap: 16 }}><Pick k="a" v={a} /><Pick k="b" v={b} /></div>
       {error && <div className="banner">{error}</div>}
@@ -508,7 +509,7 @@ export function WatchlistPage() {
   const mine = (items ?? []).filter((w) => w.region === region);
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={setRegion} />
+      <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /><RouteSeg label="Watchlist view" views={WATCH_VIEWS} /></div>
       <Header eyebrow={`Watchlist · ${REGION_NAME[region]}`} title="Companies you're watching" sub="Press Watch on any company page to add it. Saved to your account, so it's here on every device." />
       {items === null ? <Loading label="Opening your watchlist" /> : mine.length === 0 ? (
         <div className="card stack" style={{ gap: 12 }}><p className="muted">Nothing in your {REGION_NAME[region]} watchlist yet.</p><CompanySearch region={region} /></div>
@@ -586,7 +587,7 @@ export function ScanPage() {
   const cur = sets?.sets.find((s) => s.id === setId);
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={setRegion} />
+      <RegionSwitch region={region} setRegion={setRegion} />
       <Header eyebrow={`Scan · ${REGION_NAME[region]}`} title="Stage 2 + Supertrend"
         sub="Which stocks are in Stage 2 (the price above a rising 150-day average) and have the Supertrend pointing up (a line that follows the price and flips when the trend turns). Both together are called ST S2 here. Facts from the charts, not advice." />
       {!pro && <div className="banner"><span>The Stage 2 + Supertrend scan and its alert are on the Basic plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}
@@ -699,7 +700,7 @@ export function RotationPage() {
   const few = (xs: string[], n = 5) => !xs.length ? "none" : xs.length <= n + 1 ? xs.join(", ") : `${xs.slice(0, n).join(", ")} and ${xs.length - n} more`;
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} />
+      <RegionSwitch region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} />
       <Header eyebrow={`Rotation · ${REGION_NAME[region]}`} title="Sector rotation"
         sub="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
       <div className="row wrap" style={{ gap: 10, alignItems: "center" }}>
@@ -851,7 +852,7 @@ export function ResultsPage() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={setRegion} />
+      <RegionSwitch region={region} setRegion={setRegion} />
       <Header eyebrow={`Results calendar · ${REGION_NAME[region]}`} title="Results this week and next"
         sub={region === "IN" ? "Board meetings companies have called to consider their financial results, from their filings with the exchange."
           : "The dates US companies have set for their quarterly results, and the earnings release once it's filed."} />
@@ -935,7 +936,7 @@ export function FilingsPage() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region="IN" />
+      <RegionSwitch region="IN" />
       <Header eyebrow="Red flags · India" title="Filings and red flags"
         sub="What your watchlist companies told the exchange in the last 3 months: fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades." />
       {!pro && <div className="banner"><span>Red flags for your whole watchlist, with an evening alert, are on the Basic plan. Each company's own page shows its red flags on every plan.</span><Link to="/plans" className="btn sm">See plans</Link></div>}

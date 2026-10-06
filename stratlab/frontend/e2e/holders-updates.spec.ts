@@ -90,8 +90,10 @@ test("named holders: search a name, see each company alphabetically, follow", as
   await sane(page, errors);
   await card.getByRole("button", { name: "Following · stop" }).click();
   await expect(page.getByRole("region", { name: "Holders you follow" })).toHaveCount(0);
-  // the scans' tabs lead here too
-  await expect(page.getByRole("navigation", { name: "Scans" }).getByRole("link", { name: "Named holders" })).toBeVisible();
+  // the page sits in Invest › Company news, in the breadcrumb at the top
+  const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(crumb.getByRole("link", { name: "Company news" })).toHaveAttribute("href", "/invest/g/company-news");
+  await expect(crumb.getByRole("button", { name: /Named holders/ })).toBeVisible();
   // a name nobody holds
   await page.getByLabel("Holder's name").fill("zzzz nobody");
   await page.getByRole("button", { name: "Search", exact: true }).click();

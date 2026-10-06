@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
-import { FAMILIES, familyOf, rememberView, type Family } from "../lib/navGroups";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { ago, pct, price, safeHref, signClass } from "../lib/format";
 import {
@@ -10,6 +9,7 @@ import {
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { Star } from "./Icons";
 import { Info } from "./ui";
+import { Seg } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { FoBadges } from "./FoBadges";
 import { track } from "../lib/analytics";
@@ -17,46 +17,12 @@ import { track } from "../lib/analytics";
 export { CompanySearch } from "./CompanySearch";
 
 /* ---------- navigation ---------- */
-export function ResearchNav({ region, setRegion }: { region: Region; setRegion?: (r: Region) => void }) {
-  const { pathname } = useLocation();
-  const fam = familyOf(pathname);
-  useEffect(() => rememberView(pathname), [pathname]);
-  // the scans and the two watchlist views each share one tab, with their own row of tabs below
-  const tabs: [string, string, Family | null][] = [["/research", "Companies", null], ["/research/themes", "Themes", null], ["/research/pulse", "Market pulse", null],
-    ["/research/compare", "Compare", null], [FAMILIES.watch.home, "Watchlist", "watch"], [FAMILIES.scans.home, "Scans", "scans"],
-    ["/research/results", "Results", null], ["/research/corporate-actions", "Corporate actions", null]];
-  // on a phone the tabs scroll sideways in one row: bring the open one into view
-  const bar = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const el = bar.current, on = el?.querySelector<HTMLElement>(".seg-link.on");
-    if (el && on && el.scrollWidth > el.clientWidth) el.scrollLeft = on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
-  }, []);
-  return (
-    <div className="spread research-nav" style={{ flexWrap: "wrap", gap: 12 }}>
-      <nav className="seg" aria-label="Research sections" ref={bar}>
-        {tabs.map(([to, label, f]) => (
-          <NavLink key={to} to={to} end={to === "/research"} aria-current={f && f === fam ? "page" : undefined}
-            className={({ isActive }) => `seg-link${(f ? f === fam : isActive) ? " on" : ""}`}>{label}</NavLink>
-        ))}
-      </nav>
-      {setRegion && (
-        <div className="seg" role="radiogroup" aria-label="Market">
-          {(["IN", "US"] as Region[]).map((r) => (
-            <button key={r} role="radio" aria-checked={region === r} aria-pressed={region === r} onClick={() => setRegion(r)}>
-              {r === "IN" ? "₹ India" : "$ United States"}
-            </button>
-          ))}
-        </div>
-      )}
-      {fam && (
-        <nav className="seg sub-seg" aria-label={FAMILIES[fam].label}>
-          {FAMILIES[fam].views.map(([to, label]) => (
-            <NavLink key={to} to={to} end className={({ isActive }) => `seg-link${isActive ? " on" : ""}`}>{label}</NavLink>
-          ))}
-        </nav>
-      )}
-    </div>
-  );
+/** The India / United States switch at the top of a research page. The pages of Invest no longer have a row of tabs: the
+ * breadcrumb at the top of every page and the sidebar are the menu. A page that has only one market passes no `setRegion`
+ * and shows nothing here. */
+export function RegionSwitch({ region, setRegion }: { region: Region; setRegion?: (r: Region) => void }) {
+  if (!setRegion) return null;
+  return <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />;
 }
 
 /* ---------- small pieces ---------- */

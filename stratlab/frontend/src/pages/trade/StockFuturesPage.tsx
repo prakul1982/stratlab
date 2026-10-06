@@ -1,24 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../../lib/api";
 import { dayShort, dayText, desksApi, plainPct, sharesShort, signedPct, statusText, type Buildup, type FutDetail, type FutRow, type FutTable } from "../../lib/stockDesks";
 import { ChartEmpty, LineChart } from "../../components/Charts";
 import { AlertButton } from "../../components/AlertForm";
 import { Info, Loading } from "../../components/ui";
+import { POSITIONING_VIEWS, RouteSeg } from "../../components/RouteSeg";
 
-/* /trade/positioning/stocks: the stock futures desk, a tab of Positioning. One row per F&O stock from the exchange's
+/* /trade/positioning/stocks: the stock futures desk, a view of Positioning. One row per F&O stock from the exchange's
  * evening files: price and open-interest change and the buildup words for them, OI by expiry, the share in later
  * expiries (rollover), the futures' basis (annualised) and MWPL use. Sorted and filtered by the reader; nothing is
  * ranked. Today on every plan; each stock's stored history and the MWPL alert on Basic. Facts, not advice. */
 
-/** The two Positioning tabs: the index view and the stock futures desk. */
+/** The two Positioning views: the index view and the stock futures desk, as one switch on each page. */
 export function PosTabs() {
-  return (
-    <nav className="seg sub-seg pos-tabs" aria-label="Positioning">
-      <NavLink to="/trade/positioning" end className={({ isActive }) => `seg-link${isActive ? " on" : ""}`}>Index and participants</NavLink>
-      <NavLink to="/trade/positioning/stocks" className={({ isActive }) => `seg-link${isActive ? " on" : ""}`}>Stock futures</NavLink>
-    </nav>
-  );
+  return <RouteSeg label="Positioning view" views={POSITIONING_VIEWS} />;
 }
 
 type Filter = "all" | Buildup | "mwpl" | "roll";
