@@ -1,5 +1,8 @@
 import { api } from "./api";
 import { isPeriod } from "./period";
+import type { LiveView } from "./breadthLive";
+export { liveSeries, liveTitle } from "./breadthLive";
+export type { LiveSeries, LiveView } from "./breadthLive";
 
 /* Market breadth: how many stocks in a group take part in the market's moves. Counts and shares from the server,
  * worked out after each close; facts, never a call on the market. */
@@ -21,7 +24,7 @@ export type SectorTable = { columns: { label: string; day: string }[]; rows: { s
 export type BreadthView = {
   group: Group; groups: Group[]; today: Today | null; as_of: string | null; since: string | null; range: RangeId;
   help: Record<string, string>; status: string | null; locked: boolean; plan_needed: string;
-  history: History | null; sectors: SectorTable | null; thrusts: string[] | null;
+  history: History | null; sectors: SectorTable | null; thrusts: string[] | null; live: LiveView | null;
 };
 
 export const RANGES: [RangeId, string][] = [["3m", "3M"], ["6m", "6M"], ["1y", "1Y"], ["2y", "2Y"], ["all", "All"]];
