@@ -186,10 +186,12 @@ def html(inv: dict) -> str:
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="{CSP}">
 <title>{e(title)} {e(inv['number'])}</title>
-<style>body{{font:14px/1.5 system-ui,sans-serif;color:#1d1b17;max-width:760px;margin:32px auto;padding:0 16px}}
-h1{{font-size:22px;margin:0 0 4px}}table{{width:100%;border-collapse:collapse;margin:12px 0}}td,th{{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}}
-.n{{text-align:right}}.cols{{display:flex;gap:32px;flex-wrap:wrap}}.cols div{{flex:1;min-width:240px}}small{{color:#666}}
-@media print{{button{{display:none}}}}</style></head><body>
+<style>body{{font:14px/1.5 'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1D1B17;background:#F5F1E8;max-width:760px;margin:32px auto;padding:0 16px}}
+h1{{font:600 26px/1.2 Fraunces,Georgia,serif;margin:0 0 4px}}h3{{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#5C574D;margin:16px 0 4px}}
+button{{font:600 14px inherit;background:#1F4FB5;color:#fff;border:0;border-radius:10px;padding:10px 18px;cursor:pointer;margin-bottom:16px}}
+table{{width:100%;border-collapse:collapse;margin:12px 0}}td,th{{padding:8px;border-bottom:1px solid #E2DAC8;text-align:left}}
+.n{{text-align:right}}.cols{{display:flex;gap:32px;flex-wrap:wrap}}.cols div{{flex:1;min-width:240px}}small{{color:#5C574D}}
+@media print{{button{{display:none}}body{{background:#fff}}}}</style></head><body>
 <button id="print">Print or save as PDF</button><script>{PRINT_JS}</script>
 <h1>{e(title)}</h1><div>No. <b>{e(inv['number'])}</b> · Date {e(inv['date'])} · Payment {e(inv['payment_id'])}</div>
 <div class=cols><div><h3>From</h3><b>{e(s.get('legal_name') or 'StratLab')}</b><br>{e(s.get('address') or '')}<br>

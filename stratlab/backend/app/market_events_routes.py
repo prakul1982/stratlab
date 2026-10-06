@@ -61,7 +61,6 @@ def _send(profile: dict, subject: str, text: str) -> list[str]:
     """Phone and Telegram as set up in Account, and email only to an address the user confirmed (as the other alerts
     do), each opening the Events page."""
     from . import alerts
-    from .config import settings
     sent = []
     for channel, send in alerts.jobs_for(profile, subject, text, "/trade/events"):
         if channel == "email":
@@ -74,7 +73,8 @@ def _send(profile: dict, subject: str, text: str) -> list[str]:
     to = alerts.newsletter_email(profile)
     if to and alerts.email_ready() and alerts.email_confirmed(profile):
         try:
-            alerts.send_email(to, subject, f"{text}\n\nEvery event, and the reminder settings: {settings.PUBLIC_SITE_URL}/trade/events")
+            alerts.send_message(to, subject, text, "/trade/events", "Market events",
+                                "You get this because you turned on market event reminders on StratLab.")
             sent.append("email")
         except Exception as e:
             print("market events reminder failed: email", str(e)[:120])

@@ -9,12 +9,13 @@ import re
 from datetime import date, datetime, timedelta
 from html import escape
 
+from .. import email_kit as kit
 from ..ai_providers import AIError, complete, extract_json
 from ..config import settings
 from ..intel.net import TTLCache
 
 FOOTER = "Facts from exchange filings, company documents and market data. Not investment advice."
-UNSUBSCRIBE = "{unsubscribe_url}"           # the sender fills this in per reader
+UNSUBSCRIBE = kit.UNSUBSCRIBE               # the sender fills this in per reader
 REGION_NAME = {"IN": "India", "US": "US"}
 STAGE_NAME = {1: "Stage 1 (basing)", 2: "Stage 2 (advancing)", 3: "Stage 3 (topping)", 4: "Stage 4 (declining)"}
 
@@ -46,7 +47,7 @@ def _pct(x) -> str:
 
 
 def _num(x) -> str:
-    return "" if x is None else f"{x:,.2f}"
+    return "" if x is None else kit.num(x)          # 1,23,456.75: Indian digit grouping
 
 
 def _day(iso: str) -> str:
@@ -57,8 +58,8 @@ def _day(iso: str) -> str:
 
 
 # ---------- sections ----------
-def _item(text: str, url: str | None = None, lines: list | None = None) -> dict:
-    return {"text": text, "url": url, "lines": lines or []}
+def _item(text: str, url: str | None = None, lines: list | None = None, **extra) -> dict:
+    return {"text": text, "url": url, "lines": lines or [], **{k: v for k, v in extra.items() if v is not None}}
 
 
 def market_sections(f: dict) -> list[dict]:
@@ -131,7 +132,9 @@ def stock_sections(f: dict) -> list[dict]:
     out = []
     if f.get("stocks"):
         out.append({"title": "What changed for your stocks", "items": [
-            _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])) for r in f["stocks"]]})
+            _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])[1 if r.get("change_pct") is not None else 0:], price=r.get("price"),
+                  change_pct=r.get("change_pct"), since=f"since {_day(f['since'])}" if r.get("change_pct") is not None else None)
+            for r in f["stocks"]]})
     if f.get("results"):
         out.append({"title": "Results this week", "items": [result_item(r) for r in f["results"]]})
     if f.get("actions"):
@@ -253,30 +256,9 @@ def summary(f: dict) -> dict:
 
 
 # ---------- the email ----------
-def _a(url: str | None, text: str) -> str:
-    """A link, or plain text when the url isn't a web address (a feed's javascript: or data: link never gets in)."""
-    t = escape(text)
-    ok = isinstance(url, str) and url.lower().startswith(("https://", "http://"))
-    return f'<a href="{escape(url)}" style="color:#1a56db;text-decoration:none">{t}</a>' if ok else t
-
-
-link = _a            # for the other emails built in this style (app/lifecycle.py)
-
-
-def frame(title: str, body: list[str], footer: str) -> str:
-    """An email around its body: inline styles only, no images or web fonts, one column that fits a phone. `body` and
-    `footer` are HTML, already escaped."""
-    return ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            f"<title>{escape(title)}</title></head>"
-            '<body style="margin:0;padding:0;background:#f4f5f7">'
-            '<div style="max-width:600px;margin:0 auto;padding:16px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
-            'color:#1f2328;font-size:15px;line-height:1.5">'
-            '<div style="background:#ffffff;border-radius:8px;padding:20px">'
-            '<div style="font-size:12px;color:#6b7280;letter-spacing:.04em;text-transform:uppercase">StratLab</div>'
-            f'<h1 style="font-size:20px;line-height:1.3;margin:4px 0 12px">{escape(title)}</h1>'
-            + "".join(body) + "</div>"
-            f'<p style="font-size:12px;color:#6b7280;margin:16px 4px">{footer}</p>'
-            "</div></body></html>")
+link = kit.link            # a link in the kit's colours, plain text when the address isn't a web address
+TYPE_LABEL = {"market": "Market brief", "my_stocks": "My stocks"}
+DOT = " · "
 
 
 def as_of(iso: str | None) -> str | None:
@@ -289,33 +271,85 @@ def as_of(iso: str | None) -> str | None:
     return f"{d.day} {d:%b %Y}, {d:%H:%M}" + (f" {zone}" if zone else "")
 
 
+def headline(f: dict) -> str:
+    """The email's title: the lead index's move for a brief, what changed for My stocks."""
+    if f["kind"] == "market":
+        lead = next((i for i in f.get("indices") or [] if i.get("change_pct") is not None), None)
+        span = " over the week" if f["weekly"] else ""
+        if lead:
+            c = lead["change_pct"]
+            move = "flat" if round(c, 2) == 0 else f"{'up' if c > 0 else 'down'} {kit.pct_plain(c)}"
+            return f"{lead['name']} {move}{span}"
+        return f"{REGION_NAME[f['region']]} market{span}"
+    tail = subject(f).split(": ", 1)[-1]
+    return tail[:1].upper() + tail[1:]
+
+
+def type_label(f: dict) -> str:
+    if f["kind"] == "market":
+        return f"{'Weekly brief' if f['weekly'] else 'Market brief'}{DOT}{REGION_NAME[f['region']]}"
+    return "My stocks" + (f"{DOT}weekly" if f["weekly"] else "")
+
+
+def unsubscribe_type(issue: dict) -> str:
+    """The one-click unsubscribe category this issue goes out under."""
+    if issue.get("kind") == "my_stocks":
+        return "my_stocks"
+    return "market_us" if issue.get("region") == "US" else "market_in"
+
+
+def _tone(name: str) -> str:
+    return "neutral" if "VIX" in name.upper() else "updown"      # a rise in fear is not good news, so no green
+
+
+def _tiles(indices: list[dict], weekly: bool) -> list[kit.Tile]:
+    out = []
+    for i in indices[:3]:
+        sub = "over the week" if weekly and i.get("change_pct") is not None else (
+            f"{kit.pct_plain(i['from_high_pct'], 1)} below its high" if i.get("from_high_pct") else None)
+        out.append(kit.Tile(i["name"], kit.num(i["price"]), i.get("change_pct"), sub=sub, tone=_tone(i["name"])))
+    return out
+
+
+def _row(it: dict) -> kit.Row:
+    lines = tuple((ln["text"], ln.get("url")) for ln in it.get("lines") or [])
+    if it.get("change_pct") is not None or it.get("price") is not None:
+        return kit.Row(it["text"], value=kit.num(it["price"]) if it.get("price") is not None else None, change=it.get("change_pct"),
+                       since=it.get("since"), url=it.get("url"), lines=lines)
+    return kit.Row(it["text"], url=it.get("url"), lines=lines)
+
+
 def render(issue: dict) -> tuple[str, str]:
-    """(html, text) for one issue. The footer carries the {unsubscribe_url} placeholder for the sender."""
+    """(html, text) for one issue, in the shared email design. The footer carries the {unsubscribe_url} placeholder
+    for the sender."""
     view = f"{origin()}/news/{issue['id']}" if issue.get("id") else None
-    html = []
-    text = [issue["subject"], ""]
-    if issue.get("summary"):
-        html.append(f'<p style="margin:0 0 16px">{escape(issue["summary"])}</p>')
-        text += [issue["summary"], ""]
+    kind = issue.get("kind") or ("my_stocks" if str(issue.get("id", "")).startswith("my_stocks") else "market")
+    weekly = bool(issue.get("weekly"))
+    day = _day(issue["day"]) if issue.get("day") else ""
+    region = issue.get("region")
+    label = issue.get("label") or (TYPE_LABEL.get(kind, "Newsletter") + (DOT + REGION_NAME[region] if region in REGION_NAME else ""))
+    title = issue.get("title") or issue["subject"]
+    blocks: list[kit.Block] = []
+    indices = issue.get("indices") or []
+    tiles = _tiles(indices, weekly)
+    if tiles:
+        blocks.append(kit.tiles(tiles))
+        if indices[3:]:
+            blocks.append(kit.card("Other indices", [kit.Row(i["name"], value=kit.num(i["price"]), change=i.get("change_pct"),
+                                                             tone=_tone(i["name"])) for i in indices[3:]]))
+    for sec in issue.get("sections") or []:
+        if tiles and sec["title"] == "Indices":
+            continue                                         # already shown as tiles
+        blocks.append(kit.card(sec["title"], [_row(it) for it in sec["items"]]))
     when = as_of(issue.get("at"))
     if when:
-        html.append(f'<p style="margin:0 0 12px;font-size:13px;color:#6b7280">Prices and numbers as of {escape(when)}</p>')
-        text += [f"Prices and numbers as of {when}", ""]
-    for sec in issue.get("sections") or []:
-        html.append(f'<h2 style="font-size:16px;margin:20px 0 8px;padding-top:12px;border-top:1px solid #e5e7eb">{escape(sec["title"])}</h2>'
-                    '<ul style="margin:0;padding-left:18px">')
-        text.append(sec["title"].upper())
-        for it in sec["items"]:
-            sub = "".join(f'<li style="margin:2px 0;color:#374151">{_a(ln.get("url"), ln["text"])}</li>' for ln in it.get("lines") or [])
-            html.append(f'<li style="margin:6px 0">{_a(it.get("url"), it["text"])}'
-                        + (f'<ul style="margin:4px 0 0;padding-left:16px;font-size:14px">{sub}</ul>' if sub else "") + "</li>")
-            text.append(f"- {it['text']}" + (f" ({it['url']})" if it.get("url") else ""))
-            text += [f"    {ln['text']}" + (f" ({ln['url']})" if ln.get("url") else "") for ln in it.get("lines") or []]
-        html.append("</ul>")
-        text.append("")
-    if view:
-        html.append(f'<p style="margin:20px 0 0">{_a(view, "Read this in StratLab")}</p>')
-        text += [f"Read this in StratLab: {view}", ""]
-    footer = f'{escape(FOOTER)}<br><a href="{UNSUBSCRIBE}" style="color:#6b7280">Unsubscribe or change how often</a>'
-    text += [FOOTER, f"Unsubscribe or change how often: {UNSUBSCRIBE}"]
-    return frame(issue["subject"], html, footer), "\n".join(text)
+        blocks.append(kit.note(f"Prices and numbers as of {when}"))
+    name = {"market_in": "India briefs", "market_us": "US briefs", "my_stocks": "My stocks"}[unsubscribe_type({**issue, "kind": kind, "region": region})]
+    what = "My stocks email" if kind == "my_stocks" else f"{REGION_NAME.get(region, '')} market brief".strip()
+    footer = kit.Footer(
+        why=f"You get this {'weekly' if weekly else 'daily'} because you chose the {what} in StratLab.",
+        frequency=("Switch to daily" if weekly else "Switch to weekly", "/settings#notifications"),
+        unsubscribe=f"Unsubscribe from {name}", legal=FOOTER)
+    cta = (("Read the full brief" if kind == "market" else "See what changed"), view) if view else None
+    return kit.render(title, blocks, footer, label=label, date=day, summary=issue.get("summary") or None, cta=cta,
+                      subject=issue["subject"])

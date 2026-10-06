@@ -12,10 +12,9 @@ import json
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
-from html import escape
 
 from . import alerts, db
-from .newsletter import write
+from . import email_kit as kit
 from .plans import IST, PLANS, _dt, effective_plan, free_basic_until, promo_until, trial_end
 
 SENT = "lifecycle:"              # lifecycle:<uid>: {"welcome": "2026-10-03T10:00:00+00:00", "receipt:pay_1": ...}
@@ -133,40 +132,26 @@ def _last_day(end: datetime) -> date:
 
 
 def _url(path: str) -> str:
-    return write.origin() + path
+    return kit.site(path)
 
 
 def _compose(subject: str, paras: list[str], cta: tuple[str, str] | None = None, items: list | None = None,
-             transactional: bool = False) -> tuple[str, str, str]:
-    """(subject, html, text) in the newsletters' style. Tips carry the {unsubscribe_url} placeholder; account
-    emails say why they can't be turned off."""
-    html, text = [], [subject, ""]
-    for p in paras:
-        html.append(f'<p style="margin:0 0 12px">{escape(p)}</p>')
-        text += [p, ""]
+             transactional: bool = False, label: str = "Your account", tiles: list | None = None) -> tuple[str, str, str]:
+    """(subject, html, text) in the shared email kit. The first paragraph is the one-line summary under the title.
+    Tips carry the {unsubscribe_url} placeholder; account emails say why they can't be turned off."""
+    blocks = [kit.tiles(tiles)] if tiles else []
+    blocks += [kit.para(p) for p in paras[1:]]
     if items:
-        html.append('<ul style="margin:0 0 12px;padding-left:18px">')
-        for title, line, path in items:
-            url = _url(path) if path else None
-            html.append(f'<li style="margin:6px 0"><b>{write.link(url, title)}</b>' + (f": {escape(line)}" if line else "") + "</li>")
-            text.append(f"- {title}" + (f": {line}" if line else "") + (f" ({url})" if url else ""))
-        html.append("</ul>")
-        text.append("")
-    if cta:
-        label, path = cta
-        html.append(f'<p style="margin:16px 0 0"><a href="{escape(_url(path))}" style="display:inline-block;background:#1f2328;'
-                    f'color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">{escape(label)}</a></p>')
-        text += [f"{label}: {_url(path)}", ""]
+        blocks.append(kit.bullets([(title, line, _url(path) if path else None) for title, line, path in items]))
     if transactional:
-        note = "This email is about your account, so it is sent even with tips and reminders turned off."
-        footer = f'{escape(note)}<br>{write.link(_url("/account"), "Manage your emails in Account")}'.replace(
-            "color:#1a56db", "color:#6b7280")
-        text += [note, f"Manage your emails in Account: {_url('/account')}"]
+        footer = kit.Footer(why="You get this because you have a StratLab account.",
+                            transactional="It is about your account, so it is sent even with tips and reminders turned off.")
     else:
-        note = "You get tips and reminders because you have a StratLab account."
-        footer = (f'{escape(note)}<br><a href="{write.UNSUBSCRIBE}" style="color:#6b7280">Turn off tips and reminders</a>')
-        text += [note, f"Turn off tips and reminders: {write.UNSUBSCRIBE}"]
-    return subject, write.frame(subject, html, footer), "\n".join(text)
+        footer = kit.Footer(why="You get tips and reminders because you have a StratLab account.",
+                            unsubscribe="Turn off tips and reminders")
+    html, text = kit.render(subject, blocks, footer, label=label, date=_day(datetime.now(IST).date()),
+                            summary=paras[0] if paras else None, cta=cta, subject=subject)
+    return subject, html, text
 
 
 def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, str]:
@@ -183,20 +168,20 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             ("Test an idea", "describe it in plain words, or start from a ready-made one.", "/new"),
             ("Look into a company", "the numbers, its filings and the business in its own words.", "/research"),
             ("Trade it on paper", "run a strategy live with pretend money.", "/paper"),
-            ("Get the Market Brief", "a short email after each market closes.", "/account#newsletters")])
+            ("Get the Market Brief", "a short email after each market closes.", "/account#newsletters")], label="Welcome")
     if kind == "day2":
         return _compose("Test your first strategy in two minutes", [
             "You haven't run a backtest yet. Start from a ready-made idea, such as a moving-average crossover, or "
             "describe your own in plain words.",
             "You'll see how it did on years of real prices, after costs, with four checks for luck."],
-            ("Test an idea", "/new"))
+            ("Test an idea", "/new"), label="Getting started")
     if kind in ("trial_before", "trial_end"):
         last = ctx.get("last_day") or date.today()
         when = "tomorrow" if kind == "trial_before" else "today"
         return _compose(f"Your paper-trading trial ends {when}", [
             f"Your free paper trading runs until the end of {_day(last)} (India time).",
             "After that, the Basic or Pro plan keeps paper trading going. Your notebooks and backtests stay either way."],
-            ("See plans", "/plans"))
+            ("See plans", "/plans"), label="Your trial")
     if kind in ("promo_before", "promo_end"):
         last = ctx.get("last_day") or date.today()
         when = "tomorrow" if kind == "promo_before" else "today"
@@ -204,26 +189,27 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             f"Every Pro feature has been free for everyone during the launch offer. It ends at the end of {_day(last)} "
             "(India time).",
             "After that, the Free plan's limits apply again unless you choose a plan. Your notebooks, backtests and "
-            "watchlist stay either way."], ("See plans", "/plans"))
+            "watchlist stay either way."], ("See plans", "/plans"), label="Launch offer")
     if kind == "inactive":
         return _compose("What's new in StratLab", ["It's been a couple of weeks. Here is what's new:"],
-                        ("Open StratLab", "/"), WHATS_NEW)
+                        ("Open StratLab", "/"), WHATS_NEW, label="What's new")
     if kind == "receipt":
         inv = ctx.get("invoice") or {}
         plan = PLANS.get(ctx.get("plan") or "pro", PLANS["pro"])["name"]
         period = "yearly" if ctx.get("period") == "year" else "monthly"
         total = inv.get("total")
-        amount = f"{inv.get('currency') or 'INR'} {total:,.2f}" if isinstance(total, (int, float)) else "See the invoice"
+        amount = ((kit.inr(total, 2) if (inv.get("currency") or "INR") == "INR" else f"{inv['currency']} {total:,.2f}")
+                  if isinstance(total, (int, float)) else "See the invoice")
         return _compose(f"Receipt: StratLab {plan} plan", [
-            f"Thanks for your payment. You're on the {plan} plan, billed {period}."], ("See your invoices", "/account"), [
-            ("Amount", amount, None), ("Invoice", str(inv.get("number") or ""), None),
-            ("Date", str(inv.get("date") or ""), None)], transactional=tx)
+            f"Thanks for your payment. You're on the {plan} plan, billed {period}.",
+            f"Invoice number {inv.get('number') or ''}. It is saved in Account, where you can print it or save it as a PDF."], ("See your invoices", "/account"),
+            transactional=tx, label="Receipt", tiles=[kit.Tile("Amount", amount), kit.Tile("Date", str(inv.get("date") or ""))])
     if kind == "plan_ended":
         plan = PLANS.get(ctx.get("plan") or "pro", PLANS["pro"])["name"]
         return _compose("Your StratLab plan has changed to Free", [
             f"Your {plan} subscription has stopped, so your account is on the Free plan now.",
             "Your notebooks, backtests and watchlist stay. You can choose a plan again any time."],
-            ("See plans", "/plans"), transactional=tx)
+            ("See plans", "/plans"), transactional=tx, label="Your plan")
     if kind == "invite_reward":
         how = ctx.get("kind")
         if ctx.get("role") == "newcomer":
@@ -255,7 +241,7 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
                  else "You've got a free month of StratLab Basic")
         return _compose(title, [first, when, basic_includes(), rule,
                         "Nothing to pay and nothing to set up. Invite more friends from Account."],
-                        ("See your account", "/account#invite"), transactional=tx)
+                        ("See your account", "/account#invite"), transactional=tx, label="Invite reward")
     raise ValueError(f"Unknown email: {kind}")
 
 
@@ -300,11 +286,7 @@ def send(profile: dict, kind: str, key: str | None = None, ctx: dict | None = No
         return False
     try:
         subject, html, text = build(kind, profile, ctx)
-        headers = None
-        if not transactional:
-            unsub = alerts.unsubscribe_url(uid, CATEGORY)
-            html, text = (x.replace(write.UNSUBSCRIBE, unsub) for x in (html, text))
-            headers = alerts.list_unsubscribe_headers(uid, CATEGORY)
+        html, text, headers = kit.finish(html, text, uid, None if transactional else CATEGORY)
         alerts.send_email(to, subject, text, html=html, headers=headers)
     except Exception as e:
         _release(uid, key)
@@ -316,9 +298,7 @@ def send(profile: dict, kind: str, key: str | None = None, ctx: dict | None = No
 def send_test(kind: str, profile: dict, to: str) -> str:
     """Admin's test: the email with made-up details, to `to`, marked as a test and not recorded. Returns the subject."""
     subject, html, text = build(kind, profile, sample(kind))
-    if not EMAILS[kind][1]:
-        unsub = alerts.unsubscribe_url(profile["id"], CATEGORY)
-        html, text = (x.replace(write.UNSUBSCRIBE, unsub) for x in (html, text))
+    html, text, _ = kit.finish(html, text, profile["id"], None if EMAILS[kind][1] else CATEGORY)
     subject = f"[Test] {subject}"
     alerts.send_email(to, subject, text, html=html)
     return subject
@@ -326,9 +306,8 @@ def send_test(kind: str, profile: dict, to: str) -> str:
 
 def preview(kind: str, profile: dict) -> dict:
     subject, html, text = build(kind, profile, sample(kind))
-    swap = f"{write.origin()}/account"           # the preview's unsubscribe link just opens Account
-    return {"kind": kind, "subject": subject, "html": html.replace(write.UNSUBSCRIBE, swap),
-            "text": text.replace(write.UNSUBSCRIBE, swap), "transactional": EMAILS[kind][1]}
+    html, text = kit.preview_links(html, text)           # the preview's unsubscribe link just opens Manage emails
+    return {"kind": kind, "subject": subject, "html": html, "text": text, "transactional": EMAILS[kind][1]}
 
 
 # ---------- account emails, from billing ----------

@@ -424,10 +424,18 @@ def message(texts: list[str]) -> tuple[str, str]:
     return subject[:150], body
 
 
+def bulleted(text: str) -> str:
+    """The alert lines as rows for the email: each fired alert on its own line, the closing line kept as small print."""
+    out = []
+    for line in text.split("\n"):
+        keep = not line.strip() or line.startswith("- ") or "advice" in line.lower() or line.startswith("and ") and "more" in line
+        out.append(line if keep else "- " + line)
+    return "\n".join(out)
+
+
 def deliver(profile: dict, subject: str, text: str) -> list[str]:
     """Phone and Telegram as set up in Account, and email only to an address the user confirmed."""
     from . import alerts
-    from .config import settings
     sent = []
     for channel, job in alerts.jobs_for(profile, subject, text, "/alerts"):
         if channel == "email":
@@ -440,7 +448,8 @@ def deliver(profile: dict, subject: str, text: str) -> list[str]:
     to = alerts.newsletter_email(profile)
     if to and alerts.email_ready() and alerts.email_confirmed(profile):
         try:
-            alerts.send_email(to, subject, f"{text}\n\nManage your alerts: {settings.PUBLIC_SITE_URL}/alerts")
+            alerts.send_message(to, subject, bulleted(text), "/alerts", "Price and stock alerts",
+                                "You get this because you set these alerts on StratLab.")
             sent.append("email")
         except Exception as e:
             print("stock alert failed: email", str(e)[:120])

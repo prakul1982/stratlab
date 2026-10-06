@@ -52,7 +52,6 @@ def _send(profile: dict, subject: str, text: str) -> list[str]:
     """Phone and Telegram as set up in Account, and email only to an address the user confirmed (as the stock
     alerts do), each opening the F&O changes page."""
     from . import alerts
-    from .config import settings
     sent = []
     for channel, send in alerts.jobs_for(profile, subject, text, "/trade/fo-changes"):
         if channel == "email":
@@ -65,7 +64,8 @@ def _send(profile: dict, subject: str, text: str) -> list[str]:
     to = alerts.newsletter_email(profile)
     if to and alerts.email_ready() and alerts.email_confirmed(profile):
         try:
-            alerts.send_email(to, subject, f"{text}\n\nEvery change, and the alert setting: {settings.PUBLIC_SITE_URL}/trade/fo-changes")
+            alerts.send_message(to, subject, text, "/trade/fo-changes", "F&O changes",
+                                "You get this because you turned on F&O change alerts on StratLab.")
             sent.append("email")
         except Exception as e:
             print("fo changes alert failed: email", str(e)[:120])
