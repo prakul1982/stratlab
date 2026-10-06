@@ -37,7 +37,7 @@ class UploadReq(BaseModel):
 
 class ManualReq(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=40)
-    segment: Literal["eq", "fut", "opt", "com", "cur"] = "eq"
+    segment: Literal["eq", "fut", "opt", "com", "cur", "us", "crypto"] = "eq"
     side: Literal["long", "short"] = "long"
     entry_date: date
     entry_time: str | None = Field(None, pattern=TIME)
@@ -86,6 +86,29 @@ def _row(t: dict) -> dict:
     for k, dp in (("qty", 6), ("entry", 4), ("exit", 4), ("gross", 2), ("charges", 2), ("net", 2), ("r", 2)):
         out[k] = J._r(t.get(k), dp)
     out["segment_label"] = J.SEGMENTS.get(t["segment"], t["segment"])
+    out["currency"] = J.MARKETS[J.market_of(t["segment"])]["currency"]
+    return out
+
+
+# the tax report keeps F&O, commodity and currency as totals per year (not line by line), so they show beside the trades
+# as totals and are never added into the trade stats; the journal segments each total covers
+TAX_SEGMENTS = {"fno": ("fut", "opt"), "commodity": ("com",), "currency": ("cur",)}
+
+
+def tax_totals(uid: str, segment: str) -> list[dict]:
+    """The tax report's F&O, commodity and currency totals per financial year, newest first (only those of the chosen
+    segment, or all of them)."""
+    try:
+        chunks = tax_lots.load(uid)["business"]
+    except Exception as e:                    # the tax report beside the journal is extra: a failure never stops the page
+        print("journal: tax totals:", str(e)[:120])
+        return []
+    out = []
+    for fy in sorted({c["fy"] for c in chunks}, reverse=True):
+        for seg in tax_lots.business_year(fy, chunks)["segments"]:
+            if segment == "all" or segment in TAX_SEGMENTS.get(seg["seg"], ()):
+                out.append({"fy": fy, "seg": seg["seg"], "label": seg["label"], "trades": seg["trades"], "pnl": seg["pnl"],
+                            "charges": seg["charges"], "net": seg["net"], "turnover": seg["turnover"], "first": seg["first"], "last": seg["last"]})
     return out
 
 
@@ -99,7 +122,7 @@ def _paper_list(uid: str) -> list[dict]:
              "symbol": (r.get("instrument") or {}).get("symbol") or (r.get("instrument") or {}).get("type")} for r in rows]
 
 
-def view(profile, data: dict | None = None) -> dict:
+def view(profile, data: dict | None = None, segment: str = "all", market: str = "") -> dict:
     """The journal page: the trades (newest first), open positions, the stats, and on Basic and up the checks, the
     breakdowns, R-multiples and the paper sessions to compare with."""
     uid, plan = profile["id"], profile["_plan"]
@@ -109,6 +132,14 @@ def view(profile, data: dict | None = None) -> dict:
     show = data["settings"].get("show", "all")
     practice = sum(1 for t in every if t["src"] == "practice")
     allt = every if show == "all" or not practice else [t for t in every if (t["src"] == "practice") == (show == "practice")]
+    # each market (India, US stocks, crypto) is worked out apart, in its own currency; India is the default unless the
+    # journal holds only another market. Within India a segment can be picked (equity delivery, intraday, futures, ...).
+    held = {m: sum(1 for t in allt if J.market_of(t["segment"]) == m) for m in J.MARKETS}
+    market = market if market in J.MARKETS else ("in" if held["in"] or not any(held.values()) else next(m for m in J.MARKETS if held[m]))
+    in_market = [t for t in allt if J.market_of(t["segment"]) == market]
+    seg_count = {k: sum(1 for t in in_market if t["segment"] == k) for k in J.SEGMENTS if market == "in" and k not in J.OTHER_SEGMENTS}
+    segment = segment if segment in seg_count and seg_count[segment] else "all"
+    allt = [t for t in in_market if segment == "all" or t["segment"] == segment]
     limit = journal_limit(plan)
     shown = allt[-limit:] if limit else allt
     full = allows(plan, "journal")
@@ -116,19 +147,23 @@ def view(profile, data: dict | None = None) -> dict:
     return {"as_of": today().isoformat(), "updated_at": data["updated_at"], "full": full, "limit": limit,
             "count": len(shown), "total": len(allt), "beyond_limit": len(allt) - len(shown), "removed": len(data["hidden"]),
             "trades": [_row(t) for t in reversed(shown[-J.MAX_LIST:])], "open": got["open"], "unmatched": got["unmatched"], "overlap": got["overlap"],
-            "summary": J.summary(shown, cap), "verdict": J.verdict(shown, cap) if full and shown else None,
+            "summary": J.summary(shown, cap), "verdict": J.verdict(shown, cap, J.MARKETS[market]["symbol"]) if full and shown else None,
             "breakdowns": J.breakdowns(shown) if full else None, "r": J.r_distribution(shown) if full else None,
             "practice_count": practice, "real_count": len(every) - practice, "show": show if practice else "all",
             "files": data["files"], "settings": data["settings"], "links": data["links"] if full else {},
             "paper": _paper_list(uid) if full else [], "tags": sorted({t["note"]["tag"] for t in allt if t["note"].get("tag")}),
+            "market": market, "markets": [{"id": m, **J.MARKETS[m], "n": n} for m, n in held.items()],
+            "currency": J.MARKETS[market]["currency"], "segment": segment, "segment_counts": {k: n for k, n in seg_count.items() if n},
+            "tax_totals": tax_totals(uid, segment) if market == "in" else [],
             "emotions": J.EMOTIONS, "mistakes": J.MISTAKES, "segments": J.SEGMENTS, "assumptions": J.ASSUMPTIONS,
             "plan_name": PLANS[FEATURE_PLAN["journal"]]["name"]}
 
 
 @router.get("")
-def journal(profile=Depends(current_profile)):
-    """The user's real trades paired into round trips, with their notes and the stats."""
-    return _m().ok(view(profile))
+def journal(segment: str = Query("all", max_length=20), market: str = Query("", max_length=10), profile=Depends(current_profile)):
+    """The user's real trades paired into round trips, with their notes and the stats. `market` picks India, US stocks or
+    crypto (each in its own currency); `segment` narrows India to one segment."""
+    return _m().ok(view(profile, None, segment, market))
 
 
 @router.get("/brief")
@@ -136,7 +171,7 @@ def brief(profile=Depends(current_profile)):
     """A line for the Trade home: how many closed real trades, their P&L after charges and win rate (no checks run;
     chart replay practice isn't counted here)."""
     j = J.load(profile["id"])
-    allt = [t for t in J.trades(profile["id"], j, today())["trades"] if t["src"] != "practice"]
+    allt = [t for t in J.trades(profile["id"], j, today())["trades"] if t["src"] != "practice" and J.market_of(t["segment"]) == "in"]
     limit = journal_limit(profile["_plan"])
     shown = allt[-limit:] if limit else allt
     nets = [t["net"] for t in shown]

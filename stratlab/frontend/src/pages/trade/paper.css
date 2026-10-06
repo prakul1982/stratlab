@@ -1,0 +1,9 @@
+/* Paper trading pages: the row of session cards and a session's title row. */
+.k-sessions { display: flex; gap: var(--s3); overflow-x: auto; padding-bottom: var(--s1); }
+.k-sess { flex: none; min-width: 210px; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); padding: var(--s3) var(--s4); text-align: left; font: inherit; color: var(--ink);
+  cursor: pointer; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+.k-sess:hover { border-color: var(--ink-2); }
+.k-sess[aria-current="true"] { border: 2px solid var(--ink); padding: calc(var(--s3) - 1px) calc(var(--s4) - 1px); }
+.k-session-head { align-items: flex-end; }
+.k-session-name { font-family: var(--serif); font-size: clamp(24px, 3.4vw, 32px); font-weight: 600; letter-spacing: -.02em; }
+.k-rows > div > span .info { margin-left: 6px; }

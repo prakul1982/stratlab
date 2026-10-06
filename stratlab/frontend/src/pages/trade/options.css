@@ -1,0 +1,38 @@
+/* Options builder and its session page: sentences with small boxes inside them, the legs table, the chain. */
+.k-sentence { font-size: 16px; line-height: 2.5; margin: 0; }
+.k-sentence b { font-weight: 600; }
+.k-sentence .k-seg { vertical-align: middle; margin: 0 4px; }
+.k-sentence .k-check { vertical-align: middle; }
+.k-sentence .info { vertical-align: middle; }
+.k-in { width: auto; display: inline-block; vertical-align: middle; margin: 0 4px; height: var(--ctl-sm); padding: 0 10px; }
+.k-in.num { width: 92px; }
+.k-in.time { width: 122px; }
+.k-in.pick { max-width: 100%; }
+.k-plain { margin: 0; padding: var(--s3) var(--s4); border-radius: var(--r-ctl); background: var(--paper-2); border: 1px solid var(--line); font-size: var(--t-label); }
+.k-struct { display: flex; flex-direction: column; gap: var(--s4); }
+.k-expiry { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.legs-box { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--s2) var(--s3); background: var(--paper-2); min-width: 0; }
+.legs-box > summary { justify-content: space-between; }
+.legs-box, .legs-box .k-disclosure-body, .k-struct > *, .k-disclosure-body { min-width: 0; max-width: 100%; }
+.legs-box .k-tbl-wrap { max-width: 100%; }
+.legs-box[open] .link-ish { visibility: hidden; }
+.legs-box .link-ish { color: var(--blue-ink); font-weight: 500; }
+.k-leg-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.k-leg-pick .k-input { width: auto; }
+.k-leg-pick .k-input[type="number"] { width: 84px; }
+.k-table tr[data-atm] td { background: var(--chip); }
+.k-link-line { margin: 0; font-size: var(--t-label); color: var(--muted); }
+.k-whatif { display: flex; flex-direction: column; gap: var(--s3); }
+.k-whatif-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s4); }
+.whatif-slider { display: flex; flex-direction: column; gap: var(--s1); }
+.whatif-slider input[type="range"] { width: 100%; }
+.k-sess-link { flex: none; min-width: 200px; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); padding: var(--s3) var(--s4); text-decoration: none; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+.k-sess-link:hover { border-color: var(--ink-2); }
+.k-strike-chart { position: relative; }
+.k-strike-chart svg { touch-action: pan-y; }
+.k-strike-chart text { font-variant-numeric: tabular-nums; }
+.key-line.call { background: var(--pos-call); }
+.key-line.put { background: var(--pos-put); }
+.k-table tr[data-closed] td, .k-table tr[data-closed] th { opacity: .55; }
+.opt-charge-lines .k-tbl-wrap { max-width: 460px; }

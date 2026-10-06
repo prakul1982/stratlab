@@ -1,22 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, signClass } from "../../lib/format";
+import { money } from "../../lib/format";
 import { track } from "../../lib/analytics";
-import { AsOf, Empty, Info, Loading, Modal, STATUS_NAME } from "../../components/ui";
+import { upDown } from "../../lib/tradeUi";
+import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
-import { Pencil, Plus, Trash, Upload } from "../../components/Icons";
+import { Pencil, Plus, Trash } from "../../components/Icons";
+import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
+import "./trade.css";
+import "./journal.css";
 
 /* The real-trade journal (Trade space): import a tradebook or tax P&L, see every round trip with its charges, keep a
- * note on each, and see the stats and the backtest verdict's honesty checks run on the real trades. Facts about past
- * trades only. */
+ * note on each, and see the stats and the backtest verdict's honesty checks run on the real trades. Each market (India,
+ * US stocks, crypto) is worked out on its own, in its own currency; within India a segment (equity delivery or
+ * intraday, futures, options, commodity, currency) can be picked. The tax report's F&O, commodity and currency totals
+ * show beside the trades. Facts about past trades only. Built from the kit (components/kit). */
 
 type Note = { tag?: string; notes?: string; links?: string[]; emotions?: string[]; mistakes?: string[]; stop?: number; target?: number; side?: "long" | "short" };
 type Trade = {
-  id: string; symbol: string; u: string; segment: string; segment_label: string; side: "long" | "short" | null; entry_t: string; exit_t: string;
+  id: string; symbol: string; u: string; segment: string; segment_label: string; currency: string; side: "long" | "short" | null; entry_t: string; exit_t: string;
   qty: number; entry: number; exit: number; gross: number; charges: number; net: number; r: number | null; hold_s: number | null; hold_days: number;
   fills: number; src: "tradebook" | "pnl" | "manual" | "practice"; expired: boolean; charges_from: string; note: Note;
 };
@@ -29,6 +36,7 @@ type Summary = {
   streaks: { longest_win: number; longest_loss: number; current: { kind: "win" | "loss" | null; n: number } }; equity: { t: string; v: number }[];
 };
 type Open = { symbol: string; side: string; qty: number; since: string; avg: number; realised: number };
+type TaxTotal = { fy: number; seg: string; label: string; trades: number; pnl: number; charges: number; net: number; turnover: number; first: string; last: string };
 type Journal = {
   as_of: string; updated_at: string | null; full: boolean; limit: number | null; count: number; total: number; beyond_limit: number; removed: number;
   trades: Trade[]; open: Open[]; unmatched: Open[]; overlap: number; summary: Summary;
@@ -38,6 +46,8 @@ type Journal = {
   files: { name: string; broker: string; trades: number; at: string }[];
   settings: { capital: number | null; brokerage_delivery: number; brokerage_other: number; show?: Show };
   practice_count: number; real_count: number; show: Show;
+  market: string; markets: { id: string; label: string; currency: string; symbol: string; n: number }[]; currency: string; segment: string;
+  segment_counts: Record<string, number>; tax_totals: TaxTotal[];
   links: Record<string, string>; paper: { id: string; name: string; status: string; symbol?: string }[]; tags: string[];
   emotions: string[]; mistakes: string[]; segments: Record<string, string>; assumptions: string; plan_name: string;
 };
@@ -47,11 +57,21 @@ type Imported = { added: number; duplicates: number; over: number; problems: { l
 type Compared = { tag: string; session: { id: string; name: string }; note: string;
   real: Record<string, number | null>; paper: Record<string, number | null> };
 
-const inr = (v: number | null | undefined, dp = 0) => money(v, "INR", dp);
-const signed = (v: number | null | undefined) => (v == null ? "–" : `${v > 0 ? "+" : ""}${inr(v)}`);
+/** The money of the market being shown: rupees for India, dollars for US stocks and crypto. */
+const CurrencyCtx = createContext("INR");
+function useMoney() {
+  const cur = useContext(CurrencyCtx);
+  return useMemo(() => {
+    const m = (v: number | null | undefined, dp = 0) => money(v, cur, dp);
+    return { cur, m, signed: (v: number | null | undefined) => (v == null ? "–" : `${v > 0 ? "+" : ""}${m(v)}`), compact: (v: number) => moneyCompact(v, cur) };
+  }, [cur]);
+}
+const tone = (v: number | null | undefined): "up" | "down" | undefined => (v == null || v === 0 ? undefined : v > 0 ? "up" : "down");
+
 const day = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
 const when = (iso: string) => (iso.length > 10 ? `${day(iso)} ${iso.slice(11, 16)}` : day(iso));
 const qtyText = (q: number) => q.toLocaleString("en-IN", { maximumFractionDigits: 4 });
+const fyLabel = (fy: number) => `FY ${fy}-${String(fy + 1).slice(2)}`;
 const MAX_MB = 20;
 
 function holdText(t: Trade) {
@@ -65,28 +85,37 @@ function holdText(t: Trade) {
 
 const VIEWS: [string, string][] = [["weekday", "Day of week"], ["hour", "Time of day"], ["tag", "Setup"], ["instrument", "Instrument"], ["hold", "Holding time"],
   ["segment", "Segment"], ["side", "Long or short"], ["mistake", "Mistakes"], ["emotion", "Feelings"]];
+const SEGMENT_ORDER = ["eq_delivery", "eq_intraday", "fut", "opt", "com", "cur"];
 
 export function JournalPage() {
   const { notify, fail } = useApp();
   const [j, setJ] = useState<Journal | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Imported | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Trade | null>(null);
   const [adding, setAdding] = useState(false);
   const [setup, setSetup] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
+  const [askDelete, setAskDelete] = useState(false);
   const [mode, setMode] = useState<"add" | "replace">("add");
+  const [market, setMarket] = useState("");
+  const [segment, setSegment] = useState("all");
 
-  const load = useCallback(() => api<Journal>("/trade/journal").then(setJ).catch(fail), [fail]);
+  const load = useCallback(() => {
+    const q = new URLSearchParams({ segment, market });
+    return api<Journal>(`/trade/journal?${q}`).then((x) => { setJ(x); setError(null); }).catch((e) => { setError("Your journal couldn't be opened just now. Try again in a minute."); fail(e); });
+  }, [fail, market, segment]);
   useEffect(() => { load(); }, [load]);
+  /** What the server sends after a change is its default view; with a market or segment picked, the page asks again. */
+  const adopt = (x: Journal) => { if (market || segment !== "all") load(); else setJ(x); };
 
-  const pick = async (files: FileList | null) => {
+  const pick = async (files: FileList | null, reset: () => void) => {
     const list = Array.from(files ?? []).filter((f) => {
       if (f.size <= MAX_MB * 1024 * 1024) return true;
       notify(`${f.name} is larger than ${MAX_MB} MB. Split it by year (or quarter) and upload each one.`);
       return false;
     });
-    if (!list.length) { if (file.current) file.current.value = ""; return; }
+    if (!list.length) { reset(); return; }
     setBusy(true);
     try {
       let last: Imported | null = null, added = 0, dup = 0;
@@ -96,172 +125,184 @@ export function JournalPage() {
         added += last.added; dup += last.duplicates;
         track("journal file imported", { rows: last.added, zip: /\.zip$/i.test(f.name) });
       }
-      if (last) { setResult({ ...last, added, duplicates: dup }); setJ(last.journal); setMode("add"); }
-    } catch (e) { fail(e); } finally {
-      setBusy(false);
-      if (file.current) file.current.value = "";
-    }
+      if (last) { setResult({ ...last, added, duplicates: dup }); adopt(last.journal); setMode("add"); }
+    } catch (e) { fail(e); } finally { setBusy(false); reset(); }
   };
 
   const fromTax = async () => {
     setBusy(true);
     try {
       const r = await api<Imported>("/trade/journal/import-tax", { method: "POST" });
-      setJ(r.journal); setResult(null);
+      adopt(r.journal); setResult(null);
       notify(r.added ? `${r.added} trade line${r.added === 1 ? "" : "s"} brought in from the tax report.` : "Those trades are already in your journal.");
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
   const remove = () => {
-    if (!confirm("Delete my journal? Every imported and added trade, your notes and settings are removed from StratLab. Your broker account isn't touched.")) return;
-    api("/trade/journal", { method: "DELETE" }).then(() => { setResult(null); return load(); })
+    setAskDelete(false);
+    api("/trade/journal", { method: "DELETE" }).then(() => { setResult(null); setMarket(""); setSegment("all"); return load(); })
       .then(() => notify("Your journal is deleted.")).catch(fail);
   };
 
   const showOnly = async (show: Show) => {
     if (!j || show === j.show) return;
-    try { setJ(await api<Journal>("/trade/journal/settings", { method: "PUT", body: { ...j.settings, show } })); } catch (e) { fail(e); }
+    try { adopt(await api<Journal>("/trade/journal/settings", { method: "PUT", body: { ...j.settings, show } })); } catch (e) { fail(e); }
   };
 
-  if (!j) return <Loading label="Opening your journal" />;
+  const header = <PageHeader eyebrow="Trade · My trades" title="Trade journal" asOf={j?.as_of}
+    lede="Your broker's trades, equity, F&O, commodity and currency, and US stocks and crypto you add by hand, as round trips after charges, checked like a backtest. Only you can see them." />;
+  if (error && !j) return <div className="k-page j-page">{header}<ErrorState title="Your journal couldn't be opened" action={{ label: "Try again", onClick: () => { setError(null); load(); } }}>{error}</ErrorState></div>;
+  if (!j) return <div className="k-page j-page">{header}<Card><Skeleton label="Opening your journal" /></Card></div>;
   const s = j.summary;
   const has = j.total > 0;
+  const anyTrades = j.markets.some((x) => x.n > 0);
+  const others = j.markets.filter((x) => x.n > 0);
+  const segs = SEGMENT_ORDER.filter((k) => j.segment_counts[k]);
 
   return (
-    <div className="stack" style={{ gap: 24 }}>
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Trade journal</span>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Your real trades, judged honestly</h1>
-        <p className="page-sub">Your broker's trades, equity and F&amp;O, as round trips after charges, checked like a backtest. Only you can see them.</p>
-      </div>
+    <CurrencyCtx.Provider value={j.currency}>
+      <div className="k-page j-page">
+        {header}
 
-      <section className="card stack" style={{ gap: 14 }} aria-labelledby="j-import">
-        <div className="spread" style={{ flexWrap: "wrap" }}>
-          <h2 id="j-import" className="h2">Bring in your trades</h2>
-          <div className="row wrap" style={{ gap: 8 }}>
-            <button className="btn quiet sm" onClick={() => setSetup(true)}>Capital and brokerage</button>
-            <button className="btn quiet sm" onClick={() => setAdding(true)}><Plus size={16} />Add a trade by hand</button>
-          </div>
-        </div>
-        <p className="small muted" style={{ margin: 0 }}>Upload the tradebook (every purchase and sale) from Zerodha Console, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities, or the tax P&amp;L ZIP or its "Tradewise Exits" files (F&amp;O, commodity and currency included). Any CSV works with the columns Date, Symbol, Type (B or S), Quantity and Price. Trades already in the journal are skipped.</p>
-        <div className="row wrap" style={{ gap: 10 }}>
-          <label className="btn" style={{ cursor: busy ? "wait" : "pointer" }}>
-            <Upload size={17} />{busy ? "Reading…" : "Upload files"}
-            <input ref={file} type="file" multiple hidden disabled={busy} accept=".csv,.txt,.tsv,.xlsx,.xls,.zip" aria-label="Tradebook or tax P&L files" onChange={(e) => pick(e.target.files)} />
-          </label>
-          {has && (
-            <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <span>Files</span>
-              <select value={mode} onChange={(e) => setMode(e.target.value as "add" | "replace")} aria-label="Add to or replace the imported trades">
-                <option value="add">Add to my trades</option><option value="replace">Replace imported trades</option>
-              </select>
-            </label>
-          )}
-          <button className="btn outline" disabled={busy} onClick={fromTax}>Use my tax report's trades</button>
-        </div>
-        {result && (
-          <div className="stack" style={{ gap: 6 }} role="status">
-            <p className="small" style={{ margin: 0 }}><b>{result.added.toLocaleString()} trade line{result.added === 1 ? "" : "s"} added</b>{result.duplicates > 0 && `, ${result.duplicates.toLocaleString()} already in the journal (skipped)`}{result.broker !== "CSV" ? ` from a ${result.broker} file` : ""}.</p>
-            {result.problem_count > 0 && (
-              <details className="small"><summary>{result.problem_count} line{result.problem_count === 1 ? "" : "s"} couldn't be read</summary>
-                <ul>{result.problems.slice(0, 30).map((p, i) => <li key={i}>Line {p.line} · {p.text}: {p.reason}</li>)}</ul>
-              </details>
+        <Card label="Bring in your trades">
+          <CardHead title="Bring in your trades"
+            actions={<>
+              <button type="button" className="btn quiet sm" onClick={() => setSetup(true)}>Capital and brokerage</button>
+              <button type="button" className="btn quiet sm" onClick={() => setAdding(true)}><Plus size={16} />Add a trade by hand</button>
+            </>} />
+          <p className="k-small k-muted">Upload the tradebook (every purchase and sale) from Zerodha Console, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities, or the tax P&amp;L ZIP or its "Tradewise Exits" files (equity, F&amp;O, commodity and currency, intraday and delivery). Any CSV works with the columns Date, Symbol, Type (B or S), Quantity and Price. Trades already in the journal are skipped. US stocks and crypto are added by hand.</p>
+          <div className="k-row">
+            <UploadButton label="Upload files" busy={busy} multiple accept=".csv,.txt,.tsv,.xlsx,.xls,.zip" ariaLabel="Tradebook or tax P&L files" onFiles={pick} />
+            {anyTrades && (
+              <Select label="Add to or replace the imported trades" value={mode} onChange={(v) => setMode(v as "add" | "replace")}
+                options={[{ value: "add", label: "Add to my trades" }, { value: "replace", label: "Replace imported trades" }]} />
             )}
-            {result.skipped.length > 0 && (
-              <details className="small"><summary>{result.skipped.length} file{result.skipped.length === 1 ? "" : "s"} left out</summary>
-                <ul>{result.skipped.map((p, i) => <li key={i}>{p.name}: {p.reason}</li>)}</ul>
-              </details>
+            <button type="button" className="btn outline" disabled={busy} onClick={fromTax}>Use my tax report's trades</button>
+          </div>
+          <p className="k-note">The tax report keeps equity trade by trade, so those come across. Its F&amp;O, commodity and currency are kept as totals for each year: they show under the trades, and the tax P&amp;L's own files above bring them in trade by trade.</p>
+          {result && (
+            <div className="k-stack k-tight" role="status">
+              <p className="k-small"><b>{result.added.toLocaleString()} trade line{result.added === 1 ? "" : "s"} added</b>{result.duplicates > 0 && `, ${result.duplicates.toLocaleString()} already in the journal (skipped)`}{result.broker !== "CSV" ? ` from a ${result.broker} file` : ""}.</p>
+              {result.problem_count > 0 && (
+                <Disclosure summary={`${result.problem_count} line${result.problem_count === 1 ? "" : "s"} couldn't be read`}>
+                  <ul className="k-list">{result.problems.slice(0, 30).map((p, i) => <li key={i}>Line {p.line} · {p.text}: {p.reason}</li>)}</ul>
+                </Disclosure>
+              )}
+              {result.skipped.length > 0 && (
+                <Disclosure summary={`${result.skipped.length} file${result.skipped.length === 1 ? "" : "s"} left out`}>
+                  <ul className="k-list">{result.skipped.map((p, i) => <li key={i}>{p.name}: {p.reason}</li>)}</ul>
+                </Disclosure>
+              )}
+            </div>
+          )}
+        </Card>
+
+        {(others.length > 1 || (j.practice_count ?? 0) > 0 || segs.length > 1) && (
+          <div className="k-stack k-tight j-filters">
+            {others.length > 1 && (
+              <Seg label="Market" value={j.market} onChange={(v) => { setMarket(v); setSegment("all"); }}
+                options={others.map((x) => ({ value: x.id, label: `${x.label} (${x.n})` }))} />
+            )}
+            {j.market === "in" && segs.length > 1 && (
+              <ChipBar label="Segment" value={j.segment} onChange={setSegment}
+                options={[{ value: "all", label: "All" }, ...segs.map((k) => ({ value: k, label: `${j.segments[k]} (${j.segment_counts[k]})` }))]} />
+            )}
+            {(j.practice_count ?? 0) > 0 && (
+              <div className="k-row j-show">
+                <Seg label="Which trades" value={j.show} onChange={(v) => showOnly(v as Show)}
+                  options={[{ value: "real", label: `Real trades (${j.real_count})` }, { value: "practice", label: `Practice (${j.practice_count})` }, { value: "all", label: "Both" }]} />
+                <span className="k-note">Practice trades come from <Link className="link" to="/trade/replay">chart replay</Link>: a simulation on past candles, not real trades.</span>
+              </div>
             )}
           </div>
         )}
-      </section>
 
-      {(j.practice_count ?? 0) > 0 && (
-        <div className="row wrap j-show" style={{ gap: 10, alignItems: "center" }}>
-          <div className="seg" role="group" aria-label="Which trades">
-            {([["real", `Real trades (${j.real_count})`], ["practice", `Practice (${j.practice_count})`], ["all", "Both"]] as [Show, string][]).map(([k, l]) => (
-              <button key={k} type="button" aria-pressed={j.show === k} onClick={() => showOnly(k)}>{l}</button>
-            ))}
+        {!has ? (
+          <Card>
+            <EmptyState title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
+              Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.
+            </EmptyState>
+          </Card>
+        ) : (
+          <>
+            {j.beyond_limit > 0 && (
+              <Notice action={{ label: "See plans", to: "/plans" }}>
+                Your plan keeps the last {j.limit} trades, so {j.beyond_limit.toLocaleString()} older one{j.beyond_limit === 1 ? " isn't" : "s aren't"} counted. {j.plan_name} counts every trade.
+              </Notice>
+            )}
+            {j.verdict ? <VerdictView v={j.verdict} /> : <Locked plan={j.plan_name} what="The honesty checks on your real trades (enough trades, luck or edge, bad-luck drawdown, charges)" />}
+            <Stats s={s} />
+            <Card label="Running P&L after charges">
+              <CardHead title="Running P&L after charges" />
+              <Curve s={s} />
+              <p className="k-note">Each point is a trade's exit, adding up from {money(0, j.currency)}. {s.first && s.last ? `${day(s.first)} to ${day(s.last)}.` : ""}</p>
+            </Card>
+            {j.breakdowns ? <Breakdowns b={j.breakdowns} r={j.r} /> : <Locked plan={j.plan_name} what="Breakdowns by day, time of day, setup, instrument and holding time, and R-multiples" />}
+            {j.full && <PaperVsReal j={j} />}
+            <Trades j={j} onEdit={setEditing} />
+          </>
+        )}
+        {j.tax_totals.length > 0 && <TaxTotals rows={j.tax_totals} />}
+        {has && (j.open.length > 0 || j.unmatched.length > 0) && <OpenList j={j} />}
+
+        <section className="k-stack k-tight" aria-label="About these numbers">
+          <p className="k-note">{j.assumptions} Facts about past trades, not advice.</p>
+          <p className="k-note">Worked out as of {day(j.as_of)}{j.updated_at ? ` · trades saved as of ${day(j.updated_at)}` : ""}.</p>
+          <div className="k-row">
+            {j.removed > 0 && <button type="button" className="btn quiet sm" onClick={() => api<Journal>("/trade/journal/restore", { method: "POST" }).then(adopt).catch(fail)}>Show {j.removed} removed trade{j.removed === 1 ? "" : "s"} again</button>}
+            <button type="button" className="btn quiet sm danger" onClick={() => setAskDelete(true)}><Trash size={16} />Delete my journal</button>
           </div>
-          <span className="tiny muted">Practice trades come from <Link className="link" to="/trade/replay">chart replay</Link>: a simulation on past candles, not real trades.</span>
-        </div>
-      )}
+        </section>
 
-      {!has ? (
-        <Empty title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
-          <p className="muted">Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.</p>
-        </Empty>
-      ) : (
-        <>
-          {j.beyond_limit > 0 && (
-            <div className="banner">
-              <span>Your plan keeps the last {j.limit} trades, so {j.beyond_limit.toLocaleString()} older one{j.beyond_limit === 1 ? " isn't" : "s aren't"} counted. {j.plan_name} counts every trade.</span>
-              <Link to="/plans" className="btn sm">See plans</Link>
-            </div>
-          )}
-          {j.verdict ? <VerdictView v={j.verdict} /> : <Locked plan={j.plan_name} what="The honesty checks on your real trades (enough trades, luck or edge, bad-luck drawdown, charges)" />}
-          <Stats s={s} />
-          <section className="card stack" style={{ gap: 12 }} aria-labelledby="j-curve">
-            <h2 id="j-curve" className="h2">Running P&amp;L after charges</h2>
-            <XYChart series={[{ values: s.equity.map((p) => p.v), color: "var(--series-1)", label: "P&L after charges", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]}
-              times={s.equity.map((p) => p.t)} format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} testId="journal-curve"
-              refs={[{ v: 0, strong: true }]} ariaLabel={`Running P&L after charges over ${s.n} trades, ending at ${inr(s.net)}`} />
-            <p className="tiny muted" style={{ margin: 0 }}>Each point is a trade's exit, adding up from ₹0. {s.first && s.last ? `${day(s.first)} to ${day(s.last)}.` : ""}</p>
-          </section>
-          {j.breakdowns ? <Breakdowns b={j.breakdowns} r={j.r} /> : <Locked plan={j.plan_name} what="Breakdowns by day, time of day, setup, instrument and holding time, and R-multiples" />}
-          {j.full && <PaperVsReal j={j} />}
-          <Trades j={j} onEdit={setEditing} />
-          {(j.open.length > 0 || j.unmatched.length > 0) && <OpenList j={j} />}
-        </>
-      )}
-
-      <section className="stack" style={{ gap: 8 }}>
-        <p className="tiny muted" style={{ margin: 0 }}>{j.assumptions} Facts about past trades, not advice.</p>
-        <AsOf parts={[["Worked out", j.as_of], ["Trades saved", j.updated_at]]} />
-        <div className="row wrap" style={{ gap: 10 }}>
-          {j.removed > 0 && <button className="btn quiet sm" onClick={() => api<Journal>("/trade/journal/restore", { method: "POST" }).then(setJ).catch(fail)}>Show {j.removed} removed trade{j.removed === 1 ? "" : "s"} again</button>}
-          <button className="btn quiet sm danger" onClick={remove}><Trash size={16} />Delete my journal</button>
-        </div>
-      </section>
-
-      {editing && <NoteEditor j={j} t={editing} onClose={() => setEditing(null)} onSaved={(x) => { setJ(x); setEditing(null); }} />}
-      {adding && <AddTrade onClose={() => setAdding(false)} onSaved={(x) => { setJ(x); setAdding(false); notify("Trade added."); }} />}
-      {setup && <Settings j={j} onClose={() => setSetup(false)} onSaved={(x) => { setJ(x); setSetup(false); notify("Saved. Charges and drawdowns are worked out again."); }} />}
-    </div>
+        {editing && <NoteEditor j={j} t={editing} onClose={() => setEditing(null)} onSaved={(x) => { adopt(x); setEditing(null); }} />}
+        {adding && <AddTrade onClose={() => setAdding(false)} onSaved={(x) => { adopt(x); setAdding(false); notify("Trade added."); }} />}
+        {setup && <Settings j={j} onClose={() => setSetup(false)} onSaved={(x) => { adopt(x); setSetup(false); notify("Saved. Charges and drawdowns are worked out again."); }} />}
+        {askDelete && (
+          <ConfirmDialog title="Delete my journal?" confirmLabel="Delete my journal" onConfirm={remove} onClose={() => setAskDelete(false)}>
+            Every imported and added trade, your notes and settings are removed from StratLab. Your broker account isn't touched.
+          </ConfirmDialog>
+        )}
+      </div>
+    </CurrencyCtx.Provider>
   );
 }
 
 function Locked({ plan, what }: { plan: string; what: string }) {
+  return <PlanNote><b>{what}</b> are on the {plan} plan. The trade list, your notes and the basic stats below are for everyone.</PlanNote>;
+}
+
+function Curve({ s }: { s: Summary }) {
+  const { m, compact } = useMoney();
   return (
-    <section className="card dashed stack" style={{ gap: 8 }}>
-      <p className="small" style={{ margin: 0 }}><b>{what}</b> are on the {plan} plan. The trade list, your notes and the basic stats below are for everyone.</p>
-      <Link to="/plans" className="btn sm" style={{ alignSelf: "flex-start" }}>See plans</Link>
-    </section>
+    <XYChart series={[{ values: s.equity.map((p) => p.v), color: "var(--series-1)", label: "P&L after charges", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]}
+      times={s.equity.map((p) => p.t)} format={(v) => m(v)} axisFormat={compact} testId="journal-curve"
+      refs={[{ v: 0, strong: true }]} ariaLabel={`Running P&L after charges over ${s.n} trades, ending at ${m(s.net)}`} />
   );
 }
 
-function Figure({ label, children, tone, help }: { label: string; children: React.ReactNode; tone?: string; help?: string }) {
-  return <div className="stat"><span className="tiny muted">{label}{help && <Info>{help}</Info>}</span><b className={`num ${tone ?? ""}`}>{children}</b></div>;
-}
-
 function Stats({ s }: { s: Summary }) {
+  const { m, signed } = useMoney();
   const st = s.streaks;
+  const k = (label: string, help: string) => <>{label}<Info>{help}</Info></>;
   return (
-    <section className="card stack" style={{ gap: 12 }} aria-labelledby="j-stats">
-      <h2 id="j-stats" className="h2">{s.n} closed trade{s.n === 1 ? "" : "s"}</h2>
-      <div className="stat-row" aria-label="Stats">
-        <Figure label="P&L after charges" tone={signClass(s.net)}>{signed(s.net)}</Figure>
-        <Figure label="Win rate">{s.win_rate == null ? "–" : `${s.win_rate}%`} <span className="small muted">{s.wins}W · {s.losses}L</span></Figure>
-        <Figure label="Average win" tone="pos">{inr(s.avg_win)}</Figure>
-        <Figure label="Average loss" tone="neg">{inr(s.avg_loss)}</Figure>
-        <Figure label="Expectancy" tone={signClass(s.expectancy)} help="The average result per trade after charges: the total P&L divided by the number of trades.">{signed(s.expectancy)}</Figure>
-        <Figure label="Profit factor" help="Money made on winning trades divided by money lost on losing ones. Above 1 means the wins added up to more than the losses.">{s.profit_factor ?? (s.wins ? "No losses" : "–")}</Figure>
-        <Figure label="Deepest fall" tone="neg" help="The biggest drop of the running P&L from a high, after charges. As a % of your capital plus the P&L at that high, when you've entered your capital.">{inr(-s.max_dd)}{s.max_dd_pct != null && <span className="small"> ({s.max_dd_pct}%)</span>}</Figure>
-        <Figure label="Longest streaks">{st.longest_win}W · {st.longest_loss}L <span className="small muted">{st.current.kind ? `now ${st.current.n} ${st.current.kind === "win" ? "win" : "loss"}${st.current.n === 1 ? "" : st.current.kind === "win" ? "s" : "es"}` : ""}</span></Figure>
-        <Figure label="Charges" help="STT/CTT, exchange and SEBI fees, stamp duty, GST and brokerage, as a share of the P&L before charges.">{inr(s.charges)}{s.charges_pct != null && <span className="small muted"> · {s.charges_pct}% of gross</span>}</Figure>
-      </div>
-      {s.gross <= 0 && s.n > 0 && <p className="small muted" style={{ margin: 0 }}>Before charges the trades came to {signed(s.gross)}; charges of {inr(s.charges)} were on top of that.</p>}
-    </section>
+    <Card label={`${s.n} closed trades`}>
+      <CardHead title={`${s.n} closed trade${s.n === 1 ? "" : "s"}`} />
+      <StatRow label="Stats">
+        <Stat item label="P&L after charges" value={signed(s.net)} tone={tone(s.net)} />
+        <Stat item label="Win rate" value={s.win_rate == null ? "–" : `${s.win_rate}%`} note={`${s.wins}W · ${s.losses}L`} />
+        <Stat item label="Average win" value={m(s.avg_win)} tone="up" />
+        <Stat item label="Average loss" value={m(s.avg_loss)} tone="down" />
+        <Stat item label={k("Expectancy", "The average result per trade after charges: the total P&L divided by the number of trades.")} value={signed(s.expectancy)} tone={tone(s.expectancy)} />
+        <Stat item label={k("Profit factor", "Money made on winning trades divided by money lost on losing ones. Above 1 means the wins added up to more than the losses.")} value={s.profit_factor ?? (s.wins ? "No losses" : "–")} />
+        <Stat item label={k("Deepest fall", "The biggest drop of the running P&L from a high, after charges. As a % of your capital plus the P&L at that high, when you've entered your capital.")}
+          value={m(-s.max_dd)} tone="down" note={s.max_dd_pct != null ? `${s.max_dd_pct}% of capital` : undefined} />
+        <Stat item label="Longest streaks" value={`${st.longest_win}W · ${st.longest_loss}L`}
+          note={st.current.kind ? `now ${st.current.n} ${st.current.kind === "win" ? "win" : "loss"}${st.current.n === 1 ? "" : st.current.kind === "win" ? "s" : "es"}` : undefined} />
+        <Stat item label={k("Charges", "STT/CTT, exchange and SEBI fees, stamp duty, GST and brokerage in India, as a share of the P&L before charges. For US stocks and crypto, the charges you entered.")}
+          value={m(s.charges)} note={s.charges_pct != null ? `${s.charges_pct}% of gross` : undefined} />
+      </StatRow>
+      {s.gross <= 0 && s.n > 0 && <p className="k-small k-muted">Before charges the trades came to {signed(s.gross)}; charges of {m(s.charges)} were on top of that.</p>}
+    </Card>
   );
 }
 
@@ -275,134 +316,126 @@ const CHECK_HELP: Record<string, string> = {
 function VerdictView({ v }: { v: NonNullable<Journal["verdict"]> }) {
   return (
     <>
-      <section className="row" style={{ gap: 32, alignItems: "flex-end", paddingBottom: 22, borderBottom: "1px solid var(--line-2)", flexWrap: "wrap" }} aria-label="Verdict on your real trades">
-        <div className="stack" style={{ gap: 10, flex: "1 1 480px", minWidth: 0 }}>
-          <span className="eyebrow">Verdict on your real trades</span>
-          <h2 className={`verdict-head ${v.verdict}`} style={{ fontSize: "clamp(44px, 7vw, 84px)" }}>{v.headline}</h2>
-          <p className="serif" style={{ fontSize: 20, lineHeight: 1.4, color: "var(--ink-2)", maxWidth: 820, margin: 0 }}>{v.summary}</p>
+      <section className="j-verdict" aria-label="Verdict on your real trades">
+        <div className="k-stack j-verdict-main">
+          <span className="k-eyebrow">Verdict on your real trades</span>
+          <h2 className={`verdict-head j-verdict-head ${v.verdict}`}>{v.headline}</h2>
+          <p className="j-verdict-sum">{v.summary}</p>
         </div>
-        <div className="card stack" style={{ gap: 8, width: 230, flex: "none", padding: 18 }}>
-          <span className="small muted" style={{ fontWeight: 600 }}>Strength of evidence</span>
+        <Card>
+          <span className="k-small k-muted"><b>Strength of evidence</b></span>
           <div className="dots" aria-label={`${v.passed} of ${v.total} checks passed`}>
             {Array.from({ length: v.total }, (_, k) => <span key={k} className={k < v.passed ? "on" : ""} />)}
           </div>
-          <span className="mono">{v.passed} of {v.total} checks passed</span>
-        </div>
+          <span className="k-mono">{v.passed} of {v.total} checks passed</span>
+        </Card>
       </section>
-      <section className="grid4">{v.checks.map((c) => <CheckCard key={c.id} c={c} />)}</section>
+      <div className="j-checks">{v.checks.map((c) => <CheckCard key={c.id} c={c} />)}</div>
     </>
   );
 }
 
-/** Two bars in rupees, each side of a zero line: the earlier and later halves of the trades. */
+/** Two bars, each side of nothing: the earlier and later halves of the trades. */
 function Halves({ a, b, an, bn }: { a: number; b: number; an: number; bn: number }) {
+  const { signed } = useMoney();
   const max = Math.max(Math.abs(a), Math.abs(b), 1);
   const bar = (v: number, label: string) => (
-    <div className="stack" style={{ gap: 4 }} title={`${label}: ${signed(v)}`}>
-      <span className="small muted">{label}</span>
-      <div className="row" style={{ gap: 8 }}>
-        <span style={{ height: 12, width: `${Math.max(4, (Math.abs(v) / max) * 140)}px`, borderRadius: 4, background: v >= 0 ? "var(--blue)" : "var(--orange)" }} />
-        <span className={`mono small ${signClass(v)}`}>{signed(v)}</span>
+    <div className="k-stack k-tight" title={`${label}: ${signed(v)}`}>
+      <span className="k-small k-muted">{label}</span>
+      <div className="k-row">
+        <svg className="j-half" viewBox="0 0 140 12" width="140" height="12" aria-hidden="true"><rect className={v >= 0 ? "j-pos" : "j-neg"} x="0" y="0" rx="4" height="12" width={Math.max(4, (Math.abs(v) / max) * 140)} /></svg>
+        <span className={`k-mono k-small ${upDown(v)}`}>{signed(v)}</span>
       </div>
     </div>
   );
-  return <div className="stack" style={{ gap: 8 }}>{bar(a, `Earlier ${an} trades`)}{bar(b, `Later ${bn} trades`)}</div>;
+  return <div className="k-stack">{bar(a, `Earlier ${an} trades`)}{bar(b, `Later ${bn} trades`)}</div>;
 }
 
 function CheckCard({ c }: { c: Check }) {
+  const { m, signed } = useMoney();
   const d = c.data;
   return (
-    <div className="card stack" style={{ gap: 12, padding: 20 }} data-check={c.id}>
-      <div className="spread check-head"><h3 className="h3 row" style={{ gap: 0 }}>{c.title}<Info>{CHECK_HELP[c.id]}</Info></h3><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
-      {c.id === "sample" && d && <div className="serif" style={{ fontSize: 56, lineHeight: 1, letterSpacing: "-0.03em" }}>{d.trades}</div>}
-      {c.id === "luck" && d && <Halves a={d.earlier} b={d.later} an={d.earlier_n} bn={d.later_n} />}
-      {c.id === "shuffle" && d && d.unit === "pct" && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
-      {c.id === "shuffle" && d && d.unit === "rupees" && <p className="mono small" style={{ margin: 0 }}>Yours {inr(-d.yours)} · 95% of reshuffles above {inr(-d.p95)} · worst {inr(-d.worst)}</p>}
-      {c.id === "costs" && d && <p className="mono small" style={{ margin: 0 }}>Gross {signed(d.gross)} · charges {inr(d.charges)} · doubled {signed(d.doubled)}</p>}
-      <p className="small muted" style={{ lineHeight: 1.5, margin: 0 }}>{c.detail}</p>
-      {c.id === "shuffle" && d?.unit === "rupees" && <span className="hint">Enter your trading capital (Capital and brokerage) to see this as a %.</span>}
+    <div data-check={c.id} className="j-check">
+      <Card label={c.title}>
+        <div className="k-card-head">
+          <h3 className="k-card-title">{c.title}<Info>{CHECK_HELP[c.id]}</Info></h3>
+          <span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span>
+        </div>
+        {c.id === "sample" && d && <div className="j-big">{d.trades}</div>}
+        {c.id === "luck" && d && <Halves a={d.earlier} b={d.later} an={d.earlier_n} bn={d.later_n} />}
+        {c.id === "shuffle" && d && d.unit === "pct" && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
+        {c.id === "shuffle" && d && d.unit === "rupees" && <p className="k-mono k-small">Yours {m(-d.yours)} · 95% of reshuffles above {m(-d.p95)} · worst {m(-d.worst)}</p>}
+        {c.id === "costs" && d && <p className="k-mono k-small">Gross {signed(d.gross)} · charges {m(d.charges)} · doubled {signed(d.doubled)}</p>}
+        <p className="k-small k-muted">{c.detail}</p>
+        {c.id === "shuffle" && d?.unit === "rupees" && <span className="k-note">Enter your trading capital (Capital and brokerage) to see this as a %.</span>}
+      </Card>
     </div>
   );
 }
 
 /** One breakdown as a table, each row with a bar for its net P&L either side of zero. */
 function BreakdownTable({ rows, label }: { rows: Row[]; label: string }) {
+  const { m, signed } = useMoney();
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.net)));
-  if (!rows.length) return <p className="small muted">Nothing to show here yet. {label === "Mistakes" || label === "Feelings" ? "Tag trades in their journal entry to see this." : ""}</p>;
-  return (
-    <div className="table-wrap j-wrap" style={{ margin: 0 }}>
-      <table className="nums" aria-label={`P&L by ${label.toLowerCase()}`}>
-        <thead><tr><th>{label}</th><th>Net</th><th style={{ width: "26%" }}><span className="sr-only">Net, drawn</span></th><th>Trades</th><th>Win rate</th><th>Avg</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key} title={`${r.label ?? r.key}: ${r.n} trades, ${signed(r.net)} after ${inr(r.charges)} of charges`}>
-              <td>{r.label ?? r.key}</td><td className={signClass(r.net)}>{signed(r.net)}</td>
-              <td>
-                <div className="j-bar" aria-hidden="true">
-                  <span style={r.net >= 0 ? { left: "50%", width: `${(r.net / max) * 50}%`, background: "var(--blue)" }
-                    : { right: "50%", width: `${(-r.net / max) * 50}%`, background: "var(--orange)" }} />
-                </div>
-              </td>
-              <td>{r.n}</td><td>{r.win_rate}%</td><td className={signClass(r.avg)}>{signed(r.avg)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  if (!rows.length) return <p className="k-small k-muted">Nothing to show here yet. {label === "Mistakes" || label === "Feelings" ? "Tag trades in their journal entry to see this." : ""}</p>;
+  const cols: Column<Row>[] = [
+    { key: "k", header: label, rowHeader: true, cell: (r) => r.label ?? r.key },
+    { key: "net", header: "Net", numeric: true, cell: (r) => <span className={upDown(r.net)}>{signed(r.net)}</span> },
+    { key: "bar", header: <span className="sr-only">Net, drawn</span>, cell: (r) => (
+      <svg className="j-bar" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true">
+        <line x1="50" x2="50" y1="0" y2="12" className="j-zero" />
+        <rect className={r.net >= 0 ? "j-pos" : "j-neg"} y="1" height="10" x={r.net >= 0 ? 50 : 50 - (-r.net / max) * 50} width={(Math.abs(r.net) / max) * 50} />
+      </svg>) },
+    { key: "n", header: "Trades", numeric: true, cell: (r) => r.n },
+    { key: "wr", header: "Win rate", numeric: true, cell: (r) => `${r.win_rate}%` },
+    { key: "avg", header: "Avg", numeric: true, cell: (r) => <span className={upDown(r.avg)}>{signed(r.avg)}</span> },
+  ];
+  return <DataTable label={`P&L by ${label.toLowerCase()}`} columns={cols} rows={rows} rowKey={(r) => r.key}
+    rowAttrs={(r) => ({ title: `${r.label ?? r.key}: ${r.n} trades, ${signed(r.net)} after ${m(r.charges)} of charges` })} />;
 }
 
 function Breakdowns({ b, r }: { b: Record<string, Row[]>; r: Journal["r"] }) {
   const [view, setView] = useState("weekday");
   const label = VIEWS.find(([k]) => k === view)?.[1] ?? "";
   return (
-    <section className="card stack" style={{ gap: 14 }} aria-labelledby="j-break">
-      <div className="spread" style={{ flexWrap: "wrap" }}>
-        <h2 id="j-break" className="h2">Where the P&amp;L came from</h2>
-        <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <span>By</span>
-          <select value={view} onChange={(e) => setView(e.target.value)} aria-label="Break the P&L down by">
-            {VIEWS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
-        </label>
-      </div>
+    <Card label="Where the P&L came from">
+      <CardHead title="Where the P&L came from"
+        actions={<Select label="Break the P&L down by" value={view} onChange={setView} options={VIEWS.map(([k, l]) => ({ value: k, label: `By ${l.toLowerCase()}` }))} />} />
       <BreakdownTable rows={b[view] ?? []} label={label} />
-      {view === "hour" && <p className="tiny muted" style={{ margin: 0 }}>Same-day trades with times in the file, by the hour they were entered (India time).</p>}
+      {view === "hour" && <p className="k-note">Same-day trades with times in the file, by the hour they were entered (India time).</p>}
       {r && <RChart r={r} />}
-    </section>
+    </Card>
   );
 }
 
 function RChart({ r }: { r: NonNullable<Journal["r"]> }) {
   const max = Math.max(1, ...r.buckets.map((x) => x.n));
   return (
-    <div className="stack" style={{ gap: 10, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
-      <h3 className="h3 row" style={{ gap: 0 }}>R-multiples<Info>R is a trade's result divided by the risk you planned: the distance from the entry to your planned stop, times the quantity. A trade that lost exactly what you planned to risk is −1R. Set a stop in a trade's journal entry to include it.</Info></h3>
-      {r.n === 0 ? <p className="small muted" style={{ margin: 0 }}>No trade has a planned stop yet. Open a trade's journal entry and set its stop to see its R.</p> : (
+    <div className="k-stack j-rbox">
+      <h3 className="k-sub">R-multiples<Info>R is a trade's result divided by the risk you planned: the distance from the entry to your planned stop, times the quantity. A trade that lost exactly what you planned to risk is −1R. Set a stop in a trade's journal entry to include it.</Info></h3>
+      {r.n === 0 ? <p className="k-small k-muted">No trade has a planned stop yet. Open a trade's journal entry and set its stop to see its R.</p> : (
         <>
           <div className="j-rbars" role="img" aria-label={`R-multiples of ${r.n} trades: ${r.buckets.map((x) => `${x.label} ${x.n}`).join(", ")}`}>
             {r.buckets.map((x, i) => (
               <div key={x.label} className="j-rcol" title={`${x.label}: ${x.n} trade${x.n === 1 ? "" : "s"}`}>
-                <span className="mono tiny">{x.n || ""}</span>
-                <span className="j-rbar" style={{ height: `${(x.n / max) * 100}%`, background: i < 3 ? "var(--orange)" : "var(--blue)" }} />
-                <span className="tiny muted">{x.label}</span>
+                <span className="k-mono k-note">{x.n || ""}</span>
+                <svg className="j-rbar" viewBox="0 0 10 100" preserveAspectRatio="none" aria-hidden="true">
+                  <rect className={i < 3 ? "j-neg" : "j-pos"} x="0" width="10" y={100 - (x.n / max) * 100} height={(x.n / max) * 100} />
+                </svg>
+                <span className="k-note">{x.label}</span>
               </div>
             ))}
           </div>
-          <p className="small muted" style={{ margin: 0 }}>{r.n} of {r.of} trades have a planned stop; average {r.avg}R.{r.planned_rr != null ? ` Planned reward to risk from your targets: ${r.planned_rr} to 1 (${r.planned_n} trades); ${r.hit_target} reached the target.` : ""}</p>
+          <p className="k-small k-muted">{r.n} of {r.of} trades have a planned stop; average {r.avg}R.{r.planned_rr != null ? ` Planned reward to risk from your targets: ${r.planned_rr} to 1 (${r.planned_n} trades); ${r.hit_target} reached the target.` : ""}</p>
         </>
       )}
     </div>
   );
 }
 
-const CMP: [string, string, (v: number | null) => string][] = [["n", "Trades", (v) => String(v ?? "–")], ["win_rate", "Win rate", (v) => (v == null ? "–" : `${v}%`)],
-  ["avg_win", "Average win", (v) => inr(v)], ["avg_loss", "Average loss", (v) => inr(v)], ["expectancy", "Expectancy", (v) => signed(v)],
-  ["profit_factor", "Profit factor", (v) => (v == null ? "–" : String(v))], ["net", "P&L after costs", (v) => signed(v)],
-  ["max_dd", "Deepest fall", (v) => (v == null ? "–" : inr(-v))], ["avg_hold_days", "Average holding (days)", (v) => (v == null ? "–" : String(v))]];
-
 function PaperVsReal({ j }: { j: Journal }) {
   const { fail } = useApp();
+  const { m, signed } = useMoney();
   const [tag, setTag] = useState(j.tags[0] ?? "");
   const guess = (t: string) => j.links[t] ?? j.paper.find((p) => p.name.toLowerCase() === t.toLowerCase())?.id ?? "";
   const [sid, setSid] = useState(() => guess(j.tags[0] ?? ""));
@@ -414,95 +447,113 @@ function PaperVsReal({ j }: { j: Journal }) {
       if (j.links[tag] !== sid) api("/trade/journal/links", { method: "PUT", body: { tag, session: sid } }).catch(() => undefined);
     } catch (e) { fail(e); }
   };
+  const CMP: [string, string, (v: number | null) => string][] = [["n", "Trades", (v) => String(v ?? "–")], ["win_rate", "Win rate", (v) => (v == null ? "–" : `${v}%`)],
+    ["avg_win", "Average win", (v) => m(v)], ["avg_loss", "Average loss", (v) => m(v)], ["expectancy", "Expectancy", (v) => signed(v)],
+    ["profit_factor", "Profit factor", (v) => (v == null ? "–" : String(v))], ["net", "P&L after costs", (v) => signed(v)],
+    ["max_dd", "Deepest fall", (v) => (v == null ? "–" : m(-v))], ["avg_hold_days", "Average holding (days)", (v) => (v == null ? "–" : String(v))]];
+  type C = (typeof CMP)[number];
+  const cols: Column<C>[] = got ? [
+    { key: "l", header: "", rowHeader: true, cell: (c) => c[1] },
+    { key: "real", header: `Real: ${got.tag}`, numeric: true, cell: (c) => c[2](got.real[c[0]] as number | null) },
+    { key: "paper", header: `Paper: ${got.session.name}`, numeric: true, cell: (c) => c[2](got.paper[c[0]] as number | null) },
+  ] : [];
   return (
-    <section className="card stack" style={{ gap: 12 }} aria-labelledby="j-paper">
-      <h2 id="j-paper" className="h2">Paper vs real</h2>
+    <Card label="Paper vs real">
+      <CardHead title="Paper vs real" />
       {!j.tags.length || !j.paper.length ? (
-        <p className="small muted" style={{ margin: 0 }}>{!j.paper.length ? <>You have no paper sessions yet. <Link className="link" to="/paper">Paper trade a strategy</Link>, then tag</> : "Tag"} your real trades of the same setup in their journal entry to compare the two side by side.</p>
+        <p className="k-small k-muted">{!j.paper.length ? <>You have no paper sessions yet. <Link className="link" to="/paper">Paper trade a strategy</Link>, then tag</> : "Tag"} your real trades of the same setup in their journal entry to compare the two side by side.</p>
       ) : (
         <>
-          <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
-            <label className="field">Your setup<select value={tag} onChange={(e) => setTag(e.target.value)}>{j.tags.map((t) => <option key={t}>{t}</option>)}</select></label>
-            <label className="field">Paper session<select value={sid} onChange={(e) => setSid(e.target.value)}>
-              <option value="">Pick one</option>{j.paper.map((p) => <option key={p.id} value={p.id}>{p.name}{p.symbol ? ` · ${p.symbol}` : ""}</option>)}
-            </select></label>
-            <button className="btn" disabled={!sid} onClick={run}>Compare</button>
-          </div>
-          {got && (
-            <div className="table-wrap j-wrap" style={{ margin: 0 }}>
-              <table className="nums" aria-label="Paper vs real">
-                <thead><tr><th></th><th>Real: {got.tag}</th><th>Paper: {got.session.name}</th></tr></thead>
-                <tbody>{CMP.map(([k, l, f]) => <tr key={k}><td>{l}</td><td>{f(got.real[k] as number | null)}</td><td>{f(got.paper[k] as number | null)}</td></tr>)}</tbody>
-              </table>
-            </div>
-          )}
-          {got && <p className="tiny muted" style={{ margin: 0 }}>{got.note}</p>}
+          <FormGrid>
+            <Field label="Your setup">{(id) => <Select id={id} value={tag} onChange={setTag} options={j.tags.map((t) => ({ value: t, label: t }))} />}</Field>
+            <Field label="Paper session">{(id) => <Select id={id} value={sid} onChange={setSid}
+              options={[{ value: "", label: "Pick one" }, ...j.paper.map((p) => ({ value: p.id, label: `${p.name}${p.symbol ? ` · ${p.symbol}` : ""}` }))]} />}</Field>
+          </FormGrid>
+          <div><button type="button" className="btn" disabled={!sid} onClick={run}>Compare</button></div>
+          {got && <DataTable label="Paper vs real" columns={cols} rows={CMP} rowKey={(c) => c[0]} />}
+          {got && <p className="k-note">{got.note}</p>}
         </>
       )}
-    </section>
+    </Card>
   );
 }
 
 function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
+  const { m, signed } = useMoney();
   const [shown, setShown] = useState(50);
   const [q, setQ] = useState("");
   const rows = useMemo(() => {
     const k = q.trim().toLowerCase();
     return k ? j.trades.filter((t) => t.symbol.toLowerCase().includes(k) || (t.note.tag ?? "").toLowerCase().includes(k)) : j.trades;
   }, [j.trades, q]);
+  const cols: Column<Trade>[] = [
+    { key: "trade", header: "Trade", rowHeader: true, wrap: true, cell: (t) => (
+      <div className="k-stack k-tight">
+        <div className="k-row">
+          <b>{t.symbol}</b>
+          <button type="button" className="btn quiet sm" onClick={() => onEdit(t)} aria-label={`Journal: ${t.symbol} ${when(t.exit_t)}`}><Pencil size={15} />{Object.keys(t.note).length ? "Edit" : "Note"}</button>
+        </div>
+        <span className="k-note">{t.side === "long" ? "Long" : t.side === "short" ? "Short" : "Side not in the file"} · {t.segment_label}</span>
+        {(t.note.tag || t.src === "practice") && <div className="k-row">
+          {t.src === "practice" && <Badge dot={false}>Chart replay</Badge>}
+          {t.note.tag && <Badge tone="ok" dot={false}>{t.note.tag}</Badge>}</div>}
+        {t.expired && <span className="k-note">Expired: counted at {money(0, t.currency)}</span>}
+      </div>) },
+    { key: "net", header: "Net", numeric: true, cell: (t) => <span className={upDown(t.net)}>{signed(t.net)}</span> },
+    { key: "r", header: "R", numeric: true, cell: (t) => (t.r == null ? "–" : `${t.r > 0 ? "+" : ""}${t.r}R`) },
+    { key: "exit", header: "Exit", numeric: true, cell: (t) => <>{when(t.exit_t)}<span className="k-sub-line">{holdText(t)}</span></> },
+    { key: "qty", header: "Qty", numeric: true, cell: (t) => qtyText(t.qty) },
+    { key: "px", header: "Entry → exit", numeric: true, cell: (t) => `${t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 })} → ${t.exit.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` },
+    { key: "ch", header: "Charges", numeric: true, cell: (t) => (
+      <span title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "none" ? "None entered" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{m(t.charges, 2)}</span>) },
+  ];
   return (
-    <section className="card stack" style={{ gap: 12 }} aria-labelledby="j-trades">
-      <div className="spread" style={{ flexWrap: "wrap" }}>
-        <h2 id="j-trades" className="h2">Trades</h2>
-        <input className="input" style={{ maxWidth: 260 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" />
-      </div>
-      <div className="table-wrap j-wrap" style={{ margin: 0 }}>
-        <table className="nums j-trades" aria-label="Trades">
-          <thead><tr><th>Trade</th><th>Net</th><th>R</th><th>Exit</th><th>Qty</th><th>Entry → exit</th><th>Charges</th></tr></thead>
-          <tbody>
-            {rows.slice(0, shown).map((t) => (
-              <tr key={t.id}>
-                <td>
-                  <div className="row wrap" style={{ gap: 8 }}>
-                    <b>{t.symbol}</b>
-                    <button className="btn quiet sm" onClick={() => onEdit(t)} aria-label={`Journal: ${t.symbol} ${when(t.exit_t)}`}><Pencil size={15} />{Object.keys(t.note).length ? "Edit" : "Note"}</button>
-                  </div>
-                  <div className="tiny muted">{t.side === "long" ? "Long" : t.side === "short" ? "Short" : "Side not in the file"} · {t.segment_label}</div>
-                  {(t.note.tag || t.src === "practice") && <div className="tiny row wrap" style={{ gap: 4 }}>
-                    {t.src === "practice" && <span className="badge j-practice">Chart replay</span>}
-                    {t.note.tag && <span className="badge fact">{t.note.tag}</span>}</div>}
-                  {t.expired && <div className="tiny muted">Expired: counted at ₹0</div>}
-                </td>
-                <td className={signClass(t.net)}>{signed(t.net)}</td>
-                <td>{t.r == null ? "–" : `${t.r > 0 ? "+" : ""}${t.r}R`}</td>
-                <td className="small">{when(t.exit_t)}<div className="tiny muted">{holdText(t)}</div></td>
-                <td>{qtyText(t.qty)}</td>
-                <td className="small">{t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 })} → {t.exit.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</td>
-                <td className="small" title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{inr(t.charges, 2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {rows.length > shown && <button className="btn quiet sm" style={{ alignSelf: "center" }} onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button>}
-      {j.overlap > 0 && <p className="tiny muted" style={{ margin: 0 }}>{j.overlap} tax P&amp;L line{j.overlap === 1 ? " is" : "s are"} left out: your tradebook has the same trades, with their times.</p>}
-      {j.count > j.trades.length && <p className="tiny muted" style={{ margin: 0 }}>The latest {j.trades.length.toLocaleString()} trades are listed; the stats count all {j.count.toLocaleString()}.</p>}
-    </section>
+    <Card label="Trades">
+      <CardHead title="Trades" actions={
+        <label className="k-search j-search"><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" /></label>} />
+      <DataTable label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
+      {rows.length > shown && <div className="k-center"><button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button></div>}
+      {j.overlap > 0 && <p className="k-note">{j.overlap} tax P&amp;L line{j.overlap === 1 ? " is" : "s are"} left out: your tradebook has the same trades, with their times.</p>}
+      {j.count > j.trades.length && <p className="k-note">The latest {j.trades.length.toLocaleString()} trades are listed; the stats count all {j.count.toLocaleString()}.</p>}
+    </Card>
+  );
+}
+
+/** The tax report's F&O, commodity and currency, kept there as totals for each financial year. */
+function TaxTotals({ rows }: { rows: TaxTotal[] }) {
+  const { m, signed } = useMoney();
+  const cols: Column<TaxTotal>[] = [
+    { key: "fy", header: "Year", rowHeader: true, cell: (r) => fyLabel(r.fy) },
+    { key: "seg", header: "Segment", cell: (r) => r.label },
+    { key: "n", header: "Trades", numeric: true, cell: (r) => r.trades.toLocaleString("en-IN") },
+    { key: "pnl", header: "Before charges", numeric: true, cell: (r) => <span className={upDown(r.pnl)}>{signed(r.pnl)}</span> },
+    { key: "ch", header: "Charges", numeric: true, cell: (r) => m(r.charges) },
+    { key: "net", header: "After charges", numeric: true, cell: (r) => <span className={upDown(r.net)}>{signed(r.net)}</span> },
+    { key: "to", header: "Turnover", numeric: true, cell: (r) => m(r.turnover) },
+  ];
+  return (
+    <Card label="From your tax report">
+      <CardHead title="From your tax report" info="Your tax report keeps F&O, commodity and currency as totals for each financial year, not trade by trade, so they can't be paired into round trips here. They are shown as they are in the report, and are not counted in the stats above. Upload the tax P&L's trade-by-trade files to count them." infoLabel="About these totals" />
+      <DataTable label="Totals from your tax report" columns={cols} rows={rows} rowKey={(r) => `${r.fy}-${r.seg}`} />
+      <p className="k-note">Totals per year as in your <Link className="link" to="/money/tax">tax report</Link>.</p>
+    </Card>
   );
 }
 
 function OpenList({ j }: { j: Journal }) {
+  const { signed } = useMoney();
   return (
-    <section className="card stack" style={{ gap: 10 }} aria-labelledby="j-open">
-      <h2 id="j-open" className="h2">Not counted yet</h2>
-      {j.open.length > 0 && <p className="small muted" style={{ margin: 0 }}>Still open in your files, so not a closed trade yet: {j.open.slice(0, 20).map((o) => `${o.symbol} (${o.side} ${qtyText(o.qty)} since ${day(o.since)}${o.realised ? `, ${signed(o.realised)} on the part closed` : ""})`).join("; ")}.</p>}
-      {j.unmatched.length > 0 && <p className="small muted" style={{ margin: 0 }}>Sold with no purchase in your files (bought before the earliest file, or moved in from another account): {j.unmatched.slice(0, 20).map((o) => o.symbol).join(", ")}. Upload the older tradebook to pair them.</p>}
-    </section>
+    <Card label="Not counted yet">
+      <CardHead title="Not counted yet" />
+      {j.open.length > 0 && <p className="k-small k-muted">Still open in your files, so not a closed trade yet: {j.open.slice(0, 20).map((o) => `${o.symbol} (${o.side} ${qtyText(o.qty)} since ${day(o.since)}${o.realised ? `, ${signed(o.realised)} on the part closed` : ""})`).join("; ")}.</p>}
+      {j.unmatched.length > 0 && <p className="k-small k-muted">Sold with no purchase in your files (bought before the earliest file, or moved in from another account): {j.unmatched.slice(0, 20).map((o) => o.symbol).join(", ")}. Upload the older tradebook to pair them.</p>}
+    </Card>
   );
 }
 
 function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose: () => void; onSaved: (x: Journal) => void }) {
   const { fail } = useApp();
+  const { m, signed } = useMoney();
   const n = t.note;
   const [tag, setTag] = useState(n.tag ?? "");
   const [notes, setNotes] = useState(n.notes ?? "");
@@ -513,8 +564,10 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
   const [target, setTarget] = useState(n.target != null ? String(n.target) : "");
   const [side, setSide] = useState<"" | "long" | "short">(n.side ?? "");
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
   const toggle = (list: string[], set: (x: string[]) => void, v: string) => set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const num = (v: string) => { const x = Number(v.replace(/,/g, "")); return v.trim() && Number.isFinite(x) && x > 0 ? x : null; };
+  const own = t.src === "manual" || t.src === "practice";
   const save = async () => {
     setBusy(true);
     try {
@@ -524,41 +577,49 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const del = async () => {
-    if (!confirm(t.src === "manual" || t.src === "practice" ? "Delete this trade?" : "Leave this trade out of the journal? You can show removed trades again at the foot of the page.")) return;
+    setAsking(false);
     try { onSaved(await api<Journal>(`/trade/journal/trades/${encodeURIComponent(t.id)}`, { method: "DELETE" })); } catch (e) { fail(e); }
   };
   return (
     <Modal title={`Journal: ${t.symbol}`} onClose={onClose} wide>
-      <div className="stack" style={{ gap: 14 }}>
-        <p className="small muted" style={{ margin: 0 }}>{when(t.entry_t)} → {when(t.exit_t)} · {qtyText(t.qty)} · {signed(t.net)} after {inr(t.charges, 2)} of charges</p>
-        <div className="nw-form j-form">
-          <label className="field">Setup or strategy<input value={tag} maxLength={40} list="j-tags" onChange={(e) => setTag(e.target.value)} placeholder="Opening range breakout" />
-            <datalist id="j-tags">{j.tags.map((x) => <option key={x} value={x} />)}</datalist></label>
+      <div className="k-stack">
+        <p className="k-small k-muted">{when(t.entry_t)} → {when(t.exit_t)} · {qtyText(t.qty)} · {signed(t.net)} after {m(t.charges, 2)} of charges</p>
+        <FormGrid>
+          <Field label="Setup or strategy" value={tag} maxLength={40} list="j-tags" placeholder="Opening range breakout" onChange={(e) => setTag(e.target.value)} />
           {t.src === "pnl" && (
-            <label className="field">Long or short<select value={side} onChange={(e) => setSide(e.target.value as "" | "long" | "short")}>
-              <option value="">Not in the file</option><option value="long">Long (bought first)</option><option value="short">Short (sold first)</option></select></label>
+            <Field label="Long or short">{(id) => <Select id={id} value={side} onChange={(v) => setSide(v as "" | "long" | "short")}
+              options={[{ value: "", label: "Not in the file" }, { value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           )}
-          <label className="field">Planned stop<input inputMode="decimal" value={stop} onChange={(e) => setStop(e.target.value)} placeholder={String(Math.round(t.entry * 0.98 * 100) / 100)} /></label>
-          <label className="field">Planned target<input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} /></label>
+          <Field label="Planned stop" inputMode="decimal" value={stop} placeholder={String(Math.round(t.entry * 0.98 * 100) / 100)} onChange={(e) => setStop(e.target.value)} />
+          <Field label="Planned target" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} />
+        </FormGrid>
+        <datalist id="j-tags">{j.tags.map((x) => <option key={x} value={x} />)}</datalist>
+        <Field label="Notes" wide>{(id) => <textarea id={id} className="k-textarea" value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} placeholder="Why you took it, what happened" />}</Field>
+        <Field label="Screenshots or links (one per line, up to 5)" wide>{(id) => <textarea id={id} className="k-textarea short" value={links} rows={2} onChange={(e) => setLinks(e.target.value)} placeholder="https://…" />}</Field>
+        <div className="k-stack k-tight">
+          <span className="k-small k-muted"><b>How you felt</b></span>
+          <ChipSet label="How you felt" options={j.emotions.map((x) => ({ value: x, label: x }))} on={emo} onToggle={(v) => toggle(emo, setEmo, v)} />
         </div>
-        <label className="field">Notes<textarea value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} placeholder="Why you took it, what happened" /></label>
-        <label className="field">Screenshots or links (one per line, up to 5)<textarea value={links} rows={2} style={{ minHeight: 64 }} onChange={(e) => setLinks(e.target.value)} placeholder="https://…" /></label>
-        <fieldset className="stack" style={{ gap: 8, border: 0, padding: 0, margin: 0 }}>
-          <legend className="small muted" style={{ fontWeight: 600, marginBottom: 6 }}>How you felt</legend>
-          <div className="row wrap" style={{ gap: 6 }}>{j.emotions.map((x) => <button key={x} type="button" className={`chip${emo.includes(x) ? " on" : ""}`} aria-pressed={emo.includes(x)} onClick={() => toggle(emo, setEmo, x)}>{x}</button>)}</div>
-        </fieldset>
-        <fieldset className="stack" style={{ gap: 8, border: 0, padding: 0, margin: 0 }}>
-          <legend className="small muted" style={{ fontWeight: 600, marginBottom: 6 }}>Mistakes</legend>
-          <div className="row wrap" style={{ gap: 6 }}>{j.mistakes.map((x) => <button key={x} type="button" className={`chip${mis.includes(x) ? " on" : ""}`} aria-pressed={mis.includes(x)} onClick={() => toggle(mis, setMis, x)}>{x}</button>)}</div>
-        </fieldset>
-        <div className="spread" style={{ flexWrap: "wrap" }}>
-          <button className="btn" disabled={busy} onClick={save}>Save</button>
-          <button className="btn quiet sm danger" onClick={del}><Trash size={16} />{t.src === "manual" || t.src === "practice" ? "Delete trade" : "Remove trade"}</button>
+        <div className="k-stack k-tight">
+          <span className="k-small k-muted"><b>Mistakes</b></span>
+          <ChipSet label="Mistakes" options={j.mistakes.map((x) => ({ value: x, label: x }))} on={mis} onToggle={(v) => toggle(mis, setMis, v)} />
+        </div>
+        <div className="k-row j-spread">
+          <button type="button" className="btn" disabled={busy} onClick={save}>Save</button>
+          <button type="button" className="btn quiet sm danger" onClick={() => setAsking(true)}><Trash size={16} />{own ? "Delete trade" : "Remove trade"}</button>
         </div>
       </div>
+      {asking && (
+        <ConfirmDialog title={own ? "Delete this trade?" : "Leave this trade out of the journal?"} confirmLabel={own ? "Delete trade" : "Remove trade"} onConfirm={del} onClose={() => setAsking(false)}>
+          {own ? "The trade is deleted from your journal." : "You can show removed trades again at the foot of the page."}
+        </ConfirmDialog>
+      )}
     </Modal>
   );
 }
+
+const ADD_SEGMENTS = [{ value: "eq", label: "Equity" }, { value: "fut", label: "Futures" }, { value: "opt", label: "Options" }, { value: "com", label: "Commodity" },
+  { value: "cur", label: "Currency" }, { value: "us", label: "US stocks (dollars)" }, { value: "crypto", label: "Crypto (dollars)" }];
 
 function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Journal) => void }) {
   const { fail, notify } = useApp();
@@ -566,6 +627,7 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
   const [f, setF] = useState({ symbol: "", segment: "eq", side: "long", entry_date: today, entry_time: "", exit_date: today, exit_time: "", qty: "", entry_price: "", exit_price: "", charges: "" });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const abroad = f.segment === "us" || f.segment === "crypto";
   const save = async () => {
     const n = (v: string) => Number(v.replace(/,/g, ""));
     if (!f.symbol.trim() || !(n(f.qty) > 0) || !Number.isFinite(n(f.entry_price)) || !Number.isFinite(n(f.exit_price)) || !f.entry_price || !f.exit_price) {
@@ -580,22 +642,23 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
   };
   return (
     <Modal title="Add a trade" onClose={onClose}>
-      <div className="stack" style={{ gap: 12 }}>
-        <div className="nw-form j-form">
-          <label className="field">Symbol<input value={f.symbol} maxLength={40} onChange={set("symbol")} placeholder="INFY or NIFTY26OCT25000CE" /></label>
-          <label className="field">Segment<select value={f.segment} onChange={set("segment")}>
-            <option value="eq">Equity</option><option value="fut">Futures</option><option value="opt">Options</option><option value="com">Commodity</option><option value="cur">Currency</option></select></label>
-          <label className="field">Long or short<select value={f.side} onChange={set("side")}><option value="long">Long (bought first)</option><option value="short">Short (sold first)</option></select></label>
-          <label className="field">Quantity<input inputMode="decimal" value={f.qty} onChange={set("qty")} /></label>
-          <label className="field">Entry date<input type="date" value={f.entry_date} onChange={set("entry_date")} /></label>
-          <label className="field">Entry time (optional)<input type="time" value={f.entry_time} onChange={set("entry_time")} /></label>
-          <label className="field">Entry price<input inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} /></label>
-          <label className="field">Exit date<input type="date" value={f.exit_date} onChange={set("exit_date")} /></label>
-          <label className="field">Exit time (optional)<input type="time" value={f.exit_time} onChange={set("exit_time")} /></label>
-          <label className="field">Exit price<input inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} /></label>
-          <label className="field">Charges (₹, optional)<input inputMode="decimal" value={f.charges} onChange={set("charges")} placeholder="Worked out if empty" /></label>
-        </div>
-        <button className="btn" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={save}>Add trade</button>
+      <div className="k-stack">
+        <FormGrid>
+          <Field label="Symbol" value={f.symbol} maxLength={40} placeholder={abroad ? (f.segment === "us" ? "AAPL" : "BTCUSD") : "INFY or NIFTY26OCT25000CE"} onChange={set("symbol")} />
+          <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF({ ...f, segment: v })} options={ADD_SEGMENTS} />}</Field>
+          <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
+          <Field label="Quantity" inputMode="decimal" value={f.qty} onChange={set("qty")} />
+          <Field label="Entry date" type="date" value={f.entry_date} onChange={set("entry_date")} />
+          <Field label="Entry time" optional type="time" value={f.entry_time} onChange={set("entry_time")} />
+          <Field label="Entry price" inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
+          <Field label="Exit date" type="date" value={f.exit_date} onChange={set("exit_date")} />
+          <Field label="Exit time" optional type="time" value={f.exit_time} onChange={set("exit_time")} />
+          <Field label="Exit price" inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
+          <Field label={abroad ? "Charges ($)" : "Charges (₹)"} optional inputMode="decimal" value={f.charges} onChange={set("charges")}
+            info={abroad ? "No charges are worked out for US stocks or crypto: enter what your broker or exchange charged, or leave it empty for none." : "Worked out at the published rates when left empty."} />
+        </FormGrid>
+        {abroad && <p className="k-note">{f.segment === "us" ? "US stocks" : "Crypto"} are kept as their own market, in dollars: their stats are worked out apart from your Indian trades.</p>}
+        <div><button type="button" className="btn" disabled={busy} onClick={save}>Add trade</button></div>
       </div>
     </Modal>
   );
@@ -613,15 +676,15 @@ function Settings({ j, onClose, onSaved }: { j: Journal; onClose: () => void; on
         capital: cap.trim() ? n(cap) : null, brokerage_delivery: n(del) || 0, brokerage_other: Number.isFinite(n(oth)) ? n(oth) : 20 } }));
     } catch (e) { fail(e); }
   };
+  const field = (label: string, value: string, set: (v: string) => void, extra?: { optional?: boolean; info?: ReactNode; placeholder?: string }) =>
+    <Field label={label} inputMode="decimal" value={value} onChange={(e) => set(e.target.value)} {...extra} wide />;
   return (
     <Modal title="Capital and brokerage" onClose={onClose}>
-      <div className="stack" style={{ gap: 12 }}>
-        <label className="field">Trading capital (₹, optional)<input inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="5,00,000" />
-          <span className="hint">Shows the deepest fall and the bad-luck drawdown as a % of it.</span></label>
-        <label className="field">Brokerage on a delivery order (₹)<input inputMode="decimal" value={del} onChange={(e) => setDel(e.target.value)} /></label>
-        <label className="field">Brokerage on an intraday, F&amp;O, commodity or currency order (₹)<input inputMode="decimal" value={oth} onChange={(e) => setOth(e.target.value)} />
-          <span className="hint">Counted on each line of a tradebook. Tax P&amp;L lines keep the charges your broker listed.</span></label>
-        <button className="btn" style={{ alignSelf: "flex-start" }} onClick={save}>Save</button>
+      <div className="k-stack">
+        {field("Trading capital (₹)", cap, setCap, { optional: true, placeholder: "5,00,000", info: "Shows the deepest fall and the bad-luck drawdown as a % of it." })}
+        {field("Brokerage on a delivery order (₹)", del, setDel)}
+        {field("Brokerage on an intraday, F&O, commodity or currency order (₹)", oth, setOth, { info: "Counted on each line of a tradebook. Tax P&L lines keep the charges your broker listed." })}
+        <div><button type="button" className="btn" onClick={save}>Save</button></div>
       </div>
     </Modal>
   );

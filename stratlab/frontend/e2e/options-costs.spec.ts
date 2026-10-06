@@ -81,7 +81,7 @@ test("options builder: charges to open and close, and breakevens after them, on 
   const lines = box.locator("details.opt-charge-lines");
   await expect(lines.locator("table")).toBeHidden();
   await lines.locator("summary").click();
-  await expect(lines.locator("tr")).toHaveText(["Brokerage₹80.00", "STT₹26.33", "Exchange charges₹12.33", "SEBI fee₹0.04", "Stamp duty₹0.53", "GST₹16.63", "Total₹135.84"]);
+  await expect(lines.locator("tbody tr, tfoot tr")).toHaveText(["Brokerage₹80.00", "STT₹26.33", "Exchange charges₹12.33", "SEBI fee₹0.04", "Stamp duty₹0.53", "GST₹16.63", "Total₹135.84"]);
   await expect(lines).toContainText("4 orders at ₹20 brokerage each; orders above 1,800 units go in slices");
   await expect(lines).toContainText("Rates as of 1 Apr 2026.");
 

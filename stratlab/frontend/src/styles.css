@@ -1638,7 +1638,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @media (prefers-reduced-motion: reduce) { .k-tile { transition: none; } .k-tile:hover { transform: none; } }
 
 /* table */
-.k-tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.k-tbl-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
 .k-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .k-table th { border-top: 0; text-align: left; font-weight: 500; color: var(--muted); font-size: 12.5px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--paper-2); white-space: nowrap; }
 .k-table td, .k-table tbody th { border-top: 0; padding: 11px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; font-size: 14px; font-weight: 400; color: var(--ink); background: none; }

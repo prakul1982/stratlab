@@ -5,6 +5,7 @@ import type { Instrument, Market } from "../lib/types";
 import { useSurveillance } from "../lib/surveillance";
 import { Search } from "./Icons";
 import { SurvBadges } from "./Surveillance";
+import "../pages/trade/trade.css";
 
 let defaultsCache: Instrument[] | null = null;
 
@@ -56,8 +57,8 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
   const pick = (i: Instrument) => { setQ(""); setResults(null); onPick(i); };
 
   return (
-    <div className="stack" style={{ gap: 12 }}>
-      <label className="search-box" style={compact ? { minHeight: 50 } : undefined}>
+    <div className="k-stack">
+      <label className={`search-box${compact ? " compact" : ""}`}>
         <Search />
         <span className="sr-only">Search {market.name}</span>
         <input autoFocus={autoFocus} value={q} onChange={(e) => setQ(e.target.value)}
@@ -65,7 +66,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
           placeholder={PLACEHOLDER[market.id] ?? "Search by name or symbol"} />
         {results && (
           <div className="results">
-            {results.length === 0 && <p className="small muted" style={{ padding: 14 }}>No matches in {market.name}.</p>}
+            {results.length === 0 && <p className="k-small k-muted k-pad">No matches in {market.name}.</p>}
             {results.map((r) => (
               <button key={r.id} type="button" onClick={() => pick(r)}>
                 <span><b>{r.symbol}</b> <span className="small muted">{r.name !== r.symbol ? r.name : ""}</span>
@@ -77,13 +78,13 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact }: {
         )}
       </label>
       {defaults.length > 0 && (
-        <div className="row wrap" style={{ gap: 8 }}>
-          <span className="small muted">Popular:</span>
+        <div className="k-row">
+          <span className="k-small k-muted">Popular:</span>
           {defaults.map((d) => <button key={d.id} type="button" className="btn quiet sm" onClick={() => pick(d)}>{d.symbol}
             {market.id === "IN" && <> <SurvBadges region="IN" symbol={d.symbol} plain /></>}</button>)}
         </div>
       )}
-      {surv && [...(results ?? []), ...defaults].some((i) => surv.flags[i.symbol]) && <p className="tiny muted" style={{ margin: 0 }}>Small tags such as LT-ASM 2, T2T or F&amp;O ban are the exchange's
+      {surv && [...(results ?? []), ...defaults].some((i) => surv.flags[i.symbol]) && <p className="k-note">Small tags such as LT-ASM 2, T2T or F&amp;O ban are the exchange's
         surveillance lists today; a stock's company page explains each.</p>}
     </div>
   );

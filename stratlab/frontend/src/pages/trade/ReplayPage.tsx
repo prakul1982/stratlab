@@ -2,13 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, price } from "../../lib/format";
+import { money, price, TF_NAME } from "../../lib/format";
+import { upDown } from "../../lib/tradeUi";
+import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../../lib/intervals";
 import type { Instrument } from "../../lib/types";
 import { simulate, type Action, type RBar, type ROrder, type Rates } from "../../lib/replay";
 import { PriceChart, type Tf } from "../../charts/price/lazy";
 import type { PriceLevel } from "../../charts/price/engine";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
-import { Empty, Info, Loading } from "../../components/ui";
+import { Badge, Card, CardHead, ChipBar, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Seg, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import "./trade.css";
+import "./paper.css";
+import { Info } from "../../components/ui";
 
 /* /trade/replay: chart replay practice (Trade, Basic). A past stretch of candles on StratLab's own price chart, the
  * future hidden: step or play, go long or short with a stop and a target, and see the result after charges. The page
@@ -32,7 +37,6 @@ type Finished = {
   saved: number; why_not_saved: string | null; currency: string; skipped: { why: string }[];
 };
 
-const TF_NAME: Record<string, string> = { "1d": "Daily", "1h": "1-hour", "15m": "15-minute", "5m": "5-minute" };
 const SPEEDS = [1, 5, 20];
 const KEY = (id: string) => `stratlab.replay.${id}`;
 
@@ -48,8 +52,10 @@ function keep(id: string, v: { cursor: number; orders: ROrder[] } | null) {
 const signed = (v: number, cur: string) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${money(Math.abs(v), cur, 2)}`;
 const dayText = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
+const tone = (n: number) => (n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
+
 function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void }) {
-  const { markets, fail } = useApp();
+  const { markets, fail, me } = useApp();
   const live = markets.filter((m) => m.status === "live" && m.id !== "CSV");
   const [mid, setMid] = useState("IN");
   const market = live.find((m) => m.id === mid) ?? live[0];
@@ -63,42 +69,35 @@ function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void })
       onStart(await api<Session>("/trade/replay", { method: "POST", body: random ? { random: true, tf } : { instrument: inst?.id, tf, start } }));
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
+  const sizes = CANDLE_SIZES.filter((c) => ov.tfs.includes(c.value));
   return (
-    <section className="card stack" style={{ gap: 14 }} aria-labelledby="rp-new">
-      <h2 id="rp-new" className="h2">New replay</h2>
-      <div className="row wrap" style={{ gap: 12, alignItems: "flex-end" }}>
-        <label className="field">Candles
-          <select value={tf} onChange={(e) => setTf(e.target.value)} aria-label="Candle size">
-            {ov.tfs.map((t) => <option key={t} value={t}>{TF_NAME[t] ?? t}</option>)}
-          </select>
-        </label>
-        <button className="btn outline" disabled={busy} onClick={() => go(true)}>Random stock and date</button>
-        <Info>{"A NIFTY 50 stock on a random past date. The symbol and the dates stay hidden until you finish, so you can't remember what happened next."}</Info>
-      </div>
-      <div className="stack" style={{ gap: 10 }}>
-        <span className="small muted">Or pick one yourself</span>
-        {live.length > 1 && (
-          <label className="field" style={{ maxWidth: 260 }}>Market
-            <select value={market?.id ?? ""} onChange={(e) => { setMid(e.target.value); setInst(null); }} aria-label="Market">
-              {live.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </label>
-        )}
-        {inst ? (
-          <div className="row wrap" style={{ gap: 10 }}>
-            <span className="pill">{inst.symbol}</span>
-            <button className="link" onClick={() => setInst(null)}>Pick another</button>
-          </div>
-        ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="small muted">Market data is offline right now.</p>}
-        <div className="row wrap" style={{ gap: 12, alignItems: "flex-end" }}>
-          <label className="field">Start date
-            <input type="date" value={start} max={new Date(Date.now() - 86400_000).toISOString().slice(0, 10)} onChange={(e) => setStart(e.target.value)} aria-label="Start date" />
-          </label>
-          <button className="btn" disabled={busy || !inst || !start} onClick={() => go(false)}>{busy ? "Loading candles…" : "Start replay"}</button>
+    <Card label="New replay">
+      <CardHead title="New replay" />
+      <div className="k-stack">
+        <FieldGroup label="Candle size" info={`Smaller candles go back only a few months (5-minute about four), daily candles years. ${CANDLE_LIMITS}`} infoLabel="About candle sizes">
+          <ChipBar label="Candle size" value={tf} onChange={setTf} options={sizes.map((c) => ({ value: c.value, label: TF_NAME[c.value] ?? c.label }))}
+            custom={{ storageKey: `stratlab.chips.replay.${me?.id ?? "anon"}`, units: CANDLE_UNITS, defaultUnit: "min", validate: candleCheck(ov.tfs) }} />
+        </FieldGroup>
+        <div className="k-row">
+          <button type="button" className="btn outline" disabled={busy} onClick={() => go(true)}>Random stock and date</button>
+          <Info>A NIFTY 50 stock on a random past date. The symbol and the dates stay hidden until you finish, so you can't remember what happened next.</Info>
         </div>
-        <p className="tiny muted" style={{ margin: 0 }}>Daily candles go back years; smaller candles only a few months (5-minute about four).</p>
+        <span className="k-small k-muted">Or pick one yourself</span>
+        <FormGrid label="Pick a stock and a date" onSubmit={(e) => { e.preventDefault(); void go(false); }}>
+          {live.length > 1 && (
+            <Field label="Market">{(id) => <Select id={id} value={market?.id ?? ""} onChange={(v) => { setMid(v); setInst(null); }} options={live.map((m) => ({ value: m.id, label: m.name }))} />}</Field>
+          )}
+          <FieldGroup label="Instrument" wide>
+            {inst ? (
+              <div className="k-row"><Badge tone="ok">{inst.symbol}</Badge><button type="button" className="btn quiet sm" onClick={() => setInst(null)}>Pick another</button></div>
+            ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="k-small k-muted">Market data is offline right now.</p>}
+          </FieldGroup>
+          <Field label="Start date" type="date" value={start} max={new Date(Date.now() - 86400_000).toISOString().slice(0, 10)} onChange={(e) => setStart(e.target.value)} />
+          <FormActions><button type="submit" className="btn" disabled={busy || !inst || !start}>{busy ? "Loading candles…" : "Start replay"}</button></FormActions>
+        </FormGrid>
+        <p className="k-note">Daily candles go back years; smaller candles only a few months (5-minute about four).</p>
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -114,6 +113,7 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
   const [picking, setPicking] = useState<"stop" | "target" | null>(null);
   const [level, setLevel] = useState("");
   const [busy, setBusy] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const cur = s.currency;
 
   useEffect(() => { keep(s.id, { cursor, orders }); }, [s.id, cursor, orders]);
@@ -159,71 +159,68 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const discard = async () => {
-    if (!confirm("Throw this replay away? Nothing is saved.")) return;
+    setDiscarding(false);
     try { await api(`/trade/replay/${s.id}`, { method: "DELETE" }); } catch { /* already gone */ }
     keep(s.id, null);
     onDiscard();
   };
 
   return (
-    <div className="stack" style={{ gap: 16 }}>
-      <div className="spread" style={{ flexWrap: "wrap", gap: 8 }}>
-        <div className="stack" style={{ gap: 2 }}>
-          <span className="eyebrow">{TF_NAME[s.tf]} candles{s.hidden ? " · dates hidden until the end" : ""}</span>
-          <h2 className="h2" data-testid="rp-label">{s.hidden ? "Hidden symbol" : s.symbol}</h2>
+    <div className="k-page">
+      <div className="k-spread k-session-head">
+        <div className="k-stack k-tight">
+          <span className="k-eyebrow">{TF_NAME[s.tf]} candles{s.hidden ? " · dates hidden until the end" : ""}</span>
+          <h2 className="k-session-name" data-testid="rp-label">{s.hidden ? "Hidden symbol" : s.symbol}</h2>
         </div>
-        <span className="small muted" data-testid="rp-progress">Candle {Math.max(0, cursor - s.first + 1)} of {last - s.first + 1}</span>
+        <span className="k-small k-muted" data-testid="rp-progress">Candle {Math.max(0, cursor - s.first + 1)} of {last - s.first + 1}</span>
       </div>
       <PriceChart symbol={s.hidden ? "Hidden" : s.symbol ?? ""} storageKey={`REPLAY-${s.id}`.slice(0, 40)} currency={cur} bars={shown} tf={s.tf}
         timeframes={[s.tf]} markers={markers} levels={levels} height={380}
         onPickPrice={picking ? (p) => setLine(picking, p) : null}
         note={picking ? `Click the chart at the ${picking} price, or type it below.` : "Future candles are hidden. Orders fill at the last close shown."} />
 
-      <section className="card stack rp-controls" style={{ gap: 12 }} aria-label="Replay controls">
-        <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
-          <button className="btn" onClick={() => setPlaying(!playing)} disabled={atEnd} aria-pressed={playing}>{playing ? "Pause" : "Play"}</button>
-          <button className="btn outline" onClick={() => setCursor((c) => Math.min(c + 1, last))} disabled={atEnd || playing}>Next candle</button>
-          <div className="seg" role="group" aria-label="Speed">
-            {SPEEDS.map((x) => <button key={x} type="button" aria-pressed={speed === x} onClick={() => setSpeed(x)}>{x}×</button>)}
-          </div>
+      <Card label="Replay controls">
+        <CardHead level={3} title="Replay controls" actions={<Seg label="Speed" options={SPEEDS.map((x) => ({ value: String(x), label: `${x}×` }))} value={String(speed)} onChange={(v) => setSpeed(Number(v))} />} />
+        <div className="k-row">
+          <button type="button" className="btn" onClick={() => setPlaying(!playing)} disabled={atEnd} aria-pressed={playing}>{playing ? "Pause" : "Play"}</button>
+          <button type="button" className="btn outline" onClick={() => setCursor((c) => Math.min(c + 1, last))} disabled={atEnd || playing}>Next candle</button>
         </div>
-        <div className="row wrap" style={{ gap: 8, alignItems: "flex-end" }}>
-          <label className="field" style={{ width: 130 }}>{s.fno ? "Quantity (units)" : "Quantity"}
-            <input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} aria-label="Quantity" />
-          </label>
-          <button className="btn outline" onClick={() => trade("long")}>Long</button>
-          <button className="btn outline" onClick={() => trade("short")}>Short</button>
-          <button className="btn outline" onClick={() => act("flat")} disabled={!pos}>Flat</button>
-        </div>
-        <div className="row wrap" style={{ gap: 8, alignItems: "flex-end" }}>
-          <label className="field" style={{ width: 130 }}>Stop or target
-            <input inputMode="decimal" value={level} onChange={(e) => setLevel(e.target.value)} placeholder={price(closePx, cur)} aria-label="Stop or target price" />
-          </label>
-          <button className="btn quiet" disabled={!pos} onClick={() => level.trim() ? setLine("stop", Number(level.replace(/,/g, ""))) : setPicking(picking === "stop" ? null : "stop")}
-            aria-pressed={picking === "stop"}>{level.trim() ? "Set stop" : "Stop on chart"}</button>
-          <button className="btn quiet" disabled={!pos} onClick={() => level.trim() ? setLine("target", Number(level.replace(/,/g, ""))) : setPicking(picking === "target" ? null : "target")}
-            aria-pressed={picking === "target"}>{level.trim() ? "Set target" : "Target on chart"}</button>
-          {pos?.stop != null && <button className="btn quiet sm" onClick={() => act("cancel_stop")}>Remove stop</button>}
-          {pos?.target != null && <button className="btn quiet sm" onClick={() => act("cancel_target")}>Remove target</button>}
-        </div>
-      </section>
+        <FormGrid label="Practice order" onSubmit={(e) => e.preventDefault()}>
+          <Field label={s.fno ? "Quantity (units)" : "Quantity"} aria-label="Quantity" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+          <FormActions>
+            <button type="button" className="btn outline" onClick={() => trade("long")}>Long</button>
+            <button type="button" className="btn outline" onClick={() => trade("short")}>Short</button>
+            <button type="button" className="btn outline" onClick={() => act("flat")} disabled={!pos}>Flat</button>
+          </FormActions>
+          <Field label="Stop or target" aria-label="Stop or target price" inputMode="decimal" value={level} onChange={(e) => setLevel(e.target.value)} placeholder={price(closePx, cur)} />
+          <FormActions>
+            <button type="button" className="btn quiet" disabled={!pos} onClick={() => level.trim() ? setLine("stop", Number(level.replace(/,/g, ""))) : setPicking(picking === "stop" ? null : "stop")}
+              aria-pressed={picking === "stop"}>{level.trim() ? "Set stop" : "Stop on chart"}</button>
+            <button type="button" className="btn quiet" disabled={!pos} onClick={() => level.trim() ? setLine("target", Number(level.replace(/,/g, ""))) : setPicking(picking === "target" ? null : "target")}
+              aria-pressed={picking === "target"}>{level.trim() ? "Set target" : "Target on chart"}</button>
+            {pos?.stop != null && <button type="button" className="btn quiet sm" onClick={() => act("cancel_stop")}>Remove stop</button>}
+            {pos?.target != null && <button type="button" className="btn quiet sm" onClick={() => act("cancel_target")}>Remove target</button>}
+          </FormActions>
+        </FormGrid>
+      </Card>
 
-      <section className="card stack" style={{ gap: 10 }} aria-labelledby="rp-acct">
-        <h3 id="rp-acct" className="h3">Practice account</h3>
-        <div className="stat-row">
-          <div className="stat"><span className="tiny muted">Position</span><b className="num" data-testid="rp-position">{pos ? `${pos.side === "long" ? "Long" : "Short"} ${pos.qty.toLocaleString("en-IN", { maximumFractionDigits: 4 })} at ${price(pos.avg, cur)}` : "None"}</b></div>
-          <div className="stat"><span className="tiny muted">Open P&amp;L<Info>{"The open position at the last close, before the charges to close it."}</Info></span><b className="num">{pos ? signed(pos.unrealised, cur) : "–"}</b></div>
-          <div className="stat"><span className="tiny muted">Closed trades</span><b className="num" data-testid="rp-closed">{sim.trades.length} ({sim.trades.filter((t) => t.net > 0).length} won)</b></div>
-          <div className="stat"><span className="tiny muted">Closed P&amp;L after charges</span><b className="num">{signed(closedNet, cur)}</b></div>
+      <Card label="Practice account">
+        <CardHead level={3} title="Practice account" />
+        <StatRow label="Practice account">
+          <Stat item label="Position" value={<span data-testid="rp-position">{pos ? `${pos.side === "long" ? "Long" : "Short"} ${pos.qty.toLocaleString("en-IN", { maximumFractionDigits: 4 })} at ${price(pos.avg, cur)}` : "None"}</span>} />
+          <Stat item label={<>Open P&amp;L<Info>The open position at the last close, before the charges to close it.</Info></>} value={pos ? signed(pos.unrealised, cur) : "–"} tone={pos ? tone(pos.unrealised) : undefined} />
+          <Stat item label="Closed trades" value={<span data-testid="rp-closed">{sim.trades.length} ({sim.trades.filter((t) => t.net > 0).length} won)</span>} />
+          <Stat item label="Closed P&L after charges" value={signed(closedNet, cur)} tone={tone(closedNet)} />
+        </StatRow>
+        {s.index && <p className="k-note">An index can't be traded itself, so no charges are counted on it.</p>}
+        {sim.skipped.length > 0 && <p className="k-note">{sim.skipped.length} order{sim.skipped.length === 1 ? "" : "s"} did nothing ({sim.skipped[sim.skipped.length - 1].why.toLowerCase()}).</p>}
+        <div className="k-row">
+          <button type="button" className="btn" disabled={busy} onClick={() => finish(true)}>{busy ? "Finishing…" : "Finish and save to journal"}</button>
+          <button type="button" className="btn quiet" disabled={busy} onClick={() => finish(false)}>Finish without saving</button>
+          <button type="button" className="btn quiet danger" disabled={busy} onClick={() => setDiscarding(true)}>Discard</button>
         </div>
-        {s.index && <p className="tiny muted" style={{ margin: 0 }}>An index can't be traded itself, so no charges are counted on it.</p>}
-        {sim.skipped.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>{sim.skipped.length} order{sim.skipped.length === 1 ? "" : "s"} did nothing ({sim.skipped[sim.skipped.length - 1].why.toLowerCase()}).</p>}
-        <div className="row wrap" style={{ gap: 8 }}>
-          <button className="btn" disabled={busy} onClick={() => finish(true)}>{busy ? "Finishing…" : "Finish and save to journal"}</button>
-          <button className="btn quiet" disabled={busy} onClick={() => finish(false)}>Finish without saving</button>
-          <button className="btn quiet danger" disabled={busy} onClick={discard}>Discard</button>
-        </div>
-      </section>
+      </Card>
+      {discarding && <ConfirmDialog title="Throw this replay away?" confirmLabel="Throw it away" onConfirm={discard} onClose={() => setDiscarding(false)}>Nothing is saved.</ConfirmDialog>}
     </div>
   );
 }
@@ -231,86 +228,79 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
 function Result({ f, onNew }: { f: Finished; onNew: () => void }) {
   const cur = f.currency;
   const r = f.reveal;
+  type T = Finished["trades"][number];
+  const cols: Column<T>[] = [
+    { key: "side", header: "Side", cell: (t) => (t.side === "long" ? "Long" : "Short") },
+    { key: "qty", header: "Qty", numeric: true, cell: (t) => t.qty.toLocaleString("en-IN", { maximumFractionDigits: 4 }) },
+    { key: "px", header: "Entry → exit", numeric: true, cell: (t) => `${price(t.entry, cur)} → ${price(t.exit, cur)}` },
+    { key: "why", header: "Closed by", wrap: true, cell: (t) => t.why },
+    { key: "ch", header: "Charges", numeric: true, cell: (t) => money(t.charges, cur, 2) },
+    { key: "net", header: "Net", numeric: true, cell: (t) => <span className={upDown(t.net)}>{signed(t.net, cur)}</span> },
+  ];
   return (
-    <section className="card stack" style={{ gap: 14 }} aria-labelledby="rp-result">
-      <h2 id="rp-result" className="h2">Replay finished: {r.symbol}</h2>
-      <p className="small" style={{ margin: 0 }} data-testid="rp-reveal">{r.name && r.name !== r.symbol ? `${r.name}, ` : ""}{r.candles} candle{r.candles === 1 ? "" : "s"} played from {dayText(r.from)} to {dayText(r.to)}.</p>
-      <div className="stat-row">
-        <div className="stat"><span className="tiny muted">Trades</span><b className="num">{f.summary.n} ({f.summary.wins} won)</b></div>
-        <div className="stat"><span className="tiny muted">Before charges</span><b className="num">{signed(f.summary.gross, cur)}</b></div>
-        <div className="stat"><span className="tiny muted">Charges</span><b className="num">{money(f.summary.charges, cur, 2)}</b></div>
-        <div className="stat"><span className="tiny muted">After charges</span><b className="num">{signed(f.summary.net, cur)}</b></div>
-      </div>
-      {f.trades.length > 0 && (
-        <div className="table-wrap" style={{ margin: 0 }}>
-          <table className="nums" aria-label="Practice trades">
-            <thead><tr><th>Side</th><th>Qty</th><th>Entry → exit</th><th>Closed by</th><th>Charges</th><th>Net</th></tr></thead>
-            <tbody>{f.trades.map((t, i) => (
-              <tr key={i}><td>{t.side === "long" ? "Long" : "Short"}</td><td>{t.qty.toLocaleString("en-IN", { maximumFractionDigits: 4 })}</td>
-                <td className="small">{price(t.entry, cur)} → {price(t.exit, cur)}</td><td className="small">{t.why}</td>
-                <td>{money(t.charges, cur, 2)}</td><td>{signed(t.net, cur)}</td></tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-      <p className="small" style={{ margin: 0 }} role="status">
+    <Card label="Replay finished">
+      <CardHead title={`Replay finished: ${r.symbol}`} />
+      <p className="k-small" data-testid="rp-reveal">{r.name && r.name !== r.symbol ? `${r.name}, ` : ""}{r.candles} candle{r.candles === 1 ? "" : "s"} played from {dayText(r.from)} to {dayText(r.to)}.</p>
+      <StatRow label="Result">
+        <Stat item label="Trades" value={`${f.summary.n} (${f.summary.wins} won)`} />
+        <Stat item label="Before charges" value={signed(f.summary.gross, cur)} tone={tone(f.summary.gross)} />
+        <Stat item label="Charges" value={money(f.summary.charges, cur, 2)} />
+        <Stat item label="After charges" value={signed(f.summary.net, cur)} tone={tone(f.summary.net)} />
+      </StatRow>
+      {f.trades.length > 0 && <DataTable label="Practice trades" columns={cols} rows={f.trades} rowKey={(t) => `${t.entry_t}${t.exit_t}${t.qty}`} />}
+      <p className="k-small" role="status">
         {f.saved ? <>{f.saved} practice trade{f.saved === 1 ? "" : "s"} saved to your <Link className="link" to="/trade/journal">trade journal</Link>, marked as practice.</>
           : f.why_not_saved ?? (f.trades.length ? "Not saved to the journal." : "No trades to save.")}
       </p>
-      <button className="btn" style={{ alignSelf: "flex-start" }} onClick={onNew}>Another replay</button>
-    </section>
+      <button type="button" className="btn k-btn-end" onClick={onNew}>Another replay</button>
+    </Card>
   );
 }
 
 export function ReplayPage() {
   const { fail } = useApp();
   const [ov, setOv] = useState<Overview | null>(null);
+  const [failed, setFailed] = useState(false);
   const [s, setS] = useState<Session | null>(null);
   const [done, setDone] = useState<Finished | null>(null);
   const top = useRef<HTMLDivElement>(null);
-  const load = useCallback(() => api<Overview>("/trade/replay").then(setOv).catch((e) => { fail(e); }), [fail]);
+  const load = useCallback(() => api<Overview>("/trade/replay").then((o) => { setOv(o); setFailed(false); }).catch((e) => { fail(e); setFailed(true); }), [fail]);
   useEffect(() => { load(); }, [load]);
   const open = async (id: string) => {
     try { setS(await api<Session>(`/trade/replay/${id}`)); setDone(null); } catch (e) { fail(e); load(); }
   };
 
   return (
-    <div className="stack" style={{ gap: 20 }} ref={top}>
-      <div className="stack" style={{ gap: 6 }}>
-        <span className="eyebrow">Trade · practice</span>
-        <h1 className="page-title">Chart replay</h1>
-        <p className="page-sub" style={{ maxWidth: "68ch" }}>Step through a past chart one candle at a time with the future hidden, place practice orders, and see the result after charges. Finished sessions go to your journal as practice. A historical simulation: facts, not advice.</p>
-      </div>
-      {!ov ? <Loading label="Opening chart replay" /> : !ov.allowed ? (
-        <section className="card dashed stack" style={{ gap: 8 }}>
-          <p className="small" style={{ margin: 0 }}><b>Chart replay practice</b> is on the {ov.plan} plan.</p>
-          <Link to="/plans" className="btn sm" style={{ alignSelf: "flex-start" }}>See plans</Link>
-        </section>
+    <div className="k-page" ref={top}>
+      <PageHeader eyebrow="Trade · Practise" title="Chart replay"
+        lede="Step through a past chart one candle at a time with the future hidden, place practice orders, and see the result after charges. Finished sessions go to your journal as practice. A historical simulation: facts, not advice." />
+      {failed && !ov ? <ErrorState title="Chart replay couldn't be opened" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
+        : !ov ? <Card><Skeleton label="Opening chart replay" /></Card> : !ov.allowed ? (
+        <EmptyState title="Chart replay practice" action={{ label: "See plans", to: "/plans" }}>It is on the {ov.plan} plan.</EmptyState>
       ) : done ? <Result f={done} onNew={() => { setDone(null); setS(null); load(); }} />
         : s ? <Player key={s.id} s={s} onDone={(f) => { setDone(f); setS(null); load(); }} onDiscard={() => { setS(null); load(); }} />
         : (
           <>
             {ov.sessions.length > 0 && (
-              <section className="card stack" style={{ gap: 10 }} aria-labelledby="rp-open">
-                <h2 id="rp-open" className="h3">Unfinished</h2>
-                <ul className="stack" style={{ gap: 8, listStyle: "none", padding: 0, margin: 0 }}>
+              <Card label="Unfinished">
+                <CardHead level={3} title="Unfinished" />
+                <ul className="k-list plain">
                   {ov.sessions.map((x) => (
-                    <li key={x.id} className="spread" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <span className="small">{x.label} · {TF_NAME[x.tf] ?? x.tf} candles</span>
-                      <button className="btn sm outline" onClick={() => open(x.id)}>Continue</button>
+                    <li key={x.id} className="k-spread">
+                      <span className="k-small">{x.label} · {TF_NAME[x.tf] ?? x.tf} candles</span>
+                      <button type="button" className="btn sm outline" onClick={() => open(x.id)}>Continue</button>
                     </li>
                   ))}
                 </ul>
-              </section>
+              </Card>
             )}
             <Setup ov={ov} onStart={(x) => { setS(x); setDone(null); top.current?.scrollIntoView({ block: "start" }); }} />
             {ov.practice.n > 0 ? (
-              <p className="small muted" data-testid="rp-practice">{ov.practice.n} practice trade{ov.practice.n === 1 ? "" : "s"} in your <Link className="link" to="/trade/journal">journal</Link>, {signed(ov.practice.net, "INR")} after charges{ov.practice.last ? `, the latest closed ${dayText(ov.practice.last)}` : ""}.</p>
-            ) : <Empty title="No practice trades yet">Finish a replay and its trades show in your journal, where the verdict's checks can run on them.</Empty>}
-            <details className="small">
-              <summary>How practice orders fill</summary>
-              <p className="small muted">{ov.note} A long's stop fills when a candle's low reaches it (at the open if it opened below), its target when the high does; when one candle reaches both, the stop counts first. What's open when you finish closes at the last candle shown.</p>
-            </details>
+              <p className="k-small k-muted" data-testid="rp-practice">{ov.practice.n} practice trade{ov.practice.n === 1 ? "" : "s"} in your <Link className="link" to="/trade/journal">journal</Link>, {signed(ov.practice.net, "INR")} after charges{ov.practice.last ? `, the latest closed ${dayText(ov.practice.last)}` : ""}.</p>
+            ) : <EmptyState title="No practice trades yet">Finish a replay and its trades show in your journal, where the verdict's checks can run on them.</EmptyState>}
+            <Disclosure summary="How practice orders fill">
+              <p className="k-small k-muted">{ov.note} A long's stop fills when a candle's low reaches it (at the open if it opened below), its target when the high does; when one candle reaches both, the stop counts first. What's open when you finish closes at the last candle shown.</p>
+            </Disclosure>
           </>
         )}
     </div>

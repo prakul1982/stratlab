@@ -7,9 +7,13 @@ import type { GroupMember, Instrument, Market, Notebook } from "../lib/types";
 import { parseCsv, saveUpload, type Candle } from "../lib/upload";
 import { InstrumentSearch } from "../components/InstrumentSearch";
 import { SurvBadges } from "../components/Surveillance";
-import { Info, Loading } from "../components/ui";
+import { Card, CardHead, ChipBar, EmptyState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Select, Skeleton, TilePicker } from "../components/kit";
 import { HELP } from "../lib/help";
 import { useNotebook } from "./NotebookPage";
+import "./trade/trade.css";
+
+/* /n/:id/market: pick the market and instrument a notebook tests on, or a group, or your own CSV. Built from the kit
+ * (components/kit). */
 
 function localHours(m: Market): string {
   if (!m.hours) return "Your own session hours";
@@ -66,18 +70,15 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
   };
 
   return (
-    <section className="card stack" style={{ gap: 14 }} aria-labelledby="group-h">
-      <h2 id="group-h" className="h2 row" style={{ gap: 0 }}>Or test on a group of {noun}<Info>{HELP.groupPick}</Info></h2>
-      <p className="small muted">The same rules run on every {noun === "commodities" ? "commodity" : noun.slice(0, -1)} in the group at once, sharing one pot of capital, like a real intraday or momentum book.</p>
-      <div className="row wrap" style={{ gap: 8 }}>
-        {presets.map((p) => (
-          <button key={p.id} className={`btn sm ${pick === p.id ? "" : "quiet"}`} aria-pressed={pick === p.id} onClick={() => setPick(p.id)}>{p.name} ({p.count})</button>
-        ))}
-        <button className={`btn sm ${pick === "custom" ? "" : "quiet"}`} aria-pressed={pick === "custom"} onClick={() => setPick("custom")}>Build my own</button>
-      </div>
+    <Card id="group-h" label="Test on a group">
+      <CardHead title={`Or test on a group of ${noun}`} info={HELP.groupPick} infoLabel="About groups" />
+      <p className="k-small k-muted">The same rules run on every {noun === "commodities" ? "commodity" : noun.slice(0, -1)} in the group at once, sharing one pot of capital, like a real intraday or momentum book.</p>
+      <ChipBar label="Group" value={pick ?? ""} onChange={setPick} options={[...presets.map((p) => ({ value: p.id, label: `${p.name} (${p.count})` })), { value: "custom", label: "Build my own" }]} />
       {pick === "custom" && (
-        <div className="stack" style={{ gap: 10 }}>
-          <label className="field" style={{ maxWidth: 360 }}>Group name<input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} /></label>
+        <div className="k-stack">
+          <FormGrid label="Group name">
+            <Field label="Group name" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
+          </FormGrid>
           <InstrumentSearch market={market} compact onPick={(i) => {
             if (custom.length >= 50) { notify("A group can hold up to 50."); return; }
             if (!custom.some((m) => m.id === i.id)) setCustom([...custom, { id: i.id, symbol: i.symbol }]);
@@ -89,20 +90,21 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
           <div className="chip-row">
             {members.map((m) => (
               <span key={m.id ?? m.symbol} className="pill">{m.symbol}{market.id === "IN" && <> <SurvBadges region="IN" symbol={m.symbol} plain /></>}{pick === "custom" &&
-                <button className="chip-x" aria-label={`Remove ${m.symbol}`} onClick={() => setCustom(custom.filter((x) => x !== m))}>×</button>}</span>
+                <button type="button" className="chip-x" aria-label={`Remove ${m.symbol}`} onClick={() => setCustom(custom.filter((x) => x !== m))}>×</button>}</span>
             ))}
           </div>
-          <div className="row wrap" style={{ gap: 14, alignItems: "flex-end" }}>
-            <label className="field" style={{ width: 220 }}>Positions open at once (max)
-              <input type="number" min={1} max={members.length} value={Math.min(maxOpen, members.length)} onChange={(e) => {
-                const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) setMaxOpen(n);
-              }} /></label>
-            <button className="btn blue" disabled={busy} onClick={save}>{busy ? "Saving…" : `Test on these ${members.length} ${noun}`}</button>
-          </div>
-          <p className="hint">For a portfolio, size trades by <b>fixed capital per trade</b> in the rules' costs and position size, so each position gets its share.</p>
+          <FormGrid label="Group limits" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+            <Field label="Positions open at once (max)" type="number" min={1} max={members.length} value={Math.min(maxOpen, members.length)} onChange={(e) => {
+              const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) setMaxOpen(n);
+            }} />
+            <FormActions>
+              <button type="submit" className="btn blue" disabled={busy}>{busy ? "Saving…" : `Test on these ${members.length} ${noun}`}</button>
+            </FormActions>
+          </FormGrid>
+          <p className="k-note">For a portfolio, size trades by <b>fixed capital per trade</b> in the rules' costs and position size, so each position gets its share.</p>
         </>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -125,7 +127,7 @@ export function MarketPage() {
     setSel(asked || current || markets.find((m) => m.status === "live" && m.id !== "CSV")?.id || "CRYPTO");
   }, [nb, markets, sel, loc.state]);
 
-  if (!nb) return <Loading label="Opening markets" />;
+  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Where do you want to test it?" /><Card><Skeleton label="Opening markets" /></Card></div>;
   const market = markets.find((m) => m.id === sel);
 
   const choose = async (i: Instrument) => {
@@ -153,65 +155,63 @@ export function MarketPage() {
   };
 
   return (
-    <div className="stack" style={{ gap: 26 }}>
-      <div className="stack" style={{ gap: 8 }}>
-        <Link to={`/n/${nb.id}`} className="link" style={{ textDecoration: "none", alignSelf: "flex-start" }}>← {nb.name}</Link>
-        <h1 className="page-title">Where do you want to test it?</h1>
-        <p className="muted row" style={{ fontSize: 17, gap: 0 }}>The same rules run on any market. Prices, trading hours, currency and costs switch to match it.<Info>{HELP.markets}</Info></p>
-      </div>
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title="Where do you want to test it?" info={HELP.markets} infoLabel="About markets"
+        lede={<><Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link> · The same rules run on any market. Prices, trading hours, currency and costs switch to match it.</>} />
 
-      <div className="mkt-tiles" role="radiogroup" aria-label="Market">
-        {markets.map((m) => (
-          <button key={m.id} role="radio" aria-checked={sel === m.id} className={`mkt-tile${sel === m.id ? " on" : ""}${m.status === "soon" ? " soon" : ""}`} onClick={() => setSel(m.id)}>
-            <span className="serif mkt-sym" aria-hidden>{m.symbol}</span>
-            <span className="stack" style={{ gap: 1, minWidth: 0 }}><b>{m.name}</b><span className="small muted">{m.venues}</span></span>
-            {m.status !== "live" && <span className={`badge ${m.status}`}>{STATUS[m.status]}</span>}
-          </button>
-        ))}
-      </div>
-      {market && market.status !== "soon" && (
-        <p className="small muted" style={{ marginTop: -12 }}>{market.name}: {market.what} · {localHours(market)} · costs: {market.costs}</p>
-      )}
+      <Card label="Market">
+        <CardHead title="Pick a market" />
+        <TilePicker label="Market" value={sel} onChange={setSel}
+          groups={[{ title: "Markets", tiles: markets.map((m) => ({ value: m.id, title: `${m.symbol === "+" ? "" : m.symbol + " "}${m.name}`, sub: `${m.venues}${m.status !== "live" ? ` · ${STATUS[m.status]}` : ""}` })) }]} />
+        {market && market.status !== "soon" && (
+          <p className="k-note">{market.name}: {market.what} · {localHours(market)} · costs: {market.costs}</p>
+        )}
+      </Card>
 
       {market && market.status === "soon" && (
-        <div className="card dashed stack">
-          <h2 className="h2">{market.name} is coming soon</h2>
-          <p className="muted">We're connecting a data source for {market.name}. Meanwhile, you can export candles from any charting site as a CSV and test on them with <button className="link" onClick={() => setSel("CSV")}>your own data</button>.</p>
-        </div>
+        <EmptyState title={`${market.name} is coming soon`}
+          action={{ label: "Use your own data", onClick: () => setSel("CSV") }}>
+          We're connecting a data source for {market.name}. Meanwhile, you can export candles from any charting site as a CSV and test on them with your own data.
+        </EmptyState>
       )}
       {market && market.status === "offline" && (
-        <div className="banner">Market data for {market.name} is offline right now. It usually comes back after the daily data login; try again in a few minutes.</div>
+        <Notice tone="warn">Market data for {market.name} is offline right now. It usually comes back after the daily data login; try again in a few minutes.</Notice>
       )}
 
-      {market && market.status === "live" && market.id !== "CSV" && <InstrumentSearch market={market} onPick={choose} autoFocus />}
+      {market && market.status === "live" && market.id !== "CSV" && (
+        <Card label="Instrument">
+          <CardHead title={`Search ${market.name}`} />
+          <InstrumentSearch market={market} onPick={choose} autoFocus />
+        </Card>
+      )}
       {market && market.status === "live" && market.id !== "CSV" && <GroupPicker key={market.id} nb={nb} market={market} onDone={() => nav(`/n/${nb.id}`)} />}
 
       {market?.id === "CSV" && (
-        <div className="card stack" style={{ gap: 14 }}>
-          <h2 className="h2 row" style={{ gap: 0 }}>Upload candles as a CSV<Info label="What should the file look like?">{HELP.csv}</Info></h2>
-          <p className="muted">Any market, any timeframe. The first row should be headings: <span className="mono">date, open, high, low, close, volume</span>. Most charting sites and brokers can export this.</p>
-          <label className="btn outline" style={{ alignSelf: "flex-start" }}>
+        <Card label="Upload candles">
+          <CardHead title="Upload candles as a CSV" info={HELP.csv} infoLabel="What should the file look like?" />
+          <p className="k-small k-muted">Any market, any timeframe. The first row should be headings: <span className="k-mono">date, open, high, low, close, volume</span>. Most charting sites and brokers can export this.</p>
+          <label className="btn outline k-btn-end">
             Choose a CSV file
             <input type="file" accept=".csv,text/csv,.txt" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
           </label>
           {upload && (
             <>
-              <p className="small">
+              <p className="k-small">
                 <b>{upload.bars.length.toLocaleString()} candles</b> from {new Date(upload.bars[0].t).toLocaleDateString("en-GB")} to {new Date(upload.bars[upload.bars.length - 1].t).toLocaleDateString("en-GB")}
                 {upload.skipped ? `, ${upload.skipped} rows skipped` : ""}.
               </p>
-              <div className="grid4">
-                <label className="field">Name<input value={upName} maxLength={60} onChange={(e) => setUpName(e.target.value)} /></label>
-                <label className="field">Currency<select value={upCur} onChange={(e) => setUpCur(e.target.value)}>
-                  {["USD", "INR", "EUR", "GBP", "JPY", "USDT"].map((c) => <option key={c}>{c}</option>)}</select></label>
-                <label className="field"><span className="row" style={{ gap: 0 }}>Quantities<Info>{HELP.quantities}</Info></span><select value={upStep} onChange={(e) => setUpStep(+e.target.value)}>
-                  <option value={1}>Whole units (shares, lots)</option><option value={0.0001}>Fractions (coins, forex)</option></select></label>
-              </div>
-              <button className="btn blue" style={{ alignSelf: "flex-start" }} onClick={useUpload}>Test on this data</button>
-              <p className="hint">The file stays in this browser; only the candles are sent for each test.</p>
+              <FormGrid label="About your data" onSubmit={(e) => { e.preventDefault(); void useUpload(); }}>
+                <Field label="Name" maxLength={60} value={upName} onChange={(e) => setUpName(e.target.value)} />
+                <Field label="Currency">{(fid) => <Select id={fid} value={upCur} onChange={setUpCur} options={["USD", "INR", "EUR", "GBP", "JPY", "USDT"].map((c) => ({ value: c, label: c }))} />}</Field>
+                <FieldGroup label="Quantities" info={HELP.quantities}>
+                  <Select label="Quantities" value={upStep} onChange={(v) => setUpStep(+v)} options={[{ value: 1, label: "Whole units (shares, lots)" }, { value: 0.0001, label: "Fractions (coins, forex)" }]} />
+                </FieldGroup>
+                <FormActions><button type="submit" className="btn blue">Test on this data</button></FormActions>
+              </FormGrid>
+              <p className="k-note">The file stays in this browser; only the candles are sent for each test.</p>
             </>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );

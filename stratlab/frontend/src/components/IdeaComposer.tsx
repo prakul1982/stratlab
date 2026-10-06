@@ -4,6 +4,8 @@ import { useApp } from "../lib/app";
 import { blankStrategy, detectInstrument, detectTf, nameFor, parseStrategyText, questionFrom, riskForCurrency } from "../lib/rules";
 import type { Cond, Instrument, Risk, Session, Strategy, Tf, Group } from "../lib/types";
 import { Info } from "./ui";
+import { Notice } from "./kit";
+import "../pages/trade/trade.css";
 
 export interface Built {
   strategy: Strategy;
@@ -129,21 +131,20 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
 
   const u = me?.usage;
   return (
-    <div className="stack" style={{ gap: 12 }}>
+    <div className="k-stack">
       <label className="sr-only" htmlFor="idea">Describe your trading idea</label>
-      <textarea id="idea" className="input serif" autoFocus={autoFocus} value={text} maxLength={2000}
-        style={{ fontSize: 20, minHeight: 130, lineHeight: 1.5, padding: "16px 18px" }}
+      <textarea id="idea" className="k-textarea k-idea" autoFocus={autoFocus} value={text} maxLength={2000}
         placeholder={ex.placeholder}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) build(); }} />
-      <div className="spread" style={{ flexWrap: "wrap" }}>
-        <button className="btn" disabled={busy} onClick={() => build()}>{busy ? "Building…" : busyLabel}</button>
-        {u && <span className="small muted row" style={{ gap: 0 }}>{u.ai_limit == null ? "Unlimited AI builds" : `${Math.max(0, u.ai_limit - u.ai_used)} of ${u.ai_limit} AI builds left this month`}
+      <div className="k-row">
+        <button type="button" className="btn" disabled={busy} onClick={() => build()}>{busy ? "Building…" : busyLabel}</button>
+        {u && <span className="k-small k-muted k-row">{u.ai_limit == null ? "Unlimited AI builds" : `${Math.max(0, u.ai_limit - u.ai_used)} of ${u.ai_limit} AI builds left this month`}
           <Info>The AI turns your sentence into exact rules. If it's unavailable, a simple built-in converter takes over (it understands SMA, EMA, RSI and price rules).</Info></span>}
       </div>
-      {note && <p className="small" style={{ color: "var(--orange-ink)" }} role="alert">{note}</p>}
-      <div className="stack" style={{ gap: 8, marginTop: 4 }}>
-        <span className="small muted">Not sure what to write? Try one of these:</span>
+      {note && <Notice tone="warn" role="status">{note}</Notice>}
+      <div className="k-stack k-tight">
+        <span className="k-small k-muted">Not sure what to write? Try one of these:</span>
         <div className="examples">
           {ex.list.map((ex) => (
             <button key={ex} type="button" disabled={busy} onClick={() => { setText(ex); build(ex); }}>

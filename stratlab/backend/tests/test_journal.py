@@ -452,3 +452,64 @@ def test_upload_size_cap(w):
     big = b"a" * (J.hf.FNO_MAX_BYTES + 10)
     r = c.post("/trade/journal/import?filename=big.csv", headers={**PRO, "Content-Type": "application/octet-stream"}, content=big)
     assert r.status_code == 413
+
+
+# ---------- segments, other markets and the tax report's totals ----------
+def test_the_segment_filter_works_out_the_stats_on_that_segment_alone(w):
+    c = w["client"]
+    manual(c, symbol="INFY", segment="eq")                                                  # intraday equity, +100
+    manual(c, symbol="NIFTY26OCT25000CE", segment="opt", entry_price=100, exit_price=120, qty=50, exit_date="2026-03-04")
+    manual(c, symbol="GOLDM26OCTFUT", segment="com", entry_price=70000, exit_price=70100, qty=10, exit_date="2026-03-05")
+    j = c.get("/trade/journal", headers=PRO).json()
+    assert j["market"] == "in" and j["currency"] == "INR" and j["count"] == 3 and j["segment"] == "all"
+    assert j["segment_counts"] == {"eq_intraday": 1, "opt": 1, "com": 1}
+    opt = c.get("/trade/journal?segment=opt", headers=PRO).json()
+    assert opt["segment"] == "opt" and opt["count"] == 1 and opt["trades"][0]["segment"] == "opt" and opt["summary"]["n"] == 1
+    assert opt["segment_counts"] == j["segment_counts"]                                       # the chips keep their counts
+    assert c.get("/trade/journal?segment=cur", headers=PRO).json()["segment"] == "all"       # none there: every segment
+    assert c.get("/trade/journal?segment=junk", headers=PRO).json()["count"] == 3
+
+
+def test_us_and_crypto_trades_are_their_own_market_in_dollars(w):
+    c = w["client"]
+    manual(c, symbol="INFY")
+    us = manual(c, symbol="AAPL", segment="us", qty=10, entry_price=200, exit_price=210, entry_time=None, exit_time=None, exit_date="2026-03-10")
+    assert us.status_code == 200
+    manual(c, symbol="BTCUSD", segment="crypto", qty=0.5, entry_price=60000, exit_price=63000, charges=12.5, exit_date="2026-03-11")
+    j = c.get("/trade/journal", headers=PRO).json()
+    assert j["market"] == "in" and j["count"] == 1 and j["currency"] == "INR"                # India's stats are never mixed with dollars
+    assert [(m["id"], m["n"], m["currency"]) for m in j["markets"]] == [("in", 1, "INR"), ("us", 1, "USD"), ("crypto", 1, "USD")]
+    u = c.get("/trade/journal?market=us", headers=PRO).json()
+    t = u["trades"][0]
+    assert u["currency"] == "USD" and u["count"] == 1 and t["symbol"] == "AAPL" and t["segment"] == "us" and t["currency"] == "USD"
+    assert t["gross"] == 100 and t["charges"] == 0 and t["net"] == 100 and t["charges_from"] == "none"      # no Indian charges apply
+    assert u["segment_counts"] == {} and u["tax_totals"] == [] and "₹" not in str(u["verdict"])
+    k = c.get("/trade/journal?market=crypto", headers=PRO).json()
+    assert k["trades"][0]["net"] == pytest.approx(1500 - 12.5) and k["trades"][0]["charges_from"] == "you"
+    assert c.get("/trade/journal?market=mars", headers=PRO).json()["market"] == "in"
+    brief = c.get("/trade/journal/brief", headers=PRO).json()
+    assert brief["count"] == 1                                                                 # the Trade home's line is rupees only
+
+
+def test_a_journal_with_only_another_market_opens_on_it(w):
+    c = w["client"]
+    manual(c, symbol="MSFT", segment="us", exit_date="2026-03-03")
+    j = c.get("/trade/journal", headers=PRO).json()
+    assert j["market"] == "us" and j["count"] == 1 and j["currency"] == "USD"
+
+
+def test_the_tax_reports_fno_commodity_and_currency_totals_show_beside_the_trades(w):
+    c = w["client"]
+    chunk = {"seg": "fno", "fy": 2025, "first": "2024-04-02", "last": "2025-03-27", "pnl": 12000.0, "turnover": 900000.0,
+             "turnover_contract": 900000.0, "charges": 2000.0, "stt": 300.0, "trades": 40}
+    tax_lots.save("u-pro", [], [], business=[chunk, {**chunk, "seg": "commodity", "pnl": -500.0, "trades": 3}])
+    manual(c)
+    j = c.get("/trade/journal", headers=PRO).json()
+    assert [(x["fy"], x["seg"], x["trades"], x["net"]) for x in j["tax_totals"]] == [(2025, "fno", 40, 10000.0), (2025, "commodity", 3, -2500.0)]
+    assert j["summary"]["n"] == 1                                                              # totals are never added into the trade stats
+    only = c.get("/trade/journal?segment=opt", headers=PRO).json()
+    assert only["segment"] == "all"                                                            # no option trades yet
+    manual(c, symbol="NIFTY26OCT25000CE", segment="opt", exit_date="2026-03-04")
+    opt = c.get("/trade/journal?segment=opt", headers=PRO).json()
+    assert [x["seg"] for x in opt["tax_totals"]] == ["fno"]                                    # the F&O total belongs to futures and options
+    assert c.get("/trade/journal?segment=eq_intraday", headers=PRO).json()["tax_totals"] == []

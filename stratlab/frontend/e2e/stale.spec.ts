@@ -93,15 +93,16 @@ test("paper trading: a stopped session opened from the link shows with its fold 
 test("paper session: today's orders in view, the earlier ones folded with their P&L", async ({ page }, info) => {
   const errors = await open(page, "/paper/p1", { "/live/sessions": rows, "/live/sessions/p1": single }, "Orders today");
   const card = page.locator("section", { has: page.getByRole("heading", { name: "Orders today" }) });
-  await expect(card.locator(".order-group")).toHaveCount(1);
-  await expect(card.locator(".order-head").first()).toContainText("Entry");
-  await expect(card.locator(".order-sym")).toHaveText(["RELIANCE"]);
+  const todays = card.locator(":scope > .order-list");                                    // today's orders; the earlier ones are inside the fold
+  await expect(todays.locator(".order-group")).toHaveCount(1);
+  await expect(todays.locator(".order-head").first()).toContainText("Entry");
+  await expect(todays.locator(".order-sym")).toHaveText(["RELIANCE"]);
   const fold = card.locator("details.earlier");
   await expect(fold.locator("summary")).toContainText("Earlier orders (6)");
   await expect(fold.locator("summary")).toContainText("₹1,400 on closed trades");
   await sane(page, errors, info.project.name === "phone");
   await shot(page, "paper-session", info.project.name);
-  await fold.locator("summary").click();
+  await expect(fold).toHaveAttribute("open", "");                                         // the earlier orders are open by default
   await expect(fold.locator(".order-group")).toHaveCount(6);
   await expect(fold.locator(".order-head").first()).toContainText("Exit rules");          // newest first
 });
@@ -126,8 +127,9 @@ test("group session: today's orders in view, the earlier ones folded", async ({ 
   };
   const errors = await open(page, "/paper/g1", { "/live/sessions": rows, "/live/sessions/g1": group }, "Orders today");
   const card = page.locator("section", { has: page.getByRole("heading", { name: "Orders today" }) });
-  await expect(card.locator(".order-group")).toHaveCount(1);                       // the two entries sent together, one line
-  await expect(card.locator(".order-sym")).toHaveText(["INFY", "WIPRO"]);
+  const todays = card.locator(":scope > .order-list");
+  await expect(todays.locator(".order-group")).toHaveCount(1);                     // the two entries sent together, one line
+  await expect(todays.locator(".order-sym")).toHaveText(["INFY", "WIPRO"]);
   await expect(card.locator("details.earlier summary")).toContainText("Earlier orders (2)");
   await sane(page, errors, info.project.name === "phone");
   await shot(page, "group-session", info.project.name);

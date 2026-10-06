@@ -9,6 +9,8 @@ export interface FoEvent {
   series_label?: string | null; expiry?: string | null; effective?: string | null; was?: number | null; now?: number | null; lot?: number | null;
   seen?: string | null; source?: string | null; no?: string | null; subject?: string | null; within?: boolean | null;
   date: string; text: string; upcoming: boolean;
+  /** the circulars (and the contract file) the change rests on */
+  sources?: { no: string; subject: string; url: string; date?: string | null }[];
 }
 export interface FoBadge { kind: FoKind; short: string; text: string; date: string }
 export interface FoSource { id: string; label: string; as_of: string | null; checked: string | null; failed: boolean }

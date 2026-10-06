@@ -132,11 +132,11 @@ test("options builder: Greeks, the payoff today, what-if sliders and the roll pr
   await page.mouse.move(0, 0);
 
   // the underlying up 2%: the P&L, the net delta and a what-if marker move; the today curve doesn't
-  const pnl0 = await panel.getByTestId("whatif-pnl").locator("b").first().innerText();
+  const pnl0 = await panel.getByTestId("whatif-pnl").locator(".k-stat-v").first().innerText();
   await panel.getByTestId("whatif-spot").fill("2");
   await expect(panel.getByTestId("whatif-spot-value")).toHaveText("+2% · 25,510");
   await expect(panel.getByTestId("net-delta")).not.toHaveText(delta0);
-  await expect(panel.getByTestId("whatif-pnl").locator("b").first()).not.toHaveText(pnl0);
+  await expect(panel.getByTestId("whatif-pnl").locator(".k-stat-v").first()).not.toHaveText(pnl0);
   await expect(panel).toContainText("Greeks, model estimate (NIFTY +2% at 25,510)");
   expect(await todayLine(page).getAttribute("d")).toBe(path0);
 
@@ -197,7 +197,7 @@ test("options builder: Greeks, the payoff today, what-if sliders and the roll pr
 test("options chain: IV and Greeks for every strike, labelled as model estimates", async ({ page }, info) => {
   const { errors } = await open(page, "/options");
   await page.locator("details.chain > summary").click();
-  await page.getByRole("button", { name: "IV and Greeks" }).click();
+  await page.getByRole("radio", { name: "IV and Greeks" }).click();
   const t = page.getByTestId("chain-greeks");
   await expect(t.locator("tbody tr")).toHaveCount(11);
   const atm = t.locator("tr.atm");

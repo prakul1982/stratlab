@@ -61,9 +61,10 @@ test("F&O contract changes: the dated list, filters, only mine, the alert and a 
   expect((await request.put(`${API}/trade/fo-changes/alerts`, { headers: auth, data: { on: false } })).ok()).toBeTruthy();
 
   const errors = await open(page, "/trade/fo-changes", "Every change", who);
-  await expect(page.getByRole("heading", { name: "F&O contract changes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "F&O changes", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: "Where this comes from" }).click();
   await expect(page.getByTestId("fo-asof")).toContainText(/Contract file as of .*Circulars as of/);
-  const coming = page.getByRole("region", { name: "Coming up" });
+  const coming = page.getByRole("region", { name: "Every change" });      // one dated list: what is coming up is at its top
   await expect(coming.getByText(/EXIDEIND leaves F&O\. The .* series, expiring .*, is the last one the contract file lists\./)).toBeVisible();
   await expect(coming.getByText(/NIFTY's lot size goes from 75 to 65/)).toBeVisible();
   if (phone) await touchable(page);
@@ -72,7 +73,9 @@ test("F&O contract changes: the dated list, filters, only mine, the alert and a 
   await all.getByRole("group", { name: "Kind of change" }).getByRole("button", { name: "Leaving" }).click();
   await expect(all.locator(".fo-day .fo-row[data-kind=exit]").first()).toBeVisible();
   await expect(all.locator(".fo-day .fo-row:not([data-kind=exit])")).toHaveCount(0);
-  await expect(all.getByText("Exchange circular FAOP/71001: Exclusion of EXIDEIND and NUVAMA from F&O segment")).toBeVisible();
+  // the exclusion circular is the source under each leaving line, as a link
+  const src = all.locator(".fo-row[data-symbol=EXIDEIND] .fo-sources").getByRole("link", { name: /Circular FAOP\/71001: Exclusion of EXIDEIND and NUVAMA from F&O segment/ });
+  await expect(src).toHaveAttribute("href", /FAOP71001\.pdf/);
   await all.getByRole("button", { name: "All", exact: true }).click();
 
   await all.getByLabel("Find a symbol").fill("nifty");

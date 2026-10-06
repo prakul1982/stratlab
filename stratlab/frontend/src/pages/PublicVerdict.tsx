@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
-import { money, pct, signClass, TF_NAME } from "../lib/format";
+import { money, pct, TF_NAME } from "../lib/format";
+import { upDown, checkTone } from "../lib/tradeUi";
 import type { CheckStatus, Stats, VerdictKind } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { moneyCompact } from "../lib/chartFormat";
 import { Logo } from "../components/Logo";
-import { Loading, STATUS_NAME } from "../components/ui";
+import { STATUS_NAME } from "../components/ui";
+import { Badge, Card, CardHead, DataTable, ErrorState, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import "./trade/trade.css";
+
+/* /verdict/:token: a verdict someone shared, readable without an account. Built from the kit (components/kit). */
 
 interface Snapshot {
   name: string; question: string; instrument: { symbol: string; name?: string; market?: string; currency?: string; type?: string };
@@ -16,6 +21,7 @@ interface Snapshot {
   stats: Stats; series: { t: string[]; equity: (number | null)[]; buy_hold: (number | null)[]; split: number | null };
   group: { name: string; max_open: number; members: { symbol: string; trades: number; pnl: number; win: number | null; buy_hold: number | null }[] } | null;
 }
+type Member = NonNullable<Snapshot["group"]>["members"][number];
 
 const d = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
 
@@ -29,9 +35,16 @@ export function PublicVerdict() {
   }, [token]);
 
   const v = snap?.verdict;
-  const tone = v?.verdict === "edge" ? "var(--blue)" : v?.verdict === "luck" || v?.verdict === "no_edge" ? "var(--orange)" : "var(--ink)";
   const cur = snap?.instrument.currency || (snap?.instrument.market === "IN" ? "INR" : "");
   useEffect(() => { if (snap) document.title = `${snap.verdict.headline} ${snap.name} · StratLab`; }, [snap]);
+
+  const cols: Column<Member>[] = [
+    { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
+    { key: "n", header: "Trades", numeric: true, cell: (m) => m.trades },
+    { key: "pnl", header: "P&L", numeric: true, cell: (m) => <span className={upDown(m.pnl)}>{money(m.pnl, cur)}</span> },
+    { key: "win", header: "Win rate", numeric: true, cell: (m) => (m.win == null ? "–" : `${m.win}%`) },
+    { key: "bh", header: "Buy and hold", numeric: true, cell: (m) => (m.buy_hold == null ? "–" : <span className={upDown(m.buy_hold)}>{pct(m.buy_hold)}</span>) },
+  ];
 
   return (
     <div className="pub">
@@ -39,29 +52,27 @@ export function PublicVerdict() {
         <a href="/" aria-label="StratLab home"><Logo size={40} /></a>
         <a className="btn sm" href="/">Test your own idea free</a>
       </header>
-      <main className="pub-main stack" style={{ gap: 24 }}>
-        {!snap && !gone && <Loading label="Opening the verdict" />}
+      <main className="pub-main k-page">
+        {!snap && !gone && <Card><Skeleton label="Opening the verdict" /></Card>}
         {gone && (
-          <div className="card stack" style={{ gap: 10 }}>
-            <h1 className="h2">This verdict isn't available</h1>
-            <p className="muted">{gone} The person who shared it may have turned the link off.</p>
-            <a className="btn" href="/" style={{ alignSelf: "flex-start" }}>See what StratLab does</a>
-          </div>
+          <ErrorState title="This verdict isn't available" action={{ label: "See what StratLab does", to: "/" }}>
+            {gone} The person who shared it may have turned the link off.
+          </ErrorState>
         )}
         {snap && v && (
           <>
-            <div className="stack" style={{ gap: 8 }}>
-              <span className="eyebrow">
+            <div className="k-stack">
+              <span className="k-eyebrow">
                 {snap.name} · {snap.group ? `${snap.group.name} (${snap.group.members.length})` : snap.instrument.symbol} · {TF_NAME[snap.tf] ?? snap.tf} candles
                 {snap.range ? ` · ${d(snap.range.from)} – ${d(snap.range.to)}` : ""}
               </span>
-              <h1 className="serif" style={{ fontSize: "clamp(40px, 7vw, 76px)", fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 1, color: tone }}>{v.headline}</h1>
-              <p className="serif" style={{ fontSize: 20, maxWidth: "60ch" }}>{v.summary}</p>
-              {snap.question && <p className="muted">The question: {snap.question}</p>}
+              <h1 className={`verdict-head pub-head ${v.verdict}`}>{v.headline}</h1>
+              <p className="k-lede">{v.summary}</p>
+              {snap.question && <p className="k-small k-muted">The question: {snap.question}</p>}
             </div>
 
-            <section className="card stack" style={{ gap: 10 }}>
-              <div className="spread"><h2 className="h3">Return after costs</h2><span className="small muted">{v.checks.length} honesty checks · {v.passed} passed</span></div>
+            <Card label="Return after costs">
+              <CardHead title="Return after costs" actions={<span className="k-note">{v.checks.length} honesty checks · {v.passed} passed</span>} />
               {snap.series.t.length > 1 && (
                 <XYChart ariaLabel="Strategy against buy and hold" height={240} split={snap.series.split} times={snap.series.t} compare
                   splitNotes={["tuned on these years", "never seen"]}
@@ -69,43 +80,36 @@ export function PublicVerdict() {
                   series={[{ id: "strategy", label: "Strategy", values: snap.series.equity, color: "var(--ink)", width: 2 },
                     { id: "hold", label: "Buy and hold", values: snap.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" }]} />
               )}
-              <div className="stats-grid opt-stats">
-                {[["Return after costs", pct(snap.stats.ret), snap.stats.ret], ["Buy and hold", pct(snap.stats.buy_hold_ret), snap.stats.buy_hold_ret],
-                  ["Worst fall", pct(snap.stats.mdd), snap.stats.mdd], ["Trades", String(snap.stats.n), null]].map(([k, val, n]) => (
-                  <div key={k as string}><span className="eyebrow">{k}</span><b className={`mono ${signClass(n as number | null)}`} style={{ fontSize: 22 }}>{val}</b></div>
-                ))}
-              </div>
-            </section>
+              <StatRow label="Results">
+                <Stat item label="Return after costs" value={pct(snap.stats.ret)} tone={snap.stats.ret > 0 ? "up" : snap.stats.ret < 0 ? "down" : undefined} />
+                <Stat item label="Buy and hold" value={pct(snap.stats.buy_hold_ret)} tone={snap.stats.buy_hold_ret > 0 ? "up" : snap.stats.buy_hold_ret < 0 ? "down" : undefined} />
+                <Stat item label="Worst fall" value={pct(snap.stats.mdd)} tone="down" />
+                <Stat item label="Trades" value={String(snap.stats.n)} />
+              </StatRow>
+            </Card>
 
-            <section className="pub-checks">
+            <section className="pub-checks" aria-label="The honesty checks">
               {v.checks.map((c) => (
-                <div key={c.id} className="card stack" style={{ gap: 6 }}>
-                  <div className="spread"><b>{c.title}</b><span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span></div>
-                  <p className="small muted">{c.detail}</p>
-                </div>
+                <Card key={c.id} label={c.title}>
+                  <CardHead level={3} title={c.title} actions={<Badge tone={checkTone(c.status)}>{STATUS_NAME[c.status]}</Badge>} />
+                  <p className="k-small k-muted">{c.detail}</p>
+                </Card>
               ))}
             </section>
 
             {snap.group && (
-              <section className="card stack" style={{ gap: 10 }}>
-                <h2 className="h3">{snap.group.name}: member by member</h2>
-                <div className="table-wrap"><table>
-                  <thead><tr><th>Symbol</th><th>Trades</th><th>P&amp;L</th><th>Win rate</th><th>Buy and hold</th></tr></thead>
-                  <tbody>{snap.group.members.map((m) => (
-                    <tr key={m.symbol}><td className="mono">{m.symbol}</td><td className="mono">{m.trades}</td>
-                      <td className={`mono ${signClass(m.pnl)}`}>{money(m.pnl, cur)}</td><td className="mono">{m.win == null ? "–" : `${m.win}%`}</td>
-                      <td className={`mono ${signClass(m.buy_hold)}`}>{m.buy_hold == null ? "–" : pct(m.buy_hold)}</td></tr>
-                  ))}</tbody>
-                </table></div>
-              </section>
+              <Card label="Group members">
+                <CardHead title={`${snap.group.name}: member by member`} />
+                <DataTable label="Group members" columns={cols} rows={snap.group.members} rowKey={(m) => m.symbol} />
+              </Card>
             )}
 
-            <section className="card stack pub-cta" style={{ gap: 10 }}>
-              <h2 className="serif" style={{ fontSize: 28, fontWeight: 400 }}>Is your idea real, or just lucky?</h2>
-              <p className="muted">Describe a strategy in plain words. StratLab tests it on years of real prices, after real costs, and runs the same four honesty checks.</p>
-              <a className="btn" href="/" style={{ alignSelf: "flex-start" }}>Test your own idea free</a>
-            </section>
-            <p className="small muted">Shared from StratLab. Research and paper trading only: past results don't predict future returns, and this isn't investment advice. The strategy's rules are private to the person who shared it.</p>
+            <Card label="Test your own idea">
+              <CardHead title="Is your idea real, or just lucky?" />
+              <p className="k-small k-muted">Describe a strategy in plain words. StratLab tests it on years of real prices, after real costs, and runs the same four honesty checks.</p>
+              <a className="btn k-btn-end" href="/">Test your own idea free</a>
+            </Card>
+            <p className="k-note">Shared from StratLab. Research and paper trading only: past results don't predict future returns, and this isn't investment advice. The strategy's rules are private to the person who shared it.</p>
           </>
         )}
       </main>

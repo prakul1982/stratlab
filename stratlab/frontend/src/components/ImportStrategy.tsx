@@ -8,6 +8,8 @@ import type { Cond, Group, GroupMember, Instrument, Risk, Session, Strategy, Tf 
 import { findInstrument, type Built } from "./IdeaComposer";
 import { Upload } from "./Icons";
 import { Info } from "./ui";
+import { Notice } from "./kit";
+import "../pages/trade/trade.css";
 
 interface ImportOut {
   source: string; source_name: string; used_ai: boolean; kind?: "options";
@@ -98,23 +100,22 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
   };
 
   return (
-    <div className="stack" style={{ gap: 12 }}>
-      <div className="import-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); readFile(e.dataTransfer.files[0]); }}>
+    <div className="k-stack">
+      <div className="k-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); readFile(e.dataTransfer.files[0]); }}>
         <Upload size={22} />
-        <span className="small">{file ? <b>{file}</b> : <>Drop a strategy file here, or</>}</span>
+        <span className="k-small">{file ? <b>{file}</b> : <>Drop a strategy file here, or</>}</span>
         <button type="button" className="btn quiet sm" onClick={() => input.current?.click()}>{file ? "Choose another file" : "Choose a file"}</button>
         <input ref={input} type="file" accept={ACCEPT} hidden onChange={(e) => readFile(e.target.files?.[0])} />
       </div>
       <label className="sr-only" htmlFor="import-text">Or paste the strategy</label>
-      <textarea id="import-text" className="input mono" value={text} maxLength={20000} spellCheck={false}
-        style={{ minHeight: 130, fontSize: 13, lineHeight: 1.5 }}
+      <textarea id="import-text" className="k-textarea k-mono" value={text} maxLength={20000} spellCheck={false}
         placeholder={'…or paste it here: a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words.\n\nstrategy("Golden cross")\nif ta.crossover(ta.sma(close, 50), ta.sma(close, 200))\n    strategy.entry("Long", strategy.long)'}
         onChange={(e) => { setText(e.target.value); if (!e.target.value) setFile(""); }} />
-      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-        <button className="btn" disabled={busy} onClick={run}>{busy ? "Reading your strategy…" : "Import and build my notebook"}</button>
-        <span className="small muted row" style={{ gap: 0 }}>Uses one AI build, except StratLab exports<Info>{HELP_TEXT}</Info></span>
+      <div className="k-row">
+        <button type="button" className="btn" disabled={busy} onClick={run}>{busy ? "Reading your strategy…" : "Import and build my notebook"}</button>
+        <span className="k-small k-muted k-row">Uses one AI build, except StratLab exports<Info>{HELP_TEXT}</Info></span>
       </div>
-      {note && <p className="small" style={{ color: "var(--orange-ink)" }} role="alert">{note}</p>}
+      {note && <Notice tone="warn" role="status">{note}</Notice>}
     </div>
   );
 }

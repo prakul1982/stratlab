@@ -1,0 +1,18 @@
+/* Positioning and stock futures: thin share bars drawn as pictures, and the small tags. */
+.pos-bar { display: block; width: 100%; max-width: 160px; height: 8px; }
+.pos-bar .bg { fill: var(--line-2); }
+.pos-bar .fg { fill: var(--ink-2); }
+.pos-split { display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap; }
+.pos-split .pos-bar { width: 56px; }
+.pos-sides { display: flex; flex-direction: column; gap: 2px; font-size: var(--t-body); letter-spacing: 0; line-height: 1.35; }
+.pos-chart { min-width: 0; }
+.k-table tr[data-atm] td, .k-table tr[data-atm] th { background: var(--chip); }
+.sf-mwpl { display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap; }
+.sf-meter { width: 72px; height: 8px; flex: none; }
+.sf-meter .bg { fill: var(--line-2); }
+.sf-meter .fg { fill: var(--ink-2); }
+.sf-meter .ban { stroke: var(--down); stroke-width: 1.5; }
+.sf-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--chip); font-size: var(--t-note); font-weight: 600; }
+.sf-buildup { display: inline-flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.sf-search { max-width: 220px; }
+.sf-filter-count { margin-left: 6px; opacity: .7; font-weight: 400; }
