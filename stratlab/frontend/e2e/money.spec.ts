@@ -128,7 +128,14 @@ test("money calendar: reachable from the menu", async ({ page }, info) => {
   const n = info.project.name === "phone" ? 158 : 155;
   const errors = await open(page, "/holdings", "Your stocks", n);
   if (info.project.name === "phone") await page.getByRole("button", { name: "Open menu" }).click();
-  await page.getByRole("link", { name: "Money calendar" }).click();
+  await page.getByRole("radiogroup", { name: "Space" }).getByRole("radio", { name: "Money" }).click();      // Holdings is one of Mine's own links: pick Money's menu
+  await expect(page).toHaveURL(/\/money$/);
+  if (info.project.name === "phone") await expect(async () => {
+      if (!(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
+      await expect(page.locator("aside.sidebar.open")).toBeInViewport({ timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
+  await page.locator('aside.sidebar [data-group="plan"] .side-toggle').click();      // the Plan group is folded until opened
+  await page.locator("aside.sidebar").getByRole("link", { name: "Money calendar" }).click();
   await expect(page).toHaveURL(/\/money\/calendar$/);
   await expect(page.getByRole("heading", { name: "Money calendar" })).toBeVisible();
   expect(errors).toEqual([]);

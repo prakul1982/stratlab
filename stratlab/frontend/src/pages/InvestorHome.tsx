@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct, signClass } from "../lib/format";
-import { ResearchNav } from "../components/Research";
+import { RegionSwitch } from "../components/Research";
+import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/research";
 import { AsOf, Loading } from "../components/ui";
 
@@ -46,7 +47,7 @@ export function InvestorHomePage() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={pick} />
+      <div className="k-toolbar"><RegionSwitch region={region} setRegion={pick} /><RouteSeg label="Watchlist view" views={WATCH_VIEWS} /></div>
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Investor home · {REGION_NAME[region]}</span>
         <h1 className="page-title">Your watchlist, all in one place</h1>

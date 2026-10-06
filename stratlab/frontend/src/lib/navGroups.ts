@@ -1,38 +1,5 @@
-/** Pages that share one menu entry and switch between each other with tabs. Every page keeps its own URL. */
-export type Family = "scans" | "watch";
-
-export const FAMILIES: Record<Family, { label: string; home: string; views: [string, string][] }> = {
-  scans: {
-    label: "Scans", home: "/research/scans",
-    views: [["/research/scan", "Trend scan"], ["/research/screens", "Screener"], ["/research/rotation", "Sector rotation"], ["/research/filings", "Red flags"],
-      ["/invest/breadth", "Market breadth"], ["/invest/etf-gaps", "ETF vs NAV"],
-      ["/invest/business-updates", "Business updates"], ["/invest/holders", "Named holders"]],
-  },
-  watch: {
-    label: "Watchlist", home: "/research/watchlist",
-    views: [["/research/watchlist", "List"], ["/research/investor", "At a glance"]],
-  },
-};
-
-/** The family a path belongs to, if any. */
-export function familyOf(path: string): Family | null {
-  for (const f of Object.keys(FAMILIES) as Family[]) if (FAMILIES[f].views.some(([p]) => p === path)) return f;
-  return null;
-}
-
-const KEY = (f: Family) => `stratlab.view.${f}`;
-
-/** The tab last opened in a family, so its menu entry reopens where you left off. */
-export function lastView(f: Family): string {
-  let saved: string | null = null;
-  try { saved = localStorage.getItem(KEY(f)); } catch { /* storage off */ }
-  return FAMILIES[f].views.some(([p]) => p === saved) ? saved! : FAMILIES[f].views[0][0];
-}
-
-export function rememberView(path: string) {
-  const f = familyOf(path);
-  if (f) try { localStorage.setItem(KEY(f), path); } catch { /* storage off */ }
-}
+/* The menu's entries kept as data: their one-line titles and the longer blurbs on each space's home. Where they live in
+ * the menu (space, group, order) is lib/nav.ts. */
 
 /** One menu entry kept as data. `icon` names one of the menu's icons (ICONS in Shell); an unknown name gets a plain
  * one. `blurb` is the line under it on its space's home page. */
@@ -41,8 +8,7 @@ export type NavEntry = { to: string; label: string; icon?: string; title?: strin
 /** Menu groups kept as data, by name. "Money" is the Money space's menu, in order: each Money feature adds one line
  * here, and it shows both in the menu and as a card on the Money home, so only what's built ever appears. */
 export const NAV_GROUPS: Record<string, NavEntry[]> = {
-  /** Invest pages beyond the menu's fixed entries, kept as data like Money's. Each also opens as a tab among the Scans
-   * (FAMILIES.scans), so the Scans menu entry already leads to it. */
+  /** Invest pages beyond the menu's fixed entries, kept as data like Money's. */
   Invest: [
     { to: "/invest/breadth", label: "Market breadth", icon: "pulse", title: "How many stocks rise, fall, sit above their averages or make new highs",
       blurb: "Advances and declines, stocks above their 20/50/200-day averages, 52-week highs and lows, McClellan and sectors." },
@@ -69,7 +35,7 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "Live through the auction: each F&O stock's reference price, indicative and final price, the indices, and expiry-day settlement." },
     { to: "/trade/replay", label: "Chart replay", icon: "lens", title: "Practise on past candles, one at a time, logged to your journal",
       blurb: "Step through a past chart with the future hidden, place practice orders with a stop and target, and see the result after charges." },
-    { to: "/trade/signals", label: "Signal forward test", icon: "pulse", title: "Send TradingView or Chartink alerts into paper trading",
+    { to: "/trade/signals", label: "Forward test", icon: "pulse", title: "Send TradingView or Chartink alerts into paper trading",
       blurb: "A secret webhook URL for your alerts: each one fills on paper at StratLab's own price, with a log of every signal and the verdict's checks." },
     { to: "/trade/events", label: "Market events", icon: "calendar", title: "RBI policy, data releases, the Fed, index changes, expiries and holidays",
       blurb: "One dated list from the official calendars, with the published figure once it is out, and reminders." },

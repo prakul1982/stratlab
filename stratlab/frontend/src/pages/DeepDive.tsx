@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct, safeHref, signClass } from "../lib/format";
 import { millionsOf, scaleFor } from "../lib/research";
-import { Panel, ResearchNav, TrendBars } from "../components/Research";
+import { Panel, RegionSwitch, TrendBars } from "../components/Research";
 import { DealsPanel } from "../components/Deals";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { NamedHoldersPanel } from "../components/NamedHolders";
@@ -218,7 +218,7 @@ export function DeepDivePage() {
   const b = v?.reads?.business, p = v?.reads?.plans;
   return (
     <div className="stack" style={{ gap: 22 }}>
-      <ResearchNav region={region} />
+      <RegionSwitch region={region} />
       <div className="stack" style={{ gap: 8 }}>
         <Link className="link small" to={`/research/${region}/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
         <span className="eyebrow">Deep dive · {us ? "United States" : "India"} · {sym}</span>

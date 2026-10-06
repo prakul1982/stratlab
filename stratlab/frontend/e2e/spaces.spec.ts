@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { NAV_GROUPS } from "../src/lib/navGroups";
+import { NAV } from "../src/lib/nav";
 
 // The three spaces: Trade (the strategy lab), Invest and Money. The switcher at the top of the menu, the welcome
 // question that picks the first space, each space's home, deep links opening their own space, and search labelling
@@ -34,7 +35,10 @@ const prefs = async (request: APIRequestContext, u: Who) => (await (await reques
 
 /** On a phone the menu is a drawer: open it. */
 async function menu(page: Page, phone: boolean) {
-  if (phone && !(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
+  if (phone) await expect(async () => {
+      if (!(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
+      await expect(page.locator("aside.sidebar.open")).toBeInViewport({ timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
   const side = page.locator("aside.sidebar");
   await expect(side.getByRole("navigation", { name: "Main" })).toBeVisible();
   return side;
@@ -59,9 +63,11 @@ async function sane(page: Page, errors: string[], phone: boolean) {
   expect(small, "controls too small to tap").toEqual([]);
 }
 
-const groups = (side: ReturnType<Page["locator"]>) => side.getByRole("navigation", { name: "Main" }).locator(".side-toggle");
+/** The group titles in the menu, in order (each is a link to the group's own page). */
+const groups = (side: ReturnType<Page["locator"]>) => side.getByRole("navigation", { name: "Main" }).locator(".side-group .side-title");
+const labelsOf = (space: "trade" | "invest" | "money") => NAV[space].groups.map((g) => g.label);
 
-test("spaces: the switcher shows one space's menu, All shows every group folded, and the choice is kept", async ({ page, request }, info) => {
+test("spaces: the switcher goes to a space's home and shows its groups, Mine shows its own menu, and the choice is kept", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
   const u = who(230, phone);
   await request.put(`${API}/me/prefs`, { headers: auth(u), data: { level: "some", focus: "trade" } });     // came to trade
@@ -71,51 +77,62 @@ test("spaces: the switcher shows one space's menu, All shows every group folded,
   await expect(page.locator(".space-card-lead")).toContainText("Options");
   let side = await menu(page, phone);
   const space = side.getByRole("radiogroup", { name: "Space" });
-  await expect(space.getByRole("radio")).toHaveText(["Trade", "Invest", "Money", "All"]);
+  await expect(space.getByRole("radio")).toHaveText(["Mine", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("radio", { name: "Trade" })).toHaveAttribute("aria-checked", "true");
-  await expect(groups(side)).toHaveText([/Notebooks$/, /Trading$/]);
-  await expect(side.locator('[data-group="trading"] .side-nav a')).toHaveText(["Options", "Paper trading", "Strategy library", "Import a strategy",
-    ...NAV_GROUPS.Trade.map((e) => e.label)]);
+  await expect(groups(side)).toHaveText(labelsOf("trade"));
+  for (const g of NAV.trade.groups) await expect(side.locator(`[data-group="${g.id}"] > .side-nav > .side-entry > a`)).toHaveText(g.pages.map((p) => p.label));
   // the space's main action is a normal-sized button, not a banner
   const action = side.getByRole("button", { name: "New notebook" });
   await expect(action).toBeVisible();
   expect((await action.boundingBox())!.height).toBeLessThanOrEqual(40);
 
-  // Money: its own menu, from the one list each Money feature adds itself to; the page stays where it is
+  // Money: a click goes to the space's home, and its menu has its three groups; the Money features come from the one list
   await space.getByRole("radio", { name: "Money" }).click();
+  await expect(page).toHaveURL(/\/money$/);
+  if (phone) side = await menu(page, phone);
   await expect(space.getByRole("radio", { name: "Money" })).toHaveAttribute("aria-checked", "true");
-  await expect(groups(side)).toHaveText([/Money$/]);
-  await expect(side.locator('[data-group="money"] .side-nav a')).toHaveText(NAV_GROUPS.Money.map((e) => e.label));
+  await expect(groups(side)).toHaveText(labelsOf("money"));
+  await expect(side.locator('[data-group="what-you-own"] .side-nav a')).toHaveText(["Net worth", "Holdings", "Mutual funds"]);
+  expect(NAV.money.groups.flatMap((g) => g.pages.map((p) => p.to)).sort(), "every Money feature is in the menu").toEqual(NAV_GROUPS.Money.map((e) => e.to).sort());
   await expect(side.getByRole("link", { name: "Money home" })).toHaveAttribute("href", "/money");
-  await expect(page).toHaveURL(/\/trade$/);
   // kept on the account and on this device
   await expect.poll(async () => (await prefs(request, u)).space).toBe("money");
   expect(await page.evaluate(() => localStorage.getItem("stratlab.space"))).toBe("money");
   if (phone) await sane(page, errors, phone);
 
-  // All: every group, Trade's first, folded until opened
-  await space.getByRole("radio", { name: "All" }).click();
-  await expect(groups(side)).toHaveText([/Notebooks$/, /Trading$/, /Research$/, /Watch$/, /Money$/]);
-  for (const g of await groups(side).all()) await expect(g).toHaveAttribute("aria-expanded", "false");
-  await expect(side.getByRole("link", { name: "Paper trading" })).toBeHidden();
-  await side.getByRole("button", { name: "Research", exact: true }).click();
-  await expect(side.getByRole("link", { name: "Companies" })).toBeVisible();
-  await expect.poll(async () => (await prefs(request, u)).space).toBe("all");
+  // clicking the space that is already showing goes to its home too
+  await page.goto("/money/tax-tools");
+  side = await menu(page, phone);
+  await side.getByRole("radiogroup", { name: "Space" }).getByRole("radio", { name: "Money" }).click();
+  await expect(page).toHaveURL(/\/money$/);
 
-  // after a reload, and on a new device (nothing saved in the browser), the menu is still All
+  // Mine: its own menu, not the groups
+  if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(0);     // the drawer closes after a pick
+  side = await menu(page, phone);
+  await side.getByRole("radiogroup", { name: "Space" }).getByRole("radio", { name: "Mine" }).click();
+  await expect(page).toHaveURL(/\/mine$/);
+  if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
+  side = await menu(page, phone);
+  await expect(side.getByRole("link", { name: "My space" })).toHaveAttribute("href", "/mine");
+  await expect(groups(side)).toHaveText(["Pinned"]);
+  await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
+  await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/holdings");
+  await expect.poll(async () => (await prefs(request, u)).space).toBe("all");       // the server still calls it "all"
+  expect(await page.evaluate(() => localStorage.getItem("stratlab.space"))).toBe("mine");
+
+  // after a reload, and on a new device (nothing saved in the browser), the menu is still Mine
   await page.reload();
   side = await menu(page, phone);
-  await expect(side.getByRole("radio", { name: "All" })).toHaveAttribute("aria-checked", "true");
+  await expect(side.getByRole("radio", { name: "Mine" })).toHaveAttribute("aria-checked", "true");
   await page.evaluate(() => localStorage.removeItem("stratlab.space"));
   await page.reload();
   side = await menu(page, phone);
-  await expect(side.getByRole("radio", { name: "All" })).toHaveAttribute("aria-checked", "true");
-  // in All, a link into a space keeps every group, opening the one it's in
-  await side.getByRole("link", { name: "Companies" }).click();
-  await expect(page).toHaveURL(/\/research$/);
+  await expect(side.getByRole("radio", { name: "Mine" })).toHaveAttribute("aria-checked", "true");
+  // in Mine, a page that is neither pinned nor one of its own links opens its own space's menu
+  await page.goto("/research/pulse");
   side = await menu(page, phone);
-  await expect(side.getByRole("radio", { name: "All" })).toHaveAttribute("aria-checked", "true");
-  await expect(side.getByRole("button", { name: "Research", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(side.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
+  await expect(side.locator('[data-group="market-view"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
   await sane(page, errors, phone);
 });
 
@@ -131,13 +148,14 @@ test("spaces: a deep link opens its own space, without changing the account's ch
     await expect(page.locator("main").getByText(ready).first()).toBeVisible({ timeout: 30_000 });
     const side = await menu(page, phone);
     await expect(side.getByRole("radio", { name }), `${path} opens in ${name}`).toHaveAttribute("aria-checked", "true");
-    if (name === "Money") await expect(side.getByRole("link", { name: path === "/holdings" ? "My Holdings" : "Tax report" })).toHaveClass(/active/);
+    if (name === "Money") await expect(side.getByRole("link", { name: path === "/holdings" ? "Holdings" : "Tax report", exact: true })).toHaveClass(/active/);
   }
   // a deep link only switches the menu on this device; `/` still opens the space the person picked
   expect((await prefs(request, u)).space ?? null).toBeNull();
   // picking a space in the switcher makes it the home
   const side = await menu(page, phone);
   await side.getByRole("radio", { name: "Money" }).click();
+  await expect(page).toHaveURL(/\/money$/);
   await expect.poll(async () => (await prefs(request, u)).space).toBe("money");
   await page.goto("/");
   await expect(page).toHaveURL(/\/money$/, { timeout: 30_000 });
@@ -184,7 +202,7 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   // the owner: holdings and tradebooks are loaded by the fake world, and Basic tools are on
   const errors = await signIn(page, ADMIN, "/trade");
   await page.getByRole("button", { name: /All of it/ }).click({ timeout: 4000 }).catch(() => undefined);   // first visit of the run
-  await page.goto("/trade");     // "All of it" opens the All home now; this test is about the Trade home
+  await page.goto("/trade");     // "All of it" opens My space now; this test is about the Trade home
   await expect(page.locator(".space-strip")).toBeVisible({ timeout: 30_000 });
   const strip = page.locator(".space-strip > a");
   await expect(strip.first()).toContainText("Options");
@@ -304,7 +322,7 @@ test("search labels each result with its space", async ({ page }, info) => {
   await box.getByLabel("Search or ask anything").fill("tax report");
   await expect(box.getByRole("option", { name: /Tax report/ }).first().locator(".space-tag")).toHaveText("Money");
   await box.getByLabel("Search or ask anything").fill("options");
-  await expect(box.getByRole("option", { name: /Paper trade options/ }).locator(".space-tag")).toHaveText("Trade");
+  await expect(box.getByRole("option", { name: /^Options builder/ }).locator(".space-tag")).toHaveText("Trade");
   await box.getByLabel("Search or ask anything").fill("sector rotation");
   await expect(box.getByRole("option", { name: /^Sector rotation/ }).first().locator(".space-tag")).toHaveText("Invest");
   await box.getByLabel("Search or ask anything").fill("money");

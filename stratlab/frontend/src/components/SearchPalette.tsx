@@ -189,6 +189,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       };
       out.push({ group: "Try", items: askExamples(focus).slice(0, 6).map((ex, n) => ({
         key: `t${n}`, icon: intentFor(ex) ? <Lens size={18} /> : <Sparkle size={18} />, title: ex, sub: subs[ex], run: () => setQ(ex) })) });
+      out.push({ group: "Browse", items: [{ key: "features", icon: <Compass size={18} />, title: "All features", sub: "Every page by space and group, with what it is for in a line", run: () => go("/features") }] });
       return out;
     }
     const act: Row[] = [];

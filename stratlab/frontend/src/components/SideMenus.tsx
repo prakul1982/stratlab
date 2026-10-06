@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "../lib/api";
 import { inWords, marketState } from "../lib/marketHours";
 import type { Market, Me } from "../lib/types";
-import { Close, Compass, LogOut, Moon, Shield, Sun, Updown, User } from "./Icons";
+import { Close, Compass, Layers, LogOut, Moon, Shield, Sun, Updown, User } from "./Icons";
 
 // The two small menus at the foot of the sidebar: which markets are open, and the account. Each is one line until
 // opened; opened, it floats above the line (a sheet from the bottom on a phone) and closes with Esc or a click outside.
@@ -118,6 +118,7 @@ export function AccountMenu({ me, dark, onTheme, onTour, onGo }: { me: Me | null
           {email && <div className="side-pop-head" role="presentation"><span className="muted acct-email">{email}</span></div>}
           <Link role="menuitem" to="/account" onClick={done(onGo)}><User size={16} />Account{plan && <span className="plan-tag">{plan}</span>}</Link>
           {me?.is_admin && <Link role="menuitem" to="/admin" onClick={done(onGo)}><Shield size={16} />Admin</Link>}
+          <Link role="menuitem" to="/features" onClick={done(onGo)}><Layers size={16} />All features</Link>
           <hr />
           <button role="menuitem" onClick={done(onTheme)}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? "Light mode" : "Dark mode"}</button>
           <button role="menuitem" onClick={done(onTour)}><Compass size={16} />Tour</button>

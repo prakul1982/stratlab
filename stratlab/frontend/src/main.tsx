@@ -20,7 +20,6 @@ import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
-import { lastView } from "./lib/navGroups";
 import { SPACE_HOMES } from "./lib/spaces";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
@@ -30,7 +29,11 @@ const home = () => import("./pages/Home");
 const spaceHomes = () => import("./pages/SpaceHomes");
 const SpaceHome = page(spaceHomes, "SpaceHome");
 const TradeHome = page(spaceHomes, "TradeHome");
-const AllHome = page(spaceHomes, "AllHome");
+const mineHome = () => import("./pages/MineHome");
+const MineHome = page(mineHome, "MineHome");
+const navPages = () => import("./pages/NavPages");
+const GroupPage = page(navPages, "GroupPage");
+const FeaturesPage = page(navPages, "FeaturesPage");
 const InvestHome = page(spaceHomes, "InvestHome");
 const MoneyHome = page(spaceHomes, "MoneyHome");
 const NotebooksHome = page(home, "NotebooksHome");
@@ -117,6 +120,7 @@ function warmFirstPage(path: string) {
     : path.startsWith("/verdict/") ? verdict
     : !saved ? login
     : /^\/(trade|invest|money)?$/.test(path) ? spaceHomes
+    : path === "/mine" ? mineHome
     : /^\/(notebooks|new)$/.test(path) ? home
     : /^\/n\/[^/]+$/.test(path) ? notebook
     : /^\/n\/[^/]+\/e\//.test(path) ? experiment
@@ -129,7 +133,7 @@ function warmFirstPage(path: string) {
     : path === "/money/mutual-funds" ? mfPage
     : path === "/money/calendar" ? moneyCalendar
     : path === "/trade/journal" ? journalPage
-    : path === "/research/screens" || (path === "/research/scans" && lastView("scans") === "/research/screens") ? screensPage
+    : path === "/research/screens" ? screensPage
     : path.startsWith("/research") ? research
     : null;
   load?.().catch(() => undefined);    // only a head start: the page itself reports a failed download
@@ -195,7 +199,12 @@ function Routed() {
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<SpaceHome />} />
-        <Route path="/all" element={<AllHome />} />
+        <Route path="/mine" element={<MineHome />} />
+        <Route path="/all" element={<Navigate to="/mine" replace />} />
+        <Route path="/features" element={<FeaturesPage />} />
+        <Route path="/trade/g/:group" element={<GroupPage />} />
+        <Route path="/invest/g/:group" element={<GroupPage />} />
+        <Route path="/money/g/:group" element={<GroupPage />} />
         <Route path="/trade" element={<TradeHome />} />
         <Route path="/invest" element={<InvestHome />} />
         <Route path="/money" element={<MoneyHome />} />
@@ -241,8 +250,9 @@ function Routed() {
         <Route path="/research/compare" element={<ComparePage />} />
         <Route path="/research/watchlist" element={<WatchlistPage />} />
         <Route path="/research/scan" element={<ScanPage />} />
-        <Route path="/research/scans" element={<Navigate to={lastView("scans")} replace />} />
-        <Route path="/scans" element={<Navigate to={lastView("scans")} replace />} />
+        {/* "Scans" was a row of tabs: its pages are now Find stocks and Market view, so the old address opens the first scan */}
+        <Route path="/research/scans" element={<Navigate to="/research/scan" replace />} />
+        <Route path="/scans" element={<Navigate to="/research/scan" replace />} />
         <Route path="/watchlist" element={<Navigate to="/research/watchlist" replace />} />
         <Route path="/research/screens" element={<ScreensPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />

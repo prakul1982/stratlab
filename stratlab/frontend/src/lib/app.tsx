@@ -4,7 +4,7 @@ import { api, ApiError, setApiHandlers, supabase } from "./api";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
 import { identify, resetAnalytics, track, trackSignup } from "./analytics";
-import { saveView, savedView, viewForFocus, type SpaceView } from "./spaces";
+import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
@@ -129,8 +129,8 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   /** Save some of the preferences in one request (two at once could each overwrite the other's change). */
   const savePrefs = useCallback(async (p: Prefs, quiet = false) => {
     if (p.space) { setSpaceHere(p.space); saveView(p.space); }
-    setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), ...p } } : m));
-    try { await api("/me/prefs", { method: "PUT", body: p }); } catch (e) { if (!quiet) fail(e); }
+    setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), ...p, space: p.space ? viewToServer(p.space) : m.prefs?.space } } : m));
+    try { await api("/me/prefs", { method: "PUT", body: p.space ? { ...p, space: viewToServer(p.space) } : p }); } catch (e) { if (!quiet) fail(e); }
   }, [fail]);
   const setLevel = useCallback((l: Level) => savePrefs({ level: l }), [savePrefs]);
   const setFocus = useCallback((f: Focus) => savePrefs({ focus: f }), [savePrefs]);
@@ -140,7 +140,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     saveView(s);
   }, [savePrefs]);
   // this device's last menu, else the account's choice, else what the person came for, else Trade
-  const space: SpaceView = spaceHere ?? me?.prefs?.space ?? viewForFocus(me?.prefs?.focus) ?? "trade";
+  const space: SpaceView = spaceHere ?? viewFromSaved(me?.prefs?.space) ?? viewForFocus(me?.prefs?.focus) ?? "trade";
 
   const value = useMemo<AppState>(() => ({
     session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,

@@ -63,7 +63,7 @@ test("stock futures: every F&O stock's buildup, rollover, basis and MWPL use, an
   await expect(rows.first()).toHaveAttribute("data-stock", "AMBUJACEM");                 // alphabetical: no ranking
   await expect(table.locator("tr[data-stock=RELIANCE]")).toContainText("Long buildup");
   await expect(table.locator("tr[data-stock=AMBUJACEM]")).toContainText("F&O ban");
-  await expect(page.getByRole("navigation", { name: "Positioning" }).getByRole("link", { name: "Index and participants" })).toBeVisible();
+  await expect(page.getByRole("radiogroup", { name: "Positioning view" }).getByRole("radio", { name: "Index and participants" })).toBeVisible();
   await expect(page.getByTestId("sf-status")).toContainText("trading days stored");
 
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^MWPL 80%\+/ }).click();
@@ -81,7 +81,7 @@ test("stock futures: every F&O stock's buildup, rollover, basis and MWPL use, an
   await expect(panel.getByRole("img", { name: /RELIANCE futures open interest by day/ })).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/stock-futures-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);
-  await page.getByRole("navigation", { name: "Positioning" }).getByRole("link", { name: "Index and participants" }).click();
+  await page.getByRole("radiogroup", { name: "Positioning view" }).getByRole("radio", { name: "Index and participants" }).click();
   await expect(page).toHaveURL(/\/trade\/positioning$/);
 });
 
