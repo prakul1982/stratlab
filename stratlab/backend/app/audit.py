@@ -13,6 +13,7 @@ KEY = "audit:last"
 MAX_SYMBOLS = 600
 PE_TOLERANCE = 0.25            # our P/E from market cap and trailing profit vs the page's stated P/E (minority
                                # shares and one-offs beyond this are explained on the page by a note)
+PE_ROUNDING = 0.5              # ...but a P/E under a few turns shown to one decimal: half a turn apart is rounding
 TTM_TOLERANCE = 0.05           # trailing-year revenue vs the last four quarters added up
 TTM_ROUNDING = 2               # ...but tiny companies' quarters are shown in whole crore, so 2 cr apart is rounding
 PRICE_TOLERANCE = 0.03         # prices from different sources, allowing for a day's move
@@ -123,6 +124,8 @@ def short_history(n: int) -> str:
 
 DVR = re.compile(r"\bDVR\b|differential voting", re.I)
 NO_RESULTS_DVR = "Shares with differential voting rights (DVR): the company's results are shown under its ordinary shares"
+CAPEX_SHRUNK = ("No capex estimate: its fixed assets fell by more than depreciation in each of the last three years "
+                "(assets sold or written down), so the balance sheet shows nothing bought")
 NO_RESULTS_YET = "No annual results on the company page yet: listed recently"
 
 
@@ -187,6 +190,7 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         out += _margins(p, years)
         if len(years) >= 3 and all(y.get("capex") is None for y in years[-3:]):
             out.append(_issue("fact", "Capex", NO_PLANT) if p.get("region") == "US" and not _plant(p, 3)
+                       else _issue("fact", "Capex", CAPEX_SHRUNK) if all(y.get("capex_cut") for y in years[-3:])
                        else _issue("gap", "Capex", "No capex estimate for the last three years"))
     ttm = _last_ttm(p.get("pl"), "Net Profit")
     fx = _usd_rate(p)
@@ -194,11 +198,14 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         ours = snap["market_cap_cr"] / (ttm * fx)
         off = _off(ours, snap["pe"])
         explained = any("P/E is based on" in n for n in nums.get("notes") or [])
-        if off is not None and off > PE_TOLERANCE and not explained:
+        if off is not None and off > PE_TOLERANCE and abs(ours - snap["pe"]) > PE_ROUNDING and not explained:
             out.append(_issue("mismatch", "Valuation", f"P/E {snap['pe']:.1f} on the company page, {ours:.1f} from market cap ÷ trailing profit"))
     ttm_sales = _last_ttm(p.get("pl"), "Sales", "Revenue")
-    q = [x.get("sales") for x in (nums.get("quarters") or [])[-4:]]
-    if ttm_sales and len(q) == 4 and all(v is not None for v in q):
+    last4 = (nums.get("quarters") or [])[-4:]
+    q = [x.get("sales") for x in last4]
+    # half-yearly reporters (small companies) have two columns a year, and a column per quarter only some quarters:
+    # four columns are four quarters only when they are three months apart
+    if ttm_sales and len(q) == 4 and all(v is not None for v in q) and (p.get("region") == "US" or _quarterly([x.get("quarter") for x in last4])):
         off = _off(sum(q), ttm_sales)
         if off is not None and off > TTM_TOLERANCE and abs(sum(q) - ttm_sales) > TTM_ROUNDING:
             if p.get("region") == "US":            # in the filings' own unit: "$1,204 m", "CAD 95 m"
@@ -208,6 +215,19 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
             else:
                 out.append(_issue("mismatch", "Numbers", f"Trailing revenue {ttm_sales:,.0f} cr vs last four quarters {sum(q):,.0f} cr"))
     return out
+
+
+def _quarterly(cols: list) -> bool:
+    """Whether result columns ("Sep 2025", "Dec 2025"...) are consecutive quarters, three months apart; true when
+    they aren't dated that way (nothing to tell them apart by)."""
+    months = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+    at = []
+    for c in cols:
+        m = re.match(r"([A-Za-z]{3})[a-z]* (\d{4})", str(c or ""))
+        if not m or m[1].lower() not in months:
+            return True
+        at.append(int(m[2]) * 12 + months[m[1].lower()])
+    return all(b - a == 3 for a, b in zip(at, at[1:]))
 
 
 def _plant(p: dict, n: int) -> bool:
@@ -227,6 +247,7 @@ def _usd_rate(p: dict) -> float | None:
 NO_PRICES = {    # why there's no trend: the facts first, then a source to try again
     "new": ("fact", "Listed recently: fewer than 30 trading days of prices, so no trend or stage yet"),
     "untraded": ("fact", "Not trading now (suspended, or not on the exchange's trading list), so no daily prices"),
+    "sparse": ("fact", "Trades on fewer than 30 days in over a year (thinly traded), so no trend or stage"),
     "stale": ("fact", "No trades for over a month (suspended or illiquid), so no current trend or stage"),
 }
 
@@ -270,7 +291,7 @@ def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = Non
     the page's price can be today's while our last daily close is yesterday's, so its previous close counts too, as
     the exchange's does, and a close anywhere in the page's day range is that session's price read at another minute.
     A page with only a price (India) can be a session behind ours: our previous close counts too.
-    `why` says why there's no trend when there isn't one ("new", "untraded", "stale" or "error")."""
+    `why` says why there's no trend when there isn't one ("new", "sparse", "untraded", "stale" or "error")."""
     out = []
     if not trend:
         if why == "error":
@@ -290,7 +311,12 @@ def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = Non
         before = ours / (1 + chg / 100) if page_quote is None and chg is not None and chg > -100 else None
         # a thinly traded stock's page price can be several sessions old: any of our last 5 closes counts (India)
         recent = (trend.get("recent") or [])[-5:] if page_quote is None else []
-        if not any(_near(x, on_page) for on_page in page for x in (ours, before, *recent) if x) and not _in_range(ours, lo, hi):
+        # the page's quote can be an earlier or later minute of the session our last candle covers (India): inside its range
+        if page_quote is None:
+            seen = any(_in_range(on_page, trend.get("day_low"), trend.get("day_high")) for on_page in page)
+        else:
+            seen = _in_range(ours, lo, hi)
+        if not any(_near(x, on_page) for on_page in page for x in (ours, before, *recent) if x) and not seen:
             prev = f" (previous close {page[1]:,.2f})" if len(page) > 1 else ""
             out.append(_issue("mismatch", "Prices", f"Last close {ours:,.2f} vs {page[0]:,.2f} on the company page{prev}"))
     return out
@@ -400,7 +426,7 @@ def _india_documents(kinds: list[str], told: dict | None, price_why: str | None)
             out.append(_issue("gap", "Documents", "No call transcript filed in the last two years"))
         elif calls == 0:
             out.append(_issue("fact", "Documents", NO_CALLS if meets else NO_CALLS_TOLD))
-        else:
+        elif (told or {}).get("calls_due", calls) > 0:      # a call from the last week has no transcript due yet
             out.append(_issue("gap", "Documents", f"No call transcript found, though {calls} of its filings in the last two "
                                                   "years are about earnings calls"))
     return out

@@ -1115,12 +1115,23 @@ class IndiaFilings:
     """Filings for any Indian company: NSE's feed by symbol, or BSE's by scrip code for companies listed only on
     BSE (`code_of` says which: a BSE code, or None for an NSE company). Everything else is NSE's."""
 
-    def __init__(self, nse, bse, code_of):
-        self.nse, self.bse, self.code_of = nse, bse, code_of
+    def __init__(self, nse, bse, code_of, twin_of=None):
+        self.nse, self.bse, self.code_of, self.twin_of = nse, bse, code_of, twin_of
 
     def announcements(self, symbol: str, days: int = LOOKBACK_DAYS) -> list[dict]:
         code = self.code_of(symbol)
-        return self.bse.announcements(code, days) if code else self.nse.announcements(symbol, days)
+        if code:
+            return self.bse.announcements(code, days)
+        items = self.nse.announcements(symbol, days)
+        if items or not self.twin_of:
+            return items
+        # NSE's feed answers nothing for some symbols whose company is listed and filing (Abbott India, Goodyear India):
+        # the same company's filings under its BSE listing, when it has one
+        try:
+            twin = self.twin_of(symbol)
+            return self.bse.announcements(twin, days) if twin else items
+        except SourceError:
+            return items
 
     def industry(self, symbol: str) -> list[str]:
         code = self.code_of(symbol)
