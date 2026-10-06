@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money } from "../../lib/format";
-import { AsOf, Info, Loading } from "../../components/ui";
+import { inr } from "../../lib/format";
 import { Copy, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Earlier } from "../../components/Earlier";
+import { Card, CardHead, CheckField, ChipSet, ConfirmDialog, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Seg, Select, Skeleton } from "../../components/kit";
+
+/* /money/calendar: tax due dates, results and dividends for your holdings and watchlist, plus your own dates, as a list
+ * or a month, with a private link for any calendar app and reminders. Built from the kit (components/kit). */
 
 type Cat = "tax" | "holdings" | "money" | "custom" | "market";
 type Ev = { id: string; date: string; title: string; cat: Cat; kind: string; detail: string; amount: number | null; symbol: string | null;
@@ -19,11 +22,11 @@ type View = {
   events: Ev[]; start: string; end: string; today: string; as_of: string; cats: { id: Cat; label: string }[]; own: Own[]; own_max: number;
   feed: Feed | null; reminders: Reminders; reminders_allowed: boolean; market_on?: boolean; reminders_plan: string; remind_days: number[]; notes: string[];
 };
+type Ask = { title: string; body: string; label: string; run: () => Promise<void> };
 
 const CAT_LABEL: Record<Cat, string> = { tax: "Tax", holdings: "Holdings", money: "Money", custom: "Yours", market: "Market" };
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const REPEAT: Record<Repeat, string> = { none: "Once", monthly: "Every month", yearly: "Every year" };
-const inr = (v: number | null | undefined) => money(v, "INR", 0);
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const parse = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
@@ -43,8 +46,8 @@ function EventRow({ e, past }: { e: Ev; past: boolean }) {
       <span className={`badge mc-cat mc-${e.cat}`}>{CAT_LABEL[e.cat]}</span>
       <div className="mc-ev-body">
         <div className="mc-ev-title">{e.url ? <Link className="link" to={e.url}>{e.title}</Link> : e.title}
-          {e.amount != null && <span className="num mc-amount"> {inr(e.amount)}</span>}</div>
-        {e.detail && <div className="tiny muted">{e.detail}</div>}
+          {e.amount != null && <span className="mc-amount"> {inr(e.amount)}</span>}</div>
+        {e.detail && <div className="k-note">{e.detail}</div>}
       </div>
     </li>
   );
@@ -56,12 +59,12 @@ function DayList({ events, today, label = "Money dates" }: { events: Ev[]; today
     for (const e of events) by.set(e.date, [...(by.get(e.date) ?? []), e]);
     return [...by.entries()];
   }, [events]);
-  if (!days.length) return <p className="small muted" style={{ margin: 0 }}>Nothing in these dates.</p>;
+  if (!days.length) return <p className="k-small k-muted">Nothing in these dates.</p>;
   return (
     <ol className="mc-days" aria-label={label}>
       {days.map(([d, evs]) => (
         <li key={d} className="mc-day">
-          <div className={`mc-date${d === today ? " today" : ""}`}><b>{longDay(d)}</b>{d === today && <span className="tiny"> · today</span>}</div>
+          <div className={`mc-date${d === today ? " today" : ""}`}><b>{longDay(d)}</b>{d === today && <span className="k-note"> · today</span>}</div>
           <ul className="mc-evs">{evs.map((e) => <EventRow key={e.id} e={e} past={d < today} />)}</ul>
         </li>
       ))}
@@ -74,11 +77,11 @@ function OwnDates({ rows, edit, remove }: { rows: Own[]; edit: (o: Own) => void;
   return (
     <ul className="mc-own" aria-label="Your dates">
       {rows.map((o) => (
-        <li key={o.id} className="spread" style={{ gap: 8 }}>
-          <span className="small"><b>{o.title}</b> · {longDay(o.date)}{o.repeat !== "none" && <span className="muted"> · {REPEAT[o.repeat].toLowerCase()}</span>}{o.amount != null && <span className="num"> · {inr(o.amount)}</span>}</span>
-          <span className="row" style={{ gap: 6, flex: "none" }}>
-            <button className="btn quiet sm" onClick={() => edit(o)} aria-label={`Change ${o.title}`}>Change</button>
-            <button className="btn quiet sm" onClick={() => remove(o)} aria-label={`Delete ${o.title}`}><Trash size={16} /></button>
+        <li key={o.id} className="k-spread">
+          <span className="k-small"><b>{o.title}</b> · {longDay(o.date)}{o.repeat !== "none" && <span className="k-muted"> · {REPEAT[o.repeat].toLowerCase()}</span>}{o.amount != null && <span> · {inr(o.amount)}</span>}</span>
+          <span className="k-row">
+            <button type="button" className="btn quiet sm" onClick={() => edit(o)} aria-label={`Change ${o.title}`}>Change</button>
+            <button type="button" className="btn quiet sm" onClick={() => remove(o)} aria-label={`Delete ${o.title}`}><Trash size={16} /></button>
           </span>
         </li>
       ))}
@@ -101,7 +104,7 @@ function Month({ y, m, events, today, picked, onPick }: { y: number; m: number; 
         if (!d) return <div key={i} className="mc-cell empty" aria-hidden />;
         const evs = by.get(d) ?? [];
         return (
-          <button key={d} className={`mc-cell${d === today ? " today" : ""}${d === picked ? " picked" : ""}`} aria-pressed={d === picked}
+          <button key={d} type="button" className={`mc-cell${d === today ? " today" : ""}${d === picked ? " picked" : ""}`} aria-pressed={d === picked}
             aria-label={`${longDay(d)}: ${evs.length ? `${evs.length} date${evs.length === 1 ? "" : "s"}` : "nothing"}`} onClick={() => onPick(d)}>
             <span className="mc-n">{parse(d).getDate()}</span>
             <span className="mc-dots" aria-hidden>{evs.slice(0, 4).map((e) => <i key={e.id} className={`mc-dot mc-${e.cat}`} />)}</span>
@@ -119,6 +122,7 @@ export function MoneyCalendarPage() {
   const [mode, setMode] = useState<"list" | "month">(() => { try { return localStorage.getItem("stratlab.moneycal.mode") === "month" ? "month" : "list"; } catch { return "list"; } });
   const [cats, setCats] = useState<Cat[]>(["tax", "holdings", "money", "custom", "market"]);
   const [view, setView] = useState<View | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [cursor, setCursor] = useState<{ y: number; m: number }>(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -126,6 +130,7 @@ export function MoneyCalendarPage() {
   const [form, setForm] = useState<typeof blank & { id?: string }>(blank);
   const [amounts, setAmounts] = useState(false);
   const [rem, setRem] = useState<Reminders | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
 
   const range = useCallback((): [string, string] => {
     if (mode === "month") return [iso(new Date(cursor.y, cursor.m, 1)), iso(new Date(cursor.y, cursor.m + 1, 0))];
@@ -135,7 +140,9 @@ export function MoneyCalendarPage() {
 
   const load = useCallback(() => {
     const [s, e] = range();
-    return api<View>(`/money/calendar?start=${s}&end=${e}`).then((v) => { setView(v); setRem((r) => r ?? v.reminders); }).catch(fail);
+    setError(null);
+    return api<View>(`/money/calendar?start=${s}&end=${e}`).then((v) => { setView(v); setRem((r) => r ?? v.reminders); })
+      .catch((err) => { setError(err instanceof Error ? err.message : "The calendar couldn't be read."); fail(err); });
   }, [range, fail]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { try { localStorage.setItem("stratlab.moneycal.mode", mode); } catch { /* storage off */ } }, [mode]);
@@ -161,18 +168,18 @@ export function MoneyCalendarPage() {
       await load();
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
-  const removeEvent = async (o: Own) => {
-    if (!confirm(`Delete "${o.title}" from your calendar?`)) return;
-    try { await api(`/money/calendar/events/${o.id}`, { method: "DELETE" }); await load(); } catch (e) { fail(e); }
-  };
+  const removeEvent = (o: Own) => setAsk({
+    title: `Delete "${o.title}"?`, body: "It is removed from your calendar and its link.", label: "Delete this date",
+    run: async () => { await api(`/money/calendar/events/${o.id}`, { method: "DELETE" }); await load(); },
+  });
 
   const makeFeed = async (fresh: boolean) => {
-    if (fresh && view?.feed && !confirm("Make a new link? The current one stops working, so calendars subscribed to it stop updating.")) return;
     setBusy(true);
     try {
       const f = await api<Feed>("/money/calendar/feed", { method: "POST", body: { amounts } });
       setView((v) => (v ? { ...v, feed: f } : v));
       track("money calendar feed made", { amounts: f.amounts });
+      if (fresh) notify("The new link is ready. The old one has stopped working.");
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const setFeedAmounts = async (on: boolean) => {
@@ -183,10 +190,14 @@ export function MoneyCalendarPage() {
       setView((v) => (v ? { ...v, feed: f } : v));
     } catch (e) { fail(e); }
   };
-  const stopFeed = async () => {
-    if (!confirm("Turn the link off? Calendars subscribed to it stop getting updates.")) return;
-    try { await api("/money/calendar/feed", { method: "DELETE" }); setView((v) => (v ? { ...v, feed: null } : v)); notify("The link is off."); } catch (e) { fail(e); }
-  };
+  const stopFeed = () => setAsk({
+    title: "Turn the link off?", body: "Calendars subscribed to it stop getting updates.", label: "Turn it off",
+    run: async () => { await api("/money/calendar/feed", { method: "DELETE" }); setView((v) => (v ? { ...v, feed: null } : v)); notify("The link is off."); },
+  });
+  const newFeed = () => setAsk({
+    title: "Make a new link?", body: "The current one stops working, so calendars subscribed to it stop updating.", label: "Make a new link",
+    run: () => makeFeed(true),
+  });
   const copy = async (text: string) => {
     try { await navigator.clipboard.writeText(text); notify("Link copied. Keep it private: anyone with it can see your calendar."); } catch { notify("Select the link and copy it."); }
   };
@@ -201,135 +212,141 @@ export function MoneyCalendarPage() {
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
-  const deleteAll = async () => {
-    if (!confirm("Delete my money calendar? Your own events, the feed link and the reminder settings are removed. Tax and holdings dates come back on their own.")) return;
-    try { await api("/money/calendar", { method: "DELETE" }); setRem(null); await load(); notify("Your money calendar is deleted."); } catch (e) { fail(e); }
+  const deleteAll = () => setAsk({
+    title: "Delete my money calendar?", body: "Your own events, the feed link and the reminder settings are removed. Tax and holdings dates come back on their own.", label: "Delete my money calendar",
+    run: async () => { await api("/money/calendar", { method: "DELETE" }); setRem(null); await load(); notify("Your money calendar is deleted."); },
+  });
+  const confirm = async () => {
+    if (!ask) return;
+    setBusy(true);
+    try { await ask.run(); } catch (e) { fail(e); } finally { setBusy(false); setAsk(null); }
   };
 
   useEffect(() => { if (view?.feed) setAmounts(view.feed.amounts); }, [view?.feed]);
 
-  if (!view) return <Loading label="Opening your money calendar" />;
+  const head = (
+    <PageHeader eyebrow="Money · Plan" title="Money calendar" asOf={view?.as_of} asOfLabel="Dates up to"
+      lede="Tax due dates, results and dividends for your holdings and watchlist, plus your own dates. Subscribe from any calendar app with a private link." />
+  );
+  if (!view) {
+    return (
+      <div className="k-page">
+        {head}
+        {error ? <ErrorState title="The calendar couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>{error}</ErrorState> : <Card><Skeleton label="Opening your money calendar" /></Card>}
+      </div>
+    );
+  }
   const url = view.feed ? feedUrl(view.feed.path) : "";
   const dayEvents = picked ? shown.filter((e) => e.date === picked) : [];
+  const upcoming = shown.filter((e) => e.date >= today);
+  const editOwn = (o: Own) => setForm({ id: o.id, date: o.date, title: o.title, note: o.note, amount: o.amount == null ? "" : String(o.amount), repeat: o.repeat });
 
   return (
-    <div className="stack" style={{ gap: 24 }}>
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Money</span>
-        <h1 className="serif" style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Money calendar</h1>
-        <p className="page-sub">Tax due dates, results and dividends for your holdings and watchlist, plus your own dates. Subscribe from any calendar app with a private link.</p>
-      </div>
+    <div className="k-page">
+      {head}
 
-      <section className="card stack" style={{ gap: 14 }}>
-        <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-          <div className="seg" role="group" aria-label="View">
-            <button aria-pressed={mode === "list"} onClick={() => setMode("list")}>List</button>
-            <button aria-pressed={mode === "month"} onClick={() => setMode("month")}>Month</button>
-          </div>
-          <div className="seg" role="group" aria-label="Show">
-            {view.cats.map((c) => <button key={c.id} aria-pressed={cats.includes(c.id)} onClick={() => toggleCat(c.id)}>{c.label}</button>)}
-          </div>
-        </div>
+      <Card>
+        <CardHead title={mode === "month" ? monthName(cursor.y, cursor.m) : "The next 90 days"} actions={<>
+          {mode === "month" && <>
+            <button type="button" className="btn quiet sm" onClick={() => step(-1)} aria-label="Previous month">‹ Prev</button>
+            <button type="button" className="btn quiet sm" onClick={() => step(1)} aria-label="Next month">Next ›</button>
+          </>}
+          <Seg label="View" options={[{ value: "list", label: "List" }, { value: "month", label: "Month" }]} value={mode} onChange={(v) => setMode(v as typeof mode)} />
+        </>} />
+        <ChipSet label="Show" options={view.cats.map((c) => ({ value: c.id, label: c.label }))} on={cats} onToggle={(v) => toggleCat(v as Cat)} />
         {mode === "month" ? (
-          <div className="stack" style={{ gap: 12 }}>
-            <div className="spread" style={{ gap: 8 }}>
-              <button className="btn quiet sm" onClick={() => step(-1)} aria-label="Previous month">‹ Prev</button>
-              <h2 className="h2" style={{ textAlign: "center" }}>{monthName(cursor.y, cursor.m)}</h2>
-              <button className="btn quiet sm" onClick={() => step(1)} aria-label="Next month">Next ›</button>
-            </div>
+          <div className="k-stack">
             <Month y={cursor.y} m={cursor.m} events={shown} today={today} picked={picked} onPick={(d) => setPicked(d === picked ? null : d)} />
-            {picked ? <DayList events={dayEvents} today={today} /> : <p className="tiny muted" style={{ margin: 0 }}>Pick a day to see its dates.</p>}
+            {picked ? <DayList events={dayEvents} today={today} /> : <p className="k-note">Pick a day to see its dates.</p>}
           </div>
         ) : (
           <>
-            <p className="tiny muted" style={{ margin: 0 }}>The next 90 days.</p>
-            <DayList events={shown.filter((e) => e.date >= today)} today={today} />
+            {upcoming.length === 0
+              ? <EmptyState title="Nothing in the next 90 days">Tax due dates, results and dividends for your holdings appear here. Add your own date below.</EmptyState>
+              : <DayList events={upcoming} today={today} />}
             <Earlier label="The past week" count={shown.filter((e) => e.date < today).length}>
               <DayList events={shown.filter((e) => e.date < today)} today={today} label="The past week's dates" />
             </Earlier>
           </>
         )}
-        <AsOf parts={[["Dates", view.as_of]]} />
-      </section>
+      </Card>
 
-      <div className="grid2 mc-grid">
-        <section className="card stack" style={{ gap: 12 }} aria-label="Your own dates">
-          <h2 className="h2">{form.id ? "Change your date" : "Add your own date"}</h2>
-          <p className="small muted" style={{ margin: 0 }}>A fixed deposit maturing, an insurance premium, an EMI, a rent increase: once, or every month or year.</p>
-          <div className="mc-form">
-            <label className="field">Date<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
-            <label className="field">Name<input value={form.title} maxLength={80} placeholder="e.g. FD matures" onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
-            <label className="field">Amount, ₹ (optional)<input inputMode="decimal" value={form.amount} placeholder="e.g. 250000" onChange={(e) => setForm({ ...form, amount: e.target.value })} /></label>
-            <label className="field">Repeats<select value={form.repeat} onChange={(e) => setForm({ ...form, repeat: e.target.value as Repeat })}>
-              {(Object.keys(REPEAT) as Repeat[]).map((r) => <option key={r} value={r}>{REPEAT[r]}</option>)}</select></label>
-            <label className="field mc-wide">Note (optional)<input value={form.note} maxLength={200} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
-          </div>
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button className="btn" disabled={busy} onClick={saveEvent}>{form.id ? "Save changes" : "Add to calendar"}</button>
-            {form.id && <button className="btn quiet" onClick={() => setForm(blank)}>Cancel</button>}
-          </div>
-          {ownNow.length > 0 && <OwnDates rows={ownNow} edit={(o) => setForm({ id: o.id, date: o.date, title: o.title, note: o.note, amount: o.amount == null ? "" : String(o.amount), repeat: o.repeat })} remove={removeEvent} />}
+      <div className="k-two mc-grid">
+        <Card label="Your own dates">
+          <CardHead title={form.id ? "Change your date" : "Add your own date"} info="A fixed deposit maturing, an insurance premium, an EMI, a rent increase: once, or every month or year." />
+          <FormGrid onSubmit={(e) => { e.preventDefault(); void saveEvent(); }} label="Your own date">
+            <Field label="Date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            <Field label="Name" maxLength={80} placeholder="e.g. FD matures" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Field label="Amount" optional unit="₹" inputMode="decimal" placeholder="e.g. 250000" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+            <Field label="Repeats">{(id) => <Select id={id} value={form.repeat} onChange={(v) => setForm({ ...form, repeat: v as Repeat })} options={(Object.keys(REPEAT) as Repeat[]).map((r) => ({ value: r, label: REPEAT[r] }))} />}</Field>
+            <Field label="Note" optional wide maxLength={200} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            <FormActions>
+              <button type="submit" className="btn" disabled={busy}>{form.id ? "Save changes" : "Add to calendar"}</button>
+              {form.id && <button type="button" className="btn quiet" onClick={() => setForm(blank)}>Cancel</button>}
+            </FormActions>
+          </FormGrid>
+          {ownNow.length > 0 && <OwnDates rows={ownNow} edit={editOwn} remove={removeEvent} />}
           <Earlier label="Past dates" count={ownPast.length}>
-            <OwnDates rows={ownPast} edit={(o) => setForm({ id: o.id, date: o.date, title: o.title, note: o.note, amount: o.amount == null ? "" : String(o.amount), repeat: o.repeat })} remove={removeEvent} />
+            <OwnDates rows={ownPast} edit={editOwn} remove={removeEvent} />
           </Earlier>
-        </section>
+        </Card>
 
-        <div className="stack" style={{ gap: 16 }}>
-          <section className="card stack" style={{ gap: 12 }} aria-label="Calendar feed">
-            <div className="row" style={{ gap: 6 }}><h2 className="h2">In your calendar app</h2>
-              <Info label="About the calendar link">The link works without signing in, so treat it like a password. Make a new one if it's been shared, or turn it off. Calendar apps check it every few hours.</Info></div>
-            <p className="small muted" style={{ margin: 0 }}>A private link with these dates for the past month and the next year. In Google Calendar: Other calendars, then From URL. On an iPhone or Mac: add a calendar subscription.</p>
-            <label className="row small" style={{ gap: 8 }}><input type="checkbox" checked={amounts} onChange={(e) => setFeedAmounts(e.target.checked)} />Include my amounts (left out unless ticked)</label>
+        <div className="k-page">
+          <Card label="Calendar feed">
+            <CardHead title="In your calendar app" info="The link works without signing in, so treat it like a password. Make a new one if it's been shared, or turn it off. Calendar apps check it every few hours." />
+            <p className="k-small k-muted">A private link with these dates for the past month and the next year. In Google Calendar: Other calendars, then From URL. On an iPhone or Mac: add a calendar subscription.</p>
+            <CheckField label="Include my amounts (left out unless ticked)" checked={amounts} onChange={setFeedAmounts} />
             {view.feed ? (
               <>
-                <input className="input mc-url" readOnly value={url} aria-label="Your calendar link" onFocus={(e) => e.target.select()} />
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <button className="btn" onClick={() => copy(url)}><Copy size={16} />Copy link</button>
+                <input className="k-input mc-url" readOnly value={url} aria-label="Your calendar link" onFocus={(e) => e.target.select()} />
+                <div className="k-row">
+                  <button type="button" className="btn" onClick={() => copy(url)}><Copy size={16} />Copy link</button>
                   <a className="btn quiet" href={url.replace(/^https?:\/\//, "webcal://")}>Open in calendar app</a>
-                  <button className="btn quiet" disabled={busy} onClick={() => makeFeed(true)}>New link</button>
-                  <button className="btn quiet" onClick={stopFeed}>Turn off</button>
+                  <button type="button" className="btn quiet" disabled={busy} onClick={newFeed}>New link</button>
+                  <button type="button" className="btn quiet" onClick={stopFeed}>Turn off</button>
                 </div>
               </>
-            ) : <button className="btn" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={() => makeFeed(false)}>Make a private link</button>}
-          </section>
+            ) : <button type="button" className="btn k-btn-end" disabled={busy} onClick={() => makeFeed(false)}>Make a private link</button>}
+          </Card>
 
-          <section className="card stack" style={{ gap: 12 }} aria-label="Reminders">
-            <h2 className="h2">Reminders</h2>
+          <Card label="Reminders">
+            <CardHead title="Reminders" info="Sent through the email and phone notifications set up in Account. Reminders list the dates, not your amounts." />
             {!view.reminders_allowed ? (
-              <p className="small" style={{ margin: 0 }}>A reminder by email or phone a few days before each date is on the {view.reminders_plan} plan. <Link className="link" to="/plans">See plans</Link></p>
+              <PlanNote>A reminder by email or phone a few days before each date is on the {view.reminders_plan} plan.</PlanNote>
             ) : rem && (
-              <>
-                <label className="row small" style={{ gap: 8 }}><input type="checkbox" checked={rem.on} onChange={(e) => setRem({ ...rem, on: e.target.checked })} />Remind me before my dates</label>
-                <div className="mc-form">
-                  <label className="field">How early<select value={rem.days} onChange={(e) => setRem({ ...rem, days: Number(e.target.value) })}>
-                    {view.remind_days.map((d) => <option key={d} value={d}>{d === 1 ? "The day before" : `${d} days before`}</option>)}</select></label>
-                  <label className="field">By<select value={rem.channel} onChange={(e) => setRem({ ...rem, channel: e.target.value as Reminders["channel"] })}>
-                    <option value="both">Email and phone</option><option value="email">Email</option><option value="push">Phone notification</option></select></label>
+              <FormGrid label="Reminders" onSubmit={(e) => { e.preventDefault(); void saveReminders(); }}>
+                <div className="k-field wide"><CheckField label="Remind me before my dates" checked={rem.on} onChange={(on) => setRem({ ...rem, on })} /></div>
+                <Field label="How early">{(id) => <Select id={id} value={rem.days} onChange={(v) => setRem({ ...rem, days: Number(v) })} options={view.remind_days.map((d) => ({ value: d, label: d === 1 ? "The day before" : `${d} days before` }))} />}</Field>
+                <Field label="By">{(id) => <Select id={id} value={rem.channel} onChange={(v) => setRem({ ...rem, channel: v as Reminders["channel"] })}
+                  options={[{ value: "both", label: "Email and phone" }, { value: "email", label: "Email" }, { value: "push", label: "Phone notification" }]} />}</Field>
+                <div className="k-field wide" role="group" aria-label="Remind me about">
+                  <div className="k-label-row"><span className="k-lbl">Remind me about</span></div>
+                  <div className="k-row">
+                    {view.cats.filter((c) => c.id !== "market").map((c) => (
+                      <CheckField key={c.id} label={c.label} checked={rem.cats.includes(c.id)}
+                        onChange={(on) => setRem({ ...rem, cats: on ? [...rem.cats, c.id] : rem.cats.filter((x) => x !== c.id) })} />
+                    ))}
+                  </div>
                 </div>
-                <div className="row small" style={{ gap: 14, flexWrap: "wrap" }} role="group" aria-label="Remind me about">
-                  {view.cats.filter((c) => c.id !== "market").map((c) => (
-                    <label key={c.id} className="row" style={{ gap: 6 }}><input type="checkbox" checked={rem.cats.includes(c.id)}
-                      onChange={(e) => setRem({ ...rem, cats: e.target.checked ? [...rem.cats, c.id] : rem.cats.filter((x) => x !== c.id) })} />{c.label}</label>
-                  ))}
-                </div>
-                <p className="tiny muted" style={{ margin: 0 }}>Sent through the email and phone notifications set up in <Link className="link" to="/account">Account</Link>. Reminders list the dates, not your amounts.</p>
-                <button className="btn" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={saveReminders}>Save reminders</button>
-              </>
+                <FormActions><button type="submit" className="btn" disabled={busy}>Save reminders</button></FormActions>
+              </FormGrid>
             )}
-          </section>
+          </Card>
         </div>
       </div>
 
-      <section className="stack" style={{ gap: 8 }}>
-        <ul className="tiny muted" style={{ margin: 0, paddingLeft: 20 }}>{view.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
-        <p className="tiny muted" style={{ margin: 0 }} data-testid="mc-market">
+      <section className="k-stack">
+        {view.notes.length > 0 && <ul className="k-list muted">{view.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+        <p className="k-note" data-testid="mc-market">
           {view.market_on ? "Market events (RBI policy, data releases, the Fed, index changes) are in this calendar and its feed. "
             : "RBI policy, data releases, the Fed and index changes can go into this calendar and its feed too. "}
           <Link className="link" to="/trade/events">{view.market_on ? "Change which ones" : "Turn them on from Market events"}</Link>
         </p>
-        <p className="tiny muted" style={{ margin: 0 }}>Only you can see your calendar. Your own dates and amounts are kept with your account and deleted with the button below.</p>
-        <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={deleteAll}><Trash size={16} />Delete my money calendar</button>
+        <p className="k-note">Only you can see your calendar. Your own dates and amounts are kept with your account and deleted with the button below.</p>
+        <button type="button" className="btn quiet sm k-btn-end" onClick={deleteAll}><Trash size={16} />Delete my money calendar</button>
       </section>
+
+      {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => void confirm()} onClose={() => setAsk(null)} busy={busy}>{ask.body}</ConfirmDialog>}
     </div>
   );
 }

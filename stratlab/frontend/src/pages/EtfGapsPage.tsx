@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { asOf, price, signClass } from "../lib/format";
 import { FUND_NAME, gapShort, loadEtfGaps, type EtfGaps, type Fund } from "../lib/etfGaps";
-import { ResearchNav } from "../components/Research";
+import { RegionSwitch } from "../components/Research";
 import { EtfGapDetailView } from "../components/EtfGap";
 import { Info, Loading } from "../components/ui";
 
@@ -45,9 +45,9 @@ export function EtfGapsPage() {
 
   return (
     <div className="stack etf-gaps" style={{ gap: 24 }}>
-      <ResearchNav region="IN" />
+      <RegionSwitch region="IN" />
       <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Scans · India</span>
+        <span className="eyebrow">Market view · India</span>
         <h1 className="page-title">ETF price against NAV</h1>
         <p className="page-sub">How far each ETF's price is from what one unit holds: its last published NAV, as a percent above or below, with
           the NAV's date. Facts with their times, not a view on any fund.</p>

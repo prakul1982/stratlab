@@ -63,7 +63,7 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   const errors = await open(page, "/money/calendar", "Tax due dates, results and dividends", n);
   const list = page.getByRole("list", { name: "Money dates" });
   // the next 90 days in view; the past week's dates folded under one line below them
-  const card = page.locator("section", { has: page.getByRole("group", { name: "View" }) });
+  const card = page.locator("section", { has: page.getByRole("radiogroup", { name: "View" }) });
   const past = card.locator("details.earlier", { hasText: "The past week" });
   if (await past.count()) {
     await expect(past).not.toHaveAttribute("open", "");
@@ -91,7 +91,7 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: "Your events" }).click();
 
   // the month: today's cell opens its dates below
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Month" }).click();
+  await page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Month" }).click();
   const month = page.locator(".mc-month");
   await expect(month).toBeVisible();
   await month.locator(".mc-cell.today").click();
@@ -117,8 +117,8 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   expect(body).toContain("SUMMARY:Rent goes up");
   expect(body).not.toContain("Amount:");
   if (info.project.name === "phone") await touchable(page);
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Turn off" }).click();
+  await page.getByRole("dialog", { name: "Turn the link off?" }).getByRole("button", { name: "Turn it off" }).click();
   await expect(page.getByRole("button", { name: "Make a private link" })).toBeVisible();
   expect((await request.get(url)).status()).toBe(404);
   await sane(page, errors);
@@ -128,7 +128,14 @@ test("money calendar: reachable from the menu", async ({ page }, info) => {
   const n = info.project.name === "phone" ? 158 : 155;
   const errors = await open(page, "/holdings", "Your stocks", n);
   if (info.project.name === "phone") await page.getByRole("button", { name: "Open menu" }).click();
-  await page.getByRole("link", { name: "Money calendar" }).click();
+  await page.getByRole("radiogroup", { name: "Space" }).getByRole("radio", { name: "Money" }).click();      // Holdings is one of Mine's own links: pick Money's menu
+  await expect(page).toHaveURL(/\/money$/);
+  if (info.project.name === "phone") await expect(async () => {
+      if (!(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
+      await expect(page.locator("aside.sidebar.open")).toBeInViewport({ timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
+  await page.locator('aside.sidebar [data-group="plan"] .side-toggle').click();      // the Plan group is folded until opened
+  await page.locator("aside.sidebar").getByRole("link", { name: "Money calendar" }).click();
   await expect(page).toHaveURL(/\/money\/calendar$/);
   await expect(page.getByRole("heading", { name: "Money calendar" })).toBeVisible();
   expect(errors).toEqual([]);

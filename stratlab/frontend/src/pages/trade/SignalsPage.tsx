@@ -7,6 +7,7 @@ import type { Instrument } from "../../lib/types";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
 import { Empty, Info, Loading, STATUS_NAME } from "../../components/ui";
 import { Earlier } from "../../components/Earlier";
+import { PageHeader } from "../../components/kit";
 
 /* /trade/signals: forward-test outside signals (Trade, Pro). A secret webhook URL for TradingView or Chartink alerts;
  * each signal moves one of the user's own paper sessions, filled at StratLab's live price (not the alert's) with the
@@ -263,11 +264,10 @@ export function SignalsPage() {
   );
   return (
     <div className="stack" style={{ gap: 20 }}>
-      <div className="stack" style={{ gap: 6 }}>
-        <span className="eyebrow">Trade · paper trading</span>
-        <h1 className="page-title">Signal forward test</h1>
-        <p className="page-sub" style={{ maxWidth: "70ch" }}>Point your TradingView or Chartink alerts at a secret URL and forward-test them on paper: each signal fills at StratLab's own live price with charges, every signal is logged, and the verdict's checks run once there are enough trades. Paper only: no real orders. Facts, not advice.</p>
-      </div>
+      <PageHeader eyebrow="Trade · Build and test" title="Forward test"
+        lede="A forward test tries a strategy on days that have not happened yet: your alerts are filled on paper at live prices, and every one is logged."
+        infoLabel="How this works"
+        info="Point your TradingView or Chartink alerts at a secret URL. Each signal fills at StratLab's own live price with charges, every signal is logged, and the verdict's checks run once there are enough trades. Paper only: no real orders. Facts, not advice." />
       {!ov ? <Loading label="Opening signal sessions" /> : !ov.allowed ? (
         <section className="card dashed stack" style={{ gap: 8 }}>
           <p className="small" style={{ margin: 0 }}><b>Forward-testing outside signals</b> is on the {ov.plan} plan.</p>

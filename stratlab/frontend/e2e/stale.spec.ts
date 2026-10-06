@@ -215,8 +215,8 @@ test("money calendar: the next 90 days in view, the past week and passed one-off
     own_max: 50, feed: null, reminders: { on: false, days: 3, channel: "email", cats: ["tax"] }, reminders_allowed: true, reminders_plan: "basic",
     remind_days: [1, 3, 7], notes: [] };
   const errors = await open(page, "/money/calendar", { "/money/calendar": view }, "Money calendar");
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
-  const card = page.locator("section", { has: page.getByRole("group", { name: "View" }) });
+  await page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "List" }).click();
+  const card = page.locator("section", { has: page.getByRole("radiogroup", { name: "View" }) });
   await expect(card.getByText("ITR due date")).toBeVisible();
   await expect(card.getByText("Old tax date")).toHaveCount(0);
   await expect(card.locator("details.earlier summary")).toContainText("The past week (2)");

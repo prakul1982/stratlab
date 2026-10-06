@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago } from "../lib/format";
 import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/research";
-import { ResearchNav } from "../components/Research";
+import { RegionSwitch } from "../components/Research";
 import { ActionLine, KIND_NAME, exDay, type ActionKind, type CorpAction } from "../components/CorpActions";
 import { Info, Loading } from "../components/ui";
 import { Earlier } from "../components/Earlier";
@@ -71,7 +71,7 @@ export function CorpActionsPage() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <ResearchNav region={region} setRegion={setRegion} />
+      <RegionSwitch region={region} setRegion={setRegion} />
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Corporate actions · {REGION_NAME[region]}</span>
         <h1 className="page-title">Dividends, bonuses and splits</h1>
