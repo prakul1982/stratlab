@@ -68,7 +68,7 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
       ) : (
         <p className="small">Reminders of these events are on the {p.plan} plan. <Link className="link" to="/plans">See the {p.plan} plan</Link></p>
       )}
-      {p.allowed && p.remind && !p.channels.length && <p className="tiny muted">Nowhere to send them yet: add a phone, Telegram or a confirmed email on the <Link className="link" to="/account">Account</Link> page.</p>}
+      {p.allowed && p.remind && !p.channels.length && <p className="tiny muted">Nowhere to send them yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
       <div className="row wrap" style={{ gap: 6 }} role="group" aria-label="Kinds of event">
         {kinds.map((k) => (
           <label key={k} className="row tiny ev-kind" style={{ gap: 6 }}>

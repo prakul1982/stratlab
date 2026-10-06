@@ -114,7 +114,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
       </div>
       <FormActions>
         <button className="btn" disabled={busy}>{busy ? "Saving…" : editing ? "Save alert" : "Set alert"}</button>
-        <Link to="/account" className="btn quiet sm">Where alerts go</Link>
+        <Link to="/settings#notifications" className="btn quiet sm">Where alerts go</Link>
       </FormActions>
     </FormGrid>
   );

@@ -116,7 +116,8 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await expect(side.getByRole("link", { name: "My space" })).toHaveAttribute("href", "/mine");
   await expect(groups(side)).toHaveText(["Pinned"]);
   await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
-  await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/holdings");
+  await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/settings#accounts");
+  await expect(side.getByRole("link", { name: "AI assistant" })).toHaveAttribute("href", "/assistant");
   await expect.poll(async () => (await prefs(request, u)).space).toBe("all");       // the server still calls it "all"
   expect(await page.evaluate(() => localStorage.getItem("stratlab.space"))).toBe("mine");
 
@@ -143,7 +144,7 @@ test("spaces: a deep link opens its own space, without changing the account's ch
   const errors = await signIn(page, u, "/");
   await expect(page).toHaveURL(/\/invest$/, { timeout: 30_000 });
   for (const [path, ready, name] of [["/holdings", "Your stocks, at today", "Money"], ["/tax-report", "Capital gains on your shares", "Money"], ["/options", "Options", "Trade"],
-    ["/library", "librar", "Trade"], ["/research/IN/TCS", "TCS", "Invest"], ["/alerts", "Your stock alerts", "Invest"], ["/account", "Account", "Invest"]] as const) {
+    ["/library", "librar", "Trade"], ["/research/IN/TCS", "TCS", "Invest"], ["/alerts", "Your stock alerts", "Invest"], ["/account", "Account", "Mine"], ["/settings", "Settings", "Mine"], ["/assistant", "AI assistant", "Mine"], ["/app", "Get the app", "Mine"], ["/invite", "Invite friends", "Mine"]] as const) {
     await page.goto(path);
     await expect(page.locator("main").getByText(ready).first()).toBeVisible({ timeout: 30_000 });
     const side = await menu(page, phone);

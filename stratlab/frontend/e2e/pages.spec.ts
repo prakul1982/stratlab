@@ -89,7 +89,8 @@ const PAGES: [string, string][] = [
   ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
-  ["/account", "Account"], ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
+  ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
+  ["/admin", "Needs your attention"], ["/admin?tab=services", "Market data"], ["/admin?tab=checks", "Check every feature"],
   ["/admin?tab=users", "Paper trading now"], ["/admin?tab=billing", "Launch offer"],
 ];
 
@@ -841,7 +842,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   await sane(page, errors);
 });
 
-test("the account menu: Account, Admin, the theme, the tour and Sign out, with arrow keys and Esc", async ({ page }, info) => {
+test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All features, Help and Sign out, with arrow keys and Esc", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   let side = await menu(page, phone);
@@ -851,7 +852,9 @@ test("the account menu: Account, Admin, the theme, the tour and Sign out, with a
   await btn.click();
   const acct = page.getByRole("menu", { name: "Account" });
   await expect(acct).toBeVisible();
-  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Admin", "All features", /^(Dark|Light) mode$/, "Tour", "Sign out"]);
+  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Settings", "Plan", "Invite friends", "Get the app", "Admin", "All features", "Help", "Sign out"]);
+  for (const [name, href] of [["Settings", "/settings"], ["Plan", "/plans"], ["Invite friends", "/invite"], ["Get the app", "/app"], ["All features", "/features"]])
+    await expect(acct.getByRole("menuitem", { name })).toHaveAttribute("href", href);
   if (phone) {
     for (const el of await acct.getByRole("menuitem").all()) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     const box = (await acct.boundingBox())!;
@@ -873,21 +876,14 @@ test("the account menu: Account, Admin, the theme, the tour and Sign out, with a
   await expect(acct).toHaveCount(0);
   await expect(btn).toBeFocused();
 
-  // the theme flips both ways
-  const theme = () => page.evaluate(() => document.documentElement.dataset.theme ?? "");
+  // the theme moved to Settings (e2e/account.spec.ts flips it both ways)
   await btn.click();
-  const first = (await acct.getByRole("menuitem", { name: /mode$/ }).innerText()).trim();
-  await acct.getByRole("menuitem", { name: /mode$/ }).click();
-  await expect(acct).toHaveCount(0);
-  expect(await theme()).toBe(first === "Dark mode" ? "dark" : "light");
-  await btn.click();
-  await expect(acct.getByRole("menuitem", { name: first === "Dark mode" ? "Light mode" : "Dark mode" })).toBeVisible();
-  await acct.getByRole("menuitem", { name: /mode$/ }).click();
-  expect(await theme()).toBe(first === "Dark mode" ? "light" : "dark");
+  await expect(acct.getByRole("menuitem", { name: /mode$/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
-  // the tour opens from it
+  // Help opens the tour
   await btn.click();
-  await acct.getByRole("menuitem", { name: "Tour" }).click();
+  await acct.getByRole("menuitem", { name: "Help" }).click();
   await expect(page.getByRole("tablist", { name: "Tour steps" })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /^(Close|Skip|Done)/ }).first().click({ timeout: 2000 }).catch(() => undefined);
@@ -975,10 +971,10 @@ for (const [path, ready] of [["/research/IN/RELIANCE", "Reliance"], ["/research/
   });
 }
 
-test("account: your invite link, how many friends joined, and sharing it", async ({ page }, info) => {
+test("invite: your invite link, how many friends joined, and sharing it", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   await watchSharing(page);
-  const errors = await open(page, "/account", "Invite friends");
+  const errors = await open(page, "/invite", "Invite friends");
   await expect(page.getByTestId("friends-joined")).toHaveText(/^6 friends joined · 3 free months earned$/);
   await expect(page.getByTestId("invite-reward-line")).toHaveText("Invite friends, both get a month of Basic. When a friend joins with your link and uses "
     + "StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends "
@@ -1045,9 +1041,12 @@ test("admin: invite rewards waiting for review are approved or rejected", async 
 });
 
 test("account: free Basic from invites shows on the plan", async ({ page }, info) => {
-  const errors = await open(page, "/account", "Invite friends", sessionAs("load-3", "u-load-3", "load3@example.com"));
+  const errors = await open(page, "/account", "Plan and usage", sessionAs("load-3", "u-load-3", "load3@example.com"));
   await expect(page.getByText("Free Basic from invites")).toBeVisible();
   await expect(page.getByText("Basic (free from invites)")).toBeVisible();
+  if (info.project.name === "phone") await touchable(page);
+  await sane(page, errors);
+  await page.goto("/invite");
   await expect(page.getByTestId("friends-joined")).toHaveText("0 friends joined · 1 free month earned");
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);

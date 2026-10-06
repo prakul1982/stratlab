@@ -1,204 +1,112 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api, CFG, supabase } from "../lib/api";
+import { api, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { LegalLinks } from "../components/LegalLinks";
-import { Info, Loading } from "../components/ui";
 import { HELP } from "../lib/help";
-import { FOCUSES, LEVELS } from "../components/LevelPrompt";
-import { viewForFocus } from "../lib/spaces";
-import { PhoneCard } from "../components/PhoneCard";
-import { Block } from "../components/More";
+import { LegalLinks } from "../components/LegalLinks";
 import { InvoicesCard } from "../components/InvoicesCard";
-import { InviteCard } from "../components/ShareCompany";
-import { NewslettersCard } from "../components/NewslettersCard";
-import { TipsCard } from "../components/TipsCard";
-import { AssistantCard } from "../components/AssistantCard";
+import { Badge, Card, CardHead, ConfirmDialog, LinkCard, PageHeader, Skeleton } from "../components/kit";
 
-type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
+/** How the person signed in, as the app knows it: the provider on the session. */
+const PROVIDERS: Record<string, string> = { google: "Google", email: "Email link", github: "GitHub", apple: "Apple" };
+
+/** Where each kind of saved data can be deleted. There is no single export or delete-everything call, so each one links to
+ * the page that has its own delete button. */
+const DATA: { to: string; title: string; what: string }[] = [
+  { to: "/holdings", title: "My Holdings", what: "Your shares and ETFs. Delete them on that page." },
+  { to: "/tax-report", title: "Tax report", what: "Your uploaded tradebooks. Delete them on that page." },
+  { to: "/money/mutual-funds", title: "Mutual funds", what: "Your statement and its schemes. Delete them on that page." },
+  { to: "/money/net-worth", title: "Net worth", what: "What you own and owe. Delete it on that page." },
+  { to: "/notebooks", title: "Notebooks and experiments", what: "Your strategies and their results. Delete a notebook from its own page." },
+  { to: "/alerts", title: "Stock alerts", what: "Each alert has its own Delete button." },
+];
 
 export function AccountPage() {
-  const { me, fail, notify, refreshMe, level, setLevel, focus, savePrefs } = useApp();
-  const feats = me?.plan_info.features;
-  const canReport = feats ? !!feats.daily_report : true, canAlert = feats ? !!feats.alerts : true;
-  const [alerts, setAlerts] = useState({ enabled: false, tg: "", email: "", daily: true });
-  const [checks, setChecks] = useState<Row[] | null>(null);
-  const [checking, setChecking] = useState(false);
-
-  useEffect(() => {
-    if (me) setAlerts({ enabled: me.alerts.enabled, tg: me.alerts.telegram_chat_id || "", email: me.alerts.email || "", daily: me.alerts.daily_report ?? true });
-  }, [me]);
-
-  if (!me) return <Loading label="Loading your account" />;
+  const { me, session, fail, notify, refreshMe } = useApp();
+  const [ask, setAsk] = useState<"cancel" | "everywhere" | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!me) return <div className="k-page"><PageHeader eyebrow="Account" title="Account" /><Card label="Loading your account"><Skeleton label="Loading your account" /></Card></div>;
   const b = me.billing, u = me.usage;
-  const ch = me.alerts.channels ?? { push: true, telegram: true, email: true };
+  const paid = me.paid_plan ?? me.plan;   // what they pay for; me.plan is Pro for everyone during the launch offer
+  const meta = session?.user.user_metadata as { full_name?: string; name?: string } | undefined;
+  const name = meta?.full_name || meta?.name || "";
+  const provider = session?.user.app_metadata?.provider as string | undefined;
+  const until = b.renews_or_ends ? ` (${dateOnly(b.renews_or_ends)})` : "";
 
   const cancel = async () => {
-    const until = me?.billing.renews_or_ends ? ` (${dateOnly(me.billing.renews_or_ends)})` : "";
-    if (!confirm(`Cancel your subscription? You keep your plan until the end of the period you've paid for${until}, and you won't be charged again.`)) return;
-    try { await api("/billing/cancel", { method: "POST" }); await refreshMe(); notify(`Cancelled. Your plan stays until the end of the paid period${until}.`); } catch (e) { fail(e); }
+    setBusy(true);
+    try { await api("/billing/cancel", { method: "POST" }); await refreshMe(); setAsk(null); notify(`Cancelled. Your plan stays until the end of the paid period${until}.`); } catch (e) { fail(e); } finally { setBusy(false); }
   };
-  const saveAlerts = async () => {
-    try {
-      await api("/me/alerts", { method: "PUT", body: { alerts_enabled: canAlert && alerts.enabled, telegram_chat_id: alerts.tg.trim() || null, alert_email: alerts.email.trim() || null, daily_report: alerts.daily } });
-      await refreshMe(); notify("Alert settings saved.");
-    } catch (e) { fail(e); }
-  };
-  const testAlert = async () => {
-    const names: Record<string, string> = { push: "phone notification", telegram: "Telegram", email: "email" };
-    try {
-      const r = await api<{ sent: string[]; failed?: Record<string, string> }>("/me/alerts/test", { method: "POST" });
-      const bad = Object.entries(r.failed ?? {});
-      notify(`Test sent by ${r.sent.map((c) => names[c] ?? c).join(" and ")}.` + (bad.length ? ` Not sent by ${bad.map(([c, why]) => `${names[c] ?? c} (${why})`).join(", ")}.` : ""));
-    } catch (e) { fail(e); }
-  };
-  const runCheck = async () => {
-    setChecking(true);
-    const rows: Row[] = [];
-    const add = (r: Row) => { rows.push(r); setChecks([...rows]); };
-    try {
-      const { data } = await supabase.auth.getSession();
-      add({ t: "Signed in", s: data.session ? "pass" : "fail", d: data.session?.user.email || "Not signed in. Sign out and in again." });
-      let health: { data_online: boolean; ai_configured: boolean } | null = null;
-      try { health = await (await fetch(CFG.API_BASE + "/health")).json(); add({ t: "StratLab server", s: "pass", d: CFG.API_BASE.replace("https://", "") }); }
-      catch { add({ t: "StratLab server", s: "fail", d: "Can't reach the server. Check the Railway service is running and FRONTEND_ORIGIN lists this site." }); return; }
-      const markets = await api<{ name: string; status: string }[]>("/markets");
-      for (const m of markets.filter((x) => x.status !== "soon")) {
-        add({ t: /data$/i.test(m.name) ? m.name : `${m.name} data`, s: m.status === "live" ? "pass" : "warn", d: m.status === "live" ? "Online" : "Offline right now" });
-      }
-      if (!health?.ai_configured) add({ t: "AI strategy builder", s: me.is_admin ? "fail" : "warn",
-        d: me.is_admin ? "No AI key on the server, so the simple converter is used. Add a free GROQ_API_KEY (console.groq.com) in Railway → Variables, then redeploy."
-          : "Using the simple converter right now. Describing ideas still works." });
-      else if (!me.is_admin) add({ t: "AI strategy builder", s: "pass", d: "Online" });
-      else {
-        // only the owner tests every provider: each test spends the shared free AI allowance
-        add({ t: "AI strategy builder", s: "warn", d: "Testing each provider…" });
-        try {
-          const r = await api<{ providers: { label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number }[] }>("/admin/ai/test", { method: "POST" });
-          rows.pop();
-          const working = r.providers.filter((p) => p.ok).length;
-          add({ t: "AI strategy builder", s: working ? "pass" : "fail",
-            d: working ? `${working} of ${r.providers.length} providers working` : "No provider answered, so the simple converter is used. See the reasons below." });
-          for (const p of r.providers) {
-            add({ t: `AI: ${p.label}`, s: p.ok ? "pass" : p.quota ? "warn" : "fail",
-              d: p.ok ? `Working${p.model ? ` with ${p.model}` : ""}, answered in ${(p.ms / 1000).toFixed(1)}s` : p.error || "Failed" });
-          }
-        } catch (e) {
-          rows.pop();
-          add({ t: "AI strategy builder", s: "warn", d: `Couldn't run the AI test: ${(e as Error).message}` });
-        }
-      }
-      add({ t: "Your account", s: "pass", d: `${me.plan_info.name} plan, ${u.backtests_used} experiments this month` });
-    } catch (e) { fail(e); } finally { setChecking(false); }
+  const everywhere = async () => {
+    setBusy(true);
+    try { await supabase.auth.signOut({ scope: "global" }); } catch (e) { fail(e); setBusy(false); }
   };
 
-  const paid = me.paid_plan ?? me.plan;   // what they pay for; me.plan is Pro for everyone during the launch offer
+  const usage: [string, string][] = [
+    ...(me.promo ? [["Launch offer", `Every Pro feature free until ${dateOnly(me.promo.until)}`] as [string, string]] : []),
+    ...(!me.promo && me.free_basic_until ? [["Free Basic from invites", `Until ${dateOnly(me.free_basic_until)}`] as [string, string]] : []),
+    ...(paid !== "free" ? [[b.cancel_at_period_end ? "Ends on" : "Renews on", dateOnly(b.renews_or_ends)] as [string, string]] : []),
+    ["Experiments this month", u.backtests_limit == null ? `${u.backtests_used} (unlimited)` : `${u.backtests_used} of ${u.backtests_limit}`],
+    ["AI builds this month", u.ai_limit == null ? `${u.ai_used} (unlimited)` : `${u.ai_used} of ${u.ai_limit}`],
+    ...(u.deepdive_used != null ? [["Companies in the deep dive this month", u.deepdive_limit == null ? `${u.deepdive_used} (unlimited)` : `${u.deepdive_used} of ${u.deepdive_limit}`] as [string, string]] : []),
+    ...(u.deck_used != null ? [["Company decks this month", u.deck_limit == null ? `${u.deck_used} (unlimited)` : `${u.deck_used} of ${u.deck_limit}`] as [string, string]] : []),
+    ["Paper sessions running", `${me.live_running} of ${me.live_limit}`],
+  ];
+
   return (
-    <div className="stack page-narrow" style={{ gap: 26 }}>
-      <div className="spread" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div className="stack" style={{ gap: 6, minWidth: 0 }}>
-          <span className="eyebrow" style={{ overflowWrap: "anywhere" }}>{me.email}</span>
-          <h1 className="page-title">Account</h1>
+    <div className="k-page">
+      <PageHeader eyebrow="Account" title="Account" lede="Who you are, your plan and invoices, how you sign in, and where your data lives. Alerts, emails and what you see first are in Settings."
+        actions={<Link to="/settings" className="btn outline sm">Settings</Link>} />
+
+      <Card id="profile" label="Profile">
+        <CardHead title="Profile" />
+        <dl className="k-dl">
+          {name && <div><dt>Name</dt><dd>{name}</dd></div>}
+          <div><dt>Email</dt><dd>{me.email ?? session?.user.email ?? "–"}</dd></div>
+          <div><dt>Signed in with</dt><dd>{provider ? PROVIDERS[provider] ?? provider : "–"}</dd></div>
+          <div><dt>Plan</dt><dd>{me.plan_info.name}</dd></div>
+        </dl>
+      </Card>
+
+      <Card id="plan" label="Plan and usage">
+        <CardHead title="Plan and usage" info={HELP.experimentsQuota}
+          actions={<Badge tone="plain" dot={false}>{me.plan_info.name}{me.promo ? " (launch offer)" : me.free_basic_until ? " (free from invites)" : ""}</Badge>} />
+        <div className="k-rows">{usage.map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>
+        <div className="k-row">
+          {paid === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
+            : b.cancel_at_period_end ? <><span className="k-small k-muted">Cancelled. You keep {me.plan_info.name} until {dateOnly(b.renews_or_ends)}.</span><Link to="/plans" className="btn outline">Compare plans</Link></>
+              : <><Link to="/plans" className="btn outline">Change plan</Link><button type="button" className="btn quiet danger" onClick={() => setAsk("cancel")}>Cancel subscription</button></>}
         </div>
-        <button className="btn outline" onClick={() => supabase.auth.signOut()}>Sign out</button>
-      </div>
+      </Card>
 
-      <div className="stack" style={{ gap: 18 }}>
-        <section className="card stack" style={{ gap: 0 }}>
-          <div className="spread" style={{ marginBottom: 6 }}>
-            <h2 className="h2 row" style={{ gap: 0 }}>Plan and usage<Info>{HELP.experimentsQuota}</Info></h2>
-            <span className="badge skip">{me.plan_info.name}{me.promo ? " (launch offer)" : me.free_basic_until ? " (free from invites)" : ""}</span>
-          </div>
-          {[
-            ...(me.promo ? [["Launch offer", `Every Pro feature free until ${dateOnly(me.promo.until)}`]] : []),
-            ...(!me.promo && me.free_basic_until ? [["Free Basic from invites", `Until ${dateOnly(me.free_basic_until)}`]] : []),
-            ...(paid !== "free" ? [[b.cancel_at_period_end ? "Ends on" : "Renews on", dateOnly(b.renews_or_ends)]] : []),
-            ["Experiments this month", u.backtests_limit == null ? `${u.backtests_used} (unlimited)` : `${u.backtests_used} of ${u.backtests_limit}`],
-            ["AI builds this month", u.ai_limit == null ? `${u.ai_used} (unlimited)` : `${u.ai_used} of ${u.ai_limit}`],
-            ...(u.deepdive_used != null ? [["Companies in the deep dive this month", u.deepdive_limit == null ? `${u.deepdive_used} (unlimited)` : `${u.deepdive_used} of ${u.deepdive_limit}`]] : []),
-            ...(u.deck_used != null ? [["Company decks this month", u.deck_limit == null ? `${u.deck_used} (unlimited)` : `${u.deck_used} of ${u.deck_limit}`]] : []),
-            ["Paper sessions running", `${me.live_running} of ${me.live_limit}`],
-          ].map(([k, v]) => (
-            <div key={k} className="spread" style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}><span className="muted">{k}</span><b>{v}</b></div>
-          ))}
-          <div className="row wrap" style={{ gap: 8, marginTop: 14 }}>
-            {paid === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
-              : b.cancel_at_period_end ? <><span className="small muted">Cancelled. You keep {me.plan_info.name} until {dateOnly(b.renews_or_ends)}.</span><Link to="/plans" className="btn outline">Compare plans</Link></>
-                : <><Link to="/plans" className="btn outline">Change plan</Link><button className="btn quiet danger" onClick={cancel}>Cancel subscription</button></>}
-          </div>
-        </section>
+      <InvoicesCard />
 
-        <InvoicesCard />
+      <Card id="security" label="Sign-in and security">
+        <CardHead title="Sign-in and security" />
+        <p className="k-small k-muted k-hint-line">
+          {provider === "google" ? "You sign in with your Google account, so your password and two-step settings are managed there. " : ""}
+          StratLab keeps you signed in on each device until you sign out.
+        </p>
+        <div className="k-row">
+          <button type="button" className="btn outline" onClick={() => void supabase.auth.signOut()}>Sign out</button>
+          <button type="button" className="btn quiet" onClick={() => setAsk("everywhere")}>Sign out everywhere</button>
+        </div>
+      </Card>
 
-        <InviteCard />
+      <Card id="data" label="Your data">
+        <CardHead title="Your data" info="StratLab doesn't have one button that downloads or deletes everything yet. Each kind of data has its own page with its own delete button." />
+        <p className="k-small k-muted k-hint-line">What you have saved stays with your account and is never shared. Each kind can be deleted on its own page.</p>
+        <div className="k-linkcards">{DATA.map((d) => <LinkCard key={d.to} to={d.to} title={d.title}>{d.what}</LinkCard>)}</div>
+        <p className="k-small k-muted k-hint-line">For anything else, write to us from <Link className="link" to="/contact">Contact us</Link>.</p>
+      </Card>
 
-        <section className="card stack" style={{ gap: 16 }}>
-          <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>Alerts<Info>{HELP.alerts}</Info></h2>{!canReport && <span className="badge next">Basic</span>}</div>
-          <Block title="What to send">
-            <label className="row" style={{ gap: 10, fontWeight: 600 }}>
-              <input type="checkbox" style={{ width: 20, height: 20 }} checked={alerts.daily} disabled={!canReport} onChange={(e) => setAlerts({ ...alerts, daily: e.target.checked })} />
-              A short report after each market closes
-            </label>
-            <label className="row" style={{ gap: 10, fontWeight: 600 }}>
-              <input type="checkbox" style={{ width: 20, height: 20 }} checked={alerts.enabled} disabled={!canAlert} onChange={(e) => setAlerts({ ...alerts, enabled: e.target.checked })} />
-              A message for every paper trade{!canAlert && <span className="badge next">Pro</span>}
-            </label>
-          </Block>
-          <Block title="Where">
-            <p className="small muted">On your phone is the simplest: turn it on under <b>On your phone</b> below.{ch.telegram || ch.email ? " Or add:" : ""}</p>
-            {ch.telegram && <label className="field">Telegram chat ID<input value={alerts.tg} disabled={!canReport} inputMode="numeric" maxLength={40} onChange={(e) => setAlerts({ ...alerts, tg: e.target.value })} />
-              <span className="hint">Open the StratLab bot and press Start, then message @userinfobot to find your chat ID.</span></label>}
-            {ch.email && <label className="field">Email<input type="email" value={alerts.email} disabled={!canReport} maxLength={200} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} /></label>}
-            {me.is_admin && (!ch.telegram || !ch.email) && (
-              <p className="hint">Admin: {[!ch.telegram && "Telegram (set TELEGRAM_BOT_TOKEN)", !ch.email && "email (set RESEND_API_KEY)"].filter(Boolean).join(" and ")} {!ch.telegram && !ch.email ? "aren't" : "isn't"} set up on the server, so {!ch.telegram && !ch.email ? "they're" : "it's"} hidden. Add the variables in Railway to offer {!ch.telegram && !ch.email ? "them" : "it"}.</p>
-            )}
-          </Block>
-          <div className="row wrap" style={{ gap: 8 }}>
-            <button className="btn" disabled={!canReport} onClick={saveAlerts}>Save</button>
-            <button className="btn outline" disabled={!canReport} onClick={testAlert}>Send a test</button>
-          </div>
-        </section>
+      <LegalLinks />
 
-        <NewslettersCard />
-
-        <TipsCard />
-
-        <PhoneCard />
-
-        <AssistantCard />
-
-        <section className="card stack" style={{ gap: 16 }}>
-          <div className="stack" style={{ gap: 4 }}>
-            <h2 className="h2">What you see first</h2>
-            <p className="small muted">Changes only which space the menu and home page open in, and which settings start open. Every tool stays available.</p>
-          </div>
-          <Block title="What you're here for">
-            <div className="seg" role="radiogroup" aria-label="What you're here for" style={{ justifySelf: "start" }}>
-              {FOCUSES.map(([f, title]) => <button key={f} role="radio" aria-checked={focus === f} aria-pressed={focus === f} onClick={() => savePrefs({ focus: f, space: viewForFocus(f)! })}>{title}</button>)}
-            </div>
-            {focus && <p className="small muted">{FOCUSES.find(([f]) => f === focus)?.[2]}</p>}
-          </Block>
-          <Block title="Experience">
-            <div className="seg seg-even" role="radiogroup" aria-label="Experience" style={{ justifySelf: "start" }}>
-              {LEVELS.map(([l, title]) => <button key={l} role="radio" aria-checked={level === l} aria-pressed={level === l} onClick={() => setLevel(l)}>{title}</button>)}
-            </div>
-            {level && <p className="small muted">{LEVELS.find(([l]) => l === level)?.[2]}</p>}
-          </Block>
-        </section>
-
-        <section className="card stack" style={{ gap: 12 }}>
-          <div className="spread"><h2 className="h2 row" style={{ gap: 0 }}>Connection check<Info>{HELP.connection}</Info></h2><button className="btn quiet sm" disabled={checking} onClick={runCheck}>{checking ? "Checking…" : "Run check"}</button></div>
-          {!checks && <p className="small muted">If something isn't loading: checks your sign-in, the server, each market's data and the AI builder.</p>}
-          {checks?.map((r) => (
-            <div key={r.t} className="spread" style={{ padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
-              <span className="stack" style={{ gap: 0 }}><b style={{ fontSize: 14.5 }}>{r.t}</b><span className="small muted">{r.d}</span></span>
-              <span className={`badge ${r.s}`}>{r.s === "pass" ? "OK" : r.s === "warn" ? "Check" : "Problem"}</span>
-            </div>
-          ))}
-        </section>
-        <LegalLinks />
-      </div>
+      {ask === "cancel" && <ConfirmDialog title="Cancel your subscription?" confirmLabel="Cancel subscription" busy={busy} onConfirm={() => void cancel()} onClose={() => setAsk(null)}>
+        You keep your plan until the end of the period you've paid for{until}, and you won't be charged again.</ConfirmDialog>}
+      {ask === "everywhere" && <ConfirmDialog title="Sign out on every device?" confirmLabel="Sign out everywhere" busy={busy} onConfirm={() => void everywhere()} onClose={() => setAsk(null)}>
+        You'll be signed out here and on every other phone or computer where you're signed in. Sign in again to carry on.</ConfirmDialog>}
     </div>
   );
 }

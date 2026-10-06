@@ -27,10 +27,12 @@ const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book,
 const OPEN_KEY = "stratlab.side.groups";
 const NO_GROUPS: Record<string, boolean> = {};
 /** The pages Mine's own menu links to: opening one keeps Mine's menu showing. */
-const MINE_LINKS = ["/news", "/holdings"];
+const MINE_LINKS = ["/news"];
+/** Pages that belong to the person, not to a space (Account, Settings, the assistant, the app, invites): they open Mine's menu. */
+const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, theme, setTheme, me, level, focus, space, setSpace } = useApp();
+  const { notebooks, markets, me, level, focus, space, setSpace } = useApp();
   const [open, setOpen] = useState(false);
   const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(OPEN_KEY, NO_GROUPS);
   const pins = usePins();
@@ -69,10 +71,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const here = spaceOf(path);
   const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to));
   useEffect(() => {
+    if (MINE_PAGES.includes(path)) { if (space !== "mine") setSpace("mine", false); return; }
     if (!here) return;
     if (space === "mine" ? !keepsMine : here !== space) setSpace(here, false);
   }, [here, path]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
   // pinned first, then the latest; the one you have open always stays in the list
   const openId = path.match(/^\/n\/([^/]+)/)?.[1];
   const sideNotebooks = notebooks && [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
@@ -147,7 +149,8 @@ export function Shell({ children }: { children: ReactNode }) {
       <section className="side-group" data-group="mine-more">
         <div className="side-list side-nav">
           {item("/news", <News />, "Briefs", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
-          {item("/holdings", <Wallet />, "Connected accounts", at?.page.to === "/holdings", "Bring in your broker's file: the stocks you hold")}
+          {item("/settings#accounts", <Wallet />, "Connected accounts", path === "/settings" && loc.hash === "#accounts", "Your holdings, funds and tradebooks: the files StratLab reads")}
+          {item("/assistant", <Sparkle />, "AI assistant", path === "/assistant", "Use StratLab in Claude or ChatGPT")}
         </div>
       </section>
     </>
@@ -183,7 +186,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </nav>
       <div className="side-foot">
         <MarketsNow markets={markets} />
-        <AccountMenu me={me} dark={dark} onTheme={() => setTheme(dark ? "light" : "dark")} onTour={() => { setOpen(false); setTour(true); }} onGo={() => setOpen(false)} />
+        <AccountMenu me={me} onTour={() => { setOpen(false); setTour(true); }} onGo={() => setOpen(false)} />
       </div>
     </aside>
   );

@@ -1744,6 +1744,27 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 600px) { .k-downloads .btn { flex: 1 1 100%; justify-content: flex-start; } }
 @media (max-width: 560px) { .k-field.narrow { max-width: none; } }
 
+/* account, settings, assistant, app, invite */
+.k-linkcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s3); }
+.k-linkcard { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--paper); color: inherit; text-decoration: none; min-width: 0; }
+.k-linkcard:hover { border-color: var(--ink); }
+.k-linkcard:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.k-linkcard b { font-weight: 600; overflow-wrap: anywhere; }
+.k-linkcard .k-sub-line { font-size: var(--t-label); }
+.k-linkcard .k-note { margin-top: var(--s1); }
+.k-line-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s2) 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.k-line-row:last-child { border-bottom: 0; }
+.k-line-row > .k-line-text { display: flex; flex-direction: column; min-width: 0; }
+.k-line-row b { font-weight: 600; overflow-wrap: anywhere; }
+.k-callout { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s4); border: 1px solid var(--line-2); border-radius: var(--r-ctl); min-width: 0; }
+.k-code { margin: 0; padding: var(--s3); background: var(--paper-2); color: var(--ink); border-radius: var(--s2); overflow-x: auto; white-space: pre; max-width: 100%; font: 13px/1.5 var(--mono); }
+.k-mono { font-family: var(--mono); }
+.k-check-note { display: block; font-weight: 400; color: var(--muted); font-size: var(--t-note); }
+.k-check.top { align-items: flex-start; }
+.k-section-nav { display: flex; min-width: 0; }
+@media (max-width: 640px) { .k-section-nav .k-seg { flex-wrap: wrap; width: 100%; } .k-section-nav .k-seg button { flex: 1 1 auto; } }
+.k-hint-line { margin: 0; }
+
 /* chart frame */
 .k-chart-body { min-width: 0; }
 

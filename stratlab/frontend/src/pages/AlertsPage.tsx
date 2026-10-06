@@ -50,8 +50,8 @@ export function AlertsPage() {
               note={page.channels.length ? "At most a few messages an hour: alerts that fire faster wait and go out together." : "Alerts only show here until you turn on phone notifications or Telegram, or confirm your email."} />
           </StatRow>
           {full && <PlanNote>That's all your plan has. Delete one to add another, or see plans for more.</PlanNote>}
-          <p className="k-small"><Link className="link" to="/account">Account settings</Link></p>
-          {page.email && !page.email_confirmed && <p className="k-note">Email goes out once you've confirmed {page.email} in Account (Newsletters).</p>}
+          <p className="k-small"><Link className="link" to="/settings#notifications">Where alerts go and what to send</Link></p>
+          {page.email && !page.email_confirmed && <p className="k-note">Email goes out once you've confirmed {page.email} in Settings (Notifications).</p>}
         </Card>
 
         {adding && (

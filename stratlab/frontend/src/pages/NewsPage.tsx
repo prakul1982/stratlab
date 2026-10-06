@@ -48,7 +48,7 @@ export function NewsPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/news")} title="News"
-        lede={<>A short brief after each market close, for India, the US and the companies you follow. Want it by email? Turn it on in <Link className="link" to="/account#newsletters">Account → Newsletters</Link>.</>} />
+        lede={<>A short brief after each market close, for India, the US and the companies you follow. Want it by email? Turn it on in <Link className="link" to="/settings#newsletters">Settings → Notifications</Link>.</>} />
       <div className="k-toolbar">
         <Seg label="Which brief" value={tab} onChange={choose} options={TABS.map(([t, title]) => ({ value: t, label: title }))} />
       </div>
@@ -57,7 +57,7 @@ export function NewsPage() {
         <Card><ErrorState title="Couldn't load the news" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{listError} Check your connection and try again; your newsletter settings are safe.</ErrorState></Card>
       ) : !rows ? <Card><Skeleton label="Loading the issues" lines={4} /></Card>
         : !rows.length ? (
-          <Card><EmptyState title="No issues yet" action={{ label: "Newsletter settings", to: "/account#newsletters" }}>The first one arrives after the next market close.</EmptyState></Card>
+          <Card><EmptyState title="No issues yet" action={{ label: "Newsletter settings", to: "/settings#newsletters" }}>The first one arrives after the next market close.</EmptyState></Card>
         ) : (
           <div className={`news-grid${picked ? " reading" : ""}`}>
             <nav className="news-list inv-issues" aria-label="Issues">

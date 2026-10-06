@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Account → AI assistant: make a key (shown once, with the setup steps filled in), use it against the MCP endpoint,
+// The AI assistant page (/assistant): make a key (shown once, with the setup steps filled in), use it against the MCP endpoint,
 // see the call in the log, revoke it and see the endpoint refuse it, on desktop and phone (dark mode on the phone).
 // Each project signs in as its own fake Pro user.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
@@ -21,16 +21,17 @@ async function open(page: Page, n: number) {
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, sessionFor(n));
-  await page.goto("/account");
+  await page.goto("/assistant");
   const welcome = page.getByRole("dialog", { name: "What brings you here?" });
   const answered = await welcome.waitFor({ timeout: 4000 }).then(async () => {
     await welcome.getByRole("button", { name: /^All of it/ }).click();
     await expect(welcome).toHaveCount(0);
     return true;
   }).catch(() => false);
-  if (answered) await page.goto("/account");
-  const card = page.locator("section", { has: page.getByRole("heading", { name: "AI assistant" }) });
-  await expect(card).toBeVisible({ timeout: 30_000 });
+  if (answered) await page.goto("/assistant");
+  const card = page.locator("main");
+  await expect(card.getByRole("heading", { level: 1, name: "AI assistant" })).toBeVisible({ timeout: 30_000 });
+  await expect(card.getByLabel("Name of the assistant")).toBeVisible({ timeout: 30_000 });
   return { errors, card };
 }
 
@@ -50,7 +51,7 @@ test("AI assistant: make a key, use it, see the log, revoke it", async ({ page }
   await card.getByLabel("Name of the assistant").fill("Claude test");
   await card.getByRole("checkbox").check();
   await card.getByRole("button", { name: "Make a key" }).click();
-  const fresh = card.getByRole("status");
+  const fresh = card.locator(".k-callout");
   const shown = fresh.getByLabel("Key", { exact: true });
   await expect(shown).toContainText(/^slm_[A-Za-z0-9_-]{40,}$/);
   const token = (await shown.innerText()).trim();
@@ -60,6 +61,7 @@ test("AI assistant: make a key, use it, see the log, revoke it", async ({ page }
   await expect(fresh.getByLabel("Command")).toContainText("/mcp");
   await expect(card.getByText("Claude test").first()).toBeVisible();
   await expect(card.getByText("Paper orders", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/assistant$/);
 
   // nothing on the card reads as advice or names a data source; nothing scrolls sideways, even with the code blocks open
   const text = await card.innerText();
@@ -86,8 +88,10 @@ test("AI assistant: make a key, use it, see the log, revoke it", async ({ page }
   await expect(card).not.toContainText(token);                 // never shown again
 
   // revoke: the endpoint refuses the key at once, and it folds under Revoked keys
-  page.once("dialog", (d) => d.accept());
   await card.getByRole("button", { name: "Revoke" }).first().click();
+  const ask = page.getByRole("dialog", { name: /^Revoke "Claude test"\?$/ });
+  await expect(ask).toContainText("stops reaching StratLab at once");
+  await ask.getByRole("button", { name: "Revoke key" }).click();
   await expect(card.getByText(/Revoked keys/)).toBeVisible();
   expect((await mcp(page, token, "tools/list")).status()).toBe(401);
   if (SHOTS) await card.screenshot({ path: `${SHOTS}/assistant-${info.project.name}.png` });

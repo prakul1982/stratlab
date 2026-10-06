@@ -65,7 +65,7 @@ function AlertCard({ v, onChange }: { v: FoView; onChange: (on: boolean) => void
       ) : (
         <p className="small">Alerts on these changes for your watchlist and paper sessions are on the {a.plan} plan. <Link className="link" to="/plans">See the {a.plan} plan</Link></p>
       )}
-      {a.allowed && a.on && !a.channels.length && <p className="tiny muted">Nowhere to send it yet: add a phone, Telegram or a confirmed email on the <Link className="link" to="/account">Account</Link> page.</p>}
+      {a.allowed && a.on && !a.channels.length && <p className="tiny muted">Nowhere to send it yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
       {v.mine.length > 0 && <p className="tiny muted">Watching {v.mine.length} Indian symbol{v.mine.length === 1 ? "" : "s"} from your watchlist and paper sessions.</p>}
     </section>
   );

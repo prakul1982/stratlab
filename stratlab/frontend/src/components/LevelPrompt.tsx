@@ -23,7 +23,7 @@ export const FOCUSES: [Focus, string, string][] = [
 
 /** Asked once, after the first sign-in (and again to anyone who answered only one of the two old questions): one short
  * step. The experience level sits above the choices, already set to the middle one; picking what you came for answers
- * both. Neither hides anything, and both can be changed on the Account page. */
+ * both. Neither hides anything, and both can be changed in Settings. */
 export function LevelPrompt({ onDone }: { onDone: () => void }) {
   const { level, focus, savePrefs } = useApp();
   const [lvl, setLvl] = useState<Level>(level ?? "some");

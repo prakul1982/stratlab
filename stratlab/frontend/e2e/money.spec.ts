@@ -126,10 +126,8 @@ test("money calendar: tax dates, an own date added, the month view and the priva
 
 test("money calendar: reachable from the menu", async ({ page }, info) => {
   const n = info.project.name === "phone" ? 158 : 155;
-  const errors = await open(page, "/holdings", "Your stocks", n);
+  const errors = await open(page, "/money", "Your money", n);          // Money's own menu, with its Plan group
   if (info.project.name === "phone") await page.getByRole("button", { name: "Open menu" }).click();
-  await page.getByRole("radiogroup", { name: "Space" }).getByRole("radio", { name: "Money" }).click();      // Holdings is one of Mine's own links: pick Money's menu
-  await expect(page).toHaveURL(/\/money$/);
   if (info.project.name === "phone") await expect(async () => {
       if (!(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
       await expect(page.locator("aside.sidebar.open")).toBeInViewport({ timeout: 1500 });

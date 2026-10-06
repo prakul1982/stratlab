@@ -139,7 +139,7 @@ test("my space: Customise hides, shows and reorders the cards, and remembers it"
   await sane(page, errors, phone);
 });
 
-test("my space: the menu has My space, Pinned, Briefs and Connected accounts; a page pinned from its breadcrumb shows under Pinned", async ({ page, request }, info) => {
+test("my space: the menu has My space, Pinned, Briefs, Connected accounts and AI assistant; a page pinned from its breadcrumb shows under Pinned", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
   const u = who(254, phone);
   await answer(request, u, "money");
@@ -151,7 +151,8 @@ test("my space: the menu has My space, Pinned, Briefs and Connected accounts; a 
   await expect(side.getByRole("link", { name: "My space" })).toHaveClass(/active/);
   await expect(side.locator('[data-group="pinned"]')).toContainText("Pin a page from the menu in its breadcrumb");
   await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
-  await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/holdings");
+  await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/settings#accounts");
+  await expect(side.getByRole("link", { name: "AI assistant" })).toHaveAttribute("href", "/assistant");
   if (phone) await page.getByRole("button", { name: "Close menu" }).click();
 
   // pin Margin funding from its own breadcrumb menu

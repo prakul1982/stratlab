@@ -110,8 +110,9 @@ test("a new user's first session, from the invite link to the plans", async ({ p
   await page.goto("/research/screens?region=IN");
   await expect(page.getByText(/\d+ of \d+ companies match/)).toBeVisible({ timeout: 30_000 });
   await check(page, errors, phone);
-  await page.goto("/account");
+  await page.goto("/settings#newsletters");
   await expect(page.getByRole("heading", { name: /Newsletters/ })).toBeVisible({ timeout: 30_000 });
+  await page.goto("/invite");
   await expect(page.getByLabel("Your invite link")).toHaveValue(/\/\?ref=[A-Za-z0-9_-]{12}$/);
   await expect(page.getByTestId("friends-joined")).toHaveText(/^0 friends joined/);
   await check(page, errors, phone);
