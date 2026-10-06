@@ -1,0 +1,145 @@
+SECURITIES AND EXCHANGE COMMISSION
+
+ Washington, D.C. 20549
+
+ SCHEDULE 13G
+
+ UNDER THE SECURITIES EXCHANGE ACT OF 1934
+
+Apple Inc
+(Name of Issuer)
+Common Stock
+(Title of Class of Securities)
+037833100
+(CUSIP Number)
+03/31/2026
+(Date of Event Which Requires Filing of this Statement)
+ Check the appropriate box to designate the rule pursuant to which this Schedule is filed:
+ Rule 13d-1(b)
+
+ Rule 13d-1(c)
+
+ Rule 13d-1(d)
+
+ schemaVersion:
+
+ SCHEDULE 13G
+
+CUSIP Number(s):
+037833100
+1
+Names of Reporting Persons
+
+Vanguard Capital Management
+2
+Check the appropriate box if a member of a Group (see instructions)
+
+ (a)
+
+ (b) 
+
+3
+Sec Use Only
+4
+Citizenship or Place of Organization
+
+ PENNSYLVANIA
+
+Number of Shares Beneficially Owned by Each Reporting Person With:
+5
+Sole Voting Power
+
+145,321,305.00
+6
+Shared Voting Power
+
+0.00
+7
+Sole Dispositive Power
+
+1,099,168,953.00
+8
+Shared Dispositive Power
+
+0.00
+9
+Aggregate Amount Beneficially Owned by Each Reporting Person
+
+1,099,168,953.00
+10
+Check box if the aggregate amount in row (9) excludes certain shares (See Instructions)
+
+11
+Percent of class represented by amount in row (9)
+
+7.48 % 
+12
+Type of Reporting Person (See Instructions)
+
+IA
+Comment for Type of Reporting Person:
+
+In accordance with SEC Release No. 34-39538 (January 12, 1998), this Schedule 13G reflects the securities beneficially owned, or deemed to be beneficially owned, by Vanguard Capital Management LLC and the following affiliates of Vanguard Capital Management LLC or business divisions of such affiliates: Vanguard Asset Management Limited, Vanguard Fiduciary Trust Company, Vanguard Global Advisers, LLC and Vanguard Investments Australia Ltd. This Schedule 13G includes securities held by Vanguard funds, or sleeves thereof, over which Vanguard Capital Management LLC exercises dispositive power, in addition to securities held by clients over which the affiliates or business divisions of such affiliates indicated above exercise dispositive and/or voting power. This Schedule 13G does not include securities, if any, beneficially owned by other subsidiaries or affiliates of Vanguard Capital Management LLC, or business divisions of such subsidiaries, whose ownership of securities is disaggregated from that of the reporting business unit in accordance with such release.
+
+ SCHEDULE 13G
+
+Item 1.
+
+(a)
+Name of issuer:
+
+Apple Inc
+(b)
+Address of issuer's principal executive offices:
+
+1 Apple Park Way, Cupertino, CA, 95014
+Item 2.
+
+(a)
+Name of person filing:
+
+Vanguard Capital Management
+(b)
+Address or principal business office or, if none, residence:
+
+100 Vanguard Blvd,, Malvern, PA, 19355
+(c)
+Citizenship:
+
+PA
+(d)
+Title of class of securities:
+
+Common Stock
+(e)
+CUSIP Number(s):
+
+037833100
+Item 3.
+If this statement is filed pursuant to §§ 240.13d-1(b) or 240.13d-2(b) or (c), check whether the person filing is a:
+(a)
+ Broker or dealer registered under section 15 of the Act (15 U.S.C. 78o);
+
+(b)
+ Bank as defined in section 3(a)(6) of the Act (15 U.S.C. 78c);
+
+(c)
+ Insurance company as defined in section 3(a)(19) of the Act (15 U.S.C. 78c);
+
+(d)
+ Investment company registered under section 8 of the Investment Company Act of 1940 (15 U.S.C. 80a-8);
+
+(e)
+ An investment adviser in accordance with § 240.13d-1(b)(1)(ii)(E);
+
+(f)
+ An employee benefit plan or endowment fund in accordance with § 240.13d-1(b)(1)(ii)(F);
+
+(g)
+ A parent holding company or control person in accordance with § 240.13d-1(b)(1)(ii)(G);
+
+(h)
+ A savings associations as defined in Section 3(b) of the Federal Deposit Insurance Act (12 U.S.C. 1813);
+
+(i)
+ A church plan that is excluded fro

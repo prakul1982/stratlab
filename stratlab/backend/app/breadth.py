@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from . import db, rotation, sector_members, universes
+from . import db, rotation, scan_presets, sector_members, universes
 from .engine.indicators import stage
 from . import deals  # noqa: F401  (before the newsletter job, which imports it back while loading)
 from .newsletter import job as news_job
@@ -63,6 +63,7 @@ GROUPS = {
     "smallcap250": {"region": "IN", "name": "NIFTY Smallcap 250", "nse": "NIFTY SMALLCAP 250", "index": "NIFTY SMLCAP 250",
                     "index_name": "NIFTY Smallcap 250"},
     "us_large": {"region": "US", "name": "US large caps", "index": "SPY", "index_name": "SPY (an S&P 500 fund)"},
+    "sp500": {"region": "US", "name": "S&P 500", "index": "SPY", "index_name": "SPY (an S&P 500 fund)"},
 }
 DEFAULT = "nifty500"
 REGIONS = ("IN", "US")
@@ -284,6 +285,8 @@ def members(group: str, index_members=None, all_equities=None) -> list[str]:
     """A group's stocks: from the exchange's own lists when they answer (kept as the last good list), else the last
     good list; the NIFTY 50 falls back to StratLab's own list, and the US group is StratLab's own list."""
     g = GROUPS[group]
+    if group == "sp500":
+        return universes.sp500_symbols()           # the committed list (data/sp500.json), never read from the web
     if g["region"] == "US":
         return us_large()
     fresh = None
@@ -309,6 +312,10 @@ def members(group: str, index_members=None, all_equities=None) -> list[str]:
     return []
 
 
+GICS_NAMES = {"Information Technology": "Technology", "Health Care": "Health care", "Consumer Discretionary": "Consumer discretionary",
+              "Consumer Staples": "Consumer staples", "Real Estate": "Real estate", "Communication Services": "Communication"}
+
+
 def sector_map(region: str) -> dict[str, str]:
     """{symbol: sector}: the sector the screens show for the company (from its industry), else the sector index or
     fund StratLab's own lists put it in."""
@@ -318,6 +325,9 @@ def sector_map(region: str) -> dict[str, str]:
         for fund in rotation.SECTORS["US"]["members"]:
             for s in sector_members.US.get(fund, []):
                 out.setdefault(s, rotation.US_NAMES[fund])
+    if region == "US":              # the rest of the S&P 500, by its list's sector, named as the sector funds are
+        for sym, _name, sector, _cik in universes.sp500_doc()["rows"]:
+            out.setdefault(sym, GICS_NAMES.get(sector, sector))
     try:
         for r in screens.load_index(region)["rows"]:
             if r.get("sector") and r["symbol"] not in out:
@@ -387,11 +397,14 @@ class Runner:
         except Exception:
             sec = {}
         tally, loaded, failed, streak, last_error = Tally(), 0, 0, 0, None
+        scans: dict[str, dict[str, dict | None]] = {}            # group -> {symbol: scan_presets.evaluate answer}
+        scan_secs, scan_groups = 0.0, set(scan_presets.STORED.values())
         for i, (sym, gs) in enumerate(sorted(by_stock.items())):
             if i and self.gap:
                 self.sleep(self.gap)                     # leave the source room for people using the app
             try:
-                flags = stock_flags(self.load(region, sym, days), through)
+                bars = self.load(region, sym, days)
+                flags = stock_flags(bars, through)
                 streak = 0
             except Exception as e:
                 failed, streak, last_error = failed + 1, streak + 1, f"{sym}: {str(e)[:120] or e.__class__.__name__}"
@@ -403,6 +416,17 @@ class Runner:
             loaded += 1
             for g in gs:
                 tally.add(g, flags, sec.get(sym), sector_from)
+            mine = [g for g in gs if g in scan_groups]
+            if mine:                    # the trend scans' presets, from the candles just read (no second request)
+                began = time.perf_counter()
+                try:
+                    res = scan_presets.evaluate(bars, through)
+                except Exception as e:  # a scan problem never costs the breadth counts
+                    res = None
+                    print("breadth scans:", sym, str(e)[:120])
+                scan_secs += time.perf_counter() - began
+                for g in mine:
+                    scans.setdefault(g, {})[sym] = res
         if not loaded:
             raise RuntimeError(f"No stock's prices could be read ({last_error or 'no data'}).")
         out = {}
@@ -419,8 +443,14 @@ class Runner:
             out[g] = {"days": len(rows), "stocks": tally.stocks.get(g, 0), "members": len(who[g]),
                       "as_of": max(rows) if rows else None}
         as_of = max((v["as_of"] for v in out.values() if v["as_of"]), default=None)
+        for g, found in scans.items():
+            try:
+                scan_presets.save(g, scan_presets.build(found))
+            except Exception as e:
+                print("breadth scans save:", g, str(e)[:120])
         _set_status(region, ran_at=_now(), as_of=as_of, stocks=len(by_stock), loaded=loaded, failed=failed,
-                    last_error=last_error, full=full)
+                    last_error=last_error, full=full, scan_seconds=round(scan_secs, 2),
+                    scan_stocks=sum(len(v) for v in scans.values()))
         if self.after:                  # the alerts on these groups, now their new day is stored
             try:
                 self.after(region, groups, now)

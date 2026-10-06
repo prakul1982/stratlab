@@ -1,6 +1,7 @@
 """A fake SEC EDGAR: the ticker list, a filing list and XBRL company facts for one company shaped like the real thing
 (fiscal years ending in late September, the revenue concept changing in 2018, a restated year, six- and nine-month
 year-to-date figures in the quarterly reports, and the fourth quarter only inside the annual report)."""
+import re
 from datetime import date, timedelta
 
 import httpx
@@ -120,10 +121,53 @@ RELEASE = f"""<html><body><p>Apple reports second quarter results.</p><p>The Com
 low to mid single digits in the June quarter.</p><p>{FILLER}</p></body></html>"""
 
 
+HOLDERS = ["Northfield Asset Management LP", "Ridgeway Capital Partners", "Harbor Index Advisors", "Lakeshore Investment Group", "Summit Pension Trust"]
+
+
+def other_subs(cik: int) -> dict:
+    """A made-up filing list for any other S&P 500 company (by its number): a few 8-K items and 13D/13G filings, dated
+    from today so they fall inside the stored windows. Which company has which depends only on its number."""
+    day = lambda n: (date.today() - timedelta(days=n)).isoformat()
+    rows = []                                                     # (form, filed, accession, document, items)
+    acc = lambda k: f"{cik:010d}-26-{k:06d}"
+    if cik % 5 == 0:
+        rows.append(("8-K", day(3 + cik % 30), acc(1), "a8-k.htm", "4.01,9.01"))
+    if cik % 7 == 0:
+        rows.append(("8-K", day(1 + cik % 20), acc(2), "b8-k.htm", "5.02"))
+    if cik % 23 == 0:
+        rows.append(("8-K", day(5 + cik % 40), acc(3), "c8-k.htm", "4.02,9.01"))
+    if cik % 31 == 0:
+        rows.append(("8-K", day(2 + cik % 50), acc(4), "d8-k.htm", "3.01"))
+    if cik % 11 == 0:
+        rows.append(("SCHEDULE 13G/A", day(2 + cik % 60), acc(5), "xslSCHEDULE_13G_X02/primary_doc.xml", ""))
+    if cik % 53 == 0:
+        rows.append(("SC 13D", day(4 + cik % 80), acc(6), "d13.htm", ""))
+    rows.append(("8-K", day(30), acc(7), "e8-k.htm", "2.02,9.01"))        # an earnings release: not flagged
+    rows.sort(key=lambda x: x[1], reverse=True)
+    cols = list(zip(*rows))
+    recent = dict(zip(("form", "filingDate", "accessionNumber", "primaryDocument", "items"), map(list, cols)))
+    return {"cik": str(cik), "name": f"Company {cik}", "sic": "3571", "sicDescription": "X", "fiscalYearEnd": "1231", "website": "",
+            "tickers": [], "filings": {"recent": recent}}
+
+
+def cover_text(cik: int) -> str:
+    """A 13D/13G cover page's text for one made-up holder of the company with this number."""
+    holder, pct = HOLDERS[cik % len(HOLDERS)], 5.1 + (cik % 90) / 10
+    return (f"SCHEDULE 13G Company {cik} (Name of Issuer) Common Stock 1 Names of Reporting Persons {holder} 2 Check the appropriate box if a member "
+            f"of a Group (see instructions) 9 Aggregate Amount Beneficially Owned by Each Reporting Person {cik * 1000:,}.00 11 Percent of class "
+            f"represented by amount in row (9) {pct:.2f} % 12 Type of Reporting Person IA")
+
+
 def transport(calls: list | None = None) -> httpx.MockTransport:
     def handler(r: httpx.Request):
         if calls is not None:
             calls.append(r.url.path)
+        m = re.fullmatch(r"/submissions/CIK(\d{10})\.json", r.url.path)
+        if m and int(m.group(1)) not in (CIK, 1067983):
+            return httpx.Response(200, json=other_subs(int(m.group(1))))
+        m = re.match(r"/Archives/edgar/data/(\d+)/\d+/(xslSCHEDULE_13G_X02/primary_doc\.xml|d13\.htm)$", r.url.path)
+        if m:
+            return httpx.Response(200, text=cover_text(int(m.group(1))), headers={"content-type": "text/plain"})
         if r.url.path == "/files/company_tickers.json":
             return httpx.Response(200, json={"0": {"cik_str": CIK, "ticker": "AAPL", "title": "Apple Inc."},
                                              "1": {"cik_str": 1067983, "ticker": "BRK-B", "title": "Berkshire Hathaway Inc"}})

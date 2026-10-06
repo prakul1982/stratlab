@@ -45,7 +45,7 @@ async function seed(request: import("@playwright/test").APIRequestContext) {
   const card = await post("/cards/company/IN/RELIANCE", {});
   const app = ["/", "/trade", "/invest", "/money", "/notebooks", "/new", `/n/${nb.id}`, `/n/${nb.id}/market`, `/n/${nb.id}/compare`, `/n/${nb.id}/e/1`, "/import",
     "/library", "/options", "/trade/positioning", "/paper", `/paper/${paper.id}`, "/plans", "/account", "/settings", "/settings#experience", "/settings#accounts", "/settings#check", "/assistant", "/app", "/invite", "/admin", "/admin/users", "/admin/money", "/admin/data", "/admin/quality", "/admin/system", "/admin/emails", "/admin/emails/market_in", "/admin?tab=services", "/news", "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar", "/alerts", "/research", "/research/themes", "/research/pulse",
-    "/research/compare", "/research/watchlist", "/research/scan", "/research/screens", "/research/rotation", "/research/filings", "/invest/breadth", "/invest/etf-gaps",
+    "/research/compare", "/research/watchlist", "/research/scan", "/research/scan?scan=high52", "/research/filings?view=all", "/research/filings?region=US&view=all", "/invest/holders?region=US", "/research/screens", "/research/rotation", "/research/filings", "/invest/breadth", "/invest/etf-gaps",
     "/research/results", "/research/investor", "/research/IN/RELIANCE", "/research/US/AAPL", "/research/IN/RELIANCE/deep",
     "/research/US/AAPL/deep",
     // corporate actions (the calendar, both scopes and the US), a company with a bonus and dividend ahead and deals,
