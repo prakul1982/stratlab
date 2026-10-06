@@ -9,6 +9,7 @@ import type { ScaleMode } from "./scales";
 import { clampParam, newStudy, STAGE_NAMES, STUDIES, STUDY, studyLabel, type StudyConfig, type StudyType } from "./studies";
 import { aggregate, indexAtOrBefore, merge, parseTime, toBars, type Bar, type RawCandle } from "./transforms";
 import { ChipBar } from "../../components/kit/ChipBar";
+import { ConfirmDialog } from "../../components/kit/ConfirmDialog";
 import { CHART_TF_UNITS, chartTfCheck } from "../../lib/intervals";
 import "./priceChart.css";
 
@@ -140,6 +141,7 @@ export default function PriceChart(props: PriceChartProps) {
   const [auto, setAuto] = useState(true);
   const [tool, setTool] = useState<DrawingKind | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [askClear, setAskClear] = useState(false);
   const [drawCount, setDrawCount] = useState(0);
   const [full, setFull] = useState(false);
   const [menu, setMenu] = useState<"studies" | "draw" | "compare" | null>(null);
@@ -457,7 +459,11 @@ export default function PriceChart(props: PriceChartProps) {
         </div>
         <button type="button" className="pc-btn icon" disabled={!drawCount} aria-label={selected ? "Delete drawing" : "Clear drawings"}
           title={selected ? "Delete the selected drawing (Delete key)" : "Remove every drawing on this chart"}
-          onClick={() => { const e = engineRef.current; if (!e) return; if (selected) e.deleteSelected(); else if (confirm("Remove every drawing on this chart?")) e.clearDrawings(); }}>{ICON.trash}</button>
+          onClick={() => { const e = engineRef.current; if (!e) return; if (selected) e.deleteSelected(); else setAskClear(true); }}>{ICON.trash}</button>
+        {askClear && (
+          <ConfirmDialog title="Remove every drawing on this chart?" confirmLabel="Remove drawings" onClose={() => setAskClear(false)}
+            onConfirm={() => { engineRef.current?.clearDrawings(); setAskClear(false); }}>The lines and shapes you drew here are removed. The chart itself is not changed.</ConfirmDialog>
+        )}
         {compareLoad && (
           <div className="pc-wrap">
             {cmp ? <button type="button" className="pc-btn" aria-pressed="true" onClick={() => { setCmp(null); setMode("normal"); }} title="Stop comparing">vs {cmp.symbol} ✕</button>

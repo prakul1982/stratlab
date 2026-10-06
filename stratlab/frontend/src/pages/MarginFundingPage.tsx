@@ -97,7 +97,7 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
         {error ? <ErrorState title="That stock couldn't be read">{error}</ErrorState>
           : !d ? <Skeleton label={`Reading ${symbol}`} lines={3} />
           : <EmptyState title={`No margin funding in ${d.as_of ? dayText(d.as_of) : "the newest disclosure"}`}>
-              {d.as_of ? `${symbol} had no margin funding in the exchange's disclosure of ${dayText(d.as_of)}.` : "Nothing stored yet."}</EmptyState>}
+              {d.as_of ? `${symbol} had no margin funding in the exchange's disclosure of ${dayText(d.as_of)}.` : "Nothing yet."}</EmptyState>}
       </Card>
     );
   }

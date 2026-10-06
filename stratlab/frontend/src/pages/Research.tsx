@@ -213,7 +213,7 @@ export function CompanyPage() {
             {wiki?.description && <p className="k-sub">{wiki.description}</p>}
             <p className="k-small">{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {c.facts.length > 0 && <dl className="k-dl">{c.facts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
+            {c.facts.some((f) => !/market cap/i.test(f.label)) && <dl className="k-dl">{c.facts.filter((f) => !/market cap/i.test(f.label)).map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
             {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">More on Wikipedia ↗</a>}
           </Card>
         )}
@@ -254,10 +254,10 @@ export function CompanyPage() {
         {c.insider && c.insider.rows.length > 0 && (
           <Card>
             <CardHead title="Insider trades" info="Shares bought or sold by the company's own directors and officers, from filings." />
-            <p className="k-small k-muted">Net {c.insider.net > 0 ? "+" : c.insider.net < 0 ? "−" : ""}{Math.abs(Math.round(c.insider.net)).toLocaleString()} shares across recent filings</p>
+            <p className="k-small k-muted">Net {c.insider.net > 0 ? "+" : c.insider.net < 0 ? "−" : ""}{Math.abs(Math.round(c.insider.net)).toLocaleString("en-IN")} shares across recent filings</p>
             <DataTable label="Insider trades" rows={c.insider.rows} rowKey={(t) => `${t.name}-${t.date}-${t.change}`}
               columns={[{ key: "n", header: "Name", rowHeader: true, wrap: true, cell: (t) => t.name },
-                { key: "c", header: "Shares", numeric: true, cell: (t) => `${t.change > 0 ? "+" : t.change < 0 ? "−" : ""}${Math.abs(t.change).toLocaleString()}` },
+                { key: "c", header: "Shares", numeric: true, cell: (t) => `${t.change > 0 ? "+" : t.change < 0 ? "−" : ""}${Math.abs(t.change).toLocaleString("en-IN")}` },
                 { key: "d", header: "Date", numeric: true, cell: (t) => t.date }]} />
           </Card>
         )}

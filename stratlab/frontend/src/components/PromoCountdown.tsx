@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Notice } from "./kit";
 import { useApp } from "../lib/app";
 
 /** "3 days 4 hours", "5 hours 10 minutes" or "12 minutes": the two largest units left. */
@@ -24,11 +24,10 @@ export function PromoCountdown({ plansLink = true }: { plansLink?: boolean }) {
   }, [until]);
   const end = until ? new Date(until).getTime() : NaN;
   if (!until || !Number.isFinite(end) || end <= now) return null;
-  const day = new Date(until).toLocaleDateString(undefined, { day: "numeric", month: "long" });
+  const day = new Date(until).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
   return (
-    <div className="banner promo-banner promo-countdown" role="status">
-      <span><b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}).</span>
-      {plansLink && <Link to="/plans" className="btn sm quiet">See plans</Link>}
-    </div>
+    <Notice className="promo-countdown" role="status" action={plansLink ? { label: "See plans", to: "/plans" } : undefined}>
+      <b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}).
+    </Notice>
   );
 }

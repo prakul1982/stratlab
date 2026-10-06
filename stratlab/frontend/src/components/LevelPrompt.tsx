@@ -1,3 +1,4 @@
+import { Seg } from "./kit";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
@@ -39,16 +40,14 @@ export function LevelPrompt({ onDone }: { onDone: () => void }) {
   };
   return (
     <Modal title="What brings you here?" onClose={() => pick(focus ?? "both")}>
-      <p className="muted" style={{ marginBottom: 14 }}>StratLab has three spaces: Trade, Invest and Money. We'll open the one you pick. The others stay one tap away, and you can change this any time in Settings.</p>
-      <div className="stack" style={{ gap: 6, marginBottom: 14 }}>
-        <span className="small muted">How much have you done?</span>
-        <div className="seg seg-even" role="radiogroup" aria-label="Experience" style={{ alignSelf: "flex-start" }}>
-          {LEVELS.map(([l, title, what]) => <button key={l} role="radio" aria-checked={lvl === l} aria-pressed={lvl === l} title={what} onClick={() => setLvl(l)}>{title}</button>)}
-        </div>
+      <p className="muted">StratLab has three spaces: Trade, Invest and Money. We'll open the one you pick. The others stay one tap away, and you can change this any time in Settings.</p>
+      <div className="k-stack snug">
+        <span className="k-small k-muted">How much have you done?</span>
+        <Seg label="Experience" value={lvl} onChange={(v) => setLvl(v as Level)} options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} />
       </div>
-      <div className="stack" style={{ gap: 10 }}>
+      <div className="k-stack">
         {FOCUSES.map(([f, title, what]) => (
-          <button key={f} className="card explore-card" data-focus={f} onClick={() => pick(f)}><b>{title}</b><span className="small muted">{what}</span></button>
+          <button key={f} className="k-linkcard explore-card" data-focus={f} onClick={() => pick(f)}><b>{title}</b><span className="small muted">{what}</span></button>
         ))}
       </div>
     </Modal>

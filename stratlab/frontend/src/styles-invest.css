@@ -13,7 +13,6 @@
 .inv-text { max-width: 80ch; }
 .k-form-wide { grid-column: 1 / -1; }
 .k-card-actions .k-input { width: auto; max-width: 100%; }
-.inv-link-row { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 
 /* a company's price block */
 .inv-quote .k-stat-v { font-size: clamp(30px, 4vw, 40px); }
@@ -23,7 +22,6 @@
 .inv-badges:empty { display: none; }
 
 /* the day's market: a few index levels */
-.inv-indices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s4); }
 
 /* company tiles */
 .inv-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s2); }

@@ -20,7 +20,7 @@ export const KIND_NAME: Record<ActionKind, string> = {
 /** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
 export function exDay(iso: string, year = false) {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: year ? undefined : "short", day: "numeric", month: "short", year: year ? "numeric" : undefined });
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { weekday: year ? undefined : "short", day: "numeric", month: "short", year: year ? "numeric" : undefined });
 }
 
 /** One action: what it is, its ex-date and record date. */
@@ -34,7 +34,7 @@ export function ActionLine({ a, showSymbol = true, year = false }: { a: CorpActi
           {a.mine && <Badge tone="plain" dot={false}>Yours</Badge>}
         </span>
       )}
-      <span className="k-small"><Badge tone="plain" dot={false}>{a.label}</Badge> {a.text}</span>
+      <span className="k-small"><Badge tone="plain" dot={false}>{a.label}</Badge> {a.text.toLowerCase().startsWith(a.label.toLowerCase()) ? a.text.slice(a.label.length).replace(/^[\s:·-]+/, "") : a.text}</span>
       <span className="k-note">
         Ex-date {exDay(a.ex_date, year)}{a.record_date && a.record_date !== a.ex_date ? ` · record date ${exDay(a.record_date, year)}` : a.record_date ? " (also the record date)" : ""}
         {a.url && <> · <a className="link" href={safeHref(a.url)} target="_blank" rel="noopener noreferrer">Notice ↗</a></>}

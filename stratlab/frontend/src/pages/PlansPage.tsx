@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Card, CardHead, ConfirmDialog, DataTable, Field, FieldGroup, FormGrid, Notice, PageHeader, Select, Seg, type Column } from "../components/kit";
 import { Link } from "react-router-dom";
 import { LegalLinks } from "../components/LegalLinks";
 import { api, loadRazorpay } from "../lib/api";
@@ -17,18 +18,22 @@ function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
     return v == null ? "Unlimited" : p === "free" && k === "live_limit" ? `${v}, for 5 market days` : v.toLocaleString("en-IN");
   };
   const ids: PlanId[] = ["free", "basic", "pro"];
+  const names = { free: "Free", basic: "Basic", pro: "Pro" };
+  type Row = { id: string; label: string; cell: (p: PlanId) => string };
+  const rows: Row[] = [
+    ...NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })),
+    ...FLAGS.map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") })),
+    ...EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" })),
+  ];
+  const columns: Column<Row>[] = [
+    { key: "label", header: "Backtests, research and paper trading", wrap: true, cell: (r) => r.label },
+    ...ids.map((p) => ({ key: p, header: names[p], numeric: true, cell: (r: Row) => r.cell(p) })),
+  ];
   return (
-    <section className="card stack" style={{ gap: 12 }} aria-labelledby="compare-h">
-      <h2 className="h2" id="compare-h">Side by side</h2>
-      <div className="table-wrap"><table className="plan-compare">
-        <thead><tr><th>Backtests, research and paper trading</th>{ids.map((p) => <th key={p}>{{ free: "Free", basic: "Basic", pro: "Pro" }[p]}</th>)}</tr></thead>
-        <tbody>
-          {NUMBERS.map(([k, label]) => <tr key={k}><td>{label}</td>{ids.map((p) => <td key={p}>{num(p, k)}</td>)}</tr>)}
-          {FLAGS.map(([f, label]) => <tr key={f}><td>{label}</td>{ids.map((p) => <td key={p} aria-label={lim(p).features.includes(f) ? "Included" : "Not included"}>{lim(p).features.includes(f) ? "✓" : "–"}</td>)}</tr>)}
-          {EVERYONE.map((label) => <tr key={label}><td>{label}</td>{ids.map((p) => <td key={p} aria-label="Included">✓</td>)}</tr>)}
-        </tbody>
-      </table></div>
-    </section>
+    <Card id="compare">
+      <CardHead title="Side by side" />
+      <DataTable label="Plans side by side" columns={columns} rows={rows} rowKey={(r) => r.id} />
+    </Card>
   );
 }
 
@@ -58,7 +63,6 @@ export function PlansPage() {
   const anyRupees = currency !== "INR" && !!row && (period === "year" ? row.yearly_charged_in : row.charged_in) === "INR";
 
   const subscribe = async (plan: "basic" | "pro") => {
-    if (me && paid !== "free" && !confirm(`Switch to ${plan === "pro" ? "Pro" : "Basic"}? Your current subscription stops billing once the new one is active.`)) return;
     track("upgrade clicked", { plan, period, source: "plans" });
     setBusy(plan);
     try {
@@ -81,65 +85,72 @@ export function PlansPage() {
     } catch (e) { fail(e); setBusy(null); }
   };
 
+  const [switching, setSwitching] = useState<"basic" | "pro" | null>(null);
+  const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
+  const ask = (plan: "basic" | "pro") => (me && paid !== "free" ? setSwitching(plan) : void subscribe(plan));
+
   return (
-    <div className="stack" style={{ gap: 26 }}>
-      <div className="stack" style={{ gap: 8 }}>
-        <Link to="/account" className="link small" style={{ alignSelf: "flex-start" }}>← Account</Link>
-        <h1 className="page-title">Plans</h1>
-        <PromoCountdown plansLink={false} />
-        <p className="muted" style={{ fontSize: 17 }}>
-          {billing ? "Billed through Razorpay. Cancel any time; your plan stays active until the paid period ends." : "Paid plans are coming soon. During early access every feature is unlocked for everyone; the Free plan's monthly limits still apply."}
-        </p>
-        {pricing && (
-          <label className="row small" style={{ gap: 10, alignSelf: "flex-start" }}>Prices in
-            <span className="chip-select"><select value={currency} onChange={(e) => pick(e.target.value)} aria-label="Currency">
-              {Object.entries(pricing.currencies).map(([c, r]) => <option key={c} value={c}>{c} · {r.name}</option>)}
-            </select></span>
-          </label>
-        )}
-        {anyRupees && billing && <p className="small muted" style={{ margin: 0, maxWidth: "80ch" }}>Paid in rupees for now: your card is charged the rupee price shown under each plan and your bank converts it, so the amount in {currency} can differ slightly.</p>}
-        {billing && yearlyOk && (
-          <div className="seg" role="group" aria-label="Billing period" style={{ alignSelf: "flex-start" }}>
-            <button className={!yearly ? "on" : ""} aria-pressed={!yearly} onClick={() => setYearly(false)}>Monthly</button>
-            <button className={yearly ? "on" : ""} aria-pressed={yearly} onClick={() => setYearly(true)}>Yearly · 2 months free</button>
-          </div>
-        )}
-      </div>
-      <div className="grid4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+    <div className="k-page">
+      <PageHeader eyebrow="Account · Plans" title="Plans"
+        lede={billing ? "Cancel any time; your plan stays active until the paid period ends." : "Paid plans are coming soon. During early access every feature is unlocked for everyone; the Free plan's monthly limits still apply."}
+        actions={<Link to="/account" className="btn quiet sm">← Account</Link>} />
+      <PromoCountdown plansLink={false} />
+      {(pricing || (billing && yearlyOk)) && (
+        <FormGrid label="Price options">
+          {pricing && (
+            <Field label="Prices in">
+              {(id) => <Select id={id} value={currency} onChange={pick} options={Object.entries(pricing.currencies).map(([c, r]) => ({ value: c, label: `${c} · ${r.name}` }))} />}
+            </Field>
+          )}
+          {billing && yearlyOk && (
+            <FieldGroup label="Billed">
+              <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
+                options={[{ value: "month", label: "Monthly" }, { value: "year", label: "Yearly · 2 months free" }]} />
+            </FieldGroup>
+          )}
+        </FormGrid>
+      )}
+      {anyRupees && billing && <Notice>Paid in rupees for now: your card is charged the rupee price shown under each plan and your bank converts it, so the amount in {currency} can differ slightly.</Notice>}
+      <div className="k-plans">
         {(["free", "basic", "pro"] as const).map((p) => {
           const cur = paid === p;
           const price = priceOf(p, period);
           return (
-            <div key={p} className="card stack" style={{ gap: 14, border: p === "pro" ? "2px solid var(--ink)" : undefined }}>
-              <div className="stack" style={{ gap: 2 }}>
-                <h2 className="h2">{{ free: "Free", basic: "Basic", pro: "Pro" }[p]}</h2>
-                <span className="small muted">{WHO[p]}</span>
+            <Card key={p} className={p === "pro" ? "k-plan pro" : "k-plan"}>
+              <div className="k-stack tight">
+                <h2 className="k-card-title">{planName(p)}</h2>
+                <span className="k-small k-muted">{WHO[p]}</span>
               </div>
-              <div className="stack" style={{ gap: 2 }}>
-                <div className="serif" style={{ fontSize: 44, letterSpacing: "-0.02em" }}>{price.shown}<span className="small muted" style={{ fontFamily: "var(--sans)" }}> / {period}</span></div>
-                {price.inr && <span className="tiny muted">incl. GST</span>}
-                {price.charged && <span className="tiny muted">Charged as {price.charged} incl. GST / {period}</span>}
+              <div className="k-stack tight">
+                <div className="k-plan-price">{price.shown}<span> / {period}</span></div>
+                {price.inr && <span className="k-note">incl. GST</span>}
+                {price.charged && <span className="k-note">Charged as {price.charged} incl. GST / {period}</span>}
               </div>
-              <ul className="stack" style={{ gap: 8, listStyle: "none", padding: 0, margin: 0, flex: 1 }}>
-                {FEATURES[p].map((f) => f.endsWith(":") ? <li key={f} className="small muted" style={{ fontWeight: 600 }}>{f}</li>
-                  : <li key={f} className="row" style={{ alignItems: "flex-start", gap: 10 }}><span style={{ color: "var(--blue)", fontWeight: 700 }}>✓</span>{f}</li>)}
+              <ul className="k-plan-list">
+                {FEATURES[p].map((f) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
               </ul>
               {cur ? <button className="btn outline" disabled>Current plan</button>
-                : p === "free" ? <span className="small muted">Included whenever a paid plan ends</span>
+                : p === "free" ? <span className="k-small k-muted">Included whenever a paid plan ends</span>
                   : !billing ? <button className="btn outline" disabled>Coming soon</button>
-                    : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy} onClick={() => subscribe(p)}>
-                      {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${p === "pro" ? "Pro" : "Basic"}`}</button>}
-            </div>
+                    : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy} onClick={() => ask(p)}>
+                      {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}</button>}
+            </Card>
           );
         })}
       </div>
       <Compare plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
       {me && paid !== "free" && me.billing.renews_or_ends && (
-        <p className="small muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
+        <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
-      <p className="small muted" style={{ maxWidth: "80ch" }}>Rupee prices include 18% GST, and every payment gets a GST invoice in Account. Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by Razorpay.</p>
-      <p className="small muted" style={{ maxWidth: "80ch" }}>StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>
+      <p className="k-small k-muted k-measure">Rupee prices include 18% GST, and every payment gets a GST invoice in Account. Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by our payment partner.</p>
+      <p className="k-small k-muted k-measure">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>
       <LegalLinks />
+      {switching && (
+        <ConfirmDialog title={`Switch to ${planName(switching)}?`} confirmLabel={`Switch to ${planName(switching)}`} danger={false}
+          onClose={() => setSwitching(null)} onConfirm={() => { const p = switching; setSwitching(null); void subscribe(p); }}>
+          Your current subscription stops billing once the new one is active.
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

@@ -6,7 +6,7 @@ export function LogoMark({ size = 32, title }: { size?: number; title?: string }
   const id = useId().replace(/:/g, "");
   return (
     <svg width={Math.round(size * MARK_RATIO)} height={size} viewBox={MARK_VIEWBOX} role={title ? "img" : undefined}
-      aria-label={title} aria-hidden={title ? undefined : true} style={{ flex: "none" }}>
+      aria-label={title} aria-hidden={title ? undefined : true} className="logo-mark">
       <defs>
         <linearGradient id={`${id}g`} gradientUnits="userSpaceOnUse" x1="392" y1="228" x2="300" y2="365">
           {MARK_COLORS.green.map(([o, c]) => <stop key={o} offset={o} stopColor={c} />)}
@@ -25,9 +25,9 @@ export function LogoMark({ size = 32, title }: { size?: number; title?: string }
 }
 
 /** Mark plus the "StratLab" wordmark. `size` is the mark height; the text scales with it. */
-export function Logo({ size = 34 }: { size?: number }) {
+export function Logo({ size = 34 }: { size?: 30 | 34 | 40 | 46 }) {
   return (
-    <span className="logo" style={{ fontSize: size * 0.42, gap: size * 0.2 }}>
+    <span className={`logo logo-${size}`}>
       <LogoMark size={size} />
       <span className="logo-word"><b>Strat</b>Lab</span>
     </span>

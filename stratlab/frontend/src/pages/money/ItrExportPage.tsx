@@ -85,7 +85,7 @@ export function ItrExportPage() {
                 </button>
               ))}
             </div>
-            <StatRow>{v.summary.map((s) => <Stat key={s.label} label={s.label} value={s.value} />)}</StatRow>
+            <StatRow>{v.summary.map((s) => <Stat key={s.label} label={s.label} value={/^[−+-]?[₹$\d]/.test(s.value) && s.value.length < 18 ? s.value : <span className="k-stat-text">{s.value}</span>} />)}</StatRow>
           </Card>
 
           <section className="k-page" aria-label="Schedules">

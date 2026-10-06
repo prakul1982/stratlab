@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
+import { Card, CardHead } from "./kit";
 
 type Step = { id: string; title: string; to: string; done: boolean };
 type View = { show: boolean; dismissed: boolean; done: number; steps: Step[] };
@@ -27,17 +28,10 @@ export function FirstSteps() {
   };
   const total = view.steps.length;
   return (
-    <section className="card stack first-steps" style={{ gap: 12 }} aria-labelledby="first-steps-h">
-      <div className="spread" style={{ flexWrap: "wrap", gap: 10 }}>
-        <div className="stack" style={{ gap: 2 }}>
-          <h2 id="first-steps-h" className="h2">Your first steps</h2>
-          <span className="small muted">{view.done} of {total} done. Each one ticks itself when you've done it.</span>
-        </div>
-        <button className="btn quiet sm" disabled={busy} onClick={dismiss}>Hide this</button>
-      </div>
-      <div className="fs-bar" role="progressbar" aria-label="First steps done" aria-valuemin={0} aria-valuemax={total} aria-valuenow={view.done}>
-        <span style={{ width: `${(100 * view.done) / Math.max(1, total)}%` }} />
-      </div>
+    <Card className="first-steps" label="Your first steps">
+      <CardHead title="Your first steps" actions={<button className="btn quiet sm" disabled={busy} onClick={dismiss}>Hide this</button>} />
+      <span className="k-small k-muted">{view.done} of {total} done. Each one ticks itself when you've done it.</span>
+      <progress className="k-progress" aria-label="First steps done" max={total} value={view.done} />
       <ol className="fs-list">
         {view.steps.map((s) => (
           <li key={s.id} className={s.done ? "done" : ""} data-step={s.id}>
@@ -47,6 +41,6 @@ export function FirstSteps() {
           </li>
         ))}
       </ol>
-    </section>
+    </Card>
   );
 }

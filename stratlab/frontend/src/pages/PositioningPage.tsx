@@ -121,7 +121,7 @@ function Participants({ s }: { s: Summary }) {
         </>} />
       <Source testId="part-source">
         From the exchange's end-of-day participant-wise file, published each trading evening.{" "}
-        {cov ? <>Stored: {spanLine(cov)}{cov.backfill_done ? "." : `, still filling in the past ${Math.round(cov.backfill_target / 30.4)} months.`}</> : null}
+        {cov ? <>Covers {spanLine(cov)}{cov.backfill_done ? "." : `, still filling in the past ${Math.round(cov.backfill_target / 30.4)} months.`}</> : null}
         {s.full && cov && cov.days > 1 ? <> <a className="link" href="#pos-history">See the history</a>.</> : null}
       </Source>
       <p className="k-small k-muted" data-testid="part-status">{statusLine(p, "participant files")}{p.prev ? ` Changes are from ${dayName(p.prev)}.` : ""}</p>
@@ -314,7 +314,7 @@ function ChartBox({ title, children, empty, emptyText, height = 200 }: { title: 
   return (
     <div className="k-stack pos-chart">
       <h3 className="k-sub">{title}</h3>
-      {empty ? <ChartEmpty height={height}>{emptyText ?? "Not enough stored days to draw yet."}</ChartEmpty> : children}
+      {empty ? <ChartEmpty height={height}>{emptyText ?? "Not enough days yet to draw."}</ChartEmpty> : children}
     </div>
   );
 }
@@ -341,7 +341,7 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
   return (
     <Card id="pos-history" label="History">
       <CardHead title="History" infoLabel="About the history"
-        info="The stored days: the exchange's participant files from its archives and each evening since, the cash numbers from the day StratLab started reading them, and the option-chain facts from StratLab's own recordings (the nearest expiry with at least a day to go, over the 15 strikes either side of the money). A custom range can be any whole number of days, weeks, months or years up to the days stored."
+        info="The days covered: the exchange's participant files from its archives and each evening since, the cash numbers from the day StratLab started reading them, and the option-chain facts from StratLab's own recordings (the nearest expiry with at least a day to go, over the 15 strikes either side of the money). A custom range can be any whole number of days, weeks, months or years up to the days stored."
         actions={<ChipBar label="Time range" value={range} onChange={setRange} options={RANGES.map(([value, label]) => ({ value, label }))}
           custom={{ storageKey: `stratlab.chips.positioning.${me?.id ?? "anon"}`, units: SPAN_UNITS, defaultUnit: "months", validate: spanCheck(Math.max(30, stored + 30), 5) }} />} />
       {coverage && (
@@ -372,8 +372,8 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
                 </ChartBox>
               </div>
             </div>
-            <ChartBox title="Cash market, net (₹ crore)" empty={cash.length < 2}
-              emptyText={`${cash.length ? "One day" : "No days"} stored so far: the exchange shows only its latest day, so this chart grows a day at a time from when StratLab started reading the numbers.`}>
+            <ChartBox title="Cash market, net (₹ cr)" empty={cash.length < 2}
+              emptyText={`${cash.length ? "One day" : "No days"} so far: the exchange shows only its latest day, so this chart grows a day at a time from when StratLab started reading the numbers.`}>
               <LineChart lines={[{ values: cash.map((p) => p.fii), color: "var(--pos-call)", width: 2, label: "FII/FPI" },
                 { values: cash.map((p) => p.dii), color: "var(--pos-put)", width: 2, label: "DII" }]}
                 labels={label(cash)} times={days(cash)} sync="pos-history" ranges={false} legend format={(v) => crore(v, true)} axisFormat={(v) => contractsShort(v)} baseline={0} height={200}
@@ -412,7 +412,7 @@ function Locked({ plan, coverage }: { plan: string; coverage?: Coverage }) {
       <CardHead title="History" />
       <p className="k-small k-muted">
         Charts of each participant's positions and long / short shares by day, the FII and DII cash flows, each index's PCR and ATM IV by day, and where today's IV sits among the recorded days, are on the {plan} plan.
-        {coverage?.participants.days ? ` ${spanLine(coverage.participants)} of participant files are stored.` : ""} Today's numbers above are on every plan.
+        {coverage?.participants.days ? ` ${spanLine(coverage.participants)} of participant files are kept.` : ""} Today's numbers above are on every plan.
       </p>
       <Link to="/plans" className="btn sm k-btn-end">See the {plan} plan</Link>
     </Card>

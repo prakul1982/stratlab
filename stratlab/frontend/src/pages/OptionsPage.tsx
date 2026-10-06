@@ -506,14 +506,23 @@ export function OptionsPage() {
           ) : (
             <p className="k-sentence"><b>Enter at</b> <InTime label="Enter at" value={t.entry} onChange={(v) => setTiming({ entry: v })} /> on market days, no later than <InTime label="Last entry" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />.</p>
           )}
-          <p className="k-sentence">
-            <b>Exit at</b> <InTime label="Square off" value={t.squareoff} onChange={(v) => setTiming({ squareoff: v })} /> at the latest, or sooner if the loss reaches
-            <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => setRisk({ stopType: v as OptionStrategy["risk"]["stopType"] })} />
-            {r.stopType !== "none" && <input className="k-input k-in num" type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
-            {" "}or the gain reaches
-            <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => setRisk({ tgtType: v as OptionStrategy["risk"]["tgtType"] })} />
-            {r.tgtType !== "none" && <input className="k-input k-in num" type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}.
-          </p>
+          <p className="k-sentence"><b>Exit at</b> <InTime label="Square off" value={t.squareoff} onChange={(v) => setTiming({ squareoff: v })} /> at the latest.</p>
+          <div className="k-form two" role="group" aria-label="Stop and target">
+            <div className="k-field">
+              <div className="k-label-row"><span className="k-lbl">Exit sooner at a loss of</span></div>
+              <div className="k-row">
+                <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => setRisk({ stopType: v as OptionStrategy["risk"]["stopType"] })} />
+                {r.stopType !== "none" && <input className="k-input k-in num" type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
+              </div>
+            </div>
+            <div className="k-field">
+              <div className="k-label-row"><span className="k-lbl">Or at a gain of</span></div>
+              <div className="k-row">
+                <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => setRisk({ tgtType: v as OptionStrategy["risk"]["tgtType"] })} />
+                {r.tgtType !== "none" && <input className="k-input k-in num" type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}
+              </div>
+            </div>
+          </div>
           <p className="k-sentence"><b>Trade</b> <InNum label="Units" value={z.lots} min={1} max={1000} onChange={(v) => setZ({ lots: Math.round(v) })} /> unit{z.lots === 1 ? "" : "s"} of the structure.{und ? ` A lot is ${und.lot} ${s.underlying}.` : ""}</p>
           <div className="k-sentence" data-testid="vix-filter">
             <CheckField label={<>Enter only while India VIX is between{!vixOk && " (Basic)"}</>} checked={!!vf} disabled={!vixOk && !vf} onChange={(on) => patch({ vix: on ? { min: 11, max: 18 } : null })} />

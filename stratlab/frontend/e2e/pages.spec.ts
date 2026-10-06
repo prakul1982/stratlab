@@ -214,11 +214,11 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   const errors = await open(page, "/plans", "Side by side");
   for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
     "2 company deep dives and 1 slide deck a month", "Indian F&O, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview"]) {
-    await expect(page.locator(".grid4 li", { hasText: line })).toBeVisible();
+    await expect(page.locator(".k-plans li", { hasText: line })).toBeVisible();
   }
-  for (const card of await page.locator(".grid4 > .card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
+  for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
-  const table = page.locator("table.plan-compare");
+  const table = page.getByRole("table", { name: "Plans side by side" });
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
   await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "2", "15", "Unlimited"]);
@@ -1659,7 +1659,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await expect(main.getByTestId("sides-fig")).toContainText(/[\d.]+% long\s*[\d.]+% short/);
   await expect(main.getByTestId("sides-fig")).toContainText(/Long share [+−][\d.]+ pts from the day before/);
   // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
-  const overlaps = await main.locator(".space-fig").evaluateAll((figs) => figs.flatMap((f) => {
+  const overlaps = await main.locator(".k-stat").evaluateAll((figs) => figs.flatMap((f) => {
     const rows = Array.from(f.children).map((c) => c.getBoundingClientRect()).filter((b) => b.height > 0);
     return rows.slice(1).flatMap((b, i) => (b.top < rows[i].bottom - 1 ? [`${(f.textContent ?? "").slice(0, 40)}: row ${i + 2} over row ${i + 1}`] : []));
   }));

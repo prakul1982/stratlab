@@ -47,9 +47,9 @@ export function CompanySearch({ region, autoFocus, onPick, placeholder }: {
         placeholder={placeholder ?? `Try “${example}”`} aria-label={region === "IN" ? "Search any company listed in India (NSE or BSE)" : "Search any US company"} />
       {rows && (
         <div className="results">
-          {rows.length === 0 && <p className="small muted" style={{ padding: 14 }}>No matches. Press Enter to try "{q.toUpperCase()}" as a ticker.</p>}
+          {rows.length === 0 && <p className="small muted results-none">No matches. Press Enter to try "{q.toUpperCase()}" as a ticker.</p>}
           {rows.map((r, i) => (
-            <button key={r.symbol} type="button" onClick={() => pick(r.symbol)} style={i === active ? { background: "var(--paper-2)" } : undefined}>
+            <button key={r.symbol} type="button" className={i === active ? "on" : undefined} onClick={() => pick(r.symbol)}>
               <span><b>{r.symbol}</b> <span className="small muted">{r.name}</span></span>
               <span className="small muted">{r.exchange}</span>
             </button>

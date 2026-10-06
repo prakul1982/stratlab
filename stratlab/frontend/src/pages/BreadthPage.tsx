@@ -93,7 +93,7 @@ export function BreadthPage() {
             </FieldGroup>
           )}
         </FormGrid>
-        {coversAll && chosen !== "all" && <p className="k-note">Only {Math.round(span).toLocaleString("en-IN")} days are stored so far, so this shows all of them.</p>}
+        {coversAll && chosen !== "all" && <p className="k-note">Only {Math.round(span).toLocaleString("en-IN")} days of data so far, so this shows all of them.</p>}
       </Card>
 
       {!data && loading ? <Card><Skeleton label="Counting the market" lines={4} /></Card>
@@ -164,8 +164,8 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
             <LineChart lines={[{ values: s.adv, color: A, label: "Rose", width: 2 }, { values: s.dec, color: B, label: "Fell", width: 2 }]} legend labels={s.times.map((_, i) => at(i))}
               axisLabels={s.times} ranges={false} table={false} height={200} format={fmtInt} ariaLabel={`Stocks that rose and fell today, ${s.times[0]} to ${s.times[s.times.length - 1]}`} />
           </ChartFrame>
-          <ChartFrame title="Share above their averages through the day" info="The share of stocks above their 20-, 50- and 200-day averages at each point, with the live price as the latest close." infoLabel="What does this mean?"
-            table={{ label: "Share above their averages through the day", columns: [{ key: "t", header: "Time", rowHeader: true, cell: (i: number) => s.times[i] },
+          <ChartFrame title="Above their averages today" info="The share of stocks above their 20-, 50- and 200-day averages at each point, with the live price as the latest close." infoLabel="What does this mean?"
+            table={{ label: "Above their averages today", columns: [{ key: "t", header: "Time", rowHeader: true, cell: (i: number) => s.times[i] },
               { key: "p20", header: "20-day", numeric: true, cell: (i: number) => share(s.pct20[i]) }, { key: "p50", header: "50-day", numeric: true, cell: (i: number) => share(s.pct50[i]) },
               { key: "p200", header: "200-day", numeric: true, cell: (i: number) => share(s.pct200[i]) }],
               rows: s.times.map((_, i) => s.times.length - 1 - i), rowKey: (i: number) => s.times[i] }}>
@@ -289,7 +289,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
     <div data-testid="breadth-charts" className="k-page">
       <div className="k-cols">
         <Box title="Advance/decline line" info={help.ad_line} h={h} cols={[{ header: "A/D line", get: (i) => fmtInt(h.ad_line[i]) }, { header: "Rose", get: (i) => count(h.adv[i]) }, { header: "Fell", get: (i) => count(h.dec[i]) }]}
-          note={`Running total from ${since ?? "the first stored day"} · last ${last}`}>
+          note={`Running total from ${since ?? "the first day"} · last ${last}`}>
           <LineChart lines={[{ values: h.ad_line, color: A, label: "A/D line", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             format={fmtInt} ariaLabel={`Advance/decline line, ${labels[0]} to ${last}`} />
         </Box>
@@ -310,7 +310,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           <LineChart lines={[{ values: h.mcclellan, color: A, label: "Oscillator", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan oscillator" />
         </Box>
-        <Box title="McClellan summation index" info={help.summation} h={h} cols={[{ header: "Summation", get: (i) => fmt1(h.summation[i]) }]} note={`Added up from ${since ?? "the first stored day"} · last ${last}`}>
+        <Box title="McClellan summation index" info={help.summation} h={h} cols={[{ header: "Summation", get: (i) => fmt1(h.summation[i]) }]} note={`Added up from ${since ?? "the first day"} · last ${last}`}>
           <LineChart lines={[{ values: h.summation, color: A, label: "Summation", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan summation index" />
         </Box>

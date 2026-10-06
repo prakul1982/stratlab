@@ -59,7 +59,7 @@ const usdAmount = (v: number | null | undefined, cur = "$") => {
 /** An amount in ₹ crore as people say it in Indian units: "₹945 cr", "₹1.25 lakh cr". */
 const inrAmount = (v: number | null | undefined) => (v == null ? "–" : inrCompact(v * CRORE));
 const pc = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);
-const day = (s: string) => new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+const day = (s: string) => new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report",
   quarterly_report: "Quarterly report", earnings_release: "Earnings release" };
 

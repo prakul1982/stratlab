@@ -62,7 +62,7 @@ test("account: profile, plan and usage, invoices, sign-in and your data", async 
   await expect(profile).toContainText(u.email);
   await expect(profile.getByText("Signed in with")).toBeVisible();
   await expect(profile).toContainText("Google");
-  await expect(main.locator("#plan")).toContainText("Experiments this month");
+  await expect(main.locator("#plan")).toContainText("Backtests this month");
   await expect(main.getByText("Details on your invoices")).toBeVisible();
 
   // features that used to sit on this page have their own pages now

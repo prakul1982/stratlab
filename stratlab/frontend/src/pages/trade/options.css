@@ -5,6 +5,8 @@
 .k-sentence .k-check { vertical-align: middle; }
 .k-sentence .info { vertical-align: middle; }
 .k-in { width: auto; display: inline-block; vertical-align: middle; margin: 0 4px; height: var(--ctl-sm); padding: 0 10px; }
+.k-row > .k-in { margin: 0; }
+.k-form.two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
 .k-in.num { width: 92px; }
 .k-in.time { width: 122px; }
 .k-in.pick { max-width: 100%; }

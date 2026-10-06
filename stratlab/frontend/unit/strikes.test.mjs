@@ -26,5 +26,5 @@ test("India VIX words stay numbers, never verdicts", () => {
   assert.equal(vixChange({ ...q, change: null }), null);
   assert.equal(vixNum(null), "–");
   assert.equal(vixPercentileLine({ days: 250, need: 60, percentile: 62.4 }), "Higher than 62% of the past year's closes");
-  assert.equal(vixPercentileLine({ days: 12, need: 60, percentile: null }), "12 days stored; the comparison starts at 60");
+  assert.equal(vixPercentileLine({ days: 12, need: 60, percentile: null }), "12 days of history; the comparison starts at 60");
 });

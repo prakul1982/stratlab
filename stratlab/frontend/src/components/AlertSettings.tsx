@@ -55,7 +55,7 @@ export function AlertSettingsCard() {
       </FormGrid>
       <p className="k-small k-muted k-hint-line">The simplest way is a notification on your phone: turn it on under <Link className="link" to="/app">Get the app</Link>.</p>
       {me.is_admin && (!ch.telegram || !ch.email) && (
-        <Notice tone="warn">Admin: {[!ch.telegram && "Telegram (set TELEGRAM_BOT_TOKEN)", !ch.email && "email (set RESEND_API_KEY)"].filter(Boolean).join(" and ")} {!ch.telegram && !ch.email ? "aren't" : "isn't"} set up on the server, so {!ch.telegram && !ch.email ? "they're" : "it's"} hidden. Add the variables in Railway to offer {!ch.telegram && !ch.email ? "them" : "it"}.</Notice>
+        <Notice tone="warn">Admin: {[!ch.telegram && "Telegram", !ch.email && "email"].filter(Boolean).join(" and ")} {!ch.telegram && !ch.email ? "aren't" : "isn't"} set up on the server, so {!ch.telegram && !ch.email ? "they're" : "it's"} hidden here. The System section of Admin says what is missing.</Notice>
       )}
     </Card>
   );

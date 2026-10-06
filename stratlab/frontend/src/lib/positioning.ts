@@ -62,9 +62,9 @@ export const pct = (v: number | null | undefined) => (v == null ? "–" : `${Num
 export function sides(long: number | null | undefined, short: number | null | undefined, words: [string, string] = ["long", "short"]): string {
   return long == null || short == null ? "–" : `${pct(long)} ${words[0]} · ${pct(short)} ${words[1]}`;
 }
-/** "248 trading days, since 3 Oct 2025" from a stored span. */
+/** "248 trading days, since 3 Oct 2025" from a span of days. */
 export function spanLine(s: Span | undefined, unit = "trading days"): string {
-  if (!s || !s.days) return `no ${unit} stored yet`;
+  if (!s || !s.days) return `no ${unit} yet`;
   if (s.days === 1) return `1 ${unit.replace(/s$/, "")} (${dayName(s.first)})`;
   return `${s.days.toLocaleString("en-IN")} ${unit} since ${dayName(s.first)}`;
 }

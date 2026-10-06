@@ -34,8 +34,8 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   }, [onClose]);
   return (
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={box} style={wide ? { width: "min(920px, 100%)" } : undefined}>
-        <div className="spread" style={{ marginBottom: 16 }}>
+      <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} ref={box}>
+        <div className="modal-head">
           <h2 className="h2">{title}</h2>
           <button className="icon-btn" data-close aria-label="Close" onClick={onClose}><Close /></button>
         </div>
@@ -46,7 +46,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 }
 
 export function Loading({ label = "Loading" }: { label?: string }) {
-  return <div className="row muted" style={{ padding: 40, justifyContent: "center" }}><span className="spinner" />{label}…</div>;
+  return <div className="k-loading"><span className="spinner" />{label}…</div>;
 }
 
 /** A panel's placeholder while it loads, about the height of what replaces it: a row of figures (`figs`), or `lines`
@@ -56,17 +56,8 @@ export function PanelSkel({ label, figs, lines = 2 }: { label: string; figs?: bo
     <div className="panel-skel" role="status" aria-label={label} aria-busy="true">
       {figs ? (
         <div className="panel-skel-figs">{[0, 1, 2].map((i) => <span key={i}><span className="skel" /><span className="skel big" /></span>)}</div>
-      ) : Array.from({ length: lines }, (_, i) => <span key={i} className="skel line" style={{ width: `${92 - i * 17}%` }} />)}
-      <span className="skel line" style={{ width: "40%" }} />
-    </div>
-  );
-}
-
-export function Empty({ title, children }: { title: string; children?: ReactNode }) {
-  return (
-    <div className="card dashed stack empty">
-      <h2 className="h2">{title}</h2>
-      {children}
+      ) : Array.from({ length: lines }, (_, i) => <span key={i} className="skel line" />)}
+      <span className="skel line last" />
     </div>
   );
 }
@@ -113,17 +104,18 @@ export function Info({ children, label = "What does this mean?" }: { children: R
   );
 }
 
-/** One labelled figure in a row of them (`.space-figs`): the label, the number, and a note under it. The row is one grid,
+/** One labelled figure in a row of them (`.k-stats`): the label, the number, and a note under it. The row is one grid,
  * so the numbers sit on one line however the labels wrap. A missing number says why in words (`missing`), never a
  * bare dash. */
-export function Fig({ label, value, note, noteTone = "muted", tone = "", missing = "Not available yet", missingId }:
+export function Fig({ label, value, note, tone = "", missing = "Not available yet", missingId }:
   { label: ReactNode; value: ReactNode; note?: ReactNode; noteTone?: string; tone?: string; missing?: string; missingId?: string }) {
   const none = value == null || value === false || (typeof value === "string" && /^\s*[-–—]?\s*$/.test(value));
+  const dir = /\bup\b|\bpos\b/.test(tone) ? " k-up" : /\bdown\b|\bneg\b/.test(tone) ? " k-down" : "";
   return (
-    <div className="space-fig">
-      <span className="tiny muted">{label}</span>
-      {none ? <span className="small muted fig-missing" data-testid={missingId}>{missing}</span> : <b className={`num ${tone}`.trim()}>{value}</b>}
-      {note ? <span className={`tiny ${noteTone}`}>{note}</span> : null}
+    <div className="k-stat">
+      <span className="k-stat-k">{label}</span>
+      {none ? <span className="k-stat-d" data-testid={missingId}>{missing}</span> : <span className={`k-stat-v${dir}`}>{value}</span>}
+      {note ? <span className="k-stat-d">{note}</span> : null}
     </div>
   );
 }

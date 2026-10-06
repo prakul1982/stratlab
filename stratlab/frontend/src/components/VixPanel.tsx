@@ -75,7 +75,7 @@ export function VixPanel() {
               </div>
             </div>
             <p className="k-note" data-testid="vix-source">
-              {v.stored.days ? `${v.stored.days.toLocaleString("en-IN")} trading days stored, ${short(v.stored.first!)} to ${short(v.stored.last!)}. ` : ""}
+              {v.stored.days ? `${v.stored.days.toLocaleString("en-IN")} trading days of history, ${short(v.stored.first!)} to ${short(v.stored.last!)}. ` : ""}
               {v.note}
             </p>
           </>
