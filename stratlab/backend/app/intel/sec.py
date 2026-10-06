@@ -37,7 +37,11 @@ REVENUE_ELSE = ("RevenuesNetOfInterestExpense",      # a bank's or broker's tota
                 "InterestRevenueCalculatedUsingEffectiveInterestMethod",
                 # licence and collaboration income: the only revenue many drug developers have
                 "RevenueFromCollaborativeArrangementExcludingRevenueFromContractWithCustomer", "LicensesRevenue",
-                "LicenseAndServicesRevenue", "TechnologyServicesRevenue")
+                "LicenseAndServicesRevenue", "TechnologyServicesRevenue",
+                # advisory and investment banking fees; IFRS airlines, shipowners and telecoms name the service sold
+                "RegulatedOperatingRevenue", "RegulatedOperatingRevenueGas", "RegulatedOperatingRevenueElectric",
+                "InvestmentBankingRevenue", "RevenueAndOperatingIncome", "RevenueFromRenderingOfTransportServices",
+                "RevenueFromRenderingOfTelecommunicationServices")
 # ...and when no revenue line is tagged at all, the income statement's own arithmetic: gross profit plus the cost of
 # sales, or operating profit plus total costs (each pair from the same period)
 COST_OF_SALES = ("CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfSales")
@@ -48,8 +52,9 @@ PRETAX = ("IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItems
           "ProfitLossBeforeTax")
 INTEREST = ("InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt", "InterestAndDebtExpense", "FinanceCosts")
 # a bank's revenue when it files no total: interest and dividend income plus everything else it earns (fees)
-BANK_INTEREST = ("InterestAndDividendIncomeOperating", "InterestIncomeOperating", "InterestAndFeeIncomeLoansAndLeases")
-BANK_OTHER = ("NoninterestIncome",)
+BANK_INTEREST = ("InterestAndDividendIncomeOperating", "InterestIncomeOperating", "InterestAndFeeIncomeLoansAndLeases",
+                 "InterestAndFeeIncomeLoansAndLeasesHeldInPortfolio", "RevenueFromInterest")
+BANK_OTHER = ("NoninterestIncome", "FeeAndCommissionIncome")
 NET_INCOME = ("NetIncomeLoss", "ProfitLossAttributableToOwnersOfParent", "NetIncomeLossAvailableToCommonStockholdersBasic",
               "ProfitLoss", "IncomeLossFromContinuingOperations",
               "IncomeLossFromContinuingOperationsIncludingPortionAttributableToNoncontrollingInterest",
@@ -58,7 +63,8 @@ NET_INCOME = ("NetIncomeLoss", "ProfitLossAttributableToOwnersOfParent", "NetInc
 OPERATING = ("OperatingIncomeLoss", "ProfitLossFromOperatingActivities")
 DEPRECIATION = ("DepreciationDepletionAndAmortization", "DepreciationAmortizationAndAccretionNet",
                 "DepreciationAndAmortization", "CostDepreciationAmortizationAndDepletion", "Depreciation",
-                "DepreciationAndAmortisationExpense", "AdjustmentsForDepreciationAndAmortisationExpense")
+                "DepreciationAndAmortisationExpense", "AdjustmentsForDepreciationAndAmortisationExpense",
+                "UtilitiesOperatingExpenseDepreciationAndAmortization")
 # ...an IFRS filer that gives its depreciation and amortisation only in parts (AstraZeneca): their sum, else the cash
 # flow add-back that includes impairments
 DEPRECIATION_PARTS = ("DepreciationPropertyPlantAndEquipment", "DepreciationRightofuseAssets",
@@ -261,11 +267,11 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
         out.setdefault(end, v + other.get(end, 0))
     gross, cost = read(GROSS_PROFIT), read(COST_OF_SALES)
     for end, v in gross.items():
-        if end in cost:
+        if end in cost and v + cost[end] > 0:        # a total of nothing or less is costs the line doesn't cover, not sales
             out.setdefault(end, v + cost[end])
     op, costs = read(OPERATING), read(TOTAL_COSTS)
     for end, v in op.items():
-        if end in costs:
+        if end in costs and v + costs[end] > 0:
             out.setdefault(end, v + costs[end])
     return out
 
@@ -281,14 +287,24 @@ CURRENCY_NAMES = {"CAD": "Canadian dollars", "EUR": "euros", "GBP": "British pou
 
 def currency(facts: dict) -> str | None:
     """The currency a company's results are filed in, when it isn't US dollars (a foreign filer, mostly under IFRS):
-    read from the units its revenue or profit is reported in."""
+    the unit of its latest annual revenue or profit. A stray old figure in another unit (a few years' profit once filed
+    in Canadian dollars) or an interim figure in dollars beside euro annual results doesn't change it."""
+    latest: dict[str, str] = {}              # unit -> the latest year end it is given for, in an annual report
+    seen: set[str] = set()
     for ns in ("ifrs-full", "us-gaap"):
         for concept in TOP_LINE + NET_INCOME:
-            units = ((facts.get(ns) or {}).get(concept) or {}).get("units") or {}
-            other = [u for u in units if re.fullmatch(r"[A-Z]{3}", u) and u != "USD"]
-            if units and "USD" not in units and other:
-                return other[0]
-    return None
+            for unit, rows in (((facts.get(ns) or {}).get(concept) or {}).get("units") or {}).items():
+                if not re.fullmatch(r"[A-Z]{3}", unit):
+                    continue
+                seen.add(unit)
+                for f in rows:
+                    if f.get("start") and f.get("form") in ANNUAL and 340 <= _days(f["start"], f["end"]) <= 380:
+                        latest[unit] = max(latest.get(unit, ""), f["end"])
+    if latest:
+        best = max(latest, key=lambda u: (latest[u], u != "USD"))     # a tie: the filer's own currency, not the translation
+        return None if best == "USD" else best
+    other = sorted(seen - {"USD"})
+    return other[0] if other and "USD" not in seen else None
 
 
 def _accns(facts: dict, concepts: tuple, unit: str = "USD") -> set[str]:
@@ -316,8 +332,32 @@ def _not_in_report(facts: dict, have: tuple, missing: tuple, end: str, unit: str
     `that_year`: none of `missing` for that year, though they may for others (revenue in the year before, a dash in
     this one: a drug developer whose partner's payments stopped)."""
     reports = _accns_for(facts, have, end, unit, instant)
-    tagged = _accns_for(facts, missing, end, unit) if that_year else _accns(facts, missing, unit)
+    tagged = _accns_ending(facts, missing, end, unit) if that_year else _accns(facts, missing, unit)
     return bool(reports) and not reports & tagged
+
+
+def _accns_ending(facts: dict, concepts: tuple, end: str, unit: str = "USD") -> set[str]:
+    """The filings that tag any of these concepts for a period ending on `end`, of any length: a report that gives only
+    the last quarter's revenue (a filer whose year's total was tagged with the wrong start date) does have a revenue
+    line, though no full-year figure can be read from it."""
+    return {f["accn"] for c in concepts for f in _facts(facts, c, unit) if f.get("end") == end and f.get("accn")}
+
+
+# a concept named like revenue that isn't on our lists (an airline's passenger transport, a telecom's services)
+REVENUE_NAME = re.compile(r"Revenue|Sales|Turnover", re.I)
+NOT_REVENUE_NAME = re.compile(r"Cost|Deferred|Receivable|Payable|Liabilit|Tax|ProForma|Percent|Concentration|Unearned|Proceeds|"
+                              r"Payments|Increase|Decrease|Contract(Asset|Liab)|Allowance|Unbilled|Reserve|Gain|Loss|Expense|"
+                              r"Marketing|Commission|Rebate|Return|Discount|Impair|Repurchase|Related|Segment|Geograph", re.I)
+
+
+def _revenue_like_accns(facts: dict, end: str, unit: str = "USD") -> set[str]:
+    """The filings that tag any concept named like revenue for a period ending on `end`, listed or not."""
+    out = set()
+    for ns in ("us-gaap", "ifrs-full"):
+        for concept, body in (facts.get(ns) or {}).items():
+            if REVENUE_NAME.search(concept) and not NOT_REVENUE_NAME.search(concept):
+                out |= {f["accn"] for f in ((body.get("units") or {}).get(unit) or []) if f.get("end") == end and f.get("start") and f.get("accn")}
+    return out
 
 
 def _depreciation(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
@@ -439,6 +479,8 @@ NO_RESULTS = {
              "data, so its results can't be shown here.",
     "no_xbrl": "Files its annual report with the SEC, but not as structured data (XBRL), so its results can't be shown here.",
     "quarters": "Only quarterly results filed so far: the first annual report isn't out yet, so its results can't be shown here.",
+    "part_year": "Its first annual report covers less than a full year (the months since it began), so its results "
+                 "can't be shown here yet.",
     "new": "Registered with the SEC recently: no annual results filed yet, so they can't be shown here.",
     "stopped": "Has deregistered from SEC reporting, so its results can't be shown here.",
     "none": "Doesn't file annual results with the SEC (no 10-K, 20-F or 40-F), so they can't be shown here.",
@@ -467,9 +509,16 @@ def no_results(subs: dict | None, facts: dict | None = None, symbol: str = "") -
     if forms & FUND_FORMS or str(subs.get("sic") or "") in ("6722", "6726") and not annual:
         return NO_RESULTS["fund"]
     cur = currency(facts or {}) or "USD"
-    if facts and any(f.get("form") in ANNUAL for ns in ("us-gaap", "ifrs-full") for c in (facts.get(ns) or {}).values()
-                     for rows in (c.get("units") or {}).values() for f in rows):
-        return UNREAD                         # figures filed as data, but no revenue or profit among them: our gap
+    if facts:
+        statements = NET_INCOME + OPERATING + ALL_REVENUE
+        part = [f for ns in ("us-gaap", "ifrs-full") for c in statements for rows in
+                (((facts.get(ns) or {}).get(c) or {}).get("units") or {}).values() for f in rows
+                if f.get("form") in ANNUAL and f.get("start") and 20 <= _days(f["start"], f["end"]) < 340]
+        if part:
+            return NO_RESULTS["part_year"]    # the first annual report covers the months since the company began
+        if any(f.get("form") in ANNUAL for ns in ("us-gaap", "ifrs-full") for c in (facts.get(ns) or {}).values()
+               for rows in (c.get("units") or {}).values() for f in rows):
+            return UNREAD                     # figures filed as data, but no revenue or profit among them: our gap
     if facts and (quarterly(facts, NET_INCOME, cur) or revenue(facts, "quarter", cur)):
         return NO_RESULTS["quarters"]
     if annual:
@@ -485,6 +534,41 @@ def no_results(subs: dict | None, facts: dict | None = None, symbol: str = "") -
     if forms & REGISTERING:
         return NO_RESULTS["new"]
     return NO_RESULTS["none"]
+
+
+def _merge_year_ends(rev: dict, others: list[dict], balances: list[dict] = ()) -> None:
+    """One column per fiscal year. A year's end can be filed a few days apart by different concepts or reports (a
+    52/53-week year: 29 and 30 Nov, 24 and 31 Dec), and a note can give figures for other 12 months than the fiscal
+    year's (a tax year, an insurance subsidiary's year). Two 12-month period ends under 300 days apart overlap, so
+    they are one year: the end with more of the statements behind it (revenue, profit, cash flow...) stands, and
+    of two equally covered ends within 10 days of each other the later one. The other is dropped, its values moving
+    over only when they are within 10 days and the standing end has none of its own. Equally covered ends further apart
+    stay apart. The dicts are changed in place; `balances` (balance-sheet days, quarter ends among them) only gain a
+    value on the year's own end."""
+    flows_ = [rev, *others]
+    score = lambda e: sum(e in d for d in flows_)   # noqa: E731
+    ends = sorted(set().union(*flows_))
+    groups: list[list[str]] = []
+    for e in ends:
+        if groups and _days(groups[-1][-1], e) < 300:
+            groups[-1].append(e)
+        else:
+            groups.append([e])
+    for g in groups:
+        for e in g:
+            better = [k for k in g if k != e and abs(_days(e, k)) < 300
+                      and (score(k) > score(e) or score(k) == score(e) and k > e and _days(e, k) <= 10)]
+            if not better:
+                continue
+            canon = min(better, key=lambda k: (-score(k), abs(_days(e, k))))
+            for d in flows_:
+                if e in d:
+                    v = d.pop(e)
+                    if canon not in d and abs(_days(e, canon)) <= 10:
+                        d[canon] = v
+            for d in balances:
+                if e in d and canon not in d and abs(_days(e, canon)) <= 10:
+                    d[canon] = d[e]
 
 
 def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: str = "") -> dict:
@@ -520,8 +604,13 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     capex_a, div_a = flows(facts, CAPEX, "annual", cur), flows(facts, DIVIDENDS, "annual", cur)
     ppe, debt, equity, cash = instants(facts, PPE, cur), _debt(facts, cur), _equity(facts, cur), instants(facts, CASH, cur)
 
+    _merge_year_ends(rev_a, [ni_a, op_a, eb_a, dep_a, eps_a, cfo_a, cfi_a, capex_a, div_a], [ppe, debt, equity, cash])
+
     def no_revenue_line(e: str) -> bool:      # the year's annual report has no revenue line at all
-        return e in ni_a and e not in rev_a and _not_in_report(facts, NET_INCOME, ALL_REVENUE, e, cur, that_year=True)
+        # (an operating profit with no revenue behind it is a revenue we didn't read, not a year without sales)
+        return (e in ni_a and e not in rev_a and not (op_a.get(e) or 0) > 0
+                and _not_in_report(facts, NET_INCOME, ALL_REVENUE, e, cur, that_year=True)
+                and not _accns_for(facts, NET_INCOME, e, cur) & _revenue_like_accns(facts, e, cur))
 
     ends = sorted(set(rev_a) | set(ni_a))
     # the oldest years can come only from a note or another statement that goes back further than the income

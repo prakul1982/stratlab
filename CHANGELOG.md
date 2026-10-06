@@ -4,6 +4,10 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 6 October 2026: design kit
+
+- A shared UI kit (`components/kit`), design tokens, Indian-unit number formatting, `DESIGN.md` and an admin-only `/dev/kit` page. Margin funding is the first page rebuilt with it.
+
 ### 5 October 2026: small fixes
 
 - **Audit price check (India):** a company page's price that matches any of our last 5 daily closes now agrees, since a thinly traded stock's page can be several sessions old. A price that matches none is still flagged.

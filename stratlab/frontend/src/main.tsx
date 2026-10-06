@@ -107,6 +107,7 @@ const EventsPage = page(() => import("./pages/trade/EventsPage"), "EventsPage");
 const StockFuturesPage = page(() => import("./pages/trade/StockFuturesPage"), "StockFuturesPage");
 const StockLendingPage = page(() => import("./pages/StockLendingPage"), "StockLendingPage");
 const MarginFundingPage = page(() => import("./pages/MarginFundingPage"), "MarginFundingPage");
+const DevKit = page(() => import("./pages/DevKit"), "DevKit");   // /dev/kit: the design kit on one page (dev builds and admins only)
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
@@ -251,6 +252,7 @@ function Routed() {
         <Route path="/invest/business-updates" element={<BizUpdatesPage />} />
         <Route path="/invest/stock-lending" element={<StockLendingPage />} />
         <Route path="/invest/margin-funding" element={<MarginFundingPage />} />
+        <Route path="/dev/kit" element={<DevKit />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />
