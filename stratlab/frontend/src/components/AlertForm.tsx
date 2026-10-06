@@ -5,8 +5,8 @@ import { price } from "../lib/format";
 import { researchApi, type Region } from "../lib/research";
 import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, type AlertBody, type AlertsPage, type StockAlert } from "../lib/alerts";
 import { Bell } from "./Icons";
-import { CompanyCombobox } from "./CompanyCombobox";
 import { Modal } from "./ui";
+import { CheckField, Field, FormActions, FormGrid, Select, StockPicker } from "./kit";
 
 type Saved = AlertsPage & { alert: StockAlert; note: string | null };
 
@@ -19,6 +19,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const fixed = !editing && !!s0 && !choices;
   const [region, setRegion] = useState<Region>(editing?.region ?? r0);
   const [symbol, setSymbol] = useState(editing?.symbol ?? (s0 || choices?.[0]?.symbol || ""));
+  const [picked, setPicked] = useState(editing?.symbol ?? (s0 || ""));        // what the stock box shows after a pick (typing alone leaves it be)
   const [cond, setCond] = useState(editing ? conditionKey(editing) : condition ?? "price_above");
   const [value, setValue] = useState(editing?.value != null && editing.kind !== "stage" ? String(editing.value) : "");
   const [period, setPeriod] = useState(editing?.period && editing.kind === "ma" ? editing.period : 50);
@@ -58,82 +59,64 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
     } catch (err) { fail(err); } finally { setBusy(false); }
   };
 
+  const hint = c.kind === "etfgap"
+    ? "Checked through the trading day: the live price against the fund's last published NAV. On the Basic plan."
+    : c.kind === "mwpl"
+    ? "Checked each evening against the exchange's combined open interest file: fires when the stock's MWPL use crosses 80%, up or down. From 95% the stock is in the F&O ban period. On the Basic plan."
+    : c.kind === "mtf"
+    ? "Checked each evening against the exchange's margin trading disclosure (published the next trading day): fires when the funded shares cross your level. On the Basic plan."
+    : c.kind === "surveillance"
+    ? "Checked twice each trading day against the exchange's surveillance lists (ASM, GSM, ESM, trade-to-trade, F&O ban, price bands). The alert says which list, which stage and the list's date."
+    : c.kind === "bizupdate"
+    ? "Checked each evening against the company's exchange filings. The alert gives the update's headline figure and its change on the year, as filed. On the Basic plan."
+    : EVENT_KINDS.includes(c.kind)
+    ? "Checked once each evening against that day's exchange disclosures. The alert says who, which way, how many and when."
+    : c.kind === "move" || c.kind === "high52" || c.kind === "low52"
+    ? "Checked through the trading day with the live price."
+    : "Fires when it crosses during market hours: the first check notes which side it's on, then it waits for a cross.";
+
   return (
-    <form className="stack alert-form" style={{ gap: 14 }} onSubmit={save}>
+    <FormGrid onSubmit={save} label="Alert">
       {fixed ? (
-        <p className="small"><b>{sym}</b> <span className="muted">· {region === "IN" ? "India" : "US"}{now != null ? ` · now ${price(now, ccy)}` : ""}</span></p>
+        <p className="k-small k-form-wide"><b>{sym}</b> <span className="k-muted">· {region === "IN" ? "India" : "US"}{now != null ? ` · now ${price(now, ccy)}` : ""}</span></p>
       ) : (
-        <div className="row wrap" style={{ gap: 12, alignItems: "flex-end" }}>
-          <label className="field" style={{ flex: "0 0 auto" }}>Market
-            <select value={region} onChange={(e) => setRegion(e.target.value as Region)} disabled={!!choices}>
-              <option value="IN">India</option><option value="US">United States</option>
-            </select>
-          </label>
+        <>
+          <Field label="Market">{(id) => <Select id={id} value={region} disabled={!!choices} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "India" }, { value: "US", label: "United States" }]} />}</Field>
           {choices ? (
-            <label className="field" style={{ flex: "1 1 160px" }}>Stock
-              <select value={`${region}:${symbol}`} onChange={(e) => { const [rg, s] = e.target.value.split(":"); setRegion(rg as Region); setSymbol(s); }}>
-                {choices.map((x) => <option key={`${x.region}:${x.symbol}`} value={`${x.region}:${x.symbol}`}>{x.symbol}</option>)}
-              </select>
-            </label>
+            <Field label="Stock">
+              {(id) => <Select id={id} value={`${region}:${symbol}`} onChange={(v) => { const [rg, s] = v.split(":"); setRegion(rg as Region); setSymbol(s); }}
+                options={choices.map((x) => ({ value: `${x.region}:${x.symbol}`, label: x.symbol }))} />}
+            </Field>
           ) : (
-            <div style={{ flex: "1 1 160px", minWidth: 0 }}>
-              <CompanyCombobox label="Stock" market={region} value={symbol} onChange={setSymbol} placeholder={region === "IN" ? "RELIANCE" : "AAPL"}
-                onPick={(s) => { setRegion(s.market); setSymbol(s.id); }} />
-            </div>
+            <Field label="Stock" info={now != null ? `${sym} is at ${price(now, ccy)} now.` : undefined} infoLabel="Where the stock is now">
+              {(id) => <StockPicker id={id} market={region} value={picked} placeholder={region === "IN" ? "RELIANCE" : "AAPL"}
+                onText={setSymbol} onPick={(s, r) => { setRegion(r); setSymbol(s); setPicked(s); }} />}
+            </Field>
           )}
-        </div>
+        </>
       )}
-      {!fixed && now != null && <span className="hint">{sym} is at {price(now, ccy)} now.</span>}
-      <label className="field">Alert me when
-        <select aria-label="Alert me when" value={cond} onChange={(e) => setCond(e.target.value)}>
-          {CONDITIONS.filter((x) => !x.india || region === "IN").map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
-        </select>
-      </label>
-      {c.kind === "price" && <label className="field">Price level ({region === "IN" ? "₹" : "$"})
-        <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={now != null ? String(Math.round(now)) : "3000"} /></label>}
-      {c.kind === "move" && <label className="field">Move in a day (%)
-        <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="5" /></label>}
-      {c.kind === "etfgap" && <label className="field">Gap to its last NAV (%)
-        <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="2" /></label>}
-      {c.kind === "mtf" && <label className="field">Level (% of shares issued)
-        <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="1" /></label>}
-      {c.kind === "rsi" && <label className="field">RSI level (1 to 99)
-        <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} /></label>}
-      {c.kind === "ma" && <label className="field">Moving average
-        <select aria-label="Moving average" value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
-          {MA_PERIODS.map((p) => <option key={p} value={p}>{p}-day average</option>)}
-        </select></label>}
-      {c.kind === "stage" && <label className="field">Which change
-        <select aria-label="Which change" value={stage} onChange={(e) => setStage(Number(e.target.value))}>
-          <option value={0}>Any change of stage</option>
-          {[1, 2, 3, 4].map((s) => <option key={s} value={s}>Enters Stage {s}</option>)}
-        </select></label>}
-      <span className="hint">{c.kind === "etfgap"
-        ? "Checked through the trading day: the live price against the fund's last published NAV. On the Basic plan."
-        : c.kind === "mwpl"
-        ? "Checked each evening against the exchange's combined open interest file: fires when the stock's MWPL use crosses 80%, up or down. From 95% the stock is in the F&O ban period. On the Basic plan."
-        : c.kind === "mtf"
-        ? "Checked each evening against the exchange's margin trading disclosure (published the next trading day): fires when the funded shares cross your level. On the Basic plan."
-        : c.kind === "surveillance"
-        ? "Checked twice each trading day against the exchange's surveillance lists (ASM, GSM, ESM, trade-to-trade, F&O ban, price bands). The alert says which list, which stage and the list's date."
-        : c.kind === "bizupdate"
-        ? "Checked each evening against the company's exchange filings. The alert gives the update's headline figure and its change on the year, as filed. On the Basic plan."
-        : EVENT_KINDS.includes(c.kind)
-        ? "Checked once each evening against that day's exchange disclosures. The alert says who, which way, how many and when."
-        : c.kind === "move" || c.kind === "high52" || c.kind === "low52"
-        ? "Checked through the trading day with the live price."
-        : "Fires when it crosses during market hours: the first check notes which side it's on, then it waits for a cross."}</span>
-      <label className="field">Note for yourself (optional)
-        <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Why you set it" /></label>
-      <label className="row small" style={{ gap: 8 }}>
-        <input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
-        {EVENT_KINDS.includes(c.kind) ? "Repeat: keep it on after it fires (one message a day at most)" : "Repeat: keep it on after it fires (at most once a day)"}
-      </label>
-      <div className="row wrap" style={{ gap: 10 }}>
+      <Field label="Alert me when" wide>
+        {(id) => <Select id={id} value={cond} onChange={setCond} options={CONDITIONS.filter((x) => !x.india || region === "IN").map((x) => ({ value: x.key, label: x.label }))} />}
+      </Field>
+      {c.kind === "price" && <Field label="Price level" unit={region === "IN" ? "₹" : "$"} inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={now != null ? String(Math.round(now)) : "3000"} />}
+      {c.kind === "move" && <Field label="Move in a day" unit="%" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="5" />}
+      {c.kind === "etfgap" && <Field label="Gap to its last NAV" unit="%" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="2" />}
+      {c.kind === "mtf" && <Field label="Level" unit="% of shares" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="1" info="As a percent of the shares issued." />}
+      {c.kind === "rsi" && <Field label="RSI level (1 to 99)" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} />}
+      {c.kind === "ma" && <Field label="Moving average">{(id) => <Select id={id} value={period} onChange={(v) => setPeriod(Number(v))} options={MA_PERIODS.map((p) => ({ value: p, label: `${p}-day average` }))} />}</Field>}
+      {c.kind === "stage" && <Field label="Which change">{(id) => <Select id={id} value={stage} onChange={(v) => setStage(Number(v))}
+        options={[{ value: 0, label: "Any change of stage" }, ...[1, 2, 3, 4].map((s) => ({ value: s, label: `Enters Stage ${s}` }))]} />}</Field>}
+      <p className="k-note k-form-wide">{hint}</p>
+      <Field label="Note for yourself" optional wide value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Why you set it" />
+      <div className="k-form-wide">
+        <CheckField checked={repeat} onChange={setRepeat}
+          label={EVENT_KINDS.includes(c.kind) ? "Repeat: keep it on after it fires (one message a day at most)" : "Repeat: keep it on after it fires (at most once a day)"} />
+      </div>
+      <FormActions>
         <button className="btn" disabled={busy}>{busy ? "Saving…" : editing ? "Save alert" : "Set alert"}</button>
         <Link to="/account" className="btn quiet sm">Where alerts go</Link>
-      </div>
-    </form>
+      </FormActions>
+    </FormGrid>
   );
 }
 
@@ -147,8 +130,10 @@ export function AlertButton({ region, symbol, choices, label = "Set alert", cond
       <button className="btn quiet sm" onClick={() => setOpen(true)} disabled={choices && !choices.length}><Bell size={17} />{label}</button>
       {open && (
         <Modal title={symbol ? `Alert on ${symbol}` : "Set an alert"} onClose={() => setOpen(false)}>
-          <AlertForm region={region} symbol={symbol} choices={choices} condition={condition} onSaved={() => setOpen(false)} />
-          <p className="hint" style={{ marginTop: 12 }}>See and change all your alerts on the <Link className="link" to="/alerts">Alerts page</Link>.</p>
+          <div className="k-stack">
+            <AlertForm region={region} symbol={symbol} choices={choices} condition={condition} onSaved={() => setOpen(false)} />
+            <p className="k-note">See and change all your alerts on the <Link className="link" to="/alerts">Alerts page</Link>.</p>
+          </div>
         </Modal>
       )}
     </>

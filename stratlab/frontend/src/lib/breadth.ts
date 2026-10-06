@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { isPeriod } from "./period";
 
 /* Market breadth: how many stocks in a group take part in the market's moves. Counts and shares from the server,
  * worked out after each close; facts, never a call on the market. */
@@ -39,13 +40,13 @@ export const breadthApi = {
 
 const KEY = "stratlab.breadth";
 /** The group and range last picked on this device. */
-export function savedPick(): { group: GroupId; range: RangeId } {
+export function savedPick(): { group: GroupId; range: string } {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || "{}");
-    return { group: v.group || DEFAULT_GROUP, range: RANGES.some(([r]) => r === v.range) ? v.range : "1y" };
+    return { group: v.group || DEFAULT_GROUP, range: isPeriod(v.range) ? v.range : "1y" };
   } catch { return { group: DEFAULT_GROUP, range: "1y" }; }
 }
-export function savePick(group: GroupId, range: RangeId) {
+export function savePick(group: GroupId, range: string) {
   try { localStorage.setItem(KEY, JSON.stringify({ group, range })); } catch { /* storage off */ }
 }
 

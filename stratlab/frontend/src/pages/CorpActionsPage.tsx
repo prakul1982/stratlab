@@ -3,11 +3,13 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago } from "../lib/format";
+import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { ActionLine, KIND_NAME, exDay, type ActionKind, type CorpAction } from "../components/CorpActions";
-import { Info, Loading } from "../components/ui";
+import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
+import { Card, CardHead, CheckField, EmptyState, ErrorState, Field, FormGrid, PageHeader, Seg, Select, Skeleton, StockPicker } from "../components/kit";
 
 interface CalendarView {
   region: Region; scope: "mine" | "all"; kind: string; today: string; updated_at: string | null; ahead: CorpAction[]; recent: CorpAction[];
@@ -18,21 +20,11 @@ interface CalendarView {
 function DayGroups({ rows, today }: { rows: CorpAction[]; today: string }) {
   const days = [...new Set(rows.map((r) => r.ex_date))];
   return <>{days.map((d) => (
-    <div key={d} className="stack" style={{ gap: 8 }}>
-      <span className="eyebrow">Ex-date {exDay(d)}{d === today ? " · today" : ""}</span>
-      {rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} />)}
+    <div key={d} className="inv-day">
+      <span className="k-eyebrow">Ex-date {exDay(d)}{d === today ? " · today" : ""}</span>
+      <div className="inv-rows">{rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} />)}</div>
     </div>
   ))}</>;
-}
-
-/** Ex-dates in day groups, under one heading. */
-function Days({ title, rows, today, empty }: { title: string; rows: CorpAction[]; today: string; empty: string }) {
-  return (
-    <section className="card stack" style={{ gap: 14 }}>
-      <h2 className="h3">{title}</h2>
-      {rows.length === 0 ? <span className="small muted">{empty}</span> : <DayGroups rows={rows} today={today} />}
-    </section>
-  );
 }
 
 export function CorpActionsPage() {
@@ -45,6 +37,7 @@ export function CorpActionsPage() {
   const [q, setQ] = useState("");
   const [data, setData] = useState<CalendarView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
 
   const setParam = (k: string, v: string) => { const p = new URLSearchParams(params); if (v) p.set(k, v); else p.delete(k); setParams(p, { replace: true }); };
   const setRegion = (r: Region) => { setRegionState(r); saveRegion(r); setParam("region", r); };
@@ -57,7 +50,7 @@ export function CorpActionsPage() {
       api<CalendarView>(`/research/corp-actions?${qs}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [region, scope, kind, q]);
+  }, [region, scope, kind, q, tries]);
 
   const toggleAlerts = async () => {
     if (!data) return;
@@ -70,58 +63,65 @@ export function CorpActionsPage() {
   const empty = data && !data.ahead.length && !data.recent.length;
 
   return (
-    <div className="stack" style={{ gap: 24 }}>
-      <RegionSwitch region={region} setRegion={setRegion} />
-      <div className="stack" style={{ gap: 8 }}>
-        <span className="eyebrow">Corporate actions · {REGION_NAME[region]}</span>
-        <h1 className="page-title">Dividends, bonuses and splits</h1>
-        <p className="page-sub">{region === "IN"
+    <div className="k-page">
+      <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfLabel="Updated"
+        lede={region === "IN"
           ? "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, as companies announced them to the exchange."
-          : "Dividends and splits of US companies you follow, by ex-date. Dates ahead aren't available for the US yet."}</p>
+          : "Dividends and splits of US companies you follow, by ex-date. Dates ahead aren't available for the US yet."} />
+      <div className="k-toolbar">
+        <RegionSwitch region={region} setRegion={setRegion} />
+        <Seg label="Which companies" value={scope} onChange={(v) => setParam("scope", v)} options={[{ value: "mine", label: "My stocks" }, { value: "all", label: "All" }]} />
       </div>
-      <div className="row wrap" style={{ gap: 12 }}>
-        <div className="seg" role="radiogroup" aria-label="Which companies">
-          <button role="radio" aria-checked={scope === "mine"} aria-pressed={scope === "mine"} onClick={() => setParam("scope", "mine")}>My stocks</button>
-          <button role="radio" aria-checked={scope === "all"} aria-pressed={scope === "all"} onClick={() => setParam("scope", "all")}>All</button>
-        </div>
-        <select className="input" style={{ flex: "0 1 200px", minHeight: 40 }} value={kind} onChange={(e) => setParam("kind", e.target.value)} aria-label="Kind of action">
-          <option value="">Every kind</option>
-          {(Object.keys(KIND_NAME) as ActionKind[]).map((k) => <option key={k} value={k}>{KIND_NAME[k]}</option>)}
-        </select>
-        {scope === "all" && <input className="input" style={{ flex: "1 1 200px", maxWidth: 320 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a company" aria-label="Find a company" />}
-      </div>
-      {data && (
-        <label className="row small" style={{ gap: 8 }}>
-          <input type="checkbox" checked={data.alerts} onChange={toggleAlerts} />
-          Message me when my stocks announce a corporate action, and the evening before an ex-date
-          <Info>Sent by phone notification or Telegram, whichever you set up on the Account page. Your stocks are your watchlist, holdings, notebooks and paper sessions. The My Stocks newsletter lists the week's ex-dates too.</Info>
-        </label>
-      )}
-      {error && <p className="small muted">{error}</p>}
-      {!data && !error && <Loading label="Opening the corporate actions calendar" />}
+      <Card>
+        <FormGrid label="Filter the calendar">
+          <Field label="Kind of action">
+            {(id) => <Select id={id} value={kind} onChange={(v) => setParam("kind", v)}
+              options={[{ value: "", label: "Every kind" }, ...(Object.keys(KIND_NAME) as ActionKind[]).map((k) => ({ value: k, label: KIND_NAME[k] }))]} />}
+          </Field>
+          {scope === "all" && (
+            <Field label="Find a company">
+              {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder="Find a company, like TCS or Infosys" />}
+            </Field>
+          )}
+        </FormGrid>
+        {data && (
+          <CheckField checked={data.alerts} onChange={toggleAlerts}
+            label={<>Message me when my stocks announce a corporate action, and the evening before an ex-date
+              <Info>Sent by phone notification or Telegram, whichever you set up on the Account page. Your stocks are your watchlist, holdings, notebooks and paper sessions. The My Stocks newsletter lists the week's ex-dates too.</Info></>} />
+        )}
+      </Card>
+      {error && <ErrorState title="The calendar couldn't be opened" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
+      {!data && !error && <Card><Skeleton label="Opening the corporate actions calendar" lines={4} /></Card>}
       {data && empty && (
-        <div className="card stack" style={{ gap: 10 }}>
-          <p className="muted">{scope === "mine"
-            ? (data.mine_count ? `None of your ${REGION_NAME[region]} stocks has an ex-date in this window.` : `You have no ${REGION_NAME[region]} stocks yet: they come from your watchlist, holdings, notebooks and paper sessions.`)
-            : q ? "No company by that name has an action in this window." : "Nothing announced for this window yet."}</p>
-          {scope === "mine" && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setParam("scope", "all")}>See all companies</button>}
-        </div>
+        <Card>
+          <EmptyState title={scope === "mine" ? "None of your stocks has an ex-date yet" : "Nothing announced for this window"}
+            action={scope === "mine" ? { label: "See all companies", onClick: () => setParam("scope", "all") } : undefined}>
+            {scope === "mine"
+              ? (data.mine_count ? `None of your ${REGION_NAME[region]} stocks has an ex-date in this window.` : `You have no ${REGION_NAME[region]} stocks yet: they come from your watchlist, holdings, notebooks and paper sessions.`)
+              : q ? "No company by that name has an action in this window." : "Nothing announced for this window yet."}
+          </EmptyState>
+        </Card>
       )}
       {data && !empty && (
         <>
-          {(data.ahead_known || data.ahead.length > 0) && <Days title="Coming up" rows={data.ahead} today={data.today} empty="Nothing announced with an ex-date ahead." />}
+          {(data.ahead_known || data.ahead.length > 0) && (
+            <Card>
+              <CardHead title="Coming up" />
+              {data.ahead.length === 0 ? <span className="k-small k-muted">Nothing announced with an ex-date ahead.</span> : <DayGroups rows={data.ahead} today={data.today} />}
+            </Card>
+          )}
           {/* ex-dates gone by fold under one line, open only when there is nothing ahead to show */}
           {data.recent.length > 0 && (
-            <section className="card" aria-label="Last two weeks">
+            <Card label="Last two weeks">
               <Earlier label="Last two weeks" count={data.recent.length} open={!data.ahead_known && !data.ahead.length}>
                 <DayGroups rows={data.recent} today={data.today} />
               </Earlier>
-            </section>
+            </Card>
           )}
         </>
       )}
-      {data && data.more > 0 && <p className="tiny muted">And {data.more} more. Find a company by name to narrow the list.</p>}
-      {data && <p className="small muted" style={{ maxWidth: "80ch" }}>The ex-date is the first day the shares trade without the entitlement; in India it's also the record date. {data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
+      {data && data.more > 0 && <p className="k-note">And {data.more} more. Find a company by name to narrow the list.</p>}
+      {data && <p className="k-note inv-text">The ex-date is the first day the shares trade without the entitlement; in India it's also the record date. {data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>
   );
 }
