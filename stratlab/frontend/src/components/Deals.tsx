@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { safeHref } from "../lib/format";
-import { Loading } from "./ui";
+import { inr, safeHref } from "../lib/format";
+import { Badge, DataTable, EmptyState, ErrorState, Seg, Skeleton } from "./kit";
 
 export type DealKind = "insider" | "sast" | "bulk" | "block";
 export interface Deal {
@@ -42,6 +42,7 @@ export function DealsPanel({ symbol }: { symbol: string }) {
   const [error, setError] = useState<string | null>(null);
   const [show, setShow] = useState("all");
   const [more, setMore] = useState(false);
+  const [tries, setTries] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -50,45 +51,37 @@ export function DealsPanel({ symbol }: { symbol: string }) {
       .then((r) => live && setRep(r))
       .catch((e) => live && setError(e instanceof Error ? e.message : "Couldn't load the disclosures."));
     return () => { live = false; };
-  }, [symbol]);
+  }, [symbol, tries]);
 
-  if (error) return <p className="small muted">{error}</p>;
-  if (!rep) return <Loading label="Reading the exchange disclosures" />;
+  if (error) return <ErrorState title="The disclosures couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>;
+  if (!rep) return <Skeleton label="Reading the exchange disclosures" lines={3} />;
   const kinds = (SHOW.find((s) => s[0] === show) ?? SHOW[0])[2];
   const rows = rep.items.filter((d) => kinds.includes(d.kind));
   const list = more ? rows : rows.slice(0, 12);
   return (
-    <div className="stack deals" style={{ gap: 12 }}>
-      <span className="small">{rep.flow_text
+    <div className="k-stack deals">
+      <span className="k-small">{rep.flow_text
         ? <>Promoters and insiders on the open market, last {Math.round(rep.flow_days / 30)} months: <b>{rep.flow_text}</b>.</>
-        : <span className="muted">No open-market trades by promoters or insiders disclosed in the last {Math.round(rep.flow_days / 30)} months.</span>}</span>
-      <div className="seg" role="radiogroup" aria-label="Which disclosures">
-        {SHOW.map(([id, label]) => (
-          <button key={id} role="radio" aria-checked={show === id} aria-pressed={show === id} onClick={() => { setShow(id); setMore(false); }}>{label}</button>
-        ))}
-      </div>
-      {rows.length === 0 ? <p className="small muted">None disclosed in the last year.</p> : (
-        <div className="table-wrap deals-table">
-          <table>
-            <thead><tr><th>Who</th><th>Bought or sold</th><th className="num">Shares</th><th className="num">Value</th><th>Date</th><th>What</th><th>Source</th></tr></thead>
-            <tbody>{list.map((d) => (
-              <tr key={d.id}>
-                <td><span className="deal-who">{d.who}</span>{d.relation && <span className="tiny muted"> {RELATION[d.relation]}</span>}</td>
-                <td><span className="badge fact">{SIDE[d.side] ?? d.side}</span></td>
-                <td className="num">{d.qty == null ? "–" : Math.round(d.qty).toLocaleString("en-IN")}</td>
-                <td className="num">{rupees(d.value)}{d.kind !== "insider" && d.kind !== "sast" && d.price != null && <span className="tiny muted"> at ₹{d.price.toLocaleString("en-IN")}</span>}</td>
-                <td className="mono small">{day(d.date)}</td>
-                <td className="small">{d.label}{d.kind === "insider" || d.kind === "sast" ? <span className="tiny muted"> · {MODE[d.mode] ?? d.mode}</span> : null}
-                  {d.pct_after != null && <span className="tiny muted"> · {d.pct_after.toFixed(2)}% after</span>}</td>
-                <td><a className="link small" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer">Disclosure ↗</a></td>
-              </tr>))}
-            </tbody>
-          </table>
+        : <span className="k-muted">No open-market trades by promoters or insiders disclosed in the last {Math.round(rep.flow_days / 30)} months.</span>}</span>
+      <Seg label="Which disclosures" value={show} onChange={(v) => { setShow(v); setMore(false); }} options={SHOW.map(([id, label]) => ({ value: id, label }))} />
+      {rows.length === 0 ? <EmptyState title="Nothing disclosed">None disclosed in the last year.</EmptyState> : (
+        <div className="deals-table">
+          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d) => d.id} sticky={list.length > 14}
+            columns={[
+              { key: "who", header: "Who", rowHeader: true, wrap: true, cell: (d) => <><span className="deal-who">{d.who}</span>{d.relation && <span className="k-sub-line">{RELATION[d.relation]}</span>}</> },
+              { key: "side", header: "Bought or sold", cell: (d) => <Badge tone="plain" dot={false}>{SIDE[d.side] ?? d.side}</Badge> },
+              { key: "qty", header: "Shares", numeric: true, cell: (d) => (d.qty == null ? "–" : Math.round(d.qty).toLocaleString("en-IN")) },
+              { key: "val", header: "Value", numeric: true, cell: (d) => <>{rupees(d.value)}{d.kind !== "insider" && d.kind !== "sast" && d.price != null && <span className="k-sub-line">at {inr(d.price, d.price < 100 ? 2 : 0)}</span>}</> },
+              { key: "date", header: "Date", cell: (d) => day(d.date) },
+              { key: "what", header: "What", wrap: true, cell: (d) => <>{d.label}{d.kind === "insider" || d.kind === "sast" ? <span className="k-sub-line">{MODE[d.mode] ?? d.mode}{d.pct_after != null ? ` · ${d.pct_after.toFixed(2)}% after` : ""}</span>
+                : d.pct_after != null ? <span className="k-sub-line">{d.pct_after.toFixed(2)}% after</span> : null}</> },
+              { key: "src", header: "Source", cell: (d) => <a className="link" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer">Disclosure ↗</a> },
+            ]} />
         </div>
       )}
-      {rows.length > list.length && <button className="btn quiet sm" style={{ alignSelf: "flex-start" }} onClick={() => setMore(true)}>Show all {rows.length}</button>}
-      {rep.problems.length > 0 && <p className="tiny muted" style={{ margin: 0 }}>Not available right now: {rep.problems.join(", ")}. Try again later.</p>}
-      <p className="tiny muted" style={{ margin: 0 }}>From exchange disclosures over the last year, as filed: insider trades and pledges by promoters, directors and key staff, substantial acquisitions, and bulk and block deals. Facts, not advice.</p>
+      {rows.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {rows.length}</button>}
+      {rep.problems.length > 0 && <p className="k-note">Not available right now: {rep.problems.join(", ")}. Try again later.</p>}
+      <p className="k-note">From exchange disclosures over the last year, as filed: insider trades and pledges by promoters, directors and key staff, substantial acquisitions, and bulk and block deals. Facts, not advice.</p>
     </div>
   );
 }

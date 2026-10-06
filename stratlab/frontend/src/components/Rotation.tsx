@@ -17,7 +17,7 @@ const qColor = (q: Quadrant) => `var(--q-${q})`;
 
 /** The swatch that carries a quadrant's colour next to its (ink-coloured) name. */
 export function QuadrantTag({ q }: { q: Quadrant }) {
-  return <span className="q-tag"><i style={{ background: qColor(q) }} />{Q_NAME[q]}</span>;
+  return <span className="q-tag"><i className={`q-${q}`} />{Q_NAME[q]}</span>;
 }
 
 function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
@@ -88,7 +88,7 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
           const q = step ? quadrantOf(end.x, end.y) : r.quadrant;
           const on = hover === r.id, dim = hover !== null && !on;
           return (
-            <g key={r.id} opacity={dim ? 0.12 : 1} style={{ transition: "opacity .15s" }}>
+            <g key={r.id} className="rot-g" opacity={dim ? 0.12 : 1}>
               <polyline points={pts.map((p) => `${X(p.x)},${Y(p.y)}`).join(" ")} fill="none" stroke={qColor(q)}
                 strokeWidth={on ? 2 : 1.25} strokeOpacity={on ? 1 : 0.35} strokeLinejoin="round" strokeLinecap="round" />
               {on && pts.slice(0, -1).map((p) => <circle key={p.t} cx={X(p.x)} cy={Y(p.y)} r={2.5} fill={qColor(q)} />)}
@@ -99,15 +99,14 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
         })}
         {/* names: placed greedily so none overlap; a hidden one still shows when its trail is hovered or focused */}
         {labels.map((l) => (
-          <text key={l.id} x={l.x} y={l.y} textAnchor={l.anchor} className="rot-label" opacity={hover !== null && hover !== l.id ? 0.25 : 1}
-            style={{ fontWeight: hover === l.id ? 600 : undefined }}>{l.name}</text>
+          <text key={l.id} x={l.x} y={l.y} textAnchor={l.anchor} className={`rot-label${hover === l.id ? " hl" : ""}`} opacity={hover !== null && hover !== l.id ? 0.25 : 1}>{l.name}</text>
         ))}
         {rows.map((r) => {
           const end = shown(r)[shown(r).length - 1];
           return (
             <circle key={`hit-${r.id}`} cx={X(end.x)} cy={Y(end.y)} r={12} fill="transparent" tabIndex={0} aria-label={`${r.name}: ${Q_NAME[quadrantOf(end.x, end.y)]}`}
               onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(r.id)} onBlur={() => setHover(null)}
-              onClick={() => onFocus?.(focus === r.id ? null : r.id)} style={{ cursor: "pointer", outline: "none" }} />
+              onClick={() => onFocus?.(focus === r.id ? null : r.id)} className="rot-hit" />
           );
         })}
       </svg>

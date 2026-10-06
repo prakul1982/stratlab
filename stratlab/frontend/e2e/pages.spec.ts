@@ -586,7 +586,7 @@ test("alerts: set one on a company page, then edit and delete it on the Alerts p
   const dialog = page.getByRole("dialog", { name: "Alert on RELIANCE" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Price level (₹)").fill("1");
-  await dialog.getByLabel("Note for yourself (optional)").fill(tag);
+  await dialog.getByLabel("Note for yourself").fill(tag);
   if (info.project.name === "phone") await touchable(page);
   await dialog.getByRole("button", { name: "Set alert" }).click();
   await expect(page.getByText(/already above ₹1/).first()).toBeVisible();   // the price is far above: it waits for a cross
@@ -616,7 +616,7 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   await page.getByLabel("Stock").fill("TCS");
   await page.getByLabel("Alert me when").selectOption("move_either");
   await page.getByLabel("Move in a day (%)").fill("4");
-  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  await page.getByLabel("Note for yourself").fill(tag);
   await page.getByLabel(/Repeat/).check();
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "Set alert" }).click();
@@ -641,7 +641,7 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   const dialog = page.getByRole("dialog", { name: "Set an alert" });
   await expect(dialog.getByLabel("Stock")).toHaveValue("IN:RELIANCE");
   await dialog.getByLabel("Alert me when", { exact: true }).selectOption("high52");
-  await dialog.getByLabel("Note for yourself (optional)").fill(tag);
+  await dialog.getByLabel("Note for yourself").fill(tag);
   if (info.project.name === "phone") await touchable(page);
   await dialog.getByRole("button", { name: "Set alert" }).click();
   await expect(page.getByText("Alert set on RELIANCE.")).toBeVisible();
@@ -1142,7 +1142,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   await page.getByLabel("Stock").fill("RELIANCE");
   await page.getByLabel("Alert me when").selectOption("deal");
   await expect(page.getByText("Checked once each evening against that day's exchange disclosures.", { exact: false })).toBeVisible();
-  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  await page.getByLabel("Note for yourself").fill(tag);
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "Set alert" }).click();
   const row = page.locator(".alert-row", { hasText: tag });
@@ -1225,7 +1225,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   await page.getByLabel("Stock").fill("INFY");
   await page.getByLabel("Alert me when").selectOption("surveillance");
   await expect(page.getByText("Checked twice each trading day against the exchange's surveillance lists", { exact: false })).toBeVisible();
-  await page.getByLabel("Note for yourself (optional)").fill(tag);
+  await page.getByLabel("Note for yourself").fill(tag);
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "Set alert" }).click();
   const row = page.locator(".alert-row", { hasText: tag });
@@ -1581,7 +1581,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await charts.getByRole("heading", { name: "McClellan oscillator" }).getByRole("button", { name: "What does this mean?" }).click();
   await expect(page.getByRole("note")).toContainText("39-day");
   // the sector table and the counts behind the charts
-  await expect(page.locator("table.bx-heat tbody tr").first()).toBeVisible();
+  await expect(page.locator(".bx-heat tbody tr").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "The last 20 trading days" })).toBeVisible();
   // a hover shows the day's numbers on the bars
   await charts.locator("svg[aria-label^='New 52-week highs']").hover();
@@ -1598,11 +1598,13 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   if (info.project.name === "phone") await touchable(page);
 
   // a shorter range, then another group (the US), keep the page whole
-  const ranges = page.getByRole("radiogroup", { name: "Time range" });
-  await ranges.getByRole("radio", { name: "3M" }).click();
-  await expect(ranges.getByRole("radio", { name: "3M" })).toHaveAttribute("aria-checked", "true");
+  const ranges = page.getByRole("group", { name: "Time range" });
+  const ticks = () => charts.locator(".ch").first().locator("svg.ch-svg text.ch-tick").allTextContents();
+  const before = (await ticks()).join("|");
+  await ranges.getByRole("button", { name: "3M" }).click();
+  await expect.poll(async () => (await ticks()).join("|"), "the 3M button redraws the charts").not.toBe(before);
+  await expect(ranges.getByRole("button", { name: "3M" })).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel("Group of stocks").selectOption("us_large");
-  await expect(page.getByText("Market view · United States")).toBeVisible();
   await expect(charts.getByRole("heading", { name: /^SPY \(an S&P 500 fund\)/ })).toBeVisible();
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub|nseindia/i);      // "Screener" alone is a menu entry
@@ -1629,7 +1631,7 @@ test("market breadth on the Free plan: today's numbers, and the charts behind Ba
   const errors = await open(page, "/invest/breadth", "Rose / fell", sessionAs("free-token", "u-free", "free@example.com"));
   await expect(page.getByTestId("breadth-locked")).toContainText("on the Basic plan");
   await expect(page.getByTestId("breadth-charts")).toHaveCount(0);
-  await expect(page.getByRole("radiogroup", { name: "Time range" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Time range" })).toHaveCount(0);
   await sane(page, errors);
 });
 

@@ -12,6 +12,7 @@ import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
+import "./styles-invest.css";
 import { AppProvider, useApp } from "./lib/app";
 import { NEXT_PAGE, SESSION_KEY } from "./lib/api";
 import { registerPwa } from "./lib/pwa";
