@@ -128,6 +128,17 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
         s.send_message(msg)
 
 
+def send_message(to: str, subject: str, text: str, path: str = "/account", label: str = "Alert",
+                 why: str = "You get this because you turned on notifications in StratLab.", button_label: str | None = None,
+                 headers: dict | None = None) -> None:
+    """Email a plain-lines message (subject and text, as a phone notification would carry them) in the shared email
+    design, with a button to `path` on the site and a Manage emails link. The text version is the lines themselves."""
+    from . import email_kit as kit
+    html, plain = kit.message(subject, text, path, label, why, button_label=button_label,
+                              date=kit.today_label())
+    send_email(to, subject, plain, html=html, headers=headers)
+
+
 def email_for(profile: dict) -> str | None:
     """Where a user's email alerts go: the address they set in Account, or for an admin, the address they sign in with."""
     if profile.get("alert_email"):
@@ -201,7 +212,7 @@ def tell_admins(subject: str, text: str) -> int:
                 if notify(rows[0], subject, text, background=False, url="/admin"):
                     reached += 1
             elif email_ready():
-                send_email(email, subject, text)
+                send_message(email, subject, text, "/admin", "Admin alert", "You get this because you are a StratLab admin.")
                 reached += 1
         except Exception as e:
             print("admin alert failed:", e)
@@ -218,7 +229,7 @@ def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper") -> lis
         jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
     to = email_for(profile)
     if to and email_ready() and email_confirmed(profile):      # only an address its owner confirmed from a link
-        jobs.append(("email", lambda: send_email(to, subject, text)))
+        jobs.append(("email", lambda: send_message(to, subject, text, url, "Alert")))
     return jobs
 
 

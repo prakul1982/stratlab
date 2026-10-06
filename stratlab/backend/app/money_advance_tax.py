@@ -225,6 +225,25 @@ def reminder_text(d: dict, days: int) -> tuple[str, str]:
     return subject, text
 
 
+def reminder_email(d: dict, days: int) -> tuple[str, str, str]:
+    """(subject, html, text) for one reminder in the shared email design: the instalment, its date and the share of the
+    year's tax due by then as tiles, and a button to the page with the person's own figures. No amounts here."""
+    from . import email_kit as kit
+    subject, _ = reminder_text(d, days)
+    when = "tomorrow" if days == 1 else f"in {days} days"
+    due = date.fromisoformat(d["date"])
+    html, text = kit.render(
+        f"Advance tax is due {when}", [
+            kit.tiles([kit.Tile("Instalment", f"{d['n'] + 1} of 4"), kit.Tile("Due by", f"{due:%a} {due.day} {due:%b}", sub=str(due.year)),
+                       kit.Tile("Share of the year's tax", f"{d['pct'] * 100:g}%", sub="paid by then, less TDS")]),
+            kit.para(f"By {d['label']}, {d['pct'] * 100:g}% of the year's tax (less TDS) should be paid, counting what was paid before."),
+        ], kit.Footer(why="You get this because you turned on advance tax reminders.", unsubscribe="Stop advance tax reminders",
+                      legal="Dates as the Income-tax Act sets them. Facts, not tax advice; check with a chartered accountant."),
+        label="Advance tax", date=f"{due:%a} {due.day} {due:%b}", summary=f"The {d['label']} instalment is due {when}.",
+        cta=("Open your advance tax figures", "/money/tax-tools?tab=advance"), subject=subject)
+    return subject, html, text
+
+
 def reminders_due(today: date) -> list[tuple[dict, int]]:
     """(due date, days before) for the reminders that go out today."""
     out = []
@@ -245,15 +264,23 @@ def subscribers() -> list[str]:
     return out
 
 
+_current: tuple[dict, int] | None = None        # the reminder the job is sending now (send() keeps its three arguments)
+
+
 def send(profile: dict, subject: str, text: str) -> bool:
     """Email (to a confirmed address, with an unsubscribe link) and a phone notification, where set up."""
     sent = False
     to = alerts.newsletter_email(profile)
     if to and alerts.email_confirmed(profile) and alerts.email_ready():
         try:
-            unsub = alerts.unsubscribe_url(profile["id"], "advance_tax")
-            alerts.send_email(to, subject, f"{text}\n\nStop these reminders: {unsub}",
-                              headers=alerts.list_unsubscribe_headers(profile["id"], "advance_tax"))
+            from . import email_kit as kit
+            if _current:
+                _, html, plain = reminder_email(*_current)
+            else:
+                html, plain = kit.message(subject, text, "/money/tax-tools?tab=advance", "Advance tax",
+                                          "You get this because you turned on advance tax reminders.")
+            html, plain, headers = kit.finish(html, plain, profile["id"], "advance_tax")
+            alerts.send_email(to, subject, plain, html=html, headers=headers)
             sent = True
         except Exception as e:
             print("advance tax reminder email failed:", str(e)[:160])
@@ -300,6 +327,7 @@ class Job:
             for uid in subscribers():
                 profile = db.get_profile(uid)
                 if profile:
+                    globals()["_current"] = (d, n)
                     sent += send(profile, subject, text)
         self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
         return sent

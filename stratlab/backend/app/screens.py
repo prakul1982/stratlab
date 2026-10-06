@@ -19,7 +19,6 @@ import secrets
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from html import escape
 
 from . import db, deals, sector_members, stock_pages, surveillance
 from .newsletter import job as news_job
@@ -483,31 +482,30 @@ def valid_id(sid: str) -> bool:
 def note(parts: list[tuple[dict, list[dict]]], index_as_of: str | None) -> tuple[str, str, str]:
     """(subject, text, html): for each of a user's screens, the companies that newly match it. One message a week,
     however many screens. Facts only: what matched, under which conditions, and when the numbers are from."""
+    from . import email_kit as kit
     from .newsletter import write
     total = sum(len(new) for _, new in parts)
     many = f"{total} compan{'y newly matches' if total == 1 else 'ies newly match'}"
     subject = (f"StratLab: {many} your screen \u201c{parts[0][0]['name']}\u201d" if len(parts) == 1
                else f"StratLab: {many} {len(parts)} of your screens")[:150]
     when = _when(index_as_of)
-    text, body = [subject, ""], []
+    blocks = [kit.tiles([kit.Tile("New matches", str(total)), kit.Tile("Screens", str(len(parts)))])]
     for screen, new in parts:
         region, shown = screen["region"], new[:25]
         conds = "; ".join(describe(region, screen["filters"]) or ["Every company in the market"])
-        lines = [(f"{r['name']} ({r['symbol']})", write.stock_url(region, r["symbol"])) for r in shown]
+        rows = [kit.Row(f"{r['name']} ({r['symbol']})", url=write.stock_url(region, r["symbol"])) for r in shown]
         more = f"and {len(new) - len(shown)} more in StratLab" if len(new) > len(shown) else None
-        text += [screen["name"].upper(), f"Conditions: {conds}"] + [f"- {ln}: {url}" for ln, url in lines] + ([more] if more else []) + [""]
-        body.append(f'<h2 style="font-size:16px;margin:16px 0 4px">{escape(screen["name"])}</h2>'
-                    f'<p style="margin:0 0 8px;color:#374151;font-size:14px">Conditions: {escape(conds)}</p>'
-                    '<ul style="margin:0;padding-left:18px">'
-                    + "".join(f'<li style="margin:6px 0">{write.link(url, ln)}</li>' for ln, url in lines) + "</ul>"
-                    + (f'<p style="margin:8px 0 0">{more}</p>' if more else ""))
+        blocks.append(kit.card(screen["name"], rows, foot=f"Conditions: {conds}" + (f". {more.capitalize()}" if more else "")))
     if when:
-        text.append(f"Numbers as of {when}.")
-        body.append(f'<p style="margin:16px 0 0;font-size:13px;color:#6b7280">Numbers as of {escape(when)}.</p>')
-    text += ["These companies meet the conditions you set. Facts, not advice.", f"Turn off screen emails: {write.UNSUBSCRIBE}"]
-    footer = (f"These companies meet the conditions you set. Facts, not advice.<br>"
-              f'<a href="{write.UNSUBSCRIBE}" style="color:#6b7280">Turn off screen emails</a>')
-    return subject, "\n".join(text), write.frame(subject, body, footer)
+        blocks.append(kit.note(f"Numbers as of {when}."))
+    title = f"{total} new match{'' if total == 1 else 'es'} on your screen{'' if len(parts) == 1 else 's'}"
+    html, text = kit.render(
+        title, blocks, kit.Footer(why="You get this weekly because you turned on emails for your saved screens.",
+                                  frequency=None, unsubscribe="Turn off screen emails",
+                                  legal="These companies meet the conditions you set. Facts, not advice."),
+        label="Weekly screens", date=kit.today_label(), summary="Companies that meet your screen\u2019s conditions now and didn\u2019t last week.",
+        cta=("Open your screens", "/research/screens"), subject=subject)
+    return subject, text, html
 
 
 def _when(iso: str | None) -> str | None:

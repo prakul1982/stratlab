@@ -8,7 +8,7 @@ def _smtp(monkeypatch):
     monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
     monkeypatch.setattr(settings, "SMTP_USER", "bot@example.com")
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "pw")
-    monkeypatch.setattr(alerts, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+    monkeypatch.setattr(alerts, "send_email", lambda to, subject, body, html=None, headers=None: sent.append((to, subject, body)))
     return sent
 
 
@@ -21,7 +21,7 @@ def test_admins_get_alerts_by_email_without_setting_anything(monkeypatch):
         assert alerts.email_for({"email": "someone@example.com"}) is None                  # not for other users
         assert alerts.email_for({"email": "someone@example.com", "alert_email": "a@b.c"}) == "a@b.c"
         assert alerts.tell_admins("StratLab: 1 check failing", "Prices: down") == 1
-        assert sent == [("owner@example.com", "StratLab: 1 check failing", "Prices: down")]
+        assert [(s[0], s[1]) for s in sent] == [("owner@example.com", "StratLab: 1 check failing")] and "Prices: down" in sent[0][2]
         sent.clear()
         kite_auto.AutoLogin(None, lambda: None)._alert("StratLab: Kite auto-login failed and won't retry today. Bad OTP.")
         assert sent and sent[0][0] == "owner@example.com" and "Bad OTP" in sent[0][2]
@@ -36,7 +36,7 @@ def test_an_admin_alert_never_breaks_the_caller(monkeypatch):
         monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
         monkeypatch.setattr(settings, "SMTP_USER", "bot@example.com")
         monkeypatch.setattr(settings, "SMTP_PASSWORD", "pw")
-        monkeypatch.setattr(alerts, "send_email", lambda *a: (_ for _ in ()).throw(OSError("smtp down")))
+        monkeypatch.setattr(alerts, "send_email", lambda *a, **k: (_ for _ in ()).throw(OSError("smtp down")))
         assert alerts.tell_admins("x", "y") in (0, 1)                 # tried, and the failure stayed inside
     finally:
         w["close"]()
@@ -53,7 +53,7 @@ def test_admin_can_send_themselves_a_test_email(monkeypatch):
         sent = _smtp(monkeypatch)
         assert w["client"].post("/admin/alerts/test", headers=h).json() == {"sent_to": "owner@example.com"}
         assert sent[0][0] == "owner@example.com"
-        monkeypatch.setattr(main.alerts, "send_email", lambda *a: (_ for _ in ()).throw(OSError("Network is unreachable")))
+        monkeypatch.setattr(main.alerts, "send_email", lambda *a, **k: (_ for _ in ()).throw(OSError("Network is unreachable")))
         r = w["client"].post("/admin/alerts/test", headers=h)
         assert r.status_code == 502 and "RESEND_API_KEY" in r.json()["detail"]["message"]   # says what to do
         assert w["client"].post("/admin/alerts/test", headers=W.headers("pro-token")).status_code == 403

@@ -14,7 +14,7 @@ def _smtp(monkeypatch):
     monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
     monkeypatch.setattr(settings, "SMTP_USER", "bot@example.com")
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "pw")
-    monkeypatch.setattr(alerts, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+    monkeypatch.setattr(alerts, "send_email", lambda to, subject, body, html=None, headers=None: sent.append((to, subject, body)))
     return sent
 
 
@@ -105,7 +105,7 @@ def test_admin_can_send_it_now_and_no_one_else_can(monkeypatch):
         assert r.status_code == 200
         body = r.json()
         assert body["reached"] == 1 and body["subject"].startswith("StratLab weekly") and "Users" in body["text"]
-        assert sent[0][0] == "owner@example.com" and sent[0][2] == body["text"]
+        assert sent[0][0] == "owner@example.com" and body["text"].splitlines()[0] in sent[0][2]
         assert main.db.get_setting(weekly.WEEK_KEY) is None                       # Monday's still goes out
     finally:
         w["close"]()

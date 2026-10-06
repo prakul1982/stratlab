@@ -185,7 +185,7 @@ def test_confirming_the_newsletter_address(monkeypatch):
         r = c.post("/me/email/confirm", headers=W.headers("pro-token"))
         assert r.json() == {"confirmed": False, "sent_to": "pro@example.com"}
         to, body, html = sent[0]
-        link = body.split("\n\n")[1]
+        link = next(ln.split(": ", 1)[1] for ln in body.splitlines() if ln.startswith("Confirm my email: "))
         assert to == "pro@example.com" and "/email/confirm?t=" in link and link in html.replace("&amp;", "&")
 
         assert c.get("/email/confirm", params={"t": "forged"}).status_code == 400
