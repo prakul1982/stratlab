@@ -9,6 +9,7 @@ import { money, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { track } from "../lib/analytics";
 import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
+import { canBuy, finePrint, pricingIntro } from "../lib/offer";
 
 /** Every limit and feature side by side, from the server's plans when signed in. */
 function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
@@ -40,12 +41,15 @@ function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
 export function PlansPage() {
   const { me, fail, notify, refreshMe } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
-  const billing = me?.billing_enabled !== false;
-  const yearlyOk = !!me?.yearly_enabled;
+  const { pricing, currency, pick } = usePricing();
+  // one answer for what's on sale today (plans.offer_state): /me's, else the public one the landing page reads
+  const offer = me?.offer ?? pricing?.offer ?? null;
+  const billing = offer ? canBuy(offer) : me?.billing_enabled !== false;
+  const yearlyOk = offer ? offer.yearly : !!me?.yearly_enabled;
+  const intro = pricingIntro(offer, LIMITS.pro, "app");
   const [yearly, setYearly] = useState(false);
   const period = yearly && yearlyOk ? "year" : "month";
   const paid = me?.paid_plan ?? me?.plan;   // me.plan is Pro for everyone during the launch offer
-  const { pricing, currency, pick } = usePricing();
   const row = pricing?.currencies[currency];
   const inr = pricing?.currencies.INR;
   const rupees = (p: PlanId, per: string) => {
@@ -58,7 +62,9 @@ export function PlansPage() {
     if (p === "free" || !row || currency === "INR") return { shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, charged: null as string | null, inr: p !== "free" };
     const local = (row as unknown as Record<string, number>)[per === "year" ? `${p}_year` : p];
     const chargedIn = per === "year" ? row.yearly_charged_in : row.charged_in;
-    return { shown: money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false };
+    // charged in rupees: the amount is the rupee price at today's rate, so it says "about"
+    const about = chargedIn === "INR" && (per === "year" ? row.approx_year : row.approx) !== false;
+    return { shown: `${about ? "about " : ""}${money(row, local, currency)}`, charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false };
   };
   const anyRupees = currency !== "INR" && !!row && (period === "year" ? row.yearly_charged_in : row.charged_in) === "INR";
 
@@ -92,7 +98,7 @@ export function PlansPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Account · Plans" title="Plans"
-        lede={billing ? "Cancel any time; your plan stays active until the paid period ends." : "Paid plans are coming soon. During early access every feature is unlocked for everyone; the Free plan's monthly limits still apply."}
+        lede={intro.lede}
         actions={<Link to="/account" className="btn quiet sm">← Account</Link>} />
       <PromoCountdown plansLink={false} />
       {(pricing || (billing && yearlyOk)) && (
@@ -122,7 +128,7 @@ export function PlansPage() {
                 <span className="k-small k-muted">{WHO[p]}</span>
               </div>
               <div className="k-stack tight">
-                <div className="k-plan-price">{price.shown}<span> / {period}</span></div>
+                <div className="k-plan-price">{price.shown.startsWith("about ") ? <><span>about </span>{price.shown.slice(6)}</> : price.shown}<span> / {period}</span></div>
                 {price.inr && <span className="k-note">incl. GST</span>}
                 {price.charged && <span className="k-note">Charged as {price.charged} incl. GST / {period}</span>}
               </div>
@@ -131,7 +137,7 @@ export function PlansPage() {
               </ul>
               {cur ? <button className="btn outline" disabled>Current plan</button>
                 : p === "free" ? <span className="k-small k-muted">Included whenever a paid plan ends</span>
-                  : !billing ? <button className="btn outline" disabled>Coming soon</button>
+                  : !billing ? <span className="lp-plan-note k-small k-muted">Not on sale yet</span>
                     : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy} onClick={() => ask(p)}>
                       {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}</button>}
             </Card>
@@ -142,7 +148,12 @@ export function PlansPage() {
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
-      <p className="k-small k-muted k-measure">Rupee prices include 18% GST, and every payment gets a GST invoice in Account. Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by our payment partner.</p>
+      {billing ? (
+        <p className="k-small k-muted k-measure">Rupee prices include 18% GST, and every payment gets a GST invoice in Account. Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by our payment partner.</p>
+      ) : (
+        <p className="k-small k-muted k-measure">{finePrint(offer, { currency: row && currency !== "INR" ? currency : "INR", approx: !!row?.approx, approxYear: !!row?.approx_year,
+          charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` } }).join(" ")}</p>
+      )}
       <p className="k-small k-muted k-measure">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>
       <LegalLinks />
       {switching && (

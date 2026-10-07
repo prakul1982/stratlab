@@ -99,7 +99,7 @@ export const FEATURES: Feature[] = [
     words: "account profile usage invoices sign in security sign out data delete" },
   { id: "settings", title: "Settings", what: "Where alerts and emails go, what you see first, the theme and a check of every data and AI service.", to: "/settings",
     words: "settings notifications emails newsletters theme dark light experience level focus connected accounts connection check" },
-  { id: "assistant", title: "AI assistant", what: "Use StratLab in Claude or ChatGPT with a key you can revoke.", to: "/assistant",
+  { id: "assistant", title: "Connect an AI assistant", what: "Keys that let Claude or ChatGPT use your StratLab, each one revocable.", to: "/assistant",
     words: "assistant ai claude chatgpt mcp key connect" },
   { id: "invite", title: "Invite friends", what: "Your invite link, and the free months you earn when friends join.", to: "/invite",
     words: "invite friends referral link free month share" },

@@ -22,7 +22,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   const errors = await open(page);
   const order = ["trade", "invest", "money", "alerts", "pricing", "faq"];
   for (const [id, heading] of [["trade", /From a sentence/], ["invest", /Start with any company/], ["money", /What you own/],
-    ["alerts", /Hear about it/], ["pricing", /Free to start/], ["faq", /Good to know/]] as const) {
+    ["alerts", /Hear about it/], ["pricing", /^Free (to start|during early access|until)|^Every Pro feature/], ["faq", /Good to know/]] as const) {
     const sec = page.locator(`section#${id}`);
     await expect(sec, id).toHaveCount(1);
     await expect(sec.getByRole("heading", { level: 2, name: heading })).toBeVisible();
@@ -37,6 +37,10 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   await expect(page).toHaveTitle("StratLab: test it, research it, track it");
   for (const sel of ['meta[name="description"]', 'meta[property="og:description"]']) await expect(page.locator(sel)).toHaveAttribute("content", /trad/i);
   // what ships today, one line each
+  // the long lists show a few and fold the rest ("12 more Trade tools"): open them, everything is still there
+  const more = page.locator(".lp-more > summary");
+  expect(await more.count(), "the tool lists fold").toBeGreaterThanOrEqual(3);
+  for (const s of await more.all()) await s.click();
   const research = page.locator("#invest");
   for (const t of ["Company pages", "Deep dive", "Results calendar", "Corporate actions", "Deals and insider trades", "Surveillance lists",
     "Filings and red flags", "Screens", "Stage 2 scan", "Sector rotation", "Market breadth", "Price charts", "ETF price vs NAV"]) await expect(research.getByText(t, { exact: true })).toBeVisible();
@@ -84,7 +88,20 @@ test("landing: the plans match the server's plans exactly", async ({ page, reque
   await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`up to ${plans.free.holdings} holdings`);
   await expect(page.locator('.lp-price[data-plan="basic"]')).toContainText(`${plans.basic.screens} saved screens, ${plans.basic.holdings} holdings`);
   await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText(`Paper trade ${plans.pro.live_limit} strategies`);
-  await expect(page.locator("#pricing")).toContainText(`Paying yearly in rupees: Basic ₹${plans.basic.price_year.toLocaleString("en-IN")}, Pro ₹${plans.pro.price_year.toLocaleString("en-IN")}.`);
+  // what's on sale is the server's one answer (plans.offer_state via /pricing): the fake world has no payments, so the
+  // page says early access, sells nothing and promises no invoices, renewals or yearly prices
+  const offer = (await (await request.get(`${API}/pricing`)).json()).offer;
+  expect(offer.mode).toBe("early");
+  const pricing = page.locator("#pricing");
+  await expect(pricing.getByRole("heading", { level: 2 })).toHaveText("Free during early access.");
+  await expect(pricing).toContainText("Paid plans aren't on sale yet.");
+  await expect(pricing).toContainText(`${offer.free_now.backtests_per_month} backtests a month`);
+  for (const id of ["basic", "pro"]) {
+    await expect(page.locator(`.lp-price[data-plan="${id}"]`)).toContainText("Not on sale yet");
+    await expect(page.locator(`.lp-price[data-plan="${id}"]`).getByRole("button")).toHaveCount(0);
+  }
+  await expect(pricing).not.toContainText(/Start with (Basic|Pro)|Cancel any time|GST invoice|Paying yearly/);
+  await expect(pricing).toContainText("Rupee prices include 18% GST.");
   await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`${plans.free.mf_schemes} mutual funds and ${plans.free.networth_items} net worth entries`);
   await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`your last ${plans.free.journal_trades} trades`);
   // each space's paid tools on the card of the plan that adds them (tests/test_plan_copy.py checks every one)
@@ -111,6 +128,38 @@ test("landing: facts only, no data sources, fits the screen", async ({ page }) =
     }).map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`));
     expect(small, "controls too small to tap").toEqual([]);
   }
+});
+
+test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and a menu on a phone", async ({ page }, info) => {
+  const errors = await open(page);
+  // the NVIDIA sample's button is a real button: it signs in and opens the idea builder on NVDA
+  const idea = page.locator(".lp-rmock").getByRole("button", { name: /Test an idea on NVDA/ });
+  await expect(idea).toBeVisible();
+  expect(await page.locator(".lp-fake-btn").count()).toBe(0);
+  // tags under the Money cards and the options card read as labels, not links: not blue, not bold
+  const tag = page.locator("#money .lp-tag").first();
+  await expect(tag).toBeVisible();
+  const [weight, color, blue] = await tag.evaluate((el) => [getComputedStyle(el).fontWeight, getComputedStyle(el).color,
+    getComputedStyle(document.querySelector(".lp-space-go")!).color]);
+  expect(Number(weight)).toBeLessThan(600);
+  expect(color).not.toBe(blue);
+  // the three space cards have the same border: none looks selected
+  const borders = await page.locator(".lp-space").evaluateAll((els) => els.map((e) => getComputedStyle(e).borderTopColor));
+  expect(new Set(borders).size).toBe(1);
+  // crypto's sign is drawn (the fonts' fallback drew the baht's ฿)
+  const crypto = page.locator("#markets .lp-market", { hasText: "Crypto" });
+  await expect(crypto.locator("svg.lp-btc")).toHaveCount(1);
+  await expect(page.locator("#markets")).not.toContainText("฿");
+  if (info.project.name === "phone") {
+    await expect(page.locator('nav[aria-label="Sections"]')).toBeHidden();
+    await page.getByLabel("Sections menu").click();
+    const menu = page.getByRole("navigation", { name: "Sections (menu)" });
+    await expect(menu.getByRole("link")).toHaveText(["Trade", "Invest", "Money", "Alerts", "Pricing", "FAQ"]);
+    await menu.getByRole("link", { name: "Pricing" }).click();
+    await expect(menu).toBeHidden();
+    await expect(page.locator("#pricing")).toBeInViewport();
+  } else await expect(page.getByLabel("Sections menu")).toBeHidden();
+  expect(errors).toEqual([]);
 });
 
 test("landing: dark mode draws on a dark background", async ({ page }) => {

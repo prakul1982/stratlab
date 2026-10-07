@@ -44,7 +44,8 @@ test("dev kit: not for ordinary users", async ({ page }) => {
   await page.goto("/dev/kit");
   await page.waitForTimeout(2500);
   await expect(page.getByRole("heading", { name: "One look, everywhere" })).toHaveCount(0);
-  expect(new URL(page.url()).pathname).not.toBe("/dev/kit");
+  // said in the page, not a silent jump home (F4-011)
+  await expect(page.getByRole("heading", { level: 1, name: "You don't have access to this page" })).toBeVisible();
 });
 
 test("dev kit: every component renders and the switches work", async ({ page }) => {

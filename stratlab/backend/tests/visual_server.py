@@ -45,7 +45,8 @@ def build():
     from datetime import datetime, timezone
     from app import db
     # brand-new accounts, for the first-steps checklist on Home (u-load-201 and 204: the new-user walkthrough's own)
-    for uid in ("u-free", "u-basic", "u-load-201", "u-load-204"):
+    # (u-load-58 and 59: e2e/gate.spec.ts, the first-run guide one piece at a time)
+    for uid in ("u-free", "u-basic", "u-load-201", "u-load-204", "u-load-58", "u-load-59"):
         db.update_profile(uid, created_at=datetime.now(timezone.utc).isoformat())
     # the owner's holdings, imported from a Zerodha Console file, for the My Holdings page
     sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"

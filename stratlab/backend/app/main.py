@@ -98,12 +98,12 @@ from . import mtf, slb, stock_desks, stock_futures     # the per-stock market de
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
-from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
 from . import money_networth
 from .plans import networth_items
-from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
+from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
 from .plans import decks as decks_limit, deepdives as deepdives_limit
@@ -558,8 +558,9 @@ def plans():
 
 @app.get("/pricing")
 def prices():
-    """Prices in every currency StratLab shows, which currency each is charged in, and country → currency."""
-    return pricing.public()
+    """Prices in every currency StratLab shows, which currency each is charged in, country → currency, and the offer
+    in force today (payments on or not, the launch offer), so the public pages say what the app does."""
+    return {**pricing.public(), "offer": offer_state()}
 
 
 def fx_rate(code: str) -> float:
@@ -640,6 +641,8 @@ def me(profile=Depends(current_profile)):
         "data_online": kite.ready(),
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
+        "offer": offer_state(),
+        "onboarding": onboarding_of(profile["id"]),
         "is_admin": admin.is_admin(profile),
     })
 
@@ -686,6 +689,31 @@ def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     prefs = {**prefs_of(profile["id"]), **{k: v for k, v in given.items() if v}}
     db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
     return {"prefs": {k: prefs.get(k) for k in PREF_KEYS}}
+
+
+def onboarding_of(uid: str) -> dict:
+    """Where this account is in the first-run guide, kept on the account (not the browser), so it shows once per person
+    rather than once per device: `welcome` when the "What brings you here?" question was answered or closed, `tour`
+    "done" or "skipped" once the short tour was finished or closed."""
+    o = prefs_of(uid).get("onboarding")
+    o = o if isinstance(o, dict) else {}
+    return {"welcome": o.get("welcome") if isinstance(o.get("welcome"), str) else None,
+            "tour": o.get("tour") if o.get("tour") in ("done", "skipped") else None}
+
+
+@app.put("/me/onboarding")
+def set_onboarding(req: OnboardingReq, profile=Depends(current_profile)):
+    """Remember that the welcome question or the tour was seen. Only moves forward: a tour that was done stays done."""
+    prefs = prefs_of(profile["id"])
+    cur = prefs.get("onboarding") if isinstance(prefs.get("onboarding"), dict) else {}
+    nxt = dict(cur)
+    if req.welcome and not cur.get("welcome"):
+        nxt["welcome"] = db.now_iso()
+    if req.tour and cur.get("tour") != "done":
+        nxt["tour"] = req.tour
+    if nxt != cur:
+        db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "onboarding": nxt}))
+    return {"onboarding": onboarding_of(profile["id"])}
 
 
 @app.get("/push/key")
@@ -2916,6 +2944,26 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     if r == "IN":                           # the surveillance lists change daily, so they're added as the page is sent
         page = stock_pages.with_surveillance(page, surveillance.flags_for(sym))
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=SEO_HEADERS)
+
+
+@app.get("/public/company/{region}/{symbol}")
+def public_company(region: str, symbol: str):
+    """A company's name and its public page, for the "Sign in to see …" screen a signed-out visitor gets on a company's
+    address in the app. Only what the public page itself shows; 404 when the company has no public page."""
+    r = stock_pages.REGIONS.get(region.lower())
+    hit = stock_pages.find(r, symbol) if r and len(symbol) <= 20 else None
+    if not hit:
+        err(404, "not_found", "No public page for that company.")
+    sym, co = hit
+    return {"region": r, "symbol": sym, "name": co.get("name") or sym, "page": stock_pages.path(r, sym)}
+
+
+@app.get("/public/business")
+def public_business():
+    """Who runs the site, for the Contact, Terms and Refund pages: the seller's legal name, address and email as set in
+    Admin → Invoices (they already print on every invoice). Blank fields stay blank; the pages fall back to config.js."""
+    s = invoices.seller()
+    return {k: (s.get(k) or "").strip() for k in ("legal_name", "address", "email")}
 
 
 @app.get("/robots.txt")

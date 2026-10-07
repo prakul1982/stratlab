@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, CFG } from "../lib/api";
+import { mcpEndpoint } from "../lib/mcp";
 import { useApp } from "../lib/app";
 import { ago, dateOnly } from "../lib/format";
 import { Earlier } from "./Earlier";
@@ -17,6 +18,7 @@ const RESULT: Record<Entry["result"], [string, "ok" | "warn"]> = {
   ok: ["Done", "ok"], error: ["Couldn't", "warn"], refused: ["Refused", "warn"], rate_limited: ["Too many", "warn"],
 };
 const SHOWN = 15;    // log lines before the rest fold away
+const NAME_ID = "assistant-key-name";
 
 /** A block of text to copy: a command, a URL or a config. */
 function Copyable({ text, label }: { text: string; label: string }) {
@@ -73,7 +75,10 @@ export function AssistantCards() {
   const [asking, setAsking] = useState<Key | null>(null);
   useEffect(() => { api<AssistantPage>("/me/assistant").then(setP).catch(fail); }, [fail]);
 
+  const [nameMissing, setNameMissing] = useState(false);
   const create = async () => {
+    if (!name.trim()) { setNameMissing(true); document.getElementById(NAME_ID)?.focus(); return; }   // a key needs a name to tell it apart
+    setNameMissing(false);
     setBusy(true);
     try {
       const r = await api<AssistantPage & { token: string; key: Key }>("/me/assistant/keys", { method: "POST", body: { name: name.trim(), paper } });
@@ -87,8 +92,9 @@ export function AssistantCards() {
   };
 
   if (!p) return <Card label="Your assistants"><Skeleton label="Loading your assistants" /></Card>;
-  if (!p.allowed) return <PlanNote>The AI assistant is on the Pro plan. You are on the {p.plan} plan.</PlanNote>;
+  if (!p.allowed) return <PlanNote>Connecting an AI assistant is on the Pro plan. You are on the {p.plan} plan.</PlanNote>;
 
+  const endpoint = mcpEndpoint(CFG.API_BASE, location.origin, p.endpoint);
   const live = p.keys.filter((k) => !k.revoked_at);
   const gone = p.keys.filter((k) => k.revoked_at);
   const row = (k: Key) => (
@@ -119,7 +125,7 @@ export function AssistantCards() {
             <b>Your new key for {made.name}</b>
             <span className="k-small">Copy it now: StratLab keeps only a fingerprint of it and can't show it again.</span>
             <Copyable text={made.token} label="Key" />
-            <Disclosure summary="Set it up" open><SetupGuide endpoint={p.endpoint} token={made.token} /></Disclosure>
+            <Disclosure summary="Set it up" open><SetupGuide endpoint={endpoint} token={made.token} /></Disclosure>
             <button type="button" className="btn quiet sm k-btn-end" onClick={() => setMade(null)}>Done</button>
           </div>
         )}
@@ -129,7 +135,10 @@ export function AssistantCards() {
         <Earlier label="Revoked keys" count={gone.length}>{gone.map(row)}</Earlier>
         {live.length < p.max_keys ? (
           <FormGrid label="Make a key" onSubmit={(e) => { e.preventDefault(); void create(); }}>
-            <Field label="Name of the assistant" value={name} maxLength={40} placeholder="Claude on my laptop" onChange={(e) => setName(e.target.value)} />
+            <Field id={NAME_ID} label="Name of the assistant" value={name} maxLength={40} placeholder="Claude on my laptop" aria-required="true"
+              aria-invalid={nameMissing || undefined} aria-describedby={nameMissing ? `${NAME_ID}-need` : undefined}
+              onChange={(e) => { setName(e.target.value); if (e.target.value.trim()) setNameMissing(false); }} />
+            {nameMissing && <p className="k-field wide k-small k-warn-text" id={`${NAME_ID}-need`} role="alert">Name the key after the assistant that will use it, like "Claude on my laptop".</p>}
             <div className="k-field wide">
               <CheckField checked={paper} onChange={setPaper} label={<span>Allow paper orders<span className="k-check-note">It can open and close positions in your own running paper sessions (simulated, no money). Without this the key only reads.</span></span>} />
             </div>
@@ -139,9 +148,9 @@ export function AssistantCards() {
       </Card>
 
       {!made && (
-        <Card label="Connect Claude or ChatGPT">
-          <CardHead title="Connect Claude or ChatGPT" />
-          <Disclosure summary="Show the setup steps"><SetupGuide endpoint={p.endpoint} /></Disclosure>
+        <Card label="Set up Claude or ChatGPT">
+          <CardHead title="Set up Claude or ChatGPT" />
+          <Disclosure summary="Show the setup steps"><SetupGuide endpoint={endpoint} /></Disclosure>
         </Card>
       )}
 

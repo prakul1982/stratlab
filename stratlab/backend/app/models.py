@@ -348,6 +348,11 @@ class PrefsReq(BaseModel):
     space: Literal["trade", "invest", "money", "all"] | None = None       # the menu's space last picked in the sidebar
 
 
+class OnboardingReq(BaseModel):
+    welcome: bool = False                                    # the "What brings you here?" question was answered or closed
+    tour: Literal["done", "skipped"] | None = None           # the short tour was finished, or closed early
+
+
 class NewsletterReq(BaseModel):
     market_in: Literal["daily", "weekly", "off"] | None = None
     market_us: Literal["daily", "weekly", "off"] | None = None
