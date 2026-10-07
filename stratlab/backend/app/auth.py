@@ -69,4 +69,8 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
     same = (profile.get("email") or "").strip().lower() == (email or "").strip().lower()
     profile["_email_verified"] = verified and same
     profile["_signed_in_with"] = method if isinstance(method, str) else None
+    # the site owner uses every feature (what they pay for is unchanged); only a Google-proved admin address counts
+    from . import admin
+    if admin.is_admin(profile):
+        profile["_plan"] = "pro"
     return profile

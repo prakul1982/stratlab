@@ -21,6 +21,7 @@ import { registerPwa } from "./lib/pwa";
 import { captureRef } from "./lib/share";
 import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
+import { PageLock } from "./components/PageLock";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
 import { SPACE_HOMES } from "./lib/spaces";
@@ -227,6 +228,7 @@ function Routed() {
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
+      <PageLock />{/* a paid feature this plan lacks: said at the top, honestly (the server refuses it either way) */}
       <Suspense fallback={<Loading label="Opening" />}>
       <Routes>
         <Route path="/" element={<SpaceHome />} />

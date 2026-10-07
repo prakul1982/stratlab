@@ -37,7 +37,7 @@ from . import db
 from .auth import current_profile
 from .branding import public_text
 from .responses import err as _err
-from .plans import FEATURE_PLAN, PLANS, access_plan, allows
+from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 
 IST = ZoneInfo("Asia/Kolkata")
 KEY = "moneycal:"                 # moneycal:<uid> = {"events": [...], "feed": {...}, "reminders": {...}}
@@ -516,7 +516,7 @@ def send_reminders(today: date, send=_send) -> int:
             continue
         try:
             profile = db.get_profile(uid)
-            if not allows(access_plan(profile), "money_reminders"):
+            if not allows(plan_of(profile), "money_reminders"):
                 continue
             target = today + timedelta(days=r["days"])
             evs = events(uid, target, target, set(r["cats"]))

@@ -62,9 +62,8 @@ export function PlansPage() {
     if (p === "free" || !row || currency === "INR") return { shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, charged: null as string | null, inr: p !== "free" };
     const local = (row as unknown as Record<string, number>)[per === "year" ? `${p}_year` : p];
     const chargedIn = per === "year" ? row.yearly_charged_in : row.charged_in;
-    // charged in rupees: the amount is the rupee price at today's rate, so it says "about"
-    const about = chargedIn === "INR" && (per === "year" ? row.approx_year : row.approx) !== false;
-    return { shown: `${about ? "about " : ""}${money(row, local, currency)}`, charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false };
+    // the admin table's price ($8 and $20 for dollars); "Charged as ₹…" under it while that currency is charged in rupees
+    return { shown: money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false };
   };
   const anyRupees = currency !== "INR" && !!row && (period === "year" ? row.yearly_charged_in : row.charged_in) === "INR";
 
@@ -128,16 +127,16 @@ export function PlansPage() {
                 <span className="k-small k-muted">{WHO[p]}</span>
               </div>
               <div className="k-stack tight">
-                <div className="k-plan-price">{price.shown.startsWith("about ") ? <><span>about </span>{price.shown.slice(6)}</> : price.shown}<span> / {period}</span></div>
+                <div className="k-plan-price">{price.shown}<span> / {period}</span></div>
                 {price.inr && <span className="k-note">incl. GST</span>}
-                {price.charged && <span className="k-note">Charged as {price.charged} incl. GST / {period}</span>}
+                {price.charged && <span className="k-note">{billing ? `Charged as ${price.charged} incl. GST / ${period}` : `${price.charged} a ${period} in India, incl. GST`}</span>}
               </div>
               <ul className="k-plan-list">
                 {FEATURES[p].map((f) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
               </ul>
               {cur ? <button className="btn outline" disabled>Current plan</button>
                 : p === "free" ? <span className="k-small k-muted">Included whenever a paid plan ends</span>
-                  : !billing ? <span className="lp-plan-note k-small k-muted">Not on sale yet</span>
+                  : !billing ? <span className="lp-plan-note k-small k-muted">Opens soon</span>
                     : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy} onClick={() => ask(p)}>
                       {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}</button>}
             </Card>
@@ -151,7 +150,7 @@ export function PlansPage() {
       {billing ? (
         <p className="k-small k-muted k-measure">Rupee prices include 18% GST, and every payment gets a GST invoice in Account. Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by our payment partner.</p>
       ) : (
-        <p className="k-small k-muted k-measure">{finePrint(offer, { currency: row && currency !== "INR" ? currency : "INR", approx: !!row?.approx, approxYear: !!row?.approx_year,
+        <p className="k-small k-muted k-measure">{finePrint(offer, { currency: row && currency !== "INR" ? currency : "INR", inRupees: row?.charged_in === "INR", inRupeesYear: row?.yearly_charged_in === "INR",
           charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` } }).join(" ")}</p>
       )}
       <p className="k-small k-muted k-measure">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>

@@ -35,9 +35,13 @@ def test_prices_and_limits():
     assert PLANS["free"]["live_trial_days"] == 5
 
 
-def test_everything_open_during_early_access(monkeypatch):
+def test_plans_gate_even_before_payments_are_set_up(monkeypatch):
+    """The owner's decision (7 Oct): each plan gets exactly what Pricing lists, payments on or not. (This test used to
+    check that everything was open during early access.)"""
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
-    assert all(plan_info("free")["features"].values()) and group_size("free") == 50
+    assert not any(plan_info("free")["features"].values()) and group_size("free") == 10
+    assert plan_info("free")["deepdives_per_month"] == 2 and plan_info("free")["holdings"] == 30
+    assert all(plan_info("pro")["features"].values())
 
 
 def test_features_per_plan_once_payments_are_live(paid):

@@ -113,16 +113,30 @@ GRACE = timedelta(days=1)
 
 
 def payments_live() -> bool:
-    """People can actually buy a plan: the Razorpay keys and both monthly plan IDs are set. Until then every
-    feature stays open, so setting only the keys never locks people out of features they can't yet buy."""
+    """People can actually buy a plan: the Razorpay keys and both monthly plan IDs are set. It only changes the
+    words (an upgrade message says how to get early access instead of "upgrade"), never what a plan includes."""
     from . import billing
     return billing.enabled()
 
 
 def allows(plan: str, feature: str) -> bool:
-    """Paid features are open to everyone until payments go live: nobody can buy a plan yet,
-    so gating them would just hide them."""
-    return feature in PLANS[plan]["features"] or not payments_live()
+    """Each plan gets exactly what the Pricing page lists, whether or not payments are set up (the owner's decision,
+    7 Oct). `plan` is the access plan (access_plan): Pro for everyone during the launch offer and for the site owner, a
+    plan the owner granted by hand, free Basic time from invites."""
+    return feature in PLANS[plan]["features"]
+
+
+EARLY_ACCESS_EMAIL = "support@stratlab.studio"
+
+
+def upgrade_note(message: str) -> str:
+    """An upgrade message as it should read today. While no plan can be bought, it says so and how to get early access,
+    instead of sending people to a checkout that doesn't exist."""
+    if payments_live():
+        return message
+    from .config import settings
+    email = (getattr(settings, "REPLY_TO_EMAIL", "") or EARLY_ACCESS_EMAIL).strip()
+    return f"{message.rstrip()} Paid plans open soon; ask us at {email} for early access."
 
 
 def has_indicators(plan: str) -> bool:
@@ -147,47 +161,47 @@ def bigger_plan(plan: str, key: str) -> str | None:
 
 
 def group_size(plan: str) -> int:
-    return PLANS[plan]["group_size"] if payments_live() else PLANS["pro"]["group_size"]
+    return PLANS[plan]["group_size"]
 
 
 def holdings_limit(plan: str) -> int:
     """How many stocks My Holdings keeps. Importing is for everyone; paid plans keep more."""
-    return PLANS[plan]["holdings"] if payments_live() else PLANS["pro"]["holdings"]
+    return PLANS[plan]["holdings"]
 
 
 def stock_alerts(plan: str) -> int:
     """How many stock alerts can be on at once."""
-    return PLANS[plan]["stock_alerts"] if payments_live() else PLANS["pro"]["stock_alerts"]
+    return PLANS[plan]["stock_alerts"]
 
 
 def screens(plan: str) -> int:
     """How many stock screens can be saved."""
-    return PLANS[plan]["screens"] if payments_live() else PLANS["pro"]["screens"]
+    return PLANS[plan]["screens"]
 
 
 def deepdives(plan: str) -> int | None:
     """How many companies a month the deep dive opens (None: unlimited). Each company counts once a month."""
-    return PLANS[plan]["deepdives_per_month"] if payments_live() else PLANS["pro"]["deepdives_per_month"]
+    return PLANS[plan]["deepdives_per_month"]
 
 
 def decks(plan: str) -> int | None:
     """How many company decks a month (None: unlimited)."""
-    return PLANS[plan]["decks_per_month"] if payments_live() else PLANS["pro"]["decks_per_month"]
+    return PLANS[plan]["decks_per_month"]
 
 
 def networth_items(plan: str) -> int | None:
     """How many typed-in entries Net worth keeps (None: unlimited)."""
-    return PLANS[plan]["networth_items"] if payments_live() else PLANS["pro"]["networth_items"]
+    return PLANS[plan]["networth_items"]
 
 
 def mf_limit(plan: str) -> int | None:
     """How many mutual fund schemes are kept (None: no limit)."""
-    return PLANS[plan]["mf_schemes"] if payments_live() else PLANS["pro"]["mf_schemes"]
+    return PLANS[plan]["mf_schemes"]
 
 
 def journal_limit(plan: str) -> int | None:
     """How many closed trades the trade journal keeps and counts (None: no limit)."""
-    return PLANS[plan]["journal_trades"] if payments_live() else PLANS["pro"]["journal_trades"]
+    return PLANS[plan]["journal_trades"]
 
 
 def plan_info(plan: str) -> dict:
@@ -399,6 +413,14 @@ def offer_state(now: datetime | None = None) -> dict:
         "free_now": {k: info[k] for k in LIMIT_KEYS},
         "free_trial_days": PLANS["free"]["live_trial_days"],
     }
+
+
+def plan_of(profile: dict) -> str:
+    """The plan to check a feature against: the one sign-in resolved for this request (`_plan`, which also knows the
+    site owner), else worked out from the stored profile (background jobs read profiles from the database).
+    Re-working it out in a request ignored the owner, and a test or caller that set `_plan` alone."""
+    p = profile.get("_plan")
+    return p if p in PLANS else access_plan(profile)
 
 
 def trial_end(started: datetime, days: int) -> datetime:

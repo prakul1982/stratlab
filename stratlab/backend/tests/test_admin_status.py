@@ -130,7 +130,8 @@ def test_me_gives_the_plans_own_limits_and_what_lifts_them(w, monkeypatch):
     u = c.get("/me", headers=headers("free-token")).json()["usage"]
     assert u["deepdive_plan_limit"] == plans.PLANS["free"]["deepdives_per_month"] == 2
     assert u["deck_plan_limit"] == plans.PLANS["free"]["decks_per_month"] == 1
-    assert u["deepdive_limit"] is None and u["lifted_by"] == "early access"
+    # payments off no longer lifts anything (the owner's decision, 7 Oct): Free's own limit, nothing lifting it
+    assert u["deepdive_limit"] == 2 and u["lifted_by"] is None
     for mod in (plans, main):
         monkeypatch.setattr(mod, "payments_live", lambda: True)
     u = c.get("/me", headers=headers("free-token")).json()["usage"]

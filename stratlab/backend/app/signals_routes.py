@@ -23,7 +23,7 @@ from . import db, guard
 from . import journal as J
 from . import signals as SG
 from .auth import current_profile
-from .plans import FEATURE_PLAN, PLANS, access_plan, allows
+from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 from .signal_session import KIND, SignalSession, defaults, stopped_snapshot
 
 router = APIRouter(prefix="/trade/signals", tags=["signals"])
@@ -261,7 +261,7 @@ def _hook(token: str, body: bytes, addr: str) -> JSONResponse:
         profile = db.get_profile(uid)
     except Exception:
         return _answer(503, "busy", "Try again in a moment.")
-    if not allows(access_plan(profile), "signal_webhooks"):
+    if not allows(plan_of(profile), "signal_webhooks"):
         SG.log_miss(uid, {"at": now, "status": "rejected", "reason": f"Forward-testing signals is on the {_plan_name()} plan."})
         return _answer(403, "plan", f"Forward-testing signals is on the {_plan_name()} plan.")
     try:

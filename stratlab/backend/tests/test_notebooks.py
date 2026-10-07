@@ -160,7 +160,10 @@ def test_backtest_limit(api):
     nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
     r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
     assert r.status_code == 402 and r.json()["detail"]["code"] == "backtest_limit"
-    assert r.json()["detail"]["message"] == "You've used all 10 backtests for this month. Basic gives 100."
+    msg = r.json()["detail"]["message"]
+    assert msg.startswith("You've used all 10 backtests for this month. Basic gives 100.")
+    # while no plan can be bought, the prompt says how to get early access instead of pointing at a checkout
+    assert msg.endswith("Paid plans open soon; ask us at support@stratlab.studio for early access.") or r.json()["detail"]["payments"]
 
 
 def test_no_instrument_runs_on_the_default(api):

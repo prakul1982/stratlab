@@ -15,23 +15,29 @@ const onb = await import("../src/lib/onboarding.ts");
 const { mcpEndpoint } = await import("../src/lib/mcp.ts");
 const { LIMITS } = await import("../src/lib/plans.ts");
 
-const FREE_NOW_EARLY = { ...LIMITS.pro, backtests_per_month: 10, ai_builds_per_month: 10, live_limit: 1 };
-delete FREE_NOW_EARLY.features;
-const early = { mode: "early", payments: false, yearly: false, promo_until: null, free_now: FREE_NOW_EARLY, free_trial_days: 5 };
-const paid = { mode: "paid", payments: true, yearly: true, promo_until: null, free_now: {}, free_trial_days: 5 };
-const promo = { mode: "promo", payments: false, yearly: false, promo_until: "2099-10-31T00:00:00+00:00", free_now: FREE_NOW_EARLY, free_trial_days: 5 };
+const gates = await import("../src/lib/gates.ts");
+const { FLAGS, LIMITS: L2, planOf } = await import("../src/lib/plans.ts");
 
-test("early access says so, with the limits that still apply, and sells nothing", () => {
+const FREE_NOW = { ...LIMITS.free };
+delete FREE_NOW.features;
+const early = { mode: "early", payments: false, yearly: false, promo_until: null, free_now: FREE_NOW, free_trial_days: 5 };
+const paid = { mode: "paid", payments: true, yearly: true, promo_until: null, free_now: FREE_NOW, free_trial_days: 5 };
+const promo = { mode: "promo", payments: false, yearly: false, promo_until: "2099-10-31T00:00:00+00:00", free_now: FREE_NOW, free_trial_days: 5 };
+
+test("payments off: Free is open, Basic and Pro open soon, and nothing says paid features are free", () => {
   const i = offer.pricingIntro(early, LIMITS.pro, "landing");
-  assert.equal(i.title, "Free during early access.");
-  assert.match(i.lede, /^Paid plans aren't on sale yet\. Until they are, every feature is open to everyone on the Free plan, with 10 backtests a month, 10 AI strategy builds a month and paper trading for 5 market days\./);
-  assert.doesNotMatch(i.lede, /Cancel any time/);
-  assert.deepEqual(offer.landingAction(early, "pro"), { note: "Not on sale yet" });
+  assert.equal(i.title, "Free to start. Paid plans open soon.");
+  assert.equal(i.lede, "The Free plan is open to everyone. Basic and Pro aren't on sale yet; each will include what its card lists. Ask us at support@stratlab.studio for early access.");
+  assert.doesNotMatch(i.lede, /every feature is open|open to everyone until|Cancel any time/);
+  assert.deepEqual(offer.landingAction(early, "pro"), { note: "Opens soon" });
   assert.deepEqual(offer.landingAction(early, "free"), { label: "Start free", buy: false });
   assert.equal(offer.canBuy(early), false);
+  assert.equal(offer.unlockHint(early), "Paid plans open soon; ask us at support@stratlab.studio for early access.");
+  assert.equal(offer.unlockHint(paid), "See the plans to upgrade.");
   // the small print promises nothing that can't be bought: no invoices, no renewals, no yearly
-  const small = offer.finePrint(early, { currency: "INR", approx: false, approxYear: false, year: { basic: "₹6,999", pro: "₹19,999" } }).join(" ");
+  const small = offer.finePrint(early, { currency: "INR", inRupees: false, inRupeesYear: false, year: { basic: "₹6,999", pro: "₹19,999" } }).join(" ");
   assert.equal(small, "Rupee prices include 18% GST.");
+  assert.deepEqual(offer.finePrint(early, { currency: "USD", inRupees: true, inRupeesYear: true, charged: { basic: "₹699", pro: "₹1,999" } }), []);
   // the Plans page says the same words as the landing page
   assert.equal(offer.pricingIntro(early, LIMITS.pro, "app").lede, i.lede);
 });
@@ -39,31 +45,50 @@ test("early access says so, with the limits that still apply, and sells nothing"
 test("payments on: plans can be bought, cancelled any time, yearly in the visitor's own currency", () => {
   assert.deepEqual(offer.landingAction(paid, "basic"), { label: "Start with Basic", buy: true });
   assert.match(offer.pricingIntro(paid, LIMITS.pro, "landing").lede, /Cancel any time\.$/);
-  const usd = offer.finePrint(paid, { currency: "USD", approx: true, approxYear: true, year: { basic: "about $80", pro: "about $225" }, charged: { basic: "₹699", pro: "₹1,999" } });
+  const usd = offer.finePrint(paid, { currency: "USD", inRupees: true, inRupeesYear: true, year: { basic: "$80", pro: "$200" }, charged: { basic: "₹699", pro: "₹1,999" } });
   assert.ok(usd.some((l) => l.startsWith("Paid in rupees for now: a card is charged ₹699 (Basic) or ₹1,999 (Pro) a month")));
-  assert.ok(usd.includes("Paying yearly: Basic about $80, Pro about $225, charged in rupees."));
-  assert.ok(!usd.join(" ").includes("Paying yearly in rupees"), "a dollar visitor isn't shown a rupee-only yearly line");
-  const inr = offer.finePrint(paid, { currency: "INR", approx: false, approxYear: false, year: { basic: "₹6,999", pro: "₹19,999" } });
+  assert.ok(usd.includes("Paying yearly: Basic $80, Pro $200, charged in rupees."));
+  assert.ok(!usd.join(" ").includes("about"), "no converted prices: the admin table's $8 and $20");
+  const inr = offer.finePrint(paid, { currency: "INR", inRupees: false, inRupeesYear: false, year: { basic: "₹6,999", pro: "₹19,999" } });
   assert.deepEqual(inr.slice(0, 2), ["Rupee prices include 18% GST, and every payment gets a GST invoice.", "Paying yearly: Basic ₹6,999, Pro ₹19,999."]);
 });
 
 test("the launch offer names its end; an unknown offer promises nothing", () => {
   const i = offer.pricingIntro(promo, LIMITS.pro, "landing");
   assert.match(i.title, /^Every Pro feature, free until 31 Oct\.$/);
-  assert.match(i.lede, /Paid plans aren't on sale yet/);
+  assert.match(i.lede, /ask us at support@stratlab\.studio for early access/);
   assert.equal(offer.promoUntil(promo, Date.parse("2099-10-30")), promo.promo_until);
   assert.equal(offer.promoUntil(promo, Date.parse("2099-11-01")), null);
   assert.equal(offer.offerMode(null), "unknown");
   assert.deepEqual(offer.landingAction(null, "pro"), { note: "Choose a plan after you sign in" });
-  assert.deepEqual(offer.finePrint(null, { currency: "EUR", approx: true, approxYear: true }), []);
+  assert.deepEqual(offer.finePrint(null, { currency: "EUR", inRupees: true, inRupeesYear: true }), []);
 });
 
-test("a paid feature that's open today is tagged as open, and why", () => {
-  assert.deepEqual(offer.featureTag("basic", early, { paid: "free", canUse: true }),
-    { label: "Basic · open now", why: "A Basic feature, open to everyone until paid plans go on sale" });
+test("a paid feature's tag: locked with its plan, or open with why", () => {
+  const locked = offer.featureTag("basic", early, { paid: "free", canUse: false });
+  assert.deepEqual(locked, { label: "🔒 Basic", why: "A Basic feature. Paid plans open soon; ask us at support@stratlab.studio for early access.", locked: true });
   assert.equal(offer.featureTag("pro", promo, { paid: "free", canUse: true }).why, "A Pro feature, open to everyone during the launch offer");
-  assert.equal(offer.featureTag("basic", paid, { paid: "free", canUse: false }).label, "Basic");
-  assert.equal(offer.featureTag("basic", paid, { paid: "pro", canUse: true }).label, "Basic");     // paying for it: just the plan
+  assert.equal(offer.featureTag("basic", paid, { paid: "pro", canUse: true }).label, "Basic");          // paying for it: just the plan
+  assert.equal(offer.featureTag("basic", early, { paid: "free", canUse: true }).label, "Basic · open now"); // granted by the owner, free Basic time
+});
+
+test("every paid feature has a page that names its lock, or a known place inside another page", () => {
+  const paidFeatures = FLAGS.map(([f]) => f);
+  for (const f of paidFeatures) {
+    const pages = Object.entries(gates.PAGE_GATES).filter(([, g]) => g.feature === f).map(([p]) => p);
+    assert.ok(pages.length || gates.ELSEWHERE[f], `${f}: no page in PAGE_GATES and no entry in ELSEWHERE`);
+    assert.notEqual(planOf(f), "free", `${f} is a paid feature`);
+  }
+  for (const [path, g] of Object.entries(gates.PAGE_GATES)) {
+    assert.ok(paidFeatures.includes(g.feature), `${path}: ${g.feature} isn't a paid feature`);
+    assert.ok(links.isAppPath(path), `${path} isn't an app page`);
+  }
+  assert.equal(gates.gateFor("/research/scan?x=1").feature, "scans");
+  assert.equal(gates.gateFor("/trade/signals/abc").feature, "signal_webhooks");
+  assert.equal(gates.gateFor("/holdings"), null);
+  assert.equal(gates.gatePlan(gates.gateFor("/money/us-tax")), "pro");
+  assert.equal(gates.featureName("scans"), "Stage 2 + Supertrend scan, with a daily alert");
+  assert.ok(L2.basic.features.includes("scans"));
 });
 
 test("the way back after sign-in: own pages only", () => {

@@ -1817,6 +1817,10 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 @media (max-width: 600px) { .lp-more > summary { min-height: 40px; } }
 
 .k-warn-text { color: var(--orange-ink); margin: 0; }
+/* a paid feature this plan lacks: its plan beside the menu entry, and a note at the top of the page (lib/gates.ts) */
+.side-lock { margin-left: auto; flex: none; padding: 0 6px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 18px; }
+.side-lock::before { content: "🔒 " attr(data-plan); }
+.page-lock { margin-bottom: var(--s4); }
 
 /* signed out on an app address, a page that doesn't exist, a page that isn't yours (pages/Gate.tsx) */
 .gate { max-width: 640px; }

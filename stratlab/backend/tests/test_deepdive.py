@@ -488,12 +488,16 @@ def test_monthly_deep_dives_and_decks_count_each_company_once(api, monkeypatch):
     assert c.get("/research/deep/ZZZ").status_code == 200 and c.get("/me").json()["usage"]["deepdive_limit"] is None
 
 
-def test_deep_dive_is_unlimited_until_payments_go_live(api, monkeypatch):
+def test_deep_dive_cap_applies_before_payments_go_live(api, monkeypatch):
+    """The owner's decision (7 Oct): Free's 2 deep dives a month apply whether or not plans can be bought yet. (This
+    test used to check the deep dive was unlimited until payments went live.)"""
     from app import main
     from app.config import settings
     c, who, _calls, usage = api
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
     monkeypatch.setattr(main, "deep_base", lambda sym, region="IN", years=2, trades=True: {"sym": sym})
     monkeypatch.setattr(main, "deep_view", lambda sym, base: {"symbol": sym})
-    assert all(c.get(f"/research/deep/S{i}").status_code == 200 for i in range(5))   # Free, early access: no cap
-    assert usage.count("deepdive") == 5                                              # still counted, for usage
+    codes = [c.get(f"/research/deep/S{i}").status_code for i in range(3)]
+    assert codes == [200, 200, 402]                                                  # Free: 2 companies a month
+    r = c.get("/research/deep/S9")
+    assert r.json()["detail"]["code"] == "deepdive_limit" and "ask us at" in r.json()["detail"]["message"]

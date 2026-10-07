@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from . import admin, fo_changes as F, stock_alerts
 from .auth import current_profile
-from .plans import FEATURE_PLAN, PLANS, access_plan, allows
+from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 
 router = APIRouter(tags=["fo-changes"])
 
@@ -45,7 +45,7 @@ def listed_expiries():
 
 
 def alerts_allowed(profile: dict) -> bool:
-    return allows(access_plan(profile), "fo_alerts")
+    return allows(plan_of(profile), "fo_alerts")
 
 
 def _send(profile: dict, subject: str, text: str) -> list[str]:

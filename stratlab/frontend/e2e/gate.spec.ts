@@ -100,7 +100,7 @@ test("signed in: a page that doesn't exist, Admin for someone else, /pricing and
   await page.goto("/pricing");
   await expect(page).toHaveURL(/\/plans$/, { timeout: 30_000 });
   await expect(main.getByRole("heading", { level: 1, name: "Plans" })).toBeVisible();
-  await expect(main).toContainText("Paid plans aren't on sale yet.");                        // the same words as the landing page
+  await expect(main).toContainText("Basic and Pro aren't on sale yet");                     // the same words as the landing page
   await page.goto("/upgrade");
   await expect(page).toHaveURL(/\/plans$/);
   await page.goto("/help");
