@@ -1511,8 +1511,9 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
 });
 
 test("money tax tools: dividends from a file into the estimate, advance tax by date with reminders, and the long-term exemption", async ({ page, request }, info) => {
-  // the same users as the tax report tests (which run before this one in each project), starting from no tax data
-  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
+  // Pro in both projects: the amounts due by each date are a Pro feature (the phone project's own Pro user, load-299),
+  // starting from no tax data
+  const [token, id, email] = info.project.name === "phone" ? ["load-299", "u-load-299", "load299@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
   const auth = { Authorization: `Bearer ${token}` };
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
   expect((await request.post(`${API}/tax/import?filename=zerodha_console_tradebook.csv&mode=add`, {
