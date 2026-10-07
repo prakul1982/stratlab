@@ -55,8 +55,8 @@ def test_report_sent_once_with_the_days_numbers():
     assert run(utc(2026, 9, 24, 10, 15)) == [("u1", "IN")]          # only India is due, and u2 has alerts off
     subj, body = sent[0]
     assert subj == "StratLab daily report: India"
-    assert "2 trades closed (1 won), +200 INR" in body and "1 open, +120 INR on paper" in body
-    assert "Since start: +500 INR (+5.0%)" in body
+    assert "2 trades closed (1 won), +₹200" in body and "1 open, +₹120 on paper" in body      # ₹, as the app writes it
+    assert "Since start: +₹500 (+5.0%)" in body
     assert run(utc(2026, 9, 24, 10, 20)) == []                     # not twice
     assert R.Reporter(db).run([a], utc(2026, 9, 24, 10, 25), can_alert=lambda p: True, market_name=str,
                               send=lambda *x: sent.append(x)) == []  # nor after a restart

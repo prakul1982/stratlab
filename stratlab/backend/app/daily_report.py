@@ -78,12 +78,14 @@ def summarise(s, day: str) -> dict:
 
 
 def _money(x: float, cur: str) -> str:
-    sign = "-" if x < 0 else "+"
-    return f"{sign}{abs(x):,.0f} {cur}".strip()
+    """+₹200, −$35: the currency's sign, as everywhere else in the app (a currency without one keeps its code)."""
+    from .email_kit import money
+    return money(x, cur or "INR", signed=True)
 
 
 def text(market_name: str, day: str, rows: list[dict]) -> str:
-    d = date.fromisoformat(day).strftime("%a %d %b")
+    from .email_kit import fmt_date
+    d = fmt_date(day, year=False, weekday=True)
     lines = [f"StratLab daily report: {market_name}, {d}", ""]
     for r in rows:
         total = r["equity"] - r["capital"]
@@ -97,7 +99,7 @@ def text(market_name: str, day: str, rows: list[dict]) -> str:
             extra = [f"{sig['late']} late" if sig["late"] else "", f"{sig['refused']} refused" if sig["refused"] else ""]
             extra = [x for x in extra if x]
             lines.append(f"  Signals: {sig['received']} arrived" + (f" ({', '.join(extra)}; see the session's signal log)" if extra else ""))
-    lines += ["", "Paper trading only: no real orders. Turn this report off under Account → Alerts."]
+    lines += ["", "Paper trading only: no real orders. Turn this report off in Settings → Notifications → Alerts."]
     return "\n".join(lines)
 
 

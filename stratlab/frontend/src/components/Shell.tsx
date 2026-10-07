@@ -10,14 +10,10 @@ import { SPACE_IDS, SPACES, homeOf, spaceOf, type SpaceView } from "../lib/space
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
 import { PageBreadcrumb } from "./PageBreadcrumb";
+import { Onboarding, openTour } from "./Onboarding";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
-const LevelPrompt = lazy(() => import("./LevelPrompt").then((m) => ({ default: m.LevelPrompt })));
-const Tour = lazy(() => import("./Tour").then((m) => ({ default: m.Tour })));
-
-export const TOUR_SEEN = "stratlab.tour.v1";
-const tourSeen = () => { try { return localStorage.getItem(TOUR_SEEN) === "1"; } catch { return true; } };
 
 /** The menu lists this many notebooks (pinned first, then the latest) under Notebooks; the rest are one tap away on the notebooks page. */
 const SIDE_NOTEBOOKS = 6;
@@ -33,11 +29,10 @@ const MINE_LINKS = ["/news"];
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, me, level, focus, space, setSpace } = useApp();
+  const { notebooks, markets, me, focus, space, setSpace } = useApp();
   const [open, setOpen] = useState(false);
   const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(OPEN_KEY, NO_GROUPS);
   const pins = usePins();
-  const [tour, setTour] = useState(false);
   const [search, setSearch] = useState(false);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -51,9 +46,6 @@ export function Shell({ children }: { children: ReactNode }) {
   }, []);
   const [, tick] = useState(0);
   useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
-  // ask the experience level once, then show the tour to anyone who hasn't seen it
-  const askLevel = !!me && (!level || !focus);
-  useEffect(() => { if (me && level && !tourSeen()) setTour(true); }, [me, level]);
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
@@ -148,7 +140,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="side-list side-nav">
           {item("/news", <News />, "Briefs", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
           {item("/settings#accounts", <Wallet />, "Connected accounts", path === "/settings" && loc.hash === "#accounts", "Your holdings, funds and tradebooks: the files StratLab reads")}
-          {item("/assistant", <Sparkle />, "AI assistant", path === "/assistant", "Use StratLab in Claude or ChatGPT")}
+          {item("/assistant", <Sparkle />, "Connect an AI assistant", path === "/assistant", "Keys that let Claude or ChatGPT use your StratLab")}
         </div>
       </section>
     </>
@@ -185,7 +177,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </nav>
       <div className="side-foot">
         <MarketsNow markets={markets} />
-        <AccountMenu me={me} onTour={() => { setOpen(false); setTour(true); }} onGo={() => setOpen(false)} />
+        <AccountMenu me={me} onTour={() => { setOpen(false); openTour(); }} onGo={() => setOpen(false)} />
       </div>
     </aside>
   );
@@ -205,10 +197,9 @@ export function Shell({ children }: { children: ReactNode }) {
       {sidebar}
       <main className="main" id="main" tabIndex={-1}><div className="page"><PageBreadcrumb />{children}</div></main>
       <Suspense fallback={null}>
-        {tour && <Tour onClose={() => setTour(false)} />}
         {search && <SearchPalette onClose={() => setSearch(false)} />}
-        {askLevel && !tour && <LevelPrompt onDone={() => undefined} />}
       </Suspense>
+      <Onboarding />
     </div>
   );
 }

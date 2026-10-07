@@ -1,10 +1,12 @@
 import { useEffect, useState, type JSX, type ReactNode } from "react";
-import { NEXT_PAGE, supabase } from "../lib/api";
 import { money, usePricing } from "../lib/currency";
-import { FEATURES, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
+import { finePrint, landingAction, pricingIntro } from "../lib/offer";
+import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
+import { signIn } from "../lib/signin";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
+import { Seg } from "../components/kit/Seg";
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
  * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). */
@@ -114,8 +116,18 @@ const ALERTS: [string, string][] = [
   ["Paper trades", "Each trade as it happens, and a short report after the close."],
 ];
 
-const MARKETS: [string, string][] = [
-  ["₹", "India"], ["₿", "Crypto"], ["$", "United States"], ["£", "United Kingdom"], ["€", "Europe"], ["¥", "Japan"],
+/** The bitcoin sign, drawn: the page's fonts have no ₿, and the fallback font drew one that read as the baht's ฿. */
+function BitcoinSign() {
+  return (
+    <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true" className="lp-btc">
+      <text x="10" y="15" textAnchor="middle" fontSize="15" fontWeight="600" fontFamily="var(--sans)" fill="currentColor">B</text>
+      <path d="M8.3 1.5v3M11.3 1.5v3M8.3 15.5v3M11.3 15.5v3" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+const MARKETS: [ReactNode, string][] = [
+  ["₹", "India"], [<BitcoinSign key="btc" />, "Crypto"], ["$", "United States"], ["£", "United Kingdom"], ["€", "Europe"], ["¥", "Japan"],
   ["€$", "Forex"], ["₹$", "Indian currency futures"], ["₹Au", "Indian commodities"], ["$Au", "Global commodities"], ["+", "Your own data (CSV)"],
 ];
 
@@ -131,14 +143,6 @@ const FAQ: [string, string][] = [
   ["How do invite rewards work?", "Invite friends, both get a month of Basic. Your invite link is in Account. When a friend joins with your link and uses StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a month (about a week extra). If you already pay, your free time is kept and starts if your paid plan ever stops."],
   ["Is there an app?", "StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon and sends alerts as notifications."],
 ];
-
-/** Sign in with Google; `next` is the page to open once signed in. */
-function signIn(next?: string) {
-  // came from a public company page's link (test a strategy, the deep dive), or picked a plan: go there once signed in
-  const to = next ?? (location.pathname !== "/" ? location.pathname + location.search : null);
-  if (to) try { sessionStorage.setItem(NEXT_PAGE, to); } catch { /* storage off */ }
-  return supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/" } });
-}
 
 const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], ["money", "Money"],
   ["alerts", "Alerts"], ["pricing", "Pricing"], ["faq", "FAQ"]];
@@ -161,8 +165,31 @@ function Head({ eyebrow, title, children }: { eyebrow: string; title: string; ch
   );
 }
 
-export function Login() {
+/** A few tools in view, the rest one click away: the page stays short and nothing is left out. */
+function ToolList({ items, label, shown = 4, three = false }: { items: [string, string][]; label: string; shown?: number; three?: boolean }) {
+  const tool = ([t, b]: [string, string]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>;
+  const cls = `lp-tools${three ? " lp-tools-3" : ""}`;
+  return (
+    <div className="stack">
+      <div className={cls}>{items.slice(0, shown).map(tool)}</div>
+      {items.length > shown && (
+        <details className="lp-more">
+          <summary>{items.length - shown} more {label}</summary>
+          <div className={cls}>{items.slice(shown).map(tool)}</div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+const moneyCard = ([t, b, tag]: [string, string, string]) => (
+  <div key={t} className="lp-card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-tag">{tag}</span></div>
+);
+
+/** `section`: scroll there first (the page was opened as /pricing, /help…). */
+export function Login({ section = null }: { section?: string | null } = {}) {
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => { if (section) document.getElementById(section)?.scrollIntoView(); }, [section]);
 
   useEffect(() => {
     const p = new URLSearchParams(location.search + "&" + location.hash.replace(/^#/, ""));
@@ -185,6 +212,13 @@ export function Login() {
         <nav aria-label="Sections">
           {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
         </nav>
+        {/* on a phone the section links fold into a small menu (the row above hides there) */}
+        <details className="lp-menu">
+          <summary aria-label="Sections menu">Menu</summary>
+          <nav aria-label="Sections (menu)" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
+            {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
+          </nav>
+        </details>
         <button className="btn outline sm" onClick={() => signIn()}>Sign in</button>
       </header>
 
@@ -252,18 +286,16 @@ export function Login() {
               <b className="serif lp-opt-title">Paper trade option structures on live prices.</b>
               <p className="small muted k-measure m60">Straddles, strangles, condors or any structure up to eight legs, filled at the real bid and ask. See the Greeks, the payoff today beside the one at expiry, and breakevens after charges.</p>
             </div>
-            <span className="lp-fix">No real orders, ever</span>
+            <span className="lp-tag">No real orders, ever</span>
           </div>
 
-          <div className="lp-tools">
-            {TOOLS.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
-          </div>
+          <ToolList items={TOOLS} label="Trade tools" />
 
           <div id="markets" className="stack lp-anchor g14">
             <h3 className="serif lp-h3">Test where you trade.</h3>
             <p className="lp-p">Each market with its own hours, currency, holidays, fees and taxes.</p>
             <div className="lp-markets">
-              {MARKETS.map(([sym, n]) => <div key={n} className="lp-market"><span className="lp-sym serif" aria-hidden="true">{sym}</span><b>{n}</b></div>)}
+              {MARKETS.map(([sym, n]) => <div key={n} className="lp-market"><span className="lp-sym" aria-hidden="true">{sym}</span><b>{n}</b></div>)}
             </div>
           </div>
         </div>
@@ -277,9 +309,7 @@ export function Login() {
             </Head>
             <ResearchMock />
           </div>
-          <div className="lp-tools">
-            {RESEARCH.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
-          </div>
+          <ToolList items={RESEARCH} label="research tools" />
         </div>
       </section>
 
@@ -288,10 +318,13 @@ export function Login() {
           <Head eyebrow="Money" title="What you own, and what it means at tax time.">
             Bring the files you already have. StratLab keeps them private and reports facts and arithmetic about what you own.
           </Head>
-          <div className="lp-money">
-            {PORTFOLIO.map(([t, b, tag]) => (
-              <div key={t} className="lp-card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-fix">{tag}</span></div>
-            ))}
+          {/* eight in view (two full rows of four, four of two on a phone), the rest one click away */}
+          <div className="stack">
+            <div className="lp-money">{PORTFOLIO.slice(0, 8).map(moneyCard)}</div>
+            <details className="lp-more">
+              <summary>{PORTFOLIO.length - 8} more Money tools</summary>
+              <div className="lp-money">{PORTFOLIO.slice(8).map(moneyCard)}</div>
+            </details>
           </div>
         </div>
       </section>
@@ -301,9 +334,7 @@ export function Login() {
           <Head eyebrow="Alerts" title="Hear about it when it happens.">
             On your phone, on Telegram or by email, including every paper trade. Alerts report what happened, never what to do about it.
           </Head>
-          <div className="lp-tools lp-tools-3">
-            {ALERTS.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
-          </div>
+          <ToolList items={ALERTS} label="kinds of alert" shown={3} three />
         </div>
       </section>
 
@@ -343,20 +374,36 @@ export function Login() {
 /** The three plans, priced in the visitor's currency (rupees in India), with the same lines as the Plans page. */
 function Pricing() {
   const { pricing, currency } = usePricing();
-  const row = pricing?.currencies[currency];
-  const price = (p: PlanId) => {
-    if (!row || currency === "INR") return { shown: `₹${PRICE[p][0].toLocaleString("en-IN")}`, gst: p !== "free" };
-    return { shown: money(row, p === "free" ? 0 : (row as unknown as Record<string, number>)[p], currency), gst: false };
+  // what's on sale today comes from the server (plans.offer_state), the same answer the Plans page reads
+  const offer = pricing?.offer ?? null;
+  const local = currency !== "INR" ? pricing?.currencies[currency] : undefined;
+  const rupees = (p: PlanId, year = false) => `₹${PRICE[p][year ? 1 : 0].toLocaleString("en-IN")}`;
+  /** The amount in the visitor's currency, and whether it's the rupee price converted ("about $23"). */
+  const price = (p: PlanId, year = false) => {
+    if (!local) return { shown: rupees(p, year), about: false };
+    if (p === "free") return { shown: money(local, 0, currency), about: false };
+    const v = (local as unknown as Record<string, number>)[year ? `${p}_year` : p];
+    return { shown: money(local, v, currency), about: !!(year ? local.approx_year : local.approx) };
   };
+  const intro = pricingIntro(offer, LIMITS.pro, "landing");
+  const [period, setPeriod] = useState<"month" | "year">("month");
+  const yearly = (p: PlanId) => { const x = price(p, true); return `${x.about ? "about " : ""}${x.shown}`; };
+  const small = finePrint(offer, { currency: local ? currency : "INR", approx: !!local?.approx, approxYear: !!local?.approx_year,
+    year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") } });
   return (
     <section id="pricing" className="lp-sec">
       <div className="lp-wrap stack g32">
-        <Head eyebrow="Pricing" title="Free to start. Pay when you need more.">
-          Every market and every space is on the Free plan. Paid plans raise the limits and add the scans, alerts, live tools, history and the deeper tax tools. Cancel any time.
-        </Head>
+        <Head eyebrow="Pricing" title={intro.title}>{intro.lede}</Head>
+        {/* yearly only where it can be bought: a yearly price nobody can pay would be one more contradiction */}
+        {offer?.yearly && offer.payments && (
+          <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
+            options={[{ value: "month", label: "Monthly" }, { value: "year", label: "Yearly · 2 months free" }]} />
+        )}
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
-            const pr = price(p);
+            const year = period === "year" && p !== "free";
+            const pr = price(p, year);
+            const act = landingAction(offer, p);
             return (
               <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
                 <div className="stack g2">
@@ -364,21 +411,20 @@ function Pricing() {
                   <span className="small muted">{WHO[p]}</span>
                 </div>
                 <div className="stack g2">
-                  <div className="serif lp-amount">{pr.shown}<span className="small muted"> / month</span></div>
-                  {pr.gst && <span className="tiny muted">incl. GST</span>}
+                  <div className="serif lp-amount">{pr.about && <span className="small muted">about </span>}{pr.shown}<span className="small muted"> / {year ? "year" : "month"}</span></div>
+                  {p !== "free" && <span className="tiny muted">{local ? `${rupees(p, year)} a ${year ? "year" : "month"} in India, incl. GST` : "incl. GST"}</span>}
                 </div>
+                {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>
+                  : <button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>}
                 <ul className="lp-plan-list">
                   {FEATURES[p].map((f) => f.endsWith(":") ? <li key={f} className="small muted lp-plan-sub">{f}</li>
                     : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
                 </ul>
-                <button className={`btn ${p === "pro" ? "" : "outline"}`} onClick={() => signIn(p === "free" ? undefined : "/plans")}>
-                  {p === "free" ? "Start free" : `Start with ${PLAN_NAME[p]}`}
-                </button>
               </div>
             );
           })}
         </div>
-        <p className="small muted k-measure m80">Rupee prices include 18% GST, and every payment gets a GST invoice. Visitors outside India see prices in their own currency. Paying yearly in rupees: Basic ₹{PRICE.basic[1].toLocaleString("en-IN")}, Pro ₹{PRICE.pro[1].toLocaleString("en-IN")}. Paid plans renew each month or year until you cancel, which you can do any time from Account.</p>
+        {small.length > 0 && <p className="small muted k-measure m80">{small.join(" ")}</p>}
       </div>
     </section>
   );
@@ -476,7 +522,7 @@ function ResearchMock() {
       <div className="lp-ridea">
         <b className="small">Ideas to test on NVDA</b>
         <p className="small">"Buy NVDA when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below, 7% stop loss"</p>
-        <span className="btn blue sm lp-fake-btn">Test this idea →</span>
+        <button type="button" className="btn blue sm lp-idea-btn" onClick={() => void signIn("/new?market=US&symbol=NVDA")}>Test an idea on NVDA →</button>
       </div>
     </div>
   );

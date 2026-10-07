@@ -151,7 +151,7 @@ def teaser(profile: dict, issue: dict):
     if not alerts.jobs_for(quiet, "", ""):
         return
     first = re.split(r"(?<=\.)\s", issue.get("summary") or "", maxsplit=1)[0][:160]
-    alerts.notify(quiet, issue["subject"], f"{issue['subject']}\n{first}".strip(), url=f"/news/{issue['id']}")
+    alerts.notify(quiet, issue["subject"], f"{issue['subject']}\n{first}".strip(), url=kit.news_path(issue["id"]))
 
 
 def deliver(profile: dict, issue: dict, what: str) -> bool:

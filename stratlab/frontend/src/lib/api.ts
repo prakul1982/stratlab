@@ -23,8 +23,6 @@ const sbBase = new URL((CFG.SUPABASE_URL || "http://localhost").replace(/\/?$/, 
 const sbKey = CFG.SUPABASE_ANON_KEY || "missing";
 /** Where the saved login lives in localStorage. */
 export const SESSION_KEY = `sb-${sbBase.hostname.split(".")[0]}-auth-token`;
-/** Where to go once signed in, when sign-in started on a page other than home (a public company page's link). */
-export const NEXT_PAGE = "stratlab.next";
 export const supabase = {
   auth: new AuthClient({
     url: new URL("auth/v1", sbBase).href,

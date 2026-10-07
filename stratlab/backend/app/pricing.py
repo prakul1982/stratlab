@@ -155,9 +155,33 @@ def table() -> dict:
     return out
 
 
+def _as_charged(code: str, row: dict) -> dict:
+    """A row as a visitor should read it. While a currency is still charged in rupees, its own price (e.g. the fixed
+    $20) isn't what anyone pays: the card is charged the rupee price. Until its Razorpay plans exist, show the rupee
+    price at today's rate instead, marked `approx`, so every plan converts at the same rate ($8 and about $23, not $8
+    and $20 against ₹699 and ₹1,999)."""
+    if code == "INR":
+        return {**row, "approx": False, "approx_year": False}
+    out = dict(row)
+    rate = row.get("rate")
+    builtin = CURRENCIES[code][2]
+    if rate and builtin and not 0.5 <= rate / (PLANS["basic"]["price"] / builtin) <= 2:
+        rate = None          # a rate far from the one the built-in prices imply is a bad read (₹285 a dollar): keep those prices
+    for fields, charged in ((("basic", "pro"), row["charged_in"]), (("basic_year", "pro_year"), row["yearly_charged_in"])):
+        if charged != "INR" or not rate:
+            continue
+        for f in fields:
+            out[f] = nice(PLANS[f.split("_")[0]]["price" + ("_year" if f.endswith("_year") else "")] / rate)
+    out["approx"] = row["charged_in"] == "INR"
+    out["approx_year"] = row["yearly_charged_in"] == "INR"
+    return out
+
+
 def public() -> dict:
-    """What the Plans page needs: prices, symbols and which currency is charged. Plan IDs stay on the server."""
-    return {"currencies": {c: {k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto")} for c, r in table().items()},
+    """What the landing page and Plans need: prices, symbols and which currency is charged. Plan IDs stay on the
+    server. A currency charged in rupees shows the rupee price at today's rate (`approx`), never a price nobody pays."""
+    return {"currencies": {c: {k: v for k, v in _as_charged(c, r).items() if k not in PLAN_FIELDS + ("rate", "auto")}
+                           for c, r in table().items()},
             "countries": COUNTRIES}
 
 
