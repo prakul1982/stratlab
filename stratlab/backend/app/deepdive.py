@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
 from .docs import pdf_links, quote_found, ranked_windows, windows
-from .intel.filings import ist_now
+from .intel.filings import file_words as _file_words, is_call, ist_now
 from .intel.net import num
 
 KEEP = 7 * 86400              # a document read is reused for a week
@@ -36,10 +36,10 @@ def money(v: float, unit: str | None = None, digits: int = 0) -> str:
     sign = "-" if v < 0 else ""
     sym = _millions_of(unit)
     if sym:
-        if abs(v) >= 1000:                    # to within 1%: one decimal from $10 billion, two below
+        if round(abs(v), digits) >= 1000:     # to within 1%: one decimal from $10 billion, two below (and $999.6 m is $1.00 bn, not $1,000 m)
             return f"{sign}{sym}{abs(v) / 1000:,.{1 if abs(v) >= 10000 else 2}f} bn"
         return f"{sign}{sym}{abs(v):,.{digits}f} m"
-    if abs(v) >= 100000:
+    if round(abs(v), digits) >= 100000:       # ₹99,999.7 cr is ₹1.00 lakh cr, not ₹100,000 cr
         return f"{sign}₹{abs(v) / 100000:,.2f} lakh cr"
     return f"{sign}₹{abs(v):,.{digits}f} cr"
 
@@ -227,12 +227,7 @@ PRESENTATION = re.compile(r"investors?'?s? presentation|earnings presentation|re
 TRANSCRIPT = re.compile(r"\btran?scr?i?pts?\b", re.I)
 # NSE's subject for analyst meets and calls: a deck filed under it is a presentation even when it's only called one
 MEET = re.compile(r"analysts?/institutional investor meet|con\.? ?call|earnings call|conference call", re.I)
-# NSE files every meeting with analysts or investors under one subject that names calls too, so a call is told apart
-# by the rest of the filing: an earnings or conference call, its audio recording or its transcript. A one-on-one
-# meeting with an investor has no transcript to file; an earnings call has to have one.
-MEET_SUBJECT = re.compile(r"analysts?\s*/\s*institutional investors? meet\s*/\s*con\.? ?call updates?", re.I)
-CALL = re.compile(r"earnings? (?:conference )?call|conference call|con\.? ?call|concall|results? call|post[- ]results?|"
-                  r"investors?(?: and analysts?)? call|analysts?(?: and investors?)? call|audio|recording|\btran?scr?i?pts?\b", re.I)
+MEET_CATEGORIES = ("concall", "investor_meet")     # filing classes: earnings calls, and meetings with analysts or investors
 CALL_GRACE_DAYS = 7      # an earnings call this recent may not have its transcript filed yet
 
 # a deck or transcript for shareholders' resolutions (an AGM, a postal ballot) isn't the business presentation or a call
@@ -242,19 +237,6 @@ NOT_DECK = re.compile(r"postal ballot|general meeting|\b[ae]gm\b|shareholders?'*
 def _agm(text: str) -> bool:
     """A filing about the shareholders' meeting (an AGM, a postal ballot), not a call or meeting with analysts."""
     return bool(NOT_DECK.search(text) and not MEET.search(text))
-
-
-def _file_words(url: str | None) -> str:
-    """The words in a filing's PDF name: NSE keeps the name the company uploaded ("ACME_01082026190000_Q1FY27
-    ConcallTranscript.pdf"), which often says what the filing is when its subject doesn't."""
-    from urllib.parse import unquote, urlsplit
-    url = (url or "")[:500]                   # from the exchange's feed: untrusted, and only the name is wanted
-    try:
-        path = urlsplit(url).path
-    except ValueError:                        # a malformed link ("https://[..."): its words still count
-        path = url.split("?", 1)[0].split("#", 1)[0]
-    name = unquote(path.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
-    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", re.sub(r"[_\-.+]+", " ", name))
 
 
 def documents(items: list[dict], per_kind: int | None = None) -> list[dict]:
@@ -271,7 +253,7 @@ def documents(items: list[dict], per_kind: int | None = None) -> list[dict]:
         elif TRANSCRIPT.search(hay):
             continue
         elif PRESENTATION.search(hay) or (not agm and (
-                i.get("category") == "presentation" or ((i.get("category") == "concall" or MEET.search(hay)) and "presentation" in hay))):
+                i.get("category") == "presentation" or ((i.get("category") in MEET_CATEGORIES or MEET.search(hay)) and "presentation" in hay))):
             kind = "presentation"
         elif "annual report" in hay:
             kind = "annual_report"
@@ -283,22 +265,42 @@ def documents(items: list[dict], per_kind: int | None = None) -> list[dict]:
     return out
 
 
+SAME_MEETING_DAYS = 30   # filings about shareholders' meetings this close together (notice, outcome, transcript) are one meeting
+
+
+def shareholder_meetings(items: list[dict]) -> int:
+    """How many shareholders' meetings (AGMs, extraordinary meetings, postal ballots) a company's filings are about.
+    One meeting files a notice, an outcome and often a transcript or deck, so filings within a month of each other
+    count as one meeting."""
+    days = sorted(i["at"][:10] for i in items
+                  if i.get("category") == "agm" or _agm(f"{i.get('subject') or ''} {i.get('text') or ''}"))
+    n, last = 0, None
+    for d in days:
+        cur = datetime.strptime(d, "%Y-%m-%d")
+        if last is None or (cur - last).days > SAME_MEETING_DAYS:
+            n += 1
+        last = cur
+    return n
+
+
 def meetings(items: list[dict], since: str) -> dict:
     """What a company told the exchange about its meetings since a time ("2024-10-05T00:00"): {"meets": every
     analyst or investor meeting and call, "calls": the earnings or conference calls among them (their notice,
-    recording or transcript)}, and {"filed": how many filings of any kind}, which is never none for a listed company
-    that is trading: one that files nothing at all wasn't read."""
+    recording or transcript), "shareholder": its shareholders' meetings (AGMs, postal ballots), counted apart: they
+    are neither calls nor meetings with analysts}, and {"filed": how many filings of any kind}, which is never none
+    for a listed company that is trading: one that files nothing at all wasn't read."""
     recent = [i for i in items if i["at"] >= since]
     # the transcript of a shareholders' meeting (Infosys files its AGM's) is neither a meeting with investors nor a call
     # a transcript counts whatever it was classed as ("Transcript of the discussion on the financial results" reads as
     # results first)
-    meets = [i for i in recent if (i.get("category") == "concall" or TRANSCRIPT.search(f"{i.get('subject') or ''} {i.get('text') or ''}"))
-             and not _agm(f"{i.get('subject') or ''} {i.get('text') or ''}")]
-    calls = [i for i in meets if CALL.search(f"{MEET_SUBJECT.sub(' ', i.get('subject') or '')} {i.get('text') or ''} {_file_words(i.get('url'))}")]
+    meets = [i for i in recent if (i.get("category") in MEET_CATEGORIES or TRANSCRIPT.search(f"{i.get('subject') or ''} {i.get('text') or ''}"))
+             and i.get("category") != "agm" and not _agm(f"{i.get('subject') or ''} {i.get('text') or ''}")]
+    calls = [i for i in meets if is_call(i.get("subject"), i.get("text"), i.get("url"))]
     # a call is told about a few days ahead and its transcript is due five working days after: one from the last week
     # has no transcript to find yet
     fresh = (ist_now() - timedelta(days=CALL_GRACE_DAYS)).strftime("%Y-%m-%dT%H:%M")
-    return {"meets": len(meets), "calls": len(calls), "calls_due": sum(i["at"] < fresh for i in calls), "filed": len(recent)}
+    return {"meets": len(meets), "calls": len(calls), "calls_due": sum(i["at"] < fresh for i in calls),
+            "shareholder": shareholder_meetings(recent), "filed": len(recent)}
 
 
 # ---------- the document reads ----------

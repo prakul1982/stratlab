@@ -535,7 +535,7 @@ function TaxTotals({ rows }: { rows: TaxTotal[] }) {
     <Card label="From your tax report">
       <CardHead title="From your tax report" info="Your tax report keeps F&O, commodity and currency as totals for each financial year, not trade by trade, so they can't be paired into round trips here. They are shown as they are in the report, and are not counted in the stats above. Upload the tax P&L's trade-by-trade files to count them." infoLabel="About these totals" />
       <DataTable label="Totals from your tax report" columns={cols} rows={rows} rowKey={(r) => `${r.fy}-${r.seg}`} />
-      <p className="k-note">Totals per year as in your <Link className="link" to="/money/tax">tax report</Link>.</p>
+      <p className="k-note">Totals per year as in your <Link className="link" to="/tax-report">tax report</Link>.</p>
     </Card>
   );
 }

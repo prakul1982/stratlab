@@ -414,8 +414,9 @@ def _india_documents(kinds: list[str], told: dict | None, price_why: str | None)
             return [_issue("fact", "Documents", NOTHING_FILED)]
         return [_issue("gap", "Documents", NO_FILINGS_READ)]
     meets, calls = (told or {}).get("meets"), (told or {}).get("calls")
+    held = (told or {}).get("shareholder") or 0         # shareholders' meetings: a kind of their own, never an earnings call
     if "presentation" not in kinds and "transcript" not in kinds and meets == 0:
-        return [_issue("fact", "Documents", NO_MEETS)]                   # many small companies hold no calls at all
+        return [_issue("fact", "Documents", _no_calls(0, held, True) if held else NO_MEETS)]   # many small companies hold no calls at all
     out = []
     if "presentation" not in kinds:
         out.append(_issue("gap", "Documents", "No investor presentation filed in the last two years") if meets is None else
@@ -425,11 +426,24 @@ def _india_documents(kinds: list[str], told: dict | None, price_why: str | None)
         if calls is None:
             out.append(_issue("gap", "Documents", "No call transcript filed in the last two years"))
         elif calls == 0:
-            out.append(_issue("fact", "Documents", NO_CALLS if meets else NO_CALLS_TOLD))
+            out.append(_issue("fact", "Documents", _no_calls(meets or 0, held) if held else NO_CALLS if meets else NO_CALLS_TOLD))
         elif (told or {}).get("calls_due", calls) > 0:      # a call from the last week has no transcript due yet
             out.append(_issue("gap", "Documents", f"No call transcript found, though {calls} of its filings in the last two "
                                                   "years are about earnings calls"))
     return out
+
+
+def _plural(n: int, one: str, many: str) -> str:
+    return f"{n} {one if n == 1 else many}"
+
+
+def _no_calls(meets: int, held: int, nothing_to_read: bool = False) -> str:
+    """"No earnings calls; N shareholder meetings ...": what a company that held no earnings call did tell the
+    exchange about, each kind counted apart (an AGM isn't an earnings call, and isn't a meeting with analysts)."""
+    told = (f"{_plural(meets, 'analyst or investor meeting', 'analyst or investor meetings')} and " if meets else "") \
+        + _plural(held, "shareholder meeting", "shareholder meetings")
+    what = "no presentation or call transcript" if nothing_to_read else "no call transcript"
+    return f"No earnings calls; {told} in the last two years were told to the exchange, so there's {what} to read"
 
 
 STOPPED_FILING = "No annual or quarterly report filed in the last two years: the company has stopped filing with the SEC"

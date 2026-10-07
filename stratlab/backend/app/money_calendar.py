@@ -282,7 +282,7 @@ def _hook(module: str, fn: str, *args) -> list:
 
 def hook_events(uid: str, frm: date, to: date) -> list[dict]:
     """Each hook gives [{date, title, detail?, amount?, kind?, id?}]; anything else in it is left out."""
-    days = max(1, min(800, (to - date.today()).days + 1))
+    days = max(1, min(800, (to - datetime.now(IST).date()).days + 1))
     out = []
     for module, fn, cat in HOOKS:
         for x in _hook(module, fn, uid, days)[:500]:

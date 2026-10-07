@@ -48,7 +48,7 @@ def test_bse_two_years_of_filings_come_back_with_the_calls_and_documents(monkeyp
     # is not the company's investor presentation
     assert [d["kind"] for d in docs] == ["transcript"]
     told = deepdive.meetings(items, "2024-10-05T00:00")
-    assert told == {"meets": 2, "calls": 1, "calls_due": 1, "filed": 4}
+    assert told == {"meets": 2, "calls": 1, "calls_due": 1, "shareholder": 1, "filed": 4}
     assert not audit._india_documents([d["kind"] for d in docs], told, None)[1:]       # a transcript: no call gap
 
 
@@ -79,9 +79,9 @@ def test_shareholder_meeting_transcripts_and_decks_are_not_calls_or_investor_dec
     deck = _item("Investor Presentation", "HDFC Bank Limited has informed the Exchange about Investor Presentation")
     assert deepdive.documents([agm_t, agm_p, ballot]) == []
     assert [d["kind"] for d in deepdive.documents([call_t, deck])] == ["transcript", "presentation"]
-    assert agm_t["category"] == "concall"                         # the classifier's word for it: counted out below
-    assert deepdive.meetings([agm_t], "2024-01-01T00:00") == {"meets": 0, "calls": 0, "calls_due": 0, "filed": 1}
-    assert deepdive.meetings([agm_t, call_t], "2024-01-01T00:00") == {"meets": 1, "calls": 1, "calls_due": 1, "filed": 2}
+    assert agm_t["category"] == "agm"                             # a shareholder meeting, never labelled an earnings call
+    assert deepdive.meetings([agm_t], "2024-01-01T00:00") == {"meets": 0, "calls": 0, "calls_due": 0, "shareholder": 1, "filed": 1}
+    assert deepdive.meetings([agm_t, call_t], "2024-01-01T00:00") == {"meets": 1, "calls": 1, "calls_due": 1, "shareholder": 1, "filed": 2}
 
 
 def test_no_call_with_no_meetings_told_says_so():
