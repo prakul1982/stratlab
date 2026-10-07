@@ -74,6 +74,14 @@ If nothing fits, add the piece to the kit and to `/dev/kit` first; do not build 
 - **Don't** add inline `style={{}}` for spacing or font; use the tokens and kit classes.
 - **Don't** hard-code colours (`#b42318`); use tokens.
 
+## Drawing tools on the price chart
+
+One shared price chart (`src/charts/price/`) serves company pages, backtests, paper trading and chart replay, so the drawing tools live there once.
+Left rail on desktop (groups with fly-outs, magnet, hide all, drawings list), a "Draw" bottom sheet on a phone, undo/redo and the (i) shortcut list in the top bar,
+and a small bar for the selected drawing (colour, line style, lock, duplicate, delete, note text, a position's risk amount).
+Maths is in `drawGeo.ts` (tested in `unit/drawings.test.mjs`); drawings are saved per user, market and symbol at `/me/drawings/{region}/{symbol}`, with this browser as the fallback.
+A long or short position is the person's own planning box: label it with facts only (target, stop, risk : reward, quantity for their risk amount), never advice. In chart replay a drawing shows only once the replay has reached the candle it was drawn on.
+
 ## Checklist before a page is done
 
 Desktop 1300px and phone 400px, dark and light; empty, loading, error, long names; no sideways page scroll; keyboard reaches every control; screenshots saved (`E2E_SHOTS=<folder> npx playwright test e2e/kit.spec.ts` does `/dev/kit` and Margin funding).

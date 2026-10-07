@@ -18,9 +18,12 @@ test.beforeEach(async ({ request }, info) => {
   await request.put(`${API}/me/prefs`, { headers: admin, data: { level: "some", focus: "both" } });     // no welcome questions
 });
 
+/** "IN:RELIANCE" as the path the drawings API uses: IN/RELIANCE. */
+const where = (key: string) => key.replace(":", "/");
+
 /** No drawings on this symbol yet, for this test's user. */
 async function noDrawings(request: import("@playwright/test").APIRequestContext, symbol: string) {
-  const r = await request.put(`${API}/chart/drawings`, { headers: admin, data: { symbol, items: [] } });
+  const r = await request.put(`${API}/me/drawings/${where(symbol)}`, { headers: admin, data: { drawings: [], layout: null } });
   expect(r.ok(), await r.text()).toBeTruthy();
 }
 
@@ -61,14 +64,19 @@ async function touchable(chart: Locator) {
 
 async function addIndicator(page: Page, chart: Locator, name: RegExp) {
   await chart.getByRole("button", { name: "Indicators" }).click();
-  await page.getByRole("menuitem", { name }).click();
+  await page.getByRole("menuitem", { name, exact: true }).click();
 }
 
+const GROUP: Record<string, string> = { "Trend line": "Lines", "Horizontal line": "Lines", "Price level": "Lines", "Ray": "Lines" };
 async function pickTool(page: Page, chart: Locator, name: string, phone: boolean) {
+  if (name === "Price level") name = "Horizontal line";
   if (phone) {
     await chart.getByRole("button", { name: "Draw", exact: true }).click();
-    await page.getByRole("menuitem", { name }).click();
-  } else await chart.getByRole("button", { name, exact: true }).click();
+    await page.getByRole("button", { name, exact: true }).click();
+  } else {
+    await chart.getByRole("button", { name: GROUP[name] ?? "Lines", exact: true }).click();
+    await page.getByRole("menuitem", { name, exact: true }).click();
+  }
 }
 
 /** The plot's box once it's on screen and has stopped moving (the page around it may still be laying out). */
@@ -127,17 +135,17 @@ async function exercise(page: Page, chart: Locator, phone: boolean, key: string)
   await dragOn(page, chart, [0.3, 0.55], [0.6, 0.7]);
   await expect(chart).toHaveAttribute("data-drawings", "1");
   await expect(chart).not.toHaveAttribute("data-selected", "");
-  await expect.poll(async () => (await (await page.request.get(`${API}/chart/drawings?symbol=${encodeURIComponent(key)}`, { headers: admin })).json()).items.length, { timeout: 5000 }).toBe(1);
+  await expect.poll(async () => (await (await page.request.get(`${API}/me/drawings/${where(key)}`, { headers: admin })).json()).drawings.length, { timeout: 5000 }).toBe(1);
   await chart.getByRole("button", { name: "Delete drawing" }).click();
   await expect(chart).toHaveAttribute("data-drawings", "0");
-  await expect.poll(async () => (await (await page.request.get(`${API}/chart/drawings?symbol=${encodeURIComponent(key)}`, { headers: admin })).json()).items.length, { timeout: 5000 }).toBe(0);
+  await expect.poll(async () => (await (await page.request.get(`${API}/me/drawings/${where(key)}`, { headers: admin })).json()).drawings.length, { timeout: 5000 }).toBe(0);
   // a price level: one click; selected by clicking it again, deleted with the key
   await pickTool(page, chart, "Price level", phone);
   const stage = chart.locator(".pc-stage");
   const at = async (fx: number, fy: number) => { const b = await stageBox(chart); await page.mouse.click(b.x + b.width * fx, b.y + b.height * fy); };
   await at(0.4, 0.6);
   await expect(chart).toHaveAttribute("data-drawings", "1");
-  await at(0.2, 0.85);                     // somewhere else: deselects
+  await at(0.2, 0.42);                     // somewhere else: deselects
   await expect(chart).toHaveAttribute("data-selected", "");
   await at(0.5, 0.6);                      // on the line: selects
   await expect(chart).not.toHaveAttribute("data-selected", "");
