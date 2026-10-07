@@ -8,6 +8,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
+from .. import name_search
 from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import SourceError, num
@@ -57,6 +58,10 @@ def _groups(*groups) -> list[dict]:
     return out
 
 
+def _public(row: dict) -> dict:
+    return {k: v for k, v in row.items() if k != "_t"}
+
+
 def _yahoo_in(sym: str) -> str:
     """Yahoo's ticker for an Indian stock: NSE symbol.NS, or a BSE code.BO."""
     return f"{sym}.BO" if sym.isdigit() else f"{sym}.NS"
@@ -93,7 +98,13 @@ class Research:
         return results, list(status.values())
 
     # ---------- search ----------
+    # the app's own lists of companies: (q, region) -> [{symbol, name, exchange, match}], best first. Set by main.
+    local_search = None
+
     def search(self, q: str, region: str) -> list[dict]:
+        """Up to 10 companies for what's typed: a symbol, a name or a short name ("HDFC Bank", "Infy", "Apple"). India
+        from the exchanges' lists (the broker's, else the companies stored); the US from the list of US companies,
+        topped up by the search sources and ranked the same way (name_search)."""
         q = q.strip()
         if len(q) < 1:
             return []
@@ -101,23 +112,51 @@ class Research:
             if self._kite():
                 rows = [r for r in self.kite.search(q, allow_fno=False, limit=15) if r["type"] == "EQ"]
                 return [{"symbol": r["symbol"], "name": r["name"], "exchange": r["exchange"], "region": "IN"} for r in rows[:10]]
+            local = self._local(q, "IN")
+            if local:
+                return [_public(r) for r in local]
             rows = [x for x in self.yahoo.search(q) if str(x["symbol"]).endswith((".NS", ".BO"))
                     and x.get("quoteType") == "EQUITY"]
             return [{"symbol": x["symbol"].rsplit(".", 1)[0], "name": x.get("longname") or x.get("shortname"),
                      "exchange": "NSE" if x["symbol"].endswith(".NS") else "BSE", "region": "IN"} for x in rows[:10]]
+        local = self._local(q, "US")
+        if local and local[0]["_t"] <= name_search.NAME:      # the name or symbol itself: no need to ask anyone else
+            return [_public(r) for r in local]
+        found = []
         if self.finnhub.ready():
             try:
                 rows = [x for x in self.finnhub.search(q) if "." not in x.get("symbol", "")
                         and x.get("type") in ("Common Stock", "ETP", "ADR", "")]
-                if rows:
-                    return [{"symbol": x["symbol"], "name": x.get("description") or x["symbol"], "exchange": "US",
-                             "region": "US"} for x in rows[:10]]
+                found = [{"symbol": x["symbol"], "name": x.get("description") or x["symbol"], "exchange": "US",
+                          "region": "US"} for x in rows]
             except SourceError:
                 pass
-        rows = [x for x in self.yahoo.search(q) if x.get("exchange") in US_EXCHANGES
-                and x.get("quoteType") in ("EQUITY", "ETF")]
-        return [{"symbol": x["symbol"], "name": x.get("longname") or x.get("shortname") or x["symbol"],
-                 "exchange": x.get("exchDisp") or "US", "region": "US"} for x in rows[:10]]
+        if not found:
+            try:
+                rows = [x for x in self.yahoo.search(q) if x.get("exchange") in US_EXCHANGES
+                        and x.get("quoteType") in ("EQUITY", "ETF")]
+            except SourceError:
+                if not local:
+                    raise
+                rows = []
+            found = [{"symbol": x["symbol"], "name": x.get("longname") or x.get("shortname") or x["symbol"],
+                      "exchange": x.get("exchDisp") or "US", "region": "US"} for x in rows]
+        mine = {r["symbol"] for r in local}
+        found = [{**r, "_t": name_search.tier_of(q, r["symbol"], r["name"], "US")} for r in found if r["symbol"] not in mine]
+        both = sorted(local + found, key=lambda r: r["_t"])        # stable: each source's own order among equals
+        return [_public(r) for r in both[:10]]
+
+    def _local(self, q: str, region: str) -> list[dict]:
+        """The app's own list's answers, each with its group in `_t`; none when the list isn't available."""
+        if not self.local_search:
+            return []
+        try:
+            got = self.local_search(q, region) or []
+        except Exception as e:                  # the list is down: the search sources still answer
+            print("research search: own list unavailable,", region, e)
+            return []
+        return [{"symbol": r["symbol"], "name": r.get("name") or r["symbol"], "exchange": r.get("exchange") or region,
+                 "region": region, "_t": r.get("match", name_search.WORDS)} for r in got[:10]]
 
     # ---------- quotes ----------
     def quotes(self, region: str, symbols: list[str]) -> dict[str, dict]:

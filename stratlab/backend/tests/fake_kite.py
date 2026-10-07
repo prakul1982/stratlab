@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from app import rotation, sector_members, universes
 from app.data.mcx import CONTRACTS
 from app.kite_service import KiteService, today_ist
+from tests.fake_names import name_of
 
 IST = ZoneInfo("Asia/Kolkata")
 STEP = {"day": 1440, "60minute": 60, "15minute": 15, "5minute": 5, "minute": 1}
@@ -50,7 +51,7 @@ class FakeKiteConnect:
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         for s in sorted(stocks):
             token += 1
-            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": s.title(), "segment": "NSE",
+            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": name_of(s), "segment": "NSE",
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         # NSE stocks in a restricted series: the broker lists them as SYMBOL-BE
         token += 1

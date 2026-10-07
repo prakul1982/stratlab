@@ -5,6 +5,7 @@ A bare number is treated as a Kite token, for older saved strategies."""
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from .. import name_search
 from ..kite_service import KiteService
 from .coinbase import CoinbaseProvider, DataError
 from . import calendar
@@ -90,7 +91,14 @@ class Registry:
                     if market:
                         raise
                     print("search failed:", m, e)
-        return out
+        if market or len(out) < 2:
+            return out
+        # every market: the best matches first wherever they trade ("apple" is Apple Inc., "infosys" INFY), each
+        # market's own order kept among equals and India first on a tie
+        def tier(r):
+            got = r.get("match")
+            return got if isinstance(got, int) else name_search.tier_of(q, r.get("symbol") or "", r.get("name"), r.get("market"))
+        return [r for _, _, r in sorted(((tier(r), k, r) for k, r in enumerate(out)), key=lambda x: x[:2])]
 
     def defaults(self) -> list[dict]:
         out = []
