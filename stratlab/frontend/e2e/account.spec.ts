@@ -5,7 +5,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 // connection check. Each run signs in as its own new user, on desktop and phone.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const SHOTS = process.env.E2E_SHOTS;
-const PROVIDERS = /kite|zerodha|yahoo|screener\.in|finnhub|amfi|nseindia/i;
+const PROVIDERS = /kite|yahoo|screener\.in|finnhub|amfi|nseindia/i;
 const base = { token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r" };
 const who = (n: number, phone: boolean) => { const i = n + (phone ? 3 : 0); return { token: `load-${i}`, id: `u-load-${i}`, email: `load${i}@example.com` }; };
 type Who = ReturnType<typeof who>;
