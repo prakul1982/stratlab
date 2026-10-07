@@ -69,7 +69,7 @@ export function NewslettersCard() {
       {state === "ready" && prefs && <>
         <div>
           {ROWS.map(([key, title]) => (
-            <div key={key} className="k-line-row">
+            <div key={key} className="k-line-row stack-narrow">
               <b>{title}</b>
               <Seg label={title} value={prefs[key]} onChange={(v) => void set(key, v as Cadence)}
                 options={CHOICES.map(([c, name]) => {

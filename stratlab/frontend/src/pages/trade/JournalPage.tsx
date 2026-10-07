@@ -182,7 +182,7 @@ export function JournalPage() {
           <p className="k-note">The tax report keeps equity trade by trade, so those come across. Its F&amp;O, commodity and currency are kept as totals for each year: they show under the trades, and the tax P&amp;L's own files above bring them in trade by trade.</p>
           {result && (
             <div className="k-stack k-tight" role="status">
-              <p className="k-small"><b>{result.added.toLocaleString()} trade line{result.added === 1 ? "" : "s"} added</b>{result.duplicates > 0 && `, ${result.duplicates.toLocaleString()} already in the journal (skipped)`}{result.broker !== "CSV" ? ` from a ${result.broker} file` : ""}.</p>
+              <p className="k-small"><b>{result.added.toLocaleString("en-IN")} trade line{result.added === 1 ? "" : "s"} added</b>{result.duplicates > 0 && `, ${result.duplicates.toLocaleString("en-IN")} already in the journal (skipped)`}{result.broker !== "CSV" ? ` from a ${result.broker} file` : ""}.</p>
               {result.problem_count > 0 && (
                 <Disclosure summary={`${result.problem_count} line${result.problem_count === 1 ? "" : "s"} couldn't be read`}>
                   <ul className="k-list">{result.problems.slice(0, 30).map((p, i) => <li key={i}>Line {p.line} · {p.text}: {p.reason}</li>)}</ul>
@@ -227,7 +227,7 @@ export function JournalPage() {
           <>
             {j.beyond_limit > 0 && (
               <Notice action={{ label: "See plans", to: "/plans" }}>
-                Your plan keeps the last {j.limit} trades, so {j.beyond_limit.toLocaleString()} older one{j.beyond_limit === 1 ? " isn't" : "s aren't"} counted. {j.plan_name} counts every trade.
+                Your plan keeps the last {j.limit} trades, so {j.beyond_limit.toLocaleString("en-IN")} older one{j.beyond_limit === 1 ? " isn't" : "s aren't"} counted. {j.plan_name} counts every trade.
               </Notice>
             )}
             {j.verdict ? <VerdictView v={j.verdict} /> : <Locked plan={j.plan_name} what="The honesty checks on your real trades (enough trades, luck or edge, bad-luck drawdown, charges)" />}
@@ -514,7 +514,7 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
       <DataTable label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
       {rows.length > shown && <div className="k-center"><button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button></div>}
       {j.overlap > 0 && <p className="k-note">{j.overlap} tax P&amp;L line{j.overlap === 1 ? " is" : "s are"} left out: your tradebook has the same trades, with their times.</p>}
-      {j.count > j.trades.length && <p className="k-note">The latest {j.trades.length.toLocaleString()} trades are listed; the stats count all {j.count.toLocaleString()}.</p>}
+      {j.count > j.trades.length && <p className="k-note">The latest {j.trades.length.toLocaleString("en-IN")} trades are listed; the stats count all {j.count.toLocaleString("en-IN")}.</p>}
     </Card>
   );
 }

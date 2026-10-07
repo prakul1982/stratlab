@@ -258,7 +258,7 @@ async function layout(page: Page) {
     }
     // in a row of figures, the numbers share one line however their labels wrap
     const offLine: string[] = [];
-    for (const figs of document.querySelectorAll(".space-figs")) {
+    for (const figs of document.querySelectorAll(".k-stats")) {
       const tops: Record<number, number[]> = {};
       for (const f of Array.from(figs.children)) {
         const v = f.children[1];
@@ -268,7 +268,7 @@ async function layout(page: Page) {
       }
       for (const t of Object.values(tops)) if (Math.max(...t) - Math.min(...t) > 1) offLine.push(t.join("/"));
     }
-    const dashes = Array.from(document.querySelectorAll(".space-fig b")).filter((b) => /^\s*[-–—]\s*$/.test(b.textContent ?? "")).length;
+    const dashes = Array.from(document.querySelectorAll(".k-stat .k-stat-v")).filter((b) => /^\s*[-–—]\s*$/.test(b.textContent ?? "")).length;
     return { edges: Array.from(new Set(edges)), stripRight: strip ? Math.round(box(strip).right) : 0, cards: cards.length, rows: Object.values(rows), offLine, dashes };
   });
 }

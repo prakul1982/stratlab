@@ -26,7 +26,7 @@ interface ResultsView {
 /** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
 export function resultDay(iso: string) {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
 function ResultLine({ r, showMine }: { r: ResultRow; showMine: boolean }) {

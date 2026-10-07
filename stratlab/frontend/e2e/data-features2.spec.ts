@@ -54,7 +54,7 @@ test("market breadth: live while the market is open, and what it says when live 
   await expect(live.getByText("Above 200-day average")).toBeVisible();
   // 6 points: the day's two lines
   await expect(live.getByRole("heading", { name: "Rose and fell through the day" })).toBeVisible();
-  await expect(live.getByRole("heading", { name: "Share above their averages through the day" })).toBeVisible();
+  await expect(live.getByRole("heading", { name: "Above their averages today" })).toBeVisible();
   await expect(live.locator("svg[role=img]")).toHaveCount(2);
   // the daily numbers stay, now labelled as the last close
   await expect(page.getByTestId("breadth-today").getByRole("heading", { name: /^Last close · / })).toBeVisible();

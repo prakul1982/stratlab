@@ -136,7 +136,7 @@ function DividendsTab() {
   ];
   return (
     <>
-      <Card>
+      <Card compact={!note && v.files.length === 0}>
         <CardHead title="Your dividends" info="Upload your broker's dividend statement as CSV or Excel, with columns for the date, the company (symbol, name or ISIN) and the amount (or quantity and dividend a share); TDS and currency are optional (USD for US dividends). A tax P&L ZIP uploaded to the tax report brings its dividend sheet too. Without a file, the year is estimated from your holdings and the dividends the companies declared."
           actions={<>
             <UploadButton label="Upload dividends" busy={busy} accept=".csv,.xlsx,.txt,.zip,text/csv" ariaLabel="Dividend file" onFiles={pick} />
@@ -148,19 +148,17 @@ function DividendsTab() {
 
       {y && (
         <>
-          <FormGrid label="Year">
-            <Field label="Financial year">{(id) => <Select id={id} value={y.fy} onChange={(x) => setFy(Number(x))} options={yearOptions(v.years, v.current_fy)} />}</Field>
+          <Card label="Dividends for the year">
+            <CardHead title={`Dividends, ${y.label}`} actions={<>
+              {y.source === "files" && <Badge>From your files</Badge>}
+              {y.source === "estimated" && <Badge>Estimated</Badge>}
+              <Select small label="Financial year" value={y.fy} onChange={(x) => setFy(Number(x))} options={yearOptions(v.years, v.current_fy)} />
+            </>} />
             {y.source !== "none" && y.taxed && (
               <FieldGroup label="In the total tax estimate" info="Whether this year's dividends are counted as income in the total tax estimate on the tax report.">
                 <Seg label="In the total tax estimate" options={[{ value: "in", label: "Include in the tax estimate" }, { value: "out", label: "Leave out" }]} value={y.include ? "in" : "out"} onChange={(x) => include(y.fy, x === "in")} />
               </FieldGroup>
             )}
-          </FormGrid>
-          <Card label="Dividends for the year">
-            <CardHead title={`Dividends, ${y.label}`} actions={<>
-              {y.source === "files" && <Badge>From your files</Badge>}
-              {y.source === "estimated" && <Badge>Estimated</Badge>}
-            </>} />
             {y.source === "none" ? <EmptyState title={`No dividends in ${y.label}`}>No dividends in your files or holdings for the year. Upload a dividend statement above to add them.</EmptyState> : (
               <>
                 <StatRow>

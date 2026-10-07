@@ -279,6 +279,11 @@ def parse_cas(data: bytes, password: str) -> dict:
     if not hasattr(cas, "folios"):
         raise FileError("This is a depository statement. Upload the detailed CAS from CAMS or KFintech instead, "
                         "which lists every transaction.")
+    return from_cas(cas)
+
+
+def from_cas(cas) -> dict:
+    """The schemes and transactions of an opened CAMS or KFintech CAS, as parse_cas returns them."""
     if str(getattr(cas.cas_type, "value", cas.cas_type)) != "DETAILED":
         raise FileError("This is the summary statement, which has no transactions. Ask for the detailed CAS "
                         "(\"with transactions\"), from the start date you want.")
@@ -927,6 +932,16 @@ def _import(profile, data: bytes, filename: str, password: str, mode: str):
     except FileError as e:
         err(400, "wrong_password" if "password" in str(e) else "bad_file", str(e))
     uid = profile["id"]
+    counts, limit = apply_import(profile, got, filename, mode)
+    return ok({"kind": got["kind"], **counts, "problems": got["problems"], "limit": limit,
+               "upgrade": f"{PLANS['basic']['name']} keeps every scheme." if counts["over_limit"] else None,
+               "view": view(uid, profile["_plan"])})
+
+
+def apply_import(profile, got: dict, filename: str, mode: str = "add") -> tuple[dict, int | None]:
+    """Save a read statement with the user's mutual funds (duplicates skipped, history kept): (counts, plan limit). The
+    upload route and the statement inbox both end here."""
+    uid = profile["id"]
     before = empty() if mode == "replace" else load(uid)
     if mode == "replace":
         old = load(uid)
@@ -939,10 +954,7 @@ def _import(profile, data: bytes, filename: str, password: str, mode: str):
         merged["kinds"] = {k: v for k, v in merged["kinds"].items() if k in keys}
         merged["fmv"] = {k: v for k, v in merged["fmv"].items() if k in keys}
         save(uid, merged)
-    limit = mf_limit(profile["_plan"])
-    return ok({"kind": got["kind"], **counts, "problems": got["problems"], "limit": limit,
-               "upgrade": f"{PLANS['basic']['name']} keeps every scheme." if counts["over_limit"] else None,
-               "view": view(uid, profile["_plan"])})
+    return counts, mf_limit(profile["_plan"])
 
 
 @router.put("/kind")

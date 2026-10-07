@@ -187,3 +187,13 @@ export function firstName(meta: Record<string, unknown> | null | undefined): str
   }
   return "";
 }
+
+/** Where a saved list of holdings came from, in words ("your Groww file", "your statements", "your Zerodha login"). */
+export function sourceWords(source: string): string {
+  if (source === "Manual") return "your own entries";
+  if (source === "CSV") return "a CSV file";
+  if (source === "Statement") return "your statements";
+  if (source === "Zerodha Kite") return "your Zerodha login";
+  if (source === "Interactive Brokers") return "your Interactive Brokers account";
+  return `your ${source} file`;
+}

@@ -57,12 +57,12 @@ export const desksApi = {
 export const signedPct = (v: number | null | undefined, dp = 2) =>
   v == null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(dp)}%`;
 export const plainPct = (v: number | null | undefined, dp = 1) => (v == null ? "–" : `${v.toFixed(dp)}%`);
-/** Shares in Indian grouping, or in lakh/crore when large: "1.46 cr", "8.1 L". */
+/** Shares in Indian grouping, or in lakh/crore when large: "1.46 cr", "8.1 lakh". */
 export function sharesShort(v: number | null | undefined): string {
   if (v == null) return "–";
   const a = Math.abs(v);
   if (a >= 1e7) return `${(v / 1e7).toFixed(2)} cr`;
-  if (a >= 1e5) return `${(v / 1e5).toFixed(1)} L`;
+  if (a >= 1e5) return `${(v / 1e5).toFixed(1)} lakh`;
   return Math.round(v).toLocaleString("en-IN");
 }
 export const rupees = (v: number | null | undefined, dp = 2) =>
@@ -76,7 +76,7 @@ export const dayShort = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00"
 /** The status line under a desk's title: the newest day, or why it isn't there. */
 export function statusText(s: DeskStatus | undefined, what: string): string {
   if (!s) return "";
-  if (!s.as_of) return s.reason ?? `No ${what} stored yet.`;
-  const head = `${what[0].toUpperCase()}${what.slice(1)} of ${dayText(s.as_of)} · ${s.days} trading day${s.days === 1 ? "" : "s"} stored`;
+  if (!s.as_of) return s.reason ?? `No ${what} yet.`;
+  const head = `${what[0].toUpperCase()}${what.slice(1)} of ${dayText(s.as_of)} · ${s.days} trading day${s.days === 1 ? "" : "s"} of history`;
   return s.status === "ok" || !s.reason ? head : `${head}. ${s.reason}`;
 }

@@ -3,8 +3,8 @@ import { Info } from "../ui";
 
 /** The one card: 24px padding (16px on a phone), 14px radius, 16px between its parts. `compact` lays its children in one
  * row, for a card that has little to say (an empty list). */
-export function Card({ id, children, compact, label, testId }: { id?: string; children: ReactNode; compact?: boolean; label?: string; testId?: string }) {
-  return <section id={id} className={`k-card${compact ? " compact" : ""}`} aria-label={label} data-testid={testId}>{children}</section>;
+export function Card({ id, children, compact, label, testId, className }: { id?: string; children: ReactNode; compact?: boolean; label?: string; testId?: string; className?: string }) {
+  return <section id={id} className={`k-card${compact ? " compact" : ""}${className ? ` ${className}` : ""}`} aria-label={label} data-testid={testId}>{children}</section>;
 }
 
 /** The row at the top of a card: the title and its (i) on the left, the card's controls (range, Table, a button) on the

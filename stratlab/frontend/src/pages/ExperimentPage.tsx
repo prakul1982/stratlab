@@ -135,7 +135,8 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
   const d = c.data;
   return (
     <Card label={c.title}>
-      <CardHead level={3} title={c.title} info={HELP[c.id]} infoLabel={`About ${c.title.toLowerCase()}`} actions={<Badge tone={checkTone(c.status)}>{STATUS_NAME[c.status]}</Badge>} />
+      <CardHead level={3} title={c.title} info={HELP[c.id]} infoLabel={`About ${c.title.toLowerCase()}`} />
+      <div className="k-row"><Badge tone={checkTone(c.status)}>{STATUS_NAME[c.status]}</Badge></div>
       {c.id === "unseen" && d && (
         <SplitBars built={d.built_ret} unseen={d.unseen_ret}
           builtLabel={`Built on ${yearSpan(d.built_from, d.built_to)} · ${tradeCount(d.built_trades)}`} unseenLabel={`Tested on ${yearSpan(d.unseen_from, d.unseen_to)} · ${tradeCount(d.unseen_trades)}`} />
@@ -154,7 +155,7 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
       {c.id === "sample" && d && <div className="k-big">{d.trades}</div>}
       <p className="k-small k-muted">{c.detail}</p>
       {c.id === "sample" && <span className="k-note">Under 15 trades, luck dominates. 30 or more is a fair sample.</span>}
-      {c.id === "shuffle" && d && <span className="k-note">From {d.runs.toLocaleString()} reshuffles of your trades{cur ? ", after costs" : ""}.</span>}
+      {c.id === "shuffle" && d && <span className="k-note">From {d.runs.toLocaleString("en-IN")} reshuffles of your trades{cur ? ", after costs" : ""}.</span>}
     </Card>
   );
 }
@@ -249,7 +250,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     ["Profit factor", st.pf == null ? "∞" : st.n ? st.pf.toFixed(2) : "–", null, HELP.profitFactor],
     ["Sharpe ratio", st.sharpe.toFixed(2), null, HELP.sharpe],
     ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
-    ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString()} candles`, null, HELP.period],
+    ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString("en-IN")} candles`, null, HELP.period],
   ];
 
   return (

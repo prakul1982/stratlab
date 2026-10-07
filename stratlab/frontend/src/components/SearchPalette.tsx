@@ -255,7 +255,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         </div>
         {steps && (
           <div className="palette-work" role="status" aria-live="polite">
-            {steps.map((s, n) => <div key={n} className={`row small${n === steps.length - 1 ? "" : " muted"}`} style={{ gap: 10 }}>
+            {steps.map((s, n) => <div key={n} className={`palette-step small${n === steps.length - 1 ? "" : " muted"}`}>
               {n === steps.length - 1 ? <span className="spin" aria-hidden /> : <span aria-hidden>✓</span>}{s}</div>)}
           </div>
         )}
@@ -266,7 +266,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         )}
         <div className="palette-list" ref={list} role="listbox" hidden={!!steps}>
           {rows.map((g) => (
-            <div key={g.group} className="stack" style={{ gap: 2 }}>
+            <div key={g.group} className="palette-grp">
               <div className="eyebrow palette-group">{g.group}</div>
               {g.items.map((r) => {
                 i += 1;
@@ -275,7 +275,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
                   <button key={r.key} data-i={n} role="option" aria-selected={n === sel} className={`palette-row${n === sel ? " on" : ""}`}
                     onMouseEnter={() => setSel(n)} onClick={r.run}>
                     <span className="palette-icon">{r.icon}</span>
-                    <span className="stack" style={{ gap: 1, minWidth: 0, flex: 1 }}><b>{r.title}</b>{r.sub && <span className="small muted palette-sub">{r.sub}</span>}</span>
+                    <span className="palette-text"><b>{r.title}</b>{r.sub && <span className="small muted palette-sub">{r.sub}</span>}</span>
                     {r.space && <span className="space-tag" data-space={r.space}>{SPACES[r.space].label}</span>}
                   </button>
                 );

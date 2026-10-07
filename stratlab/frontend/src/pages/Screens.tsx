@@ -237,7 +237,7 @@ export function ScreensPage() {
 
         <div className="k-stack">
           <Card label="Companies that match">
-            <CardHead title={out ? `${out.total.toLocaleString()} of ${out.indexed.toLocaleString()} companies match` : "Checking…"}
+            <CardHead title={out ? `${out.total.toLocaleString("en-IN")} of ${out.indexed.toLocaleString("en-IN")} companies match` : "Checking…"}
               actions={<>
                 <Select label="Sort by" small value={sort} onChange={(v) => { setSort(v); setDesc(false); }} options={cols.map((c) => ({ value: c.id, label: c.short ?? c.label }))} />
                 <button className="btn quiet sm" onClick={() => setDesc((d) => !d)}>{desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button></>} />
@@ -249,7 +249,7 @@ export function ScreensPage() {
                 <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} sticky columns={tableCols} sort={{ key: sort, desc, onSort: sortBy }} />
               </div>
             )}
-            {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString()} left)</button>}
+            {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString("en-IN")} left)</button>}
           </Card>
 
           <Card>

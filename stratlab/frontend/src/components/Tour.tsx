@@ -60,10 +60,10 @@ export function Tour({ onClose }: { onClose: () => void }) {
     <Modal title="What you can do here" onClose={close}>
       <div className="tour" aria-live="polite">
         <div className="tour-icon">{step.icon}</div>
-        <div className="stack" style={{ gap: 10 }}>
-          <span className="eyebrow">{i + 1} of {STEPS.length}</span>
-          <h3 className="serif" style={{ fontSize: 28, fontWeight: 400, lineHeight: 1.15 }}>{step.title}</h3>
-          <p style={{ fontSize: 16.5 }}>{step.body}</p>
+        <div className="k-stack">
+          <span className="k-eyebrow">{i + 1} of {STEPS.length}</span>
+          <h3 className="tour-title">{step.title}</h3>
+          <p className="tour-body">{step.body}</p>
           <p className="tour-where"><b>Where:</b> {step.where}</p>
         </div>
       </div>
@@ -72,9 +72,9 @@ export function Tour({ onClose }: { onClose: () => void }) {
           <button key={s.title} role="tab" tabIndex={-1} aria-selected={k === i} aria-label={`Step ${k + 1}: ${s.title}`} onClick={() => setI(k)} />
         ))}
       </div>
-      <div className="spread" style={{ marginTop: 18, flexWrap: "wrap", gap: 10 }}>
+      <div className="k-spread tour-foot">
         <button className="link" onClick={close}>{last ? "Close" : "Skip the tour"}</button>
-        <div className="row" style={{ gap: 8 }}>
+        <div className="k-row">
           {i > 0 && <button className="btn quiet" onClick={() => setI(i - 1)}>Back</button>}
           {last ? <button className="btn" onClick={close}>Start</button>
             : <button className="btn" onClick={() => setI(i + 1)}>Next</button>}

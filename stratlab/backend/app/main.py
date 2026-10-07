@@ -38,7 +38,9 @@ from . import fixed_income
 from . import loan_check
 from . import money_advance_tax, money_routes
 from . import journal_routes
+from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
+from . import drawings_routes
 from . import market_store, storage
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
@@ -259,6 +261,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
     threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
     threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
+    connect_job.start()                  # daily Interactive Brokers read; the statement inbox's 40-day reminder
     newsletter_job.start()
     results_job.start()
     corp_job.start()
@@ -311,6 +314,8 @@ app.include_router(loan_check.router)          # /money/loans/check
 app.include_router(money_routes.router)
 app.include_router(money_calendar.router)
 app.include_router(journal_routes.router)     # /trade/journal
+app.include_router(connect_routes.router)     # /connect: statement inbox, Zerodha login, IBKR, EPF/NPS/AIS uploads
+app.include_router(connect_routes.hook_router)  # /inbound/email/<provider>: the mail service's webhook (no sign-in, signed)
 app.include_router(fo_changes_routes.router)  # /trade/fo-changes
 app.include_router(replay_routes.router)      # /trade/replay: chart replay practice
 app.include_router(signals_routes.router)     # /trade/signals: forward-testing outside signals
@@ -321,6 +326,7 @@ app.include_router(_email_previews.router)       # /admin/email-previews
 from . import admin_jobs as _admin_jobs  # noqa: E402
 app.include_router(_admin_jobs.router)           # /admin/jobs: every background job, for Admin -> Data and jobs
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
+app.include_router(drawings_routes.router)    # /me/drawings/{region}/{symbol}: drawings and layout saved per user
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
@@ -2091,6 +2097,12 @@ def with_sectors(items: list[dict], known: dict[str, str] | None = None) -> list
     return out
 
 
+connect_routes.setup(throttle)
+connect_sync.setup(holdings_matcher, _us_find, with_sectors)
+connect_redact.install()
+connect_job = connect_jobs.Job()
+
+
 def usd_inr() -> float | None:
     """Rupees a dollar: the day's stored rate, else read now; None when neither is there."""
     got = pricing.rates().get("USD")
@@ -3711,6 +3723,8 @@ async def webhook(request: Request):
 # which only an admin can start (the Admin page's "Log in to Kite" button).
 @app.get("/admin/kite/callback", response_class=HTMLResponse)
 def kite_callback(request_token: str = "", status: str = "", state: str = ""):
+    if state.startswith(connect_kite.STATE_PREFIX):        # a user connecting their own Zerodha (the Kite app has one redirect address)
+        return connect_routes._kite_done(request_token, status, state)
     if status != "success" or not request_token:
         return HTMLResponse("<p>Kite login was cancelled or failed.</p>", status_code=400)
     try:

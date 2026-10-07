@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from . import db, instrument_kinds
 
 KEY = "holdings:"
-SOURCES = ("Zerodha Console", "Zerodha Kite", "Groww", "Upstox", "Angel One", "ICICI Direct", "HDFC Securities", "CSV", "Manual")
+SOURCES = ("Zerodha Console", "Zerodha Kite", "Statement", "Interactive Brokers", "Groww", "Upstox", "Angel One", "ICICI Direct", "HDFC Securities", "CSV", "Manual")
 # the sector indices' names, in the exchange's own broad sector names, so both kinds of label add up together
 SECTOR_OF_INDEX = {"NIFTY BANK": "Financial Services", "NIFTY PSU BANK": "Financial Services", "NIFTY PVT BANK": "Financial Services",
                    "NIFTY FIN SERVICE": "Financial Services", "NIFTY IT": "Information Technology",

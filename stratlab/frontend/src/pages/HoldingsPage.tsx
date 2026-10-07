@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, dateOnly, inr, money, pct, price, qty as qtyText, safeHref, signTone } from "../lib/format";
+import { ago, dateOnly, inr, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
 import { Trash } from "../components/Icons";
 import { track } from "../lib/analytics";
@@ -210,7 +210,7 @@ export function HoldingsPage() {
               <Stat label="Today" value={t.day == null ? "–" : inr(t.day)} tone={signTone(t.day)} delta={t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta>} />
             </StatRow>
             <p className="k-note">
-              {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${view.source === "Manual" ? "your own entries" : view.source === "CSV" ? "a CSV file" : `your ${view.source} file`}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
+              {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${sourceWords(view.source)}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
               {!view.prices && " · Live prices are offline right now, so values are shown at cost."}
             </p>
             {view.us && (

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, CFG, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago } from "../lib/format";
+import { ago, sourceWords } from "../lib/format";
 import { HELP } from "../lib/help";
 import { viewForFocus } from "../lib/spaces";
 import type { Focus, Level } from "../lib/types";
@@ -10,6 +10,7 @@ import { FOCUSES, LEVELS } from "../components/LevelPrompt";
 import { AlertSettingsCard } from "../components/AlertSettings";
 import { NewslettersCard } from "../components/NewslettersCard";
 import { TipsCard } from "../components/TipsCard";
+import { ConnectCards } from "../components/ConnectedAccounts";
 import { Badge, Card, CardHead, FieldGroup, LinkCard, Notice, PageHeader, Seg, Skeleton } from "../components/kit";
 
 /* /settings: the things you set once. Four sections behind one Seg: where alerts and emails go, what you see first and the
@@ -43,7 +44,7 @@ export function SettingsPage() {
       {!me ? <Card label="Loading your settings"><Skeleton label="Loading your settings" /></Card> : <>
         {section === "notifications" && <><AlertSettingsCard /><TipsCard /><NewslettersCard /></>}
         {section === "experience" && <ExperienceCards />}
-        {section === "accounts" && <ConnectedAccounts />}
+        {section === "accounts" && <><ConnectedAccounts /><ConnectCards /></>}
         {section === "check" && <ConnectionCheck />}
       </>}
     </div>
@@ -78,8 +79,8 @@ function ExperienceCards() {
 type Held = { updated_at: string | null; source?: string | null; count?: number | null };
 const noun = (n: number | null | undefined, one: string, many: string) => (n == null ? "" : `${n.toLocaleString("en-IN")} ${n === 1 ? one : many}`);
 
-/** The places StratLab reads your accounts from. Each is a file you upload, with when it last changed; there is no broker
- * login, so there is nothing to connect or disconnect here. */
+/** The files StratLab reads your accounts from, with when each last changed. The connections that update them by themselves
+ * are the cards after it (ConnectedAccounts.tsx). */
 function ConnectedAccounts() {
   const [h, setH] = useState<Held | null | undefined>(undefined);
   const [mf, setMf] = useState<Held | null | undefined>(undefined);
@@ -96,15 +97,15 @@ function ConnectedAccounts() {
   const note = (v: Held | null | undefined, what: string) => v === undefined ? "Checking…" : v === null ? "" : v.updated_at ? `${what} · updated ${ago(v.updated_at)}` : "Nothing uploaded yet";
   return (
     <Card id="accounts" label="Connected accounts">
-      <CardHead title="Connected accounts" info="StratLab does not log in to your broker. Your holdings, funds and trades come from files you upload (or numbers you type), and each one shows when it last changed." />
+      <CardHead title="Connected accounts" info="Your holdings, funds and trades come from files you upload, numbers you type, or the connections below that update them by themselves. Each one shows when it last changed." />
       <div className="k-linkcards">
         <LinkCard to="/holdings" title="My Holdings" note={note(h, noun(h?.count, "stock", "stocks"))}>
-          {h?.source ? `From ${h.source === "Manual" ? "your own entries" : h.source === "CSV" ? "a CSV file" : `your ${h.source} file`}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
+          {h?.source ? `From ${sourceWords(h.source)}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
         </LinkCard>
         <LinkCard to="/money/mutual-funds" title="Mutual funds statement" note={note(mf, noun(mf?.count, "scheme", "schemes"))}>Upload your Consolidated Account Statement (PDF or CSV).</LinkCard>
         <LinkCard to="/tax-report" title="Broker tradebooks" note={note(tax, noun(tax?.count, "file", "files"))}>Upload tradebooks and tax P&amp;L files from any broker for your capital gains.</LinkCard>
       </div>
-      <Notice label="No broker login">StratLab does not log in to a broker, so nothing here refreshes by itself: upload a newer file to bring a page up to date.</Notice>
+      <Notice label="Keeping up to date">A file stays as it was until you upload a newer one. Connect once below and statements, Zerodha and US stocks update by themselves.</Notice>
     </Card>
   );
 }

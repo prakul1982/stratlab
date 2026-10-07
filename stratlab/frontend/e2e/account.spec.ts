@@ -5,7 +5,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 // connection check. Each run signs in as its own new user, on desktop and phone.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const SHOTS = process.env.E2E_SHOTS;
-const PROVIDERS = /kite|zerodha|yahoo|screener\.in|finnhub|amfi|nseindia/i;
+const PROVIDERS = /kite|yahoo|screener\.in|finnhub|amfi|nseindia/i;
 const base = { token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r" };
 const who = (n: number, phone: boolean) => { const i = n + (phone ? 3 : 0); return { token: `load-${i}`, id: `u-load-${i}`, email: `load${i}@example.com` }; };
 type Who = ReturnType<typeof who>;
@@ -62,7 +62,7 @@ test("account: profile, plan and usage, invoices, sign-in and your data", async 
   await expect(profile).toContainText(u.email);
   await expect(profile.getByText("Signed in with")).toBeVisible();
   await expect(profile).toContainText("Google");
-  await expect(main.locator("#plan")).toContainText("Experiments this month");
+  await expect(main.locator("#plan")).toContainText("Backtests this month");
   await expect(main.getByText("Details on your invoices")).toBeVisible();
 
   // features that used to sit on this page have their own pages now

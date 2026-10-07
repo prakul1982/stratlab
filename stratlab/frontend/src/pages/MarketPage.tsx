@@ -197,7 +197,7 @@ export function MarketPage() {
           {upload && (
             <>
               <p className="k-small">
-                <b>{upload.bars.length.toLocaleString()} candles</b> from {new Date(upload.bars[0].t).toLocaleDateString("en-GB")} to {new Date(upload.bars[upload.bars.length - 1].t).toLocaleDateString("en-GB")}
+                <b>{upload.bars.length.toLocaleString("en-IN")} candles</b> from {new Date(upload.bars[0].t).toLocaleDateString("en-GB")} to {new Date(upload.bars[upload.bars.length - 1].t).toLocaleDateString("en-GB")}
                 {upload.skipped ? `, ${upload.skipped} rows skipped` : ""}.
               </p>
               <FormGrid label="About your data" onSubmit={(e) => { e.preventDefault(); void useUpload(); }}>

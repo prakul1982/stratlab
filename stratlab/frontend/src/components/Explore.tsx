@@ -41,7 +41,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
             </div>
             <div className="explore-grid">
               {items.map((f) => (
-                <button key={f.id} className="card explore-card" onClick={() => open(f.to)}>
+                <button key={f.id} className="k-linkcard explore-card" onClick={() => open(f.to)}>
                   <b>{f.title}</b>
                   <span className="small muted">{f.what}</span>
                   {f.to.startsWith("@") && !latest && <span className="small muted">Starts with a notebook</span>}

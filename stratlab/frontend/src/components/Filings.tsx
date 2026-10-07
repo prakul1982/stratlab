@@ -14,7 +14,7 @@ export interface FilingReport { symbol: string; items: FilingItem[]; summary: Fi
 const SEV_NAME: Record<Severity, string> = { red: "Red flag", amber: "Look closer", info: "Routine" };
 
 function day(at: string) {
-  return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function SevBadge({ s, label }: { s: Severity; label: string }) {
