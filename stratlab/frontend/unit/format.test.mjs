@@ -1,7 +1,7 @@
 // Indian rupee formatting: full, compact and chart-axis forms. Run: npm run test:unit
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { axisInr, CRORE, fmtDate, fmtDateTime, asOf, inr, inrCompact, pctPlain, signed, signedInrCompact } from "../src/lib/format.ts";
+import { axisInr, axisInrFor, CRORE, fmtDate, fmtDateTime, asOf, inr, inrCompact, pctPlain, signed, signedInrCompact } from "../src/lib/format.ts";
 
 test("inr groups the Indian way, whole rupees unless paise are asked for", () => {
   assert.equal(inr(100000), "₹1,00,000");
@@ -35,6 +35,14 @@ test("axisInr shortens axis ticks", () => {
   assert.equal(axisInr(3472 * CRORE), "₹3,472 cr");
   assert.equal(axisInr(520000), "₹5.2L");
   assert.equal(axisInr(925), "₹925");
+});
+
+test("axisInrFor keeps every tick of one axis in one unit", () => {
+  const lakh = axisInrFor(-160000);                 // an options payoff that reaches −₹1.6 lakh
+  assert.deepEqual([50000, 0, -50000, -100000, -150000].map(lakh), ["₹0.5L", "₹0", "−₹0.5L", "−₹1L", "−₹1.5L"]);
+  const rupees = axisInrFor(60000);
+  assert.deepEqual([5000, 0, -50000].map(rupees), ["₹5,000", "₹0", "−₹50,000"]);
+  assert.equal(axisInrFor(3 * CRORE)(2 * CRORE), "₹2 cr");
 });
 
 test("pctPlain and signed", () => {

@@ -144,7 +144,7 @@ export function SipTestPage() {
     <div className="k-page sip-test">
       <PageHeader eyebrow="Money · Plan" title="Test a SIP"
         lede="What a stock or ETF SIP of your own would have done on past prices, with the charges on every purchase, beside the same money put in on day one."
-        info="History of the rule you set, not a forecast or a suggestion." infoLabel="About this test" />
+        info="History of the rule you set, not a forecast or a suggestion." infoLabel="About the SIP test" />
 
       <Card label="Your SIP">
         <CardHead title="Your SIP" />

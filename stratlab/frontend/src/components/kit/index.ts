@@ -15,6 +15,7 @@ export { TilePicker, type Tile, type TileGroup } from "./TilePicker";
 export { DataTable, type Column } from "./DataTable";
 export { Notice, PlanNote } from "./Notice";
 export { ConfirmDialog } from "./ConfirmDialog";
+export { Dialog, useDialogFocus, usePopover, tabbables } from "./Dialog";
 export { BarList, Meter } from "./BarList";
 export { Disclosure } from "./Disclosure";
 export { Pager } from "./Pager";

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, dataUrl, type ApiError } from "../lib/api";
 import { numberProblem, problems, type Limits } from "../lib/validate";
@@ -69,6 +69,7 @@ export function HoldingsPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
   const [edit, setEdit] = useState<Row | null>(null);
+  const editAt = useRef(0);                        // the edited row's place, so focus lands on its neighbour if it's removed
   const [asking, setAsking] = useState(false);
   const [add, setAdd] = useState<{ symbol: string; qty: string; avg: string; market: Mkt }>({ symbol: "", qty: "", avg: "", market: "IN" });
   const [addErr, setAddErr] = useState<Partial<Record<"symbol" | "qty" | "avg", string>>>({});
@@ -80,6 +81,15 @@ export function HoldingsPage() {
     if (v.rows.length) api<FactsReply>("/holdings/facts").then(setFacts).catch(() => setFacts({ rows: {}, filings: true, filings_plan: "Basic", checked: 0, count: 0 }));
   }, []);
   const [actionsAt, setActionsAt] = useState(0);         // reload the corporate actions whenever the holdings change
+  // the dividends card arrives a moment after the holdings: the cards below it wait for it (a few seconds at most), so
+  // it doesn't push them down the screen as it lands
+  const [actionsReady, setActionsReady] = useState(false);
+  useEffect(() => {
+    if (!view || actionsReady) return;
+    if (!view.rows.length) { setActionsReady(true); return; }      // nothing held: no dividends card to wait for, now or after an add
+    const t = window.setTimeout(() => setActionsReady(true), 3000);
+    return () => window.clearTimeout(t);
+  }, [view, actionsReady]);
   const show = useCallback((v: View) => { setView(v); loadFacts(v); setActionsAt((n) => n + 1); }, [loadFacts]);
   const load = useCallback(() => {
     setError(null);
@@ -177,7 +187,7 @@ export function HoldingsPage() {
       { key: "filings", header: "Filings, 3 months", cell: (r: Row) => <FilingsCell f={facts?.rows[r.symbol]} allowed={facts?.filings !== false} plan={facts?.filings_plan} /> },
       { key: "results", header: "Results meeting", cell: (r: Row) => { const f = facts?.rows[r.symbol]; return f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="k-muted">–</span>; } },
     ] : []),
-    { key: "edit", header: "", action: true, cell: (r) => <button type="button" className="btn quiet sm" onClick={() => setEdit(r)} aria-label={`Edit ${r.symbol}`}>Edit</button> },
+    { key: "edit", header: "", action: true, cell: (r) => <button type="button" className="btn quiet sm" data-row-edit onClick={() => { editAt.current = rows.indexOf(r); setEdit(r); }} aria-label={`Edit ${r.symbol}`}>Edit</button> },
   ];
   const unmatchedCols: Column<Unmatched & { i: number }>[] = [
     { key: "line", header: "Line", rowHeader: true, cell: (u) => u.line ?? "–" },
@@ -189,7 +199,7 @@ export function HoldingsPage() {
     <div className="k-page">
       <PageHeader eyebrow="Money · What you own" title="Your stocks, at today's prices" asOf={view?.prices_at} asOfLabel="Prices as of"
         lede="Your broker's holdings file, valued at today's prices: each stock's value, gain or loss, and your sector mix."
-        info="Facts, not advice. Only you can see your holdings." infoLabel="About this page" />
+        info="Facts, not advice. Only you can see your holdings." infoLabel="About your holdings" />
 
       <Card>
         <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here. Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price.</>}
@@ -245,15 +255,20 @@ export function HoldingsPage() {
               </p>
             )}
           </Card>
-          <HoldingsActionsPanel<View> version={actionsAt} onHoldings={setView} />
+          <HoldingsActionsPanel<View> version={actionsAt} onHoldings={setView} onLoaded={() => setActionsReady(true)} />
+          {!actionsReady && <Card><Skeleton label="Opening your sectors and positions" /></Card>}
+        </>
+      )}
 
+      {view && t && rows.length > 0 && actionsReady && (
+        <>
           <Card>
             <CardHead title="By sector" />
             <BarList label="Holdings by sector" footnote="Share of the current value, by the exchange's sector for each company."
               rows={view.allocation.map((a) => ({ key: a.sector, name: a.sector, note: `${a.count} stock${a.count === 1 ? "" : "s"}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
           </Card>
 
-          <Card>
+          <Card label="Positions">
             <CardHead title="Positions" actions={<>
               {!facts && <span className="k-note">Checking each stock's trend and filings…</span>}
               {more.toggle}
@@ -288,7 +303,7 @@ export function HoldingsPage() {
         </>
       )}
 
-      {view && (
+      {view && actionsReady && (
         <Card>
           <CardHead title="Add a stock by hand" actions={
             <Seg label="Where it's listed" options={[{ value: "IN", label: "India (NSE/BSE)" }, { value: "US", label: "United States" }]} value={add.market}
@@ -310,7 +325,7 @@ export function HoldingsPage() {
         </Card>
       )}
 
-      {view && rows.length > 0 && (
+      {view && rows.length > 0 && actionsReady && (
         <section className="k-stack">
           <p className="k-note">Your holdings are stored with your account only, used for this page and your My Stocks newsletter, and never shared. Values use the latest prices; P&amp;L is before charges and taxes. Nothing here is investment advice.</p>
           <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my holdings</button>
@@ -318,7 +333,7 @@ export function HoldingsPage() {
       )}
 
       {edit && (
-        <EditHolding row={edit} busy={busy} onClose={() => setEdit(null)}
+        <EditHolding row={edit} busy={busy} onClose={() => setEdit(null)} fallback={() => afterRemove(editAt.current)}
           onSave={async (q, a) => { if (await save(current().map((x) => (same(x, edit) ? { ...x, qty: q, avg: a } : x)), `${edit.symbol} updated.`)) setEdit(null); }}
           onRemove={async () => { if (await save(current().filter((x) => !same(x, edit)), `${edit.symbol} removed.`)) setEdit(null); }} />
       )}
@@ -327,14 +342,26 @@ export function HoldingsPage() {
   );
 }
 
-function EditHolding({ row, busy, onClose, onSave, onRemove }: { row: Row; busy: boolean; onClose: () => void; onSave: (qty: number, avg: number | null) => void; onRemove: () => void }) {
+/** Where focus goes once a removed row's dialog closes: the next row's Edit button (the last one if it was last), else the
+ * Positions heading, else the page's heading. */
+function afterRemove(at: number): HTMLElement | null {
+  const edits = document.querySelectorAll<HTMLElement>("[data-row-edit]");
+  if (edits.length) return edits[Math.min(at, edits.length - 1)];
+  const h = document.querySelector<HTMLElement>('section[aria-label="Positions"] h2') ?? document.querySelector<HTMLElement>("main h1");
+  h?.setAttribute("tabindex", "-1");
+  return h;
+}
+
+function EditHolding({ row, busy, onClose, onSave, onRemove, fallback }: {
+  row: Row; busy: boolean; onClose: () => void; onSave: (qty: number, avg: number | null) => void; onRemove: () => void; fallback: () => HTMLElement | null;
+}) {
   const [q, setQ] = useState(String(row.qty));
   const [a, setA] = useState(row.avg == null ? "" : String(row.avg));
   const qn = Number(q.replace(/,/g, "")), an = a.trim() ? Number(a) : null;
   const qErr = numberProblem(q, QTY), aErr = numberProblem(a, { ...AVG, unit: row.market === "US" ? "$" : "₹" });
   const ok = !qErr && !aErr;
   return (
-    <Modal title={`Edit ${row.symbol}`} onClose={onClose}>
+    <Modal title={`Edit ${row.symbol}`} onClose={onClose} fallback={fallback}>
       <FormGrid onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(qn, an); }}>
         <Field label="Quantity" inputMode="decimal" value={q} error={qErr} onChange={(e) => setQ(e.target.value)} />
         <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} error={aErr} onChange={(e) => setA(e.target.value.replace(/,/g, ""))} />

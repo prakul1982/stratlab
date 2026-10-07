@@ -70,6 +70,11 @@ svg { display: block; }
 .eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .ruled { background-image: linear-gradient(var(--rule) 1px, transparent 1px); background-size: 100% 34px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* "Skip to content": the first Tab stop on every page; hidden like .sr-only until it has focus */
+.skip-link.sr-only:focus { position: fixed; top: var(--s2); left: var(--s2); z-index: 100; width: auto; height: auto; overflow: visible; clip: auto;
+  padding: var(--s2) var(--s4); border-radius: var(--r-ctl); background: var(--ink); color: var(--on-ink); font: 600 var(--t-body) var(--sans);
+  text-decoration: none; outline: 2px solid var(--blue); outline-offset: 2px; }
+.main:focus { outline: none; }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -294,7 +299,9 @@ a.link { margin-inline: -2px; }
 }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }   /* a short page's spare height goes to the page, not the top bar */
-  .sidebar { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); height: auto; z-index: 40; transform: translateX(-102%); transition: transform .2s; box-shadow: var(--shadow); }
+  /* the drawer: shut, it's out of the Tab order too (visibility goes after the slide) */
+  .sidebar { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); height: auto; z-index: 40; transform: translateX(-102%); visibility: hidden; transition: transform .2s, visibility 0s .2s; box-shadow: var(--shadow); }
+  .sidebar.open { visibility: visible; transition: transform .2s; }
   .side-close { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
   .side-close:hover { background: var(--side-hover); color: var(--ink); }
   .sidebar.open { transform: none; }
@@ -887,6 +894,8 @@ label.btn.disabled { opacity: .5; }
 .btn.sm.on { border-color: var(--ink); font-weight: 600; }
 .btn.icon-only { padding: 0 10px; }
 
+/* while the first matches load: the table's own height, so the card below doesn't jump when they arrive */
+.screens-wait { min-height: 70vh; }
 .screens-table { margin: 0 -24px; max-height: 70vh; overflow: auto; }
 @media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
 .screens-table th { position: sticky; top: 0; z-index: 1; padding: 0; }
@@ -928,7 +937,7 @@ label.btn.disabled { opacity: .5; }
 .space-card-line { line-height: 1.4; min-height: 2.8em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .space-card-foot { display: flex; align-items: center; min-height: 20px; margin-top: auto; padding-top: 4px; color: var(--muted); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .space-card-foot.live, .space-card-lead .space-card-foot { font-weight: 600; }
-.space-card-foot.live { color: var(--q-leading); }
+.space-card-foot.live { color: var(--up); }     /* 5:1 on the paper; the lighter series green was 3.8:1 */
 .space-card-foot.live::before { content: ""; flex: none; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; }
 .space-card-lead .space-card-foot:not(.live) { color: var(--blue-ink); }
 .space-card-foot .skel { width: 72px; height: 12px; }
@@ -1261,22 +1270,24 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-eyebrow { font-family: var(--mono); font-size: var(--t-eyebrow); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 
 /* the (i) button, in the kit's three places (page header, card title, field label) */
-.k-page-head .info-btn, .k-card-title .info-btn, .k-label-row .info-btn { border: 1px solid var(--line-2); font: italic 600 12px var(--serif); }
-.k-page-head .info, .k-card-title .info, .k-label-row .info { margin-left: 0; }
-.k-page-head .info-btn, .k-card-title .info-btn { width: 20px; height: 20px; }
+.k-page-head .info-btn, .k-card-title .info-btn, .k-card-titlerow .info-btn, .k-label-row .info-btn { border: 1px solid var(--line-2); font: italic 600 12px var(--serif); }
+.k-page-head .info, .k-card-title .info, .k-card-titlerow .info, .k-label-row .info { margin-left: 0; }
+.k-page-head .info-btn, .k-card-title .info-btn, .k-card-titlerow .info-btn { width: 20px; height: 20px; }
 .k-label-row .info-btn { width: 17px; height: 17px; font-size: 11px; }
 
 /* page header */
 .k-page-head { display: flex; flex-direction: column; gap: var(--s2); padding-bottom: var(--s1); min-width: 0; }
 .k-h1 { font-family: var(--serif); font-size: var(--t-h1); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
 .k-lede { font-size: var(--t-lede); color: var(--ink-2); max-width: 64ch; }
-.k-meta { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.k-meta { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; min-height: 25px; }   /* a badge's height: the "Data up to" badge that lands later doesn't move the page */
 
 /* card and its header row */
 .k-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; scroll-margin-top: 80px; }
 @media (max-width: 640px) { .k-card { padding: var(--s4); } }
 .k-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; min-height: 36px; }
 .k-card-title { display: inline-flex; align-items: center; gap: var(--s2); font-family: var(--serif); font-size: var(--t-card); font-weight: 600; min-width: 0; }
+/* a title with its (i): the button sits after the heading element, on the same line */
+.k-card-titlerow { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
 .k-card-actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; min-width: 0; max-width: 100%; }
 .k-card-actions > .k-chipwrap { max-width: 100%; }
 .k-card-actions .btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
@@ -1620,6 +1631,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .feat-line { flex: 1 1 260px; min-width: 0; color: var(--muted); font-size: var(--t-label); }
 
 .mine { gap: var(--s5); }
+/* the lede gains its second line when the calendars answer: keep room for it */
+.space-home.mine .k-lede { min-height: 3em; }
 .mine-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-flow: dense; gap: var(--s4); }
 .mine-slot { grid-column: span 12; min-width: 0; display: flex; }
 .mine-slot > * { flex: 1; min-width: 0; }

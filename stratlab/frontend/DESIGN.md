@@ -55,6 +55,7 @@ The dark values are written twice in `styles.css` (explicit dark and "follow the
 | A table | `DataTable` | a raw `<table>` |
 | A chart | `ChartFrame` (title, range, Table switch in the header row) around `LineChart`/`XYChart` with `ranges={false} table={false}` | a chart in a bare card |
 | Nothing / failed / loading | `EmptyState`, `ErrorState`, `Skeleton` (each can carry one action button) | `Empty`, `Loading` spinner, a bare `.banner` |
+| Anything that floats over the page | `Dialog` (or `ConfirmDialog`) for a modal; `useDialogFocus` on your own modal box (the palette, the phone menu); `usePopover` for a menu or an editor that opens from a button | a hand-made focus trap or Esc handler |
 | A calculator's answer | `ResultBlock` | a row of `Fig`s |
 | Money and percentages | `lib/format.ts` | `toLocaleString` and per-file `inr` copies |
 
@@ -81,6 +82,16 @@ Time zones: **a market's times are in the market's own zone, with the zone's nam
 - **Do** use `Delta tone="neutral"` for market-wide quantities. **Don't** paint a number green or red when the direction is not good or bad.
 - **Don't** add inline `style={{}}` for spacing or font; use the tokens and kit classes.
 - **Don't** hard-code colours (`#b42318`); use tokens.
+
+## Accessibility
+
+- **Dialogs** (`components/kit/Dialog.tsx`): one behaviour everywhere. Focus moves in (`data-autofocus` picks the first stop), Tab and Shift+Tab go round inside, Esc closes, and focus goes back to what opened it; when that has gone (a removed row), to the `fallback` you pass (its neighbour), else the page heading. Dialogs stack: only the top one listens. A dangerous `ConfirmDialog` starts on Cancel.
+- **Pop-ups** (`usePopover`): focus goes into the menu or editor, Esc and a click outside close it, and focus returns to its button. Something inside that handles Esc itself calls `preventDefault()`, and the dialog behind leaves it alone.
+- **(i) buttons** are named after what they explain ("About Markets"; `CardHead` does it from the title) and sit beside a heading, never inside it.
+- **Names start with the visible words** ("owner Pro plan, account menu"); add words after, in `.sr-only`, rather than an `aria-label` that says something else.
+- **A table column with no heading** (Edit buttons) still gets one for screen readers: `DataTable` writes "Actions".
+- **Space for late cards:** a card that arrives after the page should not push what's already on screen. Give its loading state the height it will have (`Skeleton` lines, a `min-height`), or keep the cards below it waiting (Holdings does this for its dividends card).
+- `e2e/a11y.spec.ts` runs axe-core on the main pages (serious and critical problems fail) and checks the keyboard behaviour above.
 
 ## Drawing tools on the price chart
 

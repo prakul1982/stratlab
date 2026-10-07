@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { firstFocus, trapTab } from "../../lib/focusTrap";
+import { firstFocus } from "../../lib/focusTrap";
+import { useDialogFocus } from "./Dialog";
 
 /** The first element on screen that matches one of the selectors (tried in order), or null. */
 function findAnchor(selectors: string[]): HTMLElement | null {
@@ -68,16 +69,8 @@ export function Coachmark({ anchor, label, onClose, children }: { anchor: string
 
   // focus the step's main button each step; keep Tab inside; Esc closes
   useEffect(() => { if (note.current) firstFocus(note.current)?.focus(); }, [key]);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    const keys = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      if (e.key === "Escape") { e.preventDefault(); close.current(); }
-      else trapTab(e, note.current);
-    };
-    document.addEventListener("keydown", keys);
-    return () => { document.removeEventListener("keydown", keys); prev?.focus(); };
-  }, []);
+  // the kit's one dialog behaviour: Tab kept inside, Esc closes, focus back to what opened the tour
+  useDialogFocus(note, true, { onEscape: () => close.current() });
 
   return (
     <div className="k-coach" data-placed={placed ? "1" : undefined}>

@@ -10,6 +10,7 @@ import { buildIdea, findInstrument } from "./IdeaComposer";
 import { track, trackBacktest } from "../lib/analytics";
 import { Book, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
 import { SPACES, spaceOf, type Space } from "../lib/spaces";
+import { useDialogFocus } from "./kit/Dialog";
 
 interface Idea { title: string; text: string; why: string; market: string; symbol: string | null; tf: string }
 /** `space`: which of Trade, Invest and Money the result opens in, shown as a small label. */
@@ -79,6 +80,9 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const [sel, setSel] = useState(0);
   const input = useRef<HTMLTextAreaElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  // the kit's dialog behaviour: focus starts in the box, Tab stays inside, Esc closes, focus goes back to what opened it
+  useDialogFocus(box, true, { onEscape: onClose, initial: () => input.current });
   const text = q.trim();
   const words = text.split(/\s+/).filter(Boolean).length;
   const code = looksLikeCode(q);
@@ -261,8 +265,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   useEffect(() => { setSel(0); setAnswer((a) => (a && a.q !== text ? null : a)); }, [text]);
   useEffect(() => { list.current?.querySelector(`[data-i="${sel}"]`)?.scrollIntoView({ block: "nearest" }); }, [sel]);
   const key = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") { e.preventDefault(); onClose(); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(flat.length - 1, s + 1)); }
+    if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(flat.length - 1, s + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setSel((s) => Math.max(0, s - 1)); }
     else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); flat[sel]?.run(); }
   };
@@ -270,8 +273,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   let i = -1;
   return (
     <div className="modal-back palette-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label="Ask or do anything"
-        onKeyDown={(e) => { if (e.key === "Escape" && e.target !== input.current) { e.preventDefault(); onClose(); } }}>
+      <div ref={box} className="palette" role="dialog" aria-modal="true" aria-label="Ask or do anything">
         <div className="palette-in">
           <Sparkle size={20} />
           <textarea ref={input} rows={Math.min(6, Math.max(1, q.split("\n").length))} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={key}

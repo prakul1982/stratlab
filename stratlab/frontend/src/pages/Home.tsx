@@ -248,7 +248,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
           const count = n.summary?.experiments ?? 0;
           return (
             <Card key={n.id} label={n.name}>
-              <CardHead level={3} title={<Link to={`/n/${n.id}`} className="k-title-link">{n.question || n.name}</Link>}
+              <CardHead title={<Link to={`/n/${n.id}`} className="k-title-link">{n.question || n.name}</Link>}
                 actions={<button type="button" className={`k-pin${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
                   title={n.pinned ? "Unpin" : "Pin to the top"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>} />
               <span className="k-eyebrow">{n.name} · {inst}</span>

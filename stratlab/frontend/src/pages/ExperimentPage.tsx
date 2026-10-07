@@ -116,7 +116,7 @@ function BasketInner({ nb, e }: { nb: Notebook; e: Experiment }) {
   ];
   return (
     <Card label="Similar instruments">
-      <CardHead title={`Does it work on similar ${peers}?`} info={HELP.basket} infoLabel="About this test"
+      <CardHead title={`Does it work on similar ${peers}?`} info={HELP.basket} infoLabel={`About the test on similar ${peers}`}
         actions={<button type="button" className="btn quiet sm" disabled={busy} onClick={run}>{busy ? `Testing ${peers}…` : b ? "Run again" : `Test on 10 similar ${peers}`}</button>} />
       {!b && <p className="k-small k-muted">An edge that only works on one chart is often luck. This runs the same rules over the same period on about 10 well-known {peers} and counts how many make money. Counts as one experiment.</p>}
       {b && <>
@@ -314,7 +314,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <section className="k-verdict-hero" aria-label="The verdict">
         <div className="k-stack">
-          <h2 className={`verdict-head ${v.verdict}`}>{v.headline}<Info label="How is the verdict decided?">{HELP.verdict}</Info></h2>
+          <div className="k-card-titlerow"><h2 className={`verdict-head ${v.verdict}`}>{v.headline}</h2><Info label="About the verdict: how it is decided">{HELP.verdict}</Info></div>
           <p className="k-lede">{v.summary}</p>
         </div>
         <Card label="Strength of evidence">
@@ -355,7 +355,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       {e.group && <GroupMembers e={e} cur={cur} />}
       {!e.group && (
         <Card label="Price and trades">
-          <CardHead title="Price and trades" info={HELP.priceChart} infoLabel="About this chart" actions={<span className="k-note">▲ buy &nbsp; ▼ sell</span>} />
+          <CardHead title="Price and trades" info={HELP.priceChart} actions={<span className="k-note">▲ buy &nbsp; ▼ sell</span>} />
           <TradesChart e={e} cur={cur} />
         </Card>
       )}

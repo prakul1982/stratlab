@@ -42,8 +42,8 @@ export function Tour({ onClose }: { onClose: (done: boolean) => void }) {
       </div>
       <div className="k-row tour-foot">
         {i > 0 && <button type="button" className="btn quiet sm" onClick={() => setI(i - 1)}>Back</button>}
-        {last ? <button type="button" className="btn sm" data-autofocus onClick={() => onClose(true)}>Done</button>
-          : <button type="button" className="btn sm" data-autofocus onClick={() => setI(i + 1)}>Next</button>}
+        {/* one button that becomes Done on the last step, so focus stays on it */}
+        <button type="button" className="btn sm" data-autofocus onClick={last ? () => onClose(true) : () => setI(i + 1)}>{last ? "Done" : "Next"}</button>
       </div>
     </Coachmark>
   );

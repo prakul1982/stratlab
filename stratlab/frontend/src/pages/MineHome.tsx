@@ -113,7 +113,7 @@ type NwView = {
 function NetWorthCard() {
   const [v, setV] = useState<NwView | null | "none">(null);
   useEffect(() => { api<NwView>("/money/net-worth").then(setV).catch(() => setV("none")); }, []);
-  if (v === null) return <Card testId="mine-networth"><Skeleton label="Adding up what you own" lines={3} /></Card>;
+  if (v === null) return <Card testId="mine-networth"><Skeleton label="Adding up what you own" lines={5} /></Card>;
   if (v === "none" || v.assets.length + v.liabilities.length === 0) {
     return (
       <Card testId="mine-networth">
@@ -157,7 +157,7 @@ type Holdings = { rows: unknown[]; totals: { value: number; day: number | null; 
 function PnlCard() {
   const [h, setH] = useState<Holdings | null | "none">(null);
   useEffect(() => { api<Holdings>("/holdings").then(setH).catch(() => setH("none")); }, []);
-  if (h === null) return <Card testId="mine-pnl"><Skeleton label="Reading your holdings" lines={3} /></Card>;
+  if (h === null) return <Card testId="mine-pnl"><Skeleton label="Reading your holdings" lines={5} /></Card>;
   if (h === "none" || !h.rows.length) {
     return (
       <Card testId="mine-pnl">
@@ -180,7 +180,7 @@ function PnlCard() {
 function PaperCard() {
   const [rows, setRows] = useState<LiveRow[] | null>(null);
   useEffect(() => { api<LiveRow[]>("/live/sessions").then(setRows).catch(() => setRows([])); }, []);
-  if (rows === null) return <Card testId="mine-paper"><Skeleton label="Opening your paper sessions" lines={3} /></Card>;
+  if (rows === null) return <Card testId="mine-paper"><Skeleton label="Opening your paper sessions" lines={5} /></Card>;
   if (!rows.length) {
     return (
       <Card testId="mine-paper">

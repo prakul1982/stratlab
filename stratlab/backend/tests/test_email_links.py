@@ -28,7 +28,7 @@ def routes() -> list[tuple[re.Pattern, str]]:
     main_tsx = (SRC / "main.tsx").read_text()
     out = []
     # a guard that wraps the page (<AdminOnly what="…"><AdminPage /></AdminOnly>) is skipped for the page inside it
-    for path, comp in re.findall(r'<Route path="([^"]+)" element=\{(?:<AdminOnly[^>]*>)?<(\w+)', main_tsx):
+    for path, comp in re.findall(r'<Route path="([^"]+)" element=\{<(?:AdminOnly\b[^>]*><)?(\w+)', main_tsx):   # AdminOnly only wraps the page
         if path == "*" or comp == "Navigate":
             continue
         rx = re.sub(r":\w+", r"[^/]+", path.replace("/*", "(?:/.*)?"))

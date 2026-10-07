@@ -1,7 +1,7 @@
 /* The drawing tools' own controls: a vertical rail on desktop, a bottom sheet on a phone, the bar for the selected
  * drawing (colour, line style, lock, duplicate, delete, text, risk amount), the list of drawings with show/hide, and
  * the shortcut list behind an (i). Plain props in, events out: the chart owns the state. */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Modal } from "../../components/ui";
 import { COLOR_KEYS, DASH_KEYS, DRAW_TOOLS, drawingTitle, SHORTCUTS, TOOL, TOOL_GROUPS, TOOL_HINT, type ColorKey, type DashStyle, type Drawing, type DrawingKind } from "./drawings";
 
@@ -38,7 +38,7 @@ export const DRAW_ICON: Record<string, ReactNode> = {
 };
 
 const Btn = ({ label, icon, pressed, disabled, onClick, children, title }: {
-  label: string; icon: string; pressed?: boolean; disabled?: boolean; onClick: () => void; children?: ReactNode; title?: string;
+  label: string; icon: string; pressed?: boolean; disabled?: boolean; onClick: (e: { currentTarget: HTMLElement }) => void; children?: ReactNode; title?: string;
 }) => (
   <button type="button" className="pc-btn icon" aria-label={label} title={title ?? label} aria-pressed={pressed} disabled={disabled} onClick={onClick}>
     {DRAW_ICON[icon]}{children}
@@ -106,15 +106,38 @@ function DrawList(p: ToolState) {
 /** The vertical rail on a desktop chart. */
 export function DrawRail(p: ToolState) {
   const [open, setOpen] = useState<string | null>(null);
+  const [up, setUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const out = (e: Event) => { if (!ref.current?.contains(e.target as Node)) setOpen(null); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
-    document.addEventListener("pointerdown", out);
-    document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("pointerdown", out); document.removeEventListener("keydown", esc); };
+  const opener = useRef<HTMLElement | null>(null);
+  // a fly-out takes focus (its first item), opens upwards when there's no room below it, closes with Esc or a click
+  // outside, and hands focus back to its button
+  useLayoutEffect(() => {
+    if (!open) { setUp(false); return; }
+    const pop = ref.current?.querySelector<HTMLElement>(".pc-pop");
+    if (!pop) return;
+    const r = pop.getBoundingClientRect();
+    setUp(r.bottom > window.innerHeight - 8 && r.top - (r.height - (opener.current?.offsetHeight ?? 0)) > 8);
   }, [open]);
+  useEffect(() => {
+    if (!open) {
+      const now = document.activeElement;
+      if (opener.current && (!now || now === document.body || !now.isConnected)) opener.current.focus();
+      return;
+    }
+    const pop = ref.current?.querySelector<HTMLElement>(".pc-pop");
+    (pop?.querySelector<HTMLElement>("[role=menuitem], button:not([disabled])") ?? pop)?.focus();
+    const out = (e: Event) => { if (!ref.current?.contains(e.target as Node)) setOpen(null); };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      setOpen(null);
+      opener.current?.focus();
+    };
+    document.addEventListener("pointerdown", out);
+    document.addEventListener("keydown", esc, true);
+    return () => { document.removeEventListener("pointerdown", out); document.removeEventListener("keydown", esc, true); };
+  }, [open]);
+  const toggle = (id: string) => (e: { currentTarget: HTMLElement }) => { opener.current = e.currentTarget; setOpen(open === id ? null : id); };
   return (
     <div className="pc-rail" ref={ref} role="toolbar" aria-orientation="vertical" aria-label="Drawing tools">
       <Btn label="Select" title="Select and edit drawings (V)" icon="select" pressed={!p.tool} onClick={() => { p.onTool(null); setOpen(null); }} />
@@ -123,11 +146,11 @@ export function DrawRail(p: ToolState) {
         return (
           <div className="pc-wrap" key={g.id}>
             <Btn label={g.name} title={`${g.name}: ${g.kinds.map((k) => TOOL[k].name).join(", ")}`} icon={TOOL[current].icon}
-              pressed={g.kinds.includes(p.tool as DrawingKind)} onClick={() => setOpen(open === g.id ? null : g.id)}>
+              pressed={g.kinds.includes(p.tool as DrawingKind)} onClick={toggle(g.id)}>
               <span className="pc-caret" aria-hidden="true" />
             </Btn>
             {open === g.id && (
-              <div className="pc-pop pc-fly" role="menu" aria-label={g.name}>
+              <div className={`pc-pop pc-fly${up ? " up" : ""}`} role="menu" aria-label={g.name}>
                 {g.kinds.map((k) => (
                   <button key={k} type="button" role="menuitem" aria-label={TOOL[k].name} aria-keyshortcuts={TOOL[k].key} className="item row" onClick={() => { p.onTool(k); setOpen(null); }}>
                     <span className="pc-ico">{DRAW_ICON[TOOL[k].icon]}</span><span>{TOOL[k].name}</span><kbd>{TOOL[k].key}</kbd>
@@ -142,8 +165,8 @@ export function DrawRail(p: ToolState) {
       <Btn label="Magnet" title="Magnet: snap to open, high, low and close (G)" icon="magnet" pressed={p.magnet} onClick={p.onMagnet} />
       <Btn label={p.hideAll ? "Show all drawings" : "Hide all drawings"} title="Hide or show all drawings (O)" icon={p.hideAll ? "eyeOff" : "eye"} pressed={p.hideAll} onClick={p.onHide} />
       <div className="pc-wrap">
-        <Btn label={`Drawings (${p.drawings.length})`} icon="list" pressed={open === "list"} onClick={() => setOpen(open === "list" ? null : "list")} />
-        {open === "list" && <div className="pc-pop pc-fly pc-listpop" role="dialog" aria-label="Drawings"><DrawList {...p} /></div>}
+        <Btn label={`Drawings (${p.drawings.length})`} icon="list" pressed={open === "list"} onClick={toggle("list")} />
+        {open === "list" && <div className={`pc-pop pc-fly pc-listpop${up ? " up" : ""}`} role="dialog" aria-label="Drawings" tabIndex={-1}><DrawList {...p} /></div>}
       </div>
     </div>
   );

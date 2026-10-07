@@ -1,9 +1,8 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import type { CheckStatus, VerdictKind } from "../lib/types";
-import { Close } from "./Icons";
+import { usePopover } from "./kit/Dialog";
 import { asOf } from "../lib/format";
-import { firstFocus, trapTab } from "../lib/focusTrap";
 
 const VERDICT_NAME: Record<VerdictKind, string> = {
   edge: "Likely a real edge", mixed: "Mixed evidence", luck: "Probably luck", not_enough: "Not enough evidence", no_edge: "No edge here",
@@ -24,35 +23,8 @@ export function Toast() {
   );
 }
 
-export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  const box = useRef<HTMLDivElement>(null);
-  // read through a ref: a caller's inline onClose is a new function each render, and re-running the effect moved focus
-  // back to the first control (and out of the dialog) on every change inside it
-  const close = useRef(onClose);
-  close.current = onClose;
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    if (box.current) firstFocus(box.current)?.focus();
-    const keys = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;                  // a pop-up inside this one handled it
-      if (e.key === "Escape") { e.preventDefault(); close.current(); }
-      else trapTab(e, box.current);                     // Tab stays inside the dialog
-    };
-    document.addEventListener("keydown", keys);
-    return () => { document.removeEventListener("keydown", keys); prev?.focus(); };
-  }, []);
-  return (
-    <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
-        <div className="modal-head">
-          <h2 className="h2">{title}</h2>
-          <button className="icon-btn" data-close aria-label="Close" onClick={onClose}><Close /></button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
+/** The kit's modal dialog (components/kit/Dialog), under its old name. */
+export { Dialog as Modal } from "./kit/Dialog";
 
 export function Loading({ label = "Loading" }: { label?: string }) {
   return <div className="k-loading"><span className="spinner" />{label}…</div>;
@@ -83,32 +55,27 @@ export function AutoGrow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
   return <textarea ref={ref} rows={1} {...props} />;
 }
 
-/** A small (i) button that explains the thing next to it. Click or tap to open; Escape or a click outside closes. */
+/** A small (i) button that explains the thing next to it. Click or tap to open; Escape or a click outside closes, and
+ * focus stays on the button. Name it after what it explains ("About Markets"); beside a heading it sits after the
+ * heading element, never inside it. */
 export function Info({ children, label = "What does this mean?" }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
   const [side, setSide] = useState<"left" | "right">("left");
   const wrap = useRef<HTMLSpanElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLSpanElement>(null);
   const id = useId();
+  usePopover(open, setOpen, btn, pop, { focusInto: false, outside: wrap });
   useEffect(() => {
     if (!open) return;
     const r = wrap.current?.getBoundingClientRect();
     if (r) setSide(r.left + 300 > window.innerWidth - 12 ? "right" : "left");
-    const out = (e: MouseEvent | TouchEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", out);
-    document.addEventListener("touchstart", out);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", out);
-      document.removeEventListener("touchstart", out);
-      document.removeEventListener("keydown", esc);
-    };
   }, [open]);
   return (
     <span ref={wrap} className="info">
-      <button type="button" className="info-btn" aria-label={label} aria-expanded={open} aria-controls={id}
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}>i</button>
-      {open && <span id={id} role="note" className={`info-pop ${side}`}>{children}</span>}
+      <button ref={btn} type="button" className="info-btn" aria-label={label} aria-expanded={open} aria-controls={open ? id : undefined}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open); }}>i</button>
+      {open && <span ref={pop} id={id} role="note" className={`info-pop ${side}`}>{children}</span>}
     </span>
   );
 }

@@ -95,7 +95,8 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
   const email = me?.email ?? "";
   const initial = (email.match(/[a-z0-9]/i)?.[0] ?? "?").toUpperCase();
   const plan = me?.plan_info.name;
-  const done = (f?: () => void) => () => { setOpen(false); f?.(); };
+  // the item goes with the menu, so focus goes back to the button first (and a dialog the item opens returns it there)
+  const done = (f?: () => void) => () => { setOpen(false); btn.current?.focus(); f?.(); };
   // up and down move between the items, as in any menu
   const keys = (e: ReactKeyboardEvent) => {
     const items = Array.from(panel.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? []);
@@ -107,11 +108,12 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
   };
   return (
     <div className="side-pop-wrap">
-      <button ref={btn} className="acct-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
-        aria-label={`Account menu${plan ? `, ${plan} plan` : ""}`} onClick={() => setOpen(!open)}>
+      {/* named by what it shows, then what it opens: "owner Pro plan, account menu" */}
+      <button ref={btn} className="acct-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
         <span className="avatar" aria-hidden="true">{initial}</span>
         <span className="acct-name">{email.split("@")[0] || "Account"}</span>
         {plan && <span className="plan-tag">{plan}</span>}
+        <span className="sr-only">{plan ? " plan" : ""}, account menu</span>
         <Updown size={14} />
       </button>
       {open && <>

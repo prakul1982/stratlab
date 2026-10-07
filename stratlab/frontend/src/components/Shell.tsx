@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useDialogFocus } from "./kit/Dialog";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
@@ -51,13 +52,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
-  // Esc closes the drawer on a phone (a pop-up inside it closes first, on its own)
-  useEffect(() => {
-    if (!open) return;
-    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    window.addEventListener("keydown", k);
-    return () => window.removeEventListener("keydown", k);
-  }, [open]);
+  // on a phone (or zoomed in) the menu is a drawer: a modal while it's open. Focus moves in and stays in, Esc closes it
+  // (a pop-up inside it closes first, on its own), and focus goes back to the menu button.
+  const aside = useRef<HTMLElement>(null);
+  useDialogFocus(aside, open, { onEscape: () => setOpen(false), initial: () => aside.current?.querySelector<HTMLElement>(".side-close") });
   const path = loc.pathname;
   const at = locate(path);
   const onGroup = locateGroup(path);
@@ -158,7 +156,8 @@ export function Shell({ children }: { children: ReactNode }) {
   };
   const homeLabel = space === "mine" ? "My space" : `${SPACES[space].label} home`;
   const sidebar = (
-    <aside className={`sidebar${open ? " open" : ""}`} aria-label="Navigation">
+    <aside ref={aside} id="side-menu" className={`sidebar${open ? " open" : ""}`} aria-label={open ? "Menu" : "Navigation"}
+      {...(open ? { role: "dialog", "aria-modal": true } : {})}>
       <div className="side-top">
         <div className="side-brand">
           <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
@@ -171,7 +170,7 @@ export function Shell({ children }: { children: ReactNode }) {
           : space === "money" || (space === "mine" && focus === "money")
           ? <button className="side-new" onClick={() => nav("/holdings")}><Book size={16} />Add your holdings</button>
           : <button className="side-new" onClick={() => nav("/new")}><Plus size={16} />New notebook</button>}
-        <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
+        <button className="search-btn" onClick={() => setSearch(true)} aria-keyshortcuts={/Mac/.test(navigator.platform) ? "Meta+K" : "Control+K"}>
           <Sparkle size={16} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
         </button>
       </div>
@@ -190,9 +189,10 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className={`shell${slim ? " slim" : ""}`}>
+      <a className="skip-link sr-only" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}>Skip to content</a>
       {slim && <button className="side-show" aria-label="Show the menu" title="Show the menu" onClick={() => setSlim(false)}><Menu /></button>}
       <header className="topbar">
-        <button className="icon-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Menu /></button>
+        <button className="icon-btn" aria-label="Open menu" aria-expanded={open} aria-controls="side-menu" onClick={() => setOpen(true)}><Menu /></button>
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
         <span className="row tight">
           <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
@@ -201,7 +201,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main"><div className="page"><PageBreadcrumb />{children}</div></main>
+      <main className="main" id="main" tabIndex={-1}><div className="page"><PageBreadcrumb />{children}</div></main>
       <Suspense fallback={null}>
         {search && <SearchPalette onClose={() => setSearch(false)} />}
       </Suspense>
