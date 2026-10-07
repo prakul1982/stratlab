@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { price, safeHref } from "../lib/format";
+import { price, safeHref, fmtDate } from "../lib/format";
 import type { Region } from "../lib/research";
 import { Badge, ErrorState, Skeleton } from "./kit";
 
@@ -19,8 +19,7 @@ export const KIND_NAME: Record<ActionKind, string> = {
 
 /** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
 export function exDay(iso: string, year = false) {
-  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { weekday: year ? undefined : "short", day: "numeric", month: "short", year: year ? "numeric" : undefined });
+  return fmtDate(iso.slice(0, 10), { weekday: !year, year });
 }
 
 /** One action: what it is, its ex-date and record date. */

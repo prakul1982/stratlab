@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { Link } from "react-router-dom";
 import { Seg } from "./Seg";
 import "./calendar.css";
+import { fmtDate } from "../../lib/format";
 
 export type CalKind = { id: string; label: string };
 export type CalEvent = { id: string; date: string; title: string; kind: string; detail?: ReactNode; to?: string };
@@ -10,7 +11,7 @@ const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const parse = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const longDay = (s: string) => parse(s).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-const shortDay = (s: string) => parse(s).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const shortDay = (s: string) => fmtDate(parse(s), { weekday: true });
 const monthName = (y: number, m: number) => new Date(y, m, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 const kindIndex = (kinds: CalKind[], id: string) => Math.max(0, kinds.findIndex((k) => k.id === id));
 

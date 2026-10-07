@@ -1593,7 +1593,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await charts.getByRole("heading", { name: "McClellan oscillator" }).getByRole("button", { name: "What does this mean?" }).click();
   await expect(page.getByRole("note")).toContainText("39-day");
   // the sector table and the counts behind the charts
-  await expect(page.locator(".bx-heat tbody tr").first()).toBeVisible();
+  await expect(page.getByRole("table", { name: /Share of each sector/ }).locator("tbody tr").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "The last 20 trading days" })).toBeVisible();
   // a hover shows the day's numbers on the bars
   await charts.locator("svg[aria-label^='New 52-week highs']").hover();

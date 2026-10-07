@@ -29,10 +29,3 @@ export function bizChange(c: number | null | undefined, unit: string | null) {
   return (unit ?? "").includes("%") ? `${s}${Math.abs(c).toFixed(2)} pts` : `${s}${Math.abs(c).toFixed(1)}%`;
 }
 
-/** "1 Oct": the day a filing was filed. */
-export function filedOn(iso: string | null | undefined) {
-  if (!iso) return "Filing";
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? "Filing" : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-}
-

@@ -1,6 +1,7 @@
 import { api } from "./api";
 import { isPeriod } from "./period";
 import type { LiveView } from "./breadthLive";
+import { fmtDate } from "./format";
 export { liveSeries, liveTitle } from "./breadthLive";
 export type { LiveSeries, LiveView } from "./breadthLive";
 
@@ -66,5 +67,5 @@ export function delta(v: number | null | undefined, unit: "" | "pts" = "", dp = 
 export function shortDay(iso: string): string {
   const d = new Date(`${iso}T12:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(d.getFullYear() !== new Date().getFullYear() ? { year: "2-digit" } : {}) });
+  return fmtDate(iso, { year: d.getFullYear() !== new Date().getFullYear() });
 }

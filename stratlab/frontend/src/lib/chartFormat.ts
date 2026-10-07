@@ -2,7 +2,7 @@
  * axes that pick their own step (minutes, hours, days, months, years) with labels like "10:15", "1 Oct", "Oct '26".
  * Shared by every chart in the app, so the same number reads the same way everywhere. */
 
-import { currencySymbol } from "./format";
+import { currencySymbol, fmtDate, fmtDateTime } from "./format";
 
 const MINUS = "−";
 const sign = (v: number) => (v < 0 ? MINUS : "");
@@ -151,8 +151,8 @@ function tickLabel(ms: number, unit: Unit, tz?: string): string {
 export function tipTime(ms: number, intraday = false, tz?: string): string {
   const d = new Date(ms);
   return intraday
-    ? d.toLocaleString("en-GB", { timeZone: tz, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })
-    : d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    ? fmtDateTime(d, { tz, year: false })
+    : fmtDate(d, { tz, weekday: true });
 }
 
 /** True when the points sit closer than a day apart, so labels need clock times. */

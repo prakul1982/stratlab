@@ -75,7 +75,8 @@ HELP = {
                     "India only.",
     "red_flags": "Filings in the last three months that match fixed red-flag rules: fund raises (QIP, preferential, "
                  "rights, warrants), promoter pledges, auditor resignations, defaults, insolvency, regulator action "
-                 "and rating downgrades. India only.",
+                 "and rating downgrades. For US companies it counts Form 8-K items for bankruptcy, a delisting notice, a change "
+                 "of auditor and earlier financial statements that must not be relied on (S&P 500 companies).",
 }
 # the table's columns; sorting is allowed on any of them
 COLUMNS = ("name", "symbol", "sector", "market_cap", "price", "from_high", "sales_cagr_3y", "net_margin", "opm",
@@ -129,6 +130,33 @@ def _sector(region: str, symbol: str, f: dict) -> str | None:
     return None
 
 
+def us_red_counts(today=None) -> dict[str, int] | None:
+    """Red 8-K filings of the last three months for every S&P 500 company, from the stored daily read (redflags.py):
+    {symbol: count}, a company with none at 0. None until that read has run once. Other US companies are not in it."""
+    from . import redflags, universes
+    st = redflags.state("US")
+    if not st.get("at"):
+        return None
+    today = today or datetime.now(timezone.utc).date()
+    counts = {s: 0 for s in universes.sp500_symbols()}
+    for i in redflags.flags.between("US", today - timedelta(days=RED_DAYS), today):
+        if i.get("severity") == "red" and i.get("symbol") in counts:
+            counts[i["symbol"]] += 1
+    return counts
+
+
+def with_us_red(rows: list[dict]) -> list[dict]:
+    """Fill US rows' `red_flags` from the stored 8-K counts (None for a company the read doesn't cover)."""
+    try:
+        counts = us_red_counts()
+    except Exception as e:                       # the store being down leaves the column empty, not the screen
+        print("screens: US red flags:", str(e)[:120])
+        counts = None
+    for r in rows:
+        r["red_flags"] = None if counts is None else counts.get(r["symbol"])
+    return rows
+
+
 def row(region: str, symbol: str, f: dict) -> dict | None:
     """One company's line in the index, from its stored page facts; None when there's nothing to screen on."""
     if not isinstance(f, dict) or not f:
@@ -163,6 +191,8 @@ def build_index(region: str, store: bool = True) -> dict:
                 r["insider_buy_at"] = bought.get(sym)
             rows.append(r)
     rows.sort(key=lambda r: (r["name"].lower(), r["symbol"]))
+    if region == "US":
+        with_us_red(rows)
     index = {"region": region, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rows": rows}
     if store:
         db.set_setting(INDEX_KEY + region, json.dumps(index))
@@ -186,6 +216,8 @@ def load_index(region: str) -> dict:
     except Exception:            # storage down: an empty index, tried again next time
         return {"region": region, "at": None, "rows": []}
     index = {"region": region, "at": index.get("at"), "rows": [r for r in index.get("rows") or [] if isinstance(r, dict) and r.get("symbol")]}
+    if region == "US":
+        with_us_red(index["rows"])               # always the newest stored count, whenever the index was built
     with _mem_lock:
         _mem[region] = (time.time(), index)
     return index
@@ -224,7 +256,7 @@ def clean(region, filters) -> dict:
     red = filters.get("red_flags")
     if red not in (None, "", "any", "yes", "no"):
         raise ScreenError("Recent red-flag filings: choose yes, no or either.")
-    out["red_flags"] = red if red in ("yes", "no") and region == "IN" else None
+    out["red_flags"] = red if red in ("yes", "no") else None
     bought, days = filters.get("insider_buy"), filters.get("insider_days")
     if bought not in (None, "", "any", "yes", "no"):
         raise ScreenError("Promoter or insider bought: choose yes, no or either.")
@@ -340,7 +372,7 @@ def meta(region: str) -> dict:
             "cap": [{"id": k, "label": v[0]} for k, v in CAP_BANDS[region].items()],
             "stages": [{"id": k, "label": v} for k, v in STAGES.items()],
             "ranges": [{"id": k, "label": v[0], "unit": v[1], "help": v[2]} for k, v in RANGES.items()],
-            "help": HELP, "red_flags": region == "IN", "columns": list(COLUMNS),
+            "help": HELP, "red_flags": True, "columns": list(COLUMNS),
             "insider": {"days": list(deals.SCREEN_DAYS), "default": INSIDER_DAYS, "from": deals.buys().get("from")} if region == "IN" else None,
             "surveillance": {"lists": [{"id": k, "label": v} for k, v in surveillance.FAMILY_NAME.items()]} if region == "IN" else None,
             "indexed": len(index["rows"]), "as_of": as_of(index), "index_at": index.get("at")}

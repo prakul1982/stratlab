@@ -44,7 +44,7 @@ export function StarButton({ region, symbol, name }: { region: Region; symbol: s
 }
 
 /** A card with a title: the kit's Card and CardHead, for pages that still pass a title, an (i) and something on the right. */
-export function Panel({ title, info, children, right, id }: { title: ReactNode; info?: ReactNode; children: ReactNode; right?: ReactNode; span?: "full" | "half"; id?: string }) {
+export function Panel({ title, info, children, right, id }: { title: ReactNode; info?: ReactNode; children: ReactNode; right?: ReactNode; id?: string }) {
   return (
     <Card id={id}>
       <CardHead title={title} info={info} actions={right} />

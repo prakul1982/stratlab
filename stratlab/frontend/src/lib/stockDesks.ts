@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { fmtDate } from "./format";
 
 /** The per-stock market desks' answers: stock futures (/trade/stock-futures), stock lending fees
  * (/invest/stock-lending) and margin-funded positions (/invest/margin-funding). Facts and arithmetic only. */
@@ -70,8 +71,8 @@ export const rupees = (v: number | null | undefined, dp = 2) =>
 export const croreText = (v: number | null | undefined) =>
   v == null ? "–" : `₹${v.toLocaleString("en-IN", { maximumFractionDigits: v >= 100 ? 0 : 2 })} crore`;
 export const dayText = (iso: string | null | undefined) =>
-  !iso ? "–" : new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-export const dayShort = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  !iso ? "–" : fmtDate(iso.slice(0, 10));
+export const dayShort = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });
 
 /** The status line under a desk's title: the newest day, or why it isn't there. */
 export function statusText(s: DeskStatus | undefined, what: string): string {

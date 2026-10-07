@@ -138,12 +138,57 @@ def test_sort_by_any_column_with_missing_values_last(idx):
         screens.run("IN", {}, "score", index=idx)
 
 
-def test_us_screens_have_no_red_flag_filter(w):
-    store_pages("US", [facts("AAPL", "Apple", market_cap=3000000, red_flags=None)])
-    screens.build_index("US")
-    assert syms(screens.run("US", {"red_flags": "yes", "cap": ["large"]})) == ["AAPL"]   # ignored for the US
+def us_flag(sym, days_ago, severity="red", item="4.01"):
+    from datetime import date
+    at = (date.today() - timedelta(days=days_ago)).isoformat()
+    return {"id": f"{sym}|{at}|{item}", "symbol": sym, "company": sym, "at": at, "category": f"8k_{item.replace('.', '_')}",
+            "label": "x", "severity": severity, "subject": "x", "url": None}
+
+
+def test_us_red_flag_filter_uses_the_stored_8k_counts(w):
+    from app import redflags
+    redflags.forget()
+    store_pages("US", [facts("AAPL", "Apple", market_cap=3000000, red_flags=None), facts("MSFT", "Microsoft", market_cap=3000000, red_flags=None),
+                       facts("TSLA", "Tesla", market_cap=3000000, red_flags=None), facts("NOTSP", "Not In The Index Co", market_cap=3000000, red_flags=None)])
+    # before the daily read has run once, nothing is known: the filter finds nothing rather than guessing
+    assert syms(screens.run("US", {"red_flags": "yes"}, index=screens.build_index("US"))) == []
+    redflags.flags.add("US", [us_flag("AAPL", 10), us_flag("AAPL", 20, item="3.01"), us_flag("MSFT", 5, severity="amber", item="5.02"),
+                              us_flag("TSLA", 200)])                                     # AAPL: two red; MSFT: only a director change; TSLA: too old
+    redflags._set_state("US", at="2026-10-06T20:00:00+00:00", through="2026-10-06")
+    idx = screens.build_index("US")
+    assert {r["symbol"]: r["red_flags"] for r in idx["rows"]}["AAPL"] == 2
+    assert syms(screens.run("US", {"red_flags": "yes"}, index=idx)) == ["AAPL"]
+    assert syms(screens.run("US", {"red_flags": "no"}, index=idx)) == ["MSFT", "TSLA"]         # amber and old ones don't count; NOTSP isn't covered
+    assert syms(screens.run("US", {}, index=idx)) == ["AAPL", "MSFT", "NOTSP", "TSLA"]
+    shown = {r["symbol"]: r["red_flags"] for r in screens.run("US", {})["rows"]}
+    assert shown == {"AAPL": 2, "MSFT": 0, "NOTSP": None, "TSLA": 0}
     with pytest.raises(screens.ScreenError):
         screens.clean("US", {"cap": ["mega"]})
+    assert screens.describe("US", screens.clean("US", {"red_flags": "yes"})) == ["Red-flag filings in the last 3 months"]
+    redflags.forget()
+
+
+def test_the_us_filter_reads_the_newest_counts_even_from_an_older_index(w):
+    from app import redflags
+    redflags.forget()
+    store_pages("US", [facts("AAPL", "Apple", market_cap=3000000, red_flags=None)])
+    screens.build_index("US")                                                     # built before any flag was stored
+    redflags.flags.add("US", [us_flag("AAPL", 3)])
+    redflags._set_state("US", at="2026-10-06T20:00:00+00:00")
+    screens._mem.clear()
+    assert syms(screens.run("US", {"red_flags": "yes"})) == ["AAPL"]
+    redflags.forget()
+
+
+def test_india_red_flags_still_come_from_the_page_and_the_us_store_is_not_used(w):
+    from app import redflags
+    redflags.forget()
+    redflags.flags.add("US", [us_flag("RELIANCE", 3)])
+    redflags._set_state("US", at="2026-10-06T20:00:00+00:00")
+    store_pages()
+    idx = screens.build_index("IN")
+    assert syms(screens.run("IN", {"red_flags": "yes"}, index=idx)) == ["TCS"]
+    redflags.forget()
 
 
 @pytest.mark.parametrize("region,filters", [
@@ -184,7 +229,7 @@ def test_labels_and_help_are_plain_facts_without_provider_names(w):
     assert not PROVIDERS.search(text) and not ADVICE.search(text), (PROVIDERS.search(text) or ADVICE.search(text)).group(0)
     assert {r["id"] for r in m["ranges"]} == set(screens.RANGES) and all(r["help"] for r in m["ranges"])
     assert all(m["help"][k] for k in ("market", "sector", "cap", "stage", "red_flags"))
-    assert screens.meta("US")["red_flags"] is False and screens.meta("nope")["region"] == "IN"
+    assert screens.meta("US")["red_flags"] is True and screens.meta("nope")["region"] == "IN"
 
 
 def test_conditions_in_words(w):

@@ -163,10 +163,10 @@ export function timeTicks(walls: number[], from: number, to: number, x: (i: numb
   return out.sort((p, q) => p.i - q.i);
 }
 
-/** A bar's wall-clock time in words for the crosshair label: "Tue 5 Mar '24" or "5 Mar '24 09:15". */
+/** A bar's wall-clock time in words for the crosshair label: "Tue 5 Mar 2024" or "5 Mar 2024 09:15". */
 export function timeLabel(wall: number, intraday: boolean): string {
   const d = new Date(wall);
-  const date = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`;
+  const date = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
   if (!intraday) return `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()]} ${date}`;
   return `${date} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }

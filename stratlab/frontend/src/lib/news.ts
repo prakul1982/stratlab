@@ -1,5 +1,6 @@
 /** The newsletters: market briefs for India and the US, and one on the user's own companies. */
 import type { Region } from "./research";
+import { fmtDate } from "./format";
 
 export type NewsKind = "market" | "my_stocks";
 export type Cadence = "daily" | "weekly" | "off";
@@ -26,7 +27,7 @@ export function dayName(day: string, long = false): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(day);
   if (!m) return day;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return d.toLocaleDateString("en-GB", long ? { weekday: "long", day: "numeric", month: "long", year: "numeric" } : { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  return long ? d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : fmtDate(d, { weekday: true });
 }
 
 export const NEWS_FOOTER = "Facts from exchange filings, company documents and market data. Not investment advice.";

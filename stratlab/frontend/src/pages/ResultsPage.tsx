@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, safeHref } from "../lib/format";
+import { ago, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
@@ -25,8 +25,7 @@ interface ResultsView {
 
 /** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
 export function resultDay(iso: string) {
-  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  return fmtDate(iso.slice(0, 10), { weekday: true, year: false });
 }
 
 function ResultLine({ r, showMine }: { r: ResultRow; showMine: boolean }) {

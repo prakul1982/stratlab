@@ -57,22 +57,52 @@ def run_reminders(now: datetime | None = None) -> int:
 
 class Job:
     def __init__(self):
-        self.status = {"last_run": None, "ibkr": None, "reminders": 0, "last_error": None}
+        self.status = {"last_run": None, "ibkr": None, "ibkr_at": None, "reminders": 0, "reminders_at": None, "last_error": None}
+        self.lock = threading.Lock()
+
+    @property
+    def running(self) -> bool:
+        return self.lock.locked()
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="connect-once").start()
 
-    def tick(self, now: datetime | None = None) -> None:
+    def tick(self, now: datetime | None = None, part: str = "all") -> None:
+        """One pass: the daily read (`ibkr`), the quiet-inbox reminders (`reminders`), or both. Each is the same work the
+        timer does: only the users that are due are touched."""
         now = now or datetime.now(timezone.utc)
-        self.status["ibkr"] = ibkr.run_daily(now)
-        self.status["reminders"] = run_reminders(now)
-        self.status["last_run"] = now.isoformat(timespec="seconds")
+        stamp = now.isoformat(timespec="seconds")
+        if part in ("all", "ibkr"):
+            self.status["ibkr"] = ibkr.run_daily(now)
+            self.status["ibkr_at"] = stamp
+        if part in ("all", "reminders"):
+            self.status["reminders"] = run_reminders(now)
+            self.status["reminders_at"] = stamp
+        self.status["last_run"] = stamp
+
+    def run_now(self, part: str = "all") -> bool:
+        """For the admin's Run now: in the background, one at a time. False when a pass is already running."""
+        if part not in ("all", "ibkr", "reminders") or not self.lock.acquire(blocking=False):
+            return False
+
+        def work():
+            try:
+                self.tick(part=part)
+                self.status["last_error"] = None
+            except Exception as e:
+                self.status["last_error"] = mask(str(e))[:200]
+                print("connect-once job:", mask(type(e).__name__))
+            finally:
+                self.lock.release()
+        threading.Thread(target=work, daemon=True, name="connect-once-now").start()
+        return True
 
     def _loop(self):
         time.sleep(120)                              # after start-up traffic
         while True:
             try:
-                self.tick()
+                with self.lock:
+                    self.tick()
                 self.status["last_error"] = None
             except Exception as e:
                 self.status["last_error"] = mask(str(e))[:200]

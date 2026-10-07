@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago } from "../../lib/format";
+import { ago, fmtDate } from "../../lib/format";
 import { Badge, Card, CardHead, Light, Skeleton } from "../../components/kit";
 
 // Admin only: provider names are fine here (never on public pages).
@@ -34,7 +34,7 @@ function until(t: number | null) {
   if (s <= 60) return "in under a minute";
   if (s < 3600) return `in ${Math.round(s / 60)} min`;
   if (s < 86400) return `in ${Math.round(s / 3600)} h`;
-  return `on ${new Date(t * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+  return `on ${fmtDate(t * 1000, { year: false })}`;
 }
 const STATE: Record<Provider["state"], ["ok" | "warn" | "bad" | null, string]> = {
   ok: ["ok", "OK"], warn: ["warn", "Check"], fail: ["bad", "Problem"], idle: [null, "Not tested"], off: [null, "No key"],

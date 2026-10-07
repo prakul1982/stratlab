@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { safeHref } from "../lib/format";
+import { safeHref, fmtDate } from "../lib/format";
 import { Badge, CheckField, EmptyState, ErrorState, Skeleton } from "./kit";
 
 export type Severity = "red" | "amber" | "info";
@@ -14,7 +14,7 @@ export interface FilingReport { symbol: string; items: FilingItem[]; summary: Fi
 const SEV_NAME: Record<Severity, string> = { red: "Red flag", amber: "Look closer", info: "Routine" };
 
 function day(at: string) {
-  return new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return fmtDate(at);
 }
 
 function SevBadge({ s, label }: { s: Severity; label: string }) {

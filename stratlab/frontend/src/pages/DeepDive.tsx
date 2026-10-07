@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, CRORE, inrCompact, pct, safeHref } from "../lib/format";
+import { asOf, CRORE, inrCompact, pct, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { millionsOf, scaleFor } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
@@ -59,7 +59,7 @@ const usdAmount = (v: number | null | undefined, cur = "$") => {
 /** An amount in ₹ crore as people say it in Indian units: "₹945 cr", "₹1.25 lakh cr". */
 const inrAmount = (v: number | null | undefined) => (v == null ? "–" : inrCompact(v * CRORE));
 const pc = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);
-const day = (s: string) => new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const day = (s: string) => fmtDate(s);
 const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report",
   quarterly_report: "Quarterly report", earnings_release: "Earnings release" };
 
@@ -126,7 +126,7 @@ export const CHECK: Record<CheckState, [string, string]> = { pass: ["Pass", "pas
 function ChecklistPanel({ c }: { c: Checklist }) {
   const groups = [...new Set(c.checks.map((x) => x.group))];
   return (
-    <Panel title="Investor checklist" span="full" info="Fixed rules on the reported numbers, the price trend, the filings and the management report card. Each rule is written under its check. A screen to help you look closer, not a recommendation.">
+    <Panel title="Investor checklist" info="Fixed rules on the reported numbers, the price trend, the filings and the management report card. Each rule is written under its check. A screen to help you look closer, not a recommendation.">
       <p className="k-small"><b>{c.counts.pass} pass</b> · {c.counts.watch} watch · {c.counts.fail} fail{c.counts.na ? ` · ${c.counts.na} without data` : ""}</p>
       {c.industry && c.industry.group !== "general" && (
         <p className="k-note"><b>Rules for: {c.industry.label}{c.industry.path.length ? ` (${c.industry.path.join(" › ")})` : ""}.</b> {c.industry.note}</p>)}
@@ -241,7 +241,7 @@ export function DeepDivePage() {
       )}
       {v && n && (
         <>
-          <Panel title="Growth and margins" span="full" info="Compound annual growth from the reported annual sales and net profit. OPM is operating profit as a share of sales.">
+          <Panel title="Growth and margins" info="Compound annual growth from the reported annual sales and net profit. OPM is operating profit as a share of sales.">
             <StatRow>
               <Growth label="Sales growth a year, last 3 years" v={n.growth.sales_cagr_3y} /><Growth label="Sales growth a year, last 5 years" v={n.growth.sales_cagr_5y} />
               <Growth label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} why={lossNote(years.map((y) => y.profit), 3)} />
@@ -264,7 +264,7 @@ export function DeepDivePage() {
           </Panel>
 
           {v.valuation && (
-            <Panel title="How it's valued" span="full" info={v.valuation.why}>
+            <Panel title="How it's valued" info={v.valuation.why}>
               <StatRow>
                 <Stat label={v.valuation.name} value={v.valuation.value == null ? "–" : `${v.valuation.value.toFixed(1)}×`} />
                 {v.valuation.short !== "P/E" && <Stat label="Price to earnings" value={v.valuation.pe == null ? "–" : `${v.valuation.pe.toFixed(1)}×`} />}
@@ -275,22 +275,22 @@ export function DeepDivePage() {
 
           {v.checklist && <ChecklistPanel c={v.checklist} />}
 
-          {!us && <BizUpdatesPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Business updates" span="full" right={right}
+          {!us && <BizUpdatesPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Business updates" right={right}
             info="Monthly or quarterly numbers the company files between results, copied from its own filing with the line and page each comes from.">{body}</Panel>} />}
 
-          {!us && <NamedHoldersPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Named holders" span="full" right={right}
+          {!us && <NamedHoldersPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Named holders" right={right}
             info="From the latest quarterly shareholding pattern: the promoter group's members and every public holder above 1%.">{body}</Panel>} />}
 
-          {!us && <Panel title="Deals and insider trades" span="full" info="Who bought or sold, from exchange disclosures: promoters' and insiders' own trades and pledges, substantial acquisitions, and bulk and block deals.">
+          {!us && <Panel title="Deals and insider trades" info="Who bought or sold, from exchange disclosures: promoters' and insiders' own trades and pledges, substantial acquisitions, and bulk and block deals.">
             <DealsPanel symbol={v.symbol} />
           </Panel>}
 
           {n.bank ? (
-            <Panel title="Capex and cash" span="full">
+            <Panel title="Capex and cash">
               <p className="k-small k-muted">This is a bank or lender: its revenue is mostly interest, and lending runs through its cash flow, so capex, free cash flow, operating margin and debt to equity don't describe it. The checklist uses return on equity instead.</p>
             </Panel>
           ) : (
-          <Panel title="Capex and cash" span="full" info={n.capex_reported
+          <Panel title="Capex and cash" info={n.capex_reported
             ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${capS.unit}.`
             : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
             {n.capex_3y_total != null && <p className="k-small">{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total, cur) : inrAmount(n.capex_3y_total)}</b> spent on capex over the last three years. Figures in {capS.unit}.</p>}
@@ -322,7 +322,7 @@ export function DeepDivePage() {
           </Card>
 
           {b && (
-            <Panel title="Business model" span="full">
+            <Panel title="Business model">
               <p>{b.summary}</p>
               {b.segments.length > 0 && (
                 <div className="k-stack">
@@ -345,7 +345,7 @@ export function DeepDivePage() {
           )}
 
           {b && (b.measures?.length || v.industry_measures?.label) ? (
-            <Panel title={`${b.industry ?? v.industry_measures?.label ?? "Operating"} measures, from the company`} span="full"
+            <Panel title={`${b.industry ?? v.industry_measures?.label ?? "Operating"} measures, from the company`}
               info="The numbers this industry is judged on (for a hospital, revenue per occupied bed and occupancy), as the company states them in its presentation. They aren't in the financial tables.">
               {b.measures?.length ? (
                 <div className="promises">{b.measures.map((m, i) => (
@@ -363,7 +363,7 @@ export function DeepDivePage() {
           ) : null}
 
           {p && (p.capex.length > 0 || p.outlook.length > 0) && (
-            <Panel title="Capex and growth plans, in management's words" span="full">
+            <Panel title="Capex and growth plans, in management's words">
               {p.capex.length > 0 && (
                 <div className="promises">{p.capex.map((c, i) => (
                   <div key={i} className="promise">
@@ -414,7 +414,7 @@ export function DeepDivePage() {
           </Card>
 
           {v.documents.length > 0 && (
-            <Panel title="Documents" span="full">
+            <Panel title="Documents">
               <div className="filings">{v.documents.map((d) => (
                 <div key={d.url} className="filing"><span className="k-note">{day(d.at)}</span>
                   <div className="k-stack"><span className="k-small">{d.title}</span><span className="k-note">{KIND[d.kind] ?? d.kind}</span></div>

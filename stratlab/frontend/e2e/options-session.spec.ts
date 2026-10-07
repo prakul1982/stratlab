@@ -92,7 +92,7 @@ test("options session, mid-day: the open trade with its orders folded under it, 
   });
   await open(page, body, at(MONDAY, "07:30"));                           // 13:00 IST
   const today = page.locator("section", { has: page.getByRole("heading", { name: "Today" }) });
-  await expect(today).toContainText("Open since 05 Oct, 12:00");
+  await expect(today).toContainText("Open since 5 Oct, 12:00");
   const own = today.locator("details.earlier", { hasText: "Orders in this trade" });
   await expect(own.locator("summary")).toContainText("Orders in this trade (2)");
   await expect(own.locator(".order-group")).toHaveCount(0);             // folded until asked
@@ -101,7 +101,7 @@ test("options session, mid-day: the open trade with its orders folded under it, 
   // the trade closed today, its orders under its row
   await expect(today.getByText("Closed today")).toBeVisible();
   await expect(today.locator(".trade-line")).toHaveCount(1);
-  const toggle = today.getByRole("button", { name: /Show the orders of the trade opened 05 Oct, 09:30/ });
+  const toggle = today.getByRole("button", { name: /Show the orders of the trade opened 5 Oct, 09:30/ });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await toggle.click();
   await expect(today.getByRole("button", { name: /Hide the orders/ })).toHaveAttribute("aria-expanded", "true");

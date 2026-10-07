@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, price } from "../../lib/format";
+import { money, price, fmtDateTime } from "../../lib/format";
 import type { Instrument } from "../../lib/types";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
 import { STATUS_NAME } from "../../components/ui";
@@ -39,7 +39,7 @@ type Snap = {
 };
 
 const STATUS: Record<string, string> = { filled: "Filled", late: "Filled late", rejected: "Refused", duplicate: "Repeat", ignored: "Nothing to do" };
-const at = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const at = (iso: string) => fmtDateTime(iso, { year: false, seconds: true });
 const signed = (v: number, cur: string) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${money(Math.abs(v), cur, 2)}`;
 const curOf = (i: Instrument) => i.currency || "INR";
 

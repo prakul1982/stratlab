@@ -38,7 +38,7 @@ const COLS: Col[] = [
   { id: "div_yield", label: "Dividend yield", cell: (r) => num(r.div_yield, 2, "%") },
   { id: "pe", label: "P/E", cell: (r) => num(r.pe, 1) },
   { id: "stage", label: "Stage", cell: (r) => (r.stage == null ? "–" : String(r.stage)) },
-  { id: "red_flags", label: "Red-flag filings (3 months)", short: "Red flags", cell: (r) => (r.red_flags == null ? "–" : String(r.red_flags)), india: true },
+  { id: "red_flags", label: "Red-flag filings (3 months)", short: "Red flags", cell: (r) => (r.red_flags == null ? "–" : String(r.red_flags)) },
 ];
 
 const toDraft = (f: Filters): Draft => Object.fromEntries(Object.entries(f.ranges).map(([k, b]) =>

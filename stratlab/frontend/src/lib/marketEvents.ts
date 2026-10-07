@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { fmtDate } from "./format";
 
 /** The market events calendar (RBI policy, India's data releases, the US Fed and data, index changes, expiries and
  * holidays): one answer for the Events page, the Invest home's next events and the index badges on company pages, read
@@ -46,6 +47,5 @@ export function useEvents(on = true): EventsView | null {
 
 /** "Wed 7 Oct" for an ISO day. */
 export function evDay(iso: string, year = false): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}) });
+  return fmtDate(iso, { weekday: true, year });
 }

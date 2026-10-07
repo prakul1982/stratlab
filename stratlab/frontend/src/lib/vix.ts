@@ -25,11 +25,3 @@ export function vixPercentileLine(p: VixPercentile): string {
   if (p.percentile == null) return p.days ? `${p.days} days of history; the comparison starts at ${p.need}` : "No history yet";
   return `Higher than ${Math.round(p.percentile)}% of the past year's closes`;
 }
-
-/** "5 Oct, 12:04" from an ISO time with an offset, in India time. */
-export function vixTime(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
-}

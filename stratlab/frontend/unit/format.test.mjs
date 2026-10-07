@@ -1,7 +1,7 @@
 // Indian rupee formatting: full, compact and chart-axis forms. Run: npm run test:unit
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { axisInr, CRORE, inr, inrCompact, pctPlain, signed, signedInrCompact } from "../src/lib/format.ts";
+import { axisInr, CRORE, fmtDate, fmtDateTime, asOf, inr, inrCompact, pctPlain, signed, signedInrCompact } from "../src/lib/format.ts";
 
 test("inr groups the Indian way, whole rupees unless paise are asked for", () => {
   assert.equal(inr(100000), "₹1,00,000");
@@ -42,4 +42,26 @@ test("pctPlain and signed", () => {
   assert.equal(signed(1234567), "+12,34,567");
   assert.equal(signed(-5), "−5");
   assert.equal(signed(0), "0");
+});
+
+test("fmtDate is day first: 6 Oct and 6 Oct 2026, never Oct 6", () => {
+  assert.equal(fmtDate("2026-10-06"), "6 Oct 2026");
+  assert.equal(fmtDate("2026-10-06", { year: false }), "6 Oct");
+  assert.equal(fmtDate("2026-10-06T00:00:00"), "6 Oct 2026");
+  assert.equal(fmtDate("2026-09-03"), "3 Sep 2026");                     // never "3 Sept"
+  assert.match(fmtDate("2026-10-06", { weekday: true }), /^Tue,? 6 Oct 2026$/);
+  assert.match(fmtDate("2026-10-06", { weekday: true, year: false }), /^Tue,? 6 Oct$/);
+  assert.equal(fmtDate(new Date(2026, 9, 6, 23, 30)), "6 Oct 2026");
+  assert.equal(fmtDate("2026-10-06T20:00:00Z", { tz: "Asia/Kolkata" }), "7 Oct 2026");   // a moment is read in its zone
+  assert.equal(fmtDate(null), "–");
+  assert.equal(fmtDate("not a date"), "–");
+  assert.doesNotMatch(fmtDate("2026-10-06"), /^[A-Z][a-z]{2} \d/);
+});
+
+test("fmtDateTime and asOf use the same day-first form with a 24-hour clock", () => {
+  assert.equal(fmtDateTime("2026-10-06T09:05:00Z", { tz: "UTC" }), "6 Oct 2026, 09:05");
+  assert.equal(fmtDateTime("2026-10-06T09:05:07Z", { tz: "UTC", year: false, seconds: true }), "6 Oct, 09:05:07");
+  assert.equal(fmtDateTime(undefined), "–");
+  assert.equal(asOf("2026-10-03"), "3 Oct 2026");
+  assert.equal(asOf(null), null);
 });
