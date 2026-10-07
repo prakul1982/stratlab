@@ -10,6 +10,7 @@ import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
 import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
+import { pickFy, rememberFy } from "../lib/fy";
 
 /* /tax-report: capital gains on shares and funds from the tradebooks you upload, matched first in, first out, with the
  * exemption and set-off, F&O and intraday kept apart, and the year's total tax estimate. Estimates, never advice.
@@ -90,12 +91,12 @@ function combine(a: ImportReply | null, b: ImportReply): ImportReply {
   };
 }
 
-/** The year to open on: the one already open if it has sales, else the latest with any. */
+/** The year to open on: the one already open if it has sales, else the Money pages' shared year (lib/fy). */
 function bestYear(r: Report, cur: number | null): number {
   const busy = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0 || !!y.units;
   const open = r.years.find((y) => y.fy === cur);
   if (open && busy(open)) return open.fy;
-  return r.years.find(busy)?.fy ?? (open ? open.fy : r.current_fy);
+  return pickFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && busy(y)));
 }
 
 export function TaxReportPage() {
@@ -289,7 +290,7 @@ export function TaxReportPage() {
         <>
           <Card compact>
             <CardHead title="Financial year" actions={<>
-              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setAllSales(false); }}
+              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setAllSales(false); }}
                 options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}` }))} />
               <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("csv")}><Download size={16} />{getting === "csv" ? "Making the CSV…" : "Download CSV"}</button>
               <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>
@@ -390,13 +391,15 @@ export function TaxReportPage() {
             </Card>
           )}
 
-          <Card>
-            <CardHead title="The set-off rules, in plain words" />
-            <ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
-            <h3 className="k-sub">How this report works</h3>
-            <ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul>
-            {!!rep.unit_notes?.length && <><h3 className="k-sub">ETFs, REITs, InvITs and gold bonds</h3>
-              <ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></>}
+          {/* the method is there for whoever wants it, folded, so the figures come first (R1-015) */}
+          <Card compact label="How this report works">
+            <Disclosure summary="The set-off rules, and how this report works">
+              <ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <h3 className="k-sub">How this report works</h3>
+              <ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              {!!rep.unit_notes?.length && <><h3 className="k-sub">ETFs, REITs, InvITs and gold bonds</h3>
+                <ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></>}
+            </Disclosure>
           </Card>
         </>
       )}
@@ -421,10 +424,10 @@ const ITR3_URL = "https://www.incometax.gov.in/iec/foportal/help/individual-busi
 function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void>; filing: boolean }) {
   const t = y.total;
   const chips: [string, number, string][] = [
-    ["Capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess."],
-    ["Intraday", t.parts?.intraday ?? 0, "Intraday results are speculative business income, taxed at your slab rate. Slab tax is split between your incomes in proportion to each."],
-    ["F&O", t.parts?.fno ?? 0, "F&O, commodity and currency results, after the charges in your files, are non-speculative business income, taxed at your slab rate."],
-    ["Other income", t.parts?.other ?? 0, "Your salary, interest and other income as you entered it, after the standard deduction on salary."],
+    ["Tax on capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess."],
+    ["Tax on intraday", t.parts?.intraday ?? 0, "Intraday results are speculative business income, taxed at your slab rate. Slab tax is split between your incomes in proportion to each."],
+    ["Tax on F&O", t.parts?.fno ?? 0, "F&O, commodity and currency results, after the charges in your files, are non-speculative business income, taxed at your slab rate."],
+    ["Tax on other income", t.parts?.other ?? 0, "Your salary, interest and other income as you entered it, after the standard deduction on salary."],
   ];
   const lineCols: Column<{ i: number; label: string; amount: number; kind: string }>[] = [
     { key: "what", header: "Step", rowHeader: true, wrap: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{l.label}</b> : <span className={l.kind === "note" ? "k-muted" : undefined}>{l.label}</span>) },

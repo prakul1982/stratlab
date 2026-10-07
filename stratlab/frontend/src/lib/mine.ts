@@ -17,14 +17,18 @@ export interface MarketTile {
 }
 const grouped = (loc: string) => (v: number) => Math.round(v).toLocaleString(loc);
 const fixed = (dp: number, pre = "") => (v: number) => pre + v.toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+/** Every tile is a market-wide figure, so none is painted as good or bad news: one neutral look for all six (R1-071). */
 export const MARKET_TILES: MarketTile[] = [
-  { id: "nifty", label: "NIFTY 50", from: { research: ["IN", "^NSEI"] }, fmt: grouped("en-IN") },
-  { id: "sensex", label: "SENSEX", from: { research: ["IN", "^BSESN"] }, fmt: grouped("en-IN") },
-  { id: "banknifty", label: "BANK NIFTY", from: { research: ["IN", "^NSEBANK"] }, fmt: grouped("en-IN") },
-  { id: "sp500", label: "S&P 500", from: { research: ["US", "^GSPC"] }, fmt: grouped("en-US") },
+  { id: "nifty", label: "NIFTY 50", from: { research: ["IN", "^NSEI"] }, fmt: grouped("en-IN"), neutral: true },
+  { id: "sensex", label: "SENSEX", from: { research: ["IN", "^BSESN"] }, fmt: grouped("en-IN"), neutral: true },
+  { id: "banknifty", label: "BANK NIFTY", from: { research: ["IN", "^NSEBANK"] }, fmt: grouped("en-IN"), neutral: true },
+  { id: "sp500", label: "S&P 500", from: { research: ["US", "^GSPC"] }, fmt: grouped("en-US"), neutral: true },
   { id: "usdinr", label: "USD/INR", from: { instrument: "FX:USDINR=X" }, fmt: fixed(2), neutral: true },
   { id: "gold", label: "Gold", from: { instrument: "CMDTY:GC=F" }, fmt: fixed(0, "$"), neutral: true, unit: "$/oz" },
 ];
+
+/** Gold in rupees for 10 grams, from its dollars an ounce and the dollar in rupees (31.1035 grams to a troy ounce). */
+export const goldInr10g = (usdPerOz: number, inrPerUsd: number) => (usdPerOz * inrPerUsd / 31.1035) * 10;
 
 export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null }
 type Candle = { c: number | null; t: string };

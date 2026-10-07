@@ -4,11 +4,11 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { money, fmtDate } from "../../lib/format";
 import { track } from "../../lib/analytics";
-import { upDown } from "../../lib/tradeUi";
+import { CHECKS, checksLine, upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -100,6 +100,9 @@ export function JournalPage() {
   const [mode, setMode] = useState<"add" | "replace">("add");
   const [market, setMarket] = useState("");
   const [segment, setSegment] = useState("all");
+  // trades the tax report already has from the person's tradebooks: offered here, so an empty journal says so
+  const [taxTrades, setTaxTrades] = useState(0);
+  useEffect(() => { api<{ trades: number }>("/tax").then((t) => setTaxTrades(t.trades ?? 0)).catch(() => undefined); }, []);
 
   const load = useCallback(() => {
     const q = new URLSearchParams({ segment, market });
@@ -219,9 +222,16 @@ export function JournalPage() {
 
         {!has ? (
           <Card>
-            <EmptyState title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
-              Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.
-            </EmptyState>
+            {taxTrades > 0 && j.show !== "practice" ? (
+              <EmptyState title={`${taxTrades.toLocaleString("en-IN")} trade${taxTrades === 1 ? "" : "s"} waiting in your tax report`}
+                action={{ label: busy ? "Bringing them in…" : "Bring them in", onClick: () => { if (!busy) void fromTax(); } }}>
+                The tradebooks you uploaded for tax hold your real trades. Bring them in to see them as round trips with their charges and the checks.
+              </EmptyState>
+            ) : (
+              <EmptyState title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
+                Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.
+              </EmptyState>
+            )}
           </Card>
         ) : (
           <>
@@ -324,10 +334,10 @@ function VerdictView({ v }: { v: NonNullable<Journal["verdict"]> }) {
         </div>
         <Card>
           <span className="k-small k-muted"><b>Strength of evidence</b></span>
-          <div className="dots" aria-label={`${v.passed} of ${v.total} checks passed`}>
-            {Array.from({ length: v.total }, (_, k) => <span key={k} className={k < v.passed ? "on" : ""} />)}
+          <div className="dots" aria-label={checksLine(v.passed, v.total)}>
+            {Array.from({ length: CHECKS }, (_, k) => <span key={k} className={k < v.passed ? "on" : k >= v.total ? "skip" : ""} />)}
           </div>
-          <span className="k-mono">{v.passed} of {v.total} checks passed</span>
+          <span className="k-small">{checksLine(v.passed, v.total)}</span>
         </Card>
       </section>
       <div className="j-checks">{v.checks.map((c) => <CheckCard key={c.id} c={c} />)}</div>
@@ -648,10 +658,10 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
           <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF({ ...f, segment: v })} options={ADD_SEGMENTS} />}</Field>
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           <Field label="Quantity" inputMode="decimal" value={f.qty} onChange={set("qty")} />
-          <Field label="Entry date" type="date" value={f.entry_date} onChange={set("entry_date")} />
+          <DateField label="Entry date" value={f.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />
           <Field label="Entry time" optional type="time" value={f.entry_time} onChange={set("entry_time")} />
           <Field label="Entry price" inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
-          <Field label="Exit date" type="date" value={f.exit_date} onChange={set("exit_date")} />
+          <DateField label="Exit date" value={f.exit_date} onChange={(d) => set("exit_date")({ target: { value: d } })} />
           <Field label="Exit time" optional type="time" value={f.exit_time} onChange={set("exit_time")} />
           <Field label="Exit price" inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
           <Field label={abroad ? "Charges ($)" : "Charges (₹)"} optional inputMode="decimal" value={f.charges} onChange={set("charges")}

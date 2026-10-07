@@ -376,7 +376,7 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   if (info.project.name === "phone") await touchable(page);
   // the keyboard: down to Reliance, Enter picks it and fills the NSE symbol
   const at = options.findIndex((t) => /Reliance/.test(t));
-  for (let i = 0; i < at; i++) await box.press("ArrowDown");
+  for (let i = 0; i <= at; i++) await box.press("ArrowDown");                 // nothing is marked until the first ↓ (R1-017)
   await expect(reliance).toHaveAttribute("aria-selected", "true");
   await box.press("Enter");
   await expect(box).toHaveValue("RELIANCE");
@@ -705,7 +705,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   await expect(main.getByRole("link", { name: "Scans", exact: true })).toHaveCount(0);       // no catch-all "Scans" entry any more
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
-  await expect(foot.getByRole("button", { name: /^\d+ of \d+ markets open$/ })).toBeVisible();
+  await expect(foot.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ })).toBeVisible();
   await expect(foot.getByRole("button", { name: "Account menu, Pro plan" })).toBeVisible();
   expect((await foot.boundingBox())!.height, "the footer stays slim").toBeLessThanOrEqual(100);
   const scrolls = await side.evaluate((aside) => [aside, ...aside.querySelectorAll("*")].filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY)).map((el) => el.className));
@@ -800,7 +800,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   const side = await menu(page, phone);
-  const btn = side.getByRole("button", { name: /^\d+ of \d+ markets open$/ });
+  const btn = side.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ });
   const [, , total] = (await btn.innerText()).match(/(\d+) of (\d+)/)!.map(Number);
   await expect(btn).toHaveAttribute("aria-expanded", "false");
   const footBefore = (await side.locator(".side-foot").boundingBox())!.height;
@@ -954,7 +954,10 @@ for (const [path, ready] of [["/research/IN/RELIANCE", "Reliance"], ["/research/
     await watchSharing(page);
     const errors = await open(page, path, ready);
     await answerLevel(page);
-    const button = page.getByRole("button", { name: "Share", exact: true });
+    // a company page keeps Share under More (R1-042); the deep dive shows it as a button
+    const more = path.endsWith("/deep") ? null : page.locator("main").getByRole("button", { name: "More", exact: true }).first();
+    if (more) await more.click();
+    const button = more ? page.getByRole("menuitem", { name: "Share", exact: true }) : page.getByRole("button", { name: "Share", exact: true });
     await expect(button).toBeVisible();
     if (phone) await touchable(page);
     await button.click();
@@ -1062,12 +1065,12 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   const errors = await open(page, "/research/screens?region=IN", "Filter companies by plain facts");
   await answerLevel(page);
   await expect(page.getByText(/20 of 20 companies match/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/Prices as of 1 Oct 2026/)).toBeVisible();
+  await expect(page.getByText(/Prices as of \d+ \w+ \d{4}/)).toBeVisible();              // read today, like the rest of the app
   const table = page.locator(".screens-table");
-  await expect(table.locator("tbody tr").first()).toContainText("Axisbank Ltd");          // alphabetical by default
+  await expect(table.locator("tbody tr").first()).toContainText("Axis Bank Ltd");         // alphabetical by default, the listed name
   if (phone) await page.getByRole("button", { name: /Show filters/ }).click();
   await page.getByRole("button", { name: "Energy", exact: true }).click();
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();                 // RELIANCE, ONGC, COALINDIA
   await page.getByRole("button", { name: "What is Debt to equity?" }).click();
   await expect(page.getByRole("note")).toContainText("Borrowings divided by shareholders' equity");
   await page.getByLabel("P/E (price to earnings): at most").fill("abc");
@@ -1075,7 +1078,7 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await page.getByLabel("P/E (price to earnings): at most").fill("1");
   await expect(page.getByText("No company meets every condition.", { exact: false })).toBeVisible();
   await page.getByLabel("P/E (price to earnings): at most").fill("");
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();
   await table.getByRole("button", { name: "P/E" }).click();                             // sort by a column the user picks
   await expect(table.locator("th[aria-sort=ascending]")).toContainText("P/E");
   await page.getByRole("button", { name: /Low to high/ }).click();
@@ -1089,7 +1092,7 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByText(/20 of 20 companies match/)).toBeVisible();
   await saved.click();                                                                  // a saved screen opens its conditions
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();
   await page.getByRole("button", { name: `Delete ${tag}` }).click();
   await expect(page.getByRole("button", { name: `${tag} · weekly` })).toHaveCount(0);
   const text = await page.locator("main").innerText();

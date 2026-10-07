@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from app import rotation, sector_members, universes
 from app.data.mcx import CONTRACTS
 from app.kite_service import KiteService, today_ist
+from tests.fake_prices import ETF_NAMES, level, name_of
 
 IST = ZoneInfo("Asia/Kolkata")
 STEP = {"day": 1440, "60minute": 60, "15minute": 15, "5minute": 5, "minute": 1}
@@ -16,13 +17,14 @@ OPTIONS = {"NIFTY": ("NIFTY 50", 50, 75), "BANKNIFTY": ("NIFTY BANK", 100, 35)}
 
 
 def _base(name: str) -> float:
-    return 100 + zlib.crc32(name.encode()) % 3000
+    return level(name, 20000) or 100 + zlib.crc32(name.encode()) % 3000     # well-known names trade near their real levels (fake_prices)
 
 
 def price_of(name: str, t: datetime) -> float:
     d = t.timestamp() / 86400
     b = _base(name)
-    return round(b * (1 + 0.0003 * (d - 20000)) + b * 0.08 * math.sin(d / 11 + _base(name) % 7), 2)
+    phase = (100 + zlib.crc32(name.encode()) % 3000) % 7          # each name keeps its own rhythm whatever its level
+    return round(b * (1 + 0.0003 * (d - 20000)) + b * 0.08 * math.sin(d / 11 + phase), 2)
 
 
 def _expiries(n=3):
@@ -50,7 +52,12 @@ class FakeKiteConnect:
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         for s in sorted(stocks):
             token += 1
-            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": s.title(), "segment": "NSE",
+            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": name_of(s) or s.title(), "segment": "NSE",
+                                     "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
+        # ETFs trade on NSE like shares (the broker lists them as EQ), the ones the ETF vs NAV page reads
+        for s in sorted(ETF_NAMES):
+            token += 1
+            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": ETF_NAMES[s], "segment": "NSE",
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         # NSE stocks in a restricted series: the broker lists them as SYMBOL-BE
         token += 1
@@ -112,11 +119,13 @@ class FakeKiteConnect:
             t = t.replace(hour=0, minute=0)
         else:
             t = t.replace(minute=(t.minute // step) * step)
+        now = datetime.now(IST) if t.tzinfo else datetime.now(IST).replace(tzinfo=None)
         while t <= to:
             day_ok = t.weekday() < 5
             in_hours = step == 1440 or (t.hour, t.minute) >= (9, 15) and (t.hour, t.minute) < (15, 30)
             if day_ok and in_hours:
-                o, c = price_of(r["tradingsymbol"], t), price_of(r["tradingsymbol"], t + timedelta(minutes=step))
+                # the candle still forming closes at the price now, so the chart's last candle and the quote agree
+                o, c = price_of(r["tradingsymbol"], t), price_of(r["tradingsymbol"], min(t + timedelta(minutes=step), now))
                 out.append({"date": t.replace(tzinfo=IST), "open": o, "high": max(o, c) * 1.004, "low": min(o, c) * 0.996,
                             "close": c, "volume": 1000})
             t += timedelta(minutes=step)
@@ -142,9 +151,11 @@ class FakeKiteConnect:
             r = self.by_key.get(k)
             if r:
                 p = price_of(r["tradingsymbol"], now)
+                # the previous close is where today's daily candle opened (midnight), as the broker's own quote has it
+                prev = price_of(r["tradingsymbol"], now.replace(hour=0, minute=0, second=0, microsecond=0))
                 out[k] = {"instrument_token": r["instrument_token"], "last_price": p, "volume": 1000,
                           "last_trade_time": now.replace(tzinfo=None, microsecond=0),
-                          "ohlc": {"open": p * 0.99, "high": p * 1.01, "low": p * 0.98, "close": p * 0.995},
+                          "ohlc": {"open": prev, "high": max(prev, p) * 1.004, "low": min(prev, p) * 0.996, "close": prev},
                           "depth": {"buy": [{"price": p - 0.05, "quantity": 100}], "sell": [{"price": p + 0.05, "quantity": 100}]}}
         return out
 

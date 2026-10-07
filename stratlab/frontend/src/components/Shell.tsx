@@ -1,11 +1,12 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { NAV, groupPath, locate, locateGroup, type NavPage } from "../lib/nav";
-import { SPACE_IDS, SPACES, homeOf, spaceOf, type SpaceView } from "../lib/spaces";
+import { MINE_HOME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
+import { titleFor } from "../lib/title";
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
 import { PageBreadcrumb } from "./PageBreadcrumb";
@@ -28,10 +29,12 @@ const MINE_LINKS = ["/news"];
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, me, focus, space, setSpace } = useApp();
+  const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
   const [open, setOpen] = useState(false);
   const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(OPEN_KEY, NO_GROUPS);
   const pins = usePins();
+  // on a laptop the menu can fold away for wide tables, remembered on this device (R1-082); a phone has its drawer
+  const [slim, setSlim] = usePersisted<boolean>("stratlab.side.slim", false);
   const [search, setSearch] = useState(false);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -60,13 +63,14 @@ export function Shell({ children }: { children: ReactNode }) {
   const onGroup = locateGroup(path);
   // a link into another space shows that space's menu, so where you are is always in it. Mine keeps its own menu on the
   // pages it links to (pinned pages, Briefs, Connected accounts): that is what it is for.
-  const here = spaceOf(path);
   const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to));
+  // the menu comes from the address itself (lib/spaces menuView), so it can't lag behind a saved choice that loads later
+  const space = menuView(path, saved, keepsMine);
+  // remember it on this device, so the front door opens the space last used (only real spaces and Mine's own pages)
   useEffect(() => {
-    if (MINE_PAGES.includes(path)) { if (space !== "mine") setSpace("mine", false); return; }
-    if (!here) return;
-    if (space === "mine" ? !keepsMine : here !== space) setSpace(here, false);
-  }, [here, path]);   // eslint-disable-line react-hooks/exhaustive-deps
+    if (space !== saved && (spaceOf(path) || MINE_PAGES.includes(path) || path === MINE_HOME)) setSpace(space, false);
+  }, [space, saved, path]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { document.title = titleFor(path); }, [path]);    // each page's own title; a page may sharpen it
   // pinned first, then the latest; the one you have open always stays in the list
   const openId = path.match(/^\/n\/([^/]+)/)?.[1];
   const sideNotebooks = notebooks && [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
@@ -159,6 +163,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="side-brand">
           <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
           <button className="side-close" aria-label="Close menu" onClick={() => setOpen(false)}><Close size={18} /></button>
+          <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
         <SpaceSwitch space={space} onPick={goSpace} />
         {space === "invest" || (space === "mine" && focus === "invest")
@@ -184,7 +189,8 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="shell">
+    <div className={`shell${slim ? " slim" : ""}`}>
+      {slim && <button className="side-show" aria-label="Show the menu" title="Show the menu" onClick={() => setSlim(false)}><Menu /></button>}
       <header className="topbar">
         <button className="icon-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Menu /></button>
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>

@@ -17,6 +17,7 @@ import { moneyCompact } from "../lib/chartFormat";
 import "./trade/trade.css";
 import "./trade/options.css";
 import "./trade/paper.css";
+import { sessionFeed } from "../lib/marketHours";
 
 const TZ = "Asia/Kolkata";
 const inr = (v: number | null | undefined) => money(v, "INR");
@@ -28,7 +29,7 @@ const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? (
 
 export function OptionsSession() {
   const { sid = "" } = useParams();
-  const { fail, refreshMe } = useApp();
+  const { fail, refreshMe, markets } = useApp();
   const nav = useNavigate();
   const [snap, setSnap] = useState<OptionSnapshot | null>(null);
   const [ask, setAsk] = useState<"stop" | "delete" | null>(null);
@@ -53,7 +54,10 @@ export function OptionsSession() {
   const orders = snap.events.filter((e) => e.kind !== "skip");
   const skips = snap.events.filter((e) => e.kind === "skip").slice(-5).reverse();
   const openOrders = p ? ordersSince(orders, p.opened) : [];
-  const feed = !running ? "" : !snap.feed_connected ? "Reconnecting to prices" : snap.fresh ? "Live option prices" : "Waiting for the market to open";
+  // the exchange's hours first (lib/marketHours): after the close it says so and when it opens, not "Reconnecting"
+  const closed = sessionFeed({ feedConnected: snap.feed_connected, lastTickAt: null, market: markets.find((m) => m.id === "IN") });
+  const feed = closed.text.startsWith("Market closed") ? closed
+    : !snap.feed_connected ? { text: "Reconnecting to prices", tone: "plain" as const } : snap.fresh ? { text: "Live option prices", tone: "live" as const } : { text: "Waiting for the first prices", tone: "plain" as const };
 
   const stop = async () => {
     setAsk(null);
@@ -79,7 +83,7 @@ export function OptionsSession() {
       <PageHeader eyebrow="Trade · Practise" title={snap.name}
         lede={<><Link to="/options" className="link">← Options builder</Link> · {snap.instrument.underlying} options · {snap.instrument.exchange}{snap.expiry ? ` · expiry ${snap.expiry}` : ""} · started {t(snap.started_at)}</>}
         actions={<>
-          {running && <span className="k-row"><Badge tone={snap.fresh ? "live" : "plain"}>{feed}</Badge><Info>{HELP.optFeed}</Info></span>}
+          {running && <span className="k-row"><Badge tone={feed.tone}>{feed.text}</Badge><Info>{HELP.optFeed}</Info></span>}
           {running ? <button type="button" className="btn danger" onClick={() => setAsk("stop")}>Stop session</button>
             : <><Badge tone={snap.status === "paused" ? "warn" : "plain"}>{snap.status}</Badge><button type="button" className="btn danger sm" onClick={() => setAsk("delete")}>Delete</button></>}
         </>} />

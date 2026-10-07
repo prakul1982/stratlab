@@ -77,6 +77,7 @@ test("a new user's first session, from the invite link to the plans", async ({ p
   await check(page, errors, phone);
   await page.goto(`/n/${nb.id}`);
   await page.getByRole("button", { name: "Paper trade" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Start paper trading" }).click();      // what starts is said first (R1-031)
   await expect(page).toHaveURL(/\/paper\/[^/]+$/, { timeout: 30_000 });
   await expect(page.locator("main")).toContainText(/Trend follower|My first idea/, { timeout: 30_000 });
   await check(page, errors, phone);

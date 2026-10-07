@@ -222,6 +222,7 @@ class TaxInputsReq(BaseModel):
 
 class ExperimentReq(DataReq):
     label: str = Field("", max_length=120)
+    again: bool = False          # run it even though nothing changed since the last experiment (asked first)
 
 
 class SaveStrategyReq(BaseModel):

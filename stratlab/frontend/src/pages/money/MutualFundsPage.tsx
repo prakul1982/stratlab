@@ -9,6 +9,7 @@ import { track } from "../../lib/analytics";
 import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
 import { FundCosts } from "./FundCosts";
 import { FundBehaviour } from "./FundBehaviour";
+import { pickFy, rememberFy } from "../../lib/fy";
 
 /* /money/mutual-funds: the Consolidated Account Statement read into every scheme's value at the latest NAV, what went in,
  * the gain and XIRR, the mix by category, and capital gains for each financial year. Built from the kit (components/kit). */
@@ -61,7 +62,8 @@ export function MutualFundsPage() {
 
   const show = useCallback((v: View) => {
     setView(v);
-    setFy((cur) => (cur != null && v.gains?.years.some((y) => y.fy === cur) ? cur : v.gains?.years[0]?.fy ?? null));
+    setFy((cur) => (cur != null && v.gains?.years.some((y) => y.fy === cur) ? cur
+      : v.gains?.years.length ? pickFy(v.gains.years.map((y) => y.fy), Math.max(...v.gains.years.map((y) => y.fy))) : null));     // the Money pages' shared year
   }, []);
   const load = useCallback(() => {
     setError(null);
@@ -176,6 +178,8 @@ export function MutualFundsPage() {
             onChange={(e) => setPassword(e.target.value)} aria-label="PDF password" />}
           <FormActions>
             <button type="submit" className="btn" disabled={busy || !picked}>{busy ? "Reading…" : "Read my funds"}</button>
+            {/* a greyed-out button says what it is waiting for (R1-057) */}
+            {!picked && <span className="k-note">Pick your statement first. A PDF asks for its password here once picked.</span>}
           </FormActions>
         </FormGrid>
         {result && (
@@ -241,7 +245,7 @@ export function MutualFundsPage() {
           {view.gains && (
             <Card label="Capital gains">
               <CardHead title="Capital gains by financial year" actions={view.gains.years.length > 0 ? (
-                <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setAllSales(false); }}
+                <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setAllSales(false); }}
                   options={view.gains.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === view.gains!.current_fy ? " (this year)" : ""}` }))} />
               ) : undefined} />
               {view.gains.years.length === 0 && <EmptyState title="No gains realised yet">No redemptions or switches out yet, so no gains have been realised.</EmptyState>}

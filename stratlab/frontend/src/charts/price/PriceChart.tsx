@@ -524,7 +524,14 @@ export default function PriceChart(props: PriceChartProps) {
         <select className="pc-sel" aria-label="Chart type" value={shownType} onChange={(ev) => { touched.current = true; setType(ev.target.value as ChartType); }}>
           {CHART_TYPES.filter((c) => !props.closesOnly || ["line", "area", "baseline"].includes(c.type)).map((c) => <option key={c.type} value={c.type}>{c.name}</option>)}
         </select>
-        {tfSelect && (
+        {/* on a phone the timeframe is one box beside the chart type, so the chart isn't four rows of buttons down (R1-080) */}
+        {tfSelect && phone && (
+          <select className="pc-sel" aria-label="Timeframe" value={offered.includes(tf) ? tf : ""} onChange={(ev) => pickTf(ev.target.value as Tf)}>
+            {!offered.includes(tf) && <option value="">{TF_CHIP[tf] ?? tf}</option>}
+            {offered.map((t) => <option key={t} value={t}>{TF_CHIP[t]}</option>)}
+          </select>
+        )}
+        {tfSelect && !phone && (
           <div className="pc-tf">
             <ChipBar label="Timeframe" value={tf} onChange={(v) => pickTf(v as Tf)} options={offered.map((t) => ({ value: t, label: TF_CHIP[t] }))}
               custom={{ storageKey: "stratlab.chips.pricechart", units: CHART_TF_UNITS, defaultUnit: "min", validate: chartTfCheck(offered) }} />
@@ -561,7 +568,7 @@ export default function PriceChart(props: PriceChartProps) {
           <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom out" title="Zoom out" onClick={() => engineRef.current?.zoomBy(0.8)}>{ICON.zoomOut}</button>
           <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom in" title="Zoom in" onClick={() => engineRef.current?.zoomBy(1.25)}>{ICON.zoomIn}</button>
           <button type="button" className="pc-btn icon" aria-label="Reset the view" title="Reset the view (double-click the chart)" onClick={() => { engineRef.current?.resetView(); if (range) applyRange(range); }}>{ICON.reset}</button>
-          <button type="button" className="pc-btn icon" aria-label="Download as PNG" title="Download as PNG" onClick={shot}>{ICON.camera}</button>
+          <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Download as PNG" title="Download as PNG" onClick={shot}>{ICON.camera}</button>
           <button type="button" className="pc-btn icon" aria-label={full ? "Exit full screen" : "Full screen"} title={full ? "Exit full screen" : "Full screen"} aria-pressed={full} onClick={toggleFull}>{full ? ICON.exit : ICON.full}</button>
         </span>
       </div>

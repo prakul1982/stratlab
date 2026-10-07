@@ -5,6 +5,8 @@ import time
 
 import httpx
 
+from tests.fake_prices import level
+
 CATALOGUE = [
     {"symbol": "AAPL", "shortname": "Apple Inc.", "longname": "Apple Inc.", "exchange": "NMS", "exchDisp": "NASDAQ", "quoteType": "EQUITY"},
     {"symbol": "AAPL.MX", "shortname": "APPLE INC", "exchange": "MEX", "quoteType": "EQUITY"},
@@ -22,7 +24,7 @@ STEP = {"1d": 86400, "60m": 3600, "15m": 900, "5m": 300}
 
 
 def base_price(sym: str) -> float:
-    return {"VOD.L": 7000.0, "7203.T": 2800.0, "EURUSD=X": 1.1, "RELIANCE.NS": 1400.0}.get(sym, 180.0)
+    return {"VOD.L": 7000.0, "7203.T": 2800.0, "EURUSD=X": 1.1}.get(sym) or level(sym, 19000) or 180.0   # Indian names: fake_prices
 
 
 def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTransport:

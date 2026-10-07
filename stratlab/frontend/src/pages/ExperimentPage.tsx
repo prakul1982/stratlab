@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, pct, periodName, price, qty, TF_NAME, tzOf, when } from "../lib/format";
-import { upDown, checkTone } from "../lib/tradeUi";
+import { CHECKS, checkTone, checksLine, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
 import { pctTick, moneyCompact } from "../lib/chartFormat";
@@ -131,8 +131,10 @@ function BasketInner({ nb, e }: { nb: Notebook; e: Experiment }) {
 const yearSpan = (a: string, b: string) => (a === b ? a : `${a}–${b}`);
 const tradeCount = (n: number) => `${n} trade${n === 1 ? "" : "s"}`;
 
-function CheckCard({ c, cur }: { c: Check; cur: string }) {
+function CheckCard({ c, cur, mdd, trades }: { c: Check; cur: string; mdd: number; trades: number }) {
   const d = c.data;
+  // a trade open when the period is split belongs to neither part: say so, so the parts' trades add up
+  const across = c.id === "unseen" && d ? trades - d.built_trades - d.unseen_trades : 0;
   return (
     <Card label={c.title}>
       <CardHead level={3} title={c.title} info={HELP[c.id]} infoLabel={`About ${c.title.toLowerCase()}`} />
@@ -141,6 +143,7 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
         <SplitBars built={d.built_ret} unseen={d.unseen_ret}
           builtLabel={`Built on ${yearSpan(d.built_from, d.built_to)} · ${tradeCount(d.built_trades)}`} unseenLabel={`Tested on ${yearSpan(d.unseen_from, d.unseen_to)} · ${tradeCount(d.unseen_trades)}`} />
       )}
+      {across > 0 && <span className="k-note">{tradeCount(across)} {across === 1 ? "was" : "were"} open across the split, so neither part counts {across === 1 ? "it" : "them"}.</span>}
       {c.id === "nearby" && d && (
         <>
           <Heatmap grid={d.grid} yours={d.yours} label={`Returns for ${d.total} nearby settings; ${d.profitable} profitable`} />
@@ -155,7 +158,8 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
       {c.id === "sample" && d && <div className="k-big">{d.trades}</div>}
       <p className="k-small k-muted">{c.detail}</p>
       {c.id === "sample" && <span className="k-note">Under 15 trades, luck dominates. 30 or more is a fair sample.</span>}
-      {c.id === "shuffle" && d && <span className="k-note">From {d.runs.toLocaleString("en-IN")} reshuffles of your trades{cur ? ", after costs" : ""}.</span>}
+      {c.id === "shuffle" && d && <span className="k-note">From {d.runs.toLocaleString("en-IN")} reshuffles of your trades{cur ? ", after costs" : ""}, counted between closed trades.
+        {Math.abs(mdd) > d.yours + 0.05 && ` The numbers' Worst fall (${pct(-Math.abs(mdd))}) also counts dips while a trade was open.`}</span>}
     </Card>
   );
 }
@@ -239,7 +243,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     { key: "in", header: "In", numeric: true, cell: (t) => price(t.entry, cur) },
     { key: "out", header: "Out", numeric: true, cell: (t) => price(t.exit, cur) },
     { key: "pnl", header: "P&L", numeric: true, cell: (t) => <span className={upDown(t.pnl)}>{money(t.pnl, cur)}</span> },
-    { key: "ret", header: "Return", numeric: true, cell: (t) => <span className={upDown(t.ret)}>{pct(t.ret, 2)}</span> },
+    // the price's move from entry to exit; P&L beside it is after costs, so a small move can still be a loss
+    { key: "ret", header: "Price move", numeric: true, cell: (t) => <span className={upDown(t.ret)}>{pct(t.ret, 2)}</span> },
     { key: "why", header: "Why it closed", wrap: true, cell: (t) => t.why },
   ];
   const stats: [string, string, number | null, string][] = [
@@ -257,19 +262,19 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={nb.name}
         lede={<><Link to={`/n/${nb.id}`} className="link">← Back to the notebook</Link> · {e.label} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(e.range.from.slice(0, 4), e.range.to.slice(0, 4))} · {tradeCount(st.n)}</>}
-        actions={<>
-          <ShareMenu nb={nb} e={e} />
-          <button type="button" className="btn" onClick={() => nav(`/n/${nb.id}`)}>Next experiment →</button>
-        </>} />
+        actions={<ShareMenu nb={nb} e={e} />} />
+      {/* one place for what to do next: the verdict's own suggestion first, the rules, then the rest under More */}
       <div className="k-toolbar" role="toolbar" aria-label="What next">
         <span className="k-small k-muted">Next:</span>
+        {v.suggestions.filter((sg) => sg.action !== "note").slice(0, 2).map((sg, i) => (
+          <button type="button" key={sg.action} className={`btn ${i === 0 ? "" : "quiet "}sm`} onClick={() => nav(`/n/${nb.id}`, { state: { action: sg.action } })}>{sg.text}</button>
+        ))}
         <button type="button" className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "edit_rules" } })}><Pencil size={17} />Change the rules</button>
-        <button type="button" className="btn quiet sm" onClick={() => nav(`/n/${nb.id}`, { state: { action: "paper_trade" } })}><Pulse size={17} />Paper trade it</button>
-        {nb.experiments.some((x) => x.v < e.v) && (
-          <button type="button" className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/compare?a=${Math.max(...nb.experiments.filter((x) => x.v < e.v).map((x) => x.v))}&b=${e.v}`)}>Compare with the previous run</button>
-        )}
         {/* the less common next steps wait behind More, so the verdict isn't buried under a row of buttons */}
         <MoreMenu items={[
+          ...(v.suggestions.some((sg) => sg.action === "paper_trade") ? [] : [{ label: "Paper trade it", icon: <Pulse size={17} />, run: () => nav(`/n/${nb.id}`, { state: { action: "paper_trade" } }) }]),
+          ...(nb.experiments.some((x) => x.v < e.v)
+            ? [{ label: "Compare with the previous run", run: () => nav(`/n/${nb.id}/compare?a=${Math.max(...nb.experiments.filter((x) => x.v < e.v).map((x) => x.v))}&b=${e.v}`) }] : []),
           { label: "Try another market", icon: <Globe size={17} />, run: () => nav(`/n/${nb.id}/market`) },
           ...(!nb.group ? [{ label: "Test on a group", icon: <Layers size={17} />, run: () => nav(`/n/${nb.id}/market#group`) }] : []),
           ...((e.instrument.market ?? nb.instrument?.market) === "IN" && !nb.group
@@ -290,23 +295,24 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         <div className="k-stack">
           <h2 className={`verdict-head ${v.verdict}`}>{v.headline}<Info label="How is the verdict decided?">{HELP.verdict}</Info></h2>
           <p className="k-lede">{v.summary}</p>
+          {st.buy_hold_ret != null && <p className="k-small k-muted" data-testid="vs-hold">Over the same period: the strategy {pct(st.ret)} after costs, buying and holding {pct(st.buy_hold_ret)}.</p>}
         </div>
         <Card label="Strength of evidence">
           <CardHead level={3} title="Strength of evidence" info={HELP.strength} infoLabel="About the strength of evidence" />
-          <div className="dots" role="img" aria-label={`${v.passed} of ${v.total} checks passed`}>
-            {Array.from({ length: v.total }, (_, k) => <span key={k} className={k < v.passed ? "on" : ""} />)}
+          <div className="dots" role="img" aria-label={checksLine(v.passed, v.total)}>
+            {Array.from({ length: CHECKS }, (_, k) => <span key={k} className={k < v.passed ? "on" : k >= v.total ? "skip" : ""} />)}
           </div>
-          <span className="k-small">{v.passed} of {v.total} checks passed</span>
+          <span className="k-small">{checksLine(v.passed, v.total)}</span>
         </Card>
       </section>
 
-      <section className="k-checks" aria-label="The four checks">{v.checks.map((c) => <CheckCard key={c.id} c={c} cur={cur} />)}</section>
+      <section className="k-checks" aria-label="The four checks">{v.checks.map((c) => <CheckCard key={c.id} c={c} cur={cur} mdd={st.mdd} trades={st.n} />)}</section>
 
       <section className="k-money">
         <ChartFrame title="Where the money came from, and went" info={HELP.equity} label="Account value" actions={<span className="k-note">{money(cap, cur)} start</span>}>
           <XYChart ariaLabel="Account value over the test, with the unseen part shaded" times={e.series.t} tz={tz} height={260} compare
             format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} refs={[{ v: cap }]} split={e.series.split}
-            splitNotes={unseen ? [`tuned on these years: ${pct(unseen.built_ret, 0)}`, `never seen: ${pct(unseen.unseen_ret, 0)}`] : undefined}
+            splitNotes={unseen ? [`tuned on these years: ${pct(unseen.built_ret)}`, `never seen: ${pct(unseen.unseen_ret)}`] : undefined}
             series={[
               { id: "strategy", label: "Strategy", values: e.series.equity, color: "var(--ink)", width: 2 },
               { id: "hold", label: "Buy and hold", values: e.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" },
@@ -343,7 +349,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <Card label="Every trade">
         <CardHead title="Every trade" info={HELP.trades} infoLabel="About the trades"
-          actions={<span className="k-note">{e.trades.length} shown, after costs{e.trades_trimmed ? ` (the ${e.trades_trimmed} earlier ones were cleared to save space; run it again to see every trade)` : ""}</span>} />
+          actions={<span className="k-note">{e.trades.length} shown · P&amp;L after costs, price move before them{e.trades_trimmed ? ` (the ${e.trades_trimmed} earlier ones were cleared to save space; run it again to see every trade)` : ""}</span>} />
         <DataTable label="Every trade" columns={tradeCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period." />
       </Card>
 
@@ -351,14 +357,6 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <BasketCheck key={e.v} nb={nb} e={e} />
 
-      <Card label="What to try next">
-        <CardHead title="What to try next" />
-        <div className="k-row">
-          {v.suggestions.map((sg) => (
-            <button type="button" key={sg.action} className="btn quiet k-choice-btn" onClick={() => nav(`/n/${nb.id}`, { state: { action: sg.action } })}>{sg.text}</button>
-          ))}
-        </div>
-      </Card>
       <p className="k-note">Paper trading and research only. Past results don't predict future returns, and nothing here is investment advice.</p>
       {removing && (
         <ConfirmDialog title={`Delete experiment v${e.v}?`} confirmLabel="Delete experiment" onConfirm={remove} onClose={() => setRemoving(false)}>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly } from "../lib/format";
-import { Badge, Card, CardHead, CheckField, ConfirmDialog, Disclosure, Field, FormActions, FormGrid, Notice, Skeleton, UploadButton } from "./kit";
+import { Badge, Card, CardHead, CheckField, ConfirmDialog, DateField, Disclosure, Field, FormActions, FormGrid, Notice, Skeleton, UploadButton } from "./kit";
 
 /* Settings -> Connected accounts, the "connect once" cards: the statement inbox, Zerodha, Interactive Brokers, and the EPF, NPS and
  * AIS uploads. Every figure on them is a fact about the connection (a date, a count, a status); passwords and tokens are typed
@@ -251,7 +251,7 @@ function IbkrCard({ c, set }: P) {
       </> : <FormGrid label="Connect Interactive Brokers" onSubmit={(e) => { e.preventDefault(); if (token.trim() && query.trim()) void connect(); }}>
         <Field label="Flex token" type="password" autoComplete="off" value={token} maxLength={200} onChange={(e) => setToken(e.target.value)} />
         <Field label="Query id" inputMode="numeric" value={query} maxLength={20} onChange={(e) => setQuery(e.target.value.replace(/\D/g, ""))} />
-        <Field label="Token ends on" optional type="date" value={expires} onChange={(e) => setExpires(e.target.value)} info="The expiry date Interactive Brokers shows next to the token, so StratLab can tell you before it stops." />
+        <DateField label="Token ends on" optional value={expires} onChange={setExpires} info="The expiry date Interactive Brokers shows next to the token, so StratLab can tell you before it stops." />
         <FormActions><button type="submit" className="btn" disabled={busy || !token.trim() || !query.trim()}>{busy ? "Checking…" : "Connect"}</button></FormActions>
       </FormGrid>}
       <Disclosure summary="Where to find the token and query id">

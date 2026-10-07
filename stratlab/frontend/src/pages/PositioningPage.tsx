@@ -138,9 +138,29 @@ function Participants({ s }: { s: Summary }) {
           </StatRow>
         </div>
       )}
+      {s.full && kind === "oi" && <FiiTrend seg={seg} />}
       {rows.length ? <ParticipantTable rows={rows} kind={kind} seg={seg} split={more.on} /> : <EmptyState title={`No ${kind === "oi" ? "open interest" : "volume"} file stored yet`}>It appears here once the exchange's file for a trading day is read.</EmptyState>}
       <p className="k-note">Contracts, as the exchange counts them. {kind === "vol" ? "Volume is what each participant bought and sold that day; open interest is what they held at the close." : "Open interest is what each participant held at the close; Volume shows what they bought and sold that day."}</p>
     </Card>
+  );
+}
+
+/** The headline over time: the FIIs' long share of their futures, day by day for three months, above the full grid of
+ * numbers (R1-034). A fact line, not a signal: where it sits is for the reader to read. */
+function FiiTrend({ seg }: { seg: Segment }) {
+  const h = useHistory<PartPoint>("participants", "3m");
+  const key = `fut_${seg}_long_pct`;
+  if (h === null) return <Skeleton label="Reading the FIIs' last three months" lines={2} />;
+  if (h === "error" || h.points.length < 2) return null;
+  const pts = h.points;
+  const vals = pts.map((p) => p.fii?.[key] ?? null);
+  return (
+    <div className="k-stack pos-chart" data-testid="fii-trend">
+      <b className="k-sub">FII {SEG_WORD[seg]} futures: long share, last 3 months</b>
+      <LineChart lines={[{ values: vals, color: "var(--pos-call)", width: 2, label: "Long share" }]} labels={pts.map((p) => dayName(p.day))} times={pts.map((p) => p.day.slice(0, 10))}
+        ranges={false} format={(v) => `${v.toFixed(1)}% long · ${(100 - v).toFixed(1)}% short`} axisFormat={(v) => `${v.toFixed(0)}%`} height={160}
+        ariaLabel={`FII ${SEG_WORD[seg]} futures long share by day, last three months`} />
+    </div>
   );
 }
 

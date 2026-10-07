@@ -6,7 +6,7 @@ import { inr, fmtDate } from "../../lib/format";
 import { Copy, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Earlier } from "../../components/Earlier";
-import { Card, CardHead, CheckField, ChipSet, ConfirmDialog, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Seg, Select, Skeleton } from "../../components/kit";
+import { Card, CardHead, CheckField, ChipSet, ConfirmDialog, DateField, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Seg, Select, Skeleton } from "../../components/kit";
 
 /* /money/calendar: tax due dates, results and dividends for your holdings and watchlist, plus your own dates, as a list
  * or a month, with a private link for any calendar app and reminders. Built from the kit (components/kit). */
@@ -275,7 +275,7 @@ export function MoneyCalendarPage() {
         <Card label="Your own dates">
           <CardHead title={form.id ? "Change your date" : "Add your own date"} info="A fixed deposit maturing, an insurance premium, an EMI, a rent increase: once, or every month or year." />
           <FormGrid onSubmit={(e) => { e.preventDefault(); void saveEvent(); }} label="Your own date">
-            <Field label="Date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            <DateField label="Date" value={form.date} onChange={(date) => setForm({ ...form, date })} />
             <Field label="Name" maxLength={80} placeholder="e.g. FD matures" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             <Field label="Amount" optional unit="₹" inputMode="decimal" placeholder="e.g. 250000" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
             <Field label="Repeats">{(id) => <Select id={id} value={form.repeat} onChange={(v) => setForm({ ...form, repeat: v as Repeat })} options={(Object.keys(REPEAT) as Repeat[]).map((r) => ({ value: r, label: REPEAT[r] }))} />}</Field>

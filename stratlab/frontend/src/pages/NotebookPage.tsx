@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { dateOnly, pct, periodName, TF_NAME } from "../lib/format";
+import { dateOnly, money, pct, periodName, TF_NAME } from "../lib/format";
 import { riskForCurrency, usesPro } from "../lib/rules";
-import type { Experiment, Instrument, Notebook, Strategy, Tf } from "../lib/types";
+import type { Experiment, Instrument, LiveRow, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
 import { track, trackBacktest } from "../lib/analytics";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
@@ -86,6 +86,18 @@ export function NotebookPage() {
   const [running, setRunning] = useState(false);
   const [rewrite, setRewrite] = useState(false);
   const [groupStart, setGroupStart] = useState(false);
+  const [paperAsk, setPaperAsk] = useState(false);
+  // a paper session already running these rules: the button opens it instead of starting another
+  const [live, setLive] = useState<LiveRow | null>(null);
+  useEffect(() => {
+    if (!nb?.id) return;
+    let on = true;
+    const instId = nb.instrument && "id" in nb.instrument ? nb.instrument.id : null;
+    api<LiveRow[]>("/live/sessions").then((rows) => {
+      if (on) setLive(rows.find((r) => r.status === "running" && r.name === nb.name && (!instId || r.instrument?.id === instId)) ?? null);
+    }).catch(() => undefined);
+    return () => { on = false; };
+  }, [nb?.id, nb?.name]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [removing, setRemoving] = useState(false);
   const [fast, setFast] = useState({ ticks: false, maxSpreadPct: 0, minPrice: 0 });
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -129,13 +141,19 @@ export function NotebookPage() {
 
   const setStrategy = (st: Strategy) => patch({ strategy: st, name: st.name });
 
-  const run = async () => {
+  const run = async (again = false) => {
     if (running) return;
-    if (!inst && !group) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
+    let first: Instrument | null = null;
+    if (!inst && !group) {
+      // nothing picked yet: run on the default (the one marked Default in "What do you want to test it on?") and say so
+      first = (await api<Instrument[]>("/instruments/defaults").catch(() => []))[0] ?? null;
+      if (!first) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
+      patch({ instrument: first, instrumentId: first.id, strategy: { ...s, risk: riskForCurrency(s.risk, first.currency) } });     // saved by the flush below, before the run
+    }
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
     if (!fno && inst?.fno) { notify("Indian F&O is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
     if (!allIndicators && usesPro(s)) { notify("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them.", { label: "See plans", run: () => nav("/plans") }); return; }
-    const body: Record<string, unknown> = { label: label.trim(), days: period };
+    const body: Record<string, unknown> = { label: label.trim(), days: period, ...(again ? { again: true } : {}) };
     if (isUpload) {
       const up = getUpload(nb.id);
       if (!up) { notify("Upload your CSV again: this browser no longer has it."); nav(`/n/${nb.id}/market`); return; }
@@ -146,12 +164,17 @@ export function NotebookPage() {
     try {
       const out = await api<{ experiment: Experiment }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body });
       trackBacktest(group ? "group" : "notebook");
-      setNb({ ...nb, experiments: [...(nb.experiments || []), out.experiment] });
+      if (first) notify(`Tested on ${first.symbol}, the default. Pick another market or instrument any time.`);
+      setNb({ ...nb, ...(first ? { instrument: first } : {}), experiments: [...(nb.experiments || []), out.experiment] });
       setLabel("");
       refreshMe();
       refreshNotebooks();
       nav(`/n/${nb.id}/e/${out.experiment.v}`);
-    } catch (e) { fail(e); } finally { setRunning(false); }
+    } catch (e) {
+      // nothing changed since the last run: say so, and run it again only if asked (it uses one of the month's experiments)
+      if ((e as ApiError).code === "same_as_last") notify((e as Error).message, { label: "Run it again", run: () => { void run(true); } });
+      else fail(e);
+    } finally { setRunning(false); }
   };
 
   runRef.current = run;
@@ -197,6 +220,11 @@ export function NotebookPage() {
       return;
     }
     if (!inst || isUpload) { notify(isUpload ? "Paper trading needs live prices, so it doesn't work on uploaded data." : "Pick what to trade first."); return; }
+    setPaperAsk(true);         // what is about to start, said first (R1-031)
+  };
+  const startSingle = async () => {
+    setPaperAsk(false);
+    if (!inst) return;
     try {
       const snap = await api<{ id: string }>("/live/sessions", { method: "POST", body: { strategy: { ...s, name: nb.name }, instrument: inst.id } });
       track("paper trading started", { kind: "single" });
@@ -252,7 +280,8 @@ export function NotebookPage() {
         <Card label="About this notebook">
           <CardHead title="About this notebook" info={HELP.notebook} infoLabel="About notebooks" actions={<>
             <button type="button" className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
-            <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade</button>
+            {live ? <Link className="btn quiet sm" to={`/paper/${live.id}`} title={`Running since ${dateOnly(live.started_at)}`}><Pulse size={17} />Paper trading · open</Link>
+              : <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade</button>}
             <button type="button" className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
             <MoreMenu align="right" items={[
               { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
@@ -350,6 +379,14 @@ export function NotebookPage() {
         )}
       </aside>
 
+      {paperAsk && inst && (
+        <ConfirmDialog title={`Paper trade on ${inst.symbol}?`} confirmLabel="Start paper trading" danger={false} onConfirm={() => void startSingle()} onClose={() => setPaperAsk(false)}>
+          <span className="k-stack k-tight">
+            <span>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Orders fill at live prices; nothing real is ever placed.</span>
+            <span className="k-note">It runs until you stop it and counts as one of your plan's paper sessions. A message for each paper trade is {me?.alerts.enabled ? "on" : "off"} in Settings (Notifications).</span>
+          </span>
+        </ConfirmDialog>
+      )}
       {groupStart && group && (
         <Modal title="Paper trade this group" onClose={() => setGroupStart(false)}>
           <div className="k-stack">

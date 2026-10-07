@@ -59,8 +59,13 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   const errors = await open(page, "/money/net-worth", "Nothing added yet", who);
   if (info.project.name === "desktop") await expect(page.getByRole("link", { name: "Net worth" }).first()).toBeVisible();   // in the menu
 
+  // adding is a pop-up (R1-055): open it, pick what it is, then fill in its boxes
   const kinds = page.getByRole("radiogroup", { name: "What is it?" });
-  const kind = (name: string) => kinds.getByRole("radio", { name }).click();
+  const kind = async (name: string) => {
+    await page.locator("main").getByRole("button", { name: "Add an entry" }).first().click();
+    await kinds.getByRole("radio", { name }).click();
+  };
+  await kind("Savings and cash");
   await page.getByLabel("Amount (₹)").fill("2,50,000");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("Savings and cash added.")).toBeVisible();

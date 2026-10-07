@@ -5,6 +5,7 @@ import { useApp } from "../../lib/app";
 import { Download } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import { rememberFy, savedFy } from "../../lib/fy";
 
 /* /money/itr: the year's figures from the tax report, tax tools and US stocks, laid out as the ITR-2 and ITR-3 schedules,
  * to download as a workbook, CSV files or a PDF pack for a CA. Built from the kit (components/kit). */
@@ -42,7 +43,7 @@ export function ItrExportPage() {
     setV(null);
     api<View>(`/money/itr${fy ? `?fy=${fy}` : ""}`).then(setV).catch(fail);
   }, [fail]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(savedFy() ?? undefined); }, [load]);     // the Money pages' shared year, when one was picked
 
   const download = async (f: Format) => {
     if (!v) return;
@@ -65,9 +66,9 @@ export function ItrExportPage() {
         info="Schedule 112A scrip by scrip, Schedule CG, dividends, intraday and F&O turnover, tax paid, foreign income and Schedule FA. Only you can see these figures." infoLabel="What is in the schedules" />
       <Notice label="Not a filed return"><b>Not a filed return.</b> {v?.label_text ?? "Prepared by StratLab from your files to help you or your CA fill the return. This is not a filed return, and StratLab files nothing for you."} {v?.check}</Notice>
 
-      <FormGrid label="Choose the year">
+      <FormGrid label="Choose the year" pair>
         <Field label="Financial year">{(id) => (
-          <Select id={id} value={v?.fy ?? ""} disabled={!v} onChange={(x) => load(Number(x))}
+          <Select id={id} value={v?.fy ?? ""} disabled={!v} onChange={(x) => { rememberFy(Number(x)); load(Number(x)); }}
             options={(v?.years ?? []).map((y) => ({ value: y, label: `${fyLabel(y)} (AY ${y + 1}-${String(y + 2).slice(2)})` }))} />
         )}</Field>
       </FormGrid>
@@ -89,7 +90,14 @@ export function ItrExportPage() {
           </Card>
 
           <section className="k-page" aria-label="Schedules">
-            {v.tables.map((t) => (
+            {/* the schedules with nothing this year share one line, instead of a card each (R1-058) */}
+            {v.tables.some((t) => !t.count) && (
+              <Card compact label="Empty schedules">
+                <p className="k-small k-muted" data-testid="itr-empty"><b className="k-ink">Nothing this year in:</b> {v.tables.filter((t) => !t.count).map((t) => t.title).join(" · ")}.
+                  {" "}Upload trades on the <Link className="link" to="/tax-report">tax report</Link> to fill them.</p>
+              </Card>
+            )}
+            {v.tables.filter((t) => t.count).map((t) => (
               <Card key={t.key}>
                 <button type="button" className="k-fold" aria-expanded={open === t.key} onClick={() => setOpen(open === t.key ? null : t.key)}>
                   <span className="k-card-title">{t.title}</span>

@@ -19,6 +19,7 @@ import { Explore } from "../components/Explore";
 import { CompanySearch } from "../components/CompanySearch";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Receipt, Search, Wallet } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
+import { pickFy } from "../lib/fy";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
@@ -362,9 +363,10 @@ function HoldingsSummary() {
 function TaxSummary() {
   const [t, setT] = useState<Tax | null | "error">(null);
   useEffect(() => { api<Tax>("/tax").then(setT).catch(() => setT("error")); }, []);
-  const year = t && t !== "error" ? t.years.find((y) => y.fy === t.current_fy) ?? null : null;
+  // the Money pages' shared year (lib/fy): the one being filed now, unless another was picked
+  const year = t && t !== "error" ? t.years.find((y) => y.fy === pickFy(t.years.map((x) => x.fy), t.current_fy, (fy) => t.years.some((x) => x.fy === fy && x.count > 0))) ?? null : null;
   return (
-    <Panel title="Tax this year" right={<Link to="/tax-report" className="link">Tax report →</Link>}>
+    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} right={<Link to="/tax-report" className="link">Tax report →</Link>}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !t.trades ? (

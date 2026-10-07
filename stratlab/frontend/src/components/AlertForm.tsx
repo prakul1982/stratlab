@@ -6,14 +6,18 @@ import { researchApi, type Region } from "../lib/research";
 import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, type AlertBody, type AlertsPage, type StockAlert } from "../lib/alerts";
 import { Bell } from "./Icons";
 import { Modal } from "./ui";
-import { CheckField, Field, FormActions, FormGrid, Select, StockPicker } from "./kit";
+import { CheckField, Field, FormActions, FormGrid, Notice, Select, StockPicker } from "./kit";
+import { type ApiError } from "../lib/api";
+import { numberProblem } from "../lib/validate";
 
 type Saved = AlertsPage & { alert: StockAlert; note: string | null };
 
 /** Create or edit one alert. A stock passed in is fixed; `choices` offers a list (the watchlist) instead. */
-export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved, condition }: {
+export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved, condition, nowhere }: {
   region?: Region; symbol?: string; editing?: StockAlert; choices?: { region: Region; symbol: string }[]; onSaved: (r: Saved) => void;
   condition?: string;
+  /** Nothing is set up to send an alert yet (no phone, Telegram or confirmed email): said before it's set. */
+  nowhere?: boolean;
 }) {
   const { fail, notify } = useApp();
   const fixed = !editing && !!s0 && !choices;
@@ -28,6 +32,8 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const [note, setNote] = useState(editing?.note ?? "");
   const [now, setNow] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  // what's wrong, under the box it belongs to (not a toast that outlives the fix)
+  const [errs, setErrs] = useState<{ symbol?: string; value?: string }>({});
   const c = CONDITIONS.find((x) => x.key === cond && (!x.india || region === "IN")) ?? CONDITIONS[0];
   const sym = symbol.trim().toUpperCase();
   const ccy = region === "IN" ? "INR" : "USD";
@@ -45,8 +51,12 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
     e.preventDefault();
     const n = Number(value);
     const needsValue = c.kind === "price" || c.kind === "move" || c.kind === "rsi" || c.kind === "etfgap" || c.kind === "mtf";
-    if (!sym) { notify("Enter a ticker, like RELIANCE or AAPL."); return; }
-    if (needsValue && (!value.trim() || !Number.isFinite(n) || n <= 0)) { notify(c.kind === "move" ? "Enter the day's move in percent." : c.kind === "etfgap" ? "Enter the gap in percent." : "Enter the level."); return; }
+    const bad = {
+      symbol: sym ? undefined : "Type a name or ticker, then pick the company.",
+      value: needsValue ? numberProblem(value, c.kind === "rsi" ? { min: 1, max: 99 } : { min: 0, above: true }) ?? undefined : undefined,
+    };
+    setErrs(bad);
+    if (bad.symbol || bad.value) return;
     const body: AlertBody = {
       region, symbol: sym, kind: c.kind, op: c.op, repeat, note: note.trim() || null,
       value: needsValue ? n : c.kind === "stage" ? stage : null, period: c.kind === "ma" ? period : null,
@@ -56,7 +66,10 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
       const r = editing ? await alertsApi.update(editing.id, body) : await alertsApi.create(body);
       notify(r.note ?? (editing ? "Alert saved." : `Alert set on ${sym}.`));
       onSaved(r);
-    } catch (err) { fail(err); } finally { setBusy(false); }
+    } catch (err) {
+      const f = (err as ApiError).fields;
+      if (f?.value || f?.symbol) setErrs({ value: f.value, symbol: f.symbol }); else fail(err);
+    } finally { setBusy(false); }
   };
 
   const hint = c.kind === "etfgap"
@@ -75,8 +88,17 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
     ? "Checked through the trading day with the live price."
     : "Fires when it crosses during market hours: the first check notes which side it's on, then it waits for a cross.";
 
+  const takeValue = (v: string) => { setValue(v); setErrs((x) => ({ ...x, value: undefined })); };
+
   return (
     <FormGrid onSubmit={save} label="Alert">
+      {nowhere && !editing && (
+        <div className="k-form-wide">
+          <Notice role="status" action={{ label: "Where alerts go", to: "/settings#notifications" }}>
+            Nothing is set up to send alerts yet, so this one will only show on the Alerts page when it fires.
+          </Notice>
+        </div>
+      )}
       {fixed ? (
         <p className="k-small k-form-wide"><b>{sym}</b> <span className="k-muted">· {region === "IN" ? "India" : "US"}{now != null ? ` · now ${price(now, ccy)}` : ""}</span></p>
       ) : (
@@ -88,9 +110,9 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
                 options={choices.map((x) => ({ value: `${x.region}:${x.symbol}`, label: x.symbol }))} />}
             </Field>
           ) : (
-            <Field label="Stock" info={now != null ? `${sym} is at ${price(now, ccy)} now.` : undefined} infoLabel="Where the stock is now">
-              {(id) => <StockPicker id={id} market={region} value={picked} placeholder={region === "IN" ? "RELIANCE" : "AAPL"}
-                onText={setSymbol} onPick={(s, r) => { setRegion(r); setSymbol(s); setPicked(s); }} />}
+            <Field label="Stock" error={errs.symbol} hint={now != null ? `${sym} is at ${price(now, ccy)} now` : undefined}>
+              {(id) => <StockPicker id={id} market={region} value={picked} placeholder={region === "IN" ? "Name or symbol, like RELIANCE" : "Name or ticker, like AAPL"}
+                onText={(t) => { setSymbol(t); setErrs((x) => ({ ...x, symbol: undefined })); }} onPick={(s, r) => { setRegion(r); setSymbol(s); setPicked(s); setErrs((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
           )}
         </>
@@ -98,11 +120,12 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
       <Field label="Alert me when" wide>
         {(id) => <Select id={id} value={cond} onChange={setCond} options={CONDITIONS.filter((x) => !x.india || region === "IN").map((x) => ({ value: x.key, label: x.label }))} />}
       </Field>
-      {c.kind === "price" && <Field label="Price level" unit={region === "IN" ? "₹" : "$"} inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={now != null ? String(Math.round(now)) : "3000"} />}
-      {c.kind === "move" && <Field label="Move in a day" unit="%" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="5" />}
-      {c.kind === "etfgap" && <Field label="Gap to its last NAV" unit="%" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="2" />}
-      {c.kind === "mtf" && <Field label="Level" unit="% of shares" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="1" info="As a percent of the shares issued." />}
-      {c.kind === "rsi" && <Field label="RSI level (1 to 99)" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} />}
+      {c.kind === "price" && <Field label="Price level" unit={region === "IN" ? "₹" : "$"} inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)}
+        placeholder={now != null ? String(Math.round(now)) : ""} error={errs.value} hint={now != null ? `Now ${price(now, ccy)}` : undefined} />}
+      {c.kind === "move" && <Field label="Move in a day" unit="%" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="5" error={errs.value} />}
+      {c.kind === "etfgap" && <Field label="Gap to its last NAV" unit="%" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="2" error={errs.value} />}
+      {c.kind === "mtf" && <Field label="Level" unit="% of shares" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="1" info="As a percent of the shares issued." error={errs.value} />}
+      {c.kind === "rsi" && <Field label="RSI level" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} hint="1 to 99" error={errs.value} />}
       {c.kind === "ma" && <Field label="Moving average">{(id) => <Select id={id} value={period} onChange={(v) => setPeriod(Number(v))} options={MA_PERIODS.map((p) => ({ value: p, label: `${p}-day average` }))} />}</Field>}
       {c.kind === "stage" && <Field label="Which change">{(id) => <Select id={id} value={stage} onChange={(v) => setStage(Number(v))}
         options={[{ value: 0, label: "Any change of stage" }, ...[1, 2, 3, 4].map((s) => ({ value: s, label: `Enters Stage ${s}` }))]} />}</Field>}
@@ -128,14 +151,21 @@ export function AlertButton({ region, symbol, choices, label = "Set alert", cond
   return (
     <>
       <button className="btn quiet sm" onClick={() => setOpen(true)} disabled={choices && !choices.length}><Bell size={17} />{label}</button>
-      {open && (
-        <Modal title={symbol ? `Alert on ${symbol}` : "Set an alert"} onClose={() => setOpen(false)}>
-          <div className="k-stack">
-            <AlertForm region={region} symbol={symbol} choices={choices} condition={condition} onSaved={() => setOpen(false)} />
-            <p className="k-note">See and change all your alerts on the <Link className="link" to="/alerts">Alerts page</Link>.</p>
-          </div>
-        </Modal>
-      )}
+      {open && <AlertDialog region={region} symbol={symbol} choices={choices} condition={condition} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+/** The alert form in a pop-up, for a page that opens it from its own menu (a company page's More). */
+export function AlertDialog({ region, symbol, choices, condition, onClose }: {
+  region: Region; symbol?: string; choices?: { region: Region; symbol: string }[]; condition?: string; onClose: () => void;
+}) {
+  return (
+    <Modal title={symbol ? `Alert on ${symbol}` : "Set an alert"} onClose={onClose}>
+      <div className="k-stack">
+        <AlertForm region={region} symbol={symbol} choices={choices} condition={condition} onSaved={onClose} />
+        <p className="k-note">See and change all your alerts on the <Link className="link" to="/alerts">Alerts page</Link>.</p>
+      </div>
+    </Modal>
   );
 }

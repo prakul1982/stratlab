@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from ..kite_service import KiteService
 from .finnhub import Finnhub
-from .net import SourceError, num
+from .net import NotFound, SourceError, num
 from .news import GoogleNews, Wikipedia
 from .screener import Screener, summary as scr_summary
 from .yahoo import Yahoo
@@ -54,6 +54,44 @@ def _groups(*groups) -> list[dict]:
         items = [i for i in items if i["value"] is not None]
         if items:
             out.append({"title": title, "items": items})
+    return out
+
+
+def at_live_price(s: dict, live: float | None) -> dict:
+    """The fundamentals summary re-priced at the live price, so the market value, P/E, P/B and dividend yield on a
+    company's page agree with the price at the top of it. The fundamentals source prices its ratios once a day; the
+    reported numbers behind them (earnings, book value, dividend) don't move with the price, so each ratio scales with it."""
+    old = s.get("price")
+    if not live or live <= 0 or not old or old <= 0:
+        return s
+    k = live / old
+    out = dict(s, price=live)
+    if s.get("pe") is not None:
+        out["pe"] = s["pe"] * k
+    if s.get("book_value"):
+        out["pb"] = live / s["book_value"]
+    if s.get("div_yield") is not None:
+        out["div_yield"] = s["div_yield"] / k
+    if s.get("market_cap_cr") is not None:
+        out["market_cap_cr"] = s["market_cap_cr"] * k
+    return out
+
+
+def reported_growth(scr: dict | None, bars: list[dict] | None) -> dict:
+    """Sales and profit compounded over the last 3 and 5 reported years (the deep dive's and the AI read facts' own
+    sums), and the price's change over a year of daily candles. Empty for what can't be worked out."""
+    out: dict = {}
+    if scr:
+        try:
+            from ..deepdive import numbers
+            out.update({k: v for k, v in (numbers(scr).get("growth") or {}).items() if v is not None})
+        except Exception:                 # a page that can't be read this way keeps the source's own figures
+            pass
+    if bars:
+        from .key_facts import _year_ago
+        then, last = _year_ago(bars), num(bars[-1].get("c"))
+        if then and last:
+            out["price_1y"] = (last / then - 1) * 100
     return out
 
 
@@ -211,7 +249,7 @@ class Research:
         fh = self.finnhub
         p = fh.profile(sym)
         if not p.get("name"):
-            raise SourceError("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
+            raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
         r, sources = self._run({
             "q": ("Finnhub", lambda: fh.quote(sym)), "m": ("Finnhub", lambda: fh.metrics(sym)),
             "news": ("Finnhub", lambda: fh.news(sym)), "peers": ("Finnhub", lambda: fh.peers(sym)),
@@ -310,7 +348,7 @@ class Research:
             renamed = [h for h in self.kite.search(sym, False, 3) if not h.get("fno") and h.get("type") == "EQ"
                        and sym in getattr(self.kite, "ALIASES", {})]
             if not renamed:
-                raise SourceError("Research", f"Couldn't find {sym}. Use the NSE symbol (like RELIANCE or TCS), or the BSE code for a company listed only on BSE.")
+                raise NotFound("Research", f"Couldn't find {sym}. Use the NSE symbol (like RELIANCE or TCS), or the BSE code for a company listed only on BSE.")
             sym, inst = renamed[0]["symbol"], renamed[0]
         # listed only on BSE: the company page is under its six-digit BSE code
         code = inst.get("bse_code") if inst and inst["exchange"] == "BSE" else (sym if sym.isdigit() and len(sym) == 6 else None)
@@ -347,8 +385,16 @@ class Research:
                 lo52, hi52 = min(b["l"] for b in bars), max(b["h"] for b in bars)
         if quote is None and s.get("price"):
             quote = {"price": s["price"]}
+        s = at_live_price(s, num((quote or {}).get("price")))
         g = (scr or {}).get("growth", {})
         gs, gp, gpr = g.get("sales", {}), g.get("profit", {}), g.get("price", {})
+        # one value per figure on the page: growth compounded over the reported years (as the AI read's facts and the
+        # deep dive work it out), and the price's year from the same daily candles as the chart
+        mine = reported_growth(scr, r.get("k1y"))
+        gs = {**gs, **{k: v for k, v in (("3 Years", mine.get("sales_cagr_3y")), ("5 Years", mine.get("sales_cagr_5y"))) if v is not None}}
+        gp = {**gp, **{k: v for k, v in (("3 Years", mine.get("profit_cagr_3y")), ("5 Years", mine.get("profit_cagr_5y"))) if v is not None}}
+        if mine.get("price_1y") is not None:
+            gpr = {**gpr, "1 Year": mine["price_1y"]}
         pl = (scr or {}).get("pl")
         trend = None
         if pl:

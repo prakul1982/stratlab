@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import { asOf } from "../../lib/format";
 import { evDay, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
 import { Info } from "../../components/ui";
-import { Calendar, Card, CardHead, CheckField, ChipBar, ChipSet, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton, type CalEvent, type Column } from "../../components/kit";
+import { Calendar, type CalEvent, Card, CardHead, CheckField, ChipBar, ChipSet, type Column, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton } from "../../components/kit";
 import "./trade.css";
 import "./events.css";
 
@@ -105,7 +105,7 @@ function AdminPanel({ v, reload }: { v: EventsView; reload: () => void }) {
           }}>Read the sources now</button>
         </div>
         <FormGrid>
-          <Field label="Date" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+          <DateField label="Date" value={f.date} onChange={(date) => setF({ ...f, date })} />
           <Field label="Kind">{(id) => <Select id={id} label="Kind" value={f.kind} onChange={(k) => setF({ ...f, kind: k })} options={Object.entries(v.custom_kinds).map(([k, l]) => ({ value: k, label: l }))} />}</Field>
           <Field label="Title" placeholder="Union Budget 2027-28" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
           <Field label="Time" optional placeholder="HH:MM" value={f.time} onChange={(e) => setF({ ...f, time: e.target.value })} />

@@ -58,11 +58,13 @@ export function MarketsNow({ markets }: { markets: Market[] }) {
   if (!live.length) return null;
   const rows = live.map((m) => ({ m, ...when(m) }));
   const openCount = rows.filter((r) => r.st.open).length;
+  // India leads (the dot is India's), so the line agrees with "Indian markets open in …" on My space (R1-070)
+  const india = rows.find((r) => r.m.id === "IN");
   return (
     <div className="side-pop-wrap">
       <button ref={btn} className="mkt-btn" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
-        <span className={`mkt-dot${openCount ? " on" : ""}`} aria-hidden="true" />
-        <span>{openCount} of {live.length} markets open</span>
+        <span className={`mkt-dot${(india ? india.st.open : openCount) ? " on" : ""}`} aria-hidden="true" />
+        <span>{india ? `India ${india.st.open ? "open" : "closed"} · ` : ""}{openCount}/{live.length} markets open</span>
       </button>
       {open && <>
         <div className="side-pop-back" aria-hidden="true" />

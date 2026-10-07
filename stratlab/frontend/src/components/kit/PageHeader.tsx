@@ -10,15 +10,17 @@ export function PageHeader({ eyebrow, title, lede, asOf, asOfLabel = "Data up to
   eyebrow: string; title: string; lede?: ReactNode; asOf?: string | null; asOfLabel?: string; info?: ReactNode; infoLabel?: string; actions?: ReactNode;
 }) {
   const when = asOfText(asOf);
+  // an (i) with nothing else to sit beside ends the lede's line, instead of standing alone on a row of its own
+  const inline = !!info && !!lede && !when && !actions;
   return (
     <header className="k-page-head">
       <span className="k-eyebrow">{eyebrow}</span>
       <h1 className="k-h1">{title}</h1>
-      {lede && <p className="k-lede">{lede}</p>}
-      {(when || info || actions) && (
+      {lede && (inline ? <div className="k-lede">{lede} <Info label={infoLabel}>{info}</Info></div> : <p className="k-lede">{lede}</p>)}
+      {(when || (info && !inline) || actions) && (
         <div className="k-meta">
           {when && <Badge>{asOfLabel} {when}</Badge>}
-          {info && <Info label={infoLabel}>{info}</Info>}
+          {info && !inline && <Info label={infoLabel}>{info}</Info>}
           {actions}
         </div>
       )}

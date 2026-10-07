@@ -1204,6 +1204,17 @@ def delete_notebook(nid: str, profile=Depends(current_profile)):
     return {"deleted": True}
 
 
+def same_as_last(last: dict | None, strategy, nb: dict, group: dict | None, req) -> int | None:
+    """The last experiment's version when running now would repeat it: the same rules, instrument (or group) and test
+    period, run the same day (a later day has new candles, so it is a new test). Uploaded data is never compared."""
+    if not last or req.bars or last.get("strategy") != strategy.model_dump() or last.get("days") != req.days:
+        return None
+    want = f"GROUP:{group.get('id') or 'custom'}" if group else (req.instrument or (nb.get("instrument") or {}).get("id"))
+    if not want or (last.get("instrument") or {}).get("id") != want:
+        return None
+    return last.get("v") if str(last.get("created_at") or "")[:10] == db.now_iso()[:10] else None
+
+
 @app.post("/notebooks/{nid}/experiments")
 def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile)):
     """Test the notebook's current rules and keep the result as its next experiment."""
@@ -1212,6 +1223,11 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     experiments = list(nb.get("experiments") or [])
     version = (experiments[-1]["v"] + 1) if experiments else 1
     group = nb.get("group")
+    same = same_as_last(experiments[-1] if experiments else None, strategy, nb, group, req)
+    if same and not req.again:
+        # an unchanged re-run would only repeat the last result and use one of the month's experiments: ask first
+        err(409, "same_as_last", f"Nothing changed since v{same}: the same rules, market and test period, run today. "
+            f"Running it again repeats v{same} and uses one of your experiments.")
     if group and not req.bars:
         rec, usage = run_group_test(profile, strategy, group, req, version)
         out = {"usage": usage}
@@ -1552,9 +1568,9 @@ def filing_call(fn):
 
 @app.get("/research/filings")
 def filings_watchlist(profile=Depends(current_profile)):
-    """Red flags in the last 3 months for each India watchlist stock."""
+    """Red flags in the last 3 months for each Indian stock the person holds or watches."""
     need(profile, "filings", "Watchlist red flags")
-    syms = filings.watchlist_symbols(profile["id"])
+    syms = filings.followed_symbols(profile["id"])
     out = filings.overview(filings_feed, syms) if syms else {"rows": [], "problems": [], "days": filings.WINDOW_DAYS}
     out["problems"] = [public_text(x) for x in out["problems"]]
     return ok({**out, "alerts": bool(filings.alert_state(profile["id"]).get("on")), "send_at": filings.SEND_AT})
