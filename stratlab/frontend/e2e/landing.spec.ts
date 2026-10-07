@@ -89,15 +89,18 @@ test("landing: the plans match the server's plans exactly", async ({ page, reque
   await expect(page.locator('.lp-price[data-plan="basic"]')).toContainText(`${plans.basic.screens} saved screens, ${plans.basic.holdings} holdings`);
   await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText(`Paper trade ${plans.pro.live_limit} strategies`);
   // what's on sale is the server's one answer (plans.offer_state via /pricing): the fake world has no payments, so the
-  // page says early access, sells nothing and promises no invoices, renewals or yearly prices
+  // page says paid plans open soon, sells nothing and promises no invoices, renewals or yearly prices; and never that
+  // paid features are open to everyone (they are locked by plan, payments on or not: the owner, 7 Oct)
   const offer = (await (await request.get(`${API}/pricing`)).json()).offer;
   expect(offer.mode).toBe("early");
   const pricing = page.locator("#pricing");
-  await expect(pricing.getByRole("heading", { level: 2 })).toHaveText("Free during early access.");
-  await expect(pricing).toContainText("Paid plans aren't on sale yet.");
-  await expect(pricing).toContainText(`${offer.free_now.backtests_per_month} backtests a month`);
+  await expect(pricing.getByRole("heading", { level: 2 })).toHaveText("Free to start. Paid plans open soon.");
+  await expect(pricing).toContainText("Basic and Pro aren't on sale yet");
+  await expect(pricing).toContainText("ask us at support@stratlab.studio for early access");
+  await expect(pricing).not.toContainText(/every feature is open|open to everyone until/);
+  expect(offer.free_now.backtests_per_month).toBe(plans.free.backtests_per_month);       // Free's own limits apply
   for (const id of ["basic", "pro"]) {
-    await expect(page.locator(`.lp-price[data-plan="${id}"]`)).toContainText("Not on sale yet");
+    await expect(page.locator(`.lp-price[data-plan="${id}"]`)).toContainText("Opens soon");
     await expect(page.locator(`.lp-price[data-plan="${id}"]`).getByRole("button")).toHaveCount(0);
   }
   await expect(pricing).not.toContainText(/Start with (Basic|Pro)|Cancel any time|GST invoice|Paying yearly/);

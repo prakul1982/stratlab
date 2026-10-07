@@ -14,6 +14,7 @@ from app.engine import costs as C
 from tests import world
 
 PRO, BASIC, FREE = world.headers("pro-token"), world.headers("basic-token"), world.headers("free-token")
+OTHER_PRO = world.headers("load-2")      # another Pro account (forward tests are Pro, payments on or not)
 BTC = "CRYPTO:BTC-USD"              # crypto never closes, so these tests don't depend on the clock
 LIVE = 30000.0                      # the fake exchange's last price
 
@@ -201,12 +202,12 @@ def test_huge_and_malformed_bodies_are_refused_and_logged(w):
 def test_another_users_session_is_never_touched(w):
     c = w["client"]
     pro_url = url(c)
-    theirs = session(c, headers=BASIC)
+    theirs = session(c, headers=OTHER_PRO)
     r = send(c, pro_url, {"session": theirs["id"], "action": "buy", "qty": 0.5})
     assert r.status_code == 404 and r.json()["detail"]["code"] == "no_session"
     assert main.manager.sessions[theirs["id"]].signals == [] and main.manager.sessions[theirs["id"]].pos == 0
     assert c.get("/trade/signals", headers=PRO).json()["misses"][0]["reason"] == "No signal session with that id on this account."
-    assert c.get("/trade/signals", headers=BASIC).json()["misses"] == []           # nothing shows on their side either
+    assert c.get("/trade/signals", headers=OTHER_PRO).json()["misses"] == []           # nothing shows on their side either
     assert c.get(f"/trade/signals/sessions/{theirs['id']}", headers=PRO).status_code == 404
     assert c.post(f"/trade/signals/sessions/{theirs['id']}/test", headers=PRO, json={"action": "buy", "qty": 1}).status_code == 404
     # an ordinary (rules) paper session of the same user isn't moved by signals either

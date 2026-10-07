@@ -28,10 +28,9 @@ def test_offer_modes(w, monkeypatch):
     _payments(monkeypatch, False)
     o = plans.offer_state()
     assert o["mode"] == "early" and not o["payments"] and o["promo_until"] is None
-    # early access: Free keeps its monthly backtests and AI builds, the rest is lifted to Pro's
-    assert o["free_now"]["backtests_per_month"] == plans.PLANS["free"]["backtests_per_month"]
-    assert o["free_now"]["ai_builds_per_month"] == plans.PLANS["free"]["ai_builds_per_month"]
-    assert o["free_now"]["deepdives_per_month"] is None and o["free_now"]["holdings"] == plans.PLANS["pro"]["holdings"]
+    # payments off changes nothing about what Free includes: its own limits, exactly as Pricing lists them
+    for k in plans.LIMIT_KEYS:
+        assert o["free_now"][k] == plans.PLANS["free"][k], k
     assert o["free_trial_days"] == plans.PLANS["free"]["live_trial_days"]
 
     _payments(monkeypatch, True)
@@ -55,7 +54,8 @@ def test_pricing_and_me_carry_the_same_offer(w, monkeypatch):
     assert me["offer"]["payments"] is me["billing_enabled"]
 
 
-def test_a_currency_charged_in_rupees_shows_the_rupee_price_at_todays_rate(monkeypatch):
+def test_dollar_visitors_see_the_admin_tables_dollar_prices(monkeypatch):
+    """$8 and $20, the owner's dollar prices, whatever today's rate (no "about $23" conversion)."""
     saved = {"fx-rates": '{"rates": {"USD": 88.0, "GBP": 118.0}}'}
     pricing.forget()
     pricing._rates_cache[0] = 0.0
@@ -63,23 +63,11 @@ def test_a_currency_charged_in_rupees_shows_the_rupee_price_at_todays_rate(monke
     monkeypatch.setattr(pricing.db, "set_setting", lambda k, v: saved.__setitem__(k, v))
     try:
         pub = pricing.public()["currencies"]
-        usd = pub["USD"]
-        # charged ₹699 and ₹1,999: shown as about $8 and about $23, the same rate for both plans
-        assert (usd["basic"], usd["pro"], usd["approx"]) == (8, 23, True)
-        assert (usd["basic_year"], usd["pro_year"], usd["approx_year"]) == (80, 225, True)
-        assert pub["INR"]["approx"] is False and pub["INR"]["pro"] == 1999
-        assert "rate" not in usd and "auto" not in usd
-        # the admin's table keeps the fixed $20, which applies once dollar plans exist
-        assert pricing.table()["USD"]["pro"] == 20
-        pricing.save({"USD": {"plan_basic": "plan_usdB", "plan_pro": "plan_usdP"}})
-        usd = pricing.public()["currencies"]["USD"]
-        assert (usd["basic"], usd["pro"], usd["approx"]) == (8, 20, False)       # charged in dollars: the dollar price
-        assert usd["approx_year"] is True                                      # no yearly dollar plans yet
-        # a broken rate (₹285 a dollar) never turns ₹699 into "about $2": the built-in prices stay
-        saved["fx-rates"] = '{"rates": {"GBP": 400.0}}'
-        pricing._rates_cache[0] = 0.0
-        gbp = pricing.public()["currencies"]["GBP"]
-        assert (gbp["basic"], gbp["pro"], gbp["approx"]) == (7, 16, True)
+        assert (pub["USD"]["basic"], pub["USD"]["pro"], pub["USD"]["charged_in"]) == (8, 20, "INR")
+        assert (pub["INR"]["basic"], pub["INR"]["pro"]) == (699, 1999)
+        assert "approx" not in pub["USD"] and "rate" not in pub["USD"]
+        pricing.save({"USD": {"basic": 9}})                                   # the admin's table is the truth
+        assert pricing.public()["currencies"]["USD"]["basic"] == 9
     finally:
         pricing.forget()
         pricing._rates_cache[0] = 0.0

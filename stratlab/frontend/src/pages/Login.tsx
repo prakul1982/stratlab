@@ -378,17 +378,17 @@ function Pricing() {
   const offer = pricing?.offer ?? null;
   const local = currency !== "INR" ? pricing?.currencies[currency] : undefined;
   const rupees = (p: PlanId, year = false) => `₹${PRICE[p][year ? 1 : 0].toLocaleString("en-IN")}`;
-  /** The amount in the visitor's currency, and whether it's the rupee price converted ("about $23"). */
+  /** The amount in the visitor's currency: the admin price table's ($8 and $20 for dollars). */
   const price = (p: PlanId, year = false) => {
-    if (!local) return { shown: rupees(p, year), about: false };
-    if (p === "free") return { shown: money(local, 0, currency), about: false };
+    if (!local) return { shown: rupees(p, year) };
+    if (p === "free") return { shown: money(local, 0, currency) };
     const v = (local as unknown as Record<string, number>)[year ? `${p}_year` : p];
-    return { shown: money(local, v, currency), about: !!(year ? local.approx_year : local.approx) };
+    return { shown: money(local, v, currency) };
   };
   const intro = pricingIntro(offer, LIMITS.pro, "landing");
   const [period, setPeriod] = useState<"month" | "year">("month");
-  const yearly = (p: PlanId) => { const x = price(p, true); return `${x.about ? "about " : ""}${x.shown}`; };
-  const small = finePrint(offer, { currency: local ? currency : "INR", approx: !!local?.approx, approxYear: !!local?.approx_year,
+  const yearly = (p: PlanId) => price(p, true).shown;
+  const small = finePrint(offer, { currency: local ? currency : "INR", inRupees: local?.charged_in === "INR", inRupeesYear: local?.yearly_charged_in === "INR",
     year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") } });
   return (
     <section id="pricing" className="lp-sec">
@@ -411,7 +411,7 @@ function Pricing() {
                   <span className="small muted">{WHO[p]}</span>
                 </div>
                 <div className="stack g2">
-                  <div className="serif lp-amount">{pr.about && <span className="small muted">about </span>}{pr.shown}<span className="small muted"> / {year ? "year" : "month"}</span></div>
+                  <div className="serif lp-amount">{pr.shown}<span className="small muted"> / {year ? "year" : "month"}</span></div>
                   {p !== "free" && <span className="tiny muted">{local ? `${rupees(p, year)} a ${year ? "year" : "month"} in India, incl. GST` : "incl. GST"}</span>}
                 </div>
                 {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>

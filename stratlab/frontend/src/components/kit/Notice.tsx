@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { StateAction } from "./States";
+import { CFG } from "../../lib/api";
+import { useApp } from "../../lib/app";
+import { unlockHint } from "../../lib/offer";
 
 /** One line of words beside the page, with an optional button: a plan note ("on the Basic plan" + See plans), an
  * estimate-only reminder. `tone="warn"` gives it the orange edge. Use it instead of a bare `.banner`. */
@@ -18,7 +21,9 @@ export function Notice({ children, action, actions, tone = "info", label, role =
   );
 }
 
-/** The plan note: the sentence, then "See plans". */
+/** The plan note: the sentence, how to get it (honest while paid plans aren't on sale: ask for early access), then
+ * "See plans". */
 export function PlanNote({ children }: { children: ReactNode }) {
-  return <Notice action={{ label: "See plans", to: "/plans" }}>{children}</Notice>;
+  const { me } = useApp();
+  return <Notice className="plan-note" action={{ label: "See plans", to: "/plans" }}><span className="plan-lock" aria-hidden="true">🔒 </span>{children} {unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined)}</Notice>;
 }

@@ -106,7 +106,7 @@ from .plans import networth_items
 from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
-from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live
+from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live  # noqa: F401  (tests set main.payments_live)
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -154,8 +154,8 @@ auto_login = AutoLogin(kite, after_login)
 
 
 def _scan_alert_ok(profile: dict) -> bool:
-    from .plans import access_plan
-    return allows(access_plan(profile), "scans") and bool(alerts.jobs_for(profile, "", ""))
+    from .plans import plan_of
+    return allows(plan_of(profile), "scans") and bool(alerts.jobs_for(profile, "", ""))
 
 
 def alert_quotes(region: str, syms: list[str]) -> dict:
@@ -175,8 +175,8 @@ def alert_bars(region: str, sym: str) -> list[dict]:
 
 
 def _alert_limit(profile: dict) -> int:
-    from .plans import access_plan
-    return stock_alert_limit(access_plan(profile))
+    from .plans import plan_of
+    return stock_alert_limit(plan_of(profile))
 
 
 ALERT_FEATURE = {"etfgap": "etf_gaps", "bizupdate": "biz_updates", "mwpl": "stock_futures", "mtf": "mtf"}     # kinds of alert on a paid plan
@@ -185,8 +185,8 @@ ALERT_FEATURE = {"etfgap": "etf_gaps", "bizupdate": "biz_updates", "mwpl": "stoc
 def _alert_kind_ok(profile: dict, kind: str) -> bool:
     """Alerts on an ETF's price against its NAV, on business updates, on MWPL use and on margin funding are Basic and up;
     after a downgrade they wait."""
-    from .plans import access_plan
-    return kind not in ALERT_FEATURE or allows(access_plan(profile), ALERT_FEATURE[kind])
+    from .plans import plan_of
+    return kind not in ALERT_FEATURE or allows(plan_of(profile), ALERT_FEATURE[kind])
 
 
 stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit,
@@ -196,8 +196,8 @@ scan_alerts_job = scan.Alerts(markets, notify=lambda p, subject, text, url: aler
 
 
 def _filing_alert_ok(profile: dict) -> bool:
-    from .plans import access_plan
-    return allows(access_plan(profile), "filings") and bool(alerts.jobs_for(profile, "", ""))
+    from .plans import plan_of
+    return allows(plan_of(profile), "filings") and bool(alerts.jobs_for(profile, "", ""))
 
 
 filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), lambda s: bse_code(s), lambda s: bse_twin(s))
@@ -640,7 +640,7 @@ def me(profile=Depends(current_profile)):
                   "deck_used": used["deck"], "deck_limit": info["decks_per_month"],
                   # the plan's own limits (what the Plans page lists), and why they're lifted now when they are
                   "deepdive_plan_limit": PLANS[paid]["deepdives_per_month"], "deck_plan_limit": PLANS[paid]["decks_per_month"],
-                  "lifted_by": "the launch offer" if promo_active() else None if payments_live() else "early access"},
+                  "lifted_by": "the launch offer" if promo_active() else None},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),

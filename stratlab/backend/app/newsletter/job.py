@@ -12,7 +12,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from .. import alerts, db, email_kit as kit, newsletter_prefs
-from ..plans import access_plan, allows
+from ..plans import allows, plan_of
 from . import content, write
 
 KINDS = ("market", "my_stocks")
@@ -132,7 +132,7 @@ def confirmed(profile: dict) -> bool:
 
 def allowed(profile: dict, what: str, how: str) -> bool:
     """The plan allows this choice: the weekly editions of both newsletters for everyone, the daily ones on Basic and up."""
-    return how != "daily" or allows(access_plan(profile), "newsletter")
+    return how != "daily" or allows(plan_of(profile), "newsletter")
 
 
 def subscribers() -> list[dict]:

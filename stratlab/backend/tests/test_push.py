@@ -50,9 +50,11 @@ def test_push_is_a_channel_for_alerts_and_the_report(kv, monkeypatch):
     assert alerts.notify({"id": "u1"}, "s", "t", background=False) == []                  # no device yet
     push.add("u1", SUB(1))
     assert alerts.notify({"id": "u1"}, "Daily report", "text", background=False) == ["push"] and calls
-    assert live.report_on({"id": "u1", "plan": "free"})                                    # early access: plan allows it
+    basic = {"id": "u1", "plan": "basic", "plan_status": "active"}
+    assert live.report_on(basic)                                                           # the daily report is Basic
+    assert not live.report_on({"id": "u1", "plan": "free"})                                # Free: not, payments on or not (7 Oct)
     monkeypatch.setattr(push, "keys", lambda: None)                                        # no keys at all: push is off
-    assert not push.enabled() and not live.report_on({"id": "u1", "plan": "free"})
+    assert not push.enabled() and not live.report_on(basic)
 
 
 def test_keys_are_made_once_saved_and_sign_real_pushes(kv, monkeypatch):
