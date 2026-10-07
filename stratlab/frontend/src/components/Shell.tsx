@@ -86,8 +86,9 @@ export function Shell({ children }: { children: ReactNode }) {
     // a page that is a paid feature this plan lacks carries its plan, with a lock (lib/gates.ts)
     const gate = gateFor(p.to);
     const locked = gate?.whole && me?.plan_info?.features?.[gate.feature] === false;
-    const label = locked ? <>{p.label}<span className="side-lock" title={`On the ${PLAN_NAME[gatePlan(gate!)]} plan`}>🔒 {PLAN_NAME[gatePlan(gate!)]}</span></> : p.label;
-    return item(p.to, <Icon />, label, at?.page.to === p.to, p.line);
+    // drawn by CSS from data-plan, so the link's name stays the page's own; the plan is in its title
+    const label = locked ? <>{p.label}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(gate!)]} aria-hidden="true" /></> : p.label;
+    return item(p.to, <Icon />, label, at?.page.to === p.to, locked ? `${p.line} (on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
   };
   // the group holding the page showing is open and stays open; the others are as the person left them
   const activeGroup = space !== "mine" ? (onGroup?.space === space ? onGroup.group.id : at?.space === space ? at.group.id : null) : null;

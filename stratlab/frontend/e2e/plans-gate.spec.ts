@@ -72,7 +72,7 @@ for (const who of ["free", "basic", "pro"] as Plan[]) {
       await page.goto("/research/scan");
       const entry = page.locator("aside.sidebar").getByRole("link", { name: /Trend scan/ });
       await expect(entry).toBeVisible({ timeout: 30_000 });
-      if (who === "free") await expect(entry.locator(".side-lock")).toContainText("Basic");
+      if (who === "free") await expect(entry.locator(".side-lock")).toHaveAttribute("data-plan", "Basic");
       else await expect(entry.locator(".side-lock")).toHaveCount(0);
     }
     const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));

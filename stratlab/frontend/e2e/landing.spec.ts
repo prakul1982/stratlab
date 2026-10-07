@@ -96,7 +96,7 @@ test("landing: the plans match the server's plans exactly", async ({ page, reque
   const pricing = page.locator("#pricing");
   await expect(pricing.getByRole("heading", { level: 2 })).toHaveText("Free to start. Paid plans open soon.");
   await expect(pricing).toContainText("Basic and Pro aren't on sale yet");
-  await expect(pricing).toContainText("ask us at support@stratlab.studio for early access");
+  await expect(pricing).toContainText(/ask us at support@stratlab\.studio for early access/i);
   await expect(pricing).not.toContainText(/every feature is open|open to everyone until/);
   expect(offer.free_now.backtests_per_month).toBe(plans.free.backtests_per_month);       // Free's own limits apply
   for (const id of ["basic", "pro"]) {
