@@ -8,6 +8,7 @@ import logging
 from html import escape as html_escape
 import re
 import secrets
+import sys
 import threading
 import time
 import traceback
@@ -52,7 +53,7 @@ from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
 from . import alerts
 from .auth import current_profile
-from .config import settings
+from .config import api_docs_enabled, settings
 from .branding import public_text
 from .errors import report
 from .responses import err, ok
@@ -301,7 +302,9 @@ if settings.SENTRY_DSN:
         sentry_sdk.init(dsn=settings.SENTRY_DSN, environment=settings.SENTRY_ENV, traces_sample_rate=0, send_default_pii=False)
     except Exception as e:
         print("Sentry not started:", e)
-app = FastAPI(title="StratLab API", lifespan=lifespan)
+_docs = api_docs_enabled()
+app = FastAPI(title="StratLab API", lifespan=lifespan, docs_url="/docs" if _docs else None, redoc_url="/redoc" if _docs else None,
+              openapi_url="/openapi.json" if _docs else None)
 research_routes.setup(research_hub, _gemini, _anthropic)
 app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
@@ -352,13 +355,13 @@ async def unexpected_errors(request: Request, call_next):
     try:
         return await call_next(request)
     except Exception as e:
-        traceback.print_exc()
+        print(connect_redact.mask(traceback.format_exc()), file=sys.stderr)       # a library's error can carry a URL with a key in it
         ref = secrets.token_hex(3).upper()
         tb = traceback.extract_tb(e.__traceback__)
         own = [f for f in tb if "site-packages" not in f.filename and f.name != "unexpected_errors"] or tb   # the deepest frame of our own code
         where = f"{own[-1].filename.rsplit('/', 1)[-1]}:{own[-1].lineno} in {own[-1].name}" if own else ""
         RECENT_ERRORS.append({"ref": ref, "at": datetime.now(IST).isoformat(), "method": request.method,
-                              "path": request.url.path, "error": f"{type(e).__name__}: {str(e)[:300]}", "where": where})
+                              "path": request.url.path, "error": connect_redact.mask(f"{type(e).__name__}: {str(e)[:300]}"), "where": where})
         del RECENT_ERRORS[:-25]
         _save_errors()
         report(e, ref=ref, path=f"{request.method} {request.url.path}")

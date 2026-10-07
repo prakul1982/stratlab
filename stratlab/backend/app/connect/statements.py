@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from .. import money_mf, money_networth
-from . import state, sync, vault
+from . import pdfsandbox, state, sync, vault
 
 MAX_PDF = money_mf.MAX_PDF
 ETF_RX = re.compile(r"(?i)\bETF\b|\bBeES\b|exchange traded")
@@ -40,15 +40,17 @@ class Parsed:
 
 
 def _open(data: bytes, password: str):
-    import casparser
-    from casparser.exceptions import CASParseError, IncorrectPasswordError
+    """The statement, read in a child process with a memory and time limit (pdfsandbox.py): a PDF made to unpack to
+    gigabytes stops the child, not the server."""
     try:
-        return casparser.read_cas_pdf(io.BytesIO(data), password or "")
-    except IncorrectPasswordError:
-        raise StatementError("wrong_password", "That password didn't open the statement.") from None
-    except CASParseError:
-        raise StatementError("not_a_statement", "This PDF isn't a CAMS, KFintech, NSDL or CDSL statement.") from None
-    except Exception:
+        return pdfsandbox.read_cas(data, password or "")
+    except pdfsandbox.SandboxError as e:
+        if e.kind == "password":
+            raise StatementError("wrong_password", "That password didn't open the statement.") from None
+        if e.kind == "parse":
+            raise StatementError("not_a_statement", "This PDF isn't a CAMS, KFintech, NSDL or CDSL statement.") from None
+        if e.kind == "limit":
+            raise StatementError("too_complex", "This PDF is too large or complex to read here.") from None
         raise StatementError("unreadable", "This PDF couldn't be read.") from None
 
 

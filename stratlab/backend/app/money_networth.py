@@ -768,30 +768,40 @@ def mf_value(uid: str) -> dict:
 
 
 # ---------- the CSV export ----------
+def _cell(v):
+    """A text cell that a spreadsheet won't run as a formula (a name or note starting with = + - @ is typed text)."""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") and not v[1:2].isdigit():
+        return "'" + v
+    return v
+
+
 def to_csv(view: dict, hist: list[dict] | None) -> str:
     """Every number on the page, one row each, with its as-of date and how it was worked out."""
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Section", "Type", "Name", "Value (INR)", "As of", "How it's worked out", "Details"])
+
+    def put(row):                                                      # every row, whatever the section
+        w.writerow([_cell(x) for x in row])
+    put(["Section", "Type", "Name", "Value (INR)", "As of", "How it's worked out", "Details"])
 
     def details(r):
         return "; ".join(f"{k.replace('_', ' ')}: {v}" for k, v in (r.get("facts") or {}).items() if v not in (None, "", {}))
     for r in view["assets"]:
-        w.writerow(["Asset", r["label"], r["name"], r["value"], r.get("as_of") or "", r.get("rule") or "", details(r)])
+        put(["Asset", r["label"], r["name"], r["value"], r.get("as_of") or "", r.get("rule") or "", details(r)])
     for r in view["liabilities"]:
-        w.writerow(["Liability", r["label"], r["name"], r["value"], r.get("as_of") or "", r.get("rule") or "", details(r)])
+        put(["Liability", r["label"], r["name"], r["value"], r.get("as_of") or "", r.get("rule") or "", details(r)])
     t = view["totals"]
     for label, v in (("Total assets", t["assets"]), ("Total liabilities", t["liabilities"]), ("Net worth", t["net"])):
-        w.writerow(["Total", label, "", v, view["as_of"], "", ""])
+        put(["Total", label, "", v, view["as_of"], "", ""])
     for a in view["allocation"]:
-        w.writerow(["Allocation", a["label"], "", a["value"], view["as_of"], "", f"{a['pct']}% of assets" if a["pct"] is not None else ""])
+        put(["Allocation", a["label"], "", a["value"], view["as_of"], "", f"{a['pct']}% of assets" if a["pct"] is not None else ""])
     for p in view["insurance"]["policies"]:
-        w.writerow(["Insurance", p["label"], p["name"], p["premium"], view["as_of"], f"Premium, {p['frequency']}",
+        put(["Insurance", p["label"], p["name"], p["premium"], view["as_of"], f"Premium, {p['frequency']}",
                     "; ".join(x for x in (f"insurer: {p['insurer']}", f"sum assured: {p['sum_assured']}" if p["sum_assured"] is not None else "",
                                           f"next due: {p['next_due']}" if p["next_due"] else "", f"yearly premium: {p['yearly_premium']}",
                                           f"nominee: {p['nominee']}" if p["nominee"] else "") if x)])
     for h in hist or []:
-        w.writerow(["History", "Net worth", h.get("why") or "", h.get("net"), h["d"], "", f"assets: {h.get('assets')}; liabilities: {h.get('liabilities')}"])
+        put(["History", "Net worth", h.get("why") or "", h.get("net"), h["d"], "", f"assets: {h.get('assets')}; liabilities: {h.get('liabilities')}"])
     return buf.getvalue()
 
 
