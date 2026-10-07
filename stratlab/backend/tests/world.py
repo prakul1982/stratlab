@@ -306,8 +306,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     monkeypatch.setattr(db, "_client", fake_db)
     db._profiles.clear()
     from app import invite_rewards, plans, pricing
-    plans.forget_free_basic()
-    pricing.forget()                            # prices another test saved                   # free Basic time another test gave
+    plans.forget_free_basic()                   # free Basic time another test gave
+    plans._promo.update(read_at=0.0, until=None)   # a launch offer another test started (the stress tests post /admin/promo)
+    pricing.forget()                            # prices another test saved
     invite_rewards._touched.clear()
     from app import corp_actions
     corp_actions._empty.clear()                 # company pages another test looked up with nothing found

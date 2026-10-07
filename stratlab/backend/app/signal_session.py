@@ -313,14 +313,15 @@ class SignalSession:
                 "last_price": self.last_price}
 
     def signal_counts(self, day: str) -> dict:
-        """How many signals arrived on `day` (the market's date of arrival) and what became of them."""
-        tz = ZoneInfo(_tz(self.market))
+        """How many signals arrived on `day`, counted in the report's zone (the market's own; see daily_report.zone_of)."""
+        from .daily_report import day_of, zone_of
+        tz = zone_of(self.market)
         rows = []
         for s in self.signals:
             try:
-                if datetime.fromisoformat(s["at"]).astimezone(tz).date().isoformat() == day:
+                if day_of(s["at"], tz) == day:
                     rows.append(s)
-            except (KeyError, ValueError, TypeError):
+            except (KeyError, TypeError):
                 continue
         return {"received": len(rows), "late": sum(1 for s in rows if s.get("status") == "late"),
                 "refused": sum(1 for s in rows if s.get("status") in ("rejected", "duplicate"))}
@@ -340,11 +341,6 @@ class SignalSession:
                                 "unrealised": self.pos * ((px or self.avg) - self.avg) if self.pos else 0.0,
                                 "realised": sum(t["pnl"] for t in self.trades), "trades": len(self.trades),
                                 "wins": sum(1 for t in self.trades if t["pnl"] > 0)}}
-
-
-def _tz(market: str) -> str:
-    from .data.markets import BY_ID
-    return (BY_ID.get(market) or {}).get("tz") or "UTC"
 
 
 def stopped_snapshot(row: dict) -> dict:
