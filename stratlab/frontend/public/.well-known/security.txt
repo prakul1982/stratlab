@@ -1,0 +1,5 @@
+Contact: mailto:security@stratlab.studio
+Expires: 2027-10-07T00:00:00.000Z
+Preferred-Languages: en, hi
+Canonical: https://stratlab.studio/.well-known/security.txt
+Policy: https://stratlab.studio/terms

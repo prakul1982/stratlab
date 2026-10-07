@@ -37,6 +37,8 @@ def _refused(service: str, r) -> RuntimeError:
 
 def _send_resend(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
     msg = {"from": settings.ALERT_FROM_EMAIL or RESEND_FROM, "to": [to], "subject": subject, "text": body}
+    if settings.REPLY_TO_EMAIL:
+        msg["reply_to"] = settings.REPLY_TO_EMAIL
     if html:
         msg["html"] = html
     if headers:
@@ -61,6 +63,8 @@ def _brevo_sender() -> str:
 def _send_brevo(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
     msg = {"sender": {"name": "StratLab", "email": _brevo_sender()}, "to": [{"email": to}], "subject": subject,
            "textContent": body}
+    if settings.REPLY_TO_EMAIL:
+        msg["replyTo"] = {"email": settings.REPLY_TO_EMAIL}
     if html:
         msg["htmlContent"] = html
     if headers:
@@ -116,6 +120,8 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
     msg["From"] = settings.ALERT_FROM_EMAIL or settings.SMTP_USER
     msg["To"] = to
     msg["Subject"] = subject
+    if settings.REPLY_TO_EMAIL:
+        msg["Reply-To"] = settings.REPLY_TO_EMAIL
     for k, v in (headers or {}).items():
         msg[k] = v
     msg.set_content(body)

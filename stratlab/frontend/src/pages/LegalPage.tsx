@@ -7,12 +7,14 @@ import { LEGAL_PAGES } from "../components/LegalLinks";
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
 const BUSINESS = {
   name: CFG.BUSINESS_NAME || "StratLab",
-  email: CFG.CONTACT_EMAIL || "prakul828@gmail.com",
+  email: CFG.CONTACT_EMAIL || "info@stratlab.studio",
+  privacy: CFG.PRIVACY_EMAIL || "privacy@stratlab.studio",
   address: CFG.BUSINESS_ADDRESS || "",
   updated: "26 September 2026",
 };
 
 const Mail = () => <a className="link" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>;
+const PrivacyMail = () => <a className="link" href={`mailto:${BUSINESS.privacy}`}>{BUSINESS.privacy}</a>;
 
 function Terms() {
   return (
@@ -77,13 +79,13 @@ function Privacy() {
       <h2 className="h3">Cookies and storage</h2>
       <p>Your browser keeps your sign-in session and a few preferences (like light or dark mode). Nothing is used for advertising.</p>
       <h2 className="h3">Keeping and deleting</h2>
-      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. To see what we hold, correct it, or delete your account and its data, email <Mail />; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
+      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. To see what we hold, correct it, or delete your account and its data, email <PrivacyMail />; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
       <h2 className="h3">Security</h2>
       <p>Data is sent over HTTPS, access is limited to your own account, and secrets stay on the server. No system is perfectly secure; if a breach affects you, we'll tell you as the law requires.</p>
       <h2 className="h3">Children</h2>
       <p>StratLab is for adults (18+). We don't knowingly collect children's data.</p>
       <h2 className="h3">Contact and grievances</h2>
-      <p>For privacy questions, requests or complaints, email <Mail />. If you're not satisfied, you can complain to the Data Protection Board of India.</p>
+      <p>For privacy questions, requests or complaints, email <PrivacyMail />. If you're not satisfied, you can complain to the Data Protection Board of India.</p>
     </>
   );
 }
