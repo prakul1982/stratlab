@@ -10,7 +10,7 @@ import re
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..auth import current_profile
 from ..config import settings
@@ -268,9 +268,26 @@ async def docs_read(req: DocReadReq, profile=Depends(current_profile)):
 
 class DocConfirmReq(BaseModel):
     kind: str = Field(..., pattern="^(epf|nps|ais)$")
-    figures: dict[str, str | float | int | None]
+    figures: dict[str, str | float | int | None] = Field(..., max_length=12)
     apply_tds: bool = False
     lines: list[dict] = Field(default_factory=list, max_length=500)
+
+    @field_validator("figures")
+    @classmethod
+    def _small_figures(cls, v: dict) -> dict:
+        """Figures are a few numbers and dates: what is saved with the user's record stays small."""
+        if any(len(k) > 30 or (isinstance(x, str) and len(x) > 40) for k, x in v.items()):
+            raise ValueError("figures are short numbers and dates")
+        return v
+
+    @field_validator("lines")
+    @classmethod
+    def _small_lines(cls, v: list[dict]) -> list[dict]:
+        for line in v:
+            if len(line) > 12 or any(len(str(k)) > 20 or not (x is None or isinstance(x, (str, int, float, bool))) or (isinstance(x, str) and len(x) > 120)
+                                     for k, x in line.items()):
+                raise ValueError("a dividend line is a few short values")
+        return v
 
 
 @router.post("/docs/confirm")

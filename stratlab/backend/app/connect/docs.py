@@ -181,6 +181,11 @@ def read_doc(kind: str, data: bytes, filename: str = "", password: str = "") -> 
     return {"kind": kind, "figures": figures, "lines": lines, "found": sum(f["found"] for f in figures)}
 
 
+def _day(v) -> str | None:
+    """A confirmed "as of" date as YYYY-MM-DD, or None: nothing else is stored."""
+    return v if isinstance(v, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) else None
+
+
 def _num(v, lo=0.0, hi=1e12) -> float | None:
     x = _money(v) if not isinstance(v, (int, float)) else float(v)
     return x if x is not None and lo <= x <= hi else None
@@ -197,7 +202,7 @@ def confirm(profile: dict, kind: str, figures: dict, apply_tds: bool = False, li
         bal = _num(figures.get("balance"))
         if bal is None:
             raise DocError("bad_figure", "Enter the balance as a number.")
-        asof = figures.get("as_of") or None
+        asof = _day(figures.get("as_of"))
         note = _save_entry(uid, "epf", {"balance": bal}, asof)
         docs["epf"] = {"balance": bal, "as_of": asof, "confirmed_at": now}
         out = {"detail": note or "EPF balance saved in Net worth."}
@@ -205,7 +210,7 @@ def confirm(profile: dict, kind: str, figures: dict, apply_tds: bool = False, li
         t1, t2 = _num(figures.get("tier1")), _num(figures.get("tier2"))
         if not (t1 or t2):
             raise DocError("bad_figure", "Enter the Tier I value as a number.")
-        asof = figures.get("as_of") or None
+        asof = _day(figures.get("as_of"))
         note = statements.save_nps(uid, {"tier1": t1 or 0.0, "tier2": t2 or 0.0}, asof, profile["_plan"], how="nps_statement")
         docs["nps"] = {"tier1": t1, "tier2": t2, "as_of": asof, "confirmed_at": now}
         out = {"detail": note or "NPS value saved in Net worth."}

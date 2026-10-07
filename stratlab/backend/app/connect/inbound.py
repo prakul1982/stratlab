@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass, field
 from email.utils import getaddresses
 from typing import Callable, Mapping
+from urllib.parse import quote
 
 import httpx
 
@@ -157,9 +158,15 @@ class BrevoAdapter(Adapter):
             raise BadRequest("no Brevo key")
         try:
             with httpx.Client(transport=self.transport, timeout=30, follow_redirects=False) as c:
-                r = c.get(f"{BREVO_API}/inbound/attachments/{token}", headers={"api-key": settings.BREVO_API_KEY})
-                r.raise_for_status()
-                return r.content
+                with c.stream("GET", f"{BREVO_API}/inbound/attachments/{quote(token, safe='')}",
+                              headers={"api-key": settings.BREVO_API_KEY}) as r:
+                    r.raise_for_status()
+                    buf = bytearray()
+                    for chunk in r.iter_bytes():             # a size the mail itself declared is not trusted: stop at the cap
+                        buf += chunk
+                        if len(buf) > statements.MAX_PDF * 2:
+                            raise BadRequest("attachment too big")
+                    return bytes(buf)
         except httpx.HTTPError as e:
             raise BadRequest("attachment download failed: " + mask(type(e).__name__)) from None
 
@@ -319,15 +326,16 @@ def handle_mail(mail: Mail) -> dict:
 
 
 def receive(provider: str, headers: Mapping[str, str], query: Mapping[str, str], body: bytes) -> int:
-    """The webhook: the HTTP status to answer with. 404 while off or for another provider, 429 over the limit, 401 for a
-    bad signature or secret, 400 for a body that isn't mail, else 200."""
+    """The webhook: the HTTP status to answer with. 404 while off or for another provider, 401 for a bad signature or
+    secret, 429 over the limit (counted for authentic posts only, so strangers can't use it up), 400 for a body that isn't
+    mail, else 200."""
     ad = adapter_for(provider)
     if ad is None or not configured():
         return 404
+    if not ad.verify(headers, query, body):         # first: posts that fail it never use up the real mail service's allowance
+        return 401
     if not _allow_post():
         return 429
-    if not ad.verify(headers, query, body):
-        return 401
     try:
         mails = ad.parse(body)
     except BadRequest:
