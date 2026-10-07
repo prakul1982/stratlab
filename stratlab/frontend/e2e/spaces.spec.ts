@@ -174,7 +174,7 @@ test("onboarding: one short step asks what brings you here, with the experience,
   await expect(welcome.getByRole("button", { name: /^(Trade|Invest|Manage my money|All of it)/ })).toHaveCount(4);
   await expect(welcome.locator(".explore-card b")).toHaveText(["Trade", "Invest", "Manage my money", "All of it"]);
   const exp = welcome.getByRole("radiogroup", { name: "Experience" });
-  await expect(exp.getByRole("radio", { name: "I've done a bit" })).toHaveAttribute("aria-checked", "true");
+  await expect(exp.getByRole("radio", { name: "I've done a bit" })).toHaveAttribute("aria-checked", "false");      // nothing is picked for them
   if (phone) for (const el of await welcome.locator(".explore-card, [role=radio]").all()) {
     const b = await el.boundingBox();
     if (b && b.height) expect(b.height, `"${(await el.innerText()).slice(0, 30)}" is too small to tap`).toBeGreaterThanOrEqual(32);

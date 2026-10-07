@@ -582,7 +582,7 @@ export function OptionsPage() {
           <Field label="Name" wide maxLength={80} value={s.name} onChange={(e) => patch({ name: e.target.value })} />
           <FormActions>
             <button type="submit" className="btn quiet" disabled={pricing || !!offline}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
-            <button type="button" className="btn blue" disabled={starting || !!offline || (ruleMode && !s.signal)} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : "Start paper trading"}</button>
+            <button type="button" className="btn" disabled={starting || !!offline || (ruleMode && !s.signal)} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : "Start paper trading"}</button>
           </FormActions>
         </FormGrid>
         {preview && (

@@ -303,7 +303,7 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
             sectors[r["sector"]] = sectors.get(r["sector"], 0) + (r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r)
     allocation = [{"sector": s, "value": _r(v), "pct": _r(v / value * 100, 1) if value else None,
                    "count": sum(1 for r in rows if r["sector"] == s and rate(r) is not None)}
-                  for s, v in sorted(sectors.items(), key=lambda kv: -kv[1])]
+                  for s, v in sorted(sectors.items(), key=lambda kv: (kv[0] == UNCLASSIFIED, -kv[1]))]      # "Not classified" last, whatever its size
     us = [r for r in rows if r["market"] == "US"]
     totals["count"] = len(rows)
     return {"rows": rows, "allocation": allocation, "totals": totals,

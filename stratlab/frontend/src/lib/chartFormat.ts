@@ -169,3 +169,6 @@ export const RANGE_PRESETS: { id: string; label: string; days: number | null }[]
   { id: "1m", label: "1M", days: 31 }, { id: "3m", label: "3M", days: 92 }, { id: "6m", label: "6M", days: 183 },
   { id: "1y", label: "1Y", days: 366 }, { id: "all", label: "All", days: null },
 ];
+
+/** True when every value is zero (or missing): a chart that is a flat line along the floor says "none in this period". */
+export const flatZero = (...series: (number | null | undefined)[][]) => series.every((s) => s.every((v) => !v));

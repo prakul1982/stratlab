@@ -42,6 +42,16 @@ def test_quotes_carry_the_zone_of_the_trade(w):
     assert q["at"].endswith("+05:30")
 
 
+def test_net_worth_is_as_of_the_day_of_its_prices_not_the_day_it_is_now():
+    from datetime import date
+    from app import money_networth as nw
+    rows = [{"basis": "market price", "as_of": "2026-10-07T15:30+05:30"}, {"basis": "as entered", "as_of": "2026-10-08"}]
+    assert nw.data_day(rows, date(2026, 10, 8)) == date(2026, 10, 7)               # 03:30 IST on the 8th: the 7th's close
+    assert nw.data_day(rows, date(2026, 10, 6)) == date(2026, 10, 6)               # never after the day asked for
+    assert nw.data_day([{"basis": "as entered", "as_of": "2026-10-01"}], date(2026, 10, 8)) == date(2026, 10, 8)
+    assert nw.data_day([{"basis": "market price", "as_of": "2026-10-07T22:00:00+00:00"}], date(2026, 10, 9)) == date(2026, 10, 8)    # 03:30 IST next day
+
+
 # ---------- R2B-002: one reading of the prices for every page ----------
 def test_pages_opened_seconds_apart_share_one_reading(w, monkeypatch):
     calls = []

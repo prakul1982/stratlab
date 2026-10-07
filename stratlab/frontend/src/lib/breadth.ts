@@ -69,6 +69,3 @@ export function shortDay(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso;
   return fmtDate(iso, { year: d.getFullYear() !== new Date().getFullYear() });
 }
-
-/** True when every value is zero (or missing): a chart that is a flat line along the floor says "none in this period". */
-export const flatZero = (...series: (number | null | undefined)[][]) => series.every((s) => s.every((v) => !v));

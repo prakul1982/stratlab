@@ -23,11 +23,12 @@ export const FOCUSES: [Focus, string, string][] = [
 ];
 
 /** Asked once, after the first sign-in (and again to anyone who answered only one of the two old questions): one short
- * step. The experience level sits above the choices, already set to the middle one; picking what you came for answers
+ * step. The experience level sits above the choices, left for them to pick (the standard layout if they do not); picking what you came for answers
  * both. Neither hides anything, and both can be changed in Settings. */
 export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>) => void }) {
   const { level, focus, savePrefs } = useApp();
-  const [lvl, setLvl] = useState<Level>(level ?? "some");
+  const [chosen, setChosen] = useState<Level | "">(level ?? "");        // nothing is picked for them
+  const lvl: Level = chosen || "some";                                 // left alone, the standard layout applies
   const nav = useNavigate();
   const loc = useLocation();
   const pick = (f: Focus) => {
@@ -43,8 +44,8 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>) => void
       <div className="k-stack">
         <p className="k-muted">StratLab has four spaces: Trade, Invest, Money and Mine, your own summary of all three. We'll open the one you pick. The others stay one tap away, and you can change this any time in Settings.</p>
         <div className="k-stack snug">
-          <span className="k-small k-muted">How much have you done?</span>
-          <Seg label="Experience" value={lvl} onChange={(v) => setLvl(v as Level)} options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} />
+          <span className="k-small k-muted">How much have you done? · optional</span>
+          <Seg label="Experience" value={chosen} onChange={(v) => setChosen(v as Level)} options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} />
         </div>
         <div className="k-stack" role="group" aria-label="What brings you here">
           {FOCUSES.map(([f, title, what]) => (

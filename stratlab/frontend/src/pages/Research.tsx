@@ -236,7 +236,7 @@ export function CompanyPage() {
         </div>
         {/* one main action (what this person came for), Watch and an alert; the rest under More */}
         <div className="k-row">
-          {lead === "deep" ? deep("blue") : <button className="btn blue sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
+          {lead === "deep" ? deep("") : <button className="btn sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
           <AlertButton region={region} symbol={c.symbol} />
           <MoreMenu items={[

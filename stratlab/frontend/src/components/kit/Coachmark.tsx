@@ -71,7 +71,7 @@ export function Coachmark({ anchor, label, onClose, children }: { anchor: string
   // takes no focus); Tab is kept inside and Esc closes below
   useEffect(() => { if (placed && note.current) firstFocus(note.current)?.focus(); }, [key, placed]);
   // the kit's one dialog behaviour: Tab kept inside, Esc closes, focus back to what opened the tour
-  useDialogFocus(note, true, { onEscape: () => close.current() });
+  useDialogFocus(note, true, { onEscape: () => close.current(), coach: true });
 
   return (
     <div className="k-coach" data-placed={placed ? "1" : undefined}>

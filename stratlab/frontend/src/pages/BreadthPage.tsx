@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  breadthApi, count, delta, flatZero, liveSeries, liveTitle, savePick, savedPick, share, shortDay,
+  breadthApi, count, delta, liveSeries, liveTitle, savePick, savedPick, share, shortDay,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
+import { flatZero } from "../lib/chartFormat";
 import { marketTz } from "../lib/format";
 import { LineChart, PairBars } from "../components/Charts";
 import { Info } from "../components/ui";
