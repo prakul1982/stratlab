@@ -133,7 +133,9 @@ def test_india_company_profile_without_kite(research):
     live = c["quote"]["price"]
     assert groups["Valuation"]["P/E"] == pytest.approx(27.4 * live / scr_price, rel=0.01)
     assert groups["Valuation"]["P/B"] == pytest.approx(live / groups["Valuation"]["Book value"])
-    assert groups["Sales growth"]["5Y CAGR"] == 10
+    # compounded over the last five reported years, as the deep dive and the AI read's facts work it out (the source's
+    # own table says 10%, counted to the trailing twelve months)
+    assert groups["Sales growth"]["5Y CAGR"] == pytest.approx(10.09, abs=0.01)
     assert groups["Stock price CAGR"]["1Y"] == -7
     assert c["trend"]["revenue"][-1] == {"y": "FY25", "v": 964693}   # TTM column dropped
     assert c["quarters"]["opm"][-1] == 18

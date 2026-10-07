@@ -212,7 +212,7 @@ export function CompanyPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrow} title={c.name} lede={`${c.exchange || REGION_NAME[region]} · ${c.symbol}${c.industry ? ` · ${c.industry}` : ""}`}
-        asOf={c.as_of} asOfLabel="Prices as of" actions={c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at)}</Badge> : undefined} />
+        asOf={c.as_of} asOfLabel="Prices as of" actions={c.quarters?.cols.length ? <Badge>Latest results: quarter to {c.quarters.cols[c.quarters.cols.length - 1]}</Badge> : c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at)}</Badge> : undefined} />
       <Card>
         <div className="inv-head">
           <div className="k-stack">

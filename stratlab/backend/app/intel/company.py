@@ -77,6 +77,24 @@ def at_live_price(s: dict, live: float | None) -> dict:
     return out
 
 
+def reported_growth(scr: dict | None, bars: list[dict] | None) -> dict:
+    """Sales and profit compounded over the last 3 and 5 reported years (the deep dive's and the AI read facts' own
+    sums), and the price's change over a year of daily candles. Empty for what can't be worked out."""
+    out: dict = {}
+    if scr:
+        try:
+            from ..deepdive import numbers
+            out.update({k: v for k, v in (numbers(scr).get("growth") or {}).items() if v is not None})
+        except Exception:                 # a page that can't be read this way keeps the source's own figures
+            pass
+    if bars:
+        from .key_facts import _year_ago
+        then, last = _year_ago(bars), num(bars[-1].get("c"))
+        if then and last:
+            out["price_1y"] = (last / then - 1) * 100
+    return out
+
+
 def _yahoo_in(sym: str) -> str:
     """Yahoo's ticker for an Indian stock: NSE symbol.NS, or a BSE code.BO."""
     return f"{sym}.BO" if sym.isdigit() else f"{sym}.NS"
@@ -370,6 +388,13 @@ class Research:
         s = at_live_price(s, num((quote or {}).get("price")))
         g = (scr or {}).get("growth", {})
         gs, gp, gpr = g.get("sales", {}), g.get("profit", {}), g.get("price", {})
+        # one value per figure on the page: growth compounded over the reported years (as the AI read's facts and the
+        # deep dive work it out), and the price's year from the same daily candles as the chart
+        mine = reported_growth(scr, r.get("k1y"))
+        gs = {**gs, **{k: v for k, v in (("3 Years", mine.get("sales_cagr_3y")), ("5 Years", mine.get("sales_cagr_5y"))) if v is not None}}
+        gp = {**gp, **{k: v for k, v in (("3 Years", mine.get("profit_cagr_3y")), ("5 Years", mine.get("profit_cagr_5y"))) if v is not None}}
+        if mine.get("price_1y") is not None:
+            gpr = {**gpr, "1 Year": mine["price_1y"]}
         pl = (scr or {}).get("pl")
         trend = None
         if pl:

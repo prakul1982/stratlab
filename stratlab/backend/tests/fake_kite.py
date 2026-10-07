@@ -123,7 +123,9 @@ class FakeKiteConnect:
             day_ok = t.weekday() < 5
             in_hours = step == 1440 or (t.hour, t.minute) >= (9, 15) and (t.hour, t.minute) < (15, 30)
             if day_ok and in_hours:
-                o, c = price_of(r["tradingsymbol"], t), price_of(r["tradingsymbol"], t + timedelta(minutes=step))
+                # the candle still forming closes at the price now, so the chart's last candle and the quote agree
+                now = datetime.now(IST) if t.tzinfo else datetime.now(IST).replace(tzinfo=None)
+                o, c = price_of(r["tradingsymbol"], t), price_of(r["tradingsymbol"], min(t + timedelta(minutes=step), now))
                 out.append({"date": t.replace(tzinfo=IST), "open": o, "high": max(o, c) * 1.004, "low": min(o, c) * 0.996,
                             "close": c, "volume": 1000})
             t += timedelta(minutes=step)
@@ -149,9 +151,11 @@ class FakeKiteConnect:
             r = self.by_key.get(k)
             if r:
                 p = price_of(r["tradingsymbol"], now)
+                # the previous close is where today's daily candle opened (midnight), as the broker's own quote has it
+                prev = price_of(r["tradingsymbol"], now.replace(hour=0, minute=0, second=0, microsecond=0))
                 out[k] = {"instrument_token": r["instrument_token"], "last_price": p, "volume": 1000,
                           "last_trade_time": now.replace(tzinfo=None, microsecond=0),
-                          "ohlc": {"open": p * 0.99, "high": p * 1.01, "low": p * 0.98, "close": p * 0.995},
+                          "ohlc": {"open": prev, "high": max(prev, p) * 1.004, "low": min(prev, p) * 0.996, "close": prev},
                           "depth": {"buy": [{"price": p - 0.05, "quantity": 100}], "sell": [{"price": p + 0.05, "quantity": 100}]}}
         return out
 

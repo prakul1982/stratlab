@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { money, fmtDate } from "../../lib/format";
 import { track } from "../../lib/analytics";
-import { upDown } from "../../lib/tradeUi";
+import { CHECKS, checksLine, upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
@@ -324,10 +324,10 @@ function VerdictView({ v }: { v: NonNullable<Journal["verdict"]> }) {
         </div>
         <Card>
           <span className="k-small k-muted"><b>Strength of evidence</b></span>
-          <div className="dots" aria-label={`${v.passed} of ${v.total} checks passed`}>
-            {Array.from({ length: v.total }, (_, k) => <span key={k} className={k < v.passed ? "on" : ""} />)}
+          <div className="dots" aria-label={checksLine(v.passed, v.total)}>
+            {Array.from({ length: CHECKS }, (_, k) => <span key={k} className={k < v.passed ? "on" : k >= v.total ? "skip" : ""} />)}
           </div>
-          <span className="k-mono">{v.passed} of {v.total} checks passed</span>
+          <span className="k-small">{checksLine(v.passed, v.total)}</span>
         </Card>
       </section>
       <div className="j-checks">{v.checks.map((c) => <CheckCard key={c.id} c={c} />)}</div>

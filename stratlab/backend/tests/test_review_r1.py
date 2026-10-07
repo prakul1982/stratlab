@@ -49,3 +49,28 @@ def test_company_page_ratios_agree_with_its_price(w):
     assert val["P/B"] == pytest.approx(live / val["Book value"], rel=1e-6)
     # the demo world's broker prices RELIANCE near where its fundamentals were read (fake_prices), as the real one would
     assert 0.8 < live / 1408 < 1.25
+
+
+def test_an_unchanged_rerun_asks_first(w):
+    """R1-023: the same rules, market and period run again the same day would repeat the last experiment."""
+    c, h = w["client"], H(w)
+    from tests.test_notebooks import EMA
+    nb = c.post("/notebooks", headers=h, json={"name": "Repeat", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    first = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 365})
+    assert first.status_code == 200, first.text
+    again = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 365})
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "same_as_last"
+    assert "Nothing changed since v1" in again.json()["detail"]["message"]
+    assert c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 730}).status_code == 200      # a new period is a new test
+    forced = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 730, "again": True})
+    assert forced.status_code == 200 and forced.json()["experiment"]["v"] == 3
+
+
+def test_company_growth_matches_the_ai_read_facts(w):
+    """F4-004: the Key numbers card and the facts beside the AI read work growth out the same way."""
+    from app.intel import routes
+    c = w["client"].get("/research/company/IN/RELIANCE", headers=H(w)).json()
+    val = {(g["title"], i["label"]): i["value"] for g in c["metrics"] for i in g["items"]}
+    rows = {r["id"]: {i["label"]: i["text"] for i in r["items"]} for r in routes.company_key_facts("IN", c)}
+    assert rows["growth"]["Sales, 3 years"] == f"{val[('Sales growth', '3Y CAGR')]:.1f}% a year"
+    assert rows["growth"]["Net profit, 5 years"] == f"{val[('Profit growth', '5Y CAGR')]:.1f}% a year"

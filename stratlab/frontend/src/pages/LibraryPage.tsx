@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct, TF_NAME } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
+import { checksLine } from "../lib/tradeUi";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
@@ -150,7 +151,7 @@ export function LibraryPage() {
                           <CardHead title={e.name} level={3} />
                           <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
                         </div>
-                        <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{e.verdict.passed} of {e.verdict.total} checks passed</span></div>
+                        <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{checksLine(e.verdict.passed, e.verdict.total)}</span></div>
                         {e.description && <p className={`k-small${phone ? " lib-oneline" : ""}`}>{e.description}</p>}
                         {phone ? (
                           <>
