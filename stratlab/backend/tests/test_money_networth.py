@@ -305,3 +305,14 @@ def test_damaged_rows_never_break_the_page(w):
     assert r.status_code == 200 and r.json()["assets"] == []
     assert nw.upcoming_dates("u-pro", 30) == []
     assert all(math.isfinite(x) for x in (nw.emi(1e12, 60, 600), nw.fd_value(1e12, 60, date(1950, 1, 1), date(2150, 1, 1))))
+
+
+def test_the_csv_does_not_hand_a_spreadsheet_a_formula(w):
+    """Security review, 7 Oct 2026: a name typed (or read from a statement) as =HYPERLINK(...) stays text in the export."""
+    c = w["client"]
+    add(c, {"kind": "cash", "name": '=HYPERLINK("http://evil.test","x")', "value": 5000})
+    add(c, {"kind": "cash", "name": "@SUM(1+1)", "value": 100})
+    text = c.get("/money/net-worth/export", headers=PRO).text
+    cells = [cell.strip('"') for line in text.splitlines() for cell in line.split(",")]
+    assert not any(x.startswith(("=", "@")) for x in cells), text
+    assert "'=HYPERLINK" in text and "'@SUM" in text

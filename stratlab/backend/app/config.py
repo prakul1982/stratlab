@@ -18,6 +18,14 @@ def origins(value: str) -> list[str]:
     return [o.strip().rstrip("/") for o in value.split(",") if o.strip()]
 
 
+def api_docs_enabled(env=None) -> bool:
+    """Swagger, ReDoc and openapi.json (a map of every route, admin ones included) are for development: off on Railway
+    unless API_DOCS=true is set there."""
+    env = os.environ if env is None else env
+    on_railway = any(env.get(k) for k in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "RAILWAY_PUBLIC_DOMAIN"))
+    return str(env.get("API_DOCS", "")).strip().lower() == "true" or not on_railway
+
+
 class Settings:
     SUPABASE_URL = _env("SUPABASE_URL")
     SUPABASE_SERVICE_KEY = _env("SUPABASE_SERVICE_KEY")

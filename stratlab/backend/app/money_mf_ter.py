@@ -79,21 +79,31 @@ def _excel_rows(data: bytes):
         raise ValueError("TER workbook too large")
     row: dict[int, str] = {}
     with zf.open(name) as f:
-        for _, el in ElementTree.iterparse(f):
-            tag = el.tag.rsplit("}", 1)[-1]
-            if tag == "c":
-                ref = re.match(r"[A-Z]+", el.get("r") or "")
-                v = next((x.text for x in el.iter() if x.tag.rsplit("}", 1)[-1] in ("v", "t") and x.text), "")
-                if ref:
-                    col = 0
-                    for ch in ref.group():
-                        col = col * 26 + ord(ch) - 64
-                    row[col - 1] = v
-                el.clear()
-            elif tag == "row":
-                yield [row.get(i, "") for i in range(max(row) + 1)] if row else []
-                row = {}
-                el.clear()
+        head = f.read(4096)
+        if b"<!DOCTYPE" in head.upper() or b"<!ENTITY" in head.upper():
+            # a worksheet never needs a DTD; refusing one rules out entity-expansion tricks (as the other XML readers do)
+            raise ValueError("TER workbook has a document type declaration")
+        parser = ElementTree.XMLPullParser()
+        chunk = head
+        while chunk:
+            parser.feed(chunk)
+            for _, el in parser.read_events():
+                tag = el.tag.rsplit("}", 1)[-1]
+                if tag == "c":
+                    ref = re.match(r"[A-Z]+", el.get("r") or "")
+                    v = next((x.text for x in el.iter() if x.tag.rsplit("}", 1)[-1] in ("v", "t") and x.text), "")
+                    if ref:
+                        col = 0
+                        for ch in ref.group():
+                            col = col * 26 + ord(ch) - 64
+                        row[col - 1] = v
+                    el.clear()
+                elif tag == "row":
+                    yield [row.get(i, "") for i in range(max(row) + 1)] if row else []
+                    row = {}
+                    el.clear()
+            chunk = f.read(65536)
+        parser.close()
 
 
 def _excel_day(v: str) -> str:

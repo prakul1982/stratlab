@@ -1,4 +1,5 @@
 """Razorpay subscriptions: Basic and Pro, monthly or (when those plans are set up) yearly. Prices live in plans.py."""
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -208,12 +209,13 @@ def handle_webhook(body: bytes, signature: str, event_id: str = ""):
         raise SignatureVerificationError("Webhook secret is not configured.")
     client().utility.verify_webhook_signature(body.decode(errors="replace"), _sig(signature), settings.RAZORPAY_WEBHOOK_SECRET)
     event = json.loads(body)
-    seen = f"rzp-event:{event_id[:80]}" if event_id else ""
-    if seen and db.get_setting(seen):
+    # The event id is a header Razorpay doesn't sign. With it, the id is the key; a post without it (a replay that dropped
+    # it) is keyed by the signed body's own hash, so the same signed body is still handled once.
+    seen = f"rzp-event:{event_id[:80]}" if event_id else "rzp-body:" + hashlib.sha256(body).hexdigest()
+    if db.get_setting(seen):
         return
     _act(event)
-    if seen:                                   # marked only once handled, so Razorpay's retry of a failed one still runs
-        db.set_setting(seen, "1")
+    db.set_setting(seen, "1")                  # marked only once handled, so Razorpay's retry of a failed one still runs
 
 
 REVERSALS = ("refund.created", "refund.processed", "payment.dispute.created")

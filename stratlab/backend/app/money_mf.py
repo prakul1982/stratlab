@@ -262,19 +262,17 @@ def scheme_key(folio: str, isin: str = "", code: str = "", name: str = "") -> st
 def parse_cas(data: bytes, password: str) -> dict:
     """The detailed CAS PDF, opened in memory with the password, as {"schemes", "txns", "period", "problems"}. The
     investor's name, PAN and contact details on the statement are dropped here."""
+    from .connect import pdfsandbox          # imported here: the connect package imports this module
     try:
-        import casparser
-        from casparser.exceptions import CASParseError, IncorrectPasswordError
-    except ImportError:
-        raise FileError("Reading statements isn't available right now. Try the CSV import instead.") from None
-    try:
-        cas = casparser.read_cas_pdf(io.BytesIO(data), password or "")
-    except IncorrectPasswordError:
-        raise FileError("That password didn't open the PDF. A CAS is locked with the password you chose when you asked "
-                        "for it (often your PAN in capitals).") from None
-    except CASParseError:
-        raise FileError("This PDF doesn't look like a CAMS or KFintech Consolidated Account Statement.") from None
-    except Exception:
+        cas = pdfsandbox.read_cas(data, password or "")
+    except pdfsandbox.SandboxError as e:
+        if e.kind == "password":
+            raise FileError("That password didn't open the PDF. A CAS is locked with the password you chose when you asked "
+                            "for it (often your PAN in capitals).") from None
+        if e.kind == "parse":
+            raise FileError("This PDF doesn't look like a CAMS or KFintech Consolidated Account Statement.") from None
+        if e.kind == "limit":
+            raise FileError("This PDF is too large or complex to read here. Ask for the statement for a shorter period.") from None
         raise FileError("This PDF couldn't be read. Check it's the CAS as it was emailed to you.") from None
     if not hasattr(cas, "folios"):
         raise FileError("This is a depository statement. Upload the detailed CAS from CAMS or KFintech instead, "
