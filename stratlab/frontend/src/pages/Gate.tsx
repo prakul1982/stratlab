@@ -120,7 +120,7 @@ export function NoAccess({ what, email }: { what: string; email?: string | null 
 export function HelpPage() {
   return (
     <div className="k-page gate">
-      <PageHeader eyebrow="Mine · Help" title="Help" lede="Find your way around StratLab, or reach a person." />
+      <PageHeader eyebrow="Help" title="Help" lede="Find your way around StratLab, or reach a person." />
       <Card label="A quick tour">
         <CardHead title="A quick tour" actions={<button type="button" className="btn sm" onClick={openTour}>Start the tour</button>} />
         <p className="k-small k-muted">Four short steps: the spaces, search, each space's main button and your account.</p>
