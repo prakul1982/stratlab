@@ -135,7 +135,8 @@ def warm_caches():
     """Fill the caches the busiest pages share (instrument lists, the NIFTY 50 and US scans, sector rotation, the
     option contracts), so the first people after a restart or the morning login don't all wait on them at once.
     Each step is independent; one failing (a source down, the broker not logged in yet) skips only itself."""
-    steps = [("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
+    steps = [("company list", lambda: isin_list()),         # full names and ISINs, for search by name
+             ("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
              ("option contracts", lambda: options_data.ready() and options_data.underlyings()),
              ("market list", lambda: markets.markets()),
              ("scan IN", lambda: markets.provider("IN").ready() and scan.run(markets, "IN", [{"symbol": x} for x in universes.PRESETS["IN"][0]["symbols"]])),
@@ -2138,7 +2139,7 @@ def holdings_matcher() -> holdings.Matcher:
 
 
 def _india_suggestions() -> list[dict]:
-    return suggest.india_rows(kite.equities()) if kite.ready() else []
+    return suggest.india_rows(kite.equities(), _isin["map"]) if kite.ready() else []
 
 
 def _india_listed() -> dict[str, dict]:
@@ -2149,6 +2150,12 @@ def _india_listed() -> dict[str, dict]:
 
 suggester = suggest.Suggester({"IN": _india_suggestions, "US": lambda: suggest.us_rows(_sec_companies())},
                               {"IN": _india_listed, "US": lambda: stock_pages.companies("US")})
+
+
+# search by name everywhere: the broker's list with the exchange's full names and ISINs (as far as they're read; the
+# morning warm-up reads them), and the company boxes' own lists for the research search's US side
+KiteService.names_fn = staticmethod(lambda: _isin["map"])
+Research.local_search = staticmethod(lambda q, region: suggester.search_ranked(q, region, 10))
 
 
 @app.get("/suggest/companies")

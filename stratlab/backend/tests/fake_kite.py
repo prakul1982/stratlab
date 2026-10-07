@@ -9,7 +9,8 @@ from zoneinfo import ZoneInfo
 from app import rotation, sector_members, universes
 from app.data.mcx import CONTRACTS
 from app.kite_service import KiteService, today_ist
-from tests.fake_prices import ETF_NAMES, level, name_of
+from tests.fake_names import name_of
+from tests.fake_prices import ETF_NAMES, level
 
 IST = ZoneInfo("Asia/Kolkata")
 STEP = {"day": 1440, "60minute": 60, "15minute": 15, "5minute": 5, "minute": 1}
@@ -52,7 +53,7 @@ class FakeKiteConnect:
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         for s in sorted(stocks):
             token += 1
-            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": name_of(s) or s.title(), "segment": "NSE",
+            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": name_of(s), "segment": "NSE",
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         # ETFs trade on NSE like shares (the broker lists them as EQ), the ones the ETF vs NAV page reads
         for s in sorted(ETF_NAMES):

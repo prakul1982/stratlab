@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { match, resolve } from "../lib/features";
+import { matchHelp } from "../lib/helpTopics";
 import { askExamples, useRotating } from "../lib/rotating";
 import type { Experiment, Instrument, Notebook } from "../lib/types";
 import { buildIdea, findInstrument } from "./IdeaComposer";
@@ -49,6 +50,16 @@ function intentFor(q: string): Intent | null {
   return null;
 }
 
+/** What to look up as a company: the line without a leading "research", "open", "show me"… ("research HDFC Bank"). */
+const companyPart = (q: string) => q.trim().replace(/^(?:research|open|show(?: me)?|find|search(?: for)?|look ?up|about|quote(?: for| of)?|price of|chart(?: of)?)\s+/i, "").trim();
+/** A stock or ETF with a company page, as opposed to an index, a coin or a contract. */
+const isCompany = (i: Instrument) => (i.market === "IN" || i.market === "US") && !i.fno && (i.type === "EQ" || i.type === "ETF");
+/** How well the search matched (the server's groups, 0 best): the symbol, a short name, or the start of a symbol or name. */
+const STRONG = 3;
+
+/** A question asked in words ("what is a walk-forward test?"), not a name or an instruction. */
+const asks = (q: string) => /\?\s*$|^(what|which|how|why|when|is|are|does|do|can|should|explain)\b/i.test(q.trim());
+
 const isQuestion = (q: string) => /\?|^(what|which|how|why|best|good|suggest|give|show|find|any)\b|\b(ideas?|strateg(y|ies) for|suggestions?)\b/i.test(q.trim());
 const looksLikeCode = (q: string) => /\n.*\n/.test(q) || /(\/\/@version|strategy\(|def |import |=>|\{[\s\S]*"entry")/.test(q);
 
@@ -57,7 +68,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const { notebooks, markets, fail, refreshMe, refreshNotebooks, focus } = useApp();
   const example = useRotating(askExamples(focus));
   const [steps, setSteps] = useState<string[] | null>(null);
-  const [answer, setAnswer] = useState<{ q: string; text: string; problem?: boolean } | null>(null);
+  const [answer, setAnswer] = useState<{ q: string; text: string; title?: string; problem?: boolean } | null>(null);
   const nav = useNavigate();
   const loc = useLocation();
   const [q, setQ] = useState("");
@@ -74,14 +85,15 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const intent = useMemo(() => (looksLikeCode(q) ? null : intentFor(q)), [q]);
 
   useEffect(() => { if (!steps) input.current?.focus(); }, [steps]);   // back to typing once the work is done
+  const lookup = companyPart(text);
   useEffect(() => {
     setInsts([]);
-    if (code || text.length < 2 || words > 3) return;
+    if (code || lookup.length < 2 || lookup.split(/\s+/).length > 5 || asks(text)) return;
     const t = window.setTimeout(() => {
-      api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(text.slice(0, 40))}`).then((r) => setInsts(r.slice(0, 5))).catch(() => setInsts([]));
+      api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(lookup.slice(0, 40))}`).then((r) => setInsts(r.slice(0, 8))).catch(() => setInsts([]));
     }, 220);
     return () => window.clearTimeout(t);
-  }, [text, words, code]);
+  }, [text, lookup, code]);
 
   const go = (to: string, state?: unknown) => { onClose(); nav(to, state ? { state } : undefined); };
   const testIdea = (t: string, market = lastMarket(), symbol?: string | null) => go("/new", { prefill: { market, symbol: symbol ?? undefined, text: t } });
@@ -214,20 +226,33 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         return { key: f.id, icon: <Search size={18} />, title: f.title, sub: f.what, space: spaceOf(to.split(/[?#]/)[0]), run: () => go(to) };
       }) });
     }
+    // the (i) explanations a question names ("what is a walk-forward test?"): Enter shows it here, no AI needed
+    const helps = code ? [] : matchHelp(text, asks(text) ? 3 : 2);
+    if (helps.length) out.push({ group: "Help", items: helps.map((h) => ({
+      key: `h-${h.key}`, icon: <Book size={18} />, title: h.title, sub: h.text.length > 110 ? h.text.slice(0, 110).replace(/\s+\S*$/, "") + "…" : h.text,
+      run: () => setAnswer({ q: text, title: h.title, text: h.text }) })) });
     const nbs = (notebooks ?? []).filter((n) => !code && n.name.toLowerCase().includes(text.toLowerCase())).slice(0, 4);
     if (nbs.length) out.push({ group: "Your notebooks", items: nbs.map((n) => ({ key: n.id, icon: <Book size={18} />, title: n.name, sub: n.question ?? undefined, space: "trade", run: () => go(`/n/${n.id}`) })) });
-    if (insts.length) out.push({ group: "Markets", items: insts.flatMap((i) => {
-      const research = (i.market === "IN" || i.market === "US") && !i.fno && i.type !== "INDEX";
+    // companies by symbol or name ("hdfc bank", "infosys"), each opening its page; then something to test on
+    const companies = insts.filter(isCompany).slice(0, 5);
+    if (companies.length) out.push({ group: "Companies", items: companies.map((i) => {
       const mk = i.market || "IN";
-      const rows: Row[] = [{ key: `t-${i.id}`, icon: <Sparkle size={18} />, title: `Test an idea on ${i.symbol}`, sub: [i.name, mk].filter(Boolean).join(" · "), space: "trade", run: () => testIdea("", mk, i.symbol) }];
-      if (research) rows.unshift({ key: `r-${i.id}`, icon: <Lens size={18} />, title: `${i.symbol}: research`, sub: i.name, space: "invest", run: () => go(`/research/${mk}/${encodeURIComponent(i.symbol)}`) });
-      return rows;
-    }).slice(0, 8) });
-    // a short search that names a feature ("walk forward") should open it on Enter
-    if (words <= 2 && feats.length) {
-      const f = out.findIndex((g) => g.group === "Features");
-      out.unshift(...out.splice(f, 1));
-    }
+      const named = !!i.name && i.name.toUpperCase() !== i.symbol.toUpperCase();
+      return { key: `r-${i.id}`, icon: <Lens size={18} />, title: named ? i.name! : i.symbol,
+        sub: [named ? i.symbol : null, i.exchange || mk, "Company page"].filter(Boolean).join(" · "), space: "invest" as Space,
+        run: () => go(`/research/${mk}/${encodeURIComponent(i.symbol)}`) };
+    }) });
+    const tradable = [...companies.slice(0, 1), ...insts.filter((i) => !isCompany(i))].slice(0, 4);
+    if (tradable.length) out.push({ group: "Markets", items: tradable.map((i) => {
+      const mk = i.market || "IN";
+      return { key: `t-${i.id}`, icon: <Sparkle size={18} />, title: `Test an idea on ${i.symbol}`, sub: [i.name, mk].filter(Boolean).join(" · "), space: "trade" as Space, run: () => testIdea("", mk, i.symbol) };
+    }) });
+    const first = (group: string) => { const n = out.findIndex((g) => g.group === group); if (n > 0) out.unshift(...out.splice(n, 1)); };
+    const exactFeature = feats.some((f) => f.title.toLowerCase() === text.toLowerCase());
+    if (words <= 2 && feats.length) first("Features");          // a short search that names a feature ("walk forward") opens it on Enter
+    // a company named by its symbol or name comes first: "hdfc bank" is HDFC Bank, not the Holdings page
+    if (companies.length && (companies[0].match ?? 9) <= STRONG && !exactFeature && !intent) first("Companies");
+    if (helps.length && asks(text)) first("Help");               // a question with an explanation already written gets it first
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, q, code, words, ideas, ideasFor, thinking, insts, notebooks, loc.pathname, steps, intent, focus]);
@@ -261,7 +286,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         )}
         {answer && !steps && (
           <div className={`palette-answer${answer.problem ? " problem" : ""}`} role="status">
-            <span className="eyebrow">{answer.problem ? "Not done" : "Answer"}</span><p>{answer.text}</p>
+            <span className="eyebrow">{answer.problem ? "Not done" : "Answer"}</span>{answer.title && <b>{answer.title}</b>}<p>{answer.text}</p>
             {!answer.problem && <span className="small muted">An explanation, not advice. Test any idea before trusting it.</span>}</div>
         )}
         <div className="palette-list" ref={list} role="listbox" hidden={!!steps}>

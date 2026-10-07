@@ -1,3 +1,4 @@
+import { searchWords } from "./helpTopics";
 import { ALL_PAGES, NAV } from "./nav";
 
 /** Everything StratLab can do, with the words people might search for. Used by search and the home page grid.
@@ -134,13 +135,13 @@ const SEARCHABLE: Feature[] = (() => {
 
 export function match(q: string, limit = 6): Feature[] {
   const text = q.toLowerCase().trim();
-  const words = text.split(/\s+/).filter((w) => w.length > 1);
+  const words = searchWords(q);         // "what is walk-forward?" looks for walk and forward, not "is" inside "list"
   if (!words.length) return [];
   const scored = SEARCHABLE.map((f) => {
     const title = f.title.toLowerCase();
     const hay = `${title} ${f.words}`.toLowerCase();
     let s = words.reduce((n, w) => n + (hay.includes(w) ? (title.includes(w) ? 3 : 1) : 0), 0);
-    if (words.length > 1 && hay.includes(text)) s += 4;       // the whole phrase ("borrowed money") counts for more than its words
+    if (words.length > 1 && (hay.includes(text) || hay.includes(words.join(" ")))) s += 4;       // the whole phrase ("borrowed money") counts for more than its words
     if (title === text) s += 6;
     return [s, f] as const;
   }).filter(([s]) => s > 0);
