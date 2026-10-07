@@ -194,6 +194,11 @@ def _trade_dds(orders: np.ndarray, capital: float) -> np.ndarray:
     return np.max((peak - path) / peak, axis=1) * 100
 
 
+def _pp(v: float) -> str:
+    """A fall in percent as the page shows it: one decimal under 10% (so 0.6% isn't "1%"), whole numbers above."""
+    return f"{v:.1f}" if abs(v) < 10 else f"{v:.0f}"
+
+
 def check_shuffle(trades: list[dict], capital: float, who: str = "Your backtest", whose: str = "your backtest's") -> dict:
     """Reshuffle the trades' order: how deep a fall the same trades could have had. `who` and `whose` name the trades
     in the wording (a backtest's, or the user's real trades in the journal)."""
@@ -210,13 +215,13 @@ def check_shuffle(trades: list[dict], capital: float, who: str = "Your backtest"
     yours, p95, worst = _trade_dd(pnls, capital), float(np.percentile(dds, 95)), float(dds.max())
     if p95 >= 35:
         status = "fail"
-        detail = f"With worse luck the same trades could have fallen {p95:.0f}%. That's hard to sit through."
+        detail = f"With worse luck the same trades could have fallen {_pp(p95)}%. That's hard to sit through."
     elif p95 > max(1.5 * yours, 5):
         status = "warn"
-        detail = f"{who} fell {yours:.0f}% at worst, but with worse luck expect up to {p95:.0f}%."
+        detail = f"{who} fell {_pp(yours)}% at worst between closed trades, but with worse luck expect up to {_pp(p95)}%."
     else:
         status = "pass"
-        detail = f"Even with worse luck, falls stay around {p95:.0f}%, close to {whose} {yours:.0f}%."
+        detail = f"Even with worse luck, falls between closed trades stay around {_pp(p95)}%, close to {whose} {_pp(yours)}%."
     return {"id": "shuffle", "title": "Bad-luck drawdown", "status": status, "detail": detail,
             "data": {"yours": yours, "p95": p95, "worst": worst, "runs": SHUFFLES}}
 

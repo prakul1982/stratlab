@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly, pct, periodName, TF_NAME } from "../lib/format";
 import { riskForCurrency, usesPro } from "../lib/rules";
@@ -129,13 +129,19 @@ export function NotebookPage() {
 
   const setStrategy = (st: Strategy) => patch({ strategy: st, name: st.name });
 
-  const run = async () => {
+  const run = async (again = false) => {
     if (running) return;
-    if (!inst && !group) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
+    let first: Instrument | null = null;
+    if (!inst && !group) {
+      // nothing picked yet: run on the default (the one marked Default in "What do you want to test it on?") and say so
+      first = (await api<Instrument[]>("/instruments/defaults").catch(() => []))[0] ?? null;
+      if (!first) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
+      patch({ instrument: first, instrumentId: first.id, strategy: { ...s, risk: riskForCurrency(s.risk, first.currency) } });     // saved by the flush below, before the run
+    }
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
     if (!fno && inst?.fno) { notify("Indian F&O is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
     if (!allIndicators && usesPro(s)) { notify("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them.", { label: "See plans", run: () => nav("/plans") }); return; }
-    const body: Record<string, unknown> = { label: label.trim(), days: period };
+    const body: Record<string, unknown> = { label: label.trim(), days: period, ...(again ? { again: true } : {}) };
     if (isUpload) {
       const up = getUpload(nb.id);
       if (!up) { notify("Upload your CSV again: this browser no longer has it."); nav(`/n/${nb.id}/market`); return; }
@@ -146,12 +152,17 @@ export function NotebookPage() {
     try {
       const out = await api<{ experiment: Experiment }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body });
       trackBacktest(group ? "group" : "notebook");
-      setNb({ ...nb, experiments: [...(nb.experiments || []), out.experiment] });
+      if (first) notify(`Tested on ${first.symbol}, the default. Pick another market or instrument any time.`);
+      setNb({ ...nb, ...(first ? { instrument: first } : {}), experiments: [...(nb.experiments || []), out.experiment] });
       setLabel("");
       refreshMe();
       refreshNotebooks();
       nav(`/n/${nb.id}/e/${out.experiment.v}`);
-    } catch (e) { fail(e); } finally { setRunning(false); }
+    } catch (e) {
+      // nothing changed since the last run: say so, and run it again only if asked (it uses one of the month's experiments)
+      if ((e as ApiError).code === "same_as_last") notify((e as Error).message, { label: "Run it again", run: () => { void run(true); } });
+      else fail(e);
+    } finally { setRunning(false); }
   };
 
   runRef.current = run;
