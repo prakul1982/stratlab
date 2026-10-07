@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { Close } from "../Icons";
+import { firstFocus, tabbables, trapTab } from "../../lib/focusTrap";
 
 /* One behaviour for everything that floats over the page.
  *
@@ -10,18 +11,7 @@ import { Close } from "../Icons";
  *    outside closes it, and focus goes back to its button when it closes with focus inside it or lost.
  */
 
-const TABBABLE = "a[href], area[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex], [contenteditable=true], summary";
-
-/** The elements Tab stops on inside `root`, in order. */
-export function tabbables(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(TABBABLE)).filter((el) => {
-    if (el.tabIndex < 0 || el.closest("[inert], [hidden]")) return false;
-    if (el.tagName === "SUMMARY" && el.parentElement?.tagName !== "DETAILS") return false;
-    const d = el.closest("details");
-    if (d && !d.open && el.tagName !== "SUMMARY" && !el.closest("summary")) return false;
-    return el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
-  });
-}
+export { tabbables };
 
 /** Where focus lands when the thing that opened a dialog has gone (a removed row's Edit button): the page's heading. */
 function pageHeading(): HTMLElement | null {
@@ -72,9 +62,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, active: boole
     const ae = document.activeElement as HTMLElement | null;
     const opener = ae && ae !== document.body && !box.contains(ae) ? ae : lastOutside;
     const first = () => {
-      const pick = o.current.initial?.() ?? box.querySelector<HTMLElement>("[data-autofocus]")
-        ?? tabbables(box).find((el) => el.matches("input, textarea, select"))
-        ?? tabbables(box).find((el) => !el.hasAttribute("data-close")) ?? tabbables(box)[0];
+      const pick = o.current.initial?.() ?? firstFocus(box);
       if (pick) pick.focus();
       else { if (!box.hasAttribute("tabindex")) box.setAttribute("tabindex", "-1"); box.focus(); }
     };
@@ -86,14 +74,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, active: boole
         if (e.defaultPrevented || !o.current.onEscape) return;
         e.preventDefault();
         o.current.onEscape();
-      } else if (e.key === "Tab") {
-        const els = tabbables(box);
-        if (!els.length) { e.preventDefault(); box.focus(); return; }
-        const at = els.indexOf(document.activeElement as HTMLElement);
-        if (at === -1) { e.preventDefault(); (e.shiftKey ? els[els.length - 1] : els[0]).focus(); }
-        else if (!e.shiftKey && at === els.length - 1) { e.preventDefault(); els[0].focus(); }
-        else if (e.shiftKey && at === 0) { e.preventDefault(); els[els.length - 1].focus(); }
-      }
+      } else trapTab(e, box);
     };
     // focus that lands outside (a click on the page behind, a script) comes back in
     const into = (e: FocusEvent) => {

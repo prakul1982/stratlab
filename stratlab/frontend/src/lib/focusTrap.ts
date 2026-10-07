@@ -1,14 +1,19 @@
 /* Keeping the keyboard inside a pop-up: Tab from the last control goes to the first, Shift+Tab from the first to the
- * last, and focus that somehow left (a click behind a transparent part) comes back. Used by Modal and the tour. */
+ * last, and focus that somehow left (a click behind a transparent part) comes back. The low-level parts of the kit's one
+ * dialog behaviour (components/kit/Dialog: useDialogFocus, Dialog, usePopover), which every modal uses. */
 
-const TABBABLE = "a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]";
+const TABBABLE = "a[href], area[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), iframe, summary, [tabindex], [contenteditable=true]";
 
-/** The controls Tab stops on inside `box`, in order (a roving group's other options, tabIndex -1, are left out). */
+/** The controls Tab stops on inside `box`, in order (a roving group's other options, tabIndex -1, are left out, and so is
+ * anything hidden, invisible or inside a shut <details>). */
 export function tabbables(box: HTMLElement): HTMLElement[] {
   return Array.from(box.querySelectorAll<HTMLElement>(TABBABLE)).filter((el) => {
     if (el.tabIndex < 0 || el.closest("[hidden], [inert]")) return false;
+    if (el.tagName === "SUMMARY" && el.parentElement?.tagName !== "DETAILS") return false;
+    const d = el.closest("details");
+    if (d && !d.open && !el.closest("summary")) return false;
     const r = el.getBoundingClientRect();
-    return r.width > 0 || r.height > 0;
+    return (r.width > 0 || r.height > 0) && getComputedStyle(el).visibility !== "hidden";
   });
 }
 
