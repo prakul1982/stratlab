@@ -142,7 +142,9 @@ def test_watchlist_round_trip(api):
 def test_an_unreadable_ai_reply_asks_for_a_refresh_not_a_rephrase(api, monkeypatch):
     monkeypatch.setattr(A, "complete", lambda system, text, **kw: "not json at all")
     r = api.get("/research/company/US/NVDA/ai")
-    assert r.status_code == 422 and r.json()["detail"]["message"] == "The AI reply couldn't be read. Press Refresh to try again."
+    # an unusable reply is an answer ("unavailable", and why), not a failed request on a page that has loaded
+    assert r.status_code == 200 and r.json()["unavailable"] is True and r.json()["code"] == "ai_failed"
+    assert r.json()["message"] == "The AI reply couldn't be read. Press Refresh to try again."
 
 
 SCORE_WORDS = re.compile(r"\b(moat|momentum|health|score|scores|rating|grade)\b", re.I)

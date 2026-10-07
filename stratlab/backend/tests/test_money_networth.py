@@ -192,7 +192,7 @@ def test_the_page_adds_up_every_kind_with_its_as_of_date(w):
     pol = v["insurance"]["policies"][0]
     assert pol["due_in"] == (date(2026, 11, 1) - nw.today()).days and v["insurance"]["yearly_premium"] == 12000
     assert v["insurance"]["cover"] == {"term": 10000000}
-    assert v["history"][-1]["d"] == nw.today().isoformat() and v["history"][-1]["net"] == t["net"] and v["count"] == 14
+    assert v["history"][-1]["d"] == v["as_of"] and v["history"][-1]["net"] == t["net"] and v["count"] == 14
 
 
 def test_edit_delete_prepay_upcoming_and_export(w):

@@ -740,8 +740,10 @@ def named_holders(symbol: str, profile=Depends(current_profile)):
     if got is None:
         if problem:
             err(503, "holders_unavailable", f"The shareholding filing couldn't be read just now ({problem}). Try again later.")
-        err(404, "no_filing", f"No shareholding filing found for {sym} on the exchange.")
-    return ok({**got, "search": _allowed(profile)})
+        # nothing filed (or not listed on NSE) is an answer, not a fault: an empty 200 the page leaves out quietly
+        return ok({"symbol": sym, "available": False, "holders": [], "dropped": [], "search": _allowed(profile),
+                   "message": f"No shareholding filing found for {sym} on the exchange."})
+    return ok({**got, "available": True, "search": _allowed(profile)})
 
 
 @router.get("/invest/holders")

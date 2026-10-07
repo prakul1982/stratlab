@@ -160,7 +160,7 @@ export function CompanyPage() {
   const [tries, setTries] = useState(0);
   const nav = useNavigate();
   const share = useShareCompany(region, sym);
-  useDocTitle(c ? `${c.symbol}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : sym);
+  useDocTitle(c ? `${c.name || c.symbol}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : sym);
   useEffect(() => {
     let live = true;
     setC(null); setError(null); setResults(null);
@@ -236,7 +236,7 @@ export function CompanyPage() {
         </div>
         {/* one main action (what this person came for), Watch and an alert; the rest under More */}
         <div className="k-row">
-          {lead === "deep" ? deep("blue") : <button className="btn blue sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
+          {lead === "deep" ? deep("") : <button className="btn sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
           <AlertButton region={region} symbol={c.symbol} />
           <MoreMenu items={[

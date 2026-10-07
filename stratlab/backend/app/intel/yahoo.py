@@ -149,6 +149,7 @@ class Yahoo(Source):
             "volume": m.get("regularMarketVolume"),
             "high52": m.get("fiftyTwoWeekHigh"), "low52": m.get("fiftyTwoWeekLow"),
             "tz": m.get("exchangeTimezoneName"), "type": m.get("instrumentType"),
+            "at": datetime.fromtimestamp(m["regularMarketTime"], timezone.utc).isoformat(timespec="seconds") if isinstance(m.get("regularMarketTime"), (int, float)) else None,
         }
 
     def search(self, q: str, limit: int = 15) -> list[dict]:

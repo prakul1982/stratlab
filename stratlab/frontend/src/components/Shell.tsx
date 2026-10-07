@@ -174,11 +174,13 @@ export function Shell({ children }: { children: ReactNode }) {
           <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
         <SpaceSwitch space={space} onPick={goSpace} />
-        {space === "invest" || (space === "mine" && focus === "invest")
-          ? <button className="side-new" onClick={() => nav("/research")}><Lens size={16} />Look up a company</button>
-          : space === "money" || (space === "mine" && focus === "money")
-          ? <button className="side-new" onClick={() => nav("/holdings")}><Book size={16} />Add your holdings</button>
-          : <button className="side-new" onClick={() => nav("/new")}><Plus size={16} />New notebook</button>}
+        {(() => {
+          // the space's main button: never a link to the page you are on
+          const main = space === "invest" || (space === "mine" && focus === "invest") ? { to: "/research", icon: <Lens size={16} />, label: "Look up a company" }
+            : space === "money" || (space === "mine" && focus === "money") ? { to: "/holdings", icon: <Book size={16} />, label: "Add your holdings" }
+            : { to: "/new", icon: <Plus size={16} />, label: "New notebook" };
+          return path === main.to ? null : <button className="side-new" onClick={() => nav(main.to)}>{main.icon}{main.label}</button>;
+        })()}
         <button className="search-btn" onClick={() => setSearch(true)} aria-keyshortcuts={/Mac/.test(navigator.platform) ? "Meta+K" : "Control+K"}>
           <Sparkle size={16} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
         </button>

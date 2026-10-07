@@ -93,7 +93,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/invest/stock-lending", "Stock lending fees", "receipt", "stock lending fees slb securities lending borrowing borrowed shares lend my shares earn on holdings", { isNew: true }),
       ] },
       { id: "company-news", label: "Company news", blurb: "What companies report and announce: news, results, dividends, updates and who holds them.", pages: [
-        page("/news", "News", "news", "news newsletter brief digest email daily weekly market close my stocks watchlist headlines subscribe", { line: "A short brief after each market close, for India, the US and the companies you follow." }),
+        page("/news", "Briefs", "news", "news briefs newsletter brief digest email daily weekly market close my stocks watchlist headlines subscribe", { line: "A short brief after each market close, for India, the US and the companies you follow." }),
         page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement", { line: "Results days for your stocks, or every company, week by week." }),
         page("/research/corporate-actions", "Corporate actions", "calendar", "corporate actions dividend ex date record date bonus issue stock split rights buyback demerger", { line: "Dividends, bonus issues and splits by ex-date, for your stocks or every company." }),
         page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { isNew: true, flag: "biz_updates" }),

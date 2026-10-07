@@ -129,10 +129,11 @@ test("onboarding: asked once, on a home page only; the short tour once; the acco
   await expect(welcome).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  // home: the question, with focus on the experience that's selected
+  // home: the question, with no experience picked for them (the standard layout applies if they leave it)
   await page.goto("/");
   await expect(welcome).toBeVisible({ timeout: 30_000 });
-  await expect(welcome.getByRole("radio", { name: "I've done a bit" })).toBeFocused();
+  await expect(welcome.getByRole("radio", { checked: true })).toHaveCount(0);
+  await expect(welcome.locator(":focus")).toHaveCount(1);
   await expect(page.getByText("Your first steps")).toHaveCount(0);                         // one guide at a time
   await welcome.getByRole("button", { name: /^Trade/ }).click();
   await expect(welcome).toHaveCount(0);

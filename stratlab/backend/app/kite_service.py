@@ -438,6 +438,8 @@ class KiteService:
             prev = ohlc.get("close") or None
             last = v.get("last_price")
             traded = v.get("last_trade_time")
+            if hasattr(traded, "tzinfo") and traded.tzinfo is None:
+                traded = traded.replace(tzinfo=IST)          # the broker's clock is India's: say so, so no reader's zone moves it
             out[keys.get(k, k.split(":", 1)[1])] = {
                 "price": last, "prev_close": prev, "open": ohlc.get("open"), "high": ohlc.get("high"),
                 "low": ohlc.get("low"), "volume": v.get("volume"), "at": traded.isoformat() if hasattr(traded, "isoformat") else None,

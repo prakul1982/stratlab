@@ -213,6 +213,27 @@ def us_sector(fund: str | None) -> str:
 
 
 # ---------- the page ----------
+def latest_trade(quotes: list[dict], now: datetime) -> datetime | None:
+    """The time of the latest trade among some quotes (each has an ISO `at`; one without a zone is read as India's),
+    never later than `now`. None when no quote carries one."""
+    from zoneinfo import ZoneInfo
+    best = None
+    for q in quotes:
+        at = q.get("at")
+        try:
+            t = datetime.fromisoformat(at) if isinstance(at, str) else None
+        except ValueError:
+            t = None
+        if t is None:
+            continue
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=ZoneInfo("Asia/Kolkata"))
+        t = min(t, now)
+        if best is None or t > best:
+            best = t
+    return best
+
+
 def _r(v, dp=2):
     return None if v is None else round(v, dp)
 
@@ -282,7 +303,7 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
             sectors[r["sector"]] = sectors.get(r["sector"], 0) + (r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r)
     allocation = [{"sector": s, "value": _r(v), "pct": _r(v / value * 100, 1) if value else None,
                    "count": sum(1 for r in rows if r["sector"] == s and rate(r) is not None)}
-                  for s, v in sorted(sectors.items(), key=lambda kv: -kv[1])]
+                  for s, v in sorted(sectors.items(), key=lambda kv: (kv[0] == UNCLASSIFIED, -kv[1]))]      # "Not classified" last, whatever its size
     us = [r for r in rows if r["market"] == "US"]
     totals["count"] = len(rows)
     return {"rows": rows, "allocation": allocation, "totals": totals,

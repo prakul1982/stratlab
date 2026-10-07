@@ -230,7 +230,7 @@ function NextSteps({ nb, e, onDelete }: { nb: Notebook; e: Experiment; onDelete:
     <Card label="Next step" compact>
       <CardHead title="Next step" level={3} info={HELP.nextSteps} infoLabel="About next steps" />
       <div className="k-toolbar" role="toolbar" aria-label="Next step">
-        <button type="button" className="btn blue" onClick={() => go(main.action)}>{main.action === "paper_trade" ? <Pulse size={17} /> : null}{main.text}</button>
+        <button type="button" className="btn" onClick={() => go(main.action)}>{main.action === "paper_trade" ? <Pulse size={17} /> : null}{main.text}</button>
         {rest.map((s) => <button type="button" key={s.action} className="btn quiet sm" onClick={() => go(s.action)}>{s.action === "paper_trade" ? <Pulse size={17} /> : null}{s.text}</button>)}
         {main.action !== "edit_rules" && <button type="button" className="btn quiet sm" onClick={() => go("edit_rules")}><Pencil size={17} />Change the rules</button>}
         {prev.length > 0 && (
@@ -471,7 +471,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
               )}</Field>
               <Field label="Show it as by" optional wide maxLength={40} value={author} onChange={(x) => setAuthor(x.target.value)} placeholder="A StratLab user" />
               <FormActions>
-                <button type="button" className="btn blue" onClick={publish}>{lib ? "Update" : "Publish"}</button>
+                <button type="button" className="btn" onClick={publish}>{lib ? "Update" : "Publish"}</button>
                 <button type="button" className="btn quiet" onClick={() => setPublishing(false)}>Cancel</button>
               </FormActions>
             </FormGrid>

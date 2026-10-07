@@ -340,7 +340,7 @@ export function NotebookPage() {
           <FormGrid label="Run an experiment" onSubmit={(e) => { e.preventDefault(); void run(); }}>
             <Field label="What's different this time?" optional wide maxLength={120} value={label} placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
             <FormActions>
-              <button type="submit" className="btn blue" disabled={running}>{running ? "Running 4 honesty checks…" : `Run experiment v${nextV}`}</button>
+              <button type="submit" className="btn" disabled={running}>{running ? "Running 4 honesty checks…" : `Run experiment v${nextV}`}</button>
               <span className="k-small k-muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>
               <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
             </FormActions>
@@ -391,7 +391,7 @@ export function NotebookPage() {
                 onChange={(e) => setFast({ ...fast, minPrice: Math.max(0, +e.target.value || 0) })} />
             </FormGrid>
             <div className="k-row">
-              <button type="button" className="btn blue" onClick={() => { setGroupStart(false); startGroup(); }}>Start paper trading</button>
+              <button type="button" className="btn" onClick={() => { setGroupStart(false); startGroup(); }}>Start paper trading</button>
               <button type="button" className="btn quiet" onClick={() => setGroupStart(false)}>Cancel</button>
             </div>
           </div>

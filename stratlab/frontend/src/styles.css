@@ -1333,7 +1333,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
  * scrolling row, faded at its end */
 .k-chipbar { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; padding: 2px; }
 @media (max-width: 640px) {
-  .k-chipbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 90%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent); }
+  .k-chipbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 78%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 78%, transparent); padding-inline-end: 28px; }
 }
 .k-chipbar::-webkit-scrollbar { display: none; }
 .k-chip { flex: none; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink-2); font-size: var(--t-label); font-weight: 500; cursor: pointer; white-space: nowrap; }
@@ -1345,14 +1345,14 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-custom .k-input { width: auto; height: 36px; padding-inline: 12px; }
 .k-custom input.k-input { width: 80px; }
 
-/* form grid: every label one line, every box the same height, all boxes on one baseline */
-.k-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s4); align-items: end; min-width: 0; }
+/* form grid: every label one line, every box the same height, all boxes on one baseline (rows start together, so a hint under one box never lifts its neighbours' labels) */
+.k-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s4); align-items: start; min-width: 0; }
 .k-form.k-form-pair { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 .k-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */
 .k-card > .k-field.wide { max-width: none; }   /* a row that should fill the card (a document upload) */
-.k-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.k-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 22px; }
 .k-label-row label { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-label-row .opt { font-weight: 400; color: var(--muted); }
 .k-input { height: var(--ctl); width: 100%; padding: 0 14px; border-radius: var(--r-ctl); border: 1px solid var(--line-2); background: var(--paper); font-size: var(--t-body); min-width: 0; }

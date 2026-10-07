@@ -7,7 +7,7 @@ import {
   type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
-import { ChartEmpty, Legend, LineChart } from "../components/Charts";
+import { Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
 import { useMoreColumns } from "../components/MoreColumns";
 import { VixPanel } from "../components/VixPanel";
@@ -330,11 +330,12 @@ function useHistory<T extends { day: string }>(kind: string, range: string, name
   return d;
 }
 
-function ChartBox({ title, children, empty, emptyText, height = 200 }: { title: string; children: ReactNode; empty: boolean; emptyText?: string; height?: number }) {
+/** A chart with its title; with too few days to draw it is the title and one line saying why, not an empty box. */
+function ChartBox({ title, children, empty, emptyText }: { title: string; children: ReactNode; empty: boolean; emptyText?: string; height?: number }) {
   return (
     <div className="k-stack pos-chart">
       <h3 className="k-sub">{title}</h3>
-      {empty ? <ChartEmpty height={height}>{emptyText ?? "Not enough days yet to draw."}</ChartEmpty> : children}
+      {empty ? <p className="k-note" data-testid="chart-empty">{emptyText ?? "Not enough days yet to draw."}</p> : children}
     </div>
   );
 }

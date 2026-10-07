@@ -4,6 +4,7 @@ Real network calls are refused, so anything not faked behaves like a source that
 import json
 import random
 import sys
+import zlib
 
 import httpx
 from fastapi.testclient import TestClient
@@ -219,7 +220,12 @@ def _nse(sw=None):
         if r.url.path == "/api/corporate-announcements":
             if not r.url.params.get("symbol"):          # the whole market's announcements for one day (the red-flag list)
                 return httpx.Response(200, json=market_announcements(r.url.params.get("from_date")))
-            return httpx.Response(200, json=rows)
+            sym = r.url.params.get("symbol", "").upper()
+            if sym in ("RELIANCE", "INFY", "TCS", "ITC", "HDFCBANK", "TINYCO", "SLOWCO") or not sym.isalpha():
+                return httpx.Response(200, json=rows)
+            # every other company has its own one filing, not the same three: a holdings page doesn't repeat them under each stock
+            one = dict(rows[zlib.crc32(sym.encode()) % len(rows)], symbol=sym)
+            return httpx.Response(200, json=[one] if zlib.crc32(sym.encode()) % 3 else [])
         if r.url.path in ("/api/corporates-pit", "/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
             return _deals_answer(r)
         surv = surveillance_answers().get(r.url.path)

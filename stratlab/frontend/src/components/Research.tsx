@@ -439,7 +439,7 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
                         <b>{i.title}</b>
                         <span className="k-small">"{i.text}"</span>
                         {i.why && <span className="k-note">{i.why}</span>}
-                        <button className="btn blue sm" onClick={() => onTest(i)}>Test this idea →</button>
+                        <button className="btn sm" onClick={() => onTest(i)}>Test this idea →</button>
                       </div>
                     ))}
                   </div>

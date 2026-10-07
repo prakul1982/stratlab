@@ -59,3 +59,5 @@
 /* Library cards on a phone: the description is one line; the rest is behind "Rules and all figures". */
 .lib-oneline { margin: 0; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-clamp { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lib-reason { margin: 0; }
+.explore-go { color: var(--blue-ink); font-weight: 500; }

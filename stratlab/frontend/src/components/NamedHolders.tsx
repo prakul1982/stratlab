@@ -16,6 +16,8 @@ export interface CompanyHolders {
   symbol: string; name: string; quarter: string; prev_quarter: string | null; filed: string | null; url: string | null;
   holders: NamedHolder[]; dropped: { name: string; kind: string; group: string; prev_pct: number; prev_shares: number }[];
   note: string; search: boolean;
+  /** false when nothing is filed (not on NSE, or no filing yet): the section is left out */
+  available?: boolean;
 }
 
 export function quarterEnd(iso: string | null | undefined) {
@@ -49,12 +51,8 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
     let live = true;
     setV(null); setError(null); setNone(false);
     api<CompanyHolders>(`/research/holders/${encodeURIComponent(symbol)}`)
-      .then((x) => live && setV(x))
-      .catch((e) => {
-        if (!live) return;
-        if ((e as { code?: string }).code === "no_filing") setNone(true);         // not listed on NSE, or nothing filed
-        else setError(e instanceof Error ? e.message : "Couldn't read the shareholding filing.");
-      });
+      .then((x) => { if (!live) return; if (x.available === false) setNone(true); else setV(x); })       // not listed on NSE, or nothing filed
+      .catch((e) => live && setError(e instanceof Error ? e.message : "Couldn't read the shareholding filing."));
     return () => { live = false; };
   }, [symbol]);
 

@@ -602,6 +602,24 @@ def _policy(i: dict, at: date) -> dict:
             "due_in": (nxt - at).days if nxt else None, "nominee": i.get("nominee"), "entry": i}
 
 
+def data_day(rows: list[dict], at: date) -> date:
+    """The day the market prices in the page are from (India's calendar): the latest of their stamps, never after `at`.
+    Out of hours that is the last close, not the day it is now. A page with no market-priced row is as of `at`."""
+    days = []
+    for r in rows:
+        if r.get("basis") != "market price" or not r.get("as_of"):
+            continue
+        try:
+            raw = str(r["as_of"])
+            t = datetime.fromisoformat(raw) if "T" in raw and len(raw) > 10 else None
+            d = (t.replace(tzinfo=t.tzinfo or IST).astimezone(IST).date()) if t else _date(raw)
+        except ValueError:
+            d = None
+        if d:
+            days.append(d)
+    return min(max(days), at) if days else at
+
+
 def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Prices, at: date | None = None) -> dict:
     """The whole page: totals, the allocation by asset class, every asset and loan with its value and as-of date, and the
     insurance register (kept apart: policies aren't counted in net worth). `stocks` is {"in", "us", "as_of", "count"} in
@@ -666,7 +684,7 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
                   for c, label in CLASSES if by.get(c)]
     dated = [r["as_of"] for r in rows + loans if r.get("as_of")]
     upcoming_due = sorted((p for p in policies if p["due_in"] is not None), key=lambda p: p["due_in"])
-    return {"as_of": at.isoformat(), "computed_at": now_iso,
+    return {"as_of": data_day(rows, at).isoformat(), "computed_at": now_iso,
             "totals": {"assets": _r(total_assets), "liabilities": _r(total_loans), "net": _r(total_assets - total_loans),
                        "oldest_as_of": min(dated) if dated else None},
             "allocation": allocation, "assets": rows, "liabilities": loans,
@@ -870,10 +888,11 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         hist = history(uid)
         has_any = bool(v["assets"] or v["liabilities"])
         this_month = today().strftime("%Y-%m")
+        day = _date(v["as_of"])                              # a snapshot is dated by the prices in it: out of hours, the last close
         if why and has_any:
-            hist = record(uid, v["totals"], why)
+            hist = record(uid, v["totals"], why, day)
         elif has_any and not any(h["d"].startswith(this_month) for h in hist):
-            hist = record(uid, v["totals"], "month")        # the 1st-of-the-month run missed this user: taken on the first visit
+            hist = record(uid, v["totals"], "month", day)   # the 1st-of-the-month run missed this user: taken on the first visit
         plan = profile["_plan"]
         allowed = has_history(plan)
         limit = item_limit(plan)
