@@ -28,6 +28,7 @@ export interface Strategy {
 
 export interface Instrument {
   id: string; token?: number | string | null; symbol: string; name?: string; exchange?: string; type?: string;
+  match?: number;           // search results: how well it matched (0 the symbol itself … 5 with a typo)
   market?: string; currency?: string; step?: number; lot?: number; fno?: boolean; expiry?: string | null;
   strike?: number | null; tz?: string;
   contract?: string; unit?: string; lot_units?: number;   // MCX: the contract traded, the price unit, price units per lot
