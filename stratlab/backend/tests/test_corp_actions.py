@@ -313,7 +313,7 @@ def test_my_stocks_newsletter_has_a_corporate_actions_section(w):
     assert [(r["symbol"], r["ex_date"]) for r in acts] == [("TCS", "2026-10-07")]
     f = {"kind": "my_stocks", "weekly": False, "day": TODAY.isoformat(), "since": TODAY.isoformat(), "stocks": [], "results": [], "actions": acts}
     sec = next(s for s in write.sections(f) if s["title"] == "Corporate actions")
-    assert "TCS: Interim dividend ₹11 a share, ex-date Wed 07 Oct" in json.dumps(sec, ensure_ascii=False)
+    assert "TCS: Interim dividend ₹11 a share, ex-date Wed 7 Oct" in json.dumps(sec, ensure_ascii=False)
     assert "ex-date" in write.template(f) and "ex-dates this week for 1" in write.subject(f)
 
 

@@ -28,7 +28,7 @@ def confirm_email(to: str, link: str) -> tuple[str, str, str]:
             kit.card("Address to confirm", [kit.Row(to)]),
             kit.para("The link works for 3 days. If you didn't ask for this, ignore this email and nothing changes."),
         ], kit.Footer(why="You get this because someone asked to send StratLab emails to this address.",
-                      transactional="It is a one-off message, so it has no unsubscribe link."),
+                      transactional="It is a one-off message, so it has no unsubscribe link.", manage=kit.MANAGE_NEWSLETTERS),
         label="Confirm email", date=kit.today_label(), summary="Confirm that StratLab may send newsletters and reminders to this address.",
         cta=("Confirm my email", link), subject=subject)
     return subject, html, text
@@ -57,29 +57,52 @@ def _issue(facts: dict) -> dict:
              "region": facts.get("region"), "day": facts["day"], "weekly": facts["weekly"], "subject": write.subject(facts),
              "sections": write.sections(facts), "summary": write.template(facts), "ai": False, "title": write.headline(facts),
              "label": write.type_label(facts), "indices": facts.get("indices") or [],
-             "at": datetime.now(IST).isoformat(timespec="minutes")}
+             # the weekly digest is gathered on Saturday morning; a daily issue right now
+             "at": (datetime.combine(date.fromisoformat(facts["day"]), datetime.min.time(), IST).replace(hour=8) if facts["weekly"]
+                    else datetime.now(IST)).isoformat(timespec="minutes")}
     issue["html"], issue["text"] = write.render(issue)
     return issue
 
 
+def _saturday(day: date) -> date:
+    """The weekly digest's day: the Saturday on or before `day` (the job sends it on Saturday morning)."""
+    return day - timedelta(days=(day.weekday() - 5) % 7)
+
+
+# made-up figures, each set shaped as its own issue: a day's move and distance from the high for the daily brief,
+# the move over the five sessions for the weekly one (content.index_moves gives the weekly issue no "from high")
+SAMPLE_INDICES = {
+    ("IN", False): [{"name": "NIFTY 50", "price": 22555.75, "change_pct": 0.62, "from_high_pct": 1.8},
+                    {"name": "SENSEX", "price": 74210.3, "change_pct": 0.55, "from_high_pct": 1.9},
+                    {"name": "INDIA VIX", "price": 13.2, "change_pct": -3.1},
+                    {"name": "NIFTY BANK", "price": 48120.4, "change_pct": -0.21}],
+    ("IN", True): [{"name": "NIFTY 50", "price": 22410.2, "change_pct": -1.34}, {"name": "SENSEX", "price": 73755.9, "change_pct": -1.18},
+                   {"name": "INDIA VIX", "price": 14.6, "change_pct": 8.9}, {"name": "NIFTY BANK", "price": 47630.15, "change_pct": -2.05}],
+    ("US", False): [{"name": "S&P 500", "price": 5712.6, "change_pct": -0.34, "from_high_pct": 2.4},
+                    {"name": "Nasdaq 100", "price": 19840.2, "change_pct": -0.52}, {"name": "VIX", "price": 16.8, "change_pct": 4.2}],
+    ("US", True): [{"name": "S&P 500", "price": 5688.1, "change_pct": 0.91}, {"name": "Nasdaq 100", "price": 19702.4, "change_pct": 1.27},
+                   {"name": "VIX", "price": 15.9, "change_pct": -6.4}],
+}
+SAMPLE_HEADLINES = {
+    "IN": [{"headline": "Monthly sales update filed by Tata Motors", "url": "https://example.com/tata-motors"},
+           {"headline": "RBI keeps the repo rate unchanged", "url": "https://example.com/rbi"}],
+    "US": [{"headline": "Federal Reserve leaves its policy rate unchanged", "url": "https://example.com/fed"},
+           {"headline": "Apple files its annual report with the SEC", "url": "https://example.com/apple-10k"}],
+}
+
+
 def _market(region: str, weekly: bool = False) -> tuple[str, str, str]:
-    day = _today()
+    day = _saturday(_today()) if weekly else _today()
     if region == "IN":
-        indices = [{"name": "NIFTY 50", "price": 22555.75, "change_pct": 0.62, "from_high_pct": 1.8},
-                   {"name": "SENSEX", "price": 74210.3, "change_pct": 0.55, "from_high_pct": 1.9},
-                   {"name": "INDIA VIX", "price": 13.2, "change_pct": -3.1},
-                   {"name": "NIFTY BANK", "price": 48120.4, "change_pct": -0.21}]
-        scan = {"group": "NIFTY 50", "st_s2": [{"symbol": "TCS"}, {"symbol": "INFY"}], "stage2": [{"symbol": "LT"}]}
-        rotation = [{"sector": "Auto", "from": "improving", "to": "leading"}, {"sector": "Banks", "from": "leading", "to": "weakening"}]
+        scan = ({"group": "NIFTY 50", "st_s2": [{"symbol": "HDFCBANK"}], "stage2": [{"symbol": "MARUTI"}, {"symbol": "TITAN"}]} if weekly
+                else {"group": "NIFTY 50", "st_s2": [{"symbol": "TCS"}, {"symbol": "INFY"}], "stage2": [{"symbol": "LT"}]})
+        rotation = ([{"sector": "IT", "from": "lagging", "to": "improving"}] if weekly
+                    else [{"sector": "Auto", "from": "improving", "to": "leading"}, {"sector": "Banks", "from": "leading", "to": "weakening"}])
     else:
-        indices = [{"name": "S&P 500", "price": 5712.6, "change_pct": -0.34, "from_high_pct": 2.4},
-                   {"name": "Nasdaq 100", "price": 19840.2, "change_pct": -0.52}, {"name": "VIX", "price": 16.8, "change_pct": 4.2}]
         scan = {"group": "S&P 500", "st_s2": [{"symbol": "AAPL"}], "stage2": []}
         rotation = []
-    heads = [{"headline": "Monthly sales update filed by Tata Motors", "url": "https://example.com/tata-motors"},
-             {"headline": "RBI keeps the repo rate unchanged", "url": "https://example.com/rbi"}]
-    facts = {"kind": "market", "region": region, "day": day.isoformat(), "weekly": weekly, "indices": indices,
-             "rotation": rotation, "scan": scan, "headlines": heads}
+    facts = {"kind": "market", "region": region, "day": day.isoformat(), "weekly": weekly,
+             "indices": SAMPLE_INDICES[(region, weekly)], "rotation": rotation, "scan": scan, "headlines": SAMPLE_HEADLINES[region]}
     issue = _issue(facts)
     html, text = kit.preview_links(issue["html"], issue["text"])
     return issue["subject"], html, text
@@ -106,9 +129,10 @@ def _my_stocks() -> tuple[str, str, str]:
     return issue["subject"], html, text
 
 
-def _alerts_email(subject: str, text: str, path: str, label: str, why: str) -> tuple[str, str, str]:
-    html, plain = kit.message(subject, text, path, label, why, date=kit.today_label())
-    return subject, html, plain
+def _alerts_email(subject: str, text: str, path: str, label: str, why: str, date: str | None = None) -> tuple[str, str, str]:
+    """An alert as alerts.send_message emails it."""
+    html, plain = kit.message(subject, text, path, label, why, date=date or kit.today_label())
+    return kit.subject_line(subject), html, plain
 
 
 def _stock_alert() -> tuple[str, str, str]:
@@ -122,7 +146,7 @@ def _events() -> tuple[str, str, str]:
     from . import market_events as M
     day = _today() + timedelta(days=1)
     text = M.reminder_text([{"title": "RBI policy decision", "time": "10:00"}, {"title": "NIFTY weekly expiry"}], 1, day)
-    return _alerts_email(f"StratLab: RBI policy decision and 1 more, {day:%d %b}", text, "/trade/events", "Market events",
+    return _alerts_email(f"StratLab: RBI policy decision and 1 more, {M._short(day)}", text, "/trade/events", "Market events",
                          "You get this because you turned on market event reminders on StratLab.")
 
 
@@ -136,17 +160,30 @@ def _fo() -> tuple[str, str, str]:
 
 
 def _money_calendar() -> tuple[str, str, str]:
+    """The reminder for the next tax date in the calendar, with its date from the calendar's own tax dates (never one
+    written here), as it goes out 7 days before: dated the day it would be sent."""
     from . import money_calendar as C
-    d = (_today() + timedelta(days=7)).isoformat()
-    text = C.reminder_text([{"date": d, "title": "Advance tax: 3rd instalment"}, {"date": d, "title": "Mutual fund SIP: Nifty index fund"}], 7)
+    days, today = 7, _today()
+    nxt = next(e for e in C.tax_between(today + timedelta(days=1), today + timedelta(days=400)) if e["kind"] == "advance_tax")
+    due = date.fromisoformat(nxt["date"])
+    sip = {"date": nxt["date"], "title": "SIP: Nifty 50 index fund, ₹5,000", "cat": "money"}
+    text = C.reminder_text([nxt, sip], days)
     return _alerts_email("StratLab: 2 money dates coming up", text, "/money/calendar", "Money calendar",
-                         "You get this because you turned on reminders in your money calendar.")
+                         "You get this because you turned on reminders in your money calendar.",
+                         date=kit.fmt_date(due - timedelta(days=days), year=False, weekday=True))
 
 
 def _result() -> tuple[str, str, str]:
-    text = ("TCS results are out: Q2 results (5 Oct 2026). As stated: Revenue ₹64,259 cr; Net profit ₹12,040 cr. "
-            "https://example.com/tcs-results From the company's filing. Not investment advice.")
-    return _alerts_email("TCS results are out", text, "/research/IN/TCS", "Results", "You get this because you follow TCS on StratLab.")
+    """The results message, built by results.out_text from a filing as results.india_out reads it."""
+    from . import results
+    filed = (_today() - timedelta(days=1)).isoformat()
+    row = {"symbol": "TCS", "region": "IN", "date": filed, "purpose": "Quarterly results",
+           "out": {"at": f"{filed}T16:40", "title": "Financial results for the quarter ended 30 September 2026",
+                   "url": "https://example.com/tcs-results.pdf",
+                   "numbers": [{"label": "Revenue from operations", "value": "₹64,259 crore"},
+                               {"label": "Net profit", "value": "₹12,040 crore"}]}}
+    return _alerts_email("StratLab: TCS results are out", results.out_text(row), "/research/IN/TCS", "Results",
+                         "You get this because you follow TCS on StratLab.")
 
 
 def _scan() -> tuple[str, str, str]:
@@ -171,7 +208,8 @@ def _screens() -> tuple[str, str, str]:
 
 def _advance_tax() -> tuple[str, str, str]:
     from . import money_advance_tax as A
-    d = A.due_dates(_today().year)[2]
+    today = _today()
+    d = next(x for fy in (today.year - 1, today.year, today.year + 1) for x in A.due_dates(fy) if x["date"] > today.isoformat())
     subject, html, text = A.reminder_email(d, 7)
     html, text = kit.preview_links(html, text)
     return subject, html, text
@@ -187,7 +225,8 @@ def _lifecycle(kind: str):
 
 
 def _confirm() -> tuple[str, str, str]:
-    return confirm_email("you@example.com", kit.site("/email/confirm?t=sample"))
+    from .config import settings
+    return confirm_email("you@example.com", f"{settings.PUBLIC_API_URL}/email/confirm?t=sample")      # as alerts.confirm_url makes it
 
 
 # kind: (name, group, builder, one-click unsubscribe, can't be turned off)
@@ -219,7 +258,7 @@ def registry() -> dict:
 def describe(kind: str, full: bool = False) -> dict:
     name, group, build, unsub, tx = registry()[kind]
     subject, html, text = build()
-    out = {"kind": kind, "name": name, "group": group, "subject": subject, "unsubscribe": unsub, "transactional": tx}
+    out = {"kind": kind, "name": name, "group": group, "subject": kit.subject_line(subject), "unsubscribe": unsub, "transactional": tx}
     if full:
         out.update(html=html, text=text)
     return out

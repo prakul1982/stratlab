@@ -467,7 +467,8 @@ def feed_owner(token: str) -> str | None:
 # ---------- reminders ----------
 def reminder_text(evs: list[dict], days: int) -> str:
     when = "tomorrow" if days == 1 else f"in {days} days"
-    lines = [f"Coming up {when}, on {date.fromisoformat(evs[0]['date']):%a %d %b %Y}:"]
+    from .email_kit import fmt_date
+    lines = [f"Coming up {when}, on {fmt_date(evs[0]['date'], weekday=True)}:"]
     lines += [f"- {public_text(e['title'])}" for e in evs[:20]]
     if len(evs) > 20:
         lines.append(f"…and {len(evs) - 20} more.")

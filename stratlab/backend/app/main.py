@@ -4578,7 +4578,7 @@ NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "s
 
 def news_view(issue: dict) -> dict:
     out = {k: issue.get(k) for k in NEWS_FIELDS}
-    out["html"] = (out["html"] or "").replace(news.write.UNSUBSCRIBE, f"{news.write.origin()}/account")
+    out["html"] = (out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out
 
 
