@@ -24,7 +24,7 @@ What the rows say (checked against the sources on 5 Oct 2026):
 - SEBI's consultation paper of 12 Sep 2026 (comments to 3 Oct 2026) proposes other timings and settlement prices.
   Proposals only: nothing here changes until a circular sets a date.
 """
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -153,7 +153,3 @@ def describe(day) -> dict:
             "auction": list(tt.auction) if tt.auction else None, "order_entry": list(tt.entry) if tt.entry else None,
             "derivatives_close": tt.fo_end,
             "settlement_fixed_by": tt.settle_at, "source": tt.source}
-
-
-def minutes_after(t: time, minutes: int) -> time:
-    return (datetime.combine(date(2000, 1, 3), t) + timedelta(minutes=minutes)).time()

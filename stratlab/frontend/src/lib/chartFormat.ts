@@ -54,11 +54,6 @@ export function moneyCompact(v: number, currency = "INR", dp = 1): string {
   return c.startsWith(MINUS) ? MINUS + currencySymbol(currency) + c.slice(1) : currencySymbol(currency) + c;
 }
 
-/** Money in full for a tooltip: ₹12,50,000 or $12,400.50. */
-export function moneyFull(v: number, currency = "INR", dp = 0): string {
-  return sign(v) + currencySymbol(currency) + Math.abs(v).toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: dp, minimumFractionDigits: dp });
-}
-
 /** A percentage tick: 12%, −3.5%, +4% when signed. */
 export function pctTick(v: number, signed = false, dp = 1): string {
   return `${signed && v > 0 ? "+" : sign(v)}${trim(Math.abs(v).toFixed(dp))}%`;

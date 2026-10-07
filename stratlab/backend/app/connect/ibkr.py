@@ -9,7 +9,7 @@ import hashlib
 import re
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Callable
 from zoneinfo import ZoneInfo
 

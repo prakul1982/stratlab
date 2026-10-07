@@ -7,7 +7,6 @@ import hashlib
 import json
 import re
 from datetime import date, datetime, timedelta
-from html import escape
 
 from .. import email_kit as kit
 from ..ai_providers import AIError, complete, extract_json

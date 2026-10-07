@@ -399,7 +399,7 @@ def render(title: str, blocks: list[Block], footer: Footer, *, label: str = "", 
         f'border-top:1px solid {L["line"]};border-radius:0 0 16px 16px">{fb.html}</td></tr>'
         '</table><!--[if mso]></td></tr></table><![endif]-->'
         '</td></tr></table></body></html>')
-    head = [f"STRATLAB" + (f" | {meta}" if meta else ""), "", title, "=" * min(len(title), 60)]
+    head = ["STRATLAB" + (f" | {meta}" if meta else ""), "", title, "=" * min(len(title), 60)]
     text = head + ([summary] if summary else []) + [""] + [b.text for b in parts if b.text] + [fb.text]
     return html, "\n".join(text).replace("\n\n\n", "\n\n").strip() + "\n"
 

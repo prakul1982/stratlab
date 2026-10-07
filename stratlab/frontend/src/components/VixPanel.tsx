@@ -15,13 +15,6 @@ import { fmtDate, fmtDateTime } from "../lib/format";
 const vixTime = (iso: string | null | undefined): string | null => (iso && !Number.isNaN(new Date(iso).getTime()) ? fmtDateTime(iso, { year: false, tz: "Asia/Kolkata" }) : null);
 const short = (d: string) => fmtDate(d);
 
-/** The panel's data, read once per page. */
-export function useVix() {
-  const [v, setV] = useState<Vix | null | "error">(null);
-  useEffect(() => { api<Vix>("/trade/vix").then(setV).catch(() => setV("error")); }, []);
-  return v;
-}
-
 export function VixPanel() {
   const [v, setV] = useState<Vix | null>(null);
   const [error, setError] = useState<string | null>(null);
