@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, firstName, inrCompact, pct, signedInrCompact } from "../lib/format";
+import { asOf, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
 import { evDay } from "../lib/marketEvents";
 import { inWords, marketState } from "../lib/marketHours";
-import { MARKET_TILES, useComingUp, useMarketStrip, type Up } from "../lib/mine";
+import { MARKET_TILES, goldInr10g, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
 import { researchApi, useWatchlist, type Quote, type Region } from "../lib/research";
@@ -216,6 +216,7 @@ function MarketsCard() {
                 : (
                   <>
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
+                    {t.id === "gold" && series.usdinr && <span className="k-note">≈ {inr(goldInr10g(s.last, series.usdinr.last))} per 10 g</span>}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}</span>
                     <Spark values={s.values} tone={t.neutral ? "neutral" : s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month`} />
                   </>

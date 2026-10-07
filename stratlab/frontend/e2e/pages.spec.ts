@@ -705,7 +705,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   await expect(main.getByRole("link", { name: "Scans", exact: true })).toHaveCount(0);       // no catch-all "Scans" entry any more
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
-  await expect(foot.getByRole("button", { name: /^\d+ of \d+ markets open$/ })).toBeVisible();
+  await expect(foot.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ })).toBeVisible();
   await expect(foot.getByRole("button", { name: "Account menu, Pro plan" })).toBeVisible();
   expect((await foot.boundingBox())!.height, "the footer stays slim").toBeLessThanOrEqual(100);
   const scrolls = await side.evaluate((aside) => [aside, ...aside.querySelectorAll("*")].filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY)).map((el) => el.className));
@@ -800,7 +800,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   const side = await menu(page, phone);
-  const btn = side.getByRole("button", { name: /^\d+ of \d+ markets open$/ });
+  const btn = side.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ });
   const [, , total] = (await btn.innerText()).match(/(\d+) of (\d+)/)!.map(Number);
   await expect(btn).toHaveAttribute("aria-expanded", "false");
   const footBefore = (await side.locator(".side-foot").boundingBox())!.height;

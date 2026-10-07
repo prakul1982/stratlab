@@ -185,10 +185,12 @@ async function exercise(page: Page, chart: Locator, phone: boolean, key: string)
   await chart.getByRole("button", { name: "Exit full screen" }).click();
   await expect(chart).toHaveAttribute("data-full", "false");
 
-  // the PNG download
-  const download = page.waitForEvent("download");
-  await chart.getByRole("button", { name: "Download as PNG" }).click();
-  expect((await download).suggestedFilename()).toMatch(/\.png$/);
+  // the PNG download (a laptop's: a phone's chart keeps its top bar short, R1-080)
+  if (!phone) {
+    const download = page.waitForEvent("download");
+    await chart.getByRole("button", { name: "Download as PNG" }).click();
+    expect((await download).suggestedFilename()).toMatch(/\.png$/);
+  }
 
   // the table view
   await chart.getByRole("button", { name: "Table" }).click();
@@ -204,8 +206,9 @@ test("price chart on a company page: types, indicators, drawings, zoom, full scr
   const { chart, errors } = await open(page, "/research/IN/RELIANCE");
   expect(chunks.length, "the chart's code loads in its own file").toBe(1);
   await exercise(page, chart, phone, "IN:RELIANCE");
-  // timeframes: hourly candles, then scroll back until older ones load
-  await chart.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: "1 hour", exact: true }).click();
+  // timeframes: hourly candles, then scroll back until older ones load (a phone picks it from one box)
+  if (phone) await chart.getByRole("combobox", { name: "Timeframe" }).selectOption("1h");
+  else await chart.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: "1 hour", exact: true }).click();
   await expect(chart).toHaveAttribute("data-loaded", "1h", { timeout: 20_000 });
   await expect(chart).toHaveAttribute("data-more", "true");
   const n = await num(chart, "bars");

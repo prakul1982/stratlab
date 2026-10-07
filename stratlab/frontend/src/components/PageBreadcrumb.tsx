@@ -13,6 +13,9 @@ export function PageBreadcrumb() {
   const { pathname } = useLocation();
   const pins = usePins();
   if (pathname === MINE_HOME) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} />;
+  // every space's home starts the same way as My space: its one-word name (R1-028)
+  const home = (Object.keys(NAV) as (keyof typeof NAV)[]).find((k) => NAV[k].home === pathname);
+  if (home) return <Breadcrumb trail={[{ label: NAV[home].label, to: NAV[home].home }]} />;
   if (pathname === "/features") return <Breadcrumb trail={[{ label: "StratLab", to: "/" }]} page="All features" />;
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} page="Admin" />;
   if (PERSONAL[pathname]) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} page={PERSONAL[pathname]} />;

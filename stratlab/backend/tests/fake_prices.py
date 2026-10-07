@@ -16,6 +16,8 @@ LEVELS = {
     "AMBUJACEM": 600.0, "TVSMOTOR": 3400.0,
     # US: Apple near the fake company-data quote ($183.20, 52-week high $195.60), so its chart and header agree
     "AAPL": 183.0,
+    # the markets strip's other tiles: the S&P 500, the dollar in rupees and gold in dollars an ounce
+    "^GSPC": 6700.0, "USDINR=X": 88.7, "GC=F": 2650.0,
 }
 
 # the exchange's own names and broad sectors (its "macro" sector names for India) for the same companies, so the fake broker's instrument list, the screener's index

@@ -391,13 +391,15 @@ export function TaxReportPage() {
             </Card>
           )}
 
-          <Card>
-            <CardHead title="The set-off rules, in plain words" />
-            <ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
-            <h3 className="k-sub">How this report works</h3>
-            <ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul>
-            {!!rep.unit_notes?.length && <><h3 className="k-sub">ETFs, REITs, InvITs and gold bonds</h3>
-              <ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></>}
+          {/* the method is there for whoever wants it, folded, so the figures come first (R1-015) */}
+          <Card compact label="How this report works">
+            <Disclosure summary="The set-off rules, and how this report works">
+              <ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <h3 className="k-sub">How this report works</h3>
+              <ul className="k-list muted">{rep.notes.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              {!!rep.unit_notes?.length && <><h3 className="k-sub">ETFs, REITs, InvITs and gold bonds</h3>
+                <ul className="k-list muted" aria-label="ETF, REIT, InvIT and gold bond rules">{rep.unit_notes.map((r, i) => <li key={i}>{r}</li>)}</ul></>}
+            </Disclosure>
           </Card>
         </>
       )}

@@ -8,7 +8,8 @@ import { checksLine } from "../lib/tradeUi";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
-import { Badge, Card, CardHead, ConfirmDialog, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat } from "../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat, type Column } from "../components/kit";
+import { usePersisted } from "../lib/persist";
 import "./trade/trade.css";
 
 export interface LibEntry {
@@ -70,6 +71,8 @@ export function LibraryPage() {
   const [taking, setTaking] = useState<LibEntry | null>(null);
   const [again, setAgain] = useState(0);
   const phone = usePhone();
+  // a dense table to scan many at once, or the cards; remembered on this device (R1-026)
+  const [layout, setLayout] = usePersisted<"cards" | "table">("stratlab.library.view", "cards");
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -108,6 +111,16 @@ export function LibraryPage() {
     } catch (x) { fail(x); } finally { setBusy(null); }
   };
   const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
+  const signedPct = (n: number | null) => (n == null ? "–" : <span className={n > 0 ? "k-up" : n < 0 ? "k-down" : undefined}>{pct(n)}</span>);
+  const tableCols: Column<LibEntry>[] = [
+    { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{e.name}</b><span className="k-sub-line">{e.group ? e.group.name : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} · by {e.author}</span></> },
+    { key: "verdict", header: "Verdict", cell: (e) => <><VerdictBadge v={e.verdict.verdict} /><span className="k-sub-line">{checksLine(e.verdict.passed, e.verdict.total)}</span></> },
+    { key: "ret", header: "After costs", numeric: true, cell: (e) => signedPct(e.stats.ret) },
+    { key: "bh", header: "Buy and hold", numeric: true, cell: (e) => signedPct(e.stats.buy_hold) },
+    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => signedPct(e.stats.unseen) },
+    { key: "mdd", header: "Worst fall", numeric: true, cell: (e) => signedPct(e.stats.mdd) },
+    { key: "copy", header: "", action: true, cell: (e) => <button type="button" className="btn quiet sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${e.name}`}>{busy === e.id ? "Copying…" : "Copy"}</button> },
+  ];
   const filtered = !!(q || market || verdict || official);
 
   return (
@@ -122,6 +135,7 @@ export function LibraryPage() {
           <Select label="Verdict" value={verdict} onChange={setVerdict} options={VERDICTS.map(([value, label]) => ({ value, label }))} />
           <Seg label="Whose" options={[{ value: "all", label: "Everyone's" }, { value: "official", label: "StratLab's own" }]} value={official ? "official" : "all"} onChange={(v) => setOfficial(v === "official")} />
           <Seg label="Sort" options={[{ value: "best", label: "Best verdict" }, { value: "new", label: "Newest" }, { value: "copied", label: "Most copied" }]} value={sort} onChange={setSort} />
+          {!phone && <Seg label="View" options={[{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }]} value={layout} onChange={(v) => setLayout(v as "cards" | "table")} />}
         </div>
       </Card>
       {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
@@ -133,6 +147,11 @@ export function LibraryPage() {
         ) : (
           <>
             <span className="k-small k-muted">{total} strateg{total === 1 ? "y" : "ies"}</span>
+            {layout === "table" && !phone ? (
+              <Card label="Strategies">
+                <DataTable label="Strategies" rows={rows} rowKey={(e) => e.id} columns={tableCols} />
+              </Card>
+            ) : (
             <div className="k-cards">
               {rows.map((e) => (
                 <Card key={e.id} label={e.name}>
@@ -152,7 +171,8 @@ export function LibraryPage() {
                           <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
                         </div>
                         <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{checksLine(e.verdict.passed, e.verdict.total)}</span></div>
-                        {e.description && <p className={`k-small${phone ? " lib-oneline" : ""}`}>{e.description}</p>}
+                        {/* two lines of the description; the rest is a tap away in its title, so a card isn't a wall of text */}
+                        {e.description && <p className={`k-small ${phone ? "lib-oneline" : "lib-clamp"}`} title={e.description}>{e.description}</p>}
                         {phone ? (
                           <>
                             {miniStats(stats.filter(([k]) => k !== "Worst fall"))}
@@ -166,8 +186,8 @@ export function LibraryPage() {
                           </>
                         ) : (
                           <>
-                            <Rules s={e.strategy} />
                             {miniStats(stats)}
+                            <Disclosure summary="The rules"><Rules s={e.strategy} /></Disclosure>
                           </>
                         )}
                       </>
@@ -192,6 +212,7 @@ export function LibraryPage() {
                 </Card>
               ))}
             </div>
+            )}
           </>
         )}
       <p className="k-note">Published by StratLab users for research and paper trading. Past results don't predict future returns, and nothing here is investment advice.</p>

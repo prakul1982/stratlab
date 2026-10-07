@@ -38,6 +38,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(OPEN_KEY, NO_GROUPS);
   const pins = usePins();
+  // on a laptop the menu can fold away for wide tables, remembered on this device (R1-082); a phone has its drawer
+  const [slim, setSlim] = usePersisted<boolean>("stratlab.side.slim", false);
   const [tour, setTour] = useState(false);
   const [search, setSearch] = useState(false);
   useEffect(() => {
@@ -172,6 +174,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="side-brand">
           <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
           <button className="side-close" aria-label="Close menu" onClick={() => setOpen(false)}><Close size={18} /></button>
+          <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
         <SpaceSwitch space={space} onPick={goSpace} />
         {space === "invest" || (space === "mine" && focus === "invest")
@@ -197,7 +200,8 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="shell">
+    <div className={`shell${slim ? " slim" : ""}`}>
+      {slim && <button className="side-show" aria-label="Show the menu" title="Show the menu" onClick={() => setSlim(false)}><Menu /></button>}
       <header className="topbar">
         <button className="icon-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Menu /></button>
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>

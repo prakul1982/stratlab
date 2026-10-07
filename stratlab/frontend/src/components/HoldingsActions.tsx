@@ -21,8 +21,8 @@ export interface HoldingsActions {
 const perShare = (v: number) => `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
 const incomeCols: Column<IncomeLine>[] = [
-  { key: "stock", header: "Stock", rowHeader: true, cell: (d) => <Link className="link" to={`/research/IN/${encodeURIComponent(d.symbol)}`}><b>{d.symbol}</b></Link> },
-  { key: "label", header: "Dividend", cell: (d) => d.label },
+  // the dividend's name under the stock, so the ex-date fits a phone without a sideways swipe (R1-080)
+  { key: "stock", header: "Stock", rowHeader: true, wrap: true, cell: (d) => <><Link className="link" to={`/research/IN/${encodeURIComponent(d.symbol)}`}><b>{d.symbol}</b></Link><span className="k-sub-line">{d.label}</span></> },
   { key: "ex", header: "Ex-date", numeric: true, cell: (d) => exDay(d.ex_date, true) },
   { key: "ps", header: "A share", numeric: true, cell: (d) => perShare(d.amount) },
   { key: "qty", header: "Shares", numeric: true, cell: (d) => qtyText(Math.round(d.qty * 10000) / 10000) },
