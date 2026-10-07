@@ -7,13 +7,15 @@ import { LEGAL_PAGES } from "../components/LegalLinks";
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
 const BUSINESS = {
   name: CFG.BUSINESS_NAME || "StratLab",
-  email: CFG.CONTACT_EMAIL || "info@stratlab.studio",
+  email: CFG.CONTACT_EMAIL || "support@stratlab.studio",
+  billing: CFG.BILLING_EMAIL || "billing@stratlab.studio",
   privacy: CFG.PRIVACY_EMAIL || "privacy@stratlab.studio",
   address: CFG.BUSINESS_ADDRESS || "",
   updated: "26 September 2026",
 };
 
 const Mail = () => <a className="link" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>;
+const BillingMail = () => <a className="link" href={`mailto:${BUSINESS.billing}`}>{BUSINESS.billing}</a>;
 const PrivacyMail = () => <a className="link" href={`mailto:${BUSINESS.privacy}`}>{BUSINESS.privacy}</a>;
 
 function Terms() {
@@ -103,7 +105,7 @@ function Refunds() {
       <ul>
         <li>Because you can use a paid plan straight away and cancel any time before it renews, payments for a period that has started aren't refunded.</li>
         <li>We refund in full if you were charged twice, charged after cancelling, or charged but your plan didn't activate and we can't fix it.</li>
-        <li>To ask for a refund, email <Mail /> from your account's email with the payment date. We reply within 2 working days. Approved refunds go back to the original payment method within 5–7 working days (your bank may take longer to show it).</li>
+        <li>To ask for a refund, email <BillingMail /> from your account's email with the payment date. We reply within 2 working days. Approved refunds go back to the original payment method within 5–7 working days (your bank may take longer to show it).</li>
       </ul>
       <h2 className="h3">Delivery</h2>
       <p>StratLab is an online service: nothing is shipped. A paid plan is active on your account as soon as the payment goes through, usually within a minute.</p>
@@ -116,11 +118,13 @@ function Contact() {
     <>
       <p>We're happy to help with your account, billing, refunds, privacy requests or anything else.</p>
       <ul>
-        <li><b>Email:</b> <Mail />. We reply within 2 working days.</li>
+        <li><b>Help and questions:</b> <Mail />. We reply within 2 working days.</li>
+        <li><b>Payments, invoices and refunds:</b> <BillingMail /></li>
+        <li><b>Privacy and your data:</b> <PrivacyMail /></li>
         <li><b>Business:</b> {BUSINESS.name}</li>
         {BUSINESS.address && <li><b>Address:</b> {BUSINESS.address}</li>}
       </ul>
-      <p className="small muted">For billing questions, include your account's email and the payment date so we can find it quickly.</p>
+      <p className="small muted">For billing questions, write to <BillingMail /> with your account's email and the payment date so we can find it quickly.</p>
     </>
   );
 }

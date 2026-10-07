@@ -77,7 +77,7 @@ def test_email_goes_over_https_through_resend_when_its_key_is_set(monkeypatch):
     url, kw = calls[0]
     assert url == "https://api.resend.com/emails" and kw["headers"]["Authorization"] == "Bearer re_test"
     assert kw["json"] == {"from": alerts.RESEND_FROM, "to": ["owner@example.com"], "subject": "Subject", "text": "Body",
-                          "reply_to": "info@stratlab.studio"}      # replies reach a real inbox
+                          "reply_to": "support@stratlab.studio"}      # replies reach a real inbox
     import pytest
     with pytest.raises(RuntimeError, match="own address"):
         alerts.send_email("someone@example.com", "s", "b")
@@ -97,4 +97,4 @@ def test_brevo_emails_carry_a_reply_to_a_real_inbox(monkeypatch):
     monkeypatch.setattr(alerts.httpx, "post", lambda url, **kw: sent.update(kw["json"]) or R())
     alerts.send_email("owner@example.com", "Subject", "Body")
     assert sent["sender"]["email"] == "hello@stratlab.studio"
-    assert sent["replyTo"] == {"email": "info@stratlab.studio"}
+    assert sent["replyTo"] == {"email": "support@stratlab.studio"}
