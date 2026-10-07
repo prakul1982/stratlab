@@ -111,7 +111,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     <div className="k-page">
       <div className="k-spread k-session-head">
         <div className="k-stack k-tight">
-          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
+          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true, true)}</span>
           <div className="k-row">
             <SurvBadges region={survRegion(snap.instrument)} symbol={snap.instrument.symbol} />
             <FoBadges region={survRegion(snap.instrument)} symbol={foSymbol(snap.instrument)} />
@@ -211,7 +211,7 @@ export function PaperPage() {
   let sub = me ? `${me.plan_info.name} plan · ${me.live_running} of ${me.live_limit} running` : "";
   if (me?.plan === "free" && me.trial) {
     sub = !me.trial.started ? "Free trial: 5 market days, starting with your first session"
-      : me.trial.active ? `Free trial until ${fmtDateTime(me.trial.ends_at, { year: false })}`
+      : me.trial.active ? `Free trial until ${fmtDateTime(me.trial.ends_at, { year: false, zone: true })}`
         : "Free trial ended · upgrade to keep paper trading";
   }
 

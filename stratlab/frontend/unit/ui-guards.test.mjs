@@ -53,6 +53,11 @@ test("no native confirm(): ask in the page with ConfirmDialog", () => {
   assert.deepEqual(bad, [], bad.join(", "));
 });
 
+test("no browser time box (it shows 02:45 PM in some locales): use TimeInput, 24-hour with its zone", () => {
+  const bad = pages.filter((p) => /\btype=(?:"time"|\{\s*["']time["']\s*\})/.test(readFileSync(join(SRC, p), "utf8")));
+  assert.deepEqual(bad, [], bad.join(", "));
+});
+
 test('no old ".card" or ".seg" class names: use Card and Seg from the kit', () => {
   const bad = pages.filter((p) => classTokens(readFileSync(join(SRC, p), "utf8")).some((t) => t === "card" || t === "seg"));
   assert.deepEqual(bad, [], bad.join(", "));

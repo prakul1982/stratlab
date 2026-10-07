@@ -196,7 +196,7 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
   const [again, setAgain] = useState(0);
   useEffect(() => { setRows(null); api<{ pcr: PcrRow[] }>("/trade/positioning/pcr").then((d) => setRows(d.pcr)).catch(() => setRows("error")); }, [again]);
   const cols: Column<PcrRow>[] = [
-    { key: "name", header: <>Index <span className="k-note">· expiry</span></>, rowHeader: true, cell: (r) => <>{r.name}{r.source && <span className="k-sub-line" data-testid="pcr-expiry">{r.expiry ? shortDay(r.expiry) : "–"}</span>}</> },
+    { key: "name", header: <>Index <span className="k-note">· expiry</span></>, rowHeader: true, cell: (r) => <>{r.name}{r.source && <span className="k-sub-line" data-testid="pcr-expiry">{r.expiry ? `${shortDay(r.expiry)}${r.cycle ? ` · ${r.cycle}` : ""}` : "–"}</span>}</> },
     { key: "oi", header: "PCR (OI)", numeric: true, cell: (r) => ratio(r.pcr_oi) },
     { key: "near", header: "Near the money", numeric: true, cell: (r) => ratio(r.pcr_near) },
     { key: "vol", header: "PCR (volume)", numeric: true, cell: (r) => ratio(r.pcr_vol) },

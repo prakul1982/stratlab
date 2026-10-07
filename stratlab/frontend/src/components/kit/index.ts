@@ -7,6 +7,8 @@ export { Seg, type Choice } from "./Seg";
 export { ChipBar, type CustomUnit, type CustomCheck } from "./ChipBar";
 export { FormGrid, Field, FieldGroup, FormActions, Select } from "./Form";
 export { DateInput, DateField } from "./DateInput";
+export { TimeInput } from "./TimeInput";
+export { Range } from "./Range";
 export { StockPicker } from "./StockPicker";
 export { Suggest, type SuggestItem } from "./Suggest";
 export { TilePicker, type Tile, type TileGroup } from "./TilePicker";

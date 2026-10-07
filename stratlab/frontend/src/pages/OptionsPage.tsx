@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, price, fmtDate } from "../lib/format";
+import { money, price, fmtDate, IST, tzLabel } from "../lib/format";
 import { HELP } from "../lib/help";
 import { blankOptions, IMPORTED, legName, legRule, payoff, PICKS, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
@@ -18,6 +18,7 @@ import { FoBadges } from "../components/FoBadges";
 import { foSymbol } from "../lib/foChanges";
 import {
   Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, Disclosure, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Skeleton,
+  TimeInput,
   Stat, StatRow, TilePicker, type Column, type TileGroup,
 } from "../components/kit";
 import "./trade/trade.css";
@@ -63,9 +64,12 @@ function InNum({ label, value, onChange, min = 0, max, step = 1 }: { label: stri
   );
 }
 
-/** A time box inside a sentence. */
+/** Every exchange the builder trades on (NSE, BSE, MCX, NSE currency) keeps India's time: its times are IST. */
+const ZONE = tzLabel(IST);
+
+/** A time box inside a sentence: 24-hour, in the exchange's time, with the zone beside it. */
 function InTime({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return <input className="k-input k-in time" aria-label={label} type="time" value={value} onChange={(e) => e.target.value && onChange(e.target.value)} />;
+  return <TimeInput small label={label} zone={ZONE} value={value} onChange={onChange} />;
 }
 
 /** How a leg's strike is picked, and the number(s) the rule needs. */
@@ -412,7 +416,7 @@ export function OptionsPage() {
   const exp = und?.expiries?.[s.expiry === "next" ? 1 : 0];
   const stopWord = r.stopType === "none" ? "" : `, stopping out if the loss reaches ${r.stopType === "amount" ? inr(r.stop) : `${r.stop}% of the premium`}`;
   const tgtWord = r.tgtType === "none" ? "" : ` and taking profit at ${r.tgtType === "amount" ? inr(r.tgt) : `${r.tgt}% of the premium`}`;
-  const words = `${s.name}: ${legsText}, on ${expiryNames[s.expiry] ?? `the ${s.expiry} expiry`}. ${s.signal ? `Enters whenever "${s.signal.name}" signals a trade, from ${t.entry} to ${t.lastEntry}` : `Enters at ${t.entry}, no later than ${t.lastEntry}`}, and exits by ${t.squareoff}${stopWord}${tgtWord}.`;
+  const words = `${s.name}: ${legsText}, on ${expiryNames[s.expiry] ?? `the ${s.expiry} expiry`}. ${s.signal ? `Enters whenever "${s.signal.name}" signals a trade, from ${t.entry} to ${t.lastEntry} ${ZONE}` : `Enters at ${t.entry} ${ZONE}, no later than ${t.lastEntry} ${ZONE}`}, and exits by ${t.squareoff} ${ZONE}${stopWord}${tgtWord}.`;
   const tileGroups: TileGroup[] = [
     ...TILE_GROUPS.map((g) => ({ title: g.title, tiles: g.ids.map((id) => { const x = STRUCTURES.find((y) => y.id === id)!; return { value: id, title: x.name, sub: x.hint }; }) })),
     { title: "Your own", tiles: [{ value: "custom", title: "Custom legs", sub: "Choose each leg yourself" }] },

@@ -2,14 +2,17 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, pct, price, safeHref } from "../lib/format";
+import { asOf, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { Info } from "../components/ui";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
-import { Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, DataTable, DateField, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager, PlanNote, Seg, Select, Skeleton, Stat, StatRow } from "../components/kit";
+import {
+  Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, DataTable, DateField, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg,
+  Pager, Range, Select, Skeleton, Stat, StatRow,
+} from "../components/kit";
 
 /* ---------- Trend scan: Stage 2 + Supertrend, and the preset rule sets (Basic and up) ---------- */
 interface ScanRow {
@@ -99,7 +102,7 @@ export function ScanPage() {
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/scan")} title="Trend scan"
         lede="Which stocks match a chart rule right now. Each match is a fact about the chart on a date, not advice."
-        asOf={preset?.as_of} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend." infoLabel="Which rules" />
+        asOf={preset?.as_of} asOfTz={marketTz(region)} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend." infoLabel="Which rules" />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       {!pro && <PlanNote>The trend scans and the Stage 2 + Supertrend alert are on the Basic plan.</PlanNote>}
       <Card>
@@ -133,10 +136,10 @@ export function ScanPage() {
       {preset && !busy && (
         <Card>
           <CardHead title={`${preset.scan_name}: ${preset.name}`} info={preset.stored
-            ? `Worked out once a day after the close from each stock's daily candles${preset.updated_at ? `; last read ${asOf(preset.updated_at)}` : ""}.`
+            ? `Worked out once a day after the close from each stock's daily candles${preset.updated_at ? `; last read ${asOf(preset.updated_at, { tz: marketTz(region) })}` : ""}.`
             : "Read now from each stock's daily candles."} />
           <StatRow>
-            <Stat label="Match the rule" value={String(preset.matches)} note={preset.as_of ? `as of ${asOf(preset.as_of)}` : undefined} />
+            <Stat label="Match the rule" value={String(preset.matches)} note={preset.as_of ? `as of ${asOf(preset.as_of, { tz: marketTz(region) })}` : undefined} />
             <Stat label="Stocks checked" value={String(preset.checked)} note={preset.stored ? "read after the close" : "read just now"} />
           </StatRow>
           <DataTable label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
@@ -246,13 +249,14 @@ export function RotationPage() {
     if (next.has(r.id)) { next.delete(r.id); if (focus === r.id) setFocus(null); } else next.add(r.id);
     setPicked(next);
   };
-  const names = (q: Quadrant) => all.filter((r) => r.quadrant === q).map((r) => r.name);
-  const entered = all.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
+  // the summary reads the chart: the same ones as are drawn, so its counts add up to "n of N on the chart"
+  const names = (q: Quadrant) => rows.filter((r) => r.quadrant === q).map((r) => r.name);
+  const entered = rows.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
   const unit = interval === "weekly" ? "week" : "day";
   const few = (xs: string[], n = 5) => !xs.length ? "none" : xs.length <= n + 1 ? xs.join(", ") : `${xs.slice(0, n).join(", ")} and ${xs.length - n} more`;
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of} asOfLabel="Closes up to"
+      <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of} asOfLabel="Closes up to" asOfTz={marketTz(region)}
         lede="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} /></div>
       <Card>
@@ -269,13 +273,8 @@ export function RotationPage() {
           <FieldGroup label="Candle size">
             <Seg label="Candle size" value={interval} onChange={(v) => setIv(v as "weekly" | "daily")} options={[{ value: "weekly", label: "Weekly" }, { value: "daily", label: "Daily" }]} />
           </FieldGroup>
-          <Field label="Trail">
-            {(id) => (
-              <div className="k-row">
-                <input id={id} type="range" min={1} max={12} value={tail} onChange={(e) => setTail(+e.target.value)} aria-label="Trail length" />
-                <span className="k-small">{tail} {unit}{tail === 1 ? "" : "s"}</span>
-              </div>
-            )}
+          <Field label="Trail" info={`How many ${unit}s of each one's path to draw behind its dot.`} infoLabel="About the trail">
+            {(id) => <Range id={id} min={1} max={12} value={tail} onChange={setTail} valueText={`${tail} ${unit}${tail === 1 ? "" : "s"}`} testId="rot-trail" />}
           </Field>
           <FormActions>
             <button type="button" className="btn quiet sm" disabled={!out || busy || step !== null || (out?.tail ?? 1) < 2} onClick={animate}>{step !== null ? "Playing…" : "Animate"}</button>
@@ -290,12 +289,12 @@ export function RotationPage() {
           actions={<div className="rot-legend" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
           footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one.</p> : undefined}>
           <div className="k-stack">
-            <span className="k-small k-muted">{rows.length} of {all.length} shown · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${out.as_of}` : ""}{step !== null ? ` · replaying ${unit} ${step} of ${out.tail}` : ""}</span>
-            {all.length > 0 && (
+            <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${unit} ${step} of ${out.tail}` : ""}</span>
+            {rows.length > 0 && (
               <div className="rot-read">
                 {([["leading", `stronger than ${drilled && out.parent ? out.parent.name : "the market"} and still gaining`], ["improving", "weaker, but picking up"],
                    ["weakening", "stronger, but losing pace"], ["lagging", "weaker and still slipping"]] as [Quadrant, string][]).map(([q, says]) => (
-                  <div key={q}><QuadrantTag q={q} /><span className="k-muted k-small">{says}</span><span className="k-small">{few(names(q))}</span></div>
+                  <div key={q}><QuadrantTag q={q} /><span className="k-muted k-small">{says}</span><span className="k-small" data-testid={`rot-${q}`}>{names(q).length ? `${names(q).length} · ${few(names(q))}` : "none"}</span></div>
                 ))}
                 {entered.length > 0 && <p className="k-small">Moved into Leading over the last {out.tail} {unit}s: <b>{few(entered)}</b></p>}
               </div>
@@ -449,7 +448,7 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
     <>
       <Card>
         <CardHead title={scope === "mine" ? "Your watchlist's red flags" : "Red flags across companies"}
-          info={data ? <>{data.covers}. {data.as_of ? `Read through ${asOf(data.as_of)}. ` : ""}Filings are read once a day in the evening, so today's may not be in yet.</> : undefined} />
+          info={data ? <>{data.covers}. {data.as_of ? `Read through ${asOf(data.as_of, { tz: marketTz(region) })}. ` : ""}Filings are read once a day in the evening, so today's may not be in yet.</> : undefined} />
         <FieldGroup label="Type of flag" wide>
           <ChipBar label="Flag types" value={flag} onChange={(v) => setParam({ flag: v || null })}
             options={[{ value: "", label: "All types" }, ...(data?.types ?? []).map((t) => ({ value: t.id, label: `${t.label} · ${t.count}` }))]} />

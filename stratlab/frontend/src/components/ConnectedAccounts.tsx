@@ -191,7 +191,7 @@ function ZerodhaCard({ c, set }: P) {
   };
   return (
     <Card id="zerodha" label="Zerodha">
-      <CardHead title="Zerodha" info="Log in to Zerodha once a day and your holdings and today's buys are read into My Holdings. Zerodha ends every login at about 6 am, so tomorrow you tap once more. StratLab never sees your Zerodha password."
+      <CardHead title="Zerodha" info="Log in to Zerodha once a day and your holdings and today's buys are read into My Holdings. Zerodha ends every login at about 06:00 IST, so tomorrow you tap once more. StratLab never sees your Zerodha password."
         actions={<Badge tone={k.connected && k.live ? "ok" : k.connected ? "warn" : "plain"}>{!k.available ? "Not open yet" : k.connected ? (k.live ? "Connected" : "Log in again") : "Not connected"}</Badge>} />
       {!k.available && <p className="k-small k-muted">Zerodha login isn't open yet. Upload your Zerodha holdings file in My Holdings meanwhile.</p>}
       {k.available && !k.connected && <FormActions><button type="button" className="btn" disabled={busy} onClick={() => void login()}>Connect Zerodha</button></FormActions>}

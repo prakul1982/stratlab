@@ -54,7 +54,7 @@ export const HELP = {
   unrealised: "Profit or loss on the position you're still holding, at the latest price.",
   realised: "Profit or loss from trades that have already closed.",
   cash: "Fake money not currently in a trade.",
-  feed: "Whether live prices are arriving. Indian markets trade 9:15 am to 3:30 pm IST on weekdays, except exchange holidays (F&O stocks trade continuously to 3:15 pm, then close through an auction; futures and options trade to 3:40 pm); crypto trades around the clock.",
+  feed: "Whether live prices are arriving. Indian markets trade 09:15 to 15:30 IST on weekdays, except exchange holidays (F&O stocks trade continuously to 15:15, then close through an auction; futures and options trade to 15:40); crypto trades around the clock.",
   connection: "Checks your sign-in, the StratLab server, each market's live data and the AI builder. Run it if something isn't loading.",
   alerts: "Get a Telegram message or email whenever a paper trading session buys or sells. The daily report comes a few minutes after each market closes (15:45 in India, 23:55 UTC for crypto) and covers every session you run in that market.",
   experimentsQuota: "Each experiment is one backtest plus its honesty checks. Your plan includes a number of them each month.",

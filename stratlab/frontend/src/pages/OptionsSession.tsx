@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, price, when } from "../lib/format";
+import { money, price, tzLabel, when } from "../lib/format";
 import { upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
@@ -81,7 +81,7 @@ export function OptionsSession() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Practise" title={snap.name}
-        lede={<><Link to="/options" className="link">← Options builder</Link> · {snap.instrument.underlying} options · {snap.instrument.exchange}{snap.expiry ? ` · expiry ${snap.expiry}` : ""} · started {t(snap.started_at)}</>}
+        lede={<><Link to="/options" className="link">← Options builder</Link> · {snap.instrument.underlying} options · {snap.instrument.exchange}{snap.expiry ? ` · expiry ${snap.expiry}` : ""} · started {when(snap.started_at, TZ, true, true)}</>}
         actions={<>
           {running && <span className="k-row"><Badge tone={feed.tone}>{feed.text}</Badge><Info>{HELP.optFeed}</Info></span>}
           {running ? <button type="button" className="btn danger" onClick={() => setAsk("stop")}>Stop session</button>
@@ -133,7 +133,7 @@ export function OptionsSession() {
         <CardHead level={3} title="Today" actions={snap.spot != null ? <span className="k-small">{snap.instrument.underlying} {price(snap.spot, "INR")}</span> : undefined} />
         {!p ? <p className="k-small k-muted">{flatLine(snap, today.length)}</p> : (
           <>
-            <p className="k-small k-muted">Open since {t(p.opened)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"} {inr(Math.abs(p.credit))}.
+            <p className="k-small k-muted">Open since {when(p.opened, TZ, true, true)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"} {inr(Math.abs(p.credit))}.
               {" "}Best {inr(p.best)}, worst {inr(p.worst)} so far.{p.rolls ? ` Re-centred ${p.rolls} time${p.rolls === 1 ? "" : "s"}.` : ""} Costs so far {inr(p.costs)} over {p.orders} orders.</p>
             <DataTable label="Open legs" columns={legCols} rows={snap.legs} rowKey={(l) => l.sym + l.side + l.entry} rowAttrs={(l): Record<string, string> => (l.open ? {} : { "data-closed": "1" })} />
             <Earlier label="Orders in this trade" count={openOrders.length} className="in-card">
@@ -150,7 +150,7 @@ export function OptionsSession() {
         {skips.length > 0 && (
           <Earlier label="Entries the India VIX filter held back" count={skips.length} className="in-card">
             <ul className="k-list muted" data-testid="vix-skips">
-              {skips.map((e) => <li key={e.t}>{t(e.t)}: {e.why}</li>)}
+              {skips.map((e) => <li key={e.t}>{when(e.t, TZ, true, true)}: {e.why}</li>)}
             </ul>
           </Earlier>
         )}
@@ -242,10 +242,10 @@ function SessionModel({ snap }: { snap: OptionSnapshot }) {
 type Trade = OptionSnapshot["trades"][number];
 type OrderEvent = OptionSnapshot["events"][number];
 
-/** "05 Oct, 09:30–11:30", or both dates when a trade was held overnight. */
+/** "5 Oct, 09:30–11:30 IST", or both dates when a trade was held overnight. */
 function span(x: Trade): string {
   const a = t(x.opened), b = t(x.closed), [da] = a.split(", "), [db, tb] = b.split(", ");
-  return da === db ? `${a}–${tb}` : `${a} → ${b}`;
+  return `${da === db ? `${a}–${tb}` : `${a} → ${b}`} ${tzLabel(TZ)}`;
 }
 
 /** Closed trades, newest first, one line each; tapping one opens its orders under it. */

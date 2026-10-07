@@ -1,6 +1,6 @@
 /* Derivatives positioning (Trade): the shapes the API sends and the few words and number formats the page and its
  * cards share. Facts only: what was open or traded, never what it might mean. */
-import { fmtDate } from "./format";
+import { fmtDate, fmtDateTime, IST } from "./format";
 
 export type PartStatus = { status: "ok" | "pending" | "none"; as_of: string | null; expected: string | null; today?: "pending";
   error?: string | null; checked?: string | null; reason?: string | null };
@@ -9,7 +9,7 @@ export type PartStatus = { status: "ok" | "pending" | "none"; as_of: string | nu
 export type PRow = { id: "client" | "dii" | "fii" | "pro" | "total"; label: string } & Record<string, number | string | null | undefined>;
 
 export type Flow = { buy: number | null; sell: number | null; net: number | null };
-export type PcrRow = { name: string; exchange: string; expiry?: string; pcr_oi?: number | null; pcr_vol?: number | null; pcr_near?: number | null;
+export type PcrRow = { name: string; exchange: string; expiry?: string; cycle?: "weekly" | "monthly" | null; pcr_oi?: number | null; pcr_vol?: number | null; pcr_near?: number | null;
   spot?: number | null; source: "live" | "recorded" | null; as_of?: string };
 
 /** How many days are stored: the first and the last. */
@@ -80,19 +80,19 @@ export function dayName(iso: string | null | undefined): string {
   const s = fmtDate(iso.slice(0, 10));
   return s === "–" ? iso : s;
 }
-/** A recording's time in India, whatever the reader's own zone: "1 Oct, 3:25 pm IST". */
+/** A recording's time in India, whatever the reader's own zone: "1 Oct, 15:25 IST". */
 export function istTime(iso: string | null | undefined): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : `${d.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })} IST`;
+  const s = fmtDateTime(iso, { tz: IST, year: false, zone: true });
+  return s === "–" ? "" : s;
 }
 export const shortDay = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });
 
 /** The status line for one of the exchange's daily numbers. */
 export function statusLine(s: PartStatus, what: string): string {
-  if (s.status === "none") return `No ${what} stored yet. ${s.reason ?? "The exchange publishes them each trading evening, usually between 6:30 and 8 pm."}`;
+  if (s.status === "none") return `No ${what} stored yet. ${s.reason ?? "The exchange publishes them each trading evening, usually between 18:30 and 20:00 IST."}`;
   const base = `As of ${dayName(s.as_of)}.`;
   if (s.status === "pending") return `${base} ${s.reason ?? `${dayName(s.expected)}'s ${what} aren't published yet.`}`;
-  if (s.today === "pending") return `${base} Today's ${what} aren't published yet: the exchange usually puts them out between 6:30 and 8 pm.`;
+  if (s.today === "pending") return `${base} Today's ${what} aren't published yet: the exchange usually puts them out between 18:30 and 20:00 IST.`;
   return base;
 }

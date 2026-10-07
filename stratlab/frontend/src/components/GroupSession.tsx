@@ -64,7 +64,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
     <div className="k-page">
       <div className="k-spread k-session-head">
         <div className="k-stack k-tight">
-          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
+          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true, true)}</span>
           <h2 className="k-session-name">{snap.name}</h2>
         </div>
         <div className="k-row">

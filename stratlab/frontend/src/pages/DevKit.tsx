@@ -6,7 +6,7 @@ import { LineChart } from "../components/Charts";
 import { Loading } from "../components/ui";
 import {
   Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, HealthGrid, HealthTile, LinkCard, Pager, StatusList, StatusRow, PageHeader, ResultBlock, Seg, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
-  TilePicker, type TileGroup,
+  Range, TilePicker, TimeInput, type TileGroup,
   Coachmark,
 } from "../components/kit";
 
@@ -46,6 +46,8 @@ function Body() {
   const [freq, setFreq] = useState("daily");
   const [tf, setTf] = useState("1 day");
   const [tile, setTile] = useState<string | null>("fd");
+  const [clock, setClock] = useState("09:30");
+  const [trail, setTrail] = useState(4);
   const [pg, setPg] = useState(2);
   const [sym, setSym] = useState("");
   const [coach, setCoach] = useState(false);
@@ -114,6 +116,8 @@ function Body() {
             <Field label="A label that is much too long to fit on one line of its box" placeholder="Truncates, never wraps" />
             <Field label="Frequency">{(id) => <select id={id} className="k-input" defaultValue="m"><option value="m">Monthly</option><option value="q">Quarterly</option></select>}</Field>
             <Field label="Note" optional wide placeholder="Spans the row" />
+            <Field label="Enter at" info="TimeInput: 24-hour, with the exchange's zone beside the box.">{(id) => <TimeInput id={id} zone="IST" value={clock} onChange={setClock} />}</Field>
+            <Field label="Trail" info="Range: the kit's slider, its value in words beside it.">{(id) => <Range id={id} min={1} max={12} value={trail} onChange={setTrail} valueText={`${trail} week${trail === 1 ? "" : "s"}`} />}</Field>
             <FormActions><button className="btn">Work it out</button><span className="k-small k-muted">Arithmetic on the numbers you enter, not advice.</span></FormActions>
           </FormGrid>
           <ResultBlock label="Holding for 30 days costs" big="₹2,812" note="11.25% of your own money · ₹93.75 a day in interest"
