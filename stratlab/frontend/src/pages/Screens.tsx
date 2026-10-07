@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { CRORE, inrCompact, pct, price } from "../lib/format";
+import { marketTz, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { REGION_NAME, bigMoney, useRegion, type Region } from "../lib/research";
+import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import {
   NO_FILTERS, conditionCount, screensApi, type Bound, type Filters, type RangeId, type SavedPage, type SavedScreen,
   type ScreenMeta, type ScreenResult, type ScreenRow,
@@ -20,8 +20,10 @@ type Draft = Partial<Record<RangeId, { min: string; max: string }>>;
 type Col = { id: keyof ScreenRow; label: string; short?: string; cell: (r: ScreenRow, region: Region) => string; india?: boolean; text?: boolean };
 
 const num = (v: number | null, dp = 1, unit = "") => (v == null ? "–" : `${v.toFixed(dp)}${unit}`);
-/** A market value: Indian figures arrive in crore, US ones in millions of dollars. */
-const cap = (v: number | null, region: Region) => (v == null ? "–" : region === "IN" ? inrCompact(v * CRORE) : bigMoney(v * 1e6, "USD"));
+/** A market value in one unit down the whole column, so values compare at a glance: Indian figures (they arrive in
+ * crore) as whole crore with Indian grouping ("₹7,35,120 cr"), US ones (millions of dollars) in billions. */
+const cap = (v: number | null, region: Region) => (v == null ? "–" : region === "IN"
+  ? `₹${Math.round(v).toLocaleString("en-IN")} cr` : `$${(v / 1e3).toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} bn`);
 
 const COLS: Col[] = [
   { id: "name", label: "Company", cell: (r) => r.name, text: true },
@@ -89,7 +91,7 @@ export function ScreensPage() {
   const [weekly, setWeekly] = useState(false);
   const [saving, setSaving] = useState(false);
   // on a phone the filters start folded, so the table is in view; one tap opens them
-  const [showFilters, setShowFilters] = useState(() => typeof matchMedia !== "function" || matchMedia("(min-width: 1001px)").matches);
+  const [showFilters, setShowFilters] = useState(() => typeof matchMedia !== "function" || matchMedia("(min-width: 1361px)").matches);
   const seq = useRef(0);
 
   const { ranges, bad } = useMemo(() => fromDraft(draft), [draft]);
@@ -153,7 +155,7 @@ export function ScreensPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel="Prices as of"
+      <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)}
         info={out?.index_at ? <>List gathered as of {out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
         lede="Pick the conditions; see every company that meets them. Nothing here ranks or scores companies: the list is alphabetical unless you sort by a column." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pickRegion} /></div>
@@ -241,6 +243,7 @@ export function ScreensPage() {
               actions={<>
                 <Select label="Sort by" small value={sort} onChange={(v) => { setSort(v); setDesc(false); }} options={cols.map((c) => ({ value: c.id, label: c.short ?? c.label }))} />
                 <button className="btn quiet sm" onClick={() => setDesc((d) => !d)}>{desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button></>} />
+            {!out && !error && <div className="screens-wait"><Skeleton label="Finding the companies" lines={8} /></div>}
             {error && <ErrorState title="The companies couldn't be read" action={{ label: "Try again", onClick: () => run(0) }}>{error}</ErrorState>}
             {out && out.indexed === 0 && <EmptyState title="Still gathering company numbers">StratLab is still gathering company numbers for {REGION_NAME[region]}. Check back in a little while.</EmptyState>}
             {out && out.indexed > 0 && out.total === 0 && <EmptyState title="No company meets every condition.">Try widening one of them.</EmptyState>}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { XYChart, type XYChartProps } from "./chart/XYChart";
 import { ChartTip } from "./chart/parts";
+import { fall } from "../lib/format";
 
 /* The app's charts. Everything that plots values over time or across prices is drawn by chart/XYChart (crosshair and
  * tooltip, zoom and pan, ranges, legends, linked charts, table view); this file keeps the older entry points and the
@@ -75,17 +76,18 @@ export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [numb
 }
 
 /* Where your drawdown sits among 1,000 reshuffles. */
+
 export function DrawdownBand({ yours, p95, worst }: { yours: number; p95: number; worst: number }) {
   const max = Math.max(worst, yours, 1) * 1.05;
   const X = (v: number) => 8 + (v / max) * 264;
   return (
-    <svg className="ch-svg" viewBox="0 0 280 64" width="100%" role="img" aria-label={`Your drawdown ${yours.toFixed(0)}%, 95% of reshuffles under ${p95.toFixed(0)}%, worst ${worst.toFixed(0)}%`}>
+    <svg className="ch-svg" viewBox="0 0 280 64" width="100%" role="img" aria-label={`Your worst fall ${fall(yours)}, 95% of reshuffles no deeper than ${fall(p95)}, deepest ${fall(worst)}`}>
       <line x1={8} y1={30} x2={272} y2={30} stroke="var(--line)" strokeWidth={10} strokeLinecap="round" />
       <line x1={X(yours)} y1={30} x2={X(p95)} y2={30} stroke="var(--orange-soft)" strokeWidth={10} />
       <line x1={X(yours)} y1={16} x2={X(yours)} y2={44} stroke="var(--ink)" strokeWidth={2} />
       <circle cx={X(worst)} cy={30} r={5} fill="var(--orange)" stroke="var(--card)" strokeWidth={2} />
-      <text className="ch-tick strong" x={Math.max(30, X(yours))} y={60} textAnchor="middle">yours −{yours.toFixed(0)}%</text>
-      <text className="ch-tick strong" x={272} y={12} textAnchor="end">worst −{worst.toFixed(0)}%</text>
+      <text className="ch-tick strong" x={Math.max(30, X(yours))} y={60} textAnchor="middle">yours {fall(yours)}</text>
+      <text className="ch-tick strong" x={272} y={12} textAnchor="end">worst {fall(worst)}</text>
       <text className="ch-tick" x={8} y={12}>0%</text>
     </svg>
   );

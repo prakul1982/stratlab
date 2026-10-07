@@ -90,17 +90,14 @@ def chain(spot: float, sigma: float, expiry: str, at: datetime, gap: float = 50,
 
 
 def record_days(add, name: str, days: list[date], spot: float = 25000.0, gap: float = 50, sigmas: list[float] | None = None):
-    """Save the closing recordings (15:25 India time) of the days given, current and next weekly expiry, through
-    `add(row)` (db.add_option_snapshot)."""
+    """Save the closing recordings (15:25 India time) of the days given, the current and next expiry by the exchange's
+    rule (weekly for NIFTY and SENSEX, monthly for the other indices: app/data/expiries.py), through `add(row)`
+    (db.add_option_snapshot)."""
+    from app.data.expiries import rule_expiries
     for i, d in enumerate(days):
         sigma = (sigmas or [])[i] if sigmas else 0.11 + 0.04 * ((i * 7) % 10) / 10
         at = datetime.combine(d, dtime(15, 25), P.IST)
-        exps = []
-        e = d
-        while len(exps) < 2:
-            if e.weekday() == 1:
-                exps.append(e.isoformat())
-            e += timedelta(days=1)
+        exps = [e.isoformat() for e in rule_expiries(P.NAMES[name], name, d, 2)]
         for ex in exps:
             add({"taken_at": at.astimezone(timezone.utc).isoformat(), "exchange": P.NAMES[name], "name": name, "expiry": ex,
                  "spot": spot + i * 10, "lot": 75, "chain": chain(spot + i * 10, sigma, ex, at, gap, seed=d.toordinal())})

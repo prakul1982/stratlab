@@ -56,7 +56,7 @@ async function sane(page: Page, errors: string[], phone: boolean) {
   const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main select, main a, main [role=button], main input:not([type=range]):not([type=checkbox]):not([type=radio]), aside .space-switch button"))
     .filter((el) => {
       const b = el.getBoundingClientRect();
-      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name")) return false;
+      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name, [aria-hidden=true]")) return false;
       if (el.matches(".info-btn, .chip-x") || getComputedStyle(el).display === "inline") return false;
       return b.height < 32;
     }).map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`));
@@ -317,7 +317,7 @@ test("search labels each result with its space", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await signIn(page, ADMIN, "/research");
   await page.getByRole("button", { name: /All of it/ }).click({ timeout: 4000 }).catch(() => undefined);
-  await expect(page.getByText("Companies").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Companies").filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: phone ? "Search or ask anything" : /Ask or do anything/ }).first().click();
   const box = page.getByRole("dialog", { name: "Ask or do anything" });
   await box.getByLabel("Search or ask anything").fill("tax report");

@@ -219,7 +219,7 @@ def reminder_text(d: dict, days: int) -> tuple[str, str]:
     when = "tomorrow" if days == 1 else f"in {days} days"
     subject = f"Advance tax: the {d['label']} instalment is {when}"
     text = (f"The advance tax instalment of {d['label']} is due {when}: by then, {d['pct'] * 100:g}% of the year's tax "
-            f"(less TDS) should be paid, counting what was paid before.\n\n"
+            f"(less TDS) is due, counting what was paid before.\n\n"
             f"Your figures: {settings.PUBLIC_SITE_URL}/money/tax-tools?tab=advance\n\n"
             "Dates as the Income-tax Act sets them. Facts, not tax advice; check with a chartered accountant.")
     return subject, text
@@ -236,7 +236,7 @@ def reminder_email(d: dict, days: int) -> tuple[str, str, str]:
         f"Advance tax is due {when}", [
             kit.tiles([kit.Tile("Instalment", f"{d['n'] + 1} of 4"), kit.Tile("Due by", f"{due:%a} {due.day} {due:%b}", sub=str(due.year)),
                        kit.Tile("Share of the year's tax", f"{d['pct'] * 100:g}%", sub="paid by then, less TDS")]),
-            kit.para(f"By {d['label']}, {d['pct'] * 100:g}% of the year's tax (less TDS) should be paid, counting what was paid before."),
+            kit.para(f"By {d['label']}, {d['pct'] * 100:g}% of the year's tax (less TDS) is due, counting what was paid before."),
         ], kit.Footer(why="You get this because you turned on advance tax reminders.", unsubscribe="Stop advance tax reminders",
                       legal="Dates as the Income-tax Act sets them. Facts, not tax advice; check with a chartered accountant."),
         label="Advance tax", date=f"{due:%a} {due.day} {due:%b}", summary=f"The {d['label']} instalment is due {when}.",

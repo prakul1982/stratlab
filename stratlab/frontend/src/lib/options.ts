@@ -43,6 +43,16 @@ export const POPULAR_FALLBACK = [
   { exchange: "NFO", name: "FINNIFTY" }, { exchange: "MCX", name: "CRUDEOIL" }, { exchange: "CDS", name: "USDINR" },
 ] as const;
 
+/** Whether a structure's name is one the builder made up ("NIFTY iron condor", "NIFTY options on 7 EMA cross") rather
+ * than one the person typed: only a made-up one follows a change of strategy, underlying or rules. */
+export function isAutoName(name: string, underlying: string): boolean {
+  const n = name.trim();
+  if (!n) return true;
+  const rest = n.startsWith(`${underlying} `) ? n.slice(underlying.length + 1) : null;
+  if (rest == null) return false;
+  return rest === "options" || rest.startsWith("options on ") || STRUCTURES.some((s) => s.name.toLowerCase() === rest);
+}
+
 export function blankOptions(): OptionStrategy {
   const s = STRUCTURES[0];
   return {
@@ -105,8 +115,12 @@ export function payoff(p: OptPreview) {
   const breakevens: number[] = [];
   for (let i = 1; i < xs.length; i++) if ((ys[i - 1] < 0) !== (ys[i] < 0)) breakevens.push(xs[i - 1] + ((xs[i] - xs[i - 1]) * -ys[i - 1]) / (ys[i] - ys[i - 1]));
   const credit = legs.reduce((s, l) => s + (l.side === "sell" ? 1 : -1) * l.fill * l.qty, 0);
+  // the price where each bound is reached: a flat stretch (an iron condor beyond its wings) reaches it at every price
+  // there, so take the one nearest today's price; "outside the chart" is then said only when no price on it reaches it
+  const nearest = (v: number) => at0.filter((_, i) => Math.abs(corners[i] - v) <= 1e-6 * Math.max(1, Math.abs(v)))
+    .reduce((a, b) => (Math.abs(b - p.spot) < Math.abs(a - p.spot) ? b : a));
   return { xs, ys, maxProfit: slopeAbove > 1e-9 ? null : maxP, maxLoss: slopeAbove < -1e-9 ? null : maxL, breakevens, credit,
-    bestAt: at0[corners.indexOf(maxP)], worstAt: at0[corners.indexOf(maxL)] };   // the price where each bound is reached
+    bestAt: nearest(maxP), worstAt: nearest(maxL) };
 }
 
 /** sessionStorage key: an imported options strategy handed from the import dialog to the Options page. */

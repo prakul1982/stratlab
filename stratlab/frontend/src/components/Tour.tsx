@@ -1,85 +1,50 @@
-import { useState, type ReactNode } from "react";
-import { Book, Compass, Globe, Layers, Lens, Pencil, Pulse, Share, Sparkle, User } from "./Icons";
-import { Modal } from "./ui";
-import { LogoMark } from "./Logo";
-import { TOUR_SEEN as SEEN } from "./Shell";
+import { useState } from "react";
+import { Coachmark } from "./kit";
 
-type Step = { icon: ReactNode; title: string; body: string; where: string };
+/** One step: a short title and line, pointed at the real control it is about (the desktop menu's, then the phone's
+ * top bar's). Four steps, the ones a newcomer needs; every page is also one search away. */
+type Step = { title: string; body: string; phone?: string; at: string[] };
 
-const STEPS: Step[] = [
-  { icon: <LogoMark size={52} />, title: "Welcome to StratLab",
-    body: "Test it, research it, track it: your money in one place. StratLab has three spaces. Trade is the strategy lab: describe an idea, test it on years of real prices after real costs, learn if the edge is real or luck, then paper trade it or an option structure. Invest is company research from the companies' own filings. Money is your holdings and tax. Here is everything, in about a minute.",
-    where: "Trade · Invest · Money at the top of the sidebar (the ☰ menu on phones) switches the menu between spaces; All shows every group." },
-  { icon: <Book size={34} />, title: "Three spaces, one place",
-    body: "Each space has its own home: Trade shows your notebooks, paper sessions and options; Invest shows your watchlist, today's results and red flags; Money shows your holdings, this year's capital gains tax estimate and every Money tool. Opening a page from anywhere switches the menu to its space by itself.",
-    where: "\"Trade home\", \"Invest home\" or \"Money home\" at the top of each space's menu. The StratLab logo opens the home of the space you're in." },
-  { icon: <Compass size={34} />, title: "Ask or do anything",
-    body: "One box that gets things done. \"Test: buy NIFTY when RSI drops below 30\" builds the rules and shows the verdict; \"paper trade an EMA cross on BTC\" starts paper trading; \"research HDFC Bank\", \"momentum ideas for banks\" or \"what is walk-forward?\" work too. Paste a strategy to import it.",
-    where: "\"Ask or do anything\" at the top of the sidebar and on your notebooks page, the magnifier on phones, or Ctrl+K (⌘K on a Mac) anywhere." },
-  { icon: <Sparkle size={34} />, title: "Describe ideas in plain English",
-    body: "Type an idea the way you'd tell a friend: \"buy when RSI drops under 30, sell at 5% profit\". The builder turns it into exact rules and asks about anything it had to guess.",
-    where: "New notebook, then \"Describe your idea\". To start over later, use \"Describe the idea again\" at the top of a notebook." },
-  { icon: <Lens size={34} />, title: "Research a company first",
-    body: "Look up any Indian or US company: price, valuation, growth, who owns it, news, and an AI read that ends with trading ideas you can test in one click. Themes, the market pulse and side-by-side comparisons are there too.",
-    where: "Companies, in the Invest space's menu. Press Watch on a company to keep it on your watchlist." },
-  { icon: <Pulse size={34} />, title: "Tools for investors",
-    body: "Scan a group for Stage 2 stocks with the Supertrend up (ST S2), see which sectors lead or lag the market and click through to their stocks, read your watchlist companies' filings with red flags like a QIP, pledges or resignations, and open any Indian or US company's deep dive: business, the measures its industry is judged on, how it's valued, capex plans, a management report card and an investor checklist. The investor home puts your whole watchlist on one page.",
-    where: "Scans in the Invest menu (trend scan, screener, sector rotation and red flags, as tabs), and Watchlist, where \"At a glance\" puts every company on one page. Deep dive is on every Indian and US company page. Sector rotation and each company's red flags are on every plan; the rest are Basic tools." },
-  { icon: <Globe size={34} />, title: "Test on any market",
-    body: "The same rules run on Indian stocks, indices and F&O, US, UK, European and Japanese stocks, forex, crypto, or any market you have a CSV for. Prices, hours, currency and costs switch to match.",
-    where: "Pick the market first on a new notebook, or press the \"Testing on\" button at the top of any notebook to change it." },
-  { icon: <Pencil size={34} />, title: "Every rule is editable",
-    body: "Highlighted words in the rules (marked ▾) are dropdowns. Tap one to change the indicator, its length, the condition or a number. Stop-loss, target and position size are right below.",
-    where: "The Rules card in any notebook." },
-  { icon: <Compass size={34} />, title: "Run experiments, get an honest verdict",
-    body: "Each run is saved as an experiment. The verdict comes from four checks: does it work on years it never saw, with nearby settings, against shuffled luck, and with enough trades? From a verdict you can go further: a walk-forward test, or the same rules on similar stocks.",
-    where: "Press \"Run experiment\" in a notebook, then open any result. Every number has an (i) button explaining it." },
-  { icon: <Pulse size={34} />, title: "Paper trade what survives",
-    body: "When an idea earns a real verdict, run it live on paper: real prices, fake money, same rules. With alerts on, you get a message when it would trade and a short report after the market closes.",
-    where: "\"Paper trade\" at the top of a notebook or verdict page. Running sessions are on the Trade home and under Paper trading in the Trade menu." },
-  { icon: <Layers size={34} />, title: "Groups, options and your own strategies",
-    body: "Test one set of rules on a whole group of stocks with shared capital, paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices (at a set time or when a notebook's rules signal), or import a strategy you already run and let StratLab set it up.",
-    where: "\"Testing on\" on a notebook for groups; Options (first on the Trade home) and Import a strategy in the Trade menu." },
-  { icon: <Book size={34} />, title: "Your money: holdings and tax",
-    body: "Bring the holdings file your broker gives you to see value, gain or loss, sectors and dividends, with bonuses and splits kept in step. Upload your tradebooks for capital gains by financial year: an estimate, with its assumptions written out, to check with your CA. Only you can see either.",
-    where: "My Holdings and Tax report in the Money space's menu, both summed up on the Money home." },
-  { icon: <Share size={34} />, title: "Share, export and keep notes",
-    body: "Send a verdict card from your phone or make a public link (your rules stay private), export the rules as a file, and jot lab notes so you remember why you changed something.",
-    where: "\"Share verdict\" on a result, \"More → Export\" and Lab notes in a notebook." },
-  { icon: <User size={34} />, title: "Make it yours",
-    body: "Switch to dark mode, see your plan and usage, and run the connection check if prices or the idea builder ever look stuck.",
-    where: "Your initials at the bottom of the sidebar open Account, Dark mode and this tour, any time. The line above them shows which markets are open." },
+export const STEPS: Step[] = [
+  { title: "Four spaces", at: [".sidebar .space-switch", ".topbar [aria-label='Open menu']"],
+    body: "Mine is your own summary. Trade is for testing trading ideas, Invest for researching companies and Money for what you own.",
+    phone: "The menu holds the four spaces. Mine is your own summary. Trade is for testing trading ideas, Invest for researching companies and Money for what you own." },
+  { title: "Ask or do anything", at: [".sidebar .search-btn", ".topbar [aria-label='Search or ask anything']"],
+    body: "Type a company, a page or an idea, like \"test RSI below 30 on NIFTY\". Ctrl K opens it from any page." },
+  { title: "Start here", at: [".sidebar .side-new", ".topbar [aria-label='New notebook']"],
+    body: "Each space's main button: New notebook (a trading idea, tested on past prices), Look up a company, or Add your holdings.",
+    phone: "New notebook: describe a trading idea in plain words. StratLab turns it into rules and tests them on past prices." },
+  { title: "Your account", at: [".sidebar .acct-btn", ".topbar [aria-label='Open menu']"],
+    body: "Your plan, settings and dark mode are under your name. Help there opens this tour again.",
+    phone: "In the menu, your name at the bottom opens your plan, settings and dark mode. Help there opens this tour again." },
 ];
 
-export function Tour({ onClose }: { onClose: () => void }) {
+const phoneNow = () => { try { return window.matchMedia("(max-width: 900px)").matches; } catch { return false; } };
+
+/** The short tour. `onClose(done)`: true when the last step's Done was pressed, false when it was closed early. */
+export function Tour({ onClose }: { onClose: (done: boolean) => void }) {
   const [i, setI] = useState(0);
   const step = STEPS[i];
   const last = i === STEPS.length - 1;
-  const close = () => { try { localStorage.setItem(SEEN, "1"); } catch { /* private window */ } onClose(); };
+  const phone = phoneNow();
   return (
-    <Modal title="What you can do here" onClose={close}>
-      <div className="tour" aria-live="polite">
-        <div className="tour-icon">{step.icon}</div>
-        <div className="k-stack">
-          <span className="k-eyebrow">{i + 1} of {STEPS.length}</span>
-          <h3 className="tour-title">{step.title}</h3>
-          <p className="tour-body">{step.body}</p>
-          <p className="tour-where"><b>Where:</b> {step.where}</p>
-        </div>
+    <Coachmark anchor={step.at} label="A quick tour" onClose={() => onClose(false)}>
+      <div className="k-spread">
+        <span className="k-eyebrow">Step {i + 1} of {STEPS.length}</span>
+        {!last && <button type="button" className="link k-small" data-close onClick={() => onClose(false)}>Skip tour</button>}
       </div>
+      <h2 className="tour-title" aria-live="polite">{step.title}</h2>
+      <p className="tour-body">{phone && step.phone ? step.phone : step.body}</p>
       <div className="tour-dots" role="tablist" aria-label="Tour steps">
         {STEPS.map((s, k) => (
-          <button key={s.title} role="tab" tabIndex={-1} aria-selected={k === i} aria-label={`Step ${k + 1}: ${s.title}`} onClick={() => setI(k)} />
+          <button key={s.title} type="button" role="tab" tabIndex={-1} aria-selected={k === i} aria-label={`Step ${k + 1}: ${s.title}`} onClick={() => setI(k)} />
         ))}
       </div>
-      <div className="k-spread tour-foot">
-        <button className="link" onClick={close}>{last ? "Close" : "Skip the tour"}</button>
-        <div className="k-row">
-          {i > 0 && <button className="btn quiet" onClick={() => setI(i - 1)}>Back</button>}
-          {last ? <button className="btn" onClick={close}>Start</button>
-            : <button className="btn" onClick={() => setI(i + 1)}>Next</button>}
-        </div>
+      <div className="k-row tour-foot">
+        {i > 0 && <button type="button" className="btn quiet sm" onClick={() => setI(i - 1)}>Back</button>}
+        {/* one button that becomes Done on the last step, so focus stays on it */}
+        <button type="button" className="btn sm" data-autofocus onClick={last ? () => onClose(true) : () => setI(i + 1)}>{last ? "Done" : "Next"}</button>
       </div>
-    </Modal>
+    </Coachmark>
   );
 }

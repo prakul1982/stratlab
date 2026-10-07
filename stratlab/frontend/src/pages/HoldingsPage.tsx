@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, dataUrl } from "../lib/api";
+import { api, dataUrl, type ApiError } from "../lib/api";
+import { numberProblem, problems, type Limits } from "../lib/validate";
 import { useApp } from "../lib/app";
 import { ago, dateOnly, inr, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
@@ -54,18 +55,24 @@ function FilingsCell({ f, allowed, plan }: { f?: Facts; allowed: boolean; plan?:
   return <>{f.amber ? `${f.amber} to look at` : "No red flags"}</>;
 }
 
+/** The limits the server keeps (HoldingItem in models.py), checked here first so they're said under the box. */
+const QTY: Limits = { min: 0, above: true, max: 1e9 };
+const AVG: Limits = { min: 0, max: 1e8, optional: true };
+
 export function HoldingsPage() {
   const { fail, notify } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactsReply | null>(null);
-  const more = useMoreColumns("holdings", 6);     // price detail, sector, trend and filings: one click away, so the table fits a laptop
+  const more = useMoreColumns("holdings", 4);     // sector, trend, filings and results: one click away, so the table fits a laptop
   const [mode, setMode] = useState<"replace" | "add">("replace");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
   const [edit, setEdit] = useState<Row | null>(null);
+  const editAt = useRef(0);                        // the edited row's place, so focus lands on its neighbour if it's removed
   const [asking, setAsking] = useState(false);
   const [add, setAdd] = useState<{ symbol: string; qty: string; avg: string; market: Mkt }>({ symbol: "", qty: "", avg: "", market: "IN" });
+  const [addErr, setAddErr] = useState<Partial<Record<"symbol" | "qty" | "avg", string>>>({});
   const [picked, setPicked] = useState("");        // the symbol picked from the suggestions (what the box shows until you type)
   const [boxes, setBoxes] = useState(0);           // a new number empties the stock box
 
@@ -74,6 +81,15 @@ export function HoldingsPage() {
     if (v.rows.length) api<FactsReply>("/holdings/facts").then(setFacts).catch(() => setFacts({ rows: {}, filings: true, filings_plan: "Basic", checked: 0, count: 0 }));
   }, []);
   const [actionsAt, setActionsAt] = useState(0);         // reload the corporate actions whenever the holdings change
+  // the dividends card arrives a moment after the holdings: the cards below it wait for it (a few seconds at most), so
+  // it doesn't push them down the screen as it lands
+  const [actionsReady, setActionsReady] = useState(false);
+  useEffect(() => {
+    if (!view || actionsReady) return;
+    if (!view.rows.length) { setActionsReady(true); return; }      // nothing held: no dividends card to wait for, now or after an add
+    const t = window.setTimeout(() => setActionsReady(true), 3000);
+    return () => window.clearTimeout(t);
+  }, [view, actionsReady]);
   const show = useCallback((v: View) => { setView(v); loadFacts(v); setActionsAt((n) => n + 1); }, [loadFacts]);
   const load = useCallback(() => {
     setError(null);
@@ -98,24 +114,38 @@ export function HoldingsPage() {
     }
   };
 
-  const save = async (items: { symbol: string; qty: number; avg: number | null; market: Mkt }[], done?: string) => {
+  /** Save the list; a symbol no listed company has comes back to `onMissing` (said under the box) or as a toast. */
+  const save = async (items: { symbol: string; qty: number; avg: number | null; market: Mkt }[], done?: string, onMissing?: (msg: string) => void) => {
     setBusy(true);
     try {
       const r = await api<{ unmatched: Unmatched[]; holdings: View }>("/holdings", { method: "PUT", body: { items } });
       show(r.holdings);
-      if (r.unmatched.length) notify(`${r.unmatched.map((u) => u.text).join(", ")}: ${r.unmatched[0].reason.startsWith("No US") ? "no US-listed company has that ticker" : "no listed company on NSE or BSE has that symbol"}.`);
+      const missing = r.unmatched.length
+        ? `${r.unmatched.map((u) => u.text).join(", ")}: ${r.unmatched[0].reason.startsWith("No US") ? "no US-listed company has that ticker" : "no listed company on NSE or BSE has that symbol"}. Pick one from the suggestions.` : null;
+      if (missing) (onMissing ?? notify)(missing);
       else if (done) notify(done);
       return !r.unmatched.length;
-    } catch (e) { fail(e); return false; } finally { setBusy(false); }
+    } catch (e) {
+      const f = (e as ApiError).fields;
+      if (f && onMissing && (f.qty || f.avg)) setAddErr((x) => ({ ...x, ...(f.qty ? { qty: f.qty } : {}), ...(f.avg ? { avg: f.avg } : {}) }));
+      else fail(e);
+      return false;
+    } finally { setBusy(false); }
   };
   const current = () => (view?.rows ?? []).map((r) => ({ symbol: r.symbol, qty: r.qty, avg: r.avg, market: (r.market ?? "IN") as Mkt }));
   const same = (x: { symbol: string; market: Mkt }, r: Row) => x.symbol === r.symbol && x.market === (r.market ?? "IN");
 
   const addOne = async () => {
-    const q = Number(add.qty), a = add.avg.trim() ? Number(add.avg) : null;
-    if (!add.symbol.trim() || !(q > 0) || (a != null && !(a >= 0))) { notify("Enter the symbol, a quantity above 0 and, if you like, the average price."); return; }
-    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`)) {
-      setAdd({ symbol: "", qty: "", avg: "", market: add.market }); setPicked(""); setBoxes((n) => n + 1);
+    const errs = problems({
+      symbol: add.symbol.trim() ? null : "Type a name or symbol, then pick the company.",
+      qty: numberProblem(add.qty, QTY), avg: numberProblem(add.avg, { ...AVG, unit: add.market === "US" ? "$" : "₹" }),
+    });
+    setAddErr(errs);
+    if (Object.keys(errs).length) return;
+    const q = Number(add.qty.replace(/,/g, "")), a = add.avg.trim() ? Number(add.avg) : null;
+    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`,
+      (msg) => setAddErr({ symbol: msg }))) {
+      setAdd({ symbol: "", qty: "", avg: "", market: add.market }); setPicked(""); setBoxes((n) => n + 1); setAddErr({});
     }
   };
 
@@ -143,19 +173,21 @@ export function HoldingsPage() {
         {!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} />}
       </>) },
     { key: "value", header: "Value", numeric: true, cell: (r) => money(r.value ?? r.invested, cur(r), 0) },
-    { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null ? "–" : <span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}<span className="k-sub-line">{pct(r.pnl_pct)}</span></span>) },
+    // a missing figure says why, so a dash is never a puzzle (R1-053)
+    { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null
+      ? <>–<span className="k-sub-line">{r.price == null ? "no price today" : "no average price"}</span></>
+      : <span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}<span className="k-sub-line">{pct(r.pnl_pct)}</span></span>) },
     { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <span className={tone(r.day)}>{money(r.day, cur(r), 0)}<span className="k-sub-line">{pct(r.day_pct, 2)}</span></span>) },
     { key: "weight", header: "Weight", numeric: true, cell: (r) => (r.weight == null ? "–" : `${r.weight.toFixed(1)}%`) },
-    { key: "qty", header: "Qty", numeric: true, cell: (r) => qtyText(r.qty) },
+    // what a broker's holdings page shows first: the quantity with its average cost and the last price under it
+    { key: "qty", header: "Qty · avg → last", numeric: true, cell: (r) => <>{qtyText(r.qty)}<span className="k-sub-line">{price(r.avg, cur(r))} → {price(r.price, cur(r))}</span></> },
     ...(more.on ? [
-      { key: "avg", header: "Avg. price", numeric: true, cell: (r: Row) => price(r.avg, cur(r)) },
-      { key: "price", header: "Price", numeric: true, cell: (r: Row) => price(r.price, cur(r)) },
       { key: "sector", header: "Sector", cell: (r: Row) => r.sector },
       { key: "trend", header: "Trend", cell: (r: Row) => <Trend f={facts?.rows[r.symbol]} /> },
       { key: "filings", header: "Filings, 3 months", cell: (r: Row) => <FilingsCell f={facts?.rows[r.symbol]} allowed={facts?.filings !== false} plan={facts?.filings_plan} /> },
       { key: "results", header: "Results meeting", cell: (r: Row) => { const f = facts?.rows[r.symbol]; return f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="k-muted">–</span>; } },
     ] : []),
-    { key: "edit", header: "", action: true, cell: (r) => <button type="button" className="btn quiet sm" onClick={() => setEdit(r)} aria-label={`Edit ${r.symbol}`}>Edit</button> },
+    { key: "edit", header: "", action: true, cell: (r) => <button type="button" className="btn quiet sm" data-row-edit onClick={() => { editAt.current = rows.indexOf(r); setEdit(r); }} aria-label={`Edit ${r.symbol}`}>Edit</button> },
   ];
   const unmatchedCols: Column<Unmatched & { i: number }>[] = [
     { key: "line", header: "Line", rowHeader: true, cell: (u) => u.line ?? "–" },
@@ -167,7 +199,7 @@ export function HoldingsPage() {
     <div className="k-page">
       <PageHeader eyebrow="Money · What you own" title="Your stocks, at today's prices" asOf={view?.prices_at} asOfLabel="Prices as of"
         lede="Your broker's holdings file, valued at today's prices: each stock's value, gain or loss, and your sector mix."
-        info="Facts, not advice. Only you can see your holdings." infoLabel="About this page" />
+        info="Facts, not advice. Only you can see your holdings." infoLabel="About your holdings" />
 
       <Card>
         <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here. Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price.</>}
@@ -223,15 +255,20 @@ export function HoldingsPage() {
               </p>
             )}
           </Card>
-          <HoldingsActionsPanel<View> version={actionsAt} onHoldings={setView} />
+          <HoldingsActionsPanel<View> version={actionsAt} onHoldings={setView} onLoaded={() => setActionsReady(true)} />
+          {!actionsReady && <Card><Skeleton label="Opening your sectors and positions" /></Card>}
+        </>
+      )}
 
+      {view && t && rows.length > 0 && actionsReady && (
+        <>
           <Card>
             <CardHead title="By sector" />
             <BarList label="Holdings by sector" footnote="Share of the current value, by the exchange's sector for each company."
               rows={view.allocation.map((a) => ({ key: a.sector, name: a.sector, note: `${a.count} stock${a.count === 1 ? "" : "s"}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
           </Card>
 
-          <Card>
+          <Card label="Positions">
             <CardHead title="Positions" actions={<>
               {!facts && <span className="k-note">Checking each stock's trend and filings…</span>}
               {more.toggle}
@@ -266,26 +303,29 @@ export function HoldingsPage() {
         </>
       )}
 
-      {view && (
+      {view && actionsReady && (
         <Card>
           <CardHead title="Add a stock by hand" actions={
             <Seg label="Where it's listed" options={[{ value: "IN", label: "India (NSE/BSE)" }, { value: "US", label: "United States" }]} value={add.market}
               onChange={(m) => { setAdd({ ...add, market: m as Mkt, symbol: add.market === m ? add.symbol : "" }); if (add.market !== m) { setPicked(""); setBoxes((n) => n + 1); } }} />} />
           <FormGrid onSubmit={(e) => { e.preventDefault(); void addOne(); }}>
-            <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol.">
+            <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
               {(id) => <StockPicker key={`${add.market}-${boxes}`} id={id} market={add.market} value={picked} placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
-                onText={(text) => setAdd((x) => ({ ...x, symbol: text }))} onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); }} />}
+                onText={(text) => { setAdd((x) => ({ ...x, symbol: text })); setAddErr((x) => ({ ...x, symbol: undefined })); }}
+                onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); setAddErr((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
-            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} onChange={(e) => setAdd({ ...add, qty: e.target.value })} />
-            <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg}
-              onChange={(e) => setAdd({ ...add, avg: e.target.value.replace(/,/g, "") })} />
+            {/* each number is checked as it's typed, with its limit named (lib/validate) */}
+            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} error={addErr.qty} hint="More than 0"
+              onChange={(e) => { setAdd({ ...add, qty: e.target.value }); setAddErr((x) => ({ ...x, qty: e.target.value.trim() ? numberProblem(e.target.value, QTY) ?? undefined : undefined })); }} />
+            <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg} error={addErr.avg}
+              onChange={(e) => { const v = e.target.value.replace(/,/g, ""); setAdd({ ...add, avg: v }); setAddErr((x) => ({ ...x, avg: numberProblem(v, { ...AVG, unit: add.market === "US" ? "$" : "₹" }) ?? undefined })); }} />
             <FormActions><button type="submit" className="btn" disabled={busy}>Add</button></FormActions>
           </FormGrid>
           {add.market === "US" && <p className="k-note">US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. They aren't part of the tax report.</p>}
         </Card>
       )}
 
-      {view && rows.length > 0 && (
+      {view && rows.length > 0 && actionsReady && (
         <section className="k-stack">
           <p className="k-note">Your holdings are stored with your account only, used for this page and your My Stocks newsletter, and never shared. Values use the latest prices; P&amp;L is before charges and taxes. Nothing here is investment advice.</p>
           <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my holdings</button>
@@ -293,7 +333,7 @@ export function HoldingsPage() {
       )}
 
       {edit && (
-        <EditHolding row={edit} busy={busy} onClose={() => setEdit(null)}
+        <EditHolding row={edit} busy={busy} onClose={() => setEdit(null)} fallback={() => afterRemove(editAt.current)}
           onSave={async (q, a) => { if (await save(current().map((x) => (same(x, edit) ? { ...x, qty: q, avg: a } : x)), `${edit.symbol} updated.`)) setEdit(null); }}
           onRemove={async () => { if (await save(current().filter((x) => !same(x, edit)), `${edit.symbol} removed.`)) setEdit(null); }} />
       )}
@@ -302,16 +342,29 @@ export function HoldingsPage() {
   );
 }
 
-function EditHolding({ row, busy, onClose, onSave, onRemove }: { row: Row; busy: boolean; onClose: () => void; onSave: (qty: number, avg: number | null) => void; onRemove: () => void }) {
+/** Where focus goes once a removed row's dialog closes: the next row's Edit button (the last one if it was last), else the
+ * Positions heading, else the page's heading. */
+function afterRemove(at: number): HTMLElement | null {
+  const edits = document.querySelectorAll<HTMLElement>("[data-row-edit]");
+  if (edits.length) return edits[Math.min(at, edits.length - 1)];
+  const h = document.querySelector<HTMLElement>('section[aria-label="Positions"] h2') ?? document.querySelector<HTMLElement>("main h1");
+  h?.setAttribute("tabindex", "-1");
+  return h;
+}
+
+function EditHolding({ row, busy, onClose, onSave, onRemove, fallback }: {
+  row: Row; busy: boolean; onClose: () => void; onSave: (qty: number, avg: number | null) => void; onRemove: () => void; fallback: () => HTMLElement | null;
+}) {
   const [q, setQ] = useState(String(row.qty));
   const [a, setA] = useState(row.avg == null ? "" : String(row.avg));
-  const qn = Number(q), an = a.trim() ? Number(a) : null;
-  const ok = qn > 0 && (an == null || an >= 0);
+  const qn = Number(q.replace(/,/g, "")), an = a.trim() ? Number(a) : null;
+  const qErr = numberProblem(q, QTY), aErr = numberProblem(a, { ...AVG, unit: row.market === "US" ? "$" : "₹" });
+  const ok = !qErr && !aErr;
   return (
-    <Modal title={`Edit ${row.symbol}`} onClose={onClose}>
+    <Modal title={`Edit ${row.symbol}`} onClose={onClose} fallback={fallback}>
       <FormGrid onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(qn, an); }}>
-        <Field label="Quantity" inputMode="decimal" value={q} onChange={(e) => setQ(e.target.value)} />
-        <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} onChange={(e) => setA(e.target.value.replace(/,/g, ""))} />
+        <Field label="Quantity" inputMode="decimal" value={q} error={qErr} onChange={(e) => setQ(e.target.value)} />
+        <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} error={aErr} onChange={(e) => setA(e.target.value.replace(/,/g, ""))} />
         <FormActions>
           <button type="submit" className="btn" disabled={busy || !ok}>Save</button>
           <button type="button" className="btn danger" disabled={busy} onClick={onRemove}><Trash size={16} />Remove from holdings</button>

@@ -26,7 +26,7 @@ async function open(page: Page, path: string, ready: string, who: ReturnType<typ
     return true;
   }).catch(() => false);
   if (answered) await page.goto(path);
-  await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   return errors;
 }
 
@@ -43,7 +43,7 @@ async function touchable(page: Page) {
   const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main select, main a, main [role=button], main input:not([type=range]):not([type=checkbox]):not([type=radio])"))
     .filter((el) => {
       const b = el.getBoundingClientRect();
-      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name")) return false;
+      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name, [aria-hidden=true]")) return false;
       if (el.matches(".info-btn, .chip-x") || getComputedStyle(el).display === "inline") return false;
       return b.height < 32;
     }).map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || (el as HTMLInputElement).placeholder || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`));
@@ -59,8 +59,13 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   const errors = await open(page, "/money/net-worth", "Nothing added yet", who);
   if (info.project.name === "desktop") await expect(page.getByRole("link", { name: "Net worth" }).first()).toBeVisible();   // in the menu
 
+  // adding is a pop-up (R1-055): open it, pick what it is, then fill in its boxes
   const kinds = page.getByRole("radiogroup", { name: "What is it?" });
-  const kind = (name: string) => kinds.getByRole("radio", { name }).click();
+  const kind = async (name: string) => {
+    await page.locator("main").getByRole("button", { name: "Add an entry" }).first().click();
+    await kinds.getByRole("radio", { name }).click();
+  };
+  await kind("Savings and cash");
   await page.getByLabel("Amount (₹)").fill("2,50,000");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("Savings and cash added.")).toBeVisible();

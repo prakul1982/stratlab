@@ -75,7 +75,7 @@ async function problems(page: Page, touch: boolean): Promise<string[]> {
     if (touch) {
       for (const el of document.querySelectorAll("button, select, a, [role=button], textarea, input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=hidden])")) {
         const b = el.getBoundingClientRect();
-        if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name")) continue;    // inline in text: the line is the target
+        if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name, [aria-hidden=true]")) continue;    // inline in text: the line is the target
         if (el.matches(".info-btn, .chip-x, .sr-only") || getComputedStyle(el).display === "inline") continue;
         if (b.height < 32) out.push(`too small to tap: ${name(el)} ${Math.round(b.height)}px`);
       }
@@ -148,8 +148,8 @@ test("the sidebar fits a short laptop, a tablet drawer and a phone drawer: slim 
     const page = await ctx.newPage();
     await page.goto(WEB + "/notebooks");
     const side = page.locator("aside.sidebar");
+    if (vp.width <= 900) await page.getByRole("button", { name: "Open menu" }).click();      // a shut drawer is hidden from the accessibility tree
     await expect(side.getByRole("navigation", { name: "Main" })).toBeAttached({ timeout: 30_000 });
-    if (vp.width <= 900) await page.getByRole("button", { name: "Open menu" }).click();
     await expect(side.getByRole("button", { name: /markets open$/ })).toBeVisible({ timeout: 30_000 });
     const at = `${vp.width}x${vp.height}`;
     const m = await side.evaluate((aside) => {

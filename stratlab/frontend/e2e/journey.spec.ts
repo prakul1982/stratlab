@@ -23,7 +23,7 @@ async function check(page: Page, errors: string[], phone: boolean) {
   const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main select, main a, main [role=button], main input:not([type=range]):not([type=checkbox]):not([type=radio])"))
     .filter((el) => {
       const b = el.getBoundingClientRect();
-      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name")) return false;
+      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name, [aria-hidden=true]")) return false;
       if (el.matches(".info-btn, .chip-x") || getComputedStyle(el).display === "inline") return false;
       return b.height < 32;
     }).map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`));
@@ -77,6 +77,7 @@ test("a new user's first session, from the invite link to the plans", async ({ p
   await check(page, errors, phone);
   await page.goto(`/n/${nb.id}`);
   await page.getByRole("button", { name: "Paper trade" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Start paper trading" }).click();      // what starts is said first (R1-031)
   await expect(page).toHaveURL(/\/paper\/[^/]+$/, { timeout: 30_000 });
   await expect(page.locator("main")).toContainText(/Trend follower|My first idea/, { timeout: 30_000 });
   await check(page, errors, phone);

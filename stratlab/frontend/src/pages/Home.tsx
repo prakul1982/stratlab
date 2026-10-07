@@ -213,7 +213,15 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
     return [...rows].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (sort === "recent" ? 0 : key(a).localeCompare(key(b))));
   }, [notebooks, q, sort]);
   if (notebooks === null) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" /><Card><Skeleton label="Opening your notebooks" /></Card></div>;
-  if (notebooks.length === 0) return <NewNotebook hide={hide} />;
+  // /notebooks is always the list (the menu's "Notebooks"); with none yet it says so and offers the first, on /new
+  if (notebooks.length === 0) return (
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title="Your notebooks" lede="Each notebook holds one idea: its rules, every test run on real prices after costs, and the verdict." />
+      <EmptyState title="No notebooks yet" action={{ label: "Test your first idea", to: "/new" }}>
+        Describe a trading idea in plain words; StratLab turns it into rules and tests it on years of real prices.
+      </EmptyState>
+    </div>
+  );
 
   const togglePin = async (id: string, pinned: boolean) => {
     try { await api(`/notebooks/${id}`, { method: "PUT", body: { pinned } }); await refreshNotebooks(); } catch (e) { fail(e); }
@@ -240,7 +248,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
           const count = n.summary?.experiments ?? 0;
           return (
             <Card key={n.id} label={n.name}>
-              <CardHead level={3} title={<Link to={`/n/${n.id}`} className="k-title-link">{n.question || n.name}</Link>}
+              <CardHead title={<Link to={`/n/${n.id}`} className="k-title-link">{n.question || n.name}</Link>}
                 actions={<button type="button" className={`k-pin${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
                   title={n.pinned ? "Unpin" : "Pin to the top"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>} />
               <span className="k-eyebrow">{n.name} · {inst}</span>

@@ -1,3 +1,4 @@
+import { searchWords } from "./helpTopics";
 import { ALL_PAGES, NAV } from "./nav";
 
 /** Everything StratLab can do, with the words people might search for. Used by search and the home page grid.
@@ -99,7 +100,7 @@ export const FEATURES: Feature[] = [
     words: "account profile usage invoices sign in security sign out data delete" },
   { id: "settings", title: "Settings", what: "Where alerts and emails go, what you see first, the theme and a check of every data and AI service.", to: "/settings",
     words: "settings notifications emails newsletters theme dark light experience level focus connected accounts connection check" },
-  { id: "assistant", title: "AI assistant", what: "Use StratLab in Claude or ChatGPT with a key you can revoke.", to: "/assistant",
+  { id: "assistant", title: "Connect an AI assistant", what: "Keys that let Claude or ChatGPT use your StratLab, each one revocable.", to: "/assistant",
     words: "assistant ai claude chatgpt mcp key connect" },
   { id: "invite", title: "Invite friends", what: "Your invite link, and the free months you earn when friends join.", to: "/invite",
     words: "invite friends referral link free month share" },
@@ -134,13 +135,13 @@ const SEARCHABLE: Feature[] = (() => {
 
 export function match(q: string, limit = 6): Feature[] {
   const text = q.toLowerCase().trim();
-  const words = text.split(/\s+/).filter((w) => w.length > 1);
+  const words = searchWords(q);         // "what is walk-forward?" looks for walk and forward, not "is" inside "list"
   if (!words.length) return [];
   const scored = SEARCHABLE.map((f) => {
     const title = f.title.toLowerCase();
     const hay = `${title} ${f.words}`.toLowerCase();
     let s = words.reduce((n, w) => n + (hay.includes(w) ? (title.includes(w) ? 3 : 1) : 0), 0);
-    if (words.length > 1 && hay.includes(text)) s += 4;       // the whole phrase ("borrowed money") counts for more than its words
+    if (words.length > 1 && (hay.includes(text) || hay.includes(words.join(" ")))) s += 4;       // the whole phrase ("borrowed money") counts for more than its words
     if (title === text) s += 6;
     return [s, f] as const;
   }).filter(([s]) => s > 0);

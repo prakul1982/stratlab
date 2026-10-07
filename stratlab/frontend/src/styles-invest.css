@@ -5,7 +5,8 @@
 .k-cols > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (max-width: 900px) { .k-cols { grid-template-columns: minmax(0, 1fr); } }
 .k-split2 { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s5); align-items: start; }
-@media (max-width: 1000px) { .k-split2 { grid-template-columns: minmax(0, 1fr); } }
+/* side by side only when the results still get a wide column next to the filters and the menu (R1-045) */
+@media (max-width: 1360px) { .k-split2 { grid-template-columns: minmax(0, 1fr); } }
 .inv-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--s5); }
 .inv-plain { font-weight: 400; }
 .inv-ink { color: var(--ink); }
@@ -20,6 +21,13 @@
 @media (max-width: 640px) { .inv-head { grid-template-columns: minmax(0, 1fr); } }
 .inv-badges { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .inv-badges:empty { display: none; }
+/* the price, its 52-week range and the next results day, in one column on the right of the header */
+.inv-head-price { width: min(280px, 100%); gap: var(--s2); }
+.inv-rail52 { display: grid; gap: var(--s1); }
+.inv-rail52 .k-spread { gap: var(--s3); }
+@media (max-width: 640px) { .inv-head-price { width: 100%; } }
+/* the AI read when there is none: one calm line and one button */
+.ai-read-off { justify-content: space-between; }
 
 /* the day's market: a few index levels */
 
@@ -130,9 +138,9 @@ a.inv-theme:hover { border-color: var(--ink); }
 /* the news reader: the issues beside the one you are reading (the grid itself is .news-grid) */
 .inv-issues { display: flex; flex-direction: column; gap: 2px; }
 .inv-sticky { position: sticky; top: var(--s4); max-height: calc(100vh - 32px); overflow-y: auto; }
-@media (max-width: 1000px) { .inv-sticky { position: static; max-height: none; } }
+@media (max-width: 1360px) { .inv-sticky { position: static; max-height: none; } }
 .inv-toggle { display: none; }
-@media (max-width: 1000px) { .inv-toggle { display: inline-flex; } }
+@media (max-width: 1360px) { .inv-toggle { display: inline-flex; } }
 .inv-bounds { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--s2); align-items: end; }
 .inv-bounds .k-unit { padding-bottom: 12px; color: var(--muted); font-size: var(--t-note); }
 

@@ -109,7 +109,7 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
       </div>
       <label className="sr-only" htmlFor="import-text">Or paste the strategy</label>
       <textarea id="import-text" className="k-textarea k-mono" value={text} maxLength={20000} spellCheck={false}
-        placeholder={'…or paste it here: a StratLab export, TradingView Pine Script, Python, MetaTrader, AmiBroker or plain words.\n\nstrategy("Golden cross")\nif ta.crossover(ta.sma(close, 50), ta.sma(close, 200))\n    strategy.entry("Long", strategy.long)'}
+        placeholder="…or paste it here: a StratLab export, Pine Script, Python, MetaTrader, AmiBroker or plain words"
         onChange={(e) => { setText(e.target.value); if (!e.target.value) setFile(""); }} />
       <div className="k-row">
         <button type="button" className="btn" disabled={busy} onClick={run}>{busy ? "Reading your strategy…" : "Import and build my notebook"}</button>

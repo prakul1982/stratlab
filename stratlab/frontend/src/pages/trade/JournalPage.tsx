@@ -2,13 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, fmtDate } from "../../lib/format";
+import { ET, IST, money, fmtDate, tzLabel } from "../../lib/format";
 import { track } from "../../lib/analytics";
-import { upDown } from "../../lib/tradeUi";
+import { CHECKS, checksLine, upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -100,6 +100,9 @@ export function JournalPage() {
   const [mode, setMode] = useState<"add" | "replace">("add");
   const [market, setMarket] = useState("");
   const [segment, setSegment] = useState("all");
+  // trades the tax report already has from the person's tradebooks: offered here, so an empty journal says so
+  const [taxTrades, setTaxTrades] = useState(0);
+  useEffect(() => { api<{ trades: number }>("/tax").then((t) => setTaxTrades(t.trades ?? 0)).catch(() => undefined); }, []);
 
   const load = useCallback(() => {
     const q = new URLSearchParams({ segment, market });
@@ -219,9 +222,16 @@ export function JournalPage() {
 
         {!has ? (
           <Card>
-            <EmptyState title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
-              Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.
-            </EmptyState>
+            {taxTrades > 0 && j.show !== "practice" ? (
+              <EmptyState title={`${taxTrades.toLocaleString("en-IN")} trade${taxTrades === 1 ? "" : "s"} waiting in your tax report`}
+                action={{ label: busy ? "Bringing them in…" : "Bring them in", onClick: () => { if (!busy) void fromTax(); } }}>
+                The tradebooks you uploaded for tax hold your real trades. Bring them in to see them as round trips with their charges and the checks.
+              </EmptyState>
+            ) : (
+              <EmptyState title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
+                Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.
+              </EmptyState>
+            )}
           </Card>
         ) : (
           <>
@@ -324,10 +334,10 @@ function VerdictView({ v }: { v: NonNullable<Journal["verdict"]> }) {
         </div>
         <Card>
           <span className="k-small k-muted"><b>Strength of evidence</b></span>
-          <div className="dots" aria-label={`${v.passed} of ${v.total} checks passed`}>
-            {Array.from({ length: v.total }, (_, k) => <span key={k} className={k < v.passed ? "on" : ""} />)}
+          <div className="dots" aria-label={checksLine(v.passed, v.total)}>
+            {Array.from({ length: CHECKS }, (_, k) => <span key={k} className={k < v.passed ? "on" : k >= v.total ? "skip" : ""} />)}
           </div>
-          <span className="k-mono">{v.passed} of {v.total} checks passed</span>
+          <span className="k-small">{checksLine(v.passed, v.total)}</span>
         </Card>
       </section>
       <div className="j-checks">{v.checks.map((c) => <CheckCard key={c.id} c={c} />)}</div>
@@ -358,7 +368,7 @@ function CheckCard({ c }: { c: Check }) {
     <div data-check={c.id} className="j-check">
       <Card label={c.title}>
         <div className="k-card-head">
-          <h3 className="k-card-title">{c.title}<Info>{CHECK_HELP[c.id]}</Info></h3>
+          <div className="k-card-titlerow"><h3 className="k-card-title">{c.title}</h3><Info label={`About ${c.title}`}>{CHECK_HELP[c.id]}</Info></div>
           <span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span>
         </div>
         {c.id === "sample" && d && <div className="j-big">{d.trades}</div>}
@@ -402,7 +412,7 @@ function Breakdowns({ b, r }: { b: Record<string, Row[]>; r: Journal["r"] }) {
       <CardHead title="Where the P&L came from"
         actions={<Select label="Break the P&L down by" value={view} onChange={setView} options={VIEWS.map(([k, l]) => ({ value: k, label: `By ${l.toLowerCase()}` }))} />} />
       <BreakdownTable rows={b[view] ?? []} label={label} />
-      {view === "hour" && <p className="k-note">Same-day trades with times in the file, by the hour they were entered (India time).</p>}
+      {view === "hour" && <p className="k-note">Same-day trades with times in the file, by the hour they were entered (IST).</p>}
       {r && <RChart r={r} />}
     </Card>
   );
@@ -412,7 +422,7 @@ function RChart({ r }: { r: NonNullable<Journal["r"]> }) {
   const max = Math.max(1, ...r.buckets.map((x) => x.n));
   return (
     <div className="k-stack j-rbox">
-      <h3 className="k-sub">R-multiples<Info>R is a trade's result divided by the risk you planned: the distance from the entry to your planned stop, times the quantity. A trade that lost exactly what you planned to risk is −1R. Set a stop in a trade's journal entry to include it.</Info></h3>
+      <div className="k-card-titlerow"><h3 className="k-sub">R-multiples</h3><Info label="About R-multiples">R is a trade's result divided by the risk you planned: the distance from the entry to your planned stop, times the quantity. A trade that lost exactly what you planned to risk is −1R. Set a stop in a trade's journal entry to include it.</Info></div>
       {r.n === 0 ? <p className="k-small k-muted">No trade has a planned stop yet. Open a trade's journal entry and set its stop to see its R.</p> : (
         <>
           <div className="j-rbars" role="img" aria-label={`R-multiples of ${r.n} trades: ${r.buckets.map((x) => `${x.label} ${x.n}`).join(", ")}`}>
@@ -628,6 +638,8 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const abroad = f.segment === "us" || f.segment === "crypto";
+  // times are the exchange's own clock: India's for the Indian segments, New York's for US stocks
+  const zone = f.segment === "us" ? tzLabel(ET) : f.segment === "crypto" ? undefined : tzLabel(IST);
   const save = async () => {
     const n = (v: string) => Number(v.replace(/,/g, ""));
     if (!f.symbol.trim() || !(n(f.qty) > 0) || !Number.isFinite(n(f.entry_price)) || !Number.isFinite(n(f.exit_price)) || !f.entry_price || !f.exit_price) {
@@ -648,11 +660,11 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
           <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF({ ...f, segment: v })} options={ADD_SEGMENTS} />}</Field>
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           <Field label="Quantity" inputMode="decimal" value={f.qty} onChange={set("qty")} />
-          <Field label="Entry date" type="date" value={f.entry_date} onChange={set("entry_date")} />
-          <Field label="Entry time" optional type="time" value={f.entry_time} onChange={set("entry_time")} />
+          <DateField label="Entry date" value={f.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />
+          <Field label="Entry time" optional>{(id) => <TimeInput id={id} zone={zone} value={f.entry_time} onChange={(v) => setF({ ...f, entry_time: v })} allowEmpty />}</Field>
           <Field label="Entry price" inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
-          <Field label="Exit date" type="date" value={f.exit_date} onChange={set("exit_date")} />
-          <Field label="Exit time" optional type="time" value={f.exit_time} onChange={set("exit_time")} />
+          <DateField label="Exit date" value={f.exit_date} onChange={(d) => set("exit_date")({ target: { value: d } })} />
+          <Field label="Exit time" optional>{(id) => <TimeInput id={id} zone={zone} value={f.exit_time} onChange={(v) => setF({ ...f, exit_time: v })} allowEmpty />}</Field>
           <Field label="Exit price" inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
           <Field label={abroad ? "Charges ($)" : "Charges (₹)"} optional inputMode="decimal" value={f.charges} onChange={set("charges")}
             info={abroad ? "No charges are worked out for US stocks or crypto: enter what your broker or exchange charged, or leave it empty for none." : "Worked out at the published rates when left empty."} />

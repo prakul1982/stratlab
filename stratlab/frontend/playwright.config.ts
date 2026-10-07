@@ -22,7 +22,7 @@ export default defineConfig({
     { name: "screens", testMatch: /screens\.spec/ },
   ],
   webServer: [
-    { command: `${process.env.PYTHON ?? "python"} -m tests.visual_server`, cwd: "../backend", port: apiPort, timeout: 120_000, reuseExistingServer: !process.env.CI },
+    { command: `${process.env.PYTHON ?? "python"} -m tests.visual_server`, cwd: "../backend", port: apiPort, timeout: 300_000, reuseExistingServer: !process.env.CI },   // the fake world can take minutes to build on a busy machine
     { command: `node e2e/config.mjs && npx vite preview --port ${webPort} --strictPort --host 127.0.0.1`, port: webPort, timeout: 60_000, reuseExistingServer: !process.env.CI },
   ],
 });

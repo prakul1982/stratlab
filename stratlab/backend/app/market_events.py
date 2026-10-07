@@ -1117,6 +1117,5 @@ class Job(news_job.Job):
     def run(self, now: datetime, day: date, remind: bool = True) -> int:
         out = refresh(self.web_fn(), day)
         sent = self.remind_fn(day) if remind else 0
-        self.status.update(last_run=now.isoformat(), sent=sent, problems=out["problems"][:5],
-                           last_error=out["problems"][0][:200] if out["problems"] else None)
+        self.record(now, out["problems"], len(READERS), sent=sent)
         return sent

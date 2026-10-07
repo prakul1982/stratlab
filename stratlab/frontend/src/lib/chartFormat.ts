@@ -136,11 +136,11 @@ function tickLabel(ms: number, unit: Unit, tz?: string): string {
   return String(p.y);
 }
 
-/** A moment in full for a tooltip: "Fri 3 Oct 2026", or "3 Oct, 14:30" when intraday. */
+/** A moment in full for a tooltip: "Fri 3 Oct 2026", or "3 Oct, 14:30" when intraday ("3 Oct, 14:30 IST" in a market's zone). */
 export function tipTime(ms: number, intraday = false, tz?: string): string {
   const d = new Date(ms);
   return intraday
-    ? fmtDateTime(d, { tz, year: false })
+    ? fmtDateTime(d, { tz, year: false, zone: !!tz })
     : fmtDate(d, { tz, weekday: true });
 }
 

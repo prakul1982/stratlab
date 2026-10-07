@@ -282,7 +282,7 @@ def test_saved_screens_through_the_api(w):
 def test_plan_limits_free_2_basic_10_pro_25(w, monkeypatch):
     assert (PLANS["free"]["screens"], PLANS["basic"]["screens"], PLANS["pro"]["screens"]) == (2, 10, 25)
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
-    assert plan_info("free")["screens"] == 25                       # open to everyone until payments go live
+    assert plan_info("free")["screens"] == 2                        # Free's own limit, payments on or not (7 Oct)
     paid(monkeypatch)
     assert [plan_info(p)["screens"] for p in ("free", "basic", "pro")] == [2, 10, 25]
     c, h = w["client"], headers("free-token")

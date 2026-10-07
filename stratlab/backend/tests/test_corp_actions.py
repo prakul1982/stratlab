@@ -190,7 +190,7 @@ def test_dividend_income_counts_the_shares_held_on_each_ex_date():
     assert (v["ahead_total"], v["received_total"]) == (539.0, 360.0)
     n = v["notices"][0]
     assert (n["symbol"], n["to_qty"], n["to_avg"]) == ("TCS", 24, 1760.0)
-    assert n["text"] == "TCS had a 1:1 bonus on Mon 05 Oct: your quantity is now 24, average price ₹1,760."
+    assert n["text"] == "TCS had a 1:1 bonus on Mon 5 Oct: your quantity is now 24, average price ₹1,760."
     applied = [C.apply(items[0], BONUS), items[1]]
     v2 = C.holdings_view(applied, acts, TODAY, None)
     assert v2["notices"] == [] and v2["undo"][0]["symbol"] == "TCS"
@@ -313,7 +313,7 @@ def test_my_stocks_newsletter_has_a_corporate_actions_section(w):
     assert [(r["symbol"], r["ex_date"]) for r in acts] == [("TCS", "2026-10-07")]
     f = {"kind": "my_stocks", "weekly": False, "day": TODAY.isoformat(), "since": TODAY.isoformat(), "stocks": [], "results": [], "actions": acts}
     sec = next(s for s in write.sections(f) if s["title"] == "Corporate actions")
-    assert "TCS: Interim dividend ₹11 a share, ex-date Wed 07 Oct" in json.dumps(sec, ensure_ascii=False)
+    assert "TCS: Interim dividend ₹11 a share, ex-date Wed 7 Oct" in json.dumps(sec, ensure_ascii=False)
     assert "ex-date" in write.template(f) and "ex-dates this week for 1" in write.subject(f)
 
 

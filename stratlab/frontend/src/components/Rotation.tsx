@@ -61,10 +61,10 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
     <div className="rot-chart" ref={box}>
       <svg width={W} height={H} role="img" aria-label={`Rotation of ${rows.length} items against ${benchmark}. The table below lists every value.`}>
         {/* quadrant backgrounds, then hairline grid and the 100 cross */}
-        <rect x={pad.l} y={pad.t} width={cx - pad.l} height={cy - pad.t} fill={qColor("improving")} opacity={0.07} />
-        <rect x={cx} y={pad.t} width={W - pad.r - cx} height={cy - pad.t} fill={qColor("leading")} opacity={0.07} />
-        <rect x={cx} y={cy} width={W - pad.r - cx} height={H - pad.b - cy} fill={qColor("weakening")} opacity={0.07} />
-        <rect x={pad.l} y={cy} width={cx - pad.l} height={H - pad.b - cy} fill={qColor("lagging")} opacity={0.07} />
+        <rect x={pad.l} y={pad.t} width={cx - pad.l} height={cy - pad.t} fill={qColor("improving")} className="rot-tint" />
+        <rect x={cx} y={pad.t} width={W - pad.r - cx} height={cy - pad.t} fill={qColor("leading")} className="rot-tint" />
+        <rect x={cx} y={cy} width={W - pad.r - cx} height={H - pad.b - cy} fill={qColor("weakening")} className="rot-tint" />
+        <rect x={pad.l} y={cy} width={cx - pad.l} height={H - pad.b - cy} fill={qColor("lagging")} className="rot-tint" />
         {ticks(sx).map((v) => <line key={`gx${v}`} x1={X(v)} x2={X(v)} y1={pad.t} y2={H - pad.b} stroke="var(--rule)" strokeWidth={1} />)}
         {ticks(sy).map((v) => <line key={`gy${v}`} y1={Y(v)} y2={Y(v)} x1={pad.l} x2={W - pad.r} stroke="var(--rule)" strokeWidth={1} />)}
         <line x1={cx} x2={cx} y1={pad.t} y2={H - pad.b} stroke="var(--line-2)" strokeWidth={1} />
@@ -90,7 +90,7 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
           return (
             <g key={r.id} className="rot-g" opacity={dim ? 0.12 : 1}>
               <polyline points={pts.map((p) => `${X(p.x)},${Y(p.y)}`).join(" ")} fill="none" stroke={qColor(q)}
-                strokeWidth={on ? 2 : 1.25} strokeOpacity={on ? 1 : 0.35} strokeLinejoin="round" strokeLinecap="round" />
+                strokeWidth={on ? 2 : 1.5} className={on ? undefined : "rot-trail"} strokeLinejoin="round" strokeLinecap="round" />
               {on && pts.slice(0, -1).map((p) => <circle key={p.t} cx={X(p.x)} cy={Y(p.y)} r={2.5} fill={qColor(q)} />)}
               {prev && !on && <line x1={X(prev.x)} y1={Y(prev.y)} x2={X(end.x)} y2={Y(end.y)} stroke={qColor(q)} strokeWidth={2} strokeLinecap="round" />}
               <circle cx={X(end.x)} cy={Y(end.y)} r={on ? 6 : 5} fill={qColor(q)} stroke="var(--card)" strokeWidth={2} />

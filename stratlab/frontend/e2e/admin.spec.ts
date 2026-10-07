@@ -19,7 +19,7 @@ async function open(page: Page, path: string, ready: string) {
   await page.goto(path);
   const ask = page.getByText("What brings you here?");
   await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
-  await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(300);
   return errors;
 }
@@ -75,7 +75,9 @@ test("admin: the breadcrumb says Mine > Admin, and only an admin gets in", async
 
 test("admin overview: what needs you, a light with a word on every service and feed, and today's numbers", async ({ page }, info) => {
   const errors = await open(page, "/admin", "Needs your attention");
-  await expect(page.getByRole("region", { name: "Today's numbers" }).getByText(/Sign-ups today|Paid users|Revenue today|Server errors/)).toHaveCount(4);
+  await expect(page.getByRole("region", { name: "Today's numbers" }).getByText(/Sign-ups today|Paying users|Revenue today|Server errors/)).toHaveCount(4);
+  // paid plans the owner gave are told apart from paying users (no payments are connected in the fake world)
+  await expect(page.getByRole("region", { name: "Today's numbers" })).toContainText(/\d+ on a plan you gave, not paying/);
   const services = page.getByRole("list", { name: "Services" });
   await expect(services.getByRole("listitem").first()).toBeVisible({ timeout: 30_000 });
   const feeds = page.getByRole("list", { name: "Data feeds" });
@@ -150,6 +152,97 @@ test("admin users: search by email, and the launch offer asks in the page, never
   expect(boxes, "no browser box opened").toEqual([]);
   await sane(page, errors);
   await shot(page, "admin-users", info);
+});
+
+test("admin users: a calm table filtered by plan, a … button per row, and deleting data asks for the email typed in", async ({ page }, info) => {
+  const boxes: string[] = [];
+  page.on("dialog", (d) => { boxes.push(d.message()); void d.dismiss(); });
+  const queries: string[] = [];
+  await page.route((u) => u.pathname === "/admin/users", (r) => { queries.push(new URL(r.request().url()).search); return r.fallback(); });
+  const erased: string[] = [];
+  await page.route((u) => /\/admin\/users\/[^/]+\/delete-data$/.test(u.pathname), async (r) => {        // nobody's data is really deleted
+    erased.push(new URL(r.request().url()).pathname);
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, failed: [], done: [] }) });
+  });
+  const errors = await open(page, "/admin/users", "Paper trading now");
+  const table = page.getByRole("table", { name: "Users" });
+  await expect(table.getByRole("rowheader").first()).toBeVisible({ timeout: 30_000 });
+  // no red button on every row: one … button opens the user's actions
+  await expect(table.getByRole("button", { name: /Delete|Change plan/ })).toHaveCount(0);
+  await expect(table.getByRole("button", { name: /^Actions for / }).first()).toBeVisible();
+  expect(await table.locator("tbody tr").count(), "a page at a time").toBeLessThanOrEqual(25);
+  await expect(page.getByRole("navigation", { name: "Pages" })).toContainText(/Page 1 of \d+/);
+  // filter by plan, sent to the server
+  await page.getByRole("radiogroup", { name: "Plan" }).getByRole("radio", { name: "Pro" }).click();
+  await expect.poll(() => queries.at(-1)).toContain("plan=pro");
+  await expect(table.locator("tbody tr").first()).toContainText("Pro");
+  for (const row of await table.locator("tbody tr").all()) await expect(row).toContainText(/Pro/);
+  await expect(table).not.toContainText("2099");
+  await shot(page, "admin-users-pro", info);
+  // search too, then the row's actions
+  await page.getByRole("searchbox", { name: "Search users by email" }).fill("load2@");
+  await expect(table.getByRole("rowheader")).toHaveText(["load2@example.com"], { timeout: 30_000 });
+  await table.getByRole("button", { name: "Actions for load2@example.com" }).click();
+  const box = page.getByRole("dialog", { name: "load2@example.com" });
+  await expect(box).toContainText("Given · no end date");
+  await box.getByRole("button", { name: "Delete data…" }).click();
+  const ask = page.getByRole("dialog", { name: "Delete the data of load2@example.com?" });
+  const go = ask.getByRole("button", { name: "Delete this user's data" });
+  await expect(go).toBeDisabled();
+  await ask.getByLabel("Type their email to confirm").fill("load2@example");
+  await expect(go).toBeDisabled();
+  await shot(page, "admin-users-delete", info);
+  await ask.getByLabel("Type their email to confirm").fill("load2@example.com");
+  await expect(go).toBeEnabled();
+  await go.click();
+  await expect(page.getByRole("status").first()).toContainText("The app data of load2@example.com is deleted.");
+  expect(erased).toEqual(["/admin/users/u-load-2/delete-data"]);
+  await expect(ask).toHaveCount(0);
+  // Change plan opens in the same box, and Back returns to the user's facts
+  await table.getByRole("button", { name: "Actions for load2@example.com" }).click();
+  await page.getByRole("dialog", { name: "load2@example.com" }).getByRole("button", { name: "Change plan" }).click();
+  const plan = page.getByRole("dialog", { name: "Change plan: load2@example.com" });
+  await expect(plan.getByRole("radiogroup", { name: "Plan" })).toBeVisible();
+  await plan.getByRole("button", { name: "Back" }).click();
+  await expect(page.getByRole("dialog", { name: "load2@example.com" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(boxes, "no browser box opened").toEqual([]);
+  await sane(page, errors);
+});
+
+test("admin: Overview, Data and jobs and System tell a service's state in the same words", async ({ page }, info) => {
+  const errors = await open(page, "/admin", "Needs your attention");
+  const services = page.getByRole("list", { name: "Services" });
+  await expect(services.getByRole("listitem").first()).toBeVisible({ timeout: 30_000 });
+  const tile = async (label: string) => {
+    const t = services.getByRole("listitem").filter({ hasText: label });
+    return { word: (await t.locator(".k-light").innerText()).trim(), detail: (await t.locator(".k-health-d").innerText()).trim() };
+  };
+  const feed = await tile("Live price feed"), broker = await tile("Broker data (India)"), mail = await tile("Alert emails");
+  await expect(page.getByRole("region", { name: "Needs your attention" })).not.toContainText("(SMTP) settings are missing");
+  await page.getByRole("navigation", { name: "Admin sections" }).getByRole("link", { name: "Data and jobs" }).click();
+  const rows = page.getByRole("list", { name: "India broker data" });
+  for (const [label, t] of [["Live price feed", feed], ["Broker data (India)", broker]] as const) {
+    const row = rows.getByRole("listitem").filter({ hasText: label });
+    await expect(row.locator(".k-light")).toHaveText(t.word, { timeout: 30_000 });
+    await expect(row).toContainText(t.detail);
+  }
+  // a job's problem is in words: no raw error class, and the SQL for storage is folded away
+  const jobs = page.getByRole("table", { name: "Background jobs" });
+  await expect(jobs.getByRole("rowheader").first()).toBeVisible({ timeout: 30_000 });
+  await expect(jobs).not.toContainText(/\(\w*(Error|Exception)\)/);
+  await expect(jobs.getByRole("row", { name: /^Market events/ })).not.toContainText("Problem");
+  if (await page.getByRole("button", { name: "Copy SQL" }).count()) {
+    await expect(page.getByLabel("The SQL to run")).toBeHidden();
+    await page.getByTestId("storage-sql").locator("summary").click();
+    await expect(page.getByLabel("The SQL to run")).toBeVisible();
+  }
+  await page.getByRole("navigation", { name: "Admin sections" }).getByRole("link", { name: "System" }).click();
+  const mailRow = page.getByRole("list", { name: "Other services" }).getByRole("listitem").filter({ hasText: "Alert emails" });
+  await expect(mailRow.locator(".k-light")).toHaveText(mail.word, { timeout: 30_000 });
+  if (mail.word !== "OK") for (const v of ["RESEND_API_KEY", "BREVO_API_KEY", "SMTP_HOST"]) await expect(mailRow).toContainText(v);
+  await sane(page, errors);
+  await shot(page, "admin-system-after", info);
 });
 
 test("admin emails: 25 kinds listed, each shown in a frame with no scripts at a desktop or a phone width, or as text", async ({ page }, info) => {

@@ -45,7 +45,8 @@ def build():
     from datetime import datetime, timezone
     from app import db
     # brand-new accounts, for the first-steps checklist on Home (u-load-201 and 204: the new-user walkthrough's own)
-    for uid in ("u-free", "u-basic", "u-load-201", "u-load-204"):
+    # (u-load-58 and 59: e2e/gate.spec.ts, the first-run guide one piece at a time)
+    for uid in ("u-free", "u-basic", "u-load-201", "u-load-204", "u-load-58", "u-load-59"):
         db.update_profile(uid, created_at=datetime.now(timezone.utc).isoformat())
     # the owner's holdings, imported from a Zerodha Console file, for the My Holdings page
     sample = Path(__file__).parent / "fixtures" / "holdings" / "zerodha_console_holdings.xlsx"
@@ -64,6 +65,10 @@ def build():
     fo_changes.refresh(main.filings_feed)    # the F&O contract file and circulars, likewise
     from tests import fake_market_events
     fake_market_events.seed()                # the market events calendar's sources, as the morning read would have kept them
+    # ...and its twice-a-day read (and Admin's Run now) answered by the same made-up sources, never the real sites
+    from app import market_events
+    mp.setattr(market_events, "refresh", lambda web=None, today=None, now=None, only=None: (
+        fake_market_events.seed(today), {"problems": [], "read": [n for n, _ in market_events.READERS]})[1])
     screen_index()
     breadth(mp)
     positioning_history()
@@ -339,29 +344,31 @@ def screen_index():
     import random
     from datetime import date, timedelta
     from app import db, screens
+    from tests.fake_prices import level, name_of, sector_of
     rng = random.Random(5)
-    sectors = ["Energy", "Information Technology", "Financials", "Consumer Staples", "Materials"]
+    today = date.today().isoformat()
     names = {"IN": ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "ONGC", "ITC", "HINDUNILVR", "TATASTEEL", "JSWSTEEL",
                     "WIPRO", "HCLTECH", "NTPC", "COALINDIA", "SBIN", "AXISBANK", "NESTLEIND", "DABUR", "VEDL", "SAIL"],
              "US": ["AAPL", "MSFT", "XOM", "JPM", "KO", "NUE"]}
     for region, syms in names.items():
         rows = []
         for i, sym in enumerate(syms):
-            price = round(rng.uniform(50, 3000), 2)
-            f = {"region": region, "symbol": sym, "name": f"{sym.title()} {'Ltd' if region == 'IN' else 'Inc.'}",
-                 "industry": [sectors[i % len(sectors)]], "price": price, "high52": round(price * rng.uniform(1, 1.6), 2),
-                 "low52": round(price * 0.7, 2), "price_at": "2026-10-01", "market_cap": round(rng.uniform(200, 900000)),
+            # the same names, sectors and price levels as the rest of the demo world (fake_prices), read today
+            price = round((level(sym) or rng.uniform(50, 3000)) * rng.uniform(0.97, 1.03), 2)
+            f = {"region": region, "symbol": sym, "name": name_of(sym) or f"{sym.title()} {'Ltd' if region == 'IN' else 'Inc.'}",
+                 "industry": [sector_of(sym) or "Diversified"], "price": price, "high52": round(price * rng.uniform(1, 1.6), 2),
+                 "low52": round(price * 0.7, 2), "price_at": today, "market_cap": round(rng.uniform(200, 900000)),
                  "pe": None if i % 7 == 3 else round(rng.uniform(6, 60), 1), "roe": round(rng.uniform(-5, 35), 1),
                  "roce": round(rng.uniform(0, 40), 1), "div_yield": round(rng.uniform(0, 4), 2), "net_margin": round(rng.uniform(-5, 30), 1),
                  "opm": round(rng.uniform(5, 40), 1), "debt_equity": round(rng.uniform(0, 2), 2), "bank": False,
                  "growth": {"sales_cagr_3y": round(rng.uniform(-10, 30), 1)}, "stage": 1 + i % 4,
-                 "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [], "built_at": "2026-10-01T12:00:00+00:00"}
+                 "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [], "built_at": f"{today}T12:00:00+00:00"}
             r = screens.row(region, sym, f)
             if region == "IN":          # a promoter or insider bought on the open market: 10 days ago for every fourth
                 r["insider_buy_at"] = (date.today() - timedelta(days=10 if i % 4 == 1 else 200)).isoformat() if i % 2 else None
             rows.append(r)
         rows.sort(key=lambda r: r["name"].lower())
-        db.set_setting(screens.INDEX_KEY + region, json.dumps({"region": region, "at": "2026-10-01T18:00:00+00:00", "rows": rows}))
+        db.set_setting(screens.INDEX_KEY + region, json.dumps({"region": region, "at": f"{today}T06:00:00+00:00", "rows": rows}))
 
 
 if __name__ == "__main__":

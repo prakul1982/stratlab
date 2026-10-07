@@ -10,6 +10,7 @@ import threading
 
 from ..intel.net import SourceError
 from ..intel.yahoo import INTERVAL, Yahoo
+from .calendar import trading_bars
 from .coinbase import DataError
 
 US_EXCHANGES = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS"}
@@ -170,9 +171,10 @@ class YahooProvider:
         except SourceError as e:
             raise DataError(str(e)) from None
         k = self._scale(inst, c["meta"])
+        bars = trading_bars(self.market, c["candles"], tf)      # never a weekend candle for a weekday market
         if k == 1.0:
-            return c["candles"]
-        return [{**b, "o": b["o"] * k, "h": b["h"] * k, "l": b["l"] * k, "c": b["c"] * k} for b in c["candles"]]
+            return bars
+        return [{**b, "o": b["o"] * k, "h": b["h"] * k, "l": b["l"] * k, "c": b["c"] * k} for b in bars]
 
     def closed_candles(self, inst: dict, tf: str, since: str | None) -> list[dict]:
         """Candles that have fully closed after `since`, for live paper trading."""

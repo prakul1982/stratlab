@@ -1,18 +1,22 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { CFG } from "../lib/api";
+import { api, CFG } from "../lib/api";
 import { Logo } from "../components/Logo";
 import { LEGAL_PAGES } from "../components/LegalLinks";
 
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
 const BUSINESS = {
   name: CFG.BUSINESS_NAME || "StratLab",
-  email: CFG.CONTACT_EMAIL || "prakul828@gmail.com",
+  email: CFG.CONTACT_EMAIL || "support@stratlab.studio",
+  billing: CFG.BILLING_EMAIL || "billing@stratlab.studio",
+  privacy: CFG.PRIVACY_EMAIL || "privacy@stratlab.studio",
   address: CFG.BUSINESS_ADDRESS || "",
   updated: "26 September 2026",
 };
 
-const mail = <a className="link" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>;
+const Mail = () => <a className="link" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>;
+const BillingMail = () => <a className="link" href={`mailto:${BUSINESS.billing}`}>{BUSINESS.billing}</a>;
+const PrivacyMail = () => <a className="link" href={`mailto:${BUSINESS.privacy}`}>{BUSINESS.privacy}</a>;
 
 function Terms() {
   return (
@@ -44,7 +48,7 @@ function Terms() {
       <h2 className="h3">Ending</h2>
       <p>You can stop using StratLab and cancel at any time. We may end the service or an account with notice, or without notice for misuse. These terms are governed by the laws of India, and courts in India have jurisdiction.</p>
       <h2 className="h3">Changes</h2>
-      <p>If these terms change in an important way we'll say so in the app before the change applies. Questions: {mail}.</p>
+      <p>If these terms change in an important way we'll say so in the app before the change applies. Questions: <Mail />.</p>
     </>
   );
 }
@@ -77,13 +81,13 @@ function Privacy() {
       <h2 className="h3">Cookies and storage</h2>
       <p>Your browser keeps your sign-in session and a few preferences (like light or dark mode). Nothing is used for advertising.</p>
       <h2 className="h3">Keeping and deleting</h2>
-      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. To see what we hold, correct it, or delete your account and its data, email {mail}; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
+      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. To see what we hold, correct it, or delete your account and its data, email <PrivacyMail />; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
       <h2 className="h3">Security</h2>
       <p>Data is sent over HTTPS, access is limited to your own account, and secrets stay on the server. No system is perfectly secure; if a breach affects you, we'll tell you as the law requires.</p>
       <h2 className="h3">Children</h2>
       <p>StratLab is for adults (18+). We don't knowingly collect children's data.</p>
       <h2 className="h3">Contact and grievances</h2>
-      <p>For privacy questions, requests or complaints, email {mail}. If you're not satisfied, you can complain to the Data Protection Board of India.</p>
+      <p>For privacy questions, requests or complaints, email <PrivacyMail />. If you're not satisfied, you can complain to the Data Protection Board of India.</p>
     </>
   );
 }
@@ -101,7 +105,7 @@ function Refunds() {
       <ul>
         <li>Because you can use a paid plan straight away and cancel any time before it renews, payments for a period that has started aren't refunded.</li>
         <li>We refund in full if you were charged twice, charged after cancelling, or charged but your plan didn't activate and we can't fix it.</li>
-        <li>To ask for a refund, email {mail} from your account's email with the payment date. We reply within 2 working days. Approved refunds go back to the original payment method within 5–7 working days (your bank may take longer to show it).</li>
+        <li>To ask for a refund, email <BillingMail /> from your account's email with the payment date. We reply within 2 working days. Approved refunds go back to the original payment method within 5–7 working days (your bank may take longer to show it).</li>
       </ul>
       <h2 className="h3">Delivery</h2>
       <p>StratLab is an online service: nothing is shipped. A paid plan is active on your account as soon as the payment goes through, usually within a minute.</p>
@@ -114,11 +118,13 @@ function Contact() {
     <>
       <p>We're happy to help with your account, billing, refunds, privacy requests or anything else.</p>
       <ul>
-        <li><b>Email:</b> {mail}. We reply within 2 working days.</li>
+        <li><b>Help and questions:</b> <Mail />. We reply within 2 working days.</li>
+        <li><b>Payments, invoices and refunds:</b> <BillingMail /></li>
+        <li><b>Privacy and your data:</b> <PrivacyMail /></li>
         <li><b>Business:</b> {BUSINESS.name}</li>
         {BUSINESS.address && <li><b>Address:</b> {BUSINESS.address}</li>}
       </ul>
-      <p className="small muted">For billing questions, include your account's email and the payment date so we can find it quickly.</p>
+      <p className="small muted">For billing questions, write to <BillingMail /> with your account's email and the payment date so we can find it quickly.</p>
     </>
   );
 }
@@ -128,6 +134,19 @@ const BODY: Record<string, () => ReactNode> = { "/terms": Terms, "/privacy": Pri
 /** The public policy pages. They open without signing in, as payment providers and app stores require. */
 export function LegalPage() {
   const { pathname } = useLocation();
+  // the seller's details set in Admin → Invoices (legal name, address, business email), when the owner has set them
+  const [, seen] = useState(0);
+  useEffect(() => {
+    let live = true;
+    api<{ legal_name?: string; address?: string; email?: string }>("/public/business").then((b) => {
+      if (!live || !b) return;
+      if (b.legal_name) BUSINESS.name = b.legal_name;
+      if (b.address && !CFG.BUSINESS_ADDRESS) BUSINESS.address = b.address;
+      if (b.email) BUSINESS.email = b.email;
+      seen((n) => n + 1);
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
   const page = LEGAL_PAGES.find((p) => p.path === pathname) ?? LEGAL_PAGES[0];
   const Body = BODY[page.path];
   return (

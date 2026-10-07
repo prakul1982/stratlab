@@ -11,5 +11,7 @@ window.STRATLAB_CONFIG = {
   // Shown on the Terms, Privacy, Refunds and Contact pages (Razorpay checks these before going live).
   // Add BUSINESS_ADDRESS: "Street, City, State PIN, India" if you want an address listed.
   BUSINESS_NAME: "StratLab",
-  CONTACT_EMAIL: "prakul828@gmail.com",
+  CONTACT_EMAIL: "support@stratlab.studio",   // contact and help
+  BILLING_EMAIL: "billing@stratlab.studio",   // payments, invoices and refunds
+  PRIVACY_EMAIL: "privacy@stratlab.studio",   // privacy requests and grievances (DPDP Act)
 };

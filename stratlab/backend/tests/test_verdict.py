@@ -66,7 +66,7 @@ def _fake(monkeypatch, unseen, nearby, shuffle="pass"):
     mk = lambda i, st: {"id": i, "title": i, "status": st, "detail": "x", "data": None}
     monkeypatch.setattr(V, "check_unseen", lambda *a: mk("unseen", unseen))
     monkeypatch.setattr(V, "check_nearby", lambda *a: mk("nearby", nearby))
-    monkeypatch.setattr(V, "check_shuffle", lambda *a: mk("shuffle", shuffle))
+    monkeypatch.setattr(V, "check_shuffle", lambda *a, **k: mk("shuffle", shuffle))   # takes the trades' day-by-day paths by keyword
 
 
 @pytest.mark.parametrize("unseen,nearby,ret,n,expected", [

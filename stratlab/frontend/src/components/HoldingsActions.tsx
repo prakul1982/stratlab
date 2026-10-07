@@ -21,22 +21,23 @@ export interface HoldingsActions {
 const perShare = (v: number) => `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
 const incomeCols: Column<IncomeLine>[] = [
-  { key: "stock", header: "Stock", rowHeader: true, cell: (d) => <Link className="link" to={`/research/IN/${encodeURIComponent(d.symbol)}`}><b>{d.symbol}</b></Link> },
-  { key: "label", header: "Dividend", cell: (d) => d.label },
+  // the dividend's name under the stock, so the ex-date fits a phone without a sideways swipe (R1-080)
+  { key: "stock", header: "Stock", rowHeader: true, wrap: true, cell: (d) => <><Link className="link" to={`/research/IN/${encodeURIComponent(d.symbol)}`}><b>{d.symbol}</b></Link><span className="k-sub-line">{d.label}</span></> },
   { key: "ex", header: "Ex-date", numeric: true, cell: (d) => exDay(d.ex_date, true) },
   { key: "ps", header: "A share", numeric: true, cell: (d) => perShare(d.amount) },
   { key: "qty", header: "Shares", numeric: true, cell: (d) => qtyText(Math.round(d.qty * 10000) / 10000) },
   { key: "amt", header: "Amount", numeric: true, cell: (d) => inr(d.total) },
 ];
 
-export function HoldingsActionsPanel<V>({ onHoldings, version }: { onHoldings: (v: V) => void; version: number }) {
+export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onHoldings: (v: V) => void; version: number; onLoaded?: () => void }) {
   const { fail, notify } = useApp();
   const [data, setData] = useState<HoldingsActions | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     let live = true;
-    api<HoldingsActions>("/holdings/corp-actions").then((x) => live && setData(x)).catch(() => live && setData(null));
+    // onLoaded: the page keeps the cards below this one waiting until it knows its size, so nothing jumps when it arrives
+    api<HoldingsActions>("/holdings/corp-actions").then((x) => live && setData(x)).catch(() => live && setData(null)).finally(() => live && onLoaded?.());
     return () => { live = false; };
   }, [version]);
 
@@ -56,7 +57,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version }: { onHoldings: (
   return (
     <>
       {data.notices.map((n) => (
-        <Notice key={n.id} role="status" tone="warn" actions={<>
+        <Notice key={n.id} role="status" actions={<>
           <button type="button" className="btn sm" disabled={!!busy} onClick={() => act(n.symbol, n.id, "apply", `${n.symbol}: quantity ${qtyText(n.to_qty)}${n.to_avg != null ? `, average price ${price(n.to_avg, "INR")}` : ""}.`)}>Apply</button>
           <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => act(n.symbol, n.id, "dismiss", `${n.symbol} kept as it is.`)}>Already in my file</button>
         </>}>
