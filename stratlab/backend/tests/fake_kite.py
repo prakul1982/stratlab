@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from app import rotation, sector_members, universes
 from app.data.mcx import CONTRACTS
 from app.kite_service import KiteService, today_ist
+from tests.fake_prices import ETF_NAMES, level, name_of
 
 IST = ZoneInfo("Asia/Kolkata")
 STEP = {"day": 1440, "60minute": 60, "15minute": 15, "5minute": 5, "minute": 1}
@@ -16,13 +17,14 @@ OPTIONS = {"NIFTY": ("NIFTY 50", 50, 75), "BANKNIFTY": ("NIFTY BANK", 100, 35)}
 
 
 def _base(name: str) -> float:
-    return 100 + zlib.crc32(name.encode()) % 3000
+    return level(name, 20000) or 100 + zlib.crc32(name.encode()) % 3000     # well-known names trade near their real levels (fake_prices)
 
 
 def price_of(name: str, t: datetime) -> float:
     d = t.timestamp() / 86400
     b = _base(name)
-    return round(b * (1 + 0.0003 * (d - 20000)) + b * 0.08 * math.sin(d / 11 + _base(name) % 7), 2)
+    phase = (100 + zlib.crc32(name.encode()) % 3000) % 7          # each name keeps its own rhythm whatever its level
+    return round(b * (1 + 0.0003 * (d - 20000)) + b * 0.08 * math.sin(d / 11 + phase), 2)
 
 
 def _expiries(n=3):
@@ -50,7 +52,12 @@ class FakeKiteConnect:
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         for s in sorted(stocks):
             token += 1
-            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": s.title(), "segment": "NSE",
+            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": name_of(s) or s.title(), "segment": "NSE",
+                                     "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
+        # ETFs trade on NSE like shares (the broker lists them as EQ), the ones the ETF vs NAV page reads
+        for s in sorted(ETF_NAMES):
+            token += 1
+            self.rows["NSE"].append({"instrument_token": token, "tradingsymbol": s, "name": ETF_NAMES[s], "segment": "NSE",
                                      "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         # NSE stocks in a restricted series: the broker lists them as SYMBOL-BE
         token += 1

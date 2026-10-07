@@ -274,7 +274,11 @@ def _nse(sw=None):
                                                     {"tradingDate": "22-Mar-2027", "weekDay": "Monday", "description": "Holi"}],
                                              "FO": []})
         if r.url.path == "/api/quote-equity":
-            return httpx.Response(200, json={"industryInfo": {"macro": "Energy", "industry": "Refineries"},
+            # each company's own broad sector (fake_prices), so a holdings page groups banks with banks
+            from tests.fake_prices import sector_of
+            sym = r.url.params.get("symbol", "")
+            macro = sector_of(sym) or "Energy"
+            return httpx.Response(200, json={"industryInfo": {"macro": macro, "industry": "Refineries" if sym == "RELIANCE" else macro},
                                              "priceInfo": {"lastPrice": 2900.5}})
         return httpx.Response(200, text="<html></html>")
     t = httpx.MockTransport(handler)

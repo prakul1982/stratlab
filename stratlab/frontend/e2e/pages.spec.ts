@@ -1062,12 +1062,12 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   const errors = await open(page, "/research/screens?region=IN", "Filter companies by plain facts");
   await answerLevel(page);
   await expect(page.getByText(/20 of 20 companies match/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/Prices as of 1 Oct 2026/)).toBeVisible();
+  await expect(page.getByText(/Prices as of \d+ \w+ \d{4}/)).toBeVisible();              // read today, like the rest of the app
   const table = page.locator(".screens-table");
-  await expect(table.locator("tbody tr").first()).toContainText("Axisbank Ltd");          // alphabetical by default
+  await expect(table.locator("tbody tr").first()).toContainText("Axis Bank Ltd");         // alphabetical by default, the listed name
   if (phone) await page.getByRole("button", { name: /Show filters/ }).click();
   await page.getByRole("button", { name: "Energy", exact: true }).click();
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();                 // RELIANCE, ONGC, COALINDIA
   await page.getByRole("button", { name: "What is Debt to equity?" }).click();
   await expect(page.getByRole("note")).toContainText("Borrowings divided by shareholders' equity");
   await page.getByLabel("P/E (price to earnings): at most").fill("abc");
@@ -1075,7 +1075,7 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await page.getByLabel("P/E (price to earnings): at most").fill("1");
   await expect(page.getByText("No company meets every condition.", { exact: false })).toBeVisible();
   await page.getByLabel("P/E (price to earnings): at most").fill("");
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();
   await table.getByRole("button", { name: "P/E" }).click();                             // sort by a column the user picks
   await expect(table.locator("th[aria-sort=ascending]")).toContainText("P/E");
   await page.getByRole("button", { name: /Low to high/ }).click();
@@ -1089,7 +1089,7 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByText(/20 of 20 companies match/)).toBeVisible();
   await saved.click();                                                                  // a saved screen opens its conditions
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();
   await page.getByRole("button", { name: `Delete ${tag}` }).click();
   await expect(page.getByRole("button", { name: `${tag} · weekly` })).toHaveCount(0);
   const text = await page.locator("main").innerText();
