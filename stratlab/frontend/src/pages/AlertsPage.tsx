@@ -42,7 +42,7 @@ export function AlertsPage() {
       {!page && !error && <Card><Skeleton label="Opening your alerts" lines={3} /></Card>}
       {page && <>
         <Card>
-          <CardHead title="How many are on" info="Your plan's limit counts the alerts that are on. Ones that already fired don't count, and repeating ones count once."
+          <CardHead title="Your alerts" info="Your plan's limit counts the alerts that are on. Ones that already fired don't count, and repeating ones count once."
             actions={!adding ? <button className="btn sm" disabled={full} onClick={() => setAdding(true)}><Bell size={17} />New alert</button> : undefined} />
           <StatRow>
             <Stat label="Alerts on" value={`${page.count} of ${page.limit}`} />
