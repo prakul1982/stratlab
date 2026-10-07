@@ -2,6 +2,8 @@
 import math
 import zlib
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -42,11 +44,16 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
             ts, o, h, l, c, v = [], [], [], [], [], []
             t = p1 - p1 % g
             b = base_price(sym)
+            zone = ZoneInfo(tz)
             while t <= p2:
+                if datetime.fromtimestamp(t, zone).weekday() >= 5:     # like the real feed: these markets close at weekends
+                    t += g
+                    continue
                 d = t / 86400
                 phase = (zlib.crc32(sym.encode()) % 628) / 100 if varied else 0   # varied: each symbol its own rhythm
                 px = b * (1 + 0.0003 * (d - 19000)) + b * 0.08 * math.sin(d / 9 + phase) + b * 0.01 * math.sin(t / 7000)
-                ts.append(t); o.append(px * 0.998); h.append(px * 1.01); l.append(px * 0.99); c.append(px); v.append(1000)
+                ts.append(t); o.append(px * 0.998); h.append(px * 1.01); l.append(px * 0.99); c.append(px)
+                v.append(0 if sym.endswith("=X") else 1000)     # spot forex has no exchange volume
                 t += g
             meta = {"symbol": sym, "currency": cur, "exchangeTimezoneName": tz, "regularMarketPrice": c[-1],
                     "chartPreviousClose": c[-2] if len(c) > 1 else c[-1], "fiftyTwoWeekHigh": max(c) * 1.02,

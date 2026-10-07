@@ -36,6 +36,7 @@ CMDTY_SPREAD = 0.0002            # global futures: about a tick of spread plus c
 LABELS = {
     "brokerage": "Brokerage", "stt": "STT / CTT", "exchange": "Exchange + SEBI fees", "stamp": "Stamp duty",
     "gst": "GST", "sec": "SEC fee", "finra": "FINRA fee", "fee": "Exchange fee", "spread": "Spread",
+    "slippage": "Slippage",
 }
 
 

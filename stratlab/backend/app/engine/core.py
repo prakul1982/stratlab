@@ -142,6 +142,11 @@ class Engine:
             self.cost_items[k] = self.cost_items.get(k, 0.0) + v
         return C.total(items)
 
+    def _slip(self, q: float, fill: float, px: float):
+        """Slippage is in the fill price, not a charge; it's counted here so the cost breakdown can show it."""
+        if q and fill != px:
+            self.cost_items["slippage"] = self.cost_items.get("slippage", 0.0) + abs(fill - px) * q
+
     def equity(self, px: float) -> float:
         return self.cash + self.dir * self.qty * px
 
@@ -198,14 +203,16 @@ class Engine:
     def _close(self, b: dict, px: float, why: str) -> dict:
         d = self.dir
         close_side = "sell" if d == 1 else "buy"
-        px *= 1 - self.r.slippage / 100 * d      # selling a long fills lower, buying back a short fills higher
+        fill = px * (1 - self.r.slippage / 100 * d)      # selling a long fills lower, buying back a short fills higher
+        self._slip(self.qty, fill, px)
+        px = fill
         exit_cost = self._pay(close_side, self.qty, px)
         trade_costs = self.entry_cost + exit_cost
         pnl = d * self.qty * (px - self.entry) - trade_costs
         self.cash += d * self.qty * px - exit_cost
         self.trades.append({"entry_t": self.entry_t, "exit_t": b["t"], "entry": self.entry, "exit": px,
                             "qty": self.qty, "pnl": pnl, "costs": trade_costs, "side": "short" if d == -1 else "long",
-                            "ret": d * (px / self.entry - 1) * 100, "why": why})
+                            "ret": pnl / (self.qty * self.entry) * 100 if self.qty and self.entry else 0.0, "why": why})
         ev = {"t": b["t"], "side": close_side, "px": px, "qty": self.qty, "why": why, "pnl": pnl}
         self.events.append(ev)
         self.qty = 0
@@ -291,7 +298,9 @@ class Engine:
         """Open a position of `q` at the latest price `px`, with the same slippage and charges as a rule's entry. No
         stop or target is set; the strategy's exit rules, time exit and square-off still apply from the next candle."""
         open_side = "buy" if d == 1 else "sell"
-        px = px * (1 + self.r.slippage / 100 * d)
+        fill = px * (1 + self.r.slippage / 100 * d)
+        self._slip(q, fill, px)
+        px = fill
         self.dir = d
         self.entry_cost = self._pay(open_side, q, px)
         self.cash -= d * q * px + self.entry_cost
@@ -341,6 +350,7 @@ class Engine:
             self.skipped_size += 1
             return None
         self.dir = d
+        self._slip(q, px, b["c"])
         self.entry_cost = self._pay(open_side, q, px)
         self.cash -= d * q * px + self.entry_cost
         self.qty, self.entry, self.entry_t, self.held, self.best = q, px, b["t"], 0, px
@@ -422,9 +432,17 @@ def simulate(bars: list[dict], strategy, start: int, end: int | None = None, lot
     end = len(bars) if end is None else end
     eng = Engine(strategy, lot, cost_kind=cost_kind)
     equity = [strategy.risk.capital]
+    # where each trade sits in `equity`: [index before its entry, index of its exit (None while open), entry bar]
+    eng.spans = []
     for i in range(start + 1, end):
+        was, closed = eng.qty > 0, len(eng.trades)
         eng.step(bars, ctx, i)
         equity.append(eng.equity(bars[i]["c"]))
+        j = len(equity) - 1
+        if was and len(eng.trades) > closed:
+            eng.spans[-1][1] = j
+        if eng.qty > 0 and (not was or len(eng.trades) > closed):
+            eng.spans.append([j - 1, None, i])
     return eng, equity
 
 
@@ -436,10 +454,7 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
     view = bars[start:]
     open_trade = None
     if eng.qty > 0:
-        last = bars[-1]["c"]
-        open_trade = {"entry_t": eng.entry_t, "exit_t": None, "entry": eng.entry, "exit": last, "qty": eng.qty,
-                      "pnl": eng.dir * eng.qty * (last - eng.entry), "ret": eng.dir * (last / eng.entry - 1) * 100,
-                      "side": "short" if eng.dir == -1 else "long", "why": "Still open"}
+        open_trade = open_position(eng, bars[-1]["c"])
     st = stats(equity, eng.trades, cap, PER_YEAR[tf])
     first = view[0]["c"]
     bh = [cap * b["c"] / first for b in view]
@@ -469,8 +484,16 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
         "skipped_size": eng.skipped_size,
         "candles": len(rng),
     }
+    split = split_at(start, len(bars))
+    for t, (a, b, i) in zip([*eng.trades, *([open_trade] if open_trade else [])], eng.spans):
+        t["part"] = "built" if i <= split else "unseen"
+        if i <= split and (b is None or b + start > split):
+            t["spans_split"] = True        # opened before the split and closed after it: it counts with the built part
     return {
         "diagnostics": diagnostics,
+        "_split": split,
+        # each trade's day-by-day changes in account value, for the bad-luck drawdown check
+        "_paths": [np.diff(np.asarray(equity[a:(len(equity) - 1 if b is None else b) + 1], dtype=float)) for a, b, _ in eng.spans],
         "bars": [{"t": b["t"], "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"]} for b in view],
         "equity": clean(equity), "buy_hold": clean(bh), "drawdown": clean(st.pop("dd")),
         "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100, "skipped_size": eng.skipped_size},
@@ -478,6 +501,23 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
         "overlays": overlays, "oscillators": osc, "periods": periods[-60:],
         "costs": cost_summary(eng, cost_kind, equity[-1] - cap),
     }
+
+
+def open_position(eng: Engine, last: float) -> dict:
+    """The trade still open at the end, valued at the last close. Its P&L is after the entry's costs, already paid,
+    so the trade list adds up to the account's change; closing it would cost the exit's charges too."""
+    pnl = eng.dir * eng.qty * (last - eng.entry) - eng.entry_cost
+    return {"entry_t": eng.entry_t, "exit_t": None, "entry": eng.entry, "exit": last, "qty": eng.qty, "pnl": pnl,
+            "costs": eng.entry_cost, "ret": pnl / (eng.qty * eng.entry) * 100 if eng.entry else 0.0,
+            "side": "short" if eng.dir == -1 else "long", "why": "Still open"}
+
+
+SPLIT = 0.7     # the unseen-data check: the first 70% of the test is "built on", the rest is unseen
+
+
+def split_at(start: int, n: int) -> int:
+    """The bar where the unseen part starts: trades entered after it are unseen."""
+    return start + int((n - 1 - start) * SPLIT)
 
 
 def cost_summary(eng: Engine, cost_kind: str, net_pnl: float) -> dict:

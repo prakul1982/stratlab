@@ -1105,10 +1105,26 @@ def list_notebooks(profile=Depends(current_profile)):
     return out
 
 
+def unique_name(profile, name: str) -> str:
+    """A new notebook's name, numbered when another notebook already has it ("Ride the trend 2"), so two notebooks
+    from the same template can be told apart in the sidebar."""
+    name = (name or "Untitled notebook").strip()[:80]
+    try:
+        taken = {str(r.get("name") or "").strip().lower() for r in db.list_notebook_rows(profile["id"])}
+    except Exception:
+        return name
+    if name.lower() not in taken:
+        return name
+    n = 2
+    while f"{name} {n}".lower() in taken:
+        n += 1
+    return f"{name[:76]} {n}"
+
+
 @app.post("/notebooks")
 def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
     strategy = req.strategy or Strategy(name=req.name or "Untitled notebook")
-    nb = {"name": req.name or strategy.name, "question": req.question or "", "notes": req.notes or "",
+    nb = {"name": unique_name(profile, req.name or strategy.name), "question": req.question or "", "notes": req.notes or "",
           "strategy": strategy.model_dump(), "instrument": instrument_summary(req.instrument),
           "experiments": [], "summary": research.summary([])}
     if req.group is not None and not req.instrument:
@@ -1184,6 +1200,19 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     experiments = list(nb.get("experiments") or [])
     version = (experiments[-1]["v"] + 1) if experiments else 1
     group = nb.get("group")
+    defaulted = None
+    if not req.bars and not group and not req.instrument and not (nb.get("instrument") or {}).get("id"):
+        # nothing picked yet: test on the default instrument (the first one the market picker offers) and say so
+        first = next(iter(markets.defaults()), None)
+        if first is None:
+            err(400, "no_instrument", "Pick an instrument or upload candles first.")
+        nb["instrument"] = instrument_summary(first["id"])
+        defaulted = first.get("symbol") or first["id"]
+    same = research.unchanged(experiments, strategy, None if group else (nb.get("instrument") or {}).get("id"),
+                              req.days, db.now_iso()) if not req.bars and not req.instrument else None
+    if same is not None:
+        err(409, "unchanged", f"Nothing has changed since v{same}: the same rules, market and period, already run "
+            f"today. Its result stands, and no experiment was used. Change something to run a new one.")
     if group and not req.bars:
         rec, usage = run_group_test(profile, strategy, group, req, version)
         out = {"usage": usage}
@@ -1192,10 +1221,13 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
             req.instrument = (nb.get("instrument") or {}).get("id")
         out = run_test(profile, strategy, req)
         rec = research.record(out, strategy, req.label, version, db.now_iso())
+    if not req.label.strip():
+        rec["label"] = research.describe_change(experiments[-1] if experiments else None, rec)
     experiments = research.slim((experiments + [rec])[-50:])
     nb["experiments"], nb["summary"] = experiments, research.summary(experiments)
     save_notebook(profile, nb)
-    return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"]})
+    return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"], "defaulted": defaulted,
+               "instrument": nb.get("instrument") if defaulted else None})
 
 
 @app.post("/notebooks/{nid}/experiments/{version}/basket")
