@@ -68,6 +68,18 @@ def test_dividend_on_the_money_calendar_counts_the_bonus_before_it(w):
     assert not ahead or ahead[0]["total"] == 264.0
 
 
+def test_red_flags_follow_holdings_and_the_watchlist(w):
+    """R1-049: the red-flag list covers the stocks the person holds, not only the ones they watch (ETFs left out)."""
+    import json
+    from app import db, holdings
+    from app.intel import filings
+    holdings.save("u-pro", [{"symbol": "TCS", "qty": 5, "avg": 3000.0}, {"symbol": "NIFTYBEES", "qty": 10, "avg": 250.0},
+                            {"symbol": "INFY", "qty": 2, "avg": 1500.0}], "manual")
+    db.set_setting("watchlist:u-pro", json.dumps({"items": [{"region": "IN", "symbol": "INFY"}, {"region": "IN", "symbol": "ITC"},
+                                                            {"region": "US", "symbol": "AAPL"}]}))
+    assert filings.followed_symbols("u-pro") == ["TCS", "INFY", "ITC"]
+
+
 def test_an_unchanged_rerun_asks_first(w):
     """R1-023: the same rules, market and period run again the same day would repeat the last experiment."""
     c, h = w["client"], H(w)

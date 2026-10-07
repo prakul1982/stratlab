@@ -64,7 +64,7 @@ export function HoldingsPage() {
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactsReply | null>(null);
-  const more = useMoreColumns("holdings", 6);     // price detail, sector, trend and filings: one click away, so the table fits a laptop
+  const more = useMoreColumns("holdings", 4);     // sector, trend, filings and results: one click away, so the table fits a laptop
   const [mode, setMode] = useState<"replace" | "add">("replace");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
@@ -163,13 +163,15 @@ export function HoldingsPage() {
         {!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} />}
       </>) },
     { key: "value", header: "Value", numeric: true, cell: (r) => money(r.value ?? r.invested, cur(r), 0) },
-    { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null ? "–" : <span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}<span className="k-sub-line">{pct(r.pnl_pct)}</span></span>) },
+    // a missing figure says why, so a dash is never a puzzle (R1-053)
+    { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null
+      ? <>–<span className="k-sub-line">{r.price == null ? "no price today" : "no average price"}</span></>
+      : <span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}<span className="k-sub-line">{pct(r.pnl_pct)}</span></span>) },
     { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <span className={tone(r.day)}>{money(r.day, cur(r), 0)}<span className="k-sub-line">{pct(r.day_pct, 2)}</span></span>) },
     { key: "weight", header: "Weight", numeric: true, cell: (r) => (r.weight == null ? "–" : `${r.weight.toFixed(1)}%`) },
-    { key: "qty", header: "Qty", numeric: true, cell: (r) => qtyText(r.qty) },
+    // what a broker's holdings page shows first: the quantity with its average cost and the last price under it
+    { key: "qty", header: "Qty · avg → last", numeric: true, cell: (r) => <>{qtyText(r.qty)}<span className="k-sub-line">{price(r.avg, cur(r))} → {price(r.price, cur(r))}</span></> },
     ...(more.on ? [
-      { key: "avg", header: "Avg. price", numeric: true, cell: (r: Row) => price(r.avg, cur(r)) },
-      { key: "price", header: "Price", numeric: true, cell: (r: Row) => price(r.price, cur(r)) },
       { key: "sector", header: "Sector", cell: (r: Row) => r.sector },
       { key: "trend", header: "Trend", cell: (r: Row) => <Trend f={facts?.rows[r.symbol]} /> },
       { key: "filings", header: "Filings, 3 months", cell: (r: Row) => <FilingsCell f={facts?.rows[r.symbol]} allowed={facts?.filings !== false} plan={facts?.filings_plan} /> },

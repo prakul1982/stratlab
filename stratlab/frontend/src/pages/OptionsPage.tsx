@@ -446,7 +446,7 @@ export function OptionsPage() {
               {!!unds?.length && (
                 <Select small label="Other underlyings" value={onPopular ? "" : `${s.exchange}:${s.underlying}`}
                   onChange={(v) => { if (v) { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); } }}
-                  options={[{ value: "", label: "More…" }, ...unds.map((u) => ({ value: `${u.exchange}:${u.name}`, label: `${u.name} (${u.venue})` }))]} />
+                  options={[{ value: "", label: `Other underlyings (${Math.max(0, unds.length - popular.length)})…` }, ...unds.filter((u) => !popular.some((p) => p.exchange === u.exchange && p.name === u.name)).map((u) => ({ value: `${u.exchange}:${u.name}`, label: `${u.name} (${u.venue})` }))]} />
               )}
             </div>
           </FieldGroup>

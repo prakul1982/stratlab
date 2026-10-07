@@ -89,6 +89,21 @@ test("a typed number is checked against its named limits, and the server's own c
   assert.deepEqual(f, { qty: "Enter at most 1,00,00,00,000.", value: "Enter 0 or more.", name: "Use at most 60 characters." });
 });
 
+test("a paper session after the close says the market is closed, not reconnecting (R1-030)", async () => {
+  const { sessionFeed } = await import("../src/lib/marketHours.ts");
+  const IN = { id: "IN", name: "India", tz: "Asia/Kolkata", status: "live", hours: { open: "09:15", close: "15:30", days: "Mon–Fri" }, holidays: [] };
+  const evening = new Date("2026-10-07T13:00:00Z");                      // Wed 18:30 in India
+  assert.deepEqual(sessionFeed({ feedConnected: false, lastTickAt: null, market: IN, now: evening }),
+    { text: "Market closed · opens Thu 8 Oct, 09:15 IST", tone: "plain" });
+  const friday = new Date("2026-10-09T12:00:00Z");                      // Fri 17:30: next Monday
+  assert.equal(sessionFeed({ feedConnected: true, lastTickAt: null, market: IN, now: friday }).text, "Market closed · opens Mon 12 Oct, 09:15 IST");
+  const open = new Date("2026-10-07T06:00:00Z");                         // Wed 11:30, open
+  assert.deepEqual(sessionFeed({ feedConnected: true, lastTickAt: "2026-10-07T05:59:00Z", market: IN, now: open }), { text: "Live prices", tone: "live" });
+  assert.equal(sessionFeed({ feedConnected: false, lastTickAt: "2026-10-07T05:58:00Z", market: IN, now: open }).text, "Reconnecting to prices");
+  assert.equal(sessionFeed({ feedConnected: false, lastTickAt: "2026-10-07T05:00:00Z", market: IN, now: open }).tone, "warn");
+  assert.equal(sessionFeed({ feedConnected: true, lastTickAt: "x", market: IN, alwaysOpen: true, now: evening }).text, "Live prices");     // crypto never closes
+});
+
 test("the menu follows the address, not the last space used (R1-011)", () => {
   assert.equal(menuView("/n/abc/e/1", "money"), "trade");
   assert.equal(menuView("/holdings", "trade"), "money");

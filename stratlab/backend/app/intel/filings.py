@@ -1307,6 +1307,19 @@ def watchlist_symbols(uid: str, region: str = "IN") -> list[str]:
     return [i["symbol"] for i in items if i.get("region") == region and i.get("symbol")][:MAX_SYMBOLS]
 
 
+def followed_symbols(uid: str) -> list[str]:
+    """The Indian stocks the person follows for red flags: what they hold (My Holdings, ETFs and bonds left out), then
+    their watchlist, each once, as other pages count "your stocks"."""
+    from .. import holdings, instrument_kinds
+    held = [i["symbol"] for i in holdings.indian(holdings.load(uid)["items"])
+            if instrument_kinds.base(i.get("kind") or instrument_kinds.classify(i["symbol"], i.get("isin"), i.get("name"))) == "stock"]
+    out: list[str] = []
+    for s in held + watchlist_symbols(uid):
+        if s not in out:
+            out.append(s)
+    return out[:MAX_SYMBOLS]
+
+
 def overview(feed, symbols: list[str]) -> dict:
     """The 3-month summary for each watchlist stock, the ones with red flags first."""
     rows, problems = [], []
@@ -1376,7 +1389,7 @@ class Alerts:
             if not sub.get("on"):
                 continue
             profile = db.get_profile(sub["uid"])
-            symbols = watchlist_symbols(sub["uid"])
+            symbols = followed_symbols(sub["uid"])
             if not symbols or not self.can_alert(profile):
                 continue
             seen, newest, new = sub.get("seen") or "", sub.get("seen") or "", []

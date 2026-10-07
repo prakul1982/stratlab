@@ -190,7 +190,7 @@ def test_dividend_income_counts_the_shares_held_on_each_ex_date():
     assert (v["ahead_total"], v["received_total"]) == (539.0, 360.0)
     n = v["notices"][0]
     assert (n["symbol"], n["to_qty"], n["to_avg"]) == ("TCS", 24, 1760.0)
-    assert n["text"] == "TCS had a 1:1 bonus on Mon 05 Oct: your quantity is now 24, average price ₹1,760."
+    assert n["text"] == "TCS had a 1:1 bonus on Mon 5 Oct: your quantity is now 24, average price ₹1,760."
     applied = [C.apply(items[0], BONUS), items[1]]
     v2 = C.holdings_view(applied, acts, TODAY, None)
     assert v2["notices"] == [] and v2["undo"][0]["symbol"] == "TCS"

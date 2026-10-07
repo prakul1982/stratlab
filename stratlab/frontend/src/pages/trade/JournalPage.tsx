@@ -100,6 +100,9 @@ export function JournalPage() {
   const [mode, setMode] = useState<"add" | "replace">("add");
   const [market, setMarket] = useState("");
   const [segment, setSegment] = useState("all");
+  // trades the tax report already has from the person's tradebooks: offered here, so an empty journal says so
+  const [taxTrades, setTaxTrades] = useState(0);
+  useEffect(() => { api<{ trades: number }>("/tax").then((t) => setTaxTrades(t.trades ?? 0)).catch(() => undefined); }, []);
 
   const load = useCallback(() => {
     const q = new URLSearchParams({ segment, market });
@@ -219,9 +222,16 @@ export function JournalPage() {
 
         {!has ? (
           <Card>
-            <EmptyState title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
-              Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.
-            </EmptyState>
+            {taxTrades > 0 && j.show !== "practice" ? (
+              <EmptyState title={`${taxTrades.toLocaleString("en-IN")} trade${taxTrades === 1 ? "" : "s"} waiting in your tax report`}
+                action={{ label: busy ? "Bringing them in…" : "Bring them in", onClick: () => { if (!busy) void fromTax(); } }}>
+                The tradebooks you uploaded for tax hold your real trades. Bring them in to see them as round trips with their charges and the checks.
+              </EmptyState>
+            ) : (
+              <EmptyState title={(j.practice_count ?? 0) > 0 ? (j.show === "practice" ? "No practice trades yet" : "No real trades yet") : "No trades yet"}>
+                Upload a tradebook or tax P&amp;L above, or add a trade by hand. Once trades close, the stats and the checks appear here.
+              </EmptyState>
+            )}
           </Card>
         ) : (
           <>

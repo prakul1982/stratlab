@@ -1540,9 +1540,9 @@ def filing_call(fn):
 
 @app.get("/research/filings")
 def filings_watchlist(profile=Depends(current_profile)):
-    """Red flags in the last 3 months for each India watchlist stock."""
+    """Red flags in the last 3 months for each Indian stock the person holds or watches."""
     need(profile, "filings", "Watchlist red flags")
-    syms = filings.watchlist_symbols(profile["id"])
+    syms = filings.followed_symbols(profile["id"])
     out = filings.overview(filings_feed, syms) if syms else {"rows": [], "problems": [], "days": filings.WINDOW_DAYS}
     out["problems"] = [public_text(x) for x in out["problems"]]
     return ok({**out, "alerts": bool(filings.alert_state(profile["id"]).get("on")), "send_at": filings.SEND_AT})

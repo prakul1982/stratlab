@@ -56,7 +56,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version }: { onHoldings: (
   return (
     <>
       {data.notices.map((n) => (
-        <Notice key={n.id} role="status" tone="warn" actions={<>
+        <Notice key={n.id} role="status" actions={<>
           <button type="button" className="btn sm" disabled={!!busy} onClick={() => act(n.symbol, n.id, "apply", `${n.symbol}: quantity ${qtyText(n.to_qty)}${n.to_avg != null ? `, average price ${price(n.to_avg, "INR")}` : ""}.`)}>Apply</button>
           <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => act(n.symbol, n.id, "dismiss", `${n.symbol} kept as it is.`)}>Already in my file</button>
         </>}>

@@ -603,7 +603,8 @@ def can_alert(profile: dict) -> bool:
 # ---------- the messages ----------
 def _day(iso: str) -> str:
     try:
-        return date.fromisoformat(str(iso)[:10]).strftime("%a %d %b")
+        d = date.fromisoformat(str(iso)[:10])
+        return f"{d:%a} {d.day} {d:%b}"           # "Mon 5 Oct": day first, no leading zero, as the app writes dates
     except ValueError:
         return str(iso)
 

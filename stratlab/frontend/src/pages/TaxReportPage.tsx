@@ -422,10 +422,10 @@ const ITR3_URL = "https://www.incometax.gov.in/iec/foportal/help/individual-busi
 function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void>; filing: boolean }) {
   const t = y.total;
   const chips: [string, number, string][] = [
-    ["Capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess."],
-    ["Intraday", t.parts?.intraday ?? 0, "Intraday results are speculative business income, taxed at your slab rate. Slab tax is split between your incomes in proportion to each."],
-    ["F&O", t.parts?.fno ?? 0, "F&O, commodity and currency results, after the charges in your files, are non-speculative business income, taxed at your slab rate."],
-    ["Other income", t.parts?.other ?? 0, "Your salary, interest and other income as you entered it, after the standard deduction on salary."],
+    ["Tax on capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess."],
+    ["Tax on intraday", t.parts?.intraday ?? 0, "Intraday results are speculative business income, taxed at your slab rate. Slab tax is split between your incomes in proportion to each."],
+    ["Tax on F&O", t.parts?.fno ?? 0, "F&O, commodity and currency results, after the charges in your files, are non-speculative business income, taxed at your slab rate."],
+    ["Tax on other income", t.parts?.other ?? 0, "Your salary, interest and other income as you entered it, after the standard deduction on salary."],
   ];
   const lineCols: Column<{ i: number; label: string; amount: number; kind: string }>[] = [
     { key: "what", header: "Step", rowHeader: true, wrap: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{l.label}</b> : <span className={l.kind === "note" ? "k-muted" : undefined}>{l.label}</span>) },

@@ -377,14 +377,14 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
       {data && (
         <Card>
           <CheckField checked={data.alerts} onChange={toggleAlerts}
-            label={<>Message me each evening when a watchlist stock files a red flag or something to look closer at
-              <Info>{`Checked once a day at ${data.send_at} IST, for the India stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings.`}</Info></>} />
+            label={<>Message me each evening when a stock I hold or watch files a red flag or something to look closer at
+              <Info>{`Checked once a day at ${data.send_at} IST, for the Indian stocks in your holdings and your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings.`}</Info></>} />
         </Card>
       )}
       {busy && <Card><Skeleton label="Reading each company's filings" lines={4} /></Card>}
       {error && <ErrorState title="The filings couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
       {data && !busy && (data.rows.length === 0 && data.problems.length === 0
-        ? <Card><EmptyState title="Your watchlist has no India stocks yet" action={{ label: "Find a company", to: "/research?region=IN" }}>Open a company and press Watch: its filings show up here.</EmptyState></Card>
+        ? <Card><EmptyState title="No Indian stocks held or watched yet" action={{ label: "Find a company", to: "/research?region=IN" }}>Add your holdings, or open a company and press Watch: their filings show up here.</EmptyState></Card>
         : (
           <>
             {data.rows.map((r) => (
@@ -506,11 +506,11 @@ export function FilingsPage() {
       <PageHeader eyebrow={eyebrowOf("/research/filings")} title="Filings and red flags"
         lede={region === "IN" ? "What companies told the exchange that is worth a closer read: fund raises, pledges, resignations, defaults." : "What S&P 500 companies told the SEC in a Form 8-K that is worth a closer read: bankruptcy, delisting, auditor and officer changes."}
         info={region === "IN"
-          ? "Fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades. Your watchlist's last 3 months, or the latest from every company."
+          ? "Fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades. The last 3 months of the stocks you hold and watch, or the latest from every company."
           : "Bankruptcy, a delisting notice, a change of auditor, financial statements that can no longer be relied on, and director or officer changes. Your watchlist, or the latest from every S&P 500 company."} infoLabel="What counts" />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={pickRegion} />
-        <Seg label="Which companies" value={view} onChange={pickView} options={[{ value: "mine", label: "Your watchlist" }, { value: "all", label: "All companies" }]} />
+        <Seg label="Which companies" value={view} onChange={pickView} options={[{ value: "mine", label: region === "IN" ? "Your stocks" : "Your watchlist" }, { value: "all", label: "All companies" }]} />
       </div>
       {!pro && <PlanNote>Red flags for your whole watchlist, with an evening alert, and the latest red flags across every company are on the Basic plan. Each company's own page shows its red flags on every plan.</PlanNote>}
       {view === "mine" && region === "IN" ? <WatchlistFilings pro={pro} /> : <AllFilings region={region} scope={view} pro={pro} />}

@@ -178,6 +178,8 @@ export function MutualFundsPage() {
             onChange={(e) => setPassword(e.target.value)} aria-label="PDF password" />}
           <FormActions>
             <button type="submit" className="btn" disabled={busy || !picked}>{busy ? "Reading…" : "Read my funds"}</button>
+            {/* a greyed-out button says what it is waiting for (R1-057) */}
+            {!picked && <span className="k-note">Pick your statement first. A PDF asks for its password here once picked.</span>}
           </FormActions>
         </FormGrid>
         {result && (
