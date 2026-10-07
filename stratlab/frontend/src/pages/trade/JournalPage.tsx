@@ -358,7 +358,7 @@ function CheckCard({ c }: { c: Check }) {
     <div data-check={c.id} className="j-check">
       <Card label={c.title}>
         <div className="k-card-head">
-          <h3 className="k-card-title">{c.title}<Info>{CHECK_HELP[c.id]}</Info></h3>
+          <div className="k-card-titlerow"><h3 className="k-card-title">{c.title}</h3><Info label={`About ${c.title}`}>{CHECK_HELP[c.id]}</Info></div>
           <span className={`badge ${c.status}`}>{STATUS_NAME[c.status]}</span>
         </div>
         {c.id === "sample" && d && <div className="j-big">{d.trades}</div>}
@@ -412,7 +412,7 @@ function RChart({ r }: { r: NonNullable<Journal["r"]> }) {
   const max = Math.max(1, ...r.buckets.map((x) => x.n));
   return (
     <div className="k-stack j-rbox">
-      <h3 className="k-sub">R-multiples<Info>R is a trade's result divided by the risk you planned: the distance from the entry to your planned stop, times the quantity. A trade that lost exactly what you planned to risk is −1R. Set a stop in a trade's journal entry to include it.</Info></h3>
+      <div className="k-card-titlerow"><h3 className="k-sub">R-multiples</h3><Info label="About R-multiples">R is a trade's result divided by the risk you planned: the distance from the entry to your planned stop, times the quantity. A trade that lost exactly what you planned to risk is −1R. Set a stop in a trade's journal entry to include it.</Info></div>
       {r.n === 0 ? <p className="k-small k-muted">No trade has a planned stop yet. Open a trade's journal entry and set its stop to see its R.</p> : (
         <>
           <div className="j-rbars" role="img" aria-label={`R-multiples of ${r.n} trades: ${r.buckets.map((x) => `${x.label} ${x.n}`).join(", ")}`}>

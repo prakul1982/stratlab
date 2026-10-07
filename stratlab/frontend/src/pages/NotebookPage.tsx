@@ -269,14 +269,14 @@ export function NotebookPage() {
             )}</Field>
           </FormGrid>
           <div className="k-row">
-            <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`} aria-label={group ? `Testing on the group ${group.name}. Change it` : inst ? `Testing on ${inst.symbol}. Change market or instrument` : "Pick what to test it on"}>
+            <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`}>
               <span className="k-eyebrow">{inst || group ? "Testing on" : "Not chosen yet"}</span>
               <span className="market-btn-main">
                 {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span></>
                   : inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
                   : "Pick a market and instrument"}
               </span>
-              <span className="market-btn-cta">{inst || group ? "Change" : "Choose"} →</span>
+              <span className="market-btn-cta">{inst || group ? "Change" : "Choose"}<span aria-hidden="true"> →</span></span>
             </Link>
             {sipTestLink(inst) && <Link className="btn quiet sm" to={sipTestLink(inst)!}>Test as a SIP</Link>}
           </div>

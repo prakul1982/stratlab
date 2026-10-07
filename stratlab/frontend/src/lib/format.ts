@@ -207,6 +207,15 @@ export function axisInr(v: number | null | undefined): string {
   return `${sign}₹${nf(a, 0)}`;
 }
 
+/** A rupee axis in one unit for every tick, picked from the largest value it shows (`span`): lakh from ₹1 lakh up
+ * (₹0.5L, ₹1L, −₹1.5L), else whole rupees (₹5,000, −₹50,000). Crore and above fall back to `axisInr`. */
+export function axisInrFor(span: number): (v: number) => string {
+  const big = Math.abs(span);
+  if (big >= CRORE) return axisInr;
+  if (big < LAKH) return (v) => (ok(v) ? `${v < 0 ? "−" : ""}₹${nf(Math.abs(v), 0)}` : "–");
+  return (v) => (ok(v) ? (v === 0 ? "₹0" : `${v < 0 ? "−" : ""}₹${nf(Math.abs(v) / LAKH, 2)}L`) : "–");
+}
+
 /** A percentage with no sign: 0.21%. (`pct` above is the signed one.) */
 export function pctPlain(v: number | null | undefined, dp = 1): string {
   return ok(v) ? `${v.toFixed(dp)}%` : "–";

@@ -29,14 +29,15 @@ const incomeCols: Column<IncomeLine>[] = [
   { key: "amt", header: "Amount", numeric: true, cell: (d) => inr(d.total) },
 ];
 
-export function HoldingsActionsPanel<V>({ onHoldings, version }: { onHoldings: (v: V) => void; version: number }) {
+export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onHoldings: (v: V) => void; version: number; onLoaded?: () => void }) {
   const { fail, notify } = useApp();
   const [data, setData] = useState<HoldingsActions | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     let live = true;
-    api<HoldingsActions>("/holdings/corp-actions").then((x) => live && setData(x)).catch(() => live && setData(null));
+    // onLoaded: the page keeps the cards below this one waiting until it knows its size, so nothing jumps when it arrives
+    api<HoldingsActions>("/holdings/corp-actions").then((x) => live && setData(x)).catch(() => live && setData(null)).finally(() => live && onLoaded?.());
     return () => { live = false; };
   }, [version]);
 

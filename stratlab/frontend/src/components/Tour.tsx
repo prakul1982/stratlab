@@ -76,8 +76,8 @@ export function Tour({ onClose }: { onClose: () => void }) {
         <button className="link" onClick={close}>{last ? "Close" : "Skip the tour"}</button>
         <div className="k-row">
           {i > 0 && <button className="btn quiet" onClick={() => setI(i - 1)}>Back</button>}
-          {last ? <button className="btn" onClick={close}>Start</button>
-            : <button className="btn" onClick={() => setI(i + 1)}>Next</button>}
+          {/* one button that becomes Start on the last step, so focus stays on it */}
+          <button className="btn" data-autofocus onClick={last ? close : () => setI(i + 1)}>{last ? "Start" : "Next"}</button>
         </div>
       </div>
     </Modal>

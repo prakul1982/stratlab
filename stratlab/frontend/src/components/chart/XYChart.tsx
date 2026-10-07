@@ -39,7 +39,8 @@ export interface Series {
 /** A horizontal line at a y value: zero for P&L, a threshold, a level. */
 export interface RefLine { v: number; label?: string; color?: string; dash?: boolean; strong?: boolean }
 /** A vertical line at an x value (the chart's x units): the spot price, a breakeven, an event. */
-export interface XMarker { x: number; label?: string; color?: string; dash?: boolean; strong?: boolean }
+/** `side`: which side of its line the label sits (centred over it otherwise), so two close markers can both be read. */
+export interface XMarker { x: number; label?: string; color?: string; dash?: boolean; strong?: boolean; side?: "left" | "right" }
 /** A mark on a series at a point: buy/sell triangles, a dot. */
 export interface PointMark { i: number; series?: number; kind: "buy" | "sell" | "dot"; color?: string }
 
@@ -205,22 +206,24 @@ export function XYChart(p: XYChartProps) {
     return out.length >= 2 && out.length <= 4 ? out : [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legendOn, W, series, hidden, vals, in0, in1]);
-  const endW = ends.length ? Math.min(140, Math.max(...ends.map((e) => textWidth(e.label, 12))) + 22) : 0;
   const padL = Math.max(30, Math.min(96, Math.max(0, ...yLabels.map((l) => textWidth(l))) + 10));
-  const padT = PAD.t + (p.split != null && p.splitNotes ? 20 : 0) + (xMarkers.some((m) => m.label) ? 14 : 0);
+  // marker labels take one row above the plot, or two when there are several (one that would overlap moves up a row)
+  const labelled = xMarkers.filter((m) => m.label).length;
+  const padT = PAD.t + (p.split != null && p.splitNotes ? 20 : 0) + (labelled ? (labelled > 1 ? 28 : 14) : 0);
+  // direct labels: placed at their line ends; if two would touch, none are drawn (the legend carries identity) and no
+  // room is kept for them, so the plot keeps the card's full width
+  const endLabels = useMemo(() => {
+    const y = linear(ymin, ymax, H - PAD.b, padT);
+    const ls = ends.map((e) => ({ ...e, y: y(e.v) })).sort((m, k) => m.y - k.y);
+    for (let k = 1; k < ls.length; k++) if (ls[k].y - ls[k - 1].y < 14) return [];
+    return ls;
+  }, [ends, ymin, ymax, H, padT]);
+  const endW = endLabels.length ? Math.min(140, Math.max(...endLabels.map((e) => textWidth(e.label, 12))) + 22) : 0;
   const padR = PAD.r + endW;
   const plotW = Math.max(40, W - padL - padR);
   const sx = linear(a, b, padL, padL + plotW);
   const sy = linear(ymin, ymax, H - PAD.b, padT);
   const clip = `ch-clip-${uid.replace(/:/g, "")}`;
-
-  // direct labels: placed at their line ends; if two would touch, none are drawn (the legend carries identity)
-  const endLabels = useMemo(() => {
-    const ls = ends.map((e) => ({ ...e, y: sy(e.v) })).sort((m, k) => m.y - k.y);
-    for (let k = 1; k < ls.length; k++) if (ls[k].y - ls[k - 1].y < 14) return [];
-    return ls;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ends, ymin, ymax, H]);
 
   // ---- x ticks ----
   const xTicks = useMemo((): { px: number; label: string; anchor: "start" | "middle" | "end" }[] => {
@@ -258,17 +261,19 @@ export function XYChart(p: XYChartProps) {
   // vertical markers' labels, the strong ones (the spot) placed first; one that would overlap a placed one is left to
   // the tooltip and the table
   const markerLabels = useMemo(() => {
-    const out: { px: number; label: string; anchor: "start" | "middle" | "end"; strong?: boolean; l: number; r: number }[] = [];
+    const out: { px: number; label: string; anchor: "start" | "middle" | "end"; strong?: boolean; l: number; r: number; row: number }[] = [];
     for (const m of [...xMarkers].filter((m) => m.label && m.x >= a && m.x <= b).sort((u, v) => Number(!!v.strong) - Number(!!u.strong))) {
       const px = sx(m.x), w = textWidth(m.label!);
-      const anchor = px - w / 2 < padL ? "start" : px + w / 2 > padL + plotW ? "end" : "middle";
+      const anchor = m.side === "left" && px - w - 4 >= padL ? "end" : m.side === "right" && px + w + 4 <= padL + plotW ? "start"
+        : px - w / 2 < padL ? "start" : px + w / 2 > padL + plotW ? "end" : "middle";
       const l = anchor === "start" ? px : anchor === "end" ? px - w : px - w / 2;
-      if (out.some((o) => l < o.r + 8 && l + w > o.l - 8)) continue;
-      out.push({ px, label: m.label!, anchor, strong: m.strong, l, r: l + w });
+      const row = [0, 1].slice(0, labelled > 1 ? 2 : 1).find((r) => !out.some((o) => o.row === r && l < o.r + 8 && l + w > o.l - 8));
+      if (row == null) continue;
+      out.push({ px, label: m.label!, anchor, strong: m.strong, l, r: l + w, row });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [xMarkers, a, b, padL, plotW]);
+  }, [xMarkers, a, b, padL, plotW, labelled]);
 
   // ---- pointer, touch and keys ----
   const pxOf = (clientX: number) => {
@@ -547,7 +552,7 @@ export function XYChart(p: XYChartProps) {
                 strokeWidth={m.strong ? 1.5 : 1} strokeDasharray={m.dash ? "4 4" : undefined} />
             ))}
           </g>
-          {markerLabels.map((m, k) => <text key={`ml${k}`} className={`ch-tick${m.strong ? " strong" : ""}`} x={m.px} y={padT - 8} textAnchor={m.anchor}>{m.label}</text>)}
+          {markerLabels.map((m, k) => <text key={`ml${k}`} className={`ch-tick${m.strong ? " strong" : ""}`} x={m.px} y={padT - 8 - m.row * 14} textAnchor={m.anchor}>{m.label}</text>)}
           {p.split != null && p.splitNotes && p.split > 0 && p.split < n && sx(X[p.split]) > padL && sx(X[p.split]) < padL + plotW && (
             <>
               <text className="ch-note" x={sx(X[p.split]) - 8} y={padT - 6} textAnchor="end">{W < 560 ? "" : p.splitNotes[0]}</text>

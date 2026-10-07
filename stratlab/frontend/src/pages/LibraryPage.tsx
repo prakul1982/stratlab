@@ -147,7 +147,7 @@ export function LibraryPage() {
                       <>
                         <div className="k-stack k-tight">
                           {!phone && eyebrow}
-                          <CardHead title={e.name} level={3} />
+                          <CardHead title={e.name} />
                           <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
                         </div>
                         <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{e.verdict.passed} of {e.verdict.total} checks passed</span></div>

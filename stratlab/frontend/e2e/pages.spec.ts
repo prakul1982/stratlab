@@ -660,7 +660,7 @@ test("the tools grid shows one group until asked, and the menu reaches Account w
   await expect(page.getByRole("button", { name: "Paper trade options" })).toHaveCount(0);
   await page.getByRole("button", { name: /Show \d+ more tools/ }).click();
   await expect(page.getByRole("button", { name: "Paper trade options" })).toBeVisible();
-  if (info.project.name === "desktop") await expect(page.getByRole("button", { name: /^Account menu/ })).toBeInViewport();
+  if (info.project.name === "desktop") await expect(page.getByRole("button", { name: /account menu$/ })).toBeInViewport();
   await sane(page, errors);
 });
 
@@ -706,7 +706,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
   await expect(foot.getByRole("button", { name: /^\d+ of \d+ markets open$/ })).toBeVisible();
-  await expect(foot.getByRole("button", { name: "Account menu, Pro plan" })).toBeVisible();
+  await expect(foot.getByRole("button", { name: /Pro plan, account menu$/ })).toBeVisible();
   expect((await foot.boundingBox())!.height, "the footer stays slim").toBeLessThanOrEqual(100);
   const scrolls = await side.evaluate((aside) => [aside, ...aside.querySelectorAll("*")].filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY)).map((el) => el.className));
   expect(scrolls, "one scrolling part in the sidebar").toEqual(["side-groups"]);
@@ -790,7 +790,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
 test("the menu shows Admin only to admins", async ({ page }, info) => {
   await open(page, "/research", "Companies", sessionAs("free-token", "u-free", "free@example.com"));
   const side = await menu(page, info.project.name === "phone");
-  await side.getByRole("button", { name: "Account menu, Free plan" }).click();
+  await side.getByRole("button", { name: /Free plan, account menu$/ }).click();
   const acct = side.getByRole("menu", { name: "Account" });
   await expect(acct.getByRole("menuitem", { name: /^Account/ })).toBeVisible();
   await expect(acct.getByRole("menuitem", { name: "Admin" })).toHaveCount(0);
@@ -850,7 +850,7 @@ test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   let side = await menu(page, phone);
-  const btn = side.getByRole("button", { name: "Account menu, Pro plan" });
+  const btn = side.getByRole("button", { name: /Pro plan, account menu$/ });
   await expect(btn).toContainText("owner");
   await expect(btn).toContainText("Pro");
   await btn.click();
@@ -1590,7 +1590,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   expect(await charts.locator("svg[role=img]").count()).toBeGreaterThanOrEqual(9);
   await expect(page.getByText(/Prices as of/).first()).toBeVisible();
   // each figure and chart explains itself
-  await charts.getByRole("heading", { name: "McClellan oscillator" }).getByRole("button", { name: "What does this mean?" }).click();
+  await charts.getByRole("button", { name: "About McClellan oscillator" }).click();
   await expect(page.getByRole("note")).toContainText("39-day");
   // the sector table and the counts behind the charts
   await expect(page.getByRole("table", { name: /Share of each sector/ }).locator("tbody tr").first()).toBeVisible();

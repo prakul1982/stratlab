@@ -637,7 +637,7 @@ export default function PriceChart(props: PriceChartProps) {
         {load ? (
           <div className="pc-seg" role="radiogroup" aria-label="Range">
             {RANGES.filter((r) => offered.includes(r.tf) || offered.includes("1d")).map((r) => (
-              <button key={r.key} type="button" className="pc-btn" role="radio" aria-checked={range === r.key} aria-pressed={range === r.key} onClick={() => pickRange(r.key)}>{r.key}</button>
+              <button key={r.key} type="button" className="pc-btn" role="radio" aria-checked={range === r.key} onClick={() => pickRange(r.key)}>{r.key}</button>
             ))}
           </div>
         ) : <span className="pc-note">{TF_LONG[tf]} candles</span>}
