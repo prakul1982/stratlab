@@ -1,3 +1,4 @@
+import { fmtTime } from "./format";
 import type { Market } from "./types";
 
 /** When each market is open, and how long until it opens or closes, skipping weekends and the exchange
@@ -84,10 +85,8 @@ export function marketState(m: Market, now = new Date()): MarketState {
 /** "Thu 8 Oct, 09:15 IST": a moment in an exchange's own zone, with the zone's short name. */
 export function exchangeTime(d: Date, tz: string): string {
   const day = d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "").replace(/\bSept\b/, "Sep");
-  const time = d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
-  const zone = tz === "Asia/Kolkata" ? "IST"
-    : new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(d).find((p) => p.type === "timeZoneName")?.value ?? "";
-  return `${day}, ${time}${zone ? ` ${zone}` : ""}`;
+  // the time and the zone's name the one way every market time is written (lib/format: "09:15 IST", "09:30 ET")
+  return `${day}, ${fmtTime(d, { tz, zone: true })}`;
 }
 
 export type FeedLine = { text: string; tone: "live" | "plain" | "warn" };

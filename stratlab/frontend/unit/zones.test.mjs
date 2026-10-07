@@ -91,3 +91,9 @@ test("India VIX read today keeps its today titles", () => {
   assert.equal(none.asOf, null);
   assert.equal(none.lineTitle, "Today");
 });
+
+test("a paper session's 'opens' time follows the same rule: the exchange's zone, written IST or ET", async () => {
+  const { exchangeTime } = await import("../src/lib/marketHours.ts");
+  assert.equal(exchangeTime(new Date("2026-10-08T03:45:00Z"), IST), "Thu 8 Oct, 09:15 IST");
+  assert.equal(exchangeTime(new Date("2026-10-08T13:30:00Z"), ET), "Thu 8 Oct, 09:30 ET");
+});
