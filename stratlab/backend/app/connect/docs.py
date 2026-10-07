@@ -16,7 +16,7 @@ import re
 import secrets
 
 from .. import money_dividends as divs, money_networth, money_advance_tax as adv
-from . import state, statements, sync
+from . import state, statements
 
 MAX_FILE = 5 * 1024 * 1024
 KINDS = ("epf", "nps", "ais")

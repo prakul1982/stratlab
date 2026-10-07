@@ -16,7 +16,6 @@ from .. import admin, mail_tokens
 from ..config import settings
 from ..kite_service import IST, token_valid, today_ist
 from . import state, sync, vault
-from .redact import mask
 
 STATE_PREFIX = "u1."
 PURPOSE = "kite-login"

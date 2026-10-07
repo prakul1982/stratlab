@@ -20,26 +20,6 @@ export function price(v: number | null | undefined, currency?: string | null): s
   return money(v, currency, dp);
 }
 
-/** Prices on a chart axis: whole numbers once they're big, more decimals when small. */
-export function priceAxis(v: number, currency?: string | null): string {
-  const a = Math.abs(v);
-  return money(v, currency, a >= 100 ? 0 : a >= 1 ? 2 : 4);
-}
-
-/** Short money for chart axes: ₹5.2L, $12.4k, $1.2M. */
-export function moneyShort(v: number, currency?: string | null): string {
-  const a = Math.abs(v), sign = v < 0 ? "−" : "", s = currencySymbol(currency);
-  if (currency === "INR") {
-    if (a >= 1e7) return `${sign}${s}${(a / 1e7).toFixed(1)}Cr`;
-    if (a >= 1e5) return `${sign}${s}${(a / 1e5).toFixed(2)}L`;
-  } else {
-    if (a >= 1e9) return `${sign}${s}${(a / 1e9).toFixed(1)}B`;
-    if (a >= 1e6) return `${sign}${s}${(a / 1e6).toFixed(1)}M`;
-  }
-  if (a >= 1e3) return `${sign}${s}${(a / 1e3).toFixed(1)}k`;
-  return `${sign}${s}${a.toFixed(a < 10 ? 2 : 0)}`;
-}
-
 export function pct(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return "–";
   return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(dp) + "%";

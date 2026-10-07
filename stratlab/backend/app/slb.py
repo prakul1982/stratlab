@@ -15,7 +15,7 @@ lending, and StratLab doesn't arrange lending (that goes through an approved int
 import re
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from . import exchange_days as X
 from .auth import current_profile
