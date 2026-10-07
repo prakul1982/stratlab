@@ -11,7 +11,7 @@ import time
 
 from .config import settings
 
-EXPIRES = {"confirm": 3 * 86400}     # seconds; purposes not listed never expire
+EXPIRES = {"confirm": 3 * 86400, "kite-login": 900}     # seconds; purposes not listed never expire
 _fallback = os.urandom(32)            # only with no secret configured at all (local runs): links stop working on restart
 
 

@@ -100,7 +100,62 @@ def build():
     fx_rates.seed()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
+    connect_once(mp)
     return w
+
+
+def connect_once(mp):
+    """Connected accounts: the statement inbox configured (a made-up domain and secrets), Zerodha and Interactive Brokers
+    answered by fakes, so the cards can be used end to end."""
+    import httpx
+    from cryptography.fernet import Fernet
+    from app.config import settings
+    from app.connect import ibkr, kite_user, sync
+    mp.setattr(settings, "CONNECT_SECRET_KEY", Fernet.generate_key().decode())
+    mp.setattr(settings, "INBOUND_DOMAIN", "in.example.test")
+    mp.setattr(settings, "INBOUND_WEBHOOK_SECRET", "e2e-secret-value-123456")
+    mp.setattr(settings, "KITE_API_KEY", "e2e-key")
+    mp.setattr(settings, "KITE_API_SECRET", "e2e-secret")
+    mp.setattr(settings, "KITE_MULTIUSER_APPROVED", False)
+    mp.setattr(settings, "ADMIN_EMAILS", "owner@example.com,load293@example.com,load296@example.com")   # the connect tests' owner accounts
+
+    class FakeKite:
+        def __init__(self, key):
+            pass
+
+        def login_url(self):
+            return "https://kite.example/connect/login?v=3&api_key=e2e-key"
+
+        def generate_session(self, request_token, api_secret):
+            return {"access_token": "e2e-access-token", "user_id": "AB1234"}
+
+        def set_access_token(self, t):
+            pass
+
+        def holdings(self):
+            return [{"tradingsymbol": "INFY", "exchange": "NSE", "isin": "INE009A01021", "quantity": 12, "t1_quantity": 0, "average_price": 1400.0}]
+
+        def positions(self):
+            return {"net": []}
+
+        def invalidate_access_token(self, t):
+            pass
+    mp.setattr(kite_user, "factory", FakeKite)
+    flex = """<FlexQueryResponse><FlexStatements><FlexStatement><OpenPositions>
+<OpenPosition assetCategory="STK" symbol="AAPL" description="APPLE INC" currency="USD" position="10" costBasisPrice="150.5"/>
+</OpenPositions><Trades>
+<Trade assetCategory="STK" symbol="AAPL" currency="USD" buySell="BUY" quantity="10" tradePrice="150" tradeDate="20260105" dateTime="20260105;103000" ibCommission="-1" tradeID="E1"/>
+<Trade assetCategory="STK" symbol="AAPL" currency="USD" buySell="SELL" quantity="-4" tradePrice="180" tradeDate="20260210" dateTime="20260210;143000" ibCommission="-1" tradeID="E2"/>
+</Trades></FlexStatement></FlexStatements></FlexQueryResponse>"""
+
+    def handler(req):
+        if req.url.path.endswith("SendRequest"):
+            if req.url.params.get("t") == "bad-token-0000000000":
+                return httpx.Response(200, text="<FlexStatementResponse><Status>Fail</Status><ErrorCode>1015</ErrorCode></FlexStatementResponse>")
+            return httpx.Response(200, text="<FlexStatementResponse><Status>Success</Status><ReferenceCode>R1</ReferenceCode></FlexStatementResponse>")
+        return httpx.Response(200, text=flex)
+    mp.setattr(ibkr, "transport", httpx.MockTransport(handler))
+    mp.setattr(sync.deps, "us_find", lambda sym: {"symbol": sym, "name": sym})
 
 
 def all_company_filings(mp):

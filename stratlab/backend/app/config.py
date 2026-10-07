@@ -31,6 +31,18 @@ class Settings:
     KITE_AUTO_LOGIN_AT = _env("KITE_AUTO_LOGIN_AT", "08:00")        # IST, after Kite's ~6 am token reset
     KITE_RESTART_AFTER_LOGIN = _env("KITE_RESTART_AFTER_LOGIN", "true").lower() != "false"
 
+    # Connect once (app/connect): the key that encrypts users' stored passwords and broker tokens (Fernet; see docs/ADMIN.md)
+    CONNECT_SECRET_KEY = _env("CONNECT_SECRET_KEY")
+    # Statement inbox: mail to u-<random>@INBOUND_DOMAIN reaches /inbound/email/<provider>?k=<INBOUND_WEBHOOK_SECRET>
+    INBOUND_DOMAIN = _env("INBOUND_DOMAIN").lower().lstrip("@")
+    INBOUND_PROVIDER = _env("INBOUND_PROVIDER", "brevo").lower()          # "brevo" (inbound parsing) or "signed" (HMAC-signed JSON)
+    INBOUND_WEBHOOK_SECRET = _env("INBOUND_WEBHOOK_SECRET")
+    # Zerodha login for every user needs Zerodha's approval of the multi-user Kite app; until the owner sets this to
+    # "true", only admins can connect Zerodha (KITE_API_KEY and KITE_API_SECRET are used unless these two are set)
+    KITE_MULTIUSER_APPROVED = _env("KITE_MULTIUSER_APPROVED", "false").lower() == "true"
+    KITE_CONNECT_API_KEY = _env("KITE_CONNECT_API_KEY")
+    KITE_CONNECT_API_SECRET = _env("KITE_CONNECT_API_SECRET")
+
     RAZORPAY_KEY_ID = _env("RAZORPAY_KEY_ID")
     RAZORPAY_KEY_SECRET = _env("RAZORPAY_KEY_SECRET")
     RAZORPAY_WEBHOOK_SECRET = _env("RAZORPAY_WEBHOOK_SECRET")

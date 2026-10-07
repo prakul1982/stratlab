@@ -280,6 +280,93 @@ phone notification or Telegram instead.
   email, lifecycle emails (welcome, first test, trial and offer reminders, what's new, receipts, invite rewards), and
   the owner's Monday summary.
 
+## Connect once (Settings → Connected accounts)
+
+Four things a user connects once so their numbers keep updating. Each shows "Not set up yet" (or "Not open yet") until the
+settings below are in place; nothing here invents a value. Every password and token a user hands over is encrypted at
+rest with `CONNECT_SECRET_KEY`, never written to a log (`backend/app/connect/redact.py` masks them), never sent back to
+the page, and deleted when the user disconnects.
+
+### 1. The encryption key (needed for everything below)
+
+Make a key once and add it as `CONNECT_SECRET_KEY` in Railway → Variables:
+
+```
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Keep a copy somewhere safe: if it is lost or changed, stored statement passwords and broker tokens can't be opened and users
+have to enter them again. To rotate, set `CONNECT_SECRET_KEY` to `<new key>,<old key>` (the first encrypts, all decrypt).
+
+### 2. Statement inbox (a private address per user)
+
+Each user gets `u-<20 random letters and digits>@<INBOUND_DOMAIN>`. Their email filter forwards the monthly NSDL, CDSL, CAMS,
+KFintech and MF Central statements there; the server opens the PDF in memory with the user's stored password, saves the
+holdings and funds through the same code as an upload, and keeps nothing of the PDF. Brevo (already the app's mail
+service) does the receiving. Steps for the owner:
+
+1. Pick a receiving subdomain that has no other mail, for example `in.stratlab.studio`. It must not be a domain or
+   subdomain that already receives your own mail.
+2. In your DNS (wherever `stratlab.studio` is managed) add two MX records on that subdomain, as Brevo's inbound parsing
+   guide says (https://developers.brevo.com/docs/inbound-parse-webhooks):
+
+   | Host | Type | Priority | Value |
+   |---|---|---|---|
+   | `in.stratlab.studio` | MX | 10 | `inbound1.sendinblue.com.` |
+   | `in.stratlab.studio` | MX | 20 | `inbound2.sendinblue.com.` |
+
+3. In Railway → Variables add `INBOUND_DOMAIN=in.stratlab.studio`, `INBOUND_PROVIDER=brevo`, and `INBOUND_WEBHOOK_SECRET=` a
+   long random string (for example the output of `openssl rand -hex 24`), and keep `BREVO_API_KEY` set (it is also used to
+   download the attachments). Redeploy.
+4. Register the webhook with Brevo, once:
+
+   ```
+   curl -X POST https://api.brevo.com/v3/webhooks \
+     -H "api-key: $BREVO_API_KEY" -H "content-type: application/json" \
+     -d '{"type":"inbound","events":["inboundEmailProcessed"],"domain":"in.stratlab.studio",
+          "url":"https://<your API host>/inbound/email/brevo?k=<INBOUND_WEBHOOK_SECRET>","description":"StratLab statements"}'
+   ```
+
+   Brevo doesn't sign its webhooks, so the secret `k` in the address is the check (compared in constant time); a wrong or
+   missing one gets 401. Treat the address as a password.
+5. Test: sign in, Settings → Connected accounts → Statement inbox → Set up my inbox, then send a mail with a made-up PDF
+   to the address and watch "Last received" change.
+
+Not using Brevo? `INBOUND_PROVIDER=signed` takes any forwarder that posts JSON signed with HMAC-SHA256 to
+`/inbound/email/signed` with the header `X-StratLab-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>." + body, key
+INBOUND_WEBHOOK_SECRET>`; body `{"to": [...], "from", "subject", "text", "message_id", "attachments": [{"name",
+"content_type", "data_b64"}]}` (for example an email worker on a Cloudflare-routed domain). Another provider is one
+adapter class in `backend/app/connect/inbound.py`.
+
+Behaviour worth knowing: unknown addresses get the same 200 as real ones (so addresses can't be guessed); at most 30 mails
+a day per address and 120 posts a minute overall; Gmail's forwarding-confirmation mail is recognised and its code is
+shown on the user's card; a user with no statement for 40 days gets a reminder through their usual notifications. The
+background job `connect-once` does the reminders and the daily Interactive Brokers read.
+
+### 3. Zerodha login for every user
+
+Built and switched off. Until Zerodha approves a multi-user Kite Connect app, only admins (`ADMIN_EMAILS`) can connect their
+own Zerodha; for everyone else the card says "Not open yet". Zerodha's terms for apps serving many users need their
+approval: ask through the Kite Connect forum (https://kite.trade) or Zerodha support. Once approved:
+
+1. In the Kite developer console (https://developers.kite.trade/apps) set the app's **redirect URL** to
+   `https://<your API host>/connect/kite/callback`. (If you keep using the existing app, its `/admin/kite/callback`
+   address also works: it hands user logins over by their state.) A separate multi-user app can be used by setting
+   `KITE_CONNECT_API_KEY` and `KITE_CONNECT_API_SECRET`; otherwise `KITE_API_KEY` and `KITE_API_SECRET` are used.
+2. Set `KITE_MULTIUSER_APPROVED=true` in Railway and redeploy.
+
+Zerodha ends every login at about 6 am, so users tap once a day ("Connected · refreshed today 09:12 · tap to refresh
+tomorrow"); there is no way around that daily step.
+
+### 4. Interactive Brokers (US stocks)
+
+Nothing to set beyond `CONNECT_SECRET_KEY`. Each user pastes their own Flex token and query id; a daily job (from 07:00 India
+time) reads their positions into My Holdings (US) and closed trades into the trade journal (US).
+
+### 5. EPF, NPS and AIS uploads
+
+No setup. The file is looked at in memory, the figures found are shown to the user, and only what they confirm is saved.
+
 ## Usage analytics (PostHog)
 
 Off until a key is set: with no key nothing is downloaded and nothing is sent.
