@@ -171,9 +171,9 @@ export function UsersSection() {
       { key: "free", header: "Free months", info: "Free months of Basic this user earned from invites", numeric: true, cell: (u: UserRow) => u.free_months ?? 0 },
     ] : []),
     { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (u) => (
-      <span className="k-row">
+      <span className="k-row k-col">
         <button type="button" className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button>
-        <button type="button" className="btn quiet sm danger" onClick={() => setErasing(u)}>Delete this user's data</button>
+        <button type="button" className="btn quiet sm danger" aria-label={`Delete the data of ${u.email ?? "this user"}`} onClick={() => setErasing(u)}>Delete data</button>
       </span>) },
   ];
   const sess: Column<SessionRow>[] = [

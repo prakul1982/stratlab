@@ -237,8 +237,8 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
   return (
     <div className="k-page holders-page">
       <PageHeader eyebrow={eyebrowOf("/invest/holders")} title="Holders above 5%"
-        lede="Anyone who holds more than 5% of a US company's shares files a Schedule 13D (an active stake) or 13G (a passive one) with the SEC, and an amendment when it changes. Find a company's, or see the latest from every S&P 500 company. Facts as filed, not advice."
-        asOf={data?.as_of} asOfLabel="Filings read through" info={data ? <>{data.note} Names and percentages are read from each filing's cover page{data.unread > 0 ? `; ${data.unread} of these filings are still waiting to be read` : ""}.</> : undefined}
+        lede="Who holds more than 5% of a US company, as they filed with the SEC. Facts as filed, not advice."
+        asOf={data?.as_of} asOfLabel="Filings read through" info={data ? <>Anyone who holds more than 5% of a US company's shares files a Schedule 13D (an active stake) or 13G (a passive one), and an amendment when it changes. Find one company's filings, or see the latest from every S&P 500 company. {data.note} Names and percentages are read from each filing's cover page{data.unread > 0 ? `; ${data.unread} of these filings are still waiting to be read` : ""}.</> : undefined}
         infoLabel="Where the names come from" />
       {toolbar}
       <Card>

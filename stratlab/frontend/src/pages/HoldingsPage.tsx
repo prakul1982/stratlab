@@ -176,6 +176,7 @@ export function HoldingsPage() {
           <UploadButton label="Upload holdings file" busy={busy} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
           <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
         </div>
+        <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">Connect Zerodha or your statement inbox once</Link> and this stays up to date by itself.</p>
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">

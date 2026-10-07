@@ -76,13 +76,13 @@ function lsSet(k: string, v: unknown): void {
 function readTheme(el: HTMLElement): Theme {
   const cs = getComputedStyle(el);
   const v = (k: string, d: string) => cs.getPropertyValue(k).trim() || d;
-  const mono = v("--mono", "ui-monospace, monospace");
+  const sans = v("--sans", "system-ui, sans-serif");
   return {
     bg: v("--card", "#FFFDF8"), text: v("--ink", "#1D1B17"), muted: v("--muted", "#5C574D"), grid: v("--rule", "#EAE3D3"),
     border: v("--line", "#E2DAC8"), ink: v("--ink", "#1D1B17"), accent: v("--blue", "#1F4FB5"),
     up: v("--pc-up", "#1F4FB5"), down: v("--pc-down", "#B4500F"), onUp: v("--pc-on-up", "#fff"), onDown: v("--pc-on-down", "#fff"),
     slots: [v("--pc-s0", "#138A62"), v("--pc-s1", "#A8327A"), v("--pc-s2", "#6F695C")],
-    font: `11.5px ${mono}`,
+    font: `11.5px ${sans}`,
   };
 }
 
@@ -579,7 +579,7 @@ export default function PriceChart(props: PriceChartProps) {
             <span className="title">{symbol}</span><span className="k">{TF_LONG[tf]}</span>
             {h && <>
               {shownType !== "line" && shownType !== "area" && shownType !== "baseline" && <>
-                <span><span className="k">O</span>{fmt(h.bar.o)}</span><span><span className="k">H</span>{fmt(h.bar.h)}</span><span><span className="k">L</span>{fmt(h.bar.l)}</span>
+                <span className="pc-hide-phone"><span className="k">O</span>{fmt(h.bar.o)}</span><span className="pc-hide-phone"><span className="k">H</span>{fmt(h.bar.h)}</span><span className="pc-hide-phone"><span className="k">L</span>{fmt(h.bar.l)}</span>
               </>}
               <span><span className="k">C</span>{fmt(h.bar.c)}</span>
               {chg != null && <span>{chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
