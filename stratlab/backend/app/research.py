@@ -3,6 +3,7 @@ into an experiment record small enough to keep in a notebook."""
 import json
 from datetime import datetime, timedelta, timezone
 
+from .data.calendar import trading_bars
 from .engine import costs as C
 from .engine.core import backtest
 from .engine.verdict import evaluate
@@ -71,7 +72,8 @@ def load(registry, strategy, req) -> dict:
         raise ResearchError(404, "instrument_not_found", "That instrument was not found. Search again.")
     max_days = prov.max_days[tf]
     days = min(req.days, max_days)
-    bars = prov.history(inst, tf, days + prov.warmup_days(tf))
+    # a weekday market is only ever tested on the days it trades, whatever the feed sent
+    bars = trading_bars(inst.get("market"), prov.history(inst, tf, days + prov.warmup_days(tf)), tf)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     start = next((i for i, b in enumerate(bars) if parse_t(b["t"]) >= cutoff), len(bars))
     if len(bars) - start < 10:
@@ -106,6 +108,8 @@ def run(strategy, data: dict) -> dict:
     bars = _with_fo(strategy, data.get("inst"), bars)
     out = backtest(bars, strategy, start, data["lot"], data["kind"])
     out["verdict"] = evaluate(bars, strategy, start, out, data["lot"], data["kind"], data["days"], data["max_days"])
+    for k in ("_paths", "_split"):           # the checks' working, not part of the result
+        out.pop(k, None)
     out.update({"instrument": data["inst"], "lot": data["lot"], "days": data["days"], "warmup_short": start < 200})
     return out
 
@@ -159,6 +163,7 @@ def run_group(datasets: list[dict], strategy, group: dict, days: int, max_days: 
     go = lambda t_from=None, t_to=None: portfolio.run(datasets, strategy, max_open, t_from, t_to)  # noqa: E731
     base = go()
     base["verdict"] = evaluate_portfolio(go, base, strategy, days, max_days)
+    base.pop("_paths", None)
     base["days"], base["max_open"] = days, max_open
     return base
 
@@ -200,3 +205,137 @@ def slim(experiments: list[dict]) -> list[dict]:
             e = {**e, "trades": trades[-OLD_TRADES:], "trades_trimmed": e.get("trades_trimmed", 0) + len(trades) - OLD_TRADES}
         out.append(e)
     return out
+
+
+# ---------- what changed between two experiments ----------
+_SKIP_KEYS = ("name", "text")          # renaming the notebook or re-wording the idea changes nothing tested
+
+
+def _setup(strategy: dict | None) -> dict:
+    return {k: v for k, v in (strategy or {}).items() if k not in _SKIP_KEYS}
+
+
+def unchanged(experiments: list[dict], strategy, inst_id: str | None, days: int, now: str) -> int | None:
+    """The version of the last experiment when running again would repeat it exactly: the same rules, instrument and
+    period, run today (on a later day there are newer candles, so that run is a new one). None when something differs."""
+    if not experiments:
+        return None
+    last = experiments[-1]
+    if str(last.get("created_at") or "")[:10] != now[:10]:
+        return None
+    if _setup(last.get("strategy")) != _setup(strategy.model_dump()):
+        return None
+    if (last.get("instrument") or {}).get("id") != inst_id or last.get("days") != days:
+        return None
+    return last.get("v")
+
+
+def period_name(days: int) -> str:
+    """As the pages write a test period: "6 months", "1 year", "5 years", "45 days"."""
+    if days >= 365 and days % 365 < 5:
+        y = round(days / 365)
+        return f"{y} year{'s' if days >= 730 else ''}"
+    if days >= 28:
+        m = round(days / 30.4)
+        return f"{m} month{'' if m == 1 else 's'}"
+    return f"{days} days"
+
+
+TF_NAMES = {"1d": "daily", "1h": "1-hour", "15m": "15-minute", "5m": "5-minute"}
+SIDES = {"long": "long only", "short": "short only", "both": "both ways"}
+JOINS = {"all": "all rules", "any": "any rule", "score": "a score"}
+RISK_LABELS = {"capital": "Capital", "riskPct": "Risk per trade", "maxAlloc": "Most in one trade", "sl": "Stop loss",
+               "tgt": "Target", "brokerage": "Brokerage", "slippage": "Slippage", "trail": "Trailing stop",
+               "maxBars": "Time exit", "sizing": "Sizing", "perTrade": "Per trade", "leverage": "Leverage"}
+SYMBOLS = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥"}
+
+
+def _amount(v, cur: str) -> str:
+    from .email_kit import indian
+    v = float(v or 0)
+    dp = 0 if v.is_integer() else 2
+    sym = SYMBOLS.get(cur or "INR", "")
+    return f"{sym}{indian(v, dp)}" if (cur or "INR") == "INR" else f"{sym}{v:,.{dp}f}"
+
+
+def _risk_text(key: str, v, cur: str, r: dict) -> str:
+    if key in ("capital", "perTrade", "brokerage"):
+        return _amount(v, cur)
+    if key == "sl":
+        kind = r.get("stopType")
+        return ("off" if not v else f"{v:g} points" if kind == "points" else f"{v:g}× ATR" if kind == "atr"
+                else f"{v:g}-candle swing" if kind == "swing" else f"{v:g}%")
+    if key == "tgt":
+        kind = r.get("tgtType")
+        return "off" if not v else f"{v:g} points" if kind == "points" else f"{v:g}R" if kind == "r" else f"{v:g}%"
+    if key == "trail":
+        return "off" if not v else f"{v:g}%"
+    if key == "maxBars":
+        return "off" if not v else f"{v} candles"
+    if key == "leverage":
+        return f"{v:g}×"
+    if key in ("riskPct", "maxAlloc", "slippage"):
+        return f"{v:g}%"
+    return str(v)
+
+
+def _rule_changes(old: list | None, new: list | None, what: str) -> list[str]:
+    from .engine.core import cond_text
+    from .engine.indicators import ref_name
+    from .models import Cond
+    if (old or []) == (new or []):
+        return []
+    try:
+        a, b = [Cond(**c) for c in old or []], [Cond(**c) for c in new or []]
+    except Exception:
+        return [f"{what} rules changed"]
+    if len(a) != len(b):
+        return [f"{what} rules: {len(a)} → {len(b)}"]
+    out = []
+    for x, y in zip(a, b):
+        if x.model_dump() == y.model_dump():
+            continue
+        if x.op == y.op:
+            out += [f"{ref_name(p)} → {ref_name(q)}" for p, q in ((x.l, y.l), (x.r, y.r)) if p.model_dump() != q.model_dump()]
+        else:
+            out.append(f"{cond_text(x)} → {cond_text(y)}")
+    return out
+
+
+def describe_change(prev: dict | None, rec: dict) -> str:
+    """A short label for an experiment that says what differs from the one before: the instrument, the period, the
+    candles, the rules and the money settings, in that order. The first experiment is "First run"."""
+    if not prev:
+        return "First run"
+    bits: list[str] = []
+    pi, ni = prev.get("instrument") or {}, rec.get("instrument") or {}
+    if pi.get("id") != ni.get("id"):
+        bits.append(f"{pi.get('symbol') or 'No market'} → {ni.get('symbol') or 'another market'}")
+    if prev.get("days") and rec.get("days") and prev["days"] != rec["days"]:
+        bits.append(f"{period_name(prev['days'])} → {period_name(rec['days'])}")
+    ps, ns = prev.get("strategy") or {}, rec.get("strategy") or {}
+    if ps.get("tf") != ns.get("tf"):
+        bits.append(f"{TF_NAMES.get(ps.get('tf'), ps.get('tf'))} → {TF_NAMES.get(ns.get('tf'), ns.get('tf'))} candles")
+    if ps.get("side") != ns.get("side"):
+        bits.append(f"{SIDES.get(ps.get('side'), ps.get('side'))} → {SIDES.get(ns.get('side'), ns.get('side'))}")
+    if ps.get("entryJoin") != ns.get("entryJoin") or ps.get("minScore") != ns.get("minScore"):
+        bits.append(f"enter on {JOINS.get(ps.get('entryJoin'), 'all rules')} → {JOINS.get(ns.get('entryJoin'), 'all rules')}")
+    for key, what in (("entry", "Entry"), ("exit", "Exit"), ("shortEntry", "Short entry"), ("shortExit", "Short exit")):
+        bits += _rule_changes(ps.get(key), ns.get(key), what)
+    pr, nr = ps.get("risk") or {}, ns.get("risk") or {}
+    cur = ni.get("currency") or "INR"
+    for key, label in RISK_LABELS.items():
+        if key in nr and pr.get(key) != nr.get(key):
+            bits.append(f"{label} {_risk_text(key, pr.get(key), cur, pr)} → {_risk_text(key, nr.get(key), cur, nr)}")
+    if pr.get("stopType") != nr.get("stopType") and pr.get("sl") == nr.get("sl"):
+        bits.append("Stop type changed")
+    if pr.get("tgtType") != nr.get("tgtType") and pr.get("tgt") == nr.get("tgt"):
+        bits.append("Target type changed")
+    if ps.get("session") != ns.get("session"):
+        bits.append("Session limits changed")
+    if ps.get("product") != ns.get("product"):
+        bits.append(f"Product: {ps.get('product')} → {ns.get('product')}")
+    if not bits:
+        return "Same setup, newer candles"
+    text = "; ".join(bits)
+    return text if len(text) <= 120 else text[:117].rsplit("; ", 1)[0] + " …"

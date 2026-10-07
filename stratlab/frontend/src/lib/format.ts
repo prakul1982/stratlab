@@ -12,12 +12,33 @@ export function money(v: number | null | undefined, currency?: string | null, dp
   return (v < 0 ? "−" : "") + currencySymbol(currency) + s;
 }
 
-/** Prices keep more decimals when they're small (crypto pairs, forex). */
-export function price(v: number | null | undefined, currency?: string | null): string {
+/** Prices keep more decimals when they're small (crypto pairs, forex). `dp` fixes the decimals (see `priceDp`). */
+export function price(v: number | null | undefined, currency?: string | null, dp?: number): string {
   if (v == null || !Number.isFinite(v)) return "–";
   const a = Math.abs(v);
-  const dp = a >= 1000 ? 2 : a >= 1 ? 2 : a >= 0.01 ? 4 : 8;
-  return money(v, currency, dp);
+  return money(v, currency, dp ?? (a >= 1000 ? 2 : a >= 1 ? 2 : a >= 0.01 ? 4 : 8));
+}
+
+/** The decimals an instrument's prices are quoted in, where its size alone doesn't say: spot forex in 5 (a pipette;
+ *  yen pairs 3), currency futures in 4. Undefined means "by size", as `price` does. */
+export function priceDp(inst?: { market?: string; symbol?: string; currency?: string } | null): number | undefined {
+  if (inst?.market === "FX") return /JPY/.test(inst.symbol ?? "") || inst.currency === "JPY" ? 3 : 5;
+  if (inst?.market === "CDS") return 4;
+  return undefined;
+}
+
+/** A fall from a peak, as a negative percentage with one decimal; one that rounds to nothing is "0%", never "−0%". */
+export function fall(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "–";
+  const shown = Math.abs(v).toFixed(1);
+  return +shown === 0 ? "0%" : `−${shown}%`;
+}
+
+/** A charge in a cost list: whole units, or cents and paise when it's under one unit, so nothing reads "−₹0". */
+export function charge(v: number, currency?: string | null): string {
+  const a = Math.abs(v);
+  if (a === 0) return money(0, currency);
+  return "−" + money(a, currency, a < 1 ? 2 : 0);
 }
 
 /** Size steps of a short figure: [divisor, suffix, decimals], largest first. */
@@ -63,7 +84,13 @@ export function pct(v: number | null | undefined, dp = 1): string {
 
 export const signClass = (v: number | null | undefined) => (v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "");
 
-export function qty(v: number): string {
+/** A quantity. With `step` (the instrument's smallest unit, 0.00000001 BTC) a fractional quantity keeps that many
+ *  decimals, so a column lines up (0.05013551, 0.05091380). */
+export function qty(v: number, step?: number): string {
+  if (step && step < 1) {
+    const dp = Math.min(8, Math.max(0, Math.ceil(-Math.log10(step) - 1e-9)));
+    return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  }
   if (Number.isInteger(v)) return v.toLocaleString("en-IN");
   return String(+v.toFixed(8));
 }

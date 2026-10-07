@@ -152,6 +152,32 @@ def is_trading_day(market: str, day: date) -> bool:
         return True
 
 
+# Markets that don't trade at weekends, whose candles come from a feed that can still carry a weekend row (a stray
+# Sunday print, a placeholder). Crypto trades every day. India's own exchange feed is taken as it comes: a special
+# weekend session (Diwali's Muhurat trading) is a real one.
+WEEKDAY_FEEDS = ("US", "UK", "EU", "JP", "FX", "CMDTY")
+SUNDAY_EVENING = ("FX", "CMDTY")       # their week opens on Sunday evening: those intraday candles are real
+
+
+def trading_bars(market: str | None, bars: list[dict], tf: str) -> list[dict]:
+    """Only the candles of days the market trades: no weekend candles for a weekday market. Daily candles dated on a
+    Saturday or Sunday are dropped; intraday candles on a Saturday too, and on a Sunday except where the week opens on
+    Sunday evening (forex, global futures). Candle times are in the exchange's own zone, so the date is the local one."""
+    if market not in WEEKDAY_FEEDS or not bars:
+        return bars
+
+    def keep(b: dict) -> bool:
+        try:
+            wd = date.fromisoformat(str(b["t"])[:10]).weekday()
+        except ValueError:
+            return True
+        if wd == 5:
+            return False
+        return wd != 6 or (tf != "1d" and market in SUNDAY_EVENING)
+    out = [b for b in bars if keep(b)]
+    return out if len(out) != len(bars) else bars
+
+
 def is_holiday(market: str, day: date) -> bool:
     """A weekday the exchange is closed."""
     return day.weekday() < 5 and not is_trading_day(market, day)

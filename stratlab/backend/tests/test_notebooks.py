@@ -13,6 +13,7 @@ from app.kite_service import KiteService
 from tests.test_data import PRODUCTS
 from tests.fake_yahoo import fake_yahoo
 from app.intel.yahoo import Yahoo
+from app.models import Strategy
 
 EMA = {"name": "Trend follower", "tf": "1d",
        "entry": [{"l": {"t": "ema", "p": 10}, "op": "xa", "r": {"t": "ema", "p": 30}}],
@@ -112,7 +113,9 @@ def test_notebook_experiments_flow(api):
     tighter = {**EMA, "risk": {**EMA["risk"], "sl": 2}}
     api.put(f"/notebooks/{nb['id']}", json={"strategy": tighter, "notes": "Tighter stop next"})
     exp2 = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 1500}).json()["experiment"]
-    assert exp2["v"] == 2 and exp2["label"] == "Experiment v2" and exp2["strategy"]["risk"]["sl"] == 2
+    # no label typed: the label says what changed (it was "Experiment v2" before labels described the change)
+    assert exp2["v"] == 2 and exp2["label"] == "Stop loss 4% → 2%" and exp2["strategy"]["risk"]["sl"] == 2
+    assert exp["label"] == "First try"
     listed = api.get("/notebooks").json()
     assert listed[0]["summary"]["experiments"] == 2 and listed[0]["question"].startswith("Does")
     full = api.get(f"/notebooks/{nb['id']}").json()
@@ -160,10 +163,72 @@ def test_backtest_limit(api):
     assert r.json()["detail"]["message"] == "You've used all 10 backtests for this month. Basic gives 100."
 
 
-def test_needs_an_instrument(api):
+def test_no_instrument_runs_on_the_default(api):
+    """Nothing picked: the run uses the default instrument (the first the market picker offers) and says which.
+    (It used to refuse with no_instrument and send the person to the picker.)"""
     nb = api.post("/notebooks", json={"name": "x", "strategy": EMA}).json()
+    first = main.markets.defaults()[0]
+    r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["defaulted"] == first["symbol"] and body["instrument"]["id"] == first["id"]
+    assert body["experiment"]["instrument"]["id"] == first["id"]
+    assert api.get(f"/notebooks/{nb['id']}").json()["instrument"]["id"] == first["id"]     # kept for the next run
+
+
+def test_needs_an_instrument_when_no_market_offers_one(api, monkeypatch):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA}).json()
+    monkeypatch.setattr(main.markets, "defaults", lambda: [])
     r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "no_instrument"
+
+
+def test_unchanged_rerun_is_refused_and_costs_nothing(api):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    assert api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365}).status_code == 200
+    used = len(api.usage)
+    r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365, "label": "again"})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "unchanged" and "v1" in r.json()["detail"]["message"]
+    assert len(api.usage) == used                                              # no experiment spent
+    assert [e["v"] for e in api.get(f"/notebooks/{nb['id']}").json()["experiments"]] == [1]
+    # renaming the notebook changes nothing tested; a different period does
+    api.put(f"/notebooks/{nb['id']}", json={"name": "renamed", "strategy": {**EMA, "name": "renamed"}})
+    assert api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365}).status_code == 409
+    r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 730})
+    assert r.status_code == 200 and r.json()["experiment"]["label"] == "1 year → 2 years"
+
+
+def test_a_rerun_on_a_later_day_is_allowed(api):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
+    row = api.rows[nb["id"]]
+    row["body"]["experiments"][-1]["created_at"] = "2020-01-01T00:00:00+00:00"     # run on an earlier day
+    r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
+    assert r.status_code == 200 and r.json()["experiment"]["label"] == "Same setup, newer candles"
+
+
+def test_labels_describe_the_change():
+    from app import research
+    base = {"instrument": {"id": "CRYPTO:BTC-USD", "symbol": "BTC/USD", "currency": "USD"}, "days": 365,
+            "strategy": Strategy(**EMA).model_dump()}
+    assert research.describe_change(None, base) == "First run"
+    fx = {**base, "instrument": {"id": "FX:EURUSD=X", "symbol": "EUR/USD", "currency": "USD"}}
+    assert research.describe_change(base, fx) == "BTC/USD → EUR/USD"
+    s = Strategy(**EMA).model_dump()
+    s["risk"].update(slippage=0.5, brokerage=20)
+    s["entry"][0]["r"]["p"] = 40
+    costly = {**base, "strategy": s}
+    assert research.describe_change(base, costly) == "EMA 30 → EMA 40; Brokerage $0 → $20; Slippage 0.05% → 0.5%"
+    inr = {**costly, "instrument": {"id": "IN:1", "symbol": "NIFTY 50", "currency": "INR"}}
+    s2 = {**s, "risk": {**s["risk"], "capital": 500000}}
+    assert "Capital ₹10,000 → ₹5,00,000" in research.describe_change(inr, {**inr, "strategy": s2})
+
+
+def test_new_notebooks_get_distinct_names(api):
+    a = api.post("/notebooks", json={"name": "Ride the trend", "strategy": EMA}).json()
+    b = api.post("/notebooks", json={"name": "Ride the trend", "strategy": EMA}).json()
+    c = api.post("/notebooks", json={"name": "Ride the trend", "strategy": EMA}).json()
+    assert [a["name"], b["name"], c["name"]] == ["Ride the trend", "Ride the trend 2", "Ride the trend 3"]
 
 
 def test_us_stock_backtest_uses_us_costs(api):

@@ -14,10 +14,9 @@ import copy
 import numpy as np
 
 from ..models import Ref
-from .core import Ctx, simulate
+from .core import SPLIT, Ctx, simulate
 from .indicators import MARKET, params, ref_name
 
-SPLIT = 0.7
 SHUFFLES = 1000
 SHUFFLE_BLOCK = 2_000_000
 PERIOD_TYPES = {"sma", "ema", "rsi", "vwap", "macd", "macd_signal", "macd_hist",
@@ -51,23 +50,44 @@ def _year_label(bars: list[dict], i: int) -> str:
     return str(bars[i]["t"])[:4]
 
 
-def check_unseen(bars, strategy, start, lot, kind, ctx) -> dict:
-    split = start + int((len(bars) - 1 - start) * SPLIT)
-    cap = strategy.risk.capital
-    e1, eq1 = simulate(bars, strategy, start, split + 1, lot, kind, ctx)
-    e2, eq2 = simulate(bars, strategy, split, None, lot, kind, ctx)
-    r1, r2 = _ret(eq1, cap), _ret(eq2, cap)
-    data = {"built_ret": r1, "unseen_ret": r2, "built_trades": len(e1.trades), "unseen_trades": len(e2.trades),
-            "built_from": _year_label(bars, start), "built_to": _year_label(bars, split),
-            "unseen_from": _year_label(bars, split), "unseen_to": _year_label(bars, len(bars) - 1),
-            "split_index": split - start}
-    if len(e2.trades) == 0 and e2.qty == 0:
+def unseen_check(trades: list[dict], open_trades: list[dict], capital: float, built: list[bool], spans: list[bool],
+                 labels: tuple[str, str, str, str], split_index: int, who: str = "It") -> dict:
+    """The unseen-data check from the run's own trades: each trade counts with the part it was opened in (a trade
+    opened before the split and closed after it counts with the built part), so the two parts' trades add up to the
+    whole test and each part's return is the sum of its trades' P&L after costs, as a % of the starting capital. A
+    trade still open at the end counts with its part at its value on the last close. `built` and `spans` hold one flag
+    per trade, closed trades first, then the open ones."""
+    every = [*trades, *open_trades]
+    n_closed = len(trades)
+    part = lambda b: [t for t, x in zip(every, built) if x == b]       # noqa: E731
+    b_tr, u_tr = part(True), part(False)
+    ret = lambda ts: sum(t["pnl"] for t in ts) / capital * 100 if capital else 0.0    # noqa: E731
+    closed_in = lambda b: sum(1 for k, x in enumerate(built) if x == b and k < n_closed)   # noqa: E731
+    open_in = [("built" if x else "unseen") for k, x in enumerate(built) if k >= n_closed]
+    r1, r2 = ret(b_tr), ret(u_tr)
+    data = {"built_ret": r1, "unseen_ret": r2, "built_trades": closed_in(True), "unseen_trades": closed_in(False),
+            "open_built": open_in.count("built"), "open_unseen": open_in.count("unseen"), "spanning": sum(spans),
+            "built_from": labels[0], "built_to": labels[1], "unseen_from": labels[2], "unseen_to": labels[3],
+            "split_index": split_index}
+    if not u_tr:
         status, detail = "warn", "No trades happened in the unseen part, so it couldn't be tested there."
     elif r2 > 0:
-        status, detail = "pass", "It kept making money on data it wasn't tuned on."
+        status, detail = "pass", ("It kept making money on data it wasn't tuned on." if who == "It"
+                                  else f"{who} kept making money on the part of the period it wasn't tuned on.")
     else:
-        status, detail = "fail", "It lost money on the part of the period it hadn't seen."
+        status, detail = "fail", f"{who} lost money on the part of the period it hadn't seen."
     return {"id": "unseen", "title": "Unseen data", "status": status, "detail": detail, "data": data}
+
+
+def check_unseen(bars, base: dict, start: int, capital: float) -> dict:
+    """The unseen-data check of one instrument's backtest (`base`, from core.backtest)."""
+    split = base["_split"]
+    every = [*base["trades"], *([base["open_trade"]] if base.get("open_trade") else [])]
+    built = [t.get("part", "built") == "built" for t in every]
+    return unseen_check(base["trades"], [base["open_trade"]] if base.get("open_trade") else [], capital, built,
+                        [bool(t.get("spans_split")) for t in every],
+                        (_year_label(bars, start), _year_label(bars, split), _year_label(bars, split), _year_label(bars, len(bars) - 1)),
+                        split - start)
 
 
 def _market_cut(c) -> tuple[str, float] | None:
@@ -194,36 +214,63 @@ def _trade_dds(orders: np.ndarray, capital: float) -> np.ndarray:
     return np.max((peak - path) / peak, axis=1) * 100
 
 
-def _pp(v: float) -> str:
-    """A fall in percent as the page shows it: one decimal under 10% (so 0.6% isn't "1%"), whole numbers above."""
-    return f"{v:.1f}" if abs(v) < 10 else f"{v:.0f}"
+def _path_dds(inc: np.ndarray, starts: np.ndarray, lens: np.ndarray, perms: np.ndarray, capital: float) -> np.ndarray:
+    """The worst day-by-day fall of each reshuffle: every row of `perms` is an order of the trades, and each trade
+    brings its own run of daily changes in account value (entry costs, each day's move, exit), so a reshuffle is the
+    same days in another order of trades."""
+    order_lens = lens[perms]                                         # rows × trades
+    seg = np.repeat(perms.ravel(), order_lens.ravel()).reshape(perms.shape[0], -1)
+    offs = np.cumsum(order_lens, axis=1) - order_lens                # where each trade starts in its row
+    within = np.arange(seg.shape[1])[None, :] - np.repeat(offs.ravel(), order_lens.ravel()).reshape(seg.shape)
+    return _trade_dds(inc[starts[seg] + within], capital)
 
 
-def check_shuffle(trades: list[dict], capital: float, who: str = "Your backtest", whose: str = "your backtest's") -> dict:
+def fall_text(v: float) -> str:
+    """A fall from the peak as the pages write it: one decimal, and a fall that rounds to nothing is "0%"."""
+    return "0%" if round(v, 1) == 0 else f"{v:.1f}%"
+
+
+def check_shuffle(trades: list[dict], capital: float, who: str = "Your backtest", whose: str = "your backtest's",
+                  paths: list | None = None) -> dict:
     """Reshuffle the trades' order: how deep a fall the same trades could have had. `who` and `whose` name the trades
-    in the wording (a backtest's, or the user's real trades in the journal)."""
+    in the wording (a backtest's, or the user's real trades in the journal).
+
+    With `paths` (a backtest: each trade's day-by-day changes in account value, the open trade's too), falls are
+    measured day by day from the peak, the same measure as the backtest's "Worst fall", which "yours" then equals.
+    Without them (real trades, known only by their results) each trade is one step."""
     pnls = np.array([t["pnl"] for t in trades], dtype=float)
     if len(pnls) < 5:
         return {"id": "shuffle", "title": "Bad-luck drawdown", "status": "skip",
                 "detail": "Too few trades to reshuffle.", "data": None}
     rng = np.random.default_rng(42)  # same answer every time for the same trades
-    # in blocks of about two million numbers, so thousands of trades (a real-trade journal) never build one huge array;
-    # the reshuffles come in the same order, so the answer is the same as all at once
-    rows = max(1, SHUFFLE_BLOCK // len(pnls))
-    dds = np.concatenate([_trade_dds(np.stack([rng.permutation(pnls) for _ in range(min(rows, SHUFFLES - i))]), capital)
-                          for i in range(0, SHUFFLES, rows)])
-    yours, p95, worst = _trade_dd(pnls, capital), float(np.percentile(dds, 95)), float(dds.max())
+    if paths:
+        segs = [np.asarray(p, dtype=float) for p in paths]
+        lens = np.array([len(p) for p in segs])
+        inc = np.concatenate(segs) if segs else np.zeros(0)
+        starts = np.cumsum(lens) - lens
+        yours = _trade_dd(inc, capital)
+        rows = max(1, SHUFFLE_BLOCK // max(1, len(inc)))
+        dds = np.concatenate([_path_dds(inc, starts, lens, np.stack([rng.permutation(len(segs)) for _ in range(min(rows, SHUFFLES - i))]), capital)
+                              for i in range(0, SHUFFLES, rows)])
+    else:
+        # in blocks of about two million numbers, so thousands of trades (a real-trade journal) never build one huge array;
+        # the reshuffles come in the same order, so the answer is the same as all at once
+        rows = max(1, SHUFFLE_BLOCK // len(pnls))
+        dds = np.concatenate([_trade_dds(np.stack([rng.permutation(pnls) for _ in range(min(rows, SHUFFLES - i))]), capital)
+                              for i in range(0, SHUFFLES, rows)])
+        yours = _trade_dd(pnls, capital)
+    p95, worst = float(np.percentile(dds, 95)), float(dds.max())
     if p95 >= 35:
         status = "fail"
-        detail = f"With worse luck the same trades could have fallen {_pp(p95)}%. That's hard to sit through."
+        detail = f"With worse luck the same trades could have fallen {fall_text(p95)}. That's hard to sit through."
     elif p95 > max(1.5 * yours, 5):
         status = "warn"
-        detail = f"{who} fell {_pp(yours)}% at worst between closed trades, but with worse luck expect up to {_pp(p95)}%."
+        detail = f"{who} fell {fall_text(yours)} at worst; in 95 of 100 reshuffles the fall was up to {fall_text(p95)}."
     else:
         status = "pass"
-        detail = f"Even with worse luck, falls between closed trades stay around {_pp(p95)}%, close to {whose} {_pp(yours)}%."
+        detail = f"Even with worse luck, falls stay around {fall_text(p95)}, close to {whose} {fall_text(yours)}."
     return {"id": "shuffle", "title": "Bad-luck drawdown", "status": status, "detail": detail,
-            "data": {"yours": yours, "p95": p95, "worst": worst, "runs": SHUFFLES}}
+            "data": {"yours": yours, "p95": p95, "worst": worst, "runs": SHUFFLES, "daily": bool(paths)}}
 
 
 def check_sample(n: int) -> dict:
@@ -260,16 +307,34 @@ def evaluate(bars: list[dict], strategy, start: int, base: dict, lot: float = 1,
     ctx = Ctx(bars, intraday=strategy.tf != "1d")
     trades = base["trades"]
     checks = [
-        check_unseen(bars, strategy, start, lot, cost_kind, ctx),
+        check_unseen(bars, base, start, strategy.risk.capital),
         check_nearby(bars, strategy, start, lot, cost_kind, ctx),
-        check_shuffle(trades, strategy.risk.capital),
+        check_shuffle(trades, strategy.risk.capital, paths=base.get("_paths")),
         check_sample(len(trades)),
     ]
-    return decide(checks, len(trades), base["stats"]["ret"], strategy, days, max_days)
+    return decide(checks, len(trades), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"))
 
 
-def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int) -> dict:
-    """The verdict from the checks, the trade count and the return after costs."""
+def _pc(v: float) -> str:
+    """A signed percentage with a real minus, as the pages write it: +24.6%, −3.1%, 0.0%."""
+    s = f"{abs(v):.1f}"
+    return ("" if float(s) == 0 else "+" if v > 0 else "−") + s + "%"
+
+
+def versus_hold(ret: float, hold: float | None) -> str:
+    """The plain comparison with buying and holding, stated as a fact in every verdict."""
+    if hold is None:
+        return ""
+    if abs(ret - hold) < 0.05:
+        rel = "about the same as"
+    else:
+        rel = "more than" if ret > hold else "less than"
+    return f" The strategy returned {_pc(ret)} after costs, {rel} buying and holding over the same period ({_pc(hold)})."
+
+
+def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int, hold: float | None = None) -> dict:
+    """The verdict from the checks, the trade count and the return after costs. `hold` is buy and hold's return over
+    the same period: the summary always states how the two compare."""
     by = {c["id"]: c["status"] for c in checks}
     if n < 15:
         verdict = "not_enough"
@@ -288,11 +353,12 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
         summary = "It made money overall, but " + " and ".join(bits) + ". The profit looks like a lucky fit."
     elif by["unseen"] == "pass" and by["nearby"] in ("pass", "skip") and by["shuffle"] != "fail":
         verdict = "edge"
-        summary = ("It made money after costs, kept working on unseen data, and doesn't depend on one exact "
-                   "setting. Worth paper trading before real money.")
+        summary = ("It made money after costs, kept making money on unseen data, and doesn't depend on one exact "
+                   "setting.")
     else:
         verdict = "mixed"
-        summary = "Some checks pass and some don't. Treat it as a maybe: test it longer or on other instruments."
+        summary = "It made money after costs, but some checks pass and some don't."
+    summary += versus_hold(ret, hold)
     return {"verdict": verdict, "headline": HEADLINES[verdict], "summary": summary,
             "passed": sum(1 for c in checks if c["status"] == "pass"),
             "total": sum(1 for c in checks if c["status"] != "skip"),
@@ -300,28 +366,29 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
 
 
 def evaluate_portfolio(run, base: dict, strategy, days: int, max_days: int) -> dict:
-    """The checks for a group of instruments. `run(t_from, t_to)` re-runs the portfolio on part of the period."""
+    """The checks for a group of instruments. `run(t_from, t_to)` re-runs the portfolio on part of the period (kept for
+    callers; the unseen check reads the full run's own trades, as for one instrument)."""
     times, cap = base["times"], strategy.risk.capital
     checks = []
     if len(times) > 20:
         k = int(len(times) * SPLIT)
-        split = times[k]
-        a, b = run(None, split), run(split, None)
-        r1, r2 = a["stats"]["ret"], b["stats"]["ret"]
-        data = {"built_ret": r1, "unseen_ret": r2, "built_trades": len(a["trades"]), "unseen_trades": len(b["trades"]),
-                "built_from": times[0][:4], "built_to": split[:4], "unseen_from": split[:4], "unseen_to": times[-1][:4], "split_index": k}
-        if not b["trades"] and not b["open_trades"]:
-            status, detail = "warn", "No trades happened in the unseen part, so it couldn't be tested there."
-        elif r2 > 0:
-            status, detail = "pass", "The portfolio kept making money on the part of the period it wasn't tuned on."
-        else:
-            status, detail = "fail", "The portfolio lost money on the part of the period it hadn't seen."
-        checks.append({"id": "unseen", "title": "Unseen data", "status": status, "detail": detail, "data": data})
+        split = _when(times[k])
+        opened = base.get("open_trades") or []
+        every = [*base["trades"], *opened]
+        built = [_when(t["entry_t"]) < split for t in every]
+        spans = [b and (t.get("exit_t") is None or _when(t["exit_t"]) >= split) for t, b in zip(every, built)]
+        checks.append(unseen_check(base["trades"], opened, cap, built, spans,
+                                   (times[0][:4], times[k][:4], times[k][:4], times[-1][:4]), k, who="The portfolio"))
     else:
         checks.append({"id": "unseen", "title": "Unseen data", "status": "skip", "detail": "Too short a period to split.", "data": None})
     checks.append({"id": "nearby", "title": "Nearby settings", "status": "skip",
                    "detail": "Not run on a group of instruments yet: it would mean hundreds of backtests. Test the idea on one stock to see this check.",
                    "data": None})
-    checks.append(check_shuffle(base["trades"], cap))
+    checks.append(check_shuffle(base["trades"], cap, paths=base.get("_paths")))
     checks.append(check_sample(len(base["trades"])))
-    return decide(checks, len(base["trades"]), base["stats"]["ret"], strategy, days, max_days)
+    return decide(checks, len(base["trades"]), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"))
+
+
+def _when(t: str):
+    from datetime import datetime
+    return datetime.fromisoformat(str(t))

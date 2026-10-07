@@ -80,19 +80,21 @@ def test_red_flags_follow_holdings_and_the_watchlist(w):
     assert filings.followed_symbols("u-pro") == ["TCS", "INFY", "ITC"]
 
 
-def test_an_unchanged_rerun_asks_first(w):
-    """R1-023: the same rules, market and period run again the same day would repeat the last experiment."""
+def test_an_unchanged_rerun_is_refused(w):
+    """R1-023: the same rules, market and period run again the same day would repeat the last experiment, so it is
+    refused (409 unchanged, no experiment used) and the earlier version stands; a changed period is a new test."""
     c, h = w["client"], H(w)
     from tests.test_notebooks import EMA
     nb = c.post("/notebooks", headers=h, json={"name": "Repeat", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
     first = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 365})
     assert first.status_code == 200, first.text
     again = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 365})
-    assert again.status_code == 409 and again.json()["detail"]["code"] == "same_as_last"
-    assert "Nothing changed since v1" in again.json()["detail"]["message"]
-    assert c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 730}).status_code == 200      # a new period is a new test
-    forced = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 730, "again": True})
-    assert forced.status_code == 200 and forced.json()["experiment"]["v"] == 3
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "unchanged"
+    assert "Nothing has changed since v1" in again.json()["detail"]["message"]
+    second = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 730})     # a new period is a new test
+    assert second.status_code == 200 and second.json()["experiment"]["v"] == 2
+    repeat = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 730})
+    assert repeat.status_code == 409 and "v2" in repeat.json()["detail"]["message"]
 
 
 def test_company_growth_matches_the_ai_read_facts(w):

@@ -6,7 +6,7 @@ import { asOf } from "../lib/format";
 import { firstFocus, trapTab } from "../lib/focusTrap";
 
 const VERDICT_NAME: Record<VerdictKind, string> = {
-  edge: "Likely real edge", mixed: "Mixed evidence", luck: "Probably luck", not_enough: "Not enough evidence", no_edge: "No edge",
+  edge: "Likely a real edge", mixed: "Mixed evidence", luck: "Probably luck", not_enough: "Not enough evidence", no_edge: "No edge here",
 };
 export const STATUS_NAME: Record<CheckStatus, string> = { pass: "Passed", warn: "Warning", fail: "Failed", skip: "Skipped" };
 

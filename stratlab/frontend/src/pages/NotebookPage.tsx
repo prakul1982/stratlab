@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api, type ApiError } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly, money, pct, periodName, TF_NAME } from "../lib/format";
 import { riskForCurrency, usesPro } from "../lib/rules";
@@ -141,19 +141,12 @@ export function NotebookPage() {
 
   const setStrategy = (st: Strategy) => patch({ strategy: st, name: st.name });
 
-  const run = async (again = false) => {
+  const run = async () => {
     if (running) return;
-    let first: Instrument | null = null;
-    if (!inst && !group) {
-      // nothing picked yet: run on the default (the one marked Default in "What do you want to test it on?") and say so
-      first = (await api<Instrument[]>("/instruments/defaults").catch(() => []))[0] ?? null;
-      if (!first) { notify("Pick what to test it on first."); nav(`/n/${nb.id}/market`); return; }
-      patch({ instrument: first, instrumentId: first.id, strategy: { ...s, risk: riskForCurrency(s.risk, first.currency) } });     // saved by the flush below, before the run
-    }
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
     if (!fno && inst?.fno) { notify("Indian F&O is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
     if (!allIndicators && usesPro(s)) { notify("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them.", { label: "See plans", run: () => nav("/plans") }); return; }
-    const body: Record<string, unknown> = { label: label.trim(), days: period, ...(again ? { again: true } : {}) };
+    const body: Record<string, unknown> = { label: label.trim(), days: period };
     if (isUpload) {
       const up = getUpload(nb.id);
       if (!up) { notify("Upload your CSV again: this browser no longer has it."); nav(`/n/${nb.id}/market`); return; }
@@ -162,17 +155,18 @@ export function NotebookPage() {
     await flush();
     setRunning(true);
     try {
-      const out = await api<{ experiment: Experiment }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body });
+      const out = await api<{ experiment: Experiment; defaulted?: string | null; instrument?: Instrument | null }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body });
       trackBacktest(group ? "group" : "notebook");
-      if (first) notify(`Tested on ${first.symbol}, the default. Pick another market or instrument any time.`);
-      setNb({ ...nb, ...(first ? { instrument: first } : {}), experiments: [...(nb.experiments || []), out.experiment] });
+      setNb({ ...nb, ...(out.instrument ? { instrument: out.instrument } : {}), experiments: [...(nb.experiments || []), out.experiment] });
       setLabel("");
       refreshMe();
       refreshNotebooks();
+      // nothing was picked, so it ran on the default; say which, and where to change it
+      if (out.defaulted) notify(`Tested on ${out.defaulted}, the default. Change it under Testing on.`, { label: "Change market", run: () => nav(`/n/${nb.id}/market`) });
       nav(`/n/${nb.id}/e/${out.experiment.v}`);
     } catch (e) {
-      // nothing changed since the last run: say so, and run it again only if asked (it uses one of the month's experiments)
-      if ((e as ApiError).code === "same_as_last") notify((e as Error).message, { label: "Run it again", run: () => { void run(true); } });
+      const same = e instanceof ApiError && e.code === "unchanged" ? last : undefined;
+      if (same) notify(e instanceof Error ? e.message : "Nothing has changed since the last run.", { label: `Open v${same.v}`, run: () => nav(`/n/${nb.id}/e/${same.v}`) });
       else fail(e);
     } finally { setRunning(false); }
   };
@@ -242,7 +236,6 @@ export function NotebookPage() {
     } catch (e) { fail(e); }
   };
 
-  const suggestions = last?.verdict.suggestions ?? [];
   const apply = (action: string) => {
     if (action === "longer_period") setDays(String(periods[periods.length - 1]));
     else if (action === "other_instrument") nav(`/n/${nb.id}/market`);
@@ -264,7 +257,7 @@ export function NotebookPage() {
 
   const cols: Column<Experiment>[] = [
     { key: "v", header: "Run", rowHeader: true, cell: (e) => <Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>v{e.v}</b></Link> },
-    { key: "what", header: "What changed", wrap: true, cell: (e) => <><b>{e.label}</b><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)} · {e.stats.n} trade{e.stats.n === 1 ? "" : "s"}</span></> },
+    { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)} · {e.stats.n} trade{e.stats.n === 1 ? "" : "s"}</span></> },
     { key: "ret", header: "Overall", numeric: true, cell: (e) => pct(e.stats.ret) },
     { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? pct(u.unseen_ret) : "–"; } },
     { key: "verdict", header: "Verdict", cell: (e) => <VerdictBadge v={e.verdict.verdict} /> },
@@ -369,14 +362,6 @@ export function NotebookPage() {
           <textarea id="notes" ref={notesRef} className="lab-note" value={nb.notes ?? ""} maxLength={4000}
             placeholder="What did you notice? What do you want to try next?" onChange={(e) => patch({ notes: e.target.value })} />
         </Card>
-        {suggestions.length > 0 && (
-          <Card label="Worth testing next">
-            <CardHead title="Worth testing next" level={3} info={HELP.nextSteps} infoLabel="About next steps" />
-            {suggestions.map((sg) => (
-              <button type="button" key={sg.action} className="btn quiet k-choice-btn" onClick={() => apply(sg.action)}>{sg.text}</button>
-            ))}
-          </Card>
-        )}
       </aside>
 
       {paperAsk && inst && (

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { XYChart, type XYChartProps } from "./chart/XYChart";
 import { ChartTip } from "./chart/parts";
+import { fall } from "../lib/format";
 
 /* The app's charts. Everything that plots values over time or across prices is drawn by chart/XYChart (crosshair and
  * tooltip, zoom and pan, ranges, legends, linked charts, table view); this file keeps the older entry points and the
@@ -75,20 +76,18 @@ export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [numb
 }
 
 /* Where your drawdown sits among 1,000 reshuffles. */
-/** A fall in percent: one decimal under 10% (so 0.6% isn't "1%"), whole numbers above. The verdict's words use the same. */
-export const fallPct = (v: number) => (Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0));
 
 export function DrawdownBand({ yours, p95, worst }: { yours: number; p95: number; worst: number }) {
   const max = Math.max(worst, yours, 1) * 1.05;
   const X = (v: number) => 8 + (v / max) * 264;
   return (
-    <svg className="ch-svg" viewBox="0 0 280 64" width="100%" role="img" aria-label={`Your drawdown ${fallPct(yours)}%, 95% of reshuffles under ${fallPct(p95)}%, worst ${fallPct(worst)}%`}>
+    <svg className="ch-svg" viewBox="0 0 280 64" width="100%" role="img" aria-label={`Your worst fall ${fall(yours)}, 95% of reshuffles no deeper than ${fall(p95)}, deepest ${fall(worst)}`}>
       <line x1={8} y1={30} x2={272} y2={30} stroke="var(--line)" strokeWidth={10} strokeLinecap="round" />
       <line x1={X(yours)} y1={30} x2={X(p95)} y2={30} stroke="var(--orange-soft)" strokeWidth={10} />
       <line x1={X(yours)} y1={16} x2={X(yours)} y2={44} stroke="var(--ink)" strokeWidth={2} />
       <circle cx={X(worst)} cy={30} r={5} fill="var(--orange)" stroke="var(--card)" strokeWidth={2} />
-      <text className="ch-tick strong" x={Math.max(30, X(yours))} y={60} textAnchor="middle">yours −{fallPct(yours)}%</text>
-      <text className="ch-tick strong" x={272} y={12} textAnchor="end">worst −{fallPct(worst)}%</text>
+      <text className="ch-tick strong" x={Math.max(30, X(yours))} y={60} textAnchor="middle">yours {fall(yours)}</text>
+      <text className="ch-tick strong" x={272} y={12} textAnchor="end">worst {fall(worst)}</text>
       <text className="ch-tick" x={8} y={12}>0%</text>
     </svg>
   );
