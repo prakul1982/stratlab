@@ -40,6 +40,7 @@ from . import money_advance_tax, money_routes
 from . import journal_routes
 from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
+from . import drawings_routes
 from . import market_store, storage
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
@@ -325,6 +326,7 @@ app.include_router(_email_previews.router)       # /admin/email-previews
 from . import admin_jobs as _admin_jobs  # noqa: E402
 app.include_router(_admin_jobs.router)           # /admin/jobs: every background job, for Admin -> Data and jobs
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
+app.include_router(drawings_routes.router)    # /me/drawings/{region}/{symbol}: drawings and layout saved per user
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps

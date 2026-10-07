@@ -174,7 +174,7 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
         </div>
         <span className="k-small k-muted" data-testid="rp-progress">Candle {Math.max(0, cursor - s.first + 1)} of {last - s.first + 1}</span>
       </div>
-      <PriceChart symbol={s.hidden ? "Hidden" : s.symbol ?? ""} storageKey={`REPLAY-${s.id}`.slice(0, 40)} currency={cur} bars={shown} tf={s.tf}
+      <PriceChart symbol={s.hidden ? "Hidden" : s.symbol ?? ""} storageKey={`REPLAY-${s.id}`.slice(0, 40)} currency={cur} bars={shown} tf={s.tf} replay
         timeframes={[s.tf]} markers={markers} levels={levels} height={380}
         onPickPrice={picking ? (p) => setLine(picking, p) : null}
         note={picking ? `Click the chart at the ${picking} price, or type it below.` : "Future candles are hidden. Orders fill at the last close shown."} />

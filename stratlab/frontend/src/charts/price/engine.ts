@@ -2,7 +2,8 @@
  * drawings, so moving the pointer never repaints the candles. Repaints are batched into animation frames and only
  * happen when something changed. Only the bars on screen are drawn; when they are thinner than ~1.5 px they are
  * merged into one candle per group so a long history pans as fast as a short one. */
-import { DRAW_TOOLS, hitDrawing, paintDrawing, type Drawing, type DrawingKind, type Mapper } from "./drawings";
+import { barsBetween, buildPosition, CLICKS, durationText, History, moveHandle, shiftDrawing, snapOhlc, thinStroke, type Pt } from "./drawGeo";
+import { hitDrawing, paintDrawing, toolForKey, type DrawFmt, type DrawTheme, type Drawing, type DrawingKind, type Mapper } from "./drawings";
 import { attachGestures } from "./interaction";
 import { stepDecimals, TimeScale, timeLabel, timeTicks, ValueScale, type ScaleMode } from "./scales";
 import { compute, type StudyConfig, type StudyLine, type StudyOutput } from "./studies";
@@ -23,7 +24,14 @@ export interface Theme {
 export interface Compare { label: string; bars: Bar[] }
 export interface Hover { index: number; bar: Bar; prev: Bar | null; x: number; compare: number | null }
 
-type Listener = { crosshair: (h: Hover | null) => void; view: () => void; drawings: (d: Drawing[]) => void; select: (id: string | null) => void; tool: (t: DrawingKind | null) => void };
+type Listener = { crosshair: (h: Hover | null) => void; view: () => void; drawings: (d: Drawing[]) => void; select: (id: string | null) => void; tool: (t: DrawingKind | null) => void;
+  /** Magnet, hide-all, undo/redo or the step of a drawing in progress changed. */
+  ui: () => void };
+
+/** A drawing being placed: the clicks so far, where the pointer is now, and (for a brush) the stroke. */
+interface Draft { kind: DrawingKind; clicks: Pt[]; cur: Pt | null; pending: boolean; moved: boolean; stroke: Pt[] }
+const SNAP_PX = 30;          // the magnet reaches a candle's open, high, low or close this close to the pointer
+const newId = () => `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 const AXIS_H = 24;
 const LINE_TYPES = new Set<ChartType>(["line", "area", "baseline"]);
@@ -59,17 +67,28 @@ export class PriceChartEngine {
   drawings: Drawing[] = [];
   selected: string | null = null;
   tool: DrawingKind | null = null;
+  /** Points snap to the nearest candle's open, high, low or close. */
+  magnet = false;
+  /** Every drawing is out of sight (they are kept). */
+  hideAll = false;
+  /** Chart replay: a drawing shows only once the replay has reached the candle it was drawn on. */
+  clipFuture = false;
+  /** The risk amount a new long or short position starts with. */
+  defaultRisk = 0;
+  private sym = "";
+  private times: number[] = [];
+  private history = new History<Drawing[]>(100);
+  private lastEdit = { id: "", keys: "", at: 0 };
   /** When set, a click on the price pane hands its price to this instead of drawing or selecting (chart replay's
    *  stop and target lines). */
   picker: ((price: number) => void) | null = null;
-  private draft: { d: Drawing; pending: boolean; moved: boolean } | null = null;
-  private moving: { id: string; handle: number | null; from: { t: number; p: number }; orig: Drawing } | null = null;
+  private draft: Draft | null = null;
+  private moving: { id: string; handle: number | null; from: Pt; orig: Drawing; before: Drawing[]; changed: boolean } | null = null;
   private axisDrag: { kind: "price" | "time"; x: number; y: number } | null = null;
   private cross: { x: number; y: number } | null = null;
   private hoverIndex = -1;
   private theme: Theme;
   private format: (v: number, decimals: number) => string;
-  askText: (initial: string) => string | null = (s) => window.prompt("Note text", s);
   private dirtyMain = true;
   private dirtyOver = true;
   private frame = 0;
@@ -160,6 +179,7 @@ export class PriceChartEngine {
   private rebuild(): void {
     this.shown = this.type === "heikin" ? heikinAshi(this.bars) : this.bars;
     this.walls = this.bars.map((b) => b.w);
+    this.times = this.bars.map((b) => b.t);
     this.studies = this.configs.map((c) => compute(this.bars, c, this.intraday));
     if (this.compareBars.length) this.alignCompare();
     this.layout();
@@ -192,32 +212,119 @@ export class PriceChartEngine {
     });
   }
 
-  setDrawings(d: Drawing[]): void { this.drawings = d; this.selected = null; this.invalidate(false); }
+  setCurrency(symbol: string): void { this.sym = symbol; this.invalidate(false); }
+
+  /** Replace the drawings (loaded from the account or this browser). Not an edit: no undo step, no save. */
+  setDrawings(d: Drawing[]): void {
+    this.drawings = d; this.selected = null; this.draft = null; this.history.clear();
+    this.on.ui?.(); this.invalidate(false);
+  }
 
   setTool(t: DrawingKind | null): void {
+    if (t && this.hideAll) this.setHideAll(false);          // drawing on a chart whose drawings are hidden shows them again
     this.tool = t;
     this.draft = null;
     this.over.style.cursor = t ? "copy" : "crosshair";
     this.on.tool?.(t);
+    this.on.ui?.();
     this.invalidate(false);
   }
 
-  deleteSelected(): boolean {
-    if (!this.selected) return false;
-    this.drawings = this.drawings.filter((d) => d.id !== this.selected);
-    this.select(null);
-    this.on.drawings?.(this.drawings);
-    this.invalidate(false);
+  setMagnet(on: boolean): void { this.magnet = on; this.on.ui?.(); }
+  setHideAll(on: boolean): void {
+    this.hideAll = on;
+    if (on) { this.select(null); if (this.tool) this.setTool(null); }
+    this.on.ui?.(); this.invalidate(false);
+  }
+  setClipFuture(on: boolean): void { this.clipFuture = on; this.invalidate(false); }
+
+  get canUndo(): boolean { return this.history.canUndo; }
+  get canRedo(): boolean { return this.history.canRedo; }
+  /** How many clicks of the drawing in progress are placed (0 when none). */
+  get step(): number { return this.draft?.clicks.length ?? 0; }
+
+  /** Whether a drawing is on screen: not hidden, and (in a replay) not drawn on a candle the replay hasn't reached. */
+  private shows(d: Drawing): boolean {
+    if (this.hideAll || d.hidden) return false;
+    if (this.clipFuture && d.born != null) {
+      const last = this.bars[this.bars.length - 1];
+      if (last && d.born > last.t) return false;
+    }
     return true;
   }
 
-  clearDrawings(): void { this.drawings = []; this.select(null); this.on.drawings?.(this.drawings); this.invalidate(false); }
+  /** Record an edit: the drawings before it can be undone, and listeners (the save) hear of it. */
+  private commit(next: Drawing[], before: Drawing[] = this.drawings): void {
+    this.history.push(before);
+    this.drawings = next;
+    this.on.drawings?.(next);
+    this.on.ui?.();
+    this.invalidate(false);
+  }
+
+  private step_(prev: Drawing[] | null): boolean {
+    if (!prev) return false;
+    this.drawings = prev;
+    if (this.selected && !prev.some((d) => d.id === this.selected)) this.select(null);
+    this.on.drawings?.(prev);
+    this.on.ui?.();
+    this.invalidate(false);
+    return true;
+  }
+  undo(): boolean { return this.step_(this.history.undo(this.drawings)); }
+  redo(): boolean { return this.step_(this.history.redo(this.drawings)); }
+
+  /** Change one drawing's colour, line style, text, risk, lock or visibility. A locked drawing only unlocks or hides. */
+  updateDrawing(id: string, patch: Partial<Drawing>): boolean {
+    const d = this.drawings.find((q) => q.id === id);
+    if (!d) return false;
+    if (d.locked && Object.keys(patch).some((k) => k !== "locked" && k !== "hidden")) return false;
+    const next = this.drawings.map((q) => (q.id === id ? { ...q, ...patch } : q));
+    const keys = Object.keys(patch).join(), now = Date.now();
+    if ((keys === "text" || keys === "risk") && this.lastEdit.id === id && this.lastEdit.keys === keys && now - this.lastEdit.at < 1500) {
+      this.drawings = next;                    // typing in a note or a risk box is one undo step, not one per key
+      this.on.drawings?.(next); this.on.ui?.(); this.invalidate(false);
+    } else this.commit(next);
+    this.lastEdit = { id, keys, at: now };
+    return true;
+  }
+
+  deleteDrawing(id: string): boolean {
+    const d = this.drawings.find((q) => q.id === id);
+    if (!d || d.locked) return false;
+    if (this.selected === id) this.select(null);
+    this.commit(this.drawings.filter((q) => q.id !== id));
+    return true;
+  }
+
+  deleteSelected(): boolean { return !!this.selected && this.deleteDrawing(this.selected); }
+
+  /** A copy a little to the right and below the original, selected. */
+  duplicate(id: string | null = this.selected): boolean {
+    const d = id ? this.drawings.find((q) => q.id === id) : null;
+    if (!d) return false;
+    const m = this.mapper();
+    const pts = d.points.map((p) => ({ t: this.timeAt(m.x(p.t) + 16), p: this.price.value(m.y(p.p) + 16) }));
+    const fix = d.kind === "long" || d.kind === "short" ? [pts[0], pts[1], { t: pts[1].t, p: pts[2].p }] : pts;
+    const copy: Drawing = { ...d, id: newId(), points: fix, locked: false, hidden: false, born: this.bars[this.bars.length - 1]?.t };
+    this.commit([...this.drawings, copy]);
+    this.select(copy.id);
+    return true;
+  }
+
+  clearDrawings(): void {
+    if (!this.drawings.length) return;
+    this.select(null);
+    this.commit([]);
+  }
 
   private select(id: string | null): void {
     if (this.selected === id) return;
     this.selected = id;
     this.on.select?.(id);
   }
+
+  selectDrawing(id: string | null): void { this.select(id); this.invalidate(false); }
 
   // ---------- view ----------
   plotW(): number { return Math.max(10, this.W - this.axisW); }
@@ -277,8 +384,20 @@ export class PriceChartEngine {
   private emitView(): void { this.on.view?.(); }
 
   // ---------- pointer ----------
-  private toPoint(x: number, y: number): { t: number; p: number } {
-    return { t: this.timeAt(x), p: this.price.value(y) };
+  /** The time and price under (x, y). With the magnet on, the time snaps to the nearest candle and the price to its
+   *  open, high, low or close when one is within reach. `snap` false skips that (moving a whole drawing, brush). */
+  private toPoint(x: number, y: number, snap = true): Pt {
+    const pt = { t: this.timeAt(x), p: this.price.value(y) };
+    if (snap && this.magnet && this.shown.length) {
+      const i = Math.round(this.time.index(x));
+      const bar = this.shown[i];
+      if (bar) {
+        pt.t = this.bars[i].t;
+        const p = snapOhlc(bar, y, (v) => this.price.y(v), SNAP_PX);
+        if (p != null) pt.p = p;
+      }
+    }
+    return pt;
   }
 
   /** The time under x, between bars or beyond either end (spaced like the bars around it). */
@@ -313,6 +432,37 @@ export class PriceChartEngine {
     return !!p && y >= p.top && y <= p.top + p.height;
   }
 
+  private wallOf(t: number): number {
+    const n = this.bars.length;
+    if (!n) return t;
+    const b = this.bars[Math.max(0, Math.min(n - 1, indexAtOrBefore(this.bars, t)))];
+    return t + (b.w - b.t);
+  }
+
+  /** The drawing in progress, painted as it would be with the pointer where it is. */
+  private draftDrawing(): Drawing | null {
+    const dr = this.draft;
+    if (!dr) return null;
+    if (dr.kind === "brush") return dr.stroke.length > 1 ? { id: "draft", kind: "brush", points: dr.stroke } : null;
+    const clicks = dr.cur && dr.clicks.length < CLICKS[dr.kind] ? [...dr.clicks, dr.cur] : dr.clicks;
+    return this.make(dr.kind, clicks);
+  }
+
+  /** The drawing a list of clicks makes. Missing clicks repeat the last one, so a drawing in progress can be painted. */
+  private make(kind: DrawingKind, clicks: Pt[], extra: Partial<Drawing> = {}): Drawing {
+    const c = clicks.length ? clicks : [{ t: 0, p: 0 }];
+    const at = (i: number) => c[Math.min(i, c.length - 1)];
+    let points: Pt[];
+    if (kind === "long" || kind === "short") {
+      const [a, b] = [at(0), { ...at(1) }];
+      if (b.t - a.t < 1) b.t = this.timeAt(this.xAt(a.t) + 100);          // a click in one place: a box a few candles wide
+      points = buildPosition(a, b);
+    } else if (kind === "channel") points = [at(0), at(1), at(2)];
+    else if (CLICKS[kind] === 2) points = [at(0), at(1)];
+    else points = [at(0)];
+    return { id: newId(), kind, points, born: this.bars[this.bars.length - 1]?.t, ...((kind === "long" || kind === "short") && this.defaultRisk ? { risk: this.defaultRisk } : {}), ...extra };
+  }
+
   private down(x: number, y: number, e: PointerEvent): boolean {
     (this.host.closest("[tabindex]") as HTMLElement | null)?.focus({ preventScroll: true });
     if (x > this.plotW()) { this.axisDrag = { kind: "price", x, y }; return true; }
@@ -324,33 +474,38 @@ export class PriceChartEngine {
       return true;
     }
     if (this.draft?.pending) {
-      this.draft.d.points[1] = this.toPoint(x, y);
-      this.finishDraft();
+      this.draft.moved = false;
+      this.addClick(this.toPoint(x, y));
       return true;
     }
     if (this.tool) {
-      const def = DRAW_TOOLS.find((d) => d.kind === this.tool)!;
-      const pt = this.toPoint(x, y);
-      const d: Drawing = { id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, kind: this.tool, points: def.points === 2 ? [pt, { ...pt }] : [pt] };
-      if (d.kind === "text") {
-        const text = this.askText("");
-        if (!text) { this.setTool(null); return true; }
-        d.text = text.slice(0, 200);
-      }
-      this.draft = { d, pending: false, moved: false };
-      if (def.points === 1) this.finishDraft();
+      const kind = this.tool, pt = this.toPoint(x, y, kind !== "brush");
+      this.draft = { kind, clicks: [pt], cur: pt, pending: false, moved: false, stroke: [pt] };
+      if (kind === "text") this.finishDraft({ text: "Note" });
+      else if (CLICKS[kind] === 1 && kind !== "brush") this.finishDraft();
+      this.on.ui?.();
       return true;
     }
-    const hit = hitDrawing(this.drawings, x, y, this.mapper(), e.pointerType === "mouse" ? 7 : 14);
+    const hit = this.hideAll ? null : hitDrawing(this.drawings.filter((d) => this.shows(d)), x, y, this.mapper(), e.pointerType === "mouse" ? 7 : 14, this.selected);
     if (hit) {
       this.select(hit.id);
       const orig = this.drawings.find((d) => d.id === hit.id)!;
-      this.moving = { id: hit.id, handle: hit.handle, from: this.toPoint(x, y), orig: { ...orig, points: orig.points.map((p) => ({ ...p })) } };
+      this.moving = orig.locked ? null : { id: hit.id, handle: hit.handle, from: this.toPoint(x, y, false), orig, before: this.drawings, changed: false };
       this.invalidate(false);
       return true;
     }
     if (this.selected) { this.select(null); this.invalidate(false); }
     return false;
+  }
+
+  /** A click or tap places the next point; the last one finishes the drawing. */
+  private addClick(pt: Pt): void {
+    const dr = this.draft;
+    if (!dr) return;
+    dr.clicks.push(pt);
+    dr.cur = pt;
+    if (dr.clicks.length >= CLICKS[dr.kind]) this.finishDraft();
+    else { dr.pending = true; this.on.ui?.(); this.invalidate(false); }
   }
 
   private dragTo(x: number, y: number): void {
@@ -369,50 +524,62 @@ export class PriceChartEngine {
     }
     if (this.draft) {
       this.draft.moved = true;
-      if (this.draft.d.points.length > 1) this.draft.d.points[1] = this.toPoint(x, y);
       this.cross = { x, y };
+      if (this.draft.kind === "brush") {
+        const pt = this.toPoint(x, y, false), last = this.draft.stroke[this.draft.stroke.length - 1];
+        if (Math.hypot(this.xAt(pt.t) - this.xAt(last.t), this.price.y(pt.p) - this.price.y(last.p)) >= 3) this.draft.stroke.push(pt);
+      } else this.draft.cur = this.toPoint(x, y);
       this.invalidate(false);
       return;
     }
     if (this.moving) {
-      const d = this.drawings.find((q) => q.id === this.moving!.id);
-      if (!d) return;
-      const now = this.toPoint(x, y), o = this.moving.orig;
-      if (this.moving.handle != null) d.points[this.moving.handle] = now;
+      const mv = this.moving, o = mv.orig;
+      let next: Drawing;
+      if (mv.handle != null) next = moveHandle(o, mv.handle, this.toPoint(x, y));
       else {
-        const dt = now.t - this.moving.from.t;
+        const now = this.toPoint(x, y, false);
         // move in price by the same screen distance whatever the scale mode
-        const dy = y - this.price.y(this.moving.from.p);
-        d.points = o.points.map((p) => ({ t: p.t + dt, p: this.price.value(this.price.y(p.p) + dy) }));
+        const dy = y - this.price.y(mv.from.p);
+        next = shiftDrawing(o, now.t - mv.from.t, (p) => this.price.value(this.price.y(p) + dy));
       }
+      this.drawings = this.drawings.map((q) => (q.id === o.id ? next : q));
+      mv.changed = true;
       this.invalidate(false);
     }
   }
 
   private dropAt(x: number, y: number): void {
     if (this.axisDrag) { this.axisDrag = null; this.emitView(); return; }
-    if (this.draft) {
-      if (this.draft.moved) { this.draft.d.points[1] = this.toPoint(x, y); this.finishDraft(); }
-      else this.draft.pending = true;            // a click: the next click places the second point
+    const dr = this.draft;
+    if (dr) {
+      if (dr.kind === "brush") {
+        if (dr.stroke.length >= 2) this.finishDraft();
+        else { this.draft = null; this.on.ui?.(); this.invalidate(false); }
+      } else if (dr.moved && dr.clicks.length < CLICKS[dr.kind]) this.addClick(this.toPoint(x, y));      // dragged from one point to the other
+      else dr.pending = true;                                           // a click: the next click places the next point
+      this.on.ui?.();
       return;
     }
-    if (this.moving) { this.moving = null; this.on.drawings?.(this.drawings); }
+    if (this.moving) {
+      const mv = this.moving;
+      this.moving = null;
+      if (mv.changed) { this.history.push(mv.before); this.on.drawings?.(this.drawings); this.on.ui?.(); }
+    }
   }
 
-  private finishDraft(): void {
-    if (!this.draft) return;
-    const d = this.draft.d;
+  private finishDraft(extra: Partial<Drawing> = {}): void {
+    const dr = this.draft;
+    if (!dr) return;
     this.draft = null;
-    this.drawings = [...this.drawings, d];
+    const d = dr.kind === "brush" ? { ...this.make("brush", dr.clicks), points: thinStroke(dr.stroke, 200) } : this.make(dr.kind, dr.clicks, extra);
     this.setTool(null);
+    this.commit([...this.drawings, d]);
     this.select(d.id);
-    this.on.drawings?.(this.drawings);
-    this.invalidate(false);
   }
 
   private hover(x: number, y: number): void {
     this.cross = { x, y };
-    if (this.draft?.pending && this.draft.d.points.length > 1) this.draft.d.points[1] = this.toPoint(x, y);
+    if (this.draft?.pending) this.draft.cur = this.toPoint(x, y);
     const n = this.bars.length;
     this.setHover(n && x <= this.plotW() ? Math.max(0, Math.min(n - 1, Math.round(this.time.index(x)))) : -1);
     this.invalidate(false);
@@ -430,8 +597,18 @@ export class PriceChartEngine {
     return { index: i, bar, prev: this.shown[i - 1] ?? null, x: this.time.x(i), compare: this.compare?.values[i] ?? null };
   }
 
-  /** Arrow keys pan, + and - zoom, Delete removes the selected drawing, Esc stops drawing. */
+  /** Keys on the chart: arrows pan, + and - zoom, a letter picks a drawing tool, Delete removes the selected drawing,
+   *  Ctrl/Cmd+Z undoes, Esc stops drawing. Returns whether the key was used. */
   key(e: KeyboardEvent): boolean {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === "z") { if (e.shiftKey) this.redo(); else this.undo(); return true; }
+      if (k === "y") { this.redo(); return true; }
+      if (k === "d") { this.duplicate(); return true; }
+      return false;
+    }
+    if (e.altKey) return false;
     const step = Math.max(this.time.spacing, this.plotW() * (e.shiftKey ? 0.5 : 0.1));      // a tenth of the view per press
     switch (e.key) {
       case "ArrowLeft": this.panBy(step, 0); return true;
@@ -444,6 +621,13 @@ export class PriceChartEngine {
         if (this.selected) { this.select(null); this.invalidate(false); return true; }
         return false;
     }
+    const k = e.key.toLowerCase();
+    if (e.shiftKey && k === "l") { const d = this.drawings.find((q) => q.id === this.selected); return !!d && this.updateDrawing(d.id, { locked: !d.locked }); }
+    if (!e.shiftKey && k === "v") { this.setTool(null); return true; }
+    if (!e.shiftKey && k === "g") { this.setMagnet(!this.magnet); return true; }
+    if (!e.shiftKey && k === "o") { this.setHideAll(!this.hideAll); return true; }
+    const tool = toolForKey(e.key, e.shiftKey);
+    if (tool) { this.setTool(this.tool === tool ? null : tool); return true; }
     return false;
   }
 
@@ -939,10 +1123,22 @@ export class PriceChartEngine {
       c.save();
       c.beginPath(); c.rect(0, pane.top, pw, pane.height); c.clip();
       const m = this.mapper();
-      const dth = { line: th.ink, accent: th.accent, text: th.text, bg: th.bg, fill: withAlpha(th.accent, 0.08), font: th.font };
-      const fmt = (p: number) => this.priceText(p);
-      for (const d of this.drawings) paintDrawing(c, d, m, dth, d.id === this.selected, fmt);
-      if (this.draft) paintDrawing(c, this.draft.d, m, dth, true, fmt);
+      const dth: DrawTheme = { ink: th.ink, accent: th.accent, muted: th.muted, text: th.text, bg: th.bg, font: th.font, down: th.down,
+        green: th.slots[0], magenta: th.slots[1], alpha: withAlpha };
+      const sym = this.sym;
+      const fmt: DrawFmt = {
+        price: (p) => this.priceText(p),
+        move: (d, like) => `${d < 0 ? "−" : "+"}${sym}${this.priceText(Math.abs(d), like)}`,
+        pct: (v) => (Math.abs(v) < 0.005 ? "0.00%" : `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}%`),
+        money: (v) => `${sym}${this.format(Math.round(v), 0)}`,
+        count: (n) => this.format(n, 0),
+        time: (t) => timeLabel(this.wallOf(t), this.intraday),
+        bars: (t0, t1) => barsBetween(this.times, t0, t1),
+        span: durationText,
+      };
+      for (const d of this.drawings) if (this.shows(d)) paintDrawing(c, d, m, dth, d.id === this.selected, fmt);
+      const dr = this.draftDrawing();
+      if (dr) paintDrawing(c, dr, m, dth, true, fmt);
       c.restore();
     }
     const x = this.cross;
@@ -1002,7 +1198,7 @@ export class PriceChartEngine {
   /** Numbers for tests and the page's data attributes. */
   state() {
     const [a, b] = this.visibleRange();
-    return { bars: this.bars.length, from: a, to: b, spacing: this.time.spacing, mode: this.price.mode, auto: this.auto, drawings: this.drawings.length, selected: this.selected, tool: this.tool };
+    return { bars: this.bars.length, from: a, to: b, spacing: this.time.spacing, mode: this.price.mode, auto: this.auto, drawings: this.drawings.length, selected: this.selected, tool: this.tool, magnet: this.magnet, hidden: this.hideAll, step: this.step };
   }
 }
 

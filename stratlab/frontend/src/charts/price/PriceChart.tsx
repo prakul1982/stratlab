@@ -2,15 +2,17 @@
  * timeframes and ranges, volume, indicators (the engine's own maths), drawings saved per symbol, compare, log and %
  * scales, fullscreen and a PNG download. Loaded as its own chunk (see lazy.tsx). Facts only: no signals. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api } from "../../lib/api";
 import { CHART_TYPES, PriceChartEngine, type ChartMarker, type ChartType, type Hover, type PriceLevel, type Theme } from "./engine";
-import { DRAW_TOOLS, type Drawing, type DrawingKind } from "./drawings";
+import { TOOL, TOOL_HINT, type Drawing, type DrawingKind } from "./drawings";
+import { DrawRail, DrawSheet, HistoryButtons, SelectionBar, ShortcutsButton } from "./DrawToolbar";
+import { choose, fetchRemote, pushRemote, readLocal, writeLocal, type Layout } from "./drawSync";
 import type { ScaleMode } from "./scales";
 import { clampParam, newStudy, STAGE_NAMES, STUDIES, STUDY, studyLabel, type StudyConfig, type StudyType } from "./studies";
 import { aggregate, indexAtOrBefore, merge, parseTime, toBars, type Bar, type RawCandle } from "./transforms";
 import { ChipBar } from "../../components/kit/ChipBar";
 import { ConfirmDialog } from "../../components/kit/ConfirmDialog";
 import { CHART_TF_UNITS, chartTfCheck } from "../../lib/intervals";
+import { currencySymbol } from "../../lib/format";
 import "./priceChart.css";
 
 export type Tf = "5m" | "15m" | "1h" | "1d" | "1w" | "1mo";
@@ -48,6 +50,8 @@ export interface PriceChartProps {
   closesOnly?: boolean;
   /** While set, a click on the candles picks that price (chart replay's stop and target) instead of drawing. */
   onPickPrice?: ((price: number) => void) | null;
+  /** Chart replay: the candles shown are a replay's, so a drawing appears only once the replay reaches the candle it was drawn on. */
+  replay?: boolean;
 }
 
 const TF_LABEL: Record<Tf, string> = { "5m": "5m", "15m": "15m", "1h": "1h", "1d": "1D", "1w": "1W", "1mo": "1M" };
@@ -60,7 +64,7 @@ const RANGES: { key: RangeKey; tf: Tf; fetch: string }[] = [
   { key: "6M", tf: "1d", fetch: "6m" }, { key: "YTD", tf: "1d", fetch: "ytd" }, { key: "1Y", tf: "1d", fetch: "1y" },
   { key: "5Y", tf: "1w", fetch: "5y" }, { key: "All", tf: "1mo", fetch: "max" },
 ];
-const LS = { type: "stratlab.pc.type", studies: "stratlab.pc.studies", volume: "stratlab.pc.volume", draw: "stratlab.pc.draw." };
+const LS = { type: "stratlab.pc.type", studies: "stratlab.pc.studies", volume: "stratlab.pc.volume", magnet: "stratlab.pc.magnet", risk: "stratlab.pc.risk" };
 
 function lsGet<T>(k: string, fallback: T): T {
   try { const v = localStorage.getItem(k); return v == null ? fallback : (JSON.parse(v) as T); } catch { return fallback; }
@@ -99,15 +103,25 @@ function validStudies(v: unknown): StudyConfig[] {
 
 const isoOf = (t: number) => new Date(t).toISOString();
 
+/** Whether a media query matches now, and when it changes (a phone turned sideways, a window resized). */
+function useMedia(q: string): boolean {
+  const [on, setOn] = useState(() => { try { return window.matchMedia(q).matches; } catch { return false; } });
+  useEffect(() => {
+    let m: MediaQueryList;
+    try { m = window.matchMedia(q); } catch { return; }
+    const f = () => setOn(m.matches);
+    f();
+    m.addEventListener?.("change", f);
+    return () => m.removeEventListener?.("change", f);
+  }, [q]);
+  return on;
+}
+
+const editable = (t: EventTarget | null) => { const el = t as HTMLElement | null; return !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable); };
+
 /* small line icons, drawn like the app's own */
 const I = (d: ReactNode) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
 const ICON: Record<string, ReactNode> = {
-  trend: I(<><path d="M4 19 20 5" /><circle cx="4" cy="19" r="1.6" /><circle cx="20" cy="5" r="1.6" /></>),
-  hline: I(<><path d="M3 12h18" /><circle cx="12" cy="12" r="1.6" /></>),
-  ray: I(<><path d="M4 18 21 6" /><circle cx="4" cy="18" r="1.6" /></>),
-  rect: I(<rect x="4" y="6" width="16" height="12" rx="1" />),
-  fib: I(<><path d="M3 5h18M3 10h18M3 14h18M3 19h18" /></>),
-  text: I(<><path d="M5 6h14M12 6v13" /></>),
   zoomIn: I(<><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4-4M8 11h6M11 8v6" /></>),
   zoomOut: I(<><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4-4M8 11h6" /></>),
   reset: I(<><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v4h4" /></>),
@@ -131,20 +145,28 @@ export default function PriceChart(props: PriceChartProps) {
   const reqRef = useRef(0);
   const maybeMoreRef = useRef<() => void>(() => {});
 
-  const [tf, setTf] = useState<Tf>(props.tf && offered.includes(props.tf) ? props.tf : offered.includes("1d") ? "1d" : offered[0]);
-  const [range, setRange] = useState<RangeKey | null>(load ? (props.range === undefined ? "1Y" : props.range) : null);
-  const [type, setType] = useState<ChartType>(() => { const t = lsGet<string>(LS.type, "candles"); return CHART_TYPES.some((c) => c.type === t) ? t as ChartType : "candles"; });
-  const [volume, setVolume] = useState(() => lsGet<unknown>(LS.volume, true) !== false);
-  const [mine, setMine] = useState<StudyConfig[]>(() => validStudies(lsGet(LS.studies, [])));
+  // this symbol's saved layout (this browser's copy, read now so the first candles already use it)
+  const saved0 = useRef<Layout | null | undefined>(undefined);
+  if (saved0.current === undefined) saved0.current = readLocal(storageKey)?.layout ?? null;
+  const lay0 = saved0.current;
+  const [tf, setTf] = useState<Tf>(!!load && lay0?.tf && offered.includes(lay0.tf as Tf) ? (lay0.tf as Tf) : props.tf && offered.includes(props.tf) ? props.tf : offered.includes("1d") ? "1d" : offered[0]);
+  const [range, setRange] = useState<RangeKey | null>(() => (load ? (lay0?.tf && offered.includes(lay0.tf as Tf) ? ((lay0.range as RangeKey) ?? null) : props.range === undefined ? "1Y" : props.range) : null));
+  const [type, setType] = useState<ChartType>(() => { const t = lay0?.type ?? lsGet<string>(LS.type, "candles"); return CHART_TYPES.some((c) => c.type === t) ? t as ChartType : "candles"; });
+  const [volume, setVolume] = useState(() => (lay0?.volume ?? lsGet<unknown>(LS.volume, true)) !== false);
+  const [mine, setMine] = useState<StudyConfig[]>(() => validStudies(lay0?.studies ?? lsGet(LS.studies, [])));
   const [pageList, setPageList] = useState<StudyConfig[]>(pageStudies ?? []);
   const [mode, setMode] = useState<ScaleMode>("normal");
   const [auto, setAuto] = useState(true);
   const [tool, setTool] = useState<DrawingKind | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [askClear, setAskClear] = useState(false);
-  const [drawCount, setDrawCount] = useState(0);
+  const [list, setList] = useState<Drawing[]>([]);
+  const [ui, setUi] = useState({ magnet: false, hideAll: false, canUndo: false, canRedo: false, step: 0 });
+  const [sheet, setSheet] = useState(false);
+  const [focusText, setFocusText] = useState(0);
+  const phone = useMedia("(max-width: 640px)");
   const [full, setFull] = useState(false);
-  const [menu, setMenu] = useState<"studies" | "draw" | "compare" | null>(null);
+  const [menu, setMenu] = useState<"studies" | "compare" | null>(null);
   const [edit, setEdit] = useState<string | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "empty" | "error">("loading");
@@ -166,7 +188,7 @@ export default function PriceChart(props: PriceChartProps) {
     if (!e || !el) return;
     const s = e.state();
     Object.assign(el.dataset, { bars: String(s.bars), from: String(s.from), to: String(s.to), spacing: s.spacing.toFixed(3), mode: s.mode,
-      auto: String(s.auto), drawings: String(s.drawings), tool: s.tool ?? "", selected: s.selected ?? "" });
+      auto: String(s.auto), drawings: String(s.drawings), tool: s.tool ?? "", selected: s.selected ?? "", magnet: String(s.magnet), hidden: String(s.hidden), step: String(s.step) });
   }, []);
 
   // ---------- the engine ----------
@@ -176,9 +198,16 @@ export default function PriceChart(props: PriceChartProps) {
     engineRef.current = e;
     let raf = 0;
     e.listen("crosshair", (h) => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => setHover(h)); });
-    e.listen("select", (id) => { setSelected(id); syncData(); });
+    e.listen("select", (id) => {
+      setSelected(id); syncData();
+      const d = id ? e.drawings.find((q) => q.id === id) : null;
+      if (d?.kind === "text" && d.text === "Note") setFocusText((x) => x + 1);          // a note just placed: type over its text
+    });
     e.listen("tool", (t) => { setTool(t); syncData(); });
-    e.listen("drawings", (d) => { setDrawCount(d.length); saveDrawings(d); syncData(); });
+    e.listen("drawings", (d) => { setList(d); editedRef.current = true; scheduleRef.current(); syncData(); });
+    e.listen("ui", () => { setUi({ magnet: e.magnet, hideAll: e.hideAll, canUndo: e.canUndo, canRedo: e.canRedo, step: e.step }); syncData(); });
+    e.setMagnet(lsGet<unknown>(LS.magnet, false) === true);
+    e.defaultRisk = Number(lsGet<number>(LS.risk, 0)) || 0;
     e.listen("view", () => { syncData(); setAuto(e.auto); maybeMoreRef.current(); });
     const retheme = () => e.setTheme(readTheme(rootRef.current!));
     const mo = new MutationObserver(retheme);
@@ -191,6 +220,8 @@ export default function PriceChart(props: PriceChartProps) {
   const lineish = type === "line" || type === "area" || type === "baseline";
   const shownType: ChartType = props.closesOnly && !lineish ? "line" : type;
   useEffect(() => { engineRef.current?.setType(shownType); rootRef.current!.dataset.type = shownType; }, [shownType]);
+  useEffect(() => { engineRef.current?.setCurrency(currencySymbol(currency)); }, [currency]);
+  useEffect(() => { engineRef.current?.setClipFuture(!!props.replay); }, [props.replay]);
   useEffect(() => { lsSet(LS.type, type); }, [type]);
   useEffect(() => { engineRef.current?.setVolume(volume); lsSet(LS.volume, volume); }, [volume]);
   useEffect(() => { engineRef.current?.setStudies(studies); rootRef.current!.dataset.studies = String(studies.length); setTick((x) => x + 1); }, [studies]);
@@ -217,33 +248,78 @@ export default function PriceChart(props: PriceChartProps) {
     if (cmp) setMode("percent");
   }, [cmp]);
 
-  // ---------- drawings, per symbol: the account first, this browser as the fallback ----------
-  const saveTimer = useRef(0);
-  const saveDrawings = useCallback((d: Drawing[]) => {
-    lsSet(LS.draw + storageKey, d);
-    window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
-      api("/chart/drawings", { method: "PUT", body: { symbol: storageKey, items: d } }).catch(() => { /* kept in this browser */ });
-    }, 500);
+  // ---------- drawings and layout, per symbol: this browser at once, the account a moment later ----------
+  const editedRef = useRef(false);               // drawn on since this symbol loaded: the account's copy must not replace it
+  const touched = useRef(false);                 // the person changed the layout (as opposed to it being loaded)
+  const layoutRef = useRef<Layout | null>(saved0.current);
+  const stateRef = useRef({ tf, range, type, volume, mine, hideAll: false, load: !!load });
+  stateRef.current = { tf, range, type, volume, mine, hideAll: ui.hideAll, load: !!load };
+  const scheduleRef = useRef<() => void>(() => {});
+  const timer = useRef(0);
+  const pending = useRef<null | (() => void)>(null);
+  const currentLayout = (): Layout | null => {
+    const st = stateRef.current;
+    if (!touched.current) return layoutRef.current;
+    const l: Layout = { type: st.type, volume: st.volume, hide_drawings: st.hideAll, studies: st.mine.map((x) => ({ id: x.id, type: x.type, params: x.params, slot: x.slot })) };
+    if (st.load) { l.tf = st.tf; if (st.range) l.range = st.range; }
+    layoutRef.current = l;
+    return l;
+  };
+  scheduleRef.current = () => {
+    const e = engineRef.current;
+    if (!e) return;
+    const key = storageKey, drawings = e.drawings, layout = currentLayout(), at = Date.now();
+    writeLocal(key, { drawings, layout, at, dirty: true });
+    window.clearTimeout(timer.current);
+    const send = async () => {
+      pending.current = null;
+      if (await pushRemote(key, drawings, layout)) { const cur = readLocal(key); if (cur && cur.at === at) writeLocal(key, { ...cur, dirty: false }); }
+    };
+    pending.current = () => { window.clearTimeout(timer.current); void send(); };
+    timer.current = window.setTimeout(send, 700);
+  };
+  useEffect(() => { if (touched.current) scheduleRef.current(); }, [tf, range, type, volume, mine, ui.hideAll]);
+  useEffect(() => {
+    const online = () => { const l = readLocal(storageKey); if (l?.dirty) scheduleRef.current(); };
+    window.addEventListener("online", online);
+    return () => window.removeEventListener("online", online);
   }, [storageKey]);
+
+  const applyLayout = useCallback((l: Layout | null) => {
+    if (!l) return;
+    const st = stateRef.current;
+    if (l.type && CHART_TYPES.some((c) => c.type === l.type)) setType(l.type as ChartType);
+    if (l.volume !== undefined) setVolume(l.volume);
+    if (l.studies) setMine(validStudies(l.studies));
+    if (st.load && l.tf && offered.includes(l.tf as Tf)) { setTf(l.tf as Tf); setRange((l.range as RangeKey | undefined) ?? null); }
+    engineRef.current?.setHideAll(!!l.hide_drawings);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const e = engineRef.current;
     if (!e) return;
     let live = true;
-    const local = lsGet<Drawing[]>(LS.draw + storageKey, []);
-    e.setDrawings(Array.isArray(local) ? local : []);
-    setDrawCount(e.drawings.length);
-    api<{ items: Drawing[] }>(`/chart/drawings?symbol=${encodeURIComponent(storageKey)}`)
-      .then((r) => {
-        if (!live || !Array.isArray(r?.items)) return;
-        if (!r.items.length && local.length) { saveDrawings(local); return; }      // drawn while signed out: keep them
-        e.setDrawings(r.items); setDrawCount(r.items.length); lsSet(LS.draw + storageKey, r.items); syncData();
-      })
-      .catch(() => { /* signed out or offline: this browser's copy */ });
+    editedRef.current = false; touched.current = false;
+    const local = readLocal(storageKey);
+    layoutRef.current = local?.layout ?? null;
+    e.setDrawings(local?.drawings ?? []); setList(e.drawings);
+    applyLayout(local?.layout ?? null);
+    fetchRemote(storageKey).then((r) => {
+      if (!live || editedRef.current) return;
+      const c = choose(local, r);
+      if (c.use !== local) {
+        layoutRef.current = c.use.layout;
+        e.setDrawings(c.use.drawings); setList(e.drawings);
+        applyLayout(c.use.layout);
+        writeLocal(storageKey, { drawings: c.use.drawings, layout: c.use.layout, at: r?.at || Date.now(), dirty: false });
+      }
+      if (c.send) scheduleRef.current();
+      syncData();
+    });
     syncData();
-    return () => { live = false; };
-  }, [storageKey, saveDrawings, syncData]);
+    return () => { live = false; pending.current?.(); };
+  }, [storageKey, syncData, applyLayout]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
 
   // ---------- candles ----------
   const shownFrom = useCallback((base: Bar[], t: Tf) => (t === "1w" ? aggregate(base, "week") : t === "1mo" ? aggregate(base, "month") : base), []);
@@ -328,24 +404,41 @@ export default function PriceChart(props: PriceChartProps) {
   }, [load, props.bars, syncData]);
 
   // ---------- actions ----------
-  const pickTf = (t: Tf) => { setRange(null); setTf(t); setMenu(null); };
+  const pickTf = (t: Tf) => { touched.current = true; setRange(null); setTf(t); setMenu(null); };
   const pickRange = (r: RangeKey) => {
+    touched.current = true;
     const want = RANGES.find((x) => x.key === r)!.tf;
     const t = offered.includes(want) ? want : offered.includes("1d") ? "1d" : offered[0];
     setTf(t); setRange(r);
     if (t === tf && r === range) applyRange(r);
   };
-  const addStudy = (t: StudyType) => { setMine((s) => [...s, newStudy(t, s)]); setMenu(null); };
+  const addStudy = (t: StudyType) => { touched.current = true; setMine((s) => [...s, newStudy(t, s)]); setMenu(null); };
   const removeStudy = (id: string) => {
+    touched.current = true;
     setMine((s) => s.filter((x) => x.id !== id));
     setPageList((s) => s.filter((x) => x.id !== id));
     if (edit === id) setEdit(null);
   };
   const setParam = (id: string, i: number, v: number) => {
+    touched.current = true;
     const fix = (s: StudyConfig) => (s.id !== id ? s : { ...s, params: s.params.map((p, k) => (k === i ? clampParam(STUDY[s.type].params[k], v) : p)) });
     setMine((s) => s.map(fix)); setPageList((s) => s.map(fix));
   };
-  const pickTool = (t: DrawingKind | null) => { engineRef.current?.setTool(t === tool ? null : t); setMenu(null); };
+  const pickTool = (t: DrawingKind | null) => { engineRef.current?.setTool(t === tool ? null : t); setMenu(null); setSheet(false); };
+  const drawProps = {
+    tool, onTool: pickTool,
+    magnet: ui.magnet, onMagnet: () => { const e = engineRef.current; if (e) { e.setMagnet(!e.magnet); lsSet(LS.magnet, e.magnet); } },
+    hideAll: ui.hideAll, onHide: () => { touched.current = true; const e = engineRef.current; e?.setHideAll(!e.hideAll); },
+    canUndo: ui.canUndo, canRedo: ui.canRedo, onUndo: () => engineRef.current?.undo(), onRedo: () => engineRef.current?.redo(),
+    drawings: list, selected, onSelect: (id: string | null) => engineRef.current?.selectDrawing(id),
+    onUpdate: (id: string, patch: Partial<Drawing>) => {
+      if (patch.risk !== undefined) lsSet(LS.risk, patch.risk);
+      if (engineRef.current) engineRef.current.defaultRisk = patch.risk ?? engineRef.current.defaultRisk;
+      engineRef.current?.updateDrawing(id, patch);
+    },
+    onDelete: (id: string) => engineRef.current?.deleteDrawing(id), onClearAll: () => setAskClear(true),
+  };
+  const chosen = selected ? list.find((d) => d.id === selected) : undefined;
   const shot = () => {
     const e = engineRef.current;
     if (!e) return;
@@ -428,7 +521,7 @@ export default function PriceChart(props: PriceChartProps) {
   return (
     <div ref={rootRef} className={`pc${full ? " pc-full" : ""}`} data-testid="price-chart" style={{ ["--pc-h" as string]: `${height}px` }}>
       <div className="pc-bar" role="toolbar" aria-label="Chart tools">
-        <select className="pc-sel" aria-label="Chart type" value={shownType} onChange={(ev) => setType(ev.target.value as ChartType)}>
+        <select className="pc-sel" aria-label="Chart type" value={shownType} onChange={(ev) => { touched.current = true; setType(ev.target.value as ChartType); }}>
           {CHART_TYPES.filter((c) => !props.closesOnly || ["line", "area", "baseline"].includes(c.type)).map((c) => <option key={c.type} value={c.type}>{c.name}</option>)}
         </select>
         {tfSelect && (
@@ -445,31 +538,19 @@ export default function PriceChart(props: PriceChartProps) {
             </div>
           )}
         </div>
-        <div className="pc-seg pc-hide-phone" role="group" aria-label="Drawing tools">
-          {DRAW_TOOLS.map((d) => <button key={d.kind} type="button" className="pc-btn icon" aria-label={d.name} title={d.name} aria-pressed={tool === d.kind} onClick={() => pickTool(d.kind)}>{ICON[d.kind]}</button>)}
-        </div>
-        <div className="pc-wrap pc-only-phone">
-          <button type="button" className="pc-btn" aria-haspopup="menu" aria-expanded={menu === "draw"} aria-pressed={!!tool} onClick={() => setMenu(menu === "draw" ? null : "draw")}>{tool ? DRAW_TOOLS.find((d) => d.kind === tool)!.name : "Draw"}</button>
-          {menu === "draw" && (
-            <div className="pc-pop" role="menu" aria-label="Drawing tools">
-              {DRAW_TOOLS.map((d) => <button key={d.kind} type="button" role="menuitem" className="item" onClick={() => pickTool(d.kind)}>{d.name}</button>)}
-              {tool && <button type="button" role="menuitem" className="item" onClick={() => pickTool(null)}>Stop drawing</button>}
-            </div>
-          )}
-        </div>
-        <button type="button" className="pc-btn icon" disabled={!drawCount} aria-label={selected ? "Delete drawing" : "Clear drawings"}
-          title={selected ? "Delete the selected drawing (Delete key)" : "Remove every drawing on this chart"}
-          onClick={() => { const e = engineRef.current; if (!e) return; if (selected) e.deleteSelected(); else setAskClear(true); }}>{ICON.trash}</button>
+        {phone && <button type="button" className="pc-btn" aria-haspopup="dialog" aria-expanded={sheet} aria-pressed={!!tool || sheet} onClick={() => setSheet(!sheet)}>Draw</button>}
+        <HistoryButtons canUndo={ui.canUndo} canRedo={ui.canRedo} onUndo={drawProps.onUndo} onRedo={drawProps.onRedo} />
+        <ShortcutsButton />
         {askClear && (
           <ConfirmDialog title="Remove every drawing on this chart?" confirmLabel="Remove drawings" onClose={() => setAskClear(false)}
-            onConfirm={() => { engineRef.current?.clearDrawings(); setAskClear(false); }}>The lines and shapes you drew here are removed. The chart itself is not changed.</ConfirmDialog>
+            onConfirm={() => { engineRef.current?.clearDrawings(); setAskClear(false); }}>The lines and shapes you drew here are removed. You can undo this with Ctrl/Cmd+Z. The chart itself is not changed.</ConfirmDialog>
         )}
         {compareLoad && (
           <div className="pc-wrap">
             {cmp ? <button type="button" className="pc-btn" aria-pressed="true" onClick={() => { setCmp(null); setMode("normal"); }} title="Stop comparing">vs {cmp.symbol} ✕</button>
               : <button type="button" className="pc-btn" aria-haspopup="dialog" aria-expanded={menu === "compare"} onClick={() => setMenu(menu === "compare" ? null : "compare")}>Compare</button>}
             {menu === "compare" && (
-              <form className="pc-pop" onSubmit={(ev) => { ev.preventDefault(); doCompare(cmpText); }} aria-label="Compare with another symbol">
+              <form className="pc-pop right" onSubmit={(ev) => { ev.preventDefault(); doCompare(cmpText); }} aria-label="Compare with another symbol">
                 <label>Symbol<input autoFocus value={cmpText} onChange={(ev) => setCmpText(ev.target.value)} placeholder={props.compareHint ?? "e.g. TCS"} maxLength={20} aria-label="Symbol to compare" /></label>
                 <button type="submit" className="pc-btn" disabled={cmpBusy || !cmpText.trim()}>{cmpBusy ? "Loading…" : "Compare on a % scale"}</button>
               </form>
@@ -485,8 +566,13 @@ export default function PriceChart(props: PriceChartProps) {
         </span>
       </div>
 
-      <div ref={stageRef} className="pc-stage" tabIndex={0} role="group" aria-label={`${symbol} price chart. Arrow keys move it, plus and minus zoom, Delete removes the selected drawing.`}
-        onKeyDown={(ev) => { if (engineRef.current?.key(ev.nativeEvent)) { ev.preventDefault(); syncData(); } }}>
+      <div className="pc-main" onKeyDown={(ev) => {
+        if (editable(ev.target)) return;
+        if ((ev.target as HTMLElement).tagName === "BUTTON" && !ev.ctrlKey && !ev.metaKey && !/^[A-Za-z]$/.test(ev.key) && ev.key !== "Delete") return;
+        if (engineRef.current?.key(ev.nativeEvent)) { ev.preventDefault(); syncData(); }
+      }}>
+      {!phone && <DrawRail {...drawProps} />}
+      <div ref={stageRef} className="pc-stage" tabIndex={0} role="group" aria-label={`${symbol} price chart. Arrow keys move it, plus and minus zoom, letters pick drawing tools, Delete removes the selected drawing.`}>
         <div ref={canvasRef} className="pc-canvas" role="img" aria-label={summary} />
         <div className="pc-legend" aria-label="Legend">
           <div aria-hidden="true">
@@ -539,7 +625,13 @@ export default function PriceChart(props: PriceChartProps) {
         {status === "empty" && <div className="pc-status">No candles for this timeframe yet.</div>}
         {status === "error" && <div className="pc-status">Couldn't load prices: {error}</div>}
         {fetchingMore && <div className="pc-loading-more">Loading older candles…</div>}
+        {chosen && !ui.hideAll && (
+          <SelectionBar d={chosen} symbol={currencySymbol(currency) || ""} focusText={focusText} onUpdate={(patch) => drawProps.onUpdate(chosen.id, patch)}
+            onDelete={() => drawProps.onDelete(chosen.id)} onDuplicate={() => engineRef.current?.duplicate(chosen.id)} />
+        )}
       </div>
+      </div>
+      {phone && sheet && <DrawSheet {...drawProps} onClose={() => setSheet(false)} />}
 
       <div className="pc-foot">
         {load ? (
@@ -550,7 +642,7 @@ export default function PriceChart(props: PriceChartProps) {
           </div>
         ) : <span className="pc-note">{TF_LONG[tf]} candles</span>}
         <div className="pc-seg" role="group" aria-label="Scale">
-          <button type="button" className="pc-btn" aria-pressed={volume} onClick={() => setVolume(!volume)} title="Volume bars">Vol</button>
+          <button type="button" className="pc-btn" aria-pressed={volume} onClick={() => { touched.current = true; setVolume(!volume); }} title="Volume bars">Vol</button>
           <button type="button" className="pc-btn" aria-pressed={mode === "percent"} onClick={() => setMode(mode === "percent" ? "normal" : "percent")} title="Percent scale, from the first candle on screen">%</button>
           <button type="button" className="pc-btn" aria-pressed={mode === "log"} onClick={() => setMode(mode === "log" ? "normal" : "log")} title="Log scale">Log</button>
           <button type="button" className="pc-btn" aria-pressed={auto} onClick={() => { engineRef.current?.setAuto(!auto); setAuto(!auto); }} title="Fit prices to the candles on screen">Auto</button>
@@ -559,7 +651,7 @@ export default function PriceChart(props: PriceChartProps) {
       </div>
       {error && status === "ready" && <p className="pc-note" role="status">{error}</p>}
       {props.note && <p className="pc-note">{props.note}</p>}
-      {tool && <p className="pc-note" role="status">{DRAW_TOOLS.find((d) => d.kind === tool)!.points === 2 ? "Click or drag on the chart to place both ends. Esc stops." : "Click on the chart to place it. Esc stops."}</p>}
+      {tool && <p className="pc-note" role="status">{TOOL[tool].name}: {phone ? TOOL_HINT[tool].replace(/Click/g, "Tap").replace("Press and drag", "Drag").replace(" Esc cancels.", "") : TOOL_HINT[tool]}{ui.step > 0 ? ` (${ui.step} placed)` : ""}</p>}
       {table && (
         <div className="pc-table">
           <table>
