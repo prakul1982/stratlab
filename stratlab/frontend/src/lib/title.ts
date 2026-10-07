@@ -31,6 +31,17 @@ export function titleFor(path: string): string {
   return DEFAULT_TITLE;
 }
 
+/** The title for a visitor who isn't signed in: "Sign in · Options builder · StratLab" on an app address (so a tab says
+ * what it is waiting for), "Plans · StratLab" on /pricing and /plans, the brand's line on the landing page itself. */
+export function signedOutTitle(path: string): string {
+  const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");
+  if (p === "/pricing" || p === "/upgrade" || p === "/plans") return withBrand("Plans");
+  if (p === "/help") return withBrand("Help");
+  if (p === "/" || p === "/features") return DEFAULT_TITLE;
+  const t = titleFor(p);
+  return t === DEFAULT_TITLE ? withBrand("Sign in") : `Sign in · ${t}`;
+}
+
 /** Set the tab's title from a page (runs after the shell's default for the address, so it wins). Pass null while the
  * page has nothing better than the default. */
 export function useDocTitle(name: string | null | undefined) {

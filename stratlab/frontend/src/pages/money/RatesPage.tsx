@@ -15,7 +15,7 @@ type Row = { key: string; name: string; rate: number; tax: Tax; after_tax: numbe
 type Deposit = { id: string; kind: "fd" | "rd"; name: string; rate: number; after_tax: number | null; maturity: string; matured: boolean; principal?: number;
   monthly?: number; interest: number; interest_after_tax: number; compounding?: string };
 type Rates = {
-  full: boolean; plan: string; tax_rate: number; basis: "slab" | "estimate"; slab: number | null; slabs: number[]; fy: number;
+  full: boolean; plan: string; tax_rate: number; basis: "slab" | "estimate"; slab: number | null; slabs: number[]; fy: number; inputs_saved?: boolean;
   mine: { rate: number; regime: string; income: number; age: string; fy: number } | null;
   market: Row[]; market_read_at: string | null; market_available: boolean;
   small_savings: { quarter: string; from: string; to: string; notified: string; source: string; rows: Row[] };
@@ -73,7 +73,9 @@ export function RatesPage() {
           <p className="k-small" role="status">
             {d.basis === "estimate" && d.mine
               ? <>After-tax figures use <b>{d.tax_rate}%</b>: the tax on the next ₹10,000 of interest at your {fyLabel(d.mine.fy)} tax inputs ({d.mine.regime} regime, other income {inr(d.mine.income)}), with any rebate, surcharge and cess.</>
-              : <>After-tax figures use <b>{d.tax_rate}%</b>: the {d.slab ?? 30}% slab with 4% cess.{d.full && pick === "mine" ? <> Save your income in the <Link className="link" to="/tax-report">tax report</Link> to use your own estimate.</> : null}</>}
+              : d.full && pick === "mine"
+                ? <>After-tax figures use <b>{d.tax_rate}%</b>: the {d.slab ?? 30}% slab with 4% cess, because no income is saved in your <Link className="link" to="/tax-report">tax report</Link> yet (it counts no other income until you add yours). Save your income there to use your own rate.</>
+                : <>After-tax figures use <b>{d.tax_rate}%</b>: the {d.slab ?? 30}% slab with 4% cess.</>}
           </p>
           {!d.full && <PlanNote>After-tax yields at the rate from your own tax estimate (rebate, surcharge and cess included) are on the {d.plan} plan.</PlanNote>}
         </Card>

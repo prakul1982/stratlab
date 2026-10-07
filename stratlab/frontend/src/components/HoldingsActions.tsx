@@ -13,7 +13,7 @@ interface Notice1 {
   from_qty: number; to_qty: number; from_avg: number | null; to_avg: number | null; more: number;
 }
 export interface HoldingsActions {
-  ahead: IncomeLine[]; ahead_total: number; received: IncomeLine[]; received_total: number; notices: Notice1[];
+  ahead: IncomeLine[]; ahead_total: number; received: IncomeLine[]; received_total: number; by_fy?: { fy: number; label: string; total: number; count: number }[]; notices: Notice1[];
   undo: { symbol: string; id: string; label: string; qty: number; avg: number | null }[]; checking: number; today: string;
 }
 
@@ -74,14 +74,15 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
       )}
       {(data.ahead.length > 0 || data.received.length > 0) && (
         <Card>
-          <CardHead title="Dividends" info="Amount a share as the company announced it, times the shares you'd hold on the ex-date. The last 12 months assume you held today's quantity throughout (worked back through any bonus or split), so they're an estimate; amounts are before tax."
+          <CardHead title="Dividends" info="Amount a share as the company announced it, times the shares you'd hold on the ex-date. The last 12 months assume you held today's quantity throughout (worked back through any bonus or split), so they're an estimate; amounts are before tax. Tax tools and the ITR export add the same dividends up by financial year (April to March), each in the year of its record date, so their figures are the financial-year ones below, not the rolling twelve months."
             actions={<Link className="link k-small" to="/research/corporate-actions?region=IN">Corporate actions calendar →</Link>} />
           <StatRow>
             <Stat label="Announced, ex-date ahead" value={inr(data.ahead_total)} />
             <Stat label="Last 12 months (estimated)" value={inr(data.received_total)} />
+            {(data.by_fy ?? []).filter((y) => y.count > 0).map((y) => <Stat key={y.fy} label={`${y.label} (estimated)`} value={inr(y.total)} note={`${y.count} payment${y.count === 1 ? "" : "s"} · as in tax tools`} />)}
           </StatRow>
-          {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} /></>}
-          {received.length > 0 && <><h3 className="k-sub">Last 12 months (estimated)</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} /></>}
+          {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack /></>}
+          {received.length > 0 && <><h3 className="k-sub">Last 12 months (estimated)</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack /></>}
           {data.received.length > 6 && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${data.received.length}`}</button>}
           {data.checking > 0 && <p className="k-note">Still reading the history of {data.checking} stock{data.checking === 1 ? "" : "s"}; reload in a minute.</p>}
         </Card>

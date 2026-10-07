@@ -250,8 +250,8 @@ export function RotationPage() {
     setPicked(next);
   };
   // the summary reads the chart: the same ones as are drawn, so its counts add up to "n of N on the chart"
-  const names = (q: Quadrant) => rows.filter((r) => r.quadrant === q).map((r) => r.name);
-  const entered = rows.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
+  const names = (q: Quadrant) => all.filter((r) => r.quadrant === q).map((r) => r.name);
+  const entered = all.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
   const unit = interval === "weekly" ? "week" : "day";
   const few = (xs: string[], n = 5) => !xs.length ? "none" : xs.length <= n + 1 ? xs.join(", ") : `${xs.slice(0, n).join(", ")} and ${xs.length - n} more`;
   return (
@@ -294,7 +294,7 @@ export function RotationPage() {
               <div className="rot-read">
                 {([["leading", `stronger than ${drilled && out.parent ? out.parent.name : "the market"} and still gaining`], ["improving", "weaker, but picking up"],
                    ["weakening", "stronger, but losing pace"], ["lagging", "weaker and still slipping"]] as [Quadrant, string][]).map(([q, says]) => (
-                  <div key={q}><QuadrantTag q={q} /><span className="k-muted k-small">{says}</span><span className="k-small" data-testid={`rot-${q}`}>{names(q).length ? `${names(q).length} · ${few(names(q))}` : "none"}</span></div>
+                  <div key={q}><QuadrantTag q={q} /><span className="k-muted k-small">{says}</span><span className="k-small" data-testid={`rot-${q}`}>{names(q).length ? `${names(q).length} of ${all.length} · ${few(names(q))}` : `none of ${all.length}`}</span></div>
                 ))}
                 {entered.length > 0 && <p className="k-small">Moved into Leading over the last {out.tail} {unit}s: <b>{few(entered)}</b></p>}
               </div>
@@ -323,6 +323,7 @@ export function RotationPage() {
               { key: "h", header: "Heading", cell: (r) => <span aria-label={r.heading == null ? "no move" : `${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span> },
               { key: "m", header: `${out.tail} ${unit}s ago`, cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">same</span> : <QuadrantTag q={r.moved} />) : "–") },
             ]} />
+          <p className="k-note">Heading is the way its dot moved over the trail: → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. The counts above are for all {all.length}, not only the ones ticked.</p>
           {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
         </Card>
       )}
@@ -367,7 +368,7 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
     try {
       const r = await api<{ alerts: boolean }>("/research/filings/alerts", { method: "PUT", body: { on: !data.alerts } });
       setData({ ...data, alerts: r.alerts });
-      notify(r.alerts ? `You'll get a message each evening (${data.send_at} IST) when a watchlist stock files a red flag.` : "Filing alerts off.");
+      notify(r.alerts ? `You'll get a message each evening (${data.send_at} IST) when a stock you hold or watch files a red flag.` : "Filing alerts off.");
     } catch (e) { fail(e); }
   };
 

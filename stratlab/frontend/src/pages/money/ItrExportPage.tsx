@@ -6,6 +6,7 @@ import { Download } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
 import { rememberFy, savedFy } from "../../lib/fy";
+import { minus } from "../../lib/format";
 
 /* /money/itr: the year's figures from the tax report, tax tools and US stocks, laid out as the ITR-2 and ITR-3 schedules,
  * to download as a workbook, CSV files or a PDF pack for a CA. Built from the kit (components/kit). */
@@ -23,7 +24,7 @@ const FORMATS: [Format, string, string][] = [
   ["pdf", "PDF pack for your CA", "Summary, schedules, workings, assumptions and sources"],
 ];
 const fyLabel = (y: number) => `FY ${y}-${String(y + 1).slice(2)}`;
-const cell = (v: Cell) => (v == null ? "" : typeof v === "number" ? v.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : v);
+const cell = (v: Cell) => (v == null ? "" : typeof v === "number" ? minus(v.toLocaleString("en-IN", { maximumFractionDigits: 2 })) : v);
 
 /** A schedule's table: the columns the server names, numbers on the right, the first column naming the row. */
 function Schedule({ t }: { t: Sheet }) {

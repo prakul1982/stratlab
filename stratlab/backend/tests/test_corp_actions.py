@@ -199,6 +199,15 @@ def test_dividend_income_counts_the_shares_held_on_each_ex_date():
     assert t() == "2026-10-05"
 
 
+def test_dividends_are_also_summed_by_financial_year_like_the_tax_tools():
+    acts = {"TCS": [_div("TCS", "2026-06-27", 30.0), _div("TCS", "2026-02-01", 20.0), _div("TCS", "2025-03-01", 66.0)]}
+    items = [{"symbol": "TCS", "qty": 10, "avg": 3520.0, "since": "2024-01-01"}]
+    v = C.holdings_view(items, acts, TODAY, None)
+    assert v["by_fy"] == [{"fy": 2026, "label": "FY 2026-27", "total": 300.0, "count": 1},
+                          {"fy": 2025, "label": "FY 2025-26", "total": 200.0, "count": 1}]      # the March 2025 one is FY 2024-25: not listed
+    assert v["received_total"] == 500.0                                                          # the rolling twelve months holds both
+
+
 def test_a_consolidation_to_nothing_is_not_offered():
     item = {"symbol": "X", "qty": 3, "avg": 10.0, "since": "2026-09-01"}
     a = {"id": "X|split|2026-10-01|1-10", "kind": "split", "factor": 0.1, "ex_date": "2026-10-01", "short": "consolidation", "label": "Consolidation", "text": "c"}

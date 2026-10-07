@@ -124,15 +124,25 @@ def deposits(uid: str, t: float, at: date) -> list[dict]:
     return out
 
 
+def saved_inputs(uid: str, fy: int) -> tuple[int, dict] | None:
+    """The tax inputs the person saved in the tax report that stand for `fy`: that year's own, else the latest year
+    they saved before it, else the earliest after it (income rarely resets to nothing between years)."""
+    got = {y: v for y, v in tax_total.load_inputs(uid).items() if v.get("saved")}
+    if not got:
+        return None
+    use = fy if fy in got else max((y for y in got if y < fy), default=min(got))
+    return use, got[use]
+
+
 def tax_basis(profile: dict, slab: float | None, own: bool) -> tuple[float, str, dict | None, int]:
     """(tax rate as a fraction, "estimate" or "slab", the estimate's marginal-rate facts, the financial year). The
     user's own estimate counts only on a plan with `rates_slab`; everyone else gets the picked slab (30% by default)."""
     fy = tax_lots.fy_of(today().isoformat())
     mine = None
     if allows(profile["_plan"], "rates_slab") and own:
-        inputs = tax_total.load_inputs(profile["id"]).get(fy)
-        if inputs and inputs.get("saved"):
-            mine = marginal(fy, inputs)
+        found = saved_inputs(profile["id"], fy)
+        if found:
+            mine = marginal(*found)
     if mine:
         return mine["rate"], "estimate", mine, fy
     return slab_rate(slab if slab is not None else 30), "slab", None, fy
@@ -172,7 +182,8 @@ def view(profile: dict, slab: float | None, own: bool) -> dict:
               "after_tax": after(frb, "taxable", t), "how": f"Paid half-yearly; NSC rate plus {FRB_SPREAD} points",
               "from": FRB_PERIOD[0], "to": FRB_PERIOD[1]}]
     return {"full": full, "plan": PLANS[FEATURE_PLAN["rates_slab"]]["name"], "tax_rate": round(t * 100, 2), "basis": basis,
-            "slab": slab if basis == "slab" else None, "mine": mine, "slabs": list(SLABS), "fy": fy,
+            "slab": slab if basis == "slab" else None, "mine": mine,
+            "inputs_saved": saved_inputs(profile["id"], fy) is not None, "slabs": list(SLABS), "fy": fy,
             "market": market, "market_read_at": rbi["read_at"], "market_available": bool(r),
             "small_savings": {"quarter": ss["quarter"], "from": ss["from"], "to": ss["to"], "notified": ss["notified"],
                               "source": ss["source"], "rows": small},

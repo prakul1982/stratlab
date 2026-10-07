@@ -9,7 +9,7 @@ import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
 import { pickFy, rememberFy } from "../lib/fy";
 
 /* /tax-report: capital gains on shares and funds from the tradebooks you upload, matched first in, first out, with the
@@ -92,11 +92,11 @@ function combine(a: ImportReply | null, b: ImportReply): ImportReply {
 }
 
 /** The year to open on: the one already open if it has sales, else the Money pages' shared year (lib/fy). */
+const hasTrades = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0 || !!y.units;
 function bestYear(r: Report, cur: number | null): number {
-  const busy = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0 || !!y.units;
   const open = r.years.find((y) => y.fy === cur);
-  if (open && busy(open)) return open.fy;
-  return pickFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && busy(y)));
+  if (open && hasTrades(open)) return open.fy;
+  return pickFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && hasTrades(y)));
 }
 
 export function TaxReportPage() {
@@ -297,6 +297,18 @@ export function TaxReportPage() {
             </>} />
           </Card>
 
+          {!hasTrades(y) && (() => {
+            const other = rep.years.filter((x) => x.fy !== y.fy && hasTrades(x)).sort((a, b) => b.fy - a.fy)[0];
+            return other ? (
+              <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); rememberFy(other.fy); setAllSales(false); } }}>
+                No trades in {y.label}. {other.label} has trades in your files.
+              </Notice>
+            ) : null;
+          })()}
+
+          <PageNav items={[{ id: "tax-total", label: "Total tax" }, { id: "tax-gains", label: "Gains" }, ...(y.count > 0 ? [{ id: "tax-sales", label: "Each sale" }] : []),
+            { id: "tax-below", label: "Lots below cost" }, { id: "tax-how", label: "How it works" }]} />
+
           <TotalCard y={y} onSave={saveInputs} filing={y.filing.length > 0} />
 
           <Card label="Tax tools">
@@ -305,7 +317,7 @@ export function TaxReportPage() {
             <Link className="btn quiet sm k-btn-end" to="/money/tax-tools">Open tax tools</Link>
           </Card>
 
-          <Card>
+          <Card id="tax-gains">
             <CardHead title={`Gains in ${y.label}`} />
             <StatRow>
               <Stat label="Short-term gains (net)" value={inr(y.stcg.net)} tone={signTone(y.stcg.net)} note={`${inr(y.stcg.gains)} gains · ${inr(y.stcg.losses)} losses`} />
@@ -347,7 +359,7 @@ export function TaxReportPage() {
           )}
 
           {y.count > 0 && (
-            <Card>
+            <Card id="tax-sales">
               <CardHead title="Each sale, matched to its purchase" actions={<><span className="k-note">{y.count} line{y.count === 1 ? "" : "s"}</span>{salesMore.toggle}</>} />
               <DataTable label="Realised sales" columns={saleCols} rows={(allSales ? y.rows : y.rows.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
               {y.rows.length > 30 && !allSales && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAllSales(true)}>Show all {y.rows.length}</button>}
@@ -356,7 +368,7 @@ export function TaxReportPage() {
             </Card>
           )}
 
-          <Card>
+          <Card id="tax-below">
             <CardHead title="Open lots below cost" info="Tax-loss harvesting is a name for realising a loss on shares that are below their cost, so the loss can be set off against gains in the same financial year. India has no specific wash-sale rule today; shares bought again start a new holding period at the new price. Whether it suits anyone depends on their whole tax position, so check with a CA."
               infoLabel="What is tax-loss harvesting?" actions={rep.below_cost.rows.length > 0 ? lotsMore.toggle : undefined} />
             <p className="k-small k-muted">Lots still open in your files that are worth less than they cost at today's price, and how long each has been held. Facts only: this is not a suggestion to do anything.</p>
@@ -392,7 +404,7 @@ export function TaxReportPage() {
           )}
 
           {/* the method is there for whoever wants it, folded, so the figures come first (R1-015) */}
-          <Card compact label="How this report works">
+          <Card id="tax-how" compact label="How this report works">
             <Disclosure summary="The set-off rules, and how this report works">
               <ul className="k-list">{rep.rules.map((r, i) => <li key={i}>{r}</li>)}</ul>
               <h3 className="k-sub">How this report works</h3>
@@ -434,7 +446,7 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
     { key: "amount", header: "Amount", numeric: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{inr(l.amount)}</b> : <span className={l.kind === "amount" ? tone(l.amount) : undefined}>{inr(l.amount)}</span>) },
   ];
   return (
-    <Card label="Total tax estimate">
+    <Card id="tax-total" label="Total tax estimate">
       <CardHead title={`Total tax estimate, ${y.label}`} infoLabel="What the total covers"
         info="Slab tax on your other income, intraday and F&O results, plus tax on share gains at the special rates, less the section 87A rebate where it applies, plus surcharge and 4% cess. It is worked out for an individual of the age band and residency you choose below. Advance tax and TDS already paid aren't taken off." />
       <p className="k-small k-muted">Covers only the income you enter or import here: the trades in your files and the other income you type below. House property, foreign income, other capital assets and anything else left out aren't counted.{filing && <> <a className="link" href="#tax-filing">Which return and whether a tax audit applies</a>.</>}</p>

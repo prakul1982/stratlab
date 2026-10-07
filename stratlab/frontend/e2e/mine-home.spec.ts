@@ -149,7 +149,7 @@ test("my space: the menu has My space, Pinned, Briefs, Connected accounts and AI
   const side = page.locator("aside.sidebar");
   await expect(side.getByRole("radio", { name: "Mine" })).toHaveAttribute("aria-checked", "true");
   await expect(side.getByRole("link", { name: "My space" })).toHaveClass(/active/);
-  await expect(side.locator('[data-group="pinned"]')).toContainText("Pin a page from the menu in its breadcrumb");
+  await expect(side.locator('[data-group="pinned"]')).toContainText("Nothing pinned yet");
   await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
   await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/settings#accounts");
   await expect(side.getByRole("link", { name: "AI assistant" })).toHaveAttribute("href", "/assistant");
@@ -183,7 +183,7 @@ test("my space: the menu has My space, Pinned, Briefs, Connected accounts and AI
   await page.getByRole("menuitem", { name: "Unpin from sidebar" }).click();
   await page.goto("/mine");
   if (phone) await page.getByRole("button", { name: "Open menu" }).click();
-  await expect(side.locator('[data-group="pinned"]')).toContainText("Pin a page from the menu in its breadcrumb");
+  await expect(side.locator('[data-group="pinned"]')).toContainText("Nothing pinned yet");
   await sane(page, errors, phone);
 });
 

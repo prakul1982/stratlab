@@ -1,4 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
+import { minusNode } from "../../lib/format";
 
 /** Inside a labelled StatRow (a list for screen readers), each Stat is one of its items. */
 const InList = createContext(false);
@@ -27,7 +28,7 @@ export function Stat({ label, value, note, delta, tone, item, testId }: { label:
   return (
     <div className="k-stat" role={listed ? "listitem" : undefined} data-testid={testId}>
       <span className="k-stat-k">{label}</span>
-      <span className={`k-stat-v${tone ? ` k-${tone}` : ""}`}>{value}</span>
+      <span className={`k-stat-v${tone ? ` k-${tone}` : ""}`}>{minusNode(value)}</span>
       {(delta || note) && <span className="k-stat-d">{delta}{delta && note ? " " : ""}{note}</span>}
     </div>
   );

@@ -535,6 +535,9 @@ def holdings_view(items: list[dict], actions: dict[str, list[dict]], today: date
     fallback = (fallback_since or today.isoformat())[:10]
     year_ago = (today - timedelta(days=365)).isoformat()
     ahead, received, notices, undo = [], [], [], []
+    from .tax_lots import fy_label, fy_of     # the financial-year slices use the tax tools' own rule: a dividend sits in the year of its record date
+    this_fy = fy_of(today.isoformat())
+    by_fy: dict[int, dict] = {y: {"fy": y, "label": fy_label(y), "total": 0.0, "count": 0} for y in (this_fy, this_fy - 1)}
     for i in items:
         acts = actions.get(i["symbol"]) or []
         since = str(i.get("since") or fallback)[:10]
@@ -547,8 +550,13 @@ def holdings_view(items: list[dict], actions: dict[str, list[dict]], today: date
                     "amount": a["amount"], "qty": round(q, 4), "total": round(q * a["amount"], 2)}
             if a["ex_date"] > today.isoformat():
                 ahead.append(line)
-            elif a["ex_date"] >= year_ago:
-                received.append(line)
+            else:
+                if a["ex_date"] >= year_ago:
+                    received.append(line)
+                if q > 0 and fy_of(a.get("record_date") or a["ex_date"]) in by_fy:
+                    slot = by_fy[fy_of(a.get("record_date") or a["ex_date"])]
+                    slot["total"] += line["total"]
+                    slot["count"] += 1
         wait = pending(i, acts, since, today)
         if wait:
             n = notice(i, wait[0])
@@ -562,6 +570,7 @@ def holdings_view(items: list[dict], actions: dict[str, list[dict]], today: date
     received.sort(key=lambda x: (x["ex_date"], x["symbol"]), reverse=True)
     return {"ahead": ahead, "ahead_total": round(sum(x["total"] for x in ahead), 2),
             "received": received, "received_total": round(sum(x["total"] for x in received), 2),
+            "by_fy": [{**v, "total": round(v["total"], 2)} for _, v in sorted(by_fy.items(), reverse=True)],
             "notices": notices, "undo": undo, "today": today.isoformat()}
 
 

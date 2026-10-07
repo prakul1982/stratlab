@@ -802,7 +802,10 @@ GAIN_NOTES = [
 
 
 def gains(data: dict, w: dict, today: str) -> dict:
-    fys = sorted({r["fy"] for r in w["c"]["realised"]} | set(w["c"]["dividends"]), reverse=True)
+    fys = {r["fy"] for r in w["c"]["realised"]} | set(w["c"]["dividends"])
+    if fys:       # the year being filed now is always listed, so every Money page opens on the same year
+        fys |= {tax_lots.fy_of(today) - 1}
+    fys = sorted(fys, reverse=True)
     missing = sorted({r["key"] for r in w["c"]["realised"] if r["gf"] == "missing"})
     return {"years": [_year(fy, w, data) for fy in fys], "current_fy": tax_lots.fy_of(today), "notes": GAIN_NOTES,
             "gf_missing": missing, "unknown_units": {k: _r(v, 4) for k, v in w["c"]["unknown"].items()},

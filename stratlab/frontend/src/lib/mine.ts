@@ -96,7 +96,7 @@ export function useComingUp(limit = 6): Up[] | null {
       }
       for (const v of [inRes, usRes]) for (const w of v?.weeks ?? []) for (const r of w.rows) {
         if (r.date < today || r.date > end || r.out) continue;
-        out.push({ key: `${r.date}|${r.symbol}|results`, date: r.date, title: `${r.symbol} results`, detail: ["On your watchlist", r.when].filter(Boolean).join(" · "),
+        out.push({ key: `${r.date}|${r.symbol}|results`, date: r.date, title: `${r.symbol} results`, detail: ["Among your stocks", r.when].filter(Boolean).join(" · "),
           to: `/research/${r.region}/${encodeURIComponent(r.symbol)}`, tag: "Results", tone: "plain" });
       }
       const seen = new Set<string>();

@@ -17,7 +17,7 @@ import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
 import { CompanySearch } from "../components/CompanySearch";
-import { Book, Calendar, Compass, Layers, Library, Pulse, Receipt, Search, Wallet } from "../components/Icons";
+import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 import { pickFy } from "../lib/fy";
 
@@ -265,7 +265,7 @@ function ResultsToday() {
 
 type Filings = { rows: { symbol: string; summary: FilingSummary }[] };
 
-/** Watchlist companies with red flags filed lately (India; Basic and up, as on the red flags page). */
+/** Held and watched companies with red flags filed lately (India; Basic and up, as on the red flags page). */
 function RedFlags() {
   const { me } = useApp();
   const allowed = !!me?.plan_info?.features?.filings;
@@ -273,11 +273,11 @@ function RedFlags() {
   useEffect(() => { if (allowed) api<Filings>("/research/filings").then(setData).catch(() => setData({ rows: [] })); }, [allowed]);
   const flagged = data?.rows.filter((r) => r.summary.red > 0) ?? [];
   return (
-    <Panel title="Red flags in your watchlist" right={<Link to="/research/filings" className="link">All filings →</Link>}>
-      {!allowed ? <p className="small muted">Red flags for your whole watchlist are on the Basic plan. Each company's own page shows its red flags on every plan.</p>
+    <Panel title="Red flags in your holdings and watchlist" right={<Link to="/research/filings" className="link">All filings →</Link>}>
+      {!allowed ? <p className="small muted">Red flags for all your holdings and watchlist are on the Basic plan. Each company's own page shows its red flags on every plan.</p>
         : data === null ? <PanelSkel label="Reading your companies' filings" />
-        : !data.rows.length ? <p className="small muted">Your watchlist has no India stocks yet: their filings show here.</p>
-        : !flagged.length ? <p className="small muted">No red flags filed by your {data.rows.length} India watchlist compan{data.rows.length === 1 ? "y" : "ies"} lately.</p>
+        : !data.rows.length ? <p className="small muted">You hold or watch no India stocks yet: their filings show here.</p>
+        : !flagged.length ? <p className="small muted">No red flags filed lately by the {data.rows.length} India compan{data.rows.length === 1 ? "y" : "ies"} you hold or watch.</p>
         : (
           <div className="k-stack snug">
             {flagged.slice(0, 5).map((r) => (
@@ -298,22 +298,17 @@ type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: bo
 type TaxYear = { fy: number; label: string; count: number; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number } };
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number };
 
-const MONEY_ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, wallet: Wallet, layers: Layers, calendar: Calendar, compass: Compass };
 
 export function MoneyHome() {
-  // the first four Money tools on the strip, the rest under the panels: each Money feature shows once
-  const strip = NAV_GROUPS.Money.slice(0, 4), rest = NAV_GROUPS.Money.slice(4);
-  const tools: Tool[] = strip.map((e, i) => {
-    const Icon = MONEY_ICONS[e.icon ?? ""] ?? Compass;
-    return { to: e.to, icon: <Icon size={18} />, title: e.label, line: e.title ?? e.blurb ?? "", lead: i === 0, data: { "data-money": e.to } };
-  });
+  // the two summaries (holdings and tax) stand for their tools; every other Money tool is one card below, so each feature shows once
+  const PANELS = ["/holdings", "/tax-report"];
+  const rest = NAV_GROUPS.Money.filter((e) => !PANELS.includes(e.to));
   return (
     <div className="space-home">
       <Head eyebrow="Money · seen only by you" title="Your money">
         What you own and what it means at tax time, from your own files. Facts and arithmetic.
       </Head>
       <Top />
-      <ToolStrip label="Money tools" tools={tools} />
       <div className="grid2 space-panels">
         <HoldingsSummary />
         <TaxSummary />
@@ -336,7 +331,7 @@ function HoldingsSummary() {
   const [h, setH] = useState<Holdings | null | "error">(null);
   useEffect(() => { api<Holdings>("/holdings").then(setH).catch(() => setH("error")); }, []);
   return (
-    <Panel title="My Holdings" right={<Link to="/holdings" className="link">Open →</Link>}>
+    <Panel title="My Holdings" right={<Link to="/holdings" className="link" data-money="/holdings">Open My Holdings →</Link>}>
       {h === null ? <PanelSkel figs label="Adding up your holdings" />
         : h === "error" ? <p className="small muted">Your holdings couldn't be opened just now. <Link className="link" to="/holdings">Try the page</Link>.</p>
         : !h.rows.length ? (
@@ -365,8 +360,9 @@ function TaxSummary() {
   useEffect(() => { api<Tax>("/tax").then(setT).catch(() => setT("error")); }, []);
   // the Money pages' shared year (lib/fy): the one being filed now, unless another was picked
   const year = t && t !== "error" ? t.years.find((y) => y.fy === pickFy(t.years.map((x) => x.fy), t.current_fy, (fy) => t.years.some((x) => x.fy === fy && x.count > 0))) ?? null : null;
+  const elsewhere = t && t !== "error" && year && !year.count ? t.years.filter((y) => y.count > 0).sort((a, b) => b.fy - a.fy)[0] ?? null : null;
   return (
-    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} right={<Link to="/tax-report" className="link">Tax report →</Link>}>
+    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} right={<Link to="/tax-report" className="link" data-money="/tax-report">Open Tax report →</Link>}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !t.trades ? (
@@ -381,7 +377,7 @@ function TaxSummary() {
               <Fig label="Short-term gains" tone={signClass(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
               <Fig label="Long-term gains" tone={signClass(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
-            <p className="tiny muted">Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at this year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge. {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} so far this year.` : "No sales this year yet."} An estimate to check with your CA.</p>
+            <p className="tiny muted">Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge. {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{elsewhere ? ` ${elsewhere.label} has ${elsewhere.count}.` : ""} An estimate to check with your CA.</p>
             <AsOf parts={[["Trades", t.updated_at], ["Prices", t.prices_at]]} />
           </div>
         )}

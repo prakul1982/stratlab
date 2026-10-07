@@ -215,7 +215,7 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
 
   await page.goto("/invest");
   await expect(page.getByRole("heading", { name: "Which company do you want to look into?" })).toBeVisible({ timeout: 30_000 });
-  for (const t of ["Your watchlist", "Results today", "Red flags in your watchlist"]) await expect(page.getByText(t, { exact: true }).first()).toBeVisible();
+  for (const t of ["Your watchlist", "Results today", "Red flags in your holdings and watchlist"]) await expect(page.getByText(t, { exact: true }).first()).toBeVisible();
   await expect(page.locator(".panel-skel")).toHaveCount(0, { timeout: 30_000 });
   await sane(page, errors, phone);
 

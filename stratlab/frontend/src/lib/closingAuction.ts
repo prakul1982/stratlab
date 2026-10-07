@@ -1,6 +1,6 @@
 /* The closing auction desk's data (GET /trade/closing-auction and /history) and the small pure helpers its page uses. */
 
-export type Phase = "none" | "holiday" | "before" | "transition" | "entry" | "matching" | "closed";
+export type Phase = "none" | "holiday" | "preopen" | "before" | "transition" | "entry" | "matching" | "closed";
 
 export type CasStock = {
   symbol: string; ref: number | null; lower: number | null; upper: number | null; iep: number | null; ieq: number | null;
@@ -42,7 +42,8 @@ export function steps(t: Timetable, phase: Phase): { id: Phase; label: string; f
 
 export const PHASE_TEXT: Record<Phase, string> = {
   none: "No closing auction on this day's timetable.",
-  holiday: "Not a trading day: no auction today.",
+  holiday: "The market is closed: not a trading day, so no auction today.",
+  preopen: "The market is closed until it opens at 09:15. The auction runs from 15:15.",
   before: "Continuous trading. The auction starts at 15:15.",
   transition: "Continuous trading has ended for F&O stocks. The exchange is setting reference prices; orders open at 15:20.",
   entry: "Order entry is open. Indicative prices change until the auction ends.",

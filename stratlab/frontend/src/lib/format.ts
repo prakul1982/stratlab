@@ -307,6 +307,26 @@ export function axisInrFor(span: number): (v: number) => string {
   return (v) => (ok(v) ? (v === 0 ? "₹0" : `${v < 0 ? "−" : ""}₹${nf(Math.abs(v) / LAKH, 2)}L`) : "–");
 }
 
+/** A hyphen used as a minus (before a digit or currency sign, at the start or after a space or bracket) becomes the real
+ * minus sign (U+2212): the one minus the app draws (FY ranges and dates, where a digit comes first, are left alone). */
+export function minus(s: string): string {
+  return s.replace(/(^|[\s(])-(?=\.?\d|[₹$€£])/g, "$1−");
+}
+
+/** The same for what a table cell or a figure holds: text is fixed, a number is written with its real minus. */
+export function minusNode<T>(n: T): T | string {
+  if (typeof n === "string") return minus(n);
+  if (typeof n === "number") return minus(String(n));
+  return n;
+}
+
+/** A plain number with fixed decimals, Indian grouping and the real minus: 1,234.50 / −0.21. */
+export function num(v: number | null | undefined, dp = 2): string {
+  if (!ok(v)) return "–";
+  const s = Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: dp, minimumFractionDigits: dp });
+  return `${v < 0 && /[1-9]/.test(s) ? "−" : ""}${s}`;
+}
+
 /** A percentage with no sign: 0.21%. (`pct` above is the signed one.) */
 export function pctPlain(v: number | null | undefined, dp = 1): string {
   return ok(v) ? `${v.toFixed(dp)}%` : "–";

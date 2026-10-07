@@ -21,19 +21,25 @@ function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
   const ids: PlanId[] = ["free", "basic", "pro"];
   const names = { free: "Free", basic: "Basic", pro: "Pro" };
   type Row = { id: string; label: string; cell: (p: PlanId) => string };
-  const rows: Row[] = [
-    ...NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })),
-    ...FLAGS.map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") })),
-    ...EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" })),
+  const groups: { id: string; title: string; rows: Row[] }[] = [
+    { id: "limits", title: "How much", rows: NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })) },
+    { id: "paid", title: "What each plan adds", rows: FLAGS.map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") })) },
+    { id: "all", title: "On every plan", rows: EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" })) },
   ];
-  const columns: Column<Row>[] = [
-    { key: "label", header: "Backtests, research and paper trading", wrap: true, cell: (r) => r.label },
+  const columns = (first: string): Column<Row>[] => [
+    { key: "label", header: first, wrap: true, cell: (r) => r.label },
     ...ids.map((p) => ({ key: p, header: names[p], numeric: true, cell: (r: Row) => r.cell(p) })),
   ];
+  // one table per group, each with the plan names on top; the header stays in view as the page scrolls past it
   return (
     <Card id="compare">
       <CardHead title="Side by side" />
-      <DataTable label="Plans side by side" columns={columns} rows={rows} rowKey={(r) => r.id} />
+      {groups.map((g) => (
+        <div key={g.id} className="k-stack" data-plans-group={g.id}>
+          <h3 className="k-sub">{g.title}</h3>
+          <DataTable label={`Plans side by side: ${g.title.toLowerCase()}`} columns={columns(g.title)} rows={g.rows} rowKey={(r) => r.id} pinHead />
+        </div>
+      ))}
     </Card>
   );
 }

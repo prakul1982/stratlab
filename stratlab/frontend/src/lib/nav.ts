@@ -81,7 +81,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       { id: "find-stocks", label: "Find stocks", blurb: "Filter and scan companies by plain facts, trends and filings.", pages: [
         page("/research/screens", "Screener", "search", "screener screen filter companies growth debt returns roe pe fundamentals ratios", { line: "Filter companies by plain facts: growth, debt, returns." }),
         page("/research/scan", "Trend scan", "pulse", "trend scan stage 2 stage two supertrend st s2 weinstein signals nifty 50 daily alert", { line: "Which stocks are in a rising trend (Stage 2) with the Supertrend line also pointing up." }),
-        page("/research/filings", "Red flags", "bell", "red flags filings announcements qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade", { line: "Fund raises, pledges, resignations and defaults your watchlist companies filed." }),
+        page("/research/filings", "Red flags", "bell", "red flags filings announcements qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade", { line: "Fund raises, pledges, resignations and defaults your held and watched companies filed." }),
         page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies", { line: "Map a sector or trend and see the listed companies linked to it." }),
       ] },
       { id: "market-view", label: "Market view", blurb: "The market as a whole: its mood, breadth, sectors, and the cost of borrowing to invest.", pages: [

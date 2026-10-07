@@ -401,7 +401,7 @@ export function NotebookPage() {
       {rewrite && (
         <Modal title="Describe the idea again" onClose={() => setRewrite(false)}>
           <p className="k-small k-muted">This replaces the rules in this notebook. Your experiments stay as they are.</p>
-          <IdeaComposer busyLabel="Replace the rules" autoFocus onBuilt={async (b) => {
+          <IdeaComposer busyLabel="Replace the rules" autoFocus byHand={false} onBuilt={async (b) => {
             patch({ strategy: { ...b.strategy, name: nb.name }, ...(b.instrument && !inst ? { instrument: b.instrument, instrumentId: b.instrument.id } : {}) }, true);
             setGaps(b.gaps);
             setRewrite(false);

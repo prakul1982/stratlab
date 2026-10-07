@@ -218,7 +218,7 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
-  const table = page.getByRole("table", { name: "Plans side by side" });
+  const table = page.locator("#compare");        // one table for each group (how much, what each plan adds, on every plan), each with the plan names on top
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
   await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "2", "15", "Unlimited"]);
