@@ -75,8 +75,8 @@ test("India VIX read on an earlier day is labelled stale and never titled today"
   const f = vixFreshness({ ...VIX, today: "2026-10-07" });
   assert.equal(f.stale, true);
   assert.equal(f.asOf, "5 Oct, 12:04 IST");
-  assert.equal(f.rangeLabel, "Range on Mon 5 Oct");
-  assert.equal(f.lineTitle, "Mon 5 Oct");
+  assert.match(f.rangeLabel, /^Range on Mon,? 5 Oct$/);             // ICU writes "Mon 5 Oct" or "Mon, 5 Oct"
+  assert.match(f.lineTitle, /^Mon,? 5 Oct$/);
   assert.equal(f.lineStale, true);
 });
 
