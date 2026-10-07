@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, ApiError } from "../lib/api";
-import { vixChange, vixNum, vixPercentileLine, vixTime, type Vix } from "../lib/vix";
+import { vixChange, vixNum, vixPercentileLine, type Vix } from "../lib/vix";
 import { ChartEmpty, LineChart } from "./Charts";
 import { Card, CardHead, ErrorState, Skeleton, Stat, StatRow } from "./kit";
 import "../pages/trade/trade.css";
 import "../pages/trade/positioning.css";
+import { fmtDate, fmtDateTime } from "../lib/format";
 
 /* India VIX on the Positioning page: the value now and its change, the day's range, where it sits among the past year's
  * closes, NIFTY's ATM IV beside it, today's line and the year's closes with NIFTY ATM IV drawn on the same chart. A
  * published index: no reading of what a level means. */
 
-const short = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+/** "5 Oct, 12:04" from an ISO time with an offset, in India time. */
+const vixTime = (iso: string | null | undefined): string | null => (iso && !Number.isNaN(new Date(iso).getTime()) ? fmtDateTime(iso, { year: false, tz: "Asia/Kolkata" }) : null);
+const short = (d: string) => fmtDate(d);
 
 /** The panel's data, read once per page. */
 export function useVix() {

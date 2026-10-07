@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, pct, price, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format";
 import { upDown } from "../lib/tradeUi";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
 import { ChartEmpty, LineChart } from "../components/Charts";
@@ -173,7 +173,7 @@ function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open
       {rows.map((r) => (
         <button type="button" key={r.id} className="k-sess" onClick={() => open(r)} aria-current={r.id === sid}>
           <b>{r.name}</b>
-          <span className="k-note">{r.instrument.symbol} · {new Date(r.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+          <span className="k-note">{r.instrument.symbol} · {fmtDate(r.started_at, { year: false })}</span>
           <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
           <FoBadges region={survRegion(r.instrument)} symbol={foSymbol(r.instrument)} plain />
           <Badge tone={statusTone(r.status)}>{r.status}</Badge>
@@ -210,7 +210,7 @@ export function PaperPage() {
   let sub = me ? `${me.plan_info.name} plan · ${me.live_running} of ${me.live_limit} running` : "";
   if (me?.plan === "free" && me.trial) {
     sub = !me.trial.started ? "Free trial: 5 market days, starting with your first session"
-      : me.trial.active ? `Free trial until ${new Date(me.trial.ends_at!).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`
+      : me.trial.active ? `Free trial until ${fmtDateTime(me.trial.ends_at, { year: false })}`
         : "Free trial ended · upgrade to keep paper trading";
   }
 

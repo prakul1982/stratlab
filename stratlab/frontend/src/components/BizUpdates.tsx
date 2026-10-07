@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { safeHref } from "../lib/format";
-import { bizChange, bizValue, filedOn, periodName } from "../lib/biz";
+import { safeHref, fmtDate } from "../lib/format";
+import { bizChange, bizValue, periodName } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
 import { DataTable, EmptyState, Notice, Skeleton } from "./kit";
@@ -29,11 +29,18 @@ export const bizApi = {
 };
 
 function day(iso: string) {
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const s = fmtDate(iso.slice(0, 10));
+  return s === "–" ? iso : s;
 }
 
-export { bizChange, bizValue, filedOn, periodName };
+/** "1 Oct": the day a filing was filed. */
+export function filedOn(iso: string | null | undefined) {
+  if (!iso) return "Filing";
+  const s = fmtDate(iso.slice(0, 10), { year: false });
+  return s === "–" ? "Filing" : s;
+}
+
+export { bizChange, bizValue, periodName };
 
 export function BizChart({ m, label }: { m: BizMetric; label?: string }) {
   const pts = m.points;

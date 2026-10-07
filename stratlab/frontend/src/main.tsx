@@ -22,6 +22,7 @@ import { Shell } from "./components/Shell";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
 import { SPACE_HOMES } from "./lib/spaces";
+import { fmtDate } from "./lib/format";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -148,7 +149,7 @@ warmFirstPage(location.pathname);
 
 /** Indian data is offline: say why in plain words. On a weekend or holiday that's expected, not a fault. */
 function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; back_at: string | null } | null }) {
-  const back = note?.back_at ? new Date(note.back_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+  const back = note?.back_at ? new Date(note.back_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }) : null;
   const others = "Crypto, the other markets and your own data work as usual.";
   if (note?.closed) {
     const why = note.closed === "weekend" ? "closed for the weekend" : "closed today for an exchange holiday";
@@ -172,7 +173,7 @@ function PromoBanner({ until }: { until: string }) {
   const key = `stratlab.promo.seen.${until.slice(0, 10)}`;
   const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(key) === "1"; } catch { return false; } });
   if (hidden) return null;
-  const day = new Date(until).toLocaleDateString(undefined, { day: "numeric", month: "long" });
+  const day = fmtDate(until, { year: false });
   return (
     <div className="banner promo-banner">
       <span><b>Launch offer:</b> every Pro feature is free for everyone until {day}. After that, your plan's limits apply again.</span>

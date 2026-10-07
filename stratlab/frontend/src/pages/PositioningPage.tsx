@@ -428,7 +428,7 @@ export function PositioningPage() {
     api<Summary>("/trade/positioning?pcr=false").then(setS).catch((e) => setError(e instanceof ApiError ? e.message : "The positioning numbers couldn't be read."));
   }, [again]);
   return (
-    <div className="k-page pos-page">
+    <div className="k-page">
       <PageHeader eyebrow="Trade · F&O desk" title="Positioning"
         lede="Who holds index and stock futures and options, FII and DII cash flows, India VIX, and what the index option chains show. The exchange's numbers as published: facts, not advice."
         actions={<PosTabs />} />

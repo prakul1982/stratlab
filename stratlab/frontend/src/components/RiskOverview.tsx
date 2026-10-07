@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { money } from "../lib/format";
+import { money, fmtDate } from "../lib/format";
 import { upDown } from "../lib/tradeUi";
 import { XYChart } from "./Charts";
 import { moneyCompact } from "../lib/chartFormat";
@@ -14,7 +14,7 @@ interface Cur {
 }
 interface Row { id: string; name: string; kind: string; currency: string; open_value: number; today: number; pnl: number; capital: number }
 const KIND: Record<string, string> = { single: "Rules", group: "Group", options: "Options" };
-const day = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const day = (d: string) => fmtDate(d, { year: false });
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
 
 /** Every running paper session together: what's at stake now, today, overall, the worst day and the deepest fall. */

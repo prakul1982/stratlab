@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { inr, safeHref } from "../lib/format";
+import { inr, safeHref, fmtDate } from "../lib/format";
 import { Badge, DataTable, EmptyState, ErrorState, Seg, Skeleton } from "./kit";
 
 export type DealKind = "insider" | "sast" | "bulk" | "block";
@@ -23,8 +23,8 @@ const SHOW: [string, string, DealKind[]][] = [
 ];
 
 function day(iso: string) {
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const s = fmtDate(iso.slice(0, 10));
+  return s === "–" ? iso : s;
 }
 
 /** ₹2.4 cr, ₹35.0 lakh or ₹48,000: how amounts this size are usually written in India. */

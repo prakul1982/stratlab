@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { asOf, price } from "../lib/format";
+import { asOf, price, fmtDate } from "../lib/format";
 import { etfGapApi, gapShort, gapWords, useEtfGaps, type EtfGapDetail } from "../lib/etfGaps";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
@@ -43,7 +43,7 @@ export function EtfGapDetailView({ symbol, quiet }: { symbol: string; quiet?: bo
   if (!d) return quiet ? null : <Skeleton label={`Reading ${symbol}`} lines={3} />;
   const r = d.row;
   const hist = d.history.filter((h) => h.gap != null);
-  const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const day = (iso: string) => fmtDate(iso, { year: false });
   return (
     <ChartFrame id="etf-gap" title="Price against NAV"
       info="The gap between the price on the exchange and what one unit holds, as a percent. Above means the price is higher than the NAV; below, lower. Facts, not advice."

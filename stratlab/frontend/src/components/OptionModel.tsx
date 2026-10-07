@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money } from "../lib/format";
+import { money, fmtDate } from "../lib/format";
 import { moneyCompact } from "../lib/chartFormat";
 import { curve, legGreeks, NO_MOVE, scenario, type GreekModel, type ModelLeg, type NetGreeks, type OptionGreeks, type WhatIf } from "../lib/greeks";
 import type { HeldLeg } from "../lib/options";
@@ -29,7 +29,7 @@ const sig = (v: number, n = 3) => (v === 0 ? "0" : (v < 0 ? MINUS : "") + String
 const pts = (x: number) => Math.round(x).toLocaleString("en-IN");
 const dayWord = (d: number) => `${+d.toFixed(2)} day${Math.abs(d - 1) < 1e-9 ? "" : "s"}`;
 const pctIv = (v: number) => `${(v * 100).toFixed(1)}%`;
-const shortDate = (e: string) => new Date(e + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const shortDate = (e: string) => fmtDate(e, { year: false });
 const tone = (v: number) => (v === 0 ? undefined : v > 0 ? ("up" as const) : ("down" as const));
 
 /** A value that follows `value` at most every `ms` and always settles on the last one: the sliders re-price while

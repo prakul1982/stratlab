@@ -56,17 +56,45 @@ export function qty(v: number): string {
 export const tzOf = (inst?: Partial<Instrument> | null) =>
   inst?.tz || (inst?.market === "IN" || !inst?.market ? "Asia/Kolkata" : "UTC");
 
+/** The one date format, day first, as My space shows it: "6 Oct" and "6 Oct 2026". Every date a person reads goes through
+ * `fmtDate` (or `fmtDateTime` for a moment). A plain "YYYY-MM-DD" is a calendar day and is never moved by a time zone. */
+export type DateInput = string | number | Date | null | undefined;
+export interface DateOpts { year?: boolean; weekday?: boolean; tz?: string }
+
+const CALENDAR_DAY = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00)?$/;
+
+function toDate(v: DateInput): Date | null {
+  if (v == null || v === "") return null;
+  const m = typeof v === "string" ? CALENDAR_DAY.exec(v) : null;
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3], 12);
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** "6 Oct 2026", or "6 Oct" with `year: false`; `weekday` gives "Tue, 6 Oct 2026". Missing or invalid gives "–". */
+export function fmtDate(v: DateInput, o: DateOpts = {}): string {
+  const d = toDate(v);
+  if (!d) return "–";
+  const calendar = typeof v === "string" && CALENDAR_DAY.test(v);
+  return d.toLocaleDateString("en-GB", { ...(!calendar && o.tz ? { timeZone: o.tz } : {}), ...(o.weekday ? { weekday: "short" } : {}),
+    day: "numeric", month: "short", ...(o.year === false ? {} : { year: "numeric" }) }).replace(/\bSept\b/, "Sep");
+}
+
+/** A moment: "6 Oct 2026, 14:05" (24-hour), or "6 Oct, 14:05" with `year: false`; `seconds` adds ":07". */
+export function fmtDateTime(v: DateInput, o: DateOpts & { seconds?: boolean } = {}): string {
+  const d = toDate(v);
+  if (!d) return "–";
+  const t = d.toLocaleTimeString("en-GB", { ...(o.tz ? { timeZone: o.tz } : {}), hour: "2-digit", minute: "2-digit", ...(o.seconds ? { second: "2-digit" } : {}), hour12: false });
+  return `${fmtDate(d, o)}, ${t}`;
+}
+
 export function when(iso: string | null | undefined, tz: string, intraday: boolean): string {
   if (!iso) return "–";
-  const d = new Date(iso);
-  return intraday
-    ? d.toLocaleString("en-GB", { timeZone: tz, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })
-    : d.toLocaleDateString("en-GB", { timeZone: tz, day: "2-digit", month: "short", year: "2-digit" });
+  return intraday ? fmtDateTime(iso, { tz, year: false }) : fmtDate(iso, { tz });
 }
 
 export function dateOnly(iso: string | null | undefined): string {
-  if (!iso) return "–";
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return iso ? fmtDate(iso) : "–";
 }
 
 export function ago(iso: string | null | undefined): string {
@@ -101,10 +129,9 @@ export function safeHref(url: string | null | undefined): string | undefined {
 export function asOf(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const day = /^\d{4}-\d{2}-\d{2}$/.test(iso);
-  const d = day ? new Date(`${iso}T12:00:00`) : new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return day ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-    : d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+  const d = toDate(iso);
+  if (!d) return null;
+  return day ? fmtDate(iso) : fmtDateTime(d);
 }
 
 /* ---------- Indian rupee formatting (the one place; see DESIGN.md "Numbers") ----------

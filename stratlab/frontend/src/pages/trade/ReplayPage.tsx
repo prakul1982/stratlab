@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, price, TF_NAME } from "../../lib/format";
+import { money, price, TF_NAME, fmtDate } from "../../lib/format";
 import { upDown } from "../../lib/tradeUi";
 import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../../lib/intervals";
 import type { Instrument } from "../../lib/types";
@@ -50,7 +50,7 @@ function keep(id: string, v: { cursor: number; orders: ROrder[] } | null) {
   try { if (v) localStorage.setItem(KEY(id), JSON.stringify(v)); else localStorage.removeItem(KEY(id)); } catch { /* not kept in this browser */ }
 }
 const signed = (v: number, cur: string) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${money(Math.abs(v), cur, 2)}`;
-const dayText = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const dayText = (iso: string) => fmtDate(iso.slice(0, 10));
 
 const tone = (n: number) => (n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
 

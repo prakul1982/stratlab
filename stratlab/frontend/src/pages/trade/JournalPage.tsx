@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money } from "../../lib/format";
+import { money, fmtDate } from "../../lib/format";
 import { track } from "../../lib/analytics";
 import { upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
@@ -68,7 +68,7 @@ function useMoney() {
 }
 const tone = (v: number | null | undefined): "up" | "down" | undefined => (v == null || v === 0 ? undefined : v > 0 ? "up" : "down");
 
-const day = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+const day = (iso: string) => fmtDate(iso.slice(0, 10));
 const when = (iso: string) => (iso.length > 10 ? `${day(iso)} ${iso.slice(11, 16)}` : day(iso));
 const qtyText = (q: number) => q.toLocaleString("en-IN", { maximumFractionDigits: 4 });
 const fyLabel = (fy: number) => `FY ${fy}-${String(fy + 1).slice(2)}`;

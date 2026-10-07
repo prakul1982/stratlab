@@ -350,15 +350,13 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
 function SectorHeat({ t }: { t: SectorTable }) {
   return (
     <div className="k-stack">
-      <div className="bx-heat">
-        <DataTable label="Share of each sector's stocks above their 50-day average" rows={t.rows} rowKey={(r) => r.sector} sticky={t.rows.length > 14}
-          columns={[{ key: "s", header: "Sector", rowHeader: true, cell: (r) => r.sector }, { key: "n", header: "Stocks", numeric: true, cell: (r) => r.stocks },
-            ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{c.label}</span>, numeric: true,
-              cell: (r: SectorTable["rows"][number]) => {
-                const v = r.values[i];
-                return <span className={`inv-heat-cell h${v == null ? 0 : Math.min(9, Math.floor(v / 10))}`} title={`${r.sector}, ${c.label.toLowerCase()} (${c.day}): ${share(v)}`}>{share(v)}</span>;
-              } }))]} />
-      </div>
+      <DataTable label="Share of each sector's stocks above their 50-day average" rows={t.rows} rowKey={(r) => r.sector} sticky={t.rows.length > 14}
+        columns={[{ key: "s", header: "Sector", rowHeader: true, cell: (r) => r.sector }, { key: "n", header: "Stocks", numeric: true, cell: (r) => r.stocks },
+          ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{c.label}</span>, numeric: true,
+            cell: (r: SectorTable["rows"][number]) => {
+              const v = r.values[i];
+              return <span className={`inv-heat-cell h${v == null ? 0 : Math.min(9, Math.floor(v / 10))}`} title={`${r.sector}, ${c.label.toLowerCase()} (${c.day}): ${share(v)}`}>{share(v)}</span>;
+            } }))]} />
       <div className="k-row k-small k-muted" aria-hidden="true">
         <span>0%</span><span className="inv-scale" /><span>100%</span>
         <span className="k-note">Darker: more of the sector's stocks above their 50-day average.</span>

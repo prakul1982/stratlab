@@ -7,7 +7,7 @@ import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
-import { Badge, Card, CardHead, ConfirmDialog, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat } from "../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat } from "../components/kit";
 import "./trade/trade.css";
 
 export interface LibEntry {
@@ -36,6 +36,20 @@ function Rules({ s }: { s: Strategy }) {
   );
 }
 
+/** True on a phone-width screen: the library cards then show the headline and keep the rest behind "Rules and all figures". */
+function usePhone(): boolean {
+  const q = "(max-width: 640px)";
+  const [phone, setPhone] = useState(() => typeof matchMedia === "function" && matchMedia(q).matches);
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const m = matchMedia(q), on = () => setPhone(m.matches);
+    on();
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return phone;
+}
+
 /* /library: rules people published with the verdict they earned, luck included. Copy any of them and re-test it
  * yourself. Built from the kit (components/kit). */
 export function LibraryPage() {
@@ -54,6 +68,7 @@ export function LibraryPage() {
   const [reporting, setReporting] = useState<{ id: string; reason: string } | null>(null);
   const [taking, setTaking] = useState<LibEntry | null>(null);
   const [again, setAgain] = useState(0);
+  const phone = usePhone();
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -120,18 +135,43 @@ export function LibraryPage() {
             <div className="k-cards">
               {rows.map((e) => (
                 <Card key={e.id} label={e.name}>
-                  <div className="k-stack k-tight">
-                    <span className="k-eyebrow">{e.group ? `${e.group.name} (${e.group.members?.length ?? "group"})` : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>
-                    <CardHead title={e.name} level={3} />
-                    <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
-                  </div>
-                  <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{e.verdict.passed} of {e.verdict.total} checks passed</span></div>
-                  {e.description && <p className="k-small">{e.description}</p>}
-                  <Rules s={e.strategy} />
-                  <div className="k-mini-stats">
-                    {([["After costs", e.stats.ret], ["Buy and hold", e.stats.buy_hold], ["Unseen years", e.stats.unseen], ["Worst fall", e.stats.mdd]] as [string, number | null][]).map(([k, n]) => (
-                      <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={n == null || n === 0 ? undefined : n > 0 ? "up" : "down"} />))}
-                  </div>
+                  {(() => {
+                    const eyebrow = <span className="k-eyebrow">{e.group ? `${e.group.name} (${e.group.members?.length ?? "group"})` : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>;
+                    const stats = ([["After costs", e.stats.ret], ["Buy and hold", e.stats.buy_hold], ["Unseen years", e.stats.unseen], ["Worst fall", e.stats.mdd]] as [string, number | null][])
+                      .filter(([k]) => !phone || k !== "Buy and hold");
+                    const miniStats = (list: [string, number | null][]) => (
+                      <div className="k-mini-stats">
+                        {list.map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={n == null || n === 0 ? undefined : n > 0 ? "up" : "down"} />)}
+                      </div>);
+                    return (
+                      <>
+                        <div className="k-stack k-tight">
+                          {!phone && eyebrow}
+                          <CardHead title={e.name} level={3} />
+                          <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
+                        </div>
+                        <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{e.verdict.passed} of {e.verdict.total} checks passed</span></div>
+                        {e.description && <p className={`k-small${phone ? " lib-oneline" : ""}`}>{e.description}</p>}
+                        {phone ? (
+                          <>
+                            {miniStats(stats.filter(([k]) => k !== "Worst fall"))}
+                            <Disclosure summary="Rules and all figures">
+                              <div className="k-stack">
+                                {eyebrow}
+                                <Rules s={e.strategy} />
+                                {miniStats([["Buy and hold", e.stats.buy_hold], ["Worst fall", e.stats.mdd]])}
+                              </div>
+                            </Disclosure>
+                          </>
+                        ) : (
+                          <>
+                            <Rules s={e.strategy} />
+                            {miniStats(stats)}
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                   {e.mine && e.hidden && <p className="k-small k-down">Hidden from others after reports. The site owner will review it; editing and publishing again won't bring it back sooner.</p>}
                   {reporting?.id === e.id ? (
                     <div className="k-row k-push">

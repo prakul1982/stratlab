@@ -44,7 +44,7 @@ export function marketState(m: Market, now = new Date()): MarketState {
   }
   if (m.id === "CRYPTO") return { ...base, open: true, always: true, short: "24/7", change: null };
   const at = (mins: number) => new Date(now.getTime() + mins * 60000);
-  const yours = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const yours = (d: Date) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
   if (m.id === "FX" || !m.hours?.open || !m.hours?.close) {
     // forex trades from Sunday 17:00 to Friday 17:00 New York time; global commodity futures (CME) from Sunday 18:00
     const w = wall(now, "America/New_York");
@@ -76,7 +76,7 @@ export function marketState(m: Market, now = new Date()): MarketState {
   const closedFor = open || first === undefined ? null : weekday((w.wd + first) % 7) ? "holiday" : "weekend";
   const change = at(until);
   const todayOpen = new Date(now.getTime() + (o - w.min) * 60000), todayClose = new Date(now.getTime() + (c - w.min) * 60000);
-  const short = open ? "open" : closedFor ?? (until < DAY ? `opens ${inWords(until)}` : `opens ${change.toLocaleDateString([], { weekday: "short" })}`);
+  const short = open ? "open" : closedFor ?? (until < DAY ? `opens ${inWords(until)}` : `opens ${change.toLocaleDateString("en-GB", { weekday: "short" })}`);
   return { ...base, open, closedFor, short, change, hoursLocal: `${m.hours.open}–${m.hours.close} local, ${m.hours.days}`,
     hoursYours: `${yours(todayOpen)}–${yours(todayClose)} your time` };
 }

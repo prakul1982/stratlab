@@ -116,6 +116,7 @@ export function UsersSection() {
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [stopping, setStopping] = useState<SessionRow | null>(null);
+  const [erasing, setErasing] = useState<UserRow | null>(null);
   const [promo, setPromo] = useState<"start" | "end" | null>(null);
   const [promoDays, setPromoDays] = useState("10");
   const [busy, setBusy] = useState(false);
@@ -147,6 +148,16 @@ export function UsersSection() {
     try { await api(`/admin/sessions/${stopping.id}/stop`, { method: "POST" }); notify("Session stopped."); setStopping(null); await loadSessions(); } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
+  const doErase = async () => {
+    if (!erasing) return;
+    setBusy(true);
+    try {
+      const r = await api<{ ok: boolean; failed: { label: string }[] }>(`/admin/users/${erasing.id}/delete-data`, { method: "POST" });
+      notify(r.ok ? `The app data of ${erasing.email} is deleted.` : `Deleted, except: ${r.failed.map((f) => f.label).join(", ")}. Run it again to retry.`);
+      setErasing(null);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
   const cols: Column<UserRow>[] = [
     { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => u.email ?? "–" },
     { key: "plan", header: "Plan", cell: (u) => (
@@ -159,7 +170,11 @@ export function UsersSection() {
       { key: "inv", header: "Invited", info: "Accounts that signed up through this user's invite link", numeric: true, cell: (u: UserRow) => u.referrals ?? 0 },
       { key: "free", header: "Free months", info: "Free months of Basic this user earned from invites", numeric: true, cell: (u: UserRow) => u.free_months ?? 0 },
     ] : []),
-    { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (u) => <button type="button" className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button> },
+    { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (u) => (
+      <span className="k-row">
+        <button type="button" className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button>
+        <button type="button" className="btn quiet sm danger" onClick={() => setErasing(u)}>Delete this user's data</button>
+      </span>) },
   ];
   const sess: Column<SessionRow>[] = [
     { key: "name", header: "Session", rowHeader: true, wrap: true, cell: (s) => s.name },
@@ -214,6 +229,8 @@ export function UsersSection() {
       {editing && <PlanModal user={editing} onClose={() => setEditing(null)} onSaved={() => { loadUsers(q); reload(); }} />}
       {promo === "start" && <ConfirmDialog title={`Start the launch offer for ${days} days?`} confirmLabel="Start the offer" danger={false} busy={busy} onConfirm={doPromo} onClose={() => setPromo(null)}>Every user gets every Pro feature, free, for {days} days starting now.</ConfirmDialog>}
       {promo === "end" && <ConfirmDialog title="End the launch offer now?" confirmLabel="End the offer" busy={busy} onConfirm={doPromo} onClose={() => setPromo(null)}>Everyone goes back to their own plan within a minute.</ConfirmDialog>}
+      {erasing && <ConfirmDialog title={`Delete the data of ${erasing.email ?? "this user"}?`} confirmLabel="Delete this user's data" busy={busy} onConfirm={doErase} onClose={() => setErasing(null)}>
+        This removes their chart drawings, connected accounts (tokens, inbox address and statement password), holdings, net worth entries, notebooks, alerts and preferences, with no way back. Their sign-in account, plan and payment records stay.</ConfirmDialog>}
       {stopping && <ConfirmDialog title={`Stop "${stopping.name}"?`} confirmLabel="Stop the session" busy={busy} onConfirm={doStop} onClose={() => setStopping(null)}>This ends {stopping.email}'s paper trading session now.</ConfirmDialog>}
     </>
   );

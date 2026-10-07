@@ -62,6 +62,10 @@ If nothing fits, add the piece to the kit and to `/dev/kit` first; do not build 
 
 `inr(v, dp=0)` full rupees (`₹1,00,000`; `inr(1849.3, 2)` is `₹1,849.30`). `inrCompact(v)` Indian units (`₹925`, `₹5.2 lakh`, `₹3,472 cr`, `₹1.51 lakh cr`). `signedInrCompact(v)` adds a `+`. `axisInr(v)` for chart axes (`₹1.45L cr`). `pct(v)` signed, `pctPlain(v)` unsigned, `signed(v)` plain signed number. All take **rupees** (multiply crore by `CRORE`), print `–` for missing values and a real minus (−). Exact figures belong in the tooltip and the Table view, not on the axis.
 
+## Dates
+
+One format, day first, as My space shows it: `fmtDate(v)` gives "6 Oct 2026", `fmtDate(v, { year: false })` "6 Oct", `{ weekday: true }` "Tue, 6 Oct 2026"; `fmtDateTime(v)` adds a 24-hour clock ("6 Oct 2026, 14:05"). A plain `YYYY-MM-DD` is a calendar day and is never moved by a time zone; pass `tz` for a moment that should be read in an exchange's zone. **Don't** call `toLocaleDateString` in a page, write "Oct 6", a two-digit year or a zero-padded day.
+
 ## Do and don't
 
 - **Do** put the label on one line and the detail behind (i): `Your margin (i)`. **Don't** write "Your part of the buy value (%)".

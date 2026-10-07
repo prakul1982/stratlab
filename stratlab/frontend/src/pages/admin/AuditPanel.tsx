@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago } from "../../lib/format";
+import { ago, fmtDate } from "../../lib/format";
 import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, Field, FieldGroup, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
 
 /** fact: true of the company (a recent listing, no calls held), not a gap of ours; pending: a source turned the check away, so it runs again. */
@@ -98,7 +98,7 @@ interface MarketState {
 }
 
 /** "1 Nov" from "2026-11-01". */
-const dayMonth = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const dayMonth = (d: string) => fmtDate(d, { year: false });
 /** "in 40 min", "in 3 h" for a time ahead. */
 const until = (iso: string) => {
   const s = (new Date(iso).getTime() - Date.now()) / 1000;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, price } from "../lib/format";
+import { money, price, fmtDate } from "../lib/format";
 import { HELP } from "../lib/help";
 import { blankOptions, IMPORTED, legName, legRule, payoff, PICKS, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
@@ -39,7 +39,7 @@ const loadDraft = (): OptionStrategy => {
 };
 
 const inr = (v: number | null | undefined, dp = 0) => money(v, "INR", dp);
-const expiryName = (e: string) => new Date(e + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" });
+const expiryName = (e: string) => fmtDate(e, { weekday: true, year: false });
 
 /** A number box that keeps what is typed until it is a number in range. */
 function NumField({ label, value, onChange, min = 0, max, step = 1, unit, info }: {
@@ -129,7 +129,7 @@ function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs:
 
 const points = (xs: number[]) => xs.map((b) => Math.round(b).toLocaleString("en-IN")).join(" and ");
 const share = (v: number | null) => (v == null ? "–" : v > 0 && v < 0.005 ? "under 0.01%" : `${v.toFixed(2)}%`);
-const asOf = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const asOf = (d: string) => fmtDate(d);
 
 /** What opening and closing the structure once costs, line by line, and what that does to its numbers. */
 function Charges({ c }: { c: OptCharges }) {
@@ -613,7 +613,7 @@ function OptSessionCards({ rows }: { rows: LiveRow[] }) {
       {rows.map((x) => (
         <Link key={x.id} to={`/options/s/${x.id}`} className="k-sess-link">
           <b>{x.name}</b>
-          <span className="k-note">{new Date(x.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+          <span className="k-note">{fmtDate(x.started_at, { year: false })}</span>
           <FoBadges region="IN" symbol={foSymbol(x.instrument)} plain />
           <Badge tone={x.status === "running" ? "ok" : x.status === "paused" ? "warn" : "plain"}>{x.status}</Badge>
         </Link>

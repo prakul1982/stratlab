@@ -1,5 +1,6 @@
 /* Derivatives positioning (Trade): the shapes the API sends and the few words and number formats the page and its
  * cards share. Facts only: what was open or traded, never what it might mean. */
+import { fmtDate } from "./format";
 
 export type PartStatus = { status: "ok" | "pending" | "none"; as_of: string | null; expected: string | null; today?: "pending";
   error?: string | null; checked?: string | null; reason?: string | null };
@@ -77,8 +78,8 @@ export const strike = (v: number | null | undefined) => (v == null ? "–" : v.t
 /** "3 Oct 2026" from an ISO day. */
 export function dayName(iso: string | null | undefined): string {
   if (!iso) return "";
-  const d = new Date(iso.slice(0, 10) + "T00:00:00");
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const s = fmtDate(iso.slice(0, 10));
+  return s === "–" ? iso : s;
 }
 /** A recording's time in India, whatever the reader's own zone: "1 Oct, 3:25 pm IST". */
 export function istTime(iso: string | null | undefined): string {
@@ -86,7 +87,7 @@ export function istTime(iso: string | null | undefined): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : `${d.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })} IST`;
 }
-export const shortDay = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+export const shortDay = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });
 
 /** The status line for one of the exchange's daily numbers. */
 export function statusLine(s: PartStatus, what: string): string {

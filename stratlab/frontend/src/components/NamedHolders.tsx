@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { safeHref } from "../lib/format";
+import { safeHref, fmtDate } from "../lib/format";
 import { DataTable, ErrorState, Skeleton } from "./kit";
 
 /* Named holders above 1% from the quarterly shareholding pattern (shareholders.py): the promoter group's members and
@@ -20,8 +20,8 @@ export interface CompanyHolders {
 
 export function quarterEnd(iso: string | null | undefined) {
   if (!iso) return "–";
-  const d = new Date(`${iso}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const s = fmtDate(iso);
+  return s === "–" ? iso : s;
 }
 
 export function shares(n: number | null | undefined) {
@@ -70,7 +70,7 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
       {v.holders.length === 0 ? <p className="k-small k-muted">The filing names no holder above 1%.</p> : (
         <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} sticky={list.length > 14} rowAttrs={(h) => ({ "data-holder": h.name })}
           columns={[
-            { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (h) => <><span className="holder-name">{h.name}</span><span className="k-sub-line">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</span></> },
+            { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (h) => <>{h.name}<span className="k-sub-line">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</span></> },
             { key: "s", header: "Shares", numeric: true, cell: (h) => shares(h.shares) },
             { key: "p", header: "Stake", numeric: true, cell: (h) => `${h.pct.toFixed(2)}%` },
             { key: "c", header: "Since last quarter", numeric: true, cell: (h) => <>{changeText(h.change, h.pct_change)}{h.prev_pct != null && h.change !== "same" && <span className="k-sub-line">was {h.prev_pct.toFixed(2)}%</span>}</> },

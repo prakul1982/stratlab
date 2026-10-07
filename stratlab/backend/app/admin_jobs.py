@@ -158,6 +158,37 @@ def rows() -> list[dict]:
         return _row("option-chains", "Option chain recording", f"Every {st.get('every_minutes')} minutes in market hours", st.get("last_at"),
                     st.get("last_error"), [f"{st.get('today', 0)} saved today"])
     add("Option chain recording", recorder)
+
+    def ibkr_daily():
+        st = dict(m.connect_job.status or {})
+        r = st.get("ibkr") or {}
+        return _row("ibkr-daily", "IBKR daily pull", "Every 30 minutes from 7 AM IST until each connected account has its day's read",
+                    st.get("ibkr_at"), st.get("last_error"),
+                    [f"{r['users']} accounts due, {r['ok']} read, {r['failed']} failed" if r else ""],
+                    [{"label": "Run now", "path": "/admin/connect/run?part=ibkr"}], running=m.connect_job.running)
+    add("IBKR daily pull", ibkr_daily)
+
+    def inbox_reminder():
+        st = dict(m.connect_job.status or {})
+        return _row("statement-reminder", "Statement inbox reminder", "Checked every 30 minutes; one reminder when no statement has come in 40 days",
+                    st.get("reminders_at"), st.get("last_error"),
+                    [f"{st['reminders']} reminders sent in the last check" if st.get("reminders_at") else ""],
+                    [{"label": "Run now", "path": "/admin/connect/run?part=reminders"}], running=m.connect_job.running)
+    add("Statement inbox reminder", inbox_reminder)
+
+    def library_seed():
+        res = m._seed_result or {}
+        out = res.get("result") if isinstance(res.get("result"), dict) else {}
+        entries = m.library_seed.seeded()
+        log = []
+        if out:
+            log.append(f"Last run: {len(out.get('published') or [])} published or refreshed, {len(out.get('failed') or [])} failed")
+        log.append(f"{len(entries)} StratLab strategies in the library")
+        last = res.get("finished") or max((str(e.get("published_at") or "") for e in entries), default="") or None
+        return _row("library-seed", "Library seed", "Once, a while after start-up when the library has none; the button refreshes them",
+                    last, res.get("error"), log, [{"label": "Run now", "path": "/admin/library/seed"}],
+                    running=m._seeding.locked(), note="Runs StratLab's own strategies through the backtest and verdict, which takes a few minutes.")
+    add("Library seed", library_seed)
     return out
 
 

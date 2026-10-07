@@ -4,6 +4,17 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 6 and 7 October 2026: the UI overhaul, My space, connect once and the data behind them
+
+- **UI overhaul:** every page now sits on the design kit: one title block, one card, one stat, one table, one set of states for empty, loading and failed. Money, Invest and Trade pages were rebuilt on it, Account and Settings were regrouped with Connected accounts in one place, and a last sweep checked every page at 400px, in light and dark, with guards against one-off styles and the browser's own confirm box.
+- **Navigation and My space:** the left menu groups tools by what you are doing, with a markets-now pop-up, ⌘K for everything and Admin as its own area with its own menu. My space opens with a greeting, what needs you today, your holdings, watchlist and alerts in one place. Dates read day first everywhere ("6 Oct", "6 Oct 2026") through one formatter.
+- **Admin and emails:** Admin has Overview, Users, Money, Data and jobs, Quality, System and Emails. Data and jobs now lists the daily broker statement read, the statement-inbox reminder and the library seed with their last run and a Run now button, and Users can delete one person's app data (drawings, connected accounts, holdings, net worth, notebooks, alerts, preferences) behind a confirmation. Emails and exports use the same kit pieces, and each email can be previewed in Admin.
+- **Scans and US data:** trend scan presets for whole indices, red flags across every company (India notices; US 8-K items for bankruptcy, delisting, auditor change and non-reliance), US 5% holders and US corporate actions for the whole universe. The screener's red-flag filter now works for US companies from the stored 8-K counts, not only India.
+- **Live breadth, business updates and the library:** market breadth refreshes through the day for the indices and sectors, business updates cover more sectors and read more figures, and the library opens with StratLab's own strategies, each with the verdict it earned. Library cards show the name, author, verdict, one line and the key figures on a phone, with the rules and the rest one tap away.
+- **Chart drawing tools:** 16 tools on the one price chart (trend lines, levels, channels, Fibonacci, rectangles, notes, long and short position boxes), editing with colour, line style, lock and duplicate, undo and redo, a magnet, and a drawings list. Drawings are saved per user, market and symbol; a position box states target, stop, risk to reward and quantity for your own risk amount, facts only.
+- **Connect once:** a private statement inbox address for your monthly statements (EPF, NPS and AIS can be uploaded once), a broker login for holdings, and a daily read of a US brokerage statement. Tokens and the statement password are sealed; the inbox reminds you after 40 quiet days.
+- **India and US audit fixes:** a fallback for empty exchange feeds, partial company pages, the price check against recent sessions, capex facts, sparse share counts, and the US counterparts of each.
+
 ### 6 October 2026: design kit
 
 - A shared UI kit (`components/kit`), design tokens, Indian-unit number formatting, `DESIGN.md` and an admin-only `/dev/kit` page. Margin funding is the first page rebuilt with it.

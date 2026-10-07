@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { inr } from "../../lib/format";
+import { inr, fmtDate } from "../../lib/format";
 import { Copy, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Earlier } from "../../components/Earlier";
@@ -31,7 +31,7 @@ const REPEAT: Record<Repeat, string> = { none: "Once", monthly: "Every month", y
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const parse = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const addDays = (s: string, n: number) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
-const longDay = (s: string) => parse(s).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const longDay = (s: string) => fmtDate(parse(s), { weekday: true });
 const monthName = (y: number, m: number) => new Date(y, m, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 
 /** The feed's full address, for a calendar app (webcal:// opens the subscribe dialog on Apple devices). */

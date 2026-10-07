@@ -38,6 +38,7 @@ from . import fixed_income
 from . import loan_check
 from . import money_advance_tax, money_routes
 from . import journal_routes
+from . import user_data
 from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
 from . import drawings_routes
@@ -3863,6 +3864,21 @@ def admin_set_plan(user_id: str, req: AdminPlanReq, who=Depends(admin.admin_prof
     return {"ok": True}
 
 
+@app.post("/admin/users/{user_id}/delete-data")
+def admin_delete_user_data(user_id: str, who=Depends(admin.admin_profile)):
+    """Erase one user's app data (drawings, Connect records, holdings, net worth, notebooks, alerts, preferences and the
+    like). The sign-in account and the billing record stay."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", user_id):
+        err(404, "no_user", "No user with that ID.")
+    rows = db.sb().table("profiles").select("id,email").eq("id", user_id).execute().data
+    if not rows:
+        err(404, "no_user", "No user with that ID.")
+    out = user_data.erase(user_id)
+    log.info("admin %s erased the app data of %s: %d areas done, %d failed", who.get("email"), rows[0].get("email"),
+             len(out["done"]), len(out["failed"]))
+    return {"ok": not out["failed"], "email": rows[0].get("email"), **out}
+
+
 @app.get("/admin/sessions")
 def admin_sessions(_=Depends(admin.admin_profile)):
     emails = {}
@@ -4382,6 +4398,16 @@ def admin_end_promo(who=Depends(admin.admin_profile)):
     set_promo(None)
     log.info("admin %s ended the free offer", who.get("email"))
     return {"until": None}
+
+
+@app.post("/admin/connect/run")
+def admin_connect_run(part: str = "all", _=Depends(admin.admin_profile)):
+    """Run the connect-once work now: the daily IBKR read for users who are due, and/or the quiet-inbox reminders."""
+    if part not in ("all", "ibkr", "reminders"):
+        err(400, "bad_part", "Pick ibkr, reminders or all.")
+    if not connect_job.run_now(part):
+        err(409, "busy", "The connect-once job is running already.")
+    return {"started": True, "part": part}
 
 
 _seeding = threading.Lock()
