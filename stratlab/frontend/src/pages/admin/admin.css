@@ -27,11 +27,12 @@
 .adm-cell { max-width: 380px; overflow-wrap: anywhere; font-size: var(--t-note); }
 .adm-mono { font-family: var(--mono); font-size: var(--t-note); }
 .adm-search { max-width: 340px; flex: 1 1 220px; }
+.adm-filters { margin-bottom: var(--s3); }
 
 .adm-num-input { width: 90px; text-align: right; }
 
 .adm-year { width: 110px; }
-.adm-pre { max-height: 160px; }
+.adm-pre { max-height: 360px; overflow: auto; }
 
 .adm-sub { font-size: var(--t-label); font-weight: 600; margin: 0; }
 .adm-log { display: flex; flex-direction: column; gap: var(--s1); margin: 0; padding: 0; list-style: none; font-size: var(--t-label); }

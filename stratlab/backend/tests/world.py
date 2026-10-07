@@ -274,7 +274,11 @@ def _nse(sw=None):
                                                     {"tradingDate": "22-Mar-2027", "weekDay": "Monday", "description": "Holi"}],
                                              "FO": []})
         if r.url.path == "/api/quote-equity":
-            return httpx.Response(200, json={"industryInfo": {"macro": "Energy", "industry": "Refineries"},
+            # each company's own broad sector (fake_prices), so a holdings page groups banks with banks
+            from tests.fake_prices import sector_of
+            sym = r.url.params.get("symbol", "")
+            macro = sector_of(sym) or "Energy"
+            return httpx.Response(200, json={"industryInfo": {"macro": macro, "industry": "Refineries" if sym == "RELIANCE" else macro},
                                              "priceInfo": {"lastPrice": 2900.5}})
         return httpx.Response(200, text="<html></html>")
     t = httpx.MockTransport(handler)
@@ -302,8 +306,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     monkeypatch.setattr(db, "_client", fake_db)
     db._profiles.clear()
     from app import invite_rewards, plans, pricing
-    plans.forget_free_basic()
-    pricing.forget()                            # prices another test saved                   # free Basic time another test gave
+    plans.forget_free_basic()                   # free Basic time another test gave
+    plans._promo.update(read_at=0.0, until=None)   # a launch offer another test started (the stress tests post /admin/promo)
+    pricing.forget()                            # prices another test saved
     invite_rewards._touched.clear()
     from app import corp_actions
     corp_actions._empty.clear()                 # company pages another test looked up with nothing found

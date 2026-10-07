@@ -1,24 +1,27 @@
-"""Company suggestions while a symbol is typed: listed companies in India (NSE, else BSE-only by its code) and US
-common stocks, matched on the symbol, the BSE code or the start of any word of the name.
+"""Company suggestions while a symbol or name is typed: listed companies in India (NSE, else BSE-only by its code) and
+US common stocks, matched on the symbol, the BSE code, the ISIN, a short name ("RIL", "Google") or the name
+("HDFC Bank", "apollo hosp"), with room for a typo (name_search).
 
 Each market's list is gathered once (the broker's instrument list, the SEC's list of filers, or the stock pages
-already stored when those are offline) and kept in memory, so a keystroke is a walk over a few thousand rows."""
+already stored when those are offline) and indexed in memory, so a keystroke is a few lookups."""
 import re
 import threading
 import time
+
+from . import name_search
 
 LIMIT = 8
 MEMORY = 1800                          # seconds a market's list is kept before it's gathered again
 MEMORY_SHORT = 120                     # ...when it came from the fallbacks: the full list may be back soon
 MARKETS = ("IN", "US")
-_WORD = re.compile(r"[A-Z0-9&]+")
 
 
-def _entry(symbol: str, name: str, exchange: str, market: str, code: str | None = None, ident: str | None = None) -> dict:
+def _entry(symbol: str, name: str, exchange: str, market: str, code: str | None = None, ident: str | None = None,
+           isin: str | None = None) -> dict:
     """One company as the list keeps it: what's shown, what's filled in when picked (`id`), and what's matched."""
     name = str(name or symbol).strip() or symbol
     return {"symbol": symbol, "id": ident or symbol, "name": name[:120], "exchange": exchange, "market": market,
-            "_sym": symbol.upper(), "_code": code or "", "_name": name.upper(), "_words": _WORD.findall(name.upper())}
+            "_sym": symbol.upper(), "_code": code or "", "_isin": (isin or "").upper()}
 
 
 def us_common(ticker: str, listed: set[str]) -> bool:
@@ -33,29 +36,26 @@ def us_common(ticker: str, listed: set[str]) -> bool:
     return not (len(t) == 5 and t[-1] in "WUR" and t[:4] in listed)
 
 
-def rank(q: str, rows: list[dict], limit: int = LIMIT) -> list[dict]:
-    """The best `limit` rows for what's typed: the exact symbol (or BSE code) first, then symbols starting with it,
-    then names starting with it, then names with a word starting with each word typed. Shorter symbols, then names
-    in order, break ties."""
-    q = (q or "").strip().upper()
-    if not q:
+def index(rows: list[dict], market: str | None = None, boost: set | None = None) -> name_search.NameIndex:
+    """The rows (from _entry) indexed by symbol, BSE code, ISIN, name and the market's short names."""
+    return name_search.NameIndex(rows, symbol=lambda r: r["_sym"], name=lambda r: r["name"],
+                                 codes=lambda r: (r["_code"], r["_isin"], r["id"]), boost=boost,
+                                 aliases=name_search.ALIASES.get(market or "", {}))
+
+
+def rank(q: str, rows: list[dict] | name_search.NameIndex, limit: int = LIMIT) -> list[dict]:
+    """The best `limit` rows for what's typed: the exact symbol, code or ISIN first, then a short name or the whole
+    name, symbols starting with it (shorter first), names starting with it, names with a word starting with each word
+    typed, then the same allowing a typo (name_search)."""
+    return [shown(r) for _, r in ranked(q, rows, limit)]
+
+
+def ranked(q: str, rows: list[dict] | name_search.NameIndex, limit: int = LIMIT) -> list[tuple[int, dict]]:
+    if not (q or "").strip():
         return []
-    words = _WORD.findall(q)
-    scored = []
-    for r in rows:
-        if r["_sym"] == q or (r["_code"] and r["_code"] == q) or r["id"].upper() == q:
-            s = 0
-        elif r["_sym"].startswith(q):
-            s = 1
-        elif r["_name"].startswith(q):
-            s = 2
-        elif words and all(any(w.startswith(t) for w in r["_words"]) for t in words):
-            s = 3
-        else:
-            continue
-        scored.append((s, len(r["_sym"]) if s == 1 else 0, r["_name"], r["_sym"], r))
-    scored.sort(key=lambda x: x[:4])
-    return [shown(x[4]) for x in scored[:limit]]
+    if not isinstance(rows, name_search.NameIndex):
+        rows = index(rows, rows[0].get("market") if rows else None)
+    return rows.search(q, limit)
 
 
 def shown(r: dict) -> dict:
@@ -63,9 +63,12 @@ def shown(r: dict) -> dict:
 
 
 # ---------- each market's list ----------
-def india_rows(equities: list[dict]) -> list[dict]:
+def india_rows(equities: list[dict], listed: dict | None = None) -> list[dict]:
     """From the broker's equities: NSE stocks by symbol (a restricted series under its plain symbol), and companies
-    listed only on BSE, picked by their six-digit code."""
+    listed only on BSE, picked by their six-digit code. `listed` is the exchange's list of companies ({isin: [symbol,
+    name]}): its full name is shown, and its ISIN found, instead of the broker's shortened name."""
+    full = {str(v[0]).upper(): (v[1], isin) for isin, v in (listed or {}).items()
+            if isinstance(v, (list, tuple)) and len(v) == 2 and v[0]}
     out, seen = [], set()
     for r in equities:
         if r.get("exchange") == "NSE":
@@ -74,7 +77,8 @@ def india_rows(equities: list[dict]) -> list[dict]:
             if sym in seen:
                 continue
             seen.add(sym)
-            out.append(_entry(sym, r.get("name") or sym, "NSE", "IN"))
+            name, isin = full.get(sym.upper(), (None, None))
+            out.append(_entry(sym, name or r.get("name") or sym, "NSE", "IN", isin=isin))
         elif r.get("exchange") == "BSE" and r.get("bse_code"):
             out.append(_entry(r["symbol"], r.get("name") or r["symbol"], "BSE", "IN", code=r["bse_code"], ident=r["bse_code"]))
     return out
@@ -101,23 +105,35 @@ def plain_rows(market: str, listed: dict[str, dict]) -> list[dict]:
     return out
 
 
+def well_known(market: str) -> set[str]:
+    """Symbols that come first among equal matches: NIFTY 50 and the most traded F&O stocks; the S&P 500."""
+    try:
+        from . import universes
+        out = {s for p in universes.PRESETS.get(market, []) for s in p["symbols"]}
+        if market == "US":
+            out |= set(universes.sp500_symbols())
+        return out
+    except Exception:
+        return set()
+
+
 class Suggester:
     """Keeps each market's list. `sources[market]` gives the full list's rows (and may raise when its source is
     down); `fallbacks[market]` gives the stored list of companies with a page, {symbol: {name, bse}}."""
 
     def __init__(self, sources: dict, fallbacks: dict):
         self.sources, self.fallbacks = sources, fallbacks
-        self._mem: dict[str, tuple[float, float, list[dict]]] = {}
+        self._mem: dict[str, tuple[float, float, list[dict], name_search.NameIndex]] = {}
         self._lock = threading.Lock()
 
-    def rows(self, market: str) -> list[dict]:
+    def _get(self, market: str) -> tuple[list[dict], name_search.NameIndex]:
         hit = self._mem.get(market)
         if hit and time.time() - hit[0] < hit[1]:
-            return hit[2]
+            return hit[2], hit[3]
         with self._lock:
             hit = self._mem.get(market)
             if hit and time.time() - hit[0] < hit[1]:
-                return hit[2]
+                return hit[2], hit[3]
             got, keep = [], MEMORY
             try:
                 got = self.sources[market]() or []
@@ -130,16 +146,23 @@ class Suggester:
                 except Exception as e:
                     print("suggestions: no fallback,", market, e)
                     got = []
-            self._mem[market] = (time.time(), keep, got)
-            return got
+            idx = index(got, market, well_known(market))
+            self._mem[market] = (time.time(), keep, got, idx)
+            return got, idx
 
-    def search(self, q: str, market: str | None = None) -> list[dict]:
+    def rows(self, market: str) -> list[dict]:
+        return self._get(market)[0]
+
+    def search(self, q: str, market: str | None = None, limit: int = LIMIT) -> list[dict]:
+        return [shown({k: v for k, v in r.items() if k != "match"}) for r in self.search_ranked(q, market, limit)]
+
+    def search_ranked(self, q: str, market: str | None = None, limit: int = LIMIT) -> list[dict]:
+        """Like search, each row (still with its matching keys) with `match`: its group in name_search."""
         markets = [market] if market in MARKETS else list(MARKETS)
-        if len(markets) == 1:
-            return rank(q, self.rows(markets[0]))
-        # both markets: each ranked on its own, then merged by how well they match (India first on a tie)
-        both = [(i, r) for i, m in enumerate(markets) for r in rank(q, self.rows(m))]
-        return [r for _, r in sorted(both, key=lambda x: (_score(q, x[1]), x[0]))][:LIMIT]
+        # each market ranked on its own, then merged by how well they match (India first on a tie)
+        both = [(t, n, k, r) for n, m in enumerate(markets) for k, (t, r) in enumerate(ranked(q, self._get(m)[1], limit))]
+        both.sort(key=lambda x: x[:3])
+        return [{**r, "match": t} for t, _, _, r in both[:limit]]
 
     def find(self, symbol: str, market: str) -> dict | None:
         """The row for an exact symbol (or BSE code), or None."""
@@ -148,10 +171,3 @@ class Suggester:
 
     def clear(self):
         self._mem.clear()
-
-
-def _score(q: str, r: dict) -> int:
-    """0 for the exact symbol, 1 for a symbol starting with what's typed, 2 for a name match."""
-    q = q.strip().upper()
-    sym = r["symbol"].upper()
-    return 0 if sym == q or r["id"].upper() == q else 1 if sym.startswith(q) else 2

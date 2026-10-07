@@ -14,8 +14,19 @@ def telegram_ready() -> bool:
 
 
 def email_ready() -> bool:
-    return bool(settings.BREVO_API_KEY or settings.RESEND_API_KEY
-                or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD))
+    return email_service() is not None
+
+
+def email_service() -> str | None:
+    """Which service sends the server's email, in the order send_email tries them: "Brevo", "Resend", "SMTP", or None
+    when none is set up. Admin shows it, so Overview and System name the same one."""
+    if settings.BREVO_API_KEY:
+        return "Brevo"
+    if settings.RESEND_API_KEY:
+        return "Resend"
+    if settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD:
+        return "SMTP"
+    return None
 
 
 # Resend's shared sender: it delivers only to the address the Resend account was made with, until a domain of your
@@ -37,6 +48,8 @@ def _refused(service: str, r) -> RuntimeError:
 
 def _send_resend(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
     msg = {"from": settings.ALERT_FROM_EMAIL or RESEND_FROM, "to": [to], "subject": subject, "text": body}
+    if settings.REPLY_TO_EMAIL:
+        msg["reply_to"] = settings.REPLY_TO_EMAIL
     if html:
         msg["html"] = html
     if headers:
@@ -61,6 +74,8 @@ def _brevo_sender() -> str:
 def _send_brevo(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
     msg = {"sender": {"name": "StratLab", "email": _brevo_sender()}, "to": [{"email": to}], "subject": subject,
            "textContent": body}
+    if settings.REPLY_TO_EMAIL:
+        msg["replyTo"] = {"email": settings.REPLY_TO_EMAIL}
     if html:
         msg["htmlContent"] = html
     if headers:
@@ -100,8 +115,9 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
     Brevo or Resend key is set (they work where outgoing mail ports are blocked), otherwise SMTP."""
     if not to:
         return
+    from .email_kit import subject_line
     one_line = lambda v: " ".join(str(v).split())         # a line break in a header would start a new header
-    subject = one_line(subject)
+    subject = subject_line(one_line(subject))              # one rule for every email's subject: no "StratLab:" prefix
     headers = {k: one_line(v) for k, v in (headers or {}).items()} or None
     if settings.BREVO_API_KEY:
         _send_brevo(to, subject, body, html, headers)
@@ -110,11 +126,13 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
         _send_resend(to, subject, body, html, headers)
         return
     if not (settings.SMTP_HOST and settings.SMTP_USER):
-        raise RuntimeError("Email isn't set up on the server (SMTP settings are missing).")
+        raise RuntimeError("Email isn't set up on the server: no Brevo or Resend key, and no SMTP settings.")
     msg = EmailMessage()
     msg["From"] = settings.ALERT_FROM_EMAIL or settings.SMTP_USER
     msg["To"] = to
     msg["Subject"] = subject
+    if settings.REPLY_TO_EMAIL:
+        msg["Reply-To"] = settings.REPLY_TO_EMAIL
     for k, v in (headers or {}).items():
         msg[k] = v
     msg.set_content(body)

@@ -1,22 +1,22 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useDialogFocus } from "./kit/Dialog";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { NAV, groupPath, locate, locateGroup, type NavPage } from "../lib/nav";
-import { SPACE_IDS, SPACES, homeOf, spaceOf, type SpaceView } from "../lib/spaces";
+import { MINE_HOME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
+import { titleFor } from "../lib/title";
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
 import { PageBreadcrumb } from "./PageBreadcrumb";
+import { Onboarding, openTour } from "./Onboarding";
+import { gateFor, gatePlan } from "../lib/gates";
+import { PLAN_NAME } from "../lib/plans";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
-const LevelPrompt = lazy(() => import("./LevelPrompt").then((m) => ({ default: m.LevelPrompt })));
-const Tour = lazy(() => import("./Tour").then((m) => ({ default: m.Tour })));
-
-export const TOUR_SEEN = "stratlab.tour.v1";
-const tourSeen = () => { try { return localStorage.getItem(TOUR_SEEN) === "1"; } catch { return true; } };
 
 /** The menu lists this many notebooks (pinned first, then the latest) under Notebooks; the rest are one tap away on the notebooks page. */
 const SIDE_NOTEBOOKS = 6;
@@ -32,11 +32,12 @@ const MINE_LINKS = ["/news"];
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { notebooks, markets, me, level, focus, space, setSpace } = useApp();
+  const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
   const [open, setOpen] = useState(false);
   const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(OPEN_KEY, NO_GROUPS);
   const pins = usePins();
-  const [tour, setTour] = useState(false);
+  // on a laptop the menu can fold away for wide tables, remembered on this device (R1-082); a phone has its drawer
+  const [slim, setSlim] = usePersisted<boolean>("stratlab.side.slim", false);
   const [search, setSearch] = useState(false);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -50,42 +51,44 @@ export function Shell({ children }: { children: ReactNode }) {
   }, []);
   const [, tick] = useState(0);
   useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
-  // ask the experience level once, then show the tour to anyone who hasn't seen it
-  const askLevel = !!me && (!level || !focus);
-  useEffect(() => { if (me && level && !tourSeen()) setTour(true); }, [me, level]);
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
-  // Esc closes the drawer on a phone (a pop-up inside it closes first, on its own)
-  useEffect(() => {
-    if (!open) return;
-    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    window.addEventListener("keydown", k);
-    return () => window.removeEventListener("keydown", k);
-  }, [open]);
+  // on a phone (or zoomed in) the menu is a drawer: a modal while it's open. Focus moves in and stays in, Esc closes it
+  // (a pop-up inside it closes first, on its own), and focus goes back to the menu button.
+  const aside = useRef<HTMLElement>(null);
+  useDialogFocus(aside, open, { onEscape: () => setOpen(false), initial: () => aside.current?.querySelector<HTMLElement>(".side-close") });
   const path = loc.pathname;
   const at = locate(path);
   const onGroup = locateGroup(path);
   // a link into another space shows that space's menu, so where you are is always in it. Mine keeps its own menu on the
   // pages it links to (pinned pages, Briefs, Connected accounts): that is what it is for.
-  const here = spaceOf(path);
   const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to));
+  // the menu comes from the address itself (lib/spaces menuView), so it can't lag behind a saved choice that loads later
+  const space = menuView(path, saved, keepsMine);
+  // remember it on this device, so the front door opens the space last used (only real spaces and Mine's own pages).
+  // Runs when the page changes, not when the saved choice does: picking a space in the switcher saves it first and
+  // navigates a moment later, and the page still showing must not save its own space over that choice.
   useEffect(() => {
-    if (MINE_PAGES.includes(path)) { if (space !== "mine") setSpace("mine", false); return; }
-    if (!here) return;
-    if (space === "mine" ? !keepsMine : here !== space) setSpace(here, false);
-  }, [here, path]);   // eslint-disable-line react-hooks/exhaustive-deps
+    if (space !== saved && (spaceOf(path) || MINE_PAGES.includes(path) || path === MINE_HOME)) setSpace(space, false);
+  }, [space, path]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { document.title = titleFor(path); }, [path]);    // each page's own title; a page may sharpen it
   // pinned first, then the latest; the one you have open always stays in the list
   const openId = path.match(/^\/n\/([^/]+)/)?.[1];
   const sideNotebooks = notebooks && [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
     .filter((n, i) => i < SIDE_NOTEBOOKS || n.id === openId);
 
-  const item = (to: string, icon: ReactNode, label: string, active?: boolean, title?: string) => (
+  const item = (to: string, icon: ReactNode, label: ReactNode, active?: boolean, title?: string) => (
     <NavLink key={to} to={to} title={title} {...(active === undefined ? {} : { className: () => (active ? "active" : ""), "aria-current": active ? "page" as const : false })}>{icon}{label}</NavLink>
   );
   const pageLink = (p: NavPage) => {
     const Icon = ICONS[p.icon] ?? Compass;
-    return item(p.to, <Icon />, p.label, at?.page.to === p.to, p.line);
+    // a page that is a paid feature this plan lacks carries its plan, with a lock (lib/gates.ts)
+    const gate = gateFor(p.to);
+    const locked = gate?.whole && me?.plan_info?.features?.[gate.feature] === false;
+    // drawn by CSS from data-plan, so the link's name stays the page's own; the plan is in its title
+    const label = locked ? <>{p.label}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(gate!)]} aria-hidden="true" /></> : p.label;
+    return item(p.to, <Icon />, label, at?.page.to === p.to, locked ? `${p.line} (on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
   };
   // the group holding the page showing is open and stays open; the others are as the person left them
   const activeGroup = space !== "mine" ? (onGroup?.space === space ? onGroup.group.id : at?.space === space ? at.group.id : null) : null;
@@ -150,7 +153,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="side-list side-nav">
           {item("/news", <News />, "Briefs", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
           {item("/settings#accounts", <Wallet />, "Connected accounts", path === "/settings" && loc.hash === "#accounts", "Your holdings, funds and tradebooks: the files StratLab reads")}
-          {item("/assistant", <Sparkle />, "AI assistant", path === "/assistant", "Use StratLab in Claude or ChatGPT")}
+          {item("/assistant", <Sparkle />, "Connect an AI assistant", path === "/assistant", "Keys that let Claude or ChatGPT use your StratLab")}
         </div>
       </section>
     </>
@@ -162,11 +165,13 @@ export function Shell({ children }: { children: ReactNode }) {
   };
   const homeLabel = space === "mine" ? "My space" : `${SPACES[space].label} home`;
   const sidebar = (
-    <aside className={`sidebar${open ? " open" : ""}`} aria-label="Navigation">
+    <aside ref={aside} id="side-menu" className={`sidebar${open ? " open" : ""}`} aria-label={open ? "Menu" : "Navigation"}
+      {...(open ? { role: "dialog", "aria-modal": true } : {})}>
       <div className="side-top">
         <div className="side-brand">
           <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
           <button className="side-close" aria-label="Close menu" onClick={() => setOpen(false)}><Close size={18} /></button>
+          <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
         <SpaceSwitch space={space} onPick={goSpace} />
         {space === "invest" || (space === "mine" && focus === "invest")
@@ -174,7 +179,7 @@ export function Shell({ children }: { children: ReactNode }) {
           : space === "money" || (space === "mine" && focus === "money")
           ? <button className="side-new" onClick={() => nav("/holdings")}><Book size={16} />Add your holdings</button>
           : <button className="side-new" onClick={() => nav("/new")}><Plus size={16} />New notebook</button>}
-        <button className="search-btn" onClick={() => setSearch(true)} aria-label="Ask or do anything (Ctrl+K)">
+        <button className="search-btn" onClick={() => setSearch(true)} aria-keyshortcuts={/Mac/.test(navigator.platform) ? "Meta+K" : "Control+K"}>
           <Sparkle size={16} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
         </button>
       </div>
@@ -186,15 +191,17 @@ export function Shell({ children }: { children: ReactNode }) {
       </nav>
       <div className="side-foot">
         <MarketsNow markets={markets} />
-        <AccountMenu me={me} onTour={() => { setOpen(false); setTour(true); }} onGo={() => setOpen(false)} />
+        <AccountMenu me={me} onTour={() => { setOpen(false); openTour(); }} onGo={() => setOpen(false)} />
       </div>
     </aside>
   );
 
   return (
-    <div className="shell">
+    <div className={`shell${slim ? " slim" : ""}`}>
+      <a className="skip-link sr-only" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}>Skip to content</a>
+      {slim && <button className="side-show" aria-label="Show the menu" title="Show the menu" onClick={() => setSlim(false)}><Menu /></button>}
       <header className="topbar">
-        <button className="icon-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Menu /></button>
+        <button className="icon-btn" aria-label="Open menu" aria-expanded={open} aria-controls="side-menu" onClick={() => setOpen(true)}><Menu /></button>
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
         <span className="row tight">
           <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
@@ -203,12 +210,11 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main"><div className="page"><PageBreadcrumb />{children}</div></main>
+      <main className="main" id="main" tabIndex={-1}><div className="page"><PageBreadcrumb />{children}</div></main>
       <Suspense fallback={null}>
-        {tour && <Tour onClose={() => setTour(false)} />}
         {search && <SearchPalette onClose={() => setSearch(false)} />}
-        {askLevel && !tour && <LevelPrompt onDone={() => undefined} />}
       </Suspense>
+      <Onboarding />
     </div>
   );
 }

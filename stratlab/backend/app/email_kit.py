@@ -16,6 +16,7 @@ Facts only: the kit has no place for advice wording, and colour is never the onl
 The footer's unsubscribe link is the {unsubscribe_url} placeholder, which the sender fills per reader with `finish()`."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from html import escape
 
@@ -127,7 +128,60 @@ def delta(x, dp: int = 2, tone: str = "updown") -> tuple[str, str, str]:
     return f'<span class="{cls}" style="color:{col};white-space:nowrap">{txt}</span>', txt, cls
 
 
+def money(v, currency: str | None = "INR", dp: int = 0, signed: bool = False) -> str:
+    """An amount with its currency sign, never a code: ₹3,250 (Indian grouping), $1,250.50, and with `signed` +₹3,250 or
+    −₹1,200. A currency without a sign of its own keeps its code after the number (1,250 SGD)."""
+    if v is None:
+        return "–"
+    v = float(v)
+    sign = (MINUS if v < 0 else "+" if v > 0 else "") if signed else (MINUS if v < 0 else "")
+    cur = (currency or "INR").upper()
+    if cur == "INR":
+        return f"{sign}₹{indian(abs(v), dp)}"
+    sym = CURRENCY_SIGN.get(cur)
+    body = f"{abs(v):,.{dp}f}"
+    return f"{sign}{sym}{body}" if sym else f"{sign}{body} {cur}"
+
+
+CURRENCY_SIGN = {"USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥"}
+
+
+# ---------- dates: the app's own format, day first ----------
+def fmt_date(d, year: bool = True, weekday: bool = False) -> str:
+    """A date as the app writes it (lib/format.ts fmtDate): "7 Oct 2026", "7 Oct" without the year, "Wed, 7 Oct 2026"
+    or "Wed 7 Oct" with the weekday. Takes a date, a datetime or an ISO string; a string that is not a date comes back
+    as it was, and a missing date is a dash."""
+    from datetime import date as _date, datetime as _datetime
+    if isinstance(d, str):
+        try:
+            d = _date.fromisoformat(d[:10])
+        except ValueError:
+            return d
+    if isinstance(d, _datetime):
+        d = d.date()
+    if not isinstance(d, _date):
+        return "–" if d is None else str(d)
+    out = f"{d.day} {d:%b}" + (f" {d.year}" if year else "")
+    return (f"{d:%a}, {out}" if year else f"{d:%a} {out}") if weekday else out
+
+
+def subject_line(subject: str) -> str:
+    """One rule for every email subject: it says what the email is about, without a "StratLab:" prefix (the sender
+    is StratLab already), and starts with a capital."""
+    s = " ".join(str(subject or "").split())
+    for p in ("StratLab alert: ", "StratLab: "):
+        if s.startswith(p):
+            s = s[len(p):]
+    return s[:1].upper() + s[1:]
+
+
 # ---------- links ----------
+# Every link an email carries is a page the app routes (tests/test_email_links.py walks them against the frontend).
+MANAGE_ALERTS = "/settings#alerts"             # Settings → Notifications → Alerts: where alerts and reminders go
+MANAGE_NEWSLETTERS = "/settings#newsletters"   # Settings → Notifications → Newsletters: each one's frequency
+MANAGE_TIPS = "/settings#emails"               # Settings → Notifications → Emails from StratLab: tips and account emails
+
+
 def site(path: str = "/") -> str:
     """A page on the site: the path appended to the public address (an absolute web address is kept as it is)."""
     if path.lower().startswith(("https://", "http://")):
@@ -135,8 +189,21 @@ def site(path: str = "/") -> str:
     return settings.PUBLIC_SITE_URL + (path if path.startswith("/") else "/" + path)
 
 
-def manage_url() -> str:
-    return site("/settings#notifications")
+def manage_url(path: str = MANAGE_ALERTS) -> str:
+    return site(path)
+
+
+def news_path(issue_id: str) -> str:
+    """Where an issue is read in the app: the News page with that issue open, on its own tab so it is in the list
+    (/news?tab=US&issue=market.US.2026-10-07). The app has no /news/<id> page."""
+    from urllib.parse import quote
+    kind, _, rest = str(issue_id).partition(".")
+    tab = "mine" if kind == "my_stocks" else ("US" if rest.startswith("US.") else "IN")
+    return f"/news?tab={tab}&issue={quote(str(issue_id), safe='.-_')}"
+
+
+def news_url(issue_id: str) -> str:
+    return site(news_path(issue_id))
 
 
 def safe_url(url) -> str | None:
@@ -253,7 +320,7 @@ def _row_html(r: Row, first: bool) -> str:
     weight = 600 if (r.value or r.change is not None) else 500
     return (f'<tr><td class="bd" style="{top}padding:0"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>'
             f'<td valign="top" style="padding:10px 0 0"><div class="c-ink" style="font:{weight} 15px/1.4 {SANS};color:{L["ink"]}">'
-            f'{_a(r.url, r.title, "c-ink", L["ink"])}</div></td>{right}</tr>'
+            f'{_a(r.url, r.title)}</div></td>{right}</tr>'
             f'<tr><td colspan="2" style="padding:0 0 10px">{subs}</td></tr></table></td></tr>')
 
 
@@ -304,7 +371,7 @@ def bullets(items: list) -> Block:
     for it in items:
         title, line, url = (it, None, None) if isinstance(it, str) else (tuple(it) + (None, None))[:3]
         li.append(f'<li class="c-ink2" style="margin:0 0 8px;color:{L["ink2"]}">'
-                  f'<b class="c-ink" style="color:{L["ink"]}">{_a(url, title, "c-ink", L["ink"], "font-weight:600;")}</b>'
+                  f'<b class="c-ink" style="color:{L["ink"]}">{_a(url, title, extra="font-weight:600;")}</b>'
                   + (f" – {escape(line)}" if line else "") + "</li>")
         text.append(f"- {title}" + (f": {line}" if line else "") + (f" ({url})" if safe_url(url) else ""))
     if not li:
@@ -330,6 +397,7 @@ class Footer:
     unsubscribe: str | None = None                    # "Unsubscribe from India briefs": the one-click link for this type
     transactional: str | None = None                  # why it can't be turned off ("about your account")
     legal: str | None = None                          # the facts-not-advice line
+    manage: str = MANAGE_ALERTS                       # the Settings card "Manage emails" opens
 
 
 def _footer(f: Footer) -> Block:
@@ -342,8 +410,8 @@ def _footer(f: Footer) -> Block:
     if f.unsubscribe:
         links.append(_a_raw(UNSUBSCRIBE, f.unsubscribe))
         text.append(f"{f.unsubscribe}: {UNSUBSCRIBE}")
-    links.append(_a(manage_url(), "Manage emails", "c-muted", L["muted"], "text-decoration:underline;"))
-    text.append(f"Manage emails: {manage_url()}")
+    links.append(_a(manage_url(f.manage), "Manage emails", "c-muted", L["muted"], "text-decoration:underline;"))
+    text.append(f"Manage emails: {manage_url(f.manage)}")
     if f.legal:
         text.append(f.legal)
     sep = f' <span style="color:{L["line"]}">&middot;</span> '
@@ -408,8 +476,7 @@ def today_label() -> str:
     """Today's India date for a header: Tue 6 Oct."""
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    d = datetime.now(ZoneInfo("Asia/Kolkata"))
-    return f"{d:%a} {d.day} {d:%b}"
+    return fmt_date(datetime.now(ZoneInfo("Asia/Kolkata")), year=False, weekday=True)
 
 
 # ---------- finishing: fill the unsubscribe link and the headers ----------
@@ -424,16 +491,33 @@ def finish(html: str, text: str, uid: str | None, what: str | None) -> tuple[str
 
 
 def preview_links(html: str, text: str) -> tuple[str, str]:
-    """For previews: the unsubscribe link just opens Manage emails."""
-    return html.replace(UNSUBSCRIBE, manage_url()), text.replace(UNSUBSCRIBE, manage_url())
+    """For previews: the unsubscribe link just opens the email's own Manage emails page."""
+    m = re.search(r"^Manage emails: (\S+)$", text, re.M)
+    to = m.group(1) if m else manage_url()
+    return html.replace(UNSUBSCRIBE, escape(to)), text.replace(UNSUBSCRIBE, to)
+
+
+def link_line(label: str, url) -> Block:
+    """A link on a line of its own ("Read the results filing"): the address is never printed as text in the HTML."""
+    u = safe_url(url)
+    if not u:
+        return Block("", "")
+    return Block(f'<p style="margin:0 0 14px;font:600 15px/1.5 {SANS}">{_a(u, label)}</p>', f"{label}: {u}")
 
 
 # ---------- a message from plain lines: alerts, reminders, admin notes ----------
 BUTTONS = {"/alerts": "Open your alerts", "/trade/events": "See every event", "/trade/fo-changes": "See every change",
            "/paper": "Open paper trading", "/admin": "Open Admin", "/money/calendar": "Open your money calendar",
            "/account": "Open your account", "/research/screens": "Open your screens", "/research/filings": "Open filings",
-           "/money/tax-tools?tab=advance": "Open your advance tax figures", "/account#invite": "See your invites"}
+           "/money/tax-tools?tab=advance": "Open your advance tax figures", "/invite": "See your invites"}
 _ADVICE_TAIL = ("not advice", "not investment advice", "not tax advice", "facts, not")
+_URL = re.compile(r"https?://[^\s<>\"']+", re.I)
+# the small print at the end of a line: the "From the company's filing." sentence before it, if any, and the
+# facts-not-advice sentence itself
+_TAIL = re.compile(r"(?:^|(?<=[.!?])\s+)((?:(?:from|as|dates|facts)\b[^.!?]*[.!?]\s+)?[^.!?]*\b(?:not (?:investment |tax )?advice|facts, not)\b.*)$",
+                   re.I)
+# "- Revenue: ₹64,259 crore": a row with a figure, shown with the figure on the right
+_FIGURE = re.compile(r"^([^:]{1,48}):\s+([−\-+]?[₹$€£]?\s?\d[^:]{0,30})$")
 
 
 def _is_footnote(line: str) -> bool:
@@ -441,12 +525,39 @@ def _is_footnote(line: str) -> bool:
     return any(k in low for k in _ADVICE_TAIL)
 
 
+def _split_tail(line: str) -> tuple[str, str | None]:
+    """("the facts", "the small print") when a line ends in the facts-not-advice sentence, else (line, None)."""
+    m = _TAIL.search(line)
+    if not m or not _is_footnote(m.group(1)):
+        return line, None
+    return line[:m.start(1)].strip(), m.group(1).strip()
+
+
+def _split_links(line: str) -> tuple[str, list[tuple[str, str]]]:
+    """(the line without its web addresses, [(label, address)]). "Filing: https://…" is a link labelled "Filing";
+    an address inside a sentence becomes a "Source" link after it."""
+    m = re.fullmatch(r"([^:]{1,40}):\s*(https?://\S+)", line)
+    if m:
+        return "", [(m.group(1).strip(), m.group(2))]
+    found = _URL.findall(line)
+    if not found:
+        return line, []
+    rest = " ".join(_URL.sub(" ", line).split())
+    return rest, [("Source", u) for u in found]
+
+
+def _row(line: str) -> Row:
+    m = _FIGURE.match(line)
+    return Row(m.group(1).strip(), value=m.group(2).strip()) if m else Row(line)
+
+
 def message(subject: str, text: str, path: str, label: str, why: str, *, summary: str | None = None, button_label: str | None = None,
             date: str = "", footer: Footer | None = None) -> tuple[str, str]:
-    """(html, text) for an alert, reminder or note given as a subject and plain lines: a line starting "- " is a row,
-    a line ending in ":" heads the rows after it, the rest are paragraphs, and a closing "facts, not advice" line
-    becomes the small print. The deep link is the one button."""
-    title = subject.removeprefix("StratLab alert: ").removeprefix("StratLab: ").removeprefix("StratLab ").strip() or subject
+    """(html, text) for an alert, reminder or note given as a subject and plain lines: a line starting "- " is a row
+    ("- Revenue: ₹64,259 crore" puts the figure on the right), a line ending in ":" heads the rows after it, a web
+    address becomes a link, the rest are paragraphs, and a closing "facts, not advice" sentence becomes the small
+    print. The deep link is the one button."""
+    title = subject_line(subject).removeprefix("StratLab ").strip() or subject
     title = title[:1].upper() + title[1:]
     blocks: list[Block] = []
     rows: list[Row] = []
@@ -460,23 +571,37 @@ def message(subject: str, text: str, path: str, label: str, why: str, *, summary
             blocks.append(card(head, rows))
         rows, head = [], None
     for raw in [ln.strip() for ln in text.splitlines() if ln.strip()]:
+        raw, links = _split_links(raw)
+        raw, tail = _split_tail(raw)
+        if tail:
+            legal = tail
         if raw.startswith("- "):
-            rows.append(Row(raw[2:]))
-        elif _is_footnote(raw):
-            legal = raw
-        elif raw.endswith(":") and not rows:
+            rows.append(_row(raw[2:]))
+        elif raw.endswith(":") and not rows and not links:
             head = raw[:-1]
-        else:
+        elif raw:
             flush()
             if first_para is None and not blocks:
                 first_para = raw
             else:
                 blocks.append(para(raw))
+        if links:
+            flush()
+            blocks += [link_line(lab, u) for lab, u in links]
     flush()
     if head and not blocks:
         first_para = first_para or head
+    if first_para:
+        # "TCS results are out: Q2 results (5 Oct)." under the title "TCS results are out" says it once
+        low = first_para.lower()
+        if low.startswith(title.lower()) and first_para[len(title):len(title) + 1] in (":", "."):
+            rest = first_para[len(title) + 1:].strip()
+            first_para = (rest[:1].upper() + rest[1:]) if rest else first_para
     f = footer or Footer(why=why, legal=legal or "Facts, not advice.")
     if legal and not f.legal:
         f.legal = legal
-    return render(title, blocks, f, label=label, date=date, summary=first_para, subject=subject,
-                  cta=(button_label or BUTTONS.get(path, "Open StratLab"), path))
+    default = "Open the company page" if re.fullmatch(r"/research/(IN|US)/[^/?#]+", path) else "Open StratLab"
+    return render(title, blocks, f, label=label, date=date, summary=first_para, subject=subject_line(subject),
+                  cta=(button_label or BUTTONS.get(path, default), path))
+
+

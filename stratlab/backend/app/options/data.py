@@ -4,6 +4,7 @@ import time
 
 from .engine import Contracts
 from ..kite_service import ist_date
+from ..data.expiries import keep_listed
 
 # the index each index option settles against; stock options use the NSE cash stock
 INDEX_SPOT = {
@@ -93,7 +94,7 @@ class OptionsData:
         rank = {k: i for i, k in enumerate(POPULAR)}
         out = []
         for k, u in seen.items():
-            ex = sorted(u["expiries"])
+            ex = keep_listed(u["exchange"], u["name"], sorted(u["expiries"]))
             out.append({"exchange": u["exchange"], "name": u["name"], "lot": u["lot"], "expiries": ex[:6],
                         "venue": EXCHANGE_NAME[u["exchange"]], "popular": k in rank, "freeze": freeze(u["name"]),
                         "index": k in INDEX_SPOT})
@@ -101,10 +102,12 @@ class OptionsData:
         return out
 
     def expiries(self, exchange: str, name: str) -> list[str]:
+        """The option's expiries still to come, as listed; a monthly-only index's list never carries a weekly date
+        (data/expiries.py)."""
         self._load()
         today = ist_date().isoformat()
-        return sorted({r["expiry"] for r in self._rows.get(exchange, [])
-                       if r["name"] == name and r["type"] != "FUT" and r["expiry"] >= today})
+        return keep_listed(exchange, name, sorted({r["expiry"] for r in self._rows.get(exchange, [])
+                                                   if r["name"] == name and r["type"] != "FUT" and r["expiry"] >= today}))
 
     def pick_expiry(self, exchange: str, name: str, choice: str) -> str | None:
         ex = self.expiries(exchange, name)

@@ -36,12 +36,18 @@ def _usage_since(since_iso: str) -> dict[str, Counter]:
     return out
 
 
-def users(q: str, month_start: str, limit: int = 200) -> list[dict]:
+def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -> list[dict]:
+    """The newest `limit` users: those whose email contains `q`, and on `plan` when given (the plan they have now, so
+    a paid plan that ended counts as Free)."""
     query = db.sb().table("profiles").select(
         "id,email,plan,plan_status,current_period_end,razorpay_subscription_id,created_at")
     if q:
         query = query.ilike("email", f"%{q.strip()}%")
-    rows = query.order("created_at", desc=True).limit(limit).execute().data
+    if plan in ("basic", "pro"):
+        query = query.eq("plan", plan)              # narrowed in the database; an ended plan is dropped below
+    rows = query.order("created_at", desc=True).limit(100000 if plan in PLANS else limit).execute().data
+    if plan in PLANS:
+        rows = [r for r in rows if effective_plan(r) == plan][:limit]
     usage = _usage_since(month_start)
     try:
         invited = referrals.counts()
@@ -64,14 +70,18 @@ def users(q: str, month_start: str, limit: int = 200) -> list[dict]:
 
 
 def stats(month_start: str) -> dict:
-    rows = db.sb().table("profiles").select("plan,plan_status,current_period_end,created_at").limit(100000).execute().data
+    rows = db.sb().table("profiles").select("plan,plan_status,current_period_end,created_at,razorpay_subscription_id").limit(100000).execute().data
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     plans = Counter(effective_plan(r) for r in rows)
+    # on a paid plan by paying (a subscription), or given by the owner by hand: Overview tells them apart
+    paying = Counter(effective_plan(r) for r in rows if r.get("razorpay_subscription_id"))
     new = sum(1 for r in rows if r.get("created_at") and datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")) >= week_ago)
     usage = Counter()
     for c in _usage_since(month_start).values():
         usage.update(c)
     return {"users": len(rows), "plans": {p: plans.get(p, 0) for p in PLANS}, "new_7d": new,
+            "paying": {p: paying.get(p, 0) for p in ("basic", "pro")},
+            "given": {p: plans.get(p, 0) - paying.get(p, 0) for p in ("basic", "pro")},
             "experiments_month": usage["backtest"], "ai_month": usage["ai"]}
 
 

@@ -5,6 +5,7 @@ import { useApp } from "../../lib/app";
 import { ago, dateOnly } from "../../lib/format";
 import { Card, CardHead, DataTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type JobRow } from "./AdminContext";
+import { services } from "./attention";
 import { HolidaysPanel } from "./HolidaysPanel";
 import { StoragePanel } from "./StoragePanel";
 
@@ -29,7 +30,7 @@ function JobLog({ job, mine, onClose }: { job: JobRow; mine: Outcome[]; onClose:
           <div><span>Next run</span><b>{job.schedule || "–"}</b></div>
           <div><span>Status</span><b><Light state={job.state} /></b></div>
         </div>
-        {job.error && <p className="k-small k-down" role="alert">Last problem: {job.error}</p>}
+        {job.error && <p className={`k-small ${job.state === "bad" ? "k-down" : ""}`} role="alert">Last problem: {job.error}</p>}
         {job.note && <p className="k-small k-muted">{job.note}</p>}
         <h3 className="adm-sub">What it reported</h3>
         {job.log.length ? <ul className="adm-log">{job.log.map((l, i) => <li key={i}>{l}</li>)}</ul> : <p className="k-small k-muted">Nothing besides the times above.</p>}
@@ -70,6 +71,7 @@ export function DataSection() {
   };
   const run = async (key: string, fn: () => Promise<void>) => { setKite(key); try { await fn(); } catch (e) { fail(e); } finally { setKite(null); } };
   const sv = ov?.server;
+  const broker = services(ov).filter((s) => ["kite", "feed", "auto"].includes(s.key));     // the same lights as Overview's
   const kiteLogin = () => run("kite", async () => {
     const { url } = await api<{ url: string }>("/admin/kite/login-url", { method: "POST" });
     window.open(url, "_blank", "noopener");
@@ -81,7 +83,7 @@ export function DataSection() {
   });
 
   const cols: Column<JobRow>[] = [
-    { key: "job", header: "Job", rowHeader: true, wrap: true, cell: (j) => <span className="k-stack"><b>{j.name}</b><span className="k-note k-muted">Next run: {j.schedule || "–"}</span>{j.error && <span className="k-note k-down">{j.error}</span>}</span> },
+    { key: "job", header: "Job", rowHeader: true, wrap: true, cell: (j) => <span className="k-stack"><b>{j.name}</b><span className="k-note k-muted">Next run: {j.schedule || "–"}</span>{j.error && <span className={`k-note ${j.state === "bad" ? "k-down" : "k-muted"}`}>{j.error}</span>}</span> },
     { key: "state", header: "Status", cell: (j) => <Light state={j.state} word={j.running ? "Running" : undefined} /> },
     { key: "last", header: "Last run", cell: (j) => (j.last_run ? ago(j.last_run) : <span className="k-muted">Not yet</span>) },
     { key: "do", header: <span className="sr-only">Run now and log</span>, action: true, cell: (j) => (
@@ -107,10 +109,7 @@ export function DataSection() {
         {!sv ? <Skeleton label="Loading" lines={2} /> : (
           <>
             <StatusList label="India broker data">
-              <StatusRow state={sv.kite_ready ? "ok" : "bad"} label="Broker data (India)" detail={sv.kite_invalid ? sv.kite_invalid : sv.kite_ready ? `Logged in${sv.kite_token_day ? ` for ${dateOnly(sv.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline."} />
-              <StatusRow state={sv.feed_connected || sv.live_sessions === 0 ? "ok" : "warn"} label="Live price feed" detail={sv.feed_connected ? "Connected" : sv.live_sessions ? "Not connected" : "Idle (no India sessions running)"} />
-              <StatusRow state={!sv.auto_login_configured ? "warn" : sv.auto_login.ok === false ? "bad" : sv.auto_login.ok ? "ok" : "warn"} label="Automatic daily login"
-                detail={!sv.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : `${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}`} />
+              {broker.map((s) => <StatusRow key={s.key} state={s.state} label={s.label} detail={s.fix ?? s.detail} />)}
             </StatusList>
             <div className="k-row">
               <button type="button" className="btn sm" disabled={kite === "kite"} onClick={kiteLogin}>Log in to the broker</button>

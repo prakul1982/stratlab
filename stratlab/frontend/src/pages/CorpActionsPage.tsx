@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago } from "../lib/format";
+import { ago, marketTz } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, saveRegion, savedRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
@@ -66,7 +66,7 @@ export function CorpActionsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfLabel="Updated"
+      <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfLabel="Updated" asOfTz={marketTz(region)}
         lede={region === "IN"
           ? "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, as companies announced them to the exchange."
           : "Dividends and splits of the S&P 500 and the US companies you follow, by ex-date. Only ex-dates that have already happened are available for the US."}

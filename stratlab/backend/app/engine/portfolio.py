@@ -8,7 +8,7 @@ import copy
 from datetime import datetime
 
 from . import costs as C
-from .core import PER_YEAR, Ctx, Engine, clean, stats
+from .core import PER_YEAR, Ctx, Engine, clean, open_position, stats
 
 
 def _key(t: str) -> datetime:
@@ -46,8 +46,11 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         b["eng"].gate = free_slot
 
     equity, hold, times = [], [], []
+    episodes: list[list] = []        # stretches with any position open: [index before, last index] in [capital, *equity]
     day, realised_at_open, most_open = None, 0.0, 0
     for k in timeline:
+        was_open = any(b["eng"].qty > 0 for b in books)
+        closed_before = sum(len(b["eng"].trades) for b in books)
         date = k.date()
         if date != day:
             day, state["halted"] = date, False
@@ -71,6 +74,13 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
                 state["halted"] = True
         most_open = max(most_open, sum(1 for b in books if b["eng"].qty > 0))
         equity.append(cap_total + sum(_gain(b) for b in books))
+        j = len(equity)
+        now_open = any(b["eng"].qty > 0 for b in books)
+        traded = now_open or sum(len(b["eng"].trades) for b in books) > closed_before
+        if traded and not was_open:
+            episodes.append([j - 1, j])
+        elif was_open:
+            episodes[-1][1] = j
         started = [b for b in books if b["first"] is not None]
         hold.append(cap_total * sum(b["bars"][b["last"]]["c"] / b["bars"][b["first"]]["c"] for b in started) / len(started)
                     if started else cap_total)
@@ -82,9 +92,7 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         e = b["eng"]
         if e.qty > 0 and b["last"] is not None:
             px = b["bars"][b["last"]]["c"]
-            open_trades.append({"symbol": b["inst"].get("symbol"), "entry_t": e.entry_t, "exit_t": None, "entry": e.entry, "exit": px,
-                                "qty": e.qty, "pnl": e.dir * e.qty * (px - e.entry), "ret": e.dir * (px / e.entry - 1) * 100,
-                                "side": "short" if e.dir == -1 else "long", "why": "Still open"})
+            open_trades.append({"symbol": b["inst"].get("symbol"), **open_position(e, px)})
     if not equity:
         equity, hold, times = [cap_total], [cap_total], []
     st = stats(equity, trades, cap_total, PER_YEAR[strategy.tf])
@@ -110,6 +118,8 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         "costs": {"gross_pnl": round(net + paid, 2), "total": round(paid, 2), "items": C.breakdown(items),
                   "net_pnl": round(net, 2), "tax": tax, "kept": round(net - (tax["amount"] or 0.0), 2)},
         "most_open": most_open,
+        # day-by-day changes in account value over each stretch with a position open, for the bad-luck drawdown check
+        "_paths": [[b2 - a2 for a2, b2 in zip(path[a:b], path[a + 1:b + 1])] for path in [[cap_total, *equity]] for a, b in episodes],
     }
 
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { inr, money, pct } from "../lib/format";
+import { inr, marketTz, money, pct } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { RegionSwitch } from "../components/Research";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
@@ -51,7 +51,7 @@ export function InvestorHomePage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/watchlist")} title="Your watchlist, all in one place" asOf={rows ? at : undefined} asOfLabel="Checked"
+      <PageHeader eyebrow={eyebrowOf("/research/watchlist")} title="Your watchlist, all in one place" asOf={rows ? at : undefined} asOfLabel="Checked" asOfTz={marketTz(region)}
         lede={`For each ${place} watchlist company: the price trend, where its sector sits in the rotation, ${us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. Facts to read, not advice.`} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pick} /><RouteSeg label="Watchlist view" views={WATCH_VIEWS} /></div>
       {!pro && <PlanNote>Watchlist at a glance is on the Basic plan.</PlanNote>}

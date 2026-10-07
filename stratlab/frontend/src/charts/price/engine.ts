@@ -832,9 +832,14 @@ export class PriceChartEngine {
 
   /** A price with the decimals its size (or the size of `like`, for a change in price) needs. */
   priceText(v: number, like = v): string {
+    if (this.decimals != null) return this.format(v, this.decimals);
     const a = Math.abs(like);
     return this.format(v, a >= 1 ? 2 : a >= 0.01 ? 4 : 6);
   }
+
+  /** Fixed decimals for every price (spot forex quotes to 5), or null for "by the price's size". */
+  decimals: number | null = null;
+  setDecimals(dp: number | null): void { this.decimals = dp; this.invalidate(); }
 
   /** A price on the axis's coloured tag: exact, or its % in percent mode. */
   private tagText(v: number): string {

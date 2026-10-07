@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
-import { asOf, safeHref } from "../lib/format";
+import { asOf, marketTz, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { dayName, NEWS_FOOTER, type Issue, type IssueRow } from "../lib/news";
 import { Badge, Card, EmptyState, ErrorState, PageHeader, Seg, Skeleton } from "../components/kit";
@@ -109,7 +109,7 @@ function IssueView({ id }: { id: string }) {
             {issue.weekly && <Badge tone="ok" dot={false}>Weekly</Badge>}
           </span>
           <h2 className="k-card-title">{issue.subject}</h2>
-          {asOf(issue.at) && <span className="k-note">Prices and numbers as of {asOf(issue.at)}</span>}
+          {asOf(issue.at) && <span className="k-note">Prices and numbers as of {asOf(issue.at, { tz: marketTz(issue.region) })}</span>}
           {issue.summary && <p className="k-lede">{issue.summary}</p>}
         </div>
         {(issue.sections ?? []).filter((s) => s.items?.length).map((s, i) => (

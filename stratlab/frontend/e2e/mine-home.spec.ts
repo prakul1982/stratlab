@@ -220,7 +220,7 @@ test("my space: greets by first name, writes the dollar rate without a rupee sig
 
 test("the AI assistant, Get the app and Invite friends pages drop 'Mine ·' from their eyebrow (the breadcrumb says Mine)", async ({ page }) => {
   const errors = await signIn(page, ADMIN, "/assistant");
-  for (const [path, title] of [["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"]]) {
+  for (const [path, title] of [["/assistant", "Connect an AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"]]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 30_000 });
     await expect(page.locator("main .k-eyebrow").first()).toHaveText(title);

@@ -76,7 +76,25 @@ def test_email_goes_over_https_through_resend_when_its_key_is_set(monkeypatch):
     alerts.send_email("owner@example.com", "Subject", "Body")
     url, kw = calls[0]
     assert url == "https://api.resend.com/emails" and kw["headers"]["Authorization"] == "Bearer re_test"
-    assert kw["json"] == {"from": alerts.RESEND_FROM, "to": ["owner@example.com"], "subject": "Subject", "text": "Body"}
+    assert kw["json"] == {"from": alerts.RESEND_FROM, "to": ["owner@example.com"], "subject": "Subject", "text": "Body",
+                          "reply_to": "support@stratlab.studio"}      # replies reach a real inbox
     import pytest
     with pytest.raises(RuntimeError, match="own address"):
         alerts.send_email("someone@example.com", "s", "b")
+
+
+def test_brevo_emails_carry_a_reply_to_a_real_inbox(monkeypatch):
+    """The sender (ALERT_FROM_EMAIL) may be send-only; replies go to REPLY_TO_EMAIL."""
+    from app import alerts
+    from app.config import settings
+    sent = {}
+
+    class R:
+        status_code = 201
+
+    monkeypatch.setattr(settings, "BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setattr(settings, "ALERT_FROM_EMAIL", "hello@stratlab.studio")
+    monkeypatch.setattr(alerts.httpx, "post", lambda url, **kw: sent.update(kw["json"]) or R())
+    alerts.send_email("owner@example.com", "Subject", "Body")
+    assert sent["sender"]["email"] == "hello@stratlab.studio"
+    assert sent["replyTo"] == {"email": "support@stratlab.studio"}

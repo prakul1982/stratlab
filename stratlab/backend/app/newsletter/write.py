@@ -6,7 +6,7 @@ only restate the facts, and a word filter drops it if it slips, in favour of a p
 import hashlib
 import json
 import re
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from .. import email_kit as kit
 from ..ai_providers import AIError, complete, extract_json
@@ -34,7 +34,8 @@ def banned(text: str) -> bool:
 
 
 def origin() -> str:
-    return (settings.FRONTEND_ORIGINS or [""])[0].rstrip("/")
+    """The public site every email link points to (the same address as the email kit's buttons)."""
+    return settings.PUBLIC_SITE_URL.rstrip("/")
 
 
 def stock_url(region: str, symbol: str) -> str:
@@ -42,7 +43,7 @@ def stock_url(region: str, symbol: str) -> str:
 
 
 def _pct(x) -> str:
-    return "" if x is None else f"{x:+.2f}%"
+    return "" if x is None else kit.pct(x)          # +0.62%, −0.34% (a real minus, as in the tiles)
 
 
 def _num(x) -> str:
@@ -50,10 +51,8 @@ def _num(x) -> str:
 
 
 def _day(iso: str) -> str:
-    try:
-        return date.fromisoformat(iso[:10]).strftime("%a %d %b")
-    except ValueError:
-        return iso
+    """A day in the app's format: Wed 7 Oct."""
+    return kit.fmt_date(str(iso), year=False, weekday=True)
 
 
 # ---------- sections ----------
@@ -141,10 +140,10 @@ def stock_sections(f: dict) -> list[dict]:
     if f.get("unchanged"):
         out.append({"title": "No change", "items": [_item(", ".join(f["unchanged"]))]})
     if f.get("paper"):
-        cur = lambda p: f" {p['currency']}" if p.get("currency") else ""
+        cash = lambda v, p: kit.money(v, p.get("currency") or "INR", signed=True)  # noqa: E731
         out.append({"title": "Your paper trading", "items": [
-            _item(f"{p['name']}: {p['closed']} trade{'s' if p['closed'] != 1 else ''} closed today ({p['pnl']:+,.0f}{cur(p)}), "
-                  f"{p['total']:+,.0f}{cur(p)} since start" + (f" ({p['total_pct']:+.1f}%)" if p.get("total_pct") is not None else ""),
+            _item(f"{p['name']}: {p['closed']} trade{'s' if p['closed'] != 1 else ''} closed today ({cash(p['pnl'], p)}), "
+                  f"{cash(p['total'], p)} since start" + (f" ({kit.pct(p['total_pct'], 1)})" if p.get("total_pct") is not None else ""),
                   f"{origin()}/paper") for p in f["paper"]]})
     return out
 
@@ -154,7 +153,7 @@ def sections(f: dict) -> list[dict]:
 
 
 def subject(f: dict) -> str:
-    when = f"week to {date.fromisoformat(f['day']).strftime('%d %b')}" if f["weekly"] else _day(f["day"])
+    when = f"week to {kit.fmt_date(f['day'], year=False)}" if f["weekly"] else _day(f["day"])
     if f["kind"] == "market":
         lead = next(iter(f.get("indices") or []), None)
         tail = f": {lead['name']} {_pct(lead['change_pct'])}" if lead and lead.get("change_pct") is not None else ""
@@ -321,10 +320,10 @@ def _row(it: dict) -> kit.Row:
 def render(issue: dict) -> tuple[str, str]:
     """(html, text) for one issue, in the shared email design. The footer carries the {unsubscribe_url} placeholder
     for the sender."""
-    view = f"{origin()}/news/{issue['id']}" if issue.get("id") else None
+    view = kit.news_url(issue["id"]) if issue.get("id") else None
     kind = issue.get("kind") or ("my_stocks" if str(issue.get("id", "")).startswith("my_stocks") else "market")
     weekly = bool(issue.get("weekly"))
-    day = _day(issue["day"]) if issue.get("day") else ""
+    day = (f"Week to {_day(issue['day'])}" if weekly else _day(issue["day"])) if issue.get("day") else ""
     region = issue.get("region")
     label = issue.get("label") or (TYPE_LABEL.get(kind, "Newsletter") + (DOT + REGION_NAME[region] if region in REGION_NAME else ""))
     title = issue.get("title") or issue["subject"]
@@ -335,7 +334,8 @@ def render(issue: dict) -> tuple[str, str]:
         blocks.append(kit.tiles(tiles))
         if indices[3:]:
             blocks.append(kit.card("Other indices", [kit.Row(i["name"], value=kit.num(i["price"]), change=i.get("change_pct"),
-                                                             tone=_tone(i["name"])) for i in indices[3:]]))
+                                                             tone=_tone(i["name"]), since="over the week" if weekly else None)
+                                                     for i in indices[3:]]))
     for sec in issue.get("sections") or []:
         if tiles and sec["title"] == "Indices":
             continue                                         # already shown as tiles
@@ -347,8 +347,8 @@ def render(issue: dict) -> tuple[str, str]:
     what = "My stocks email" if kind == "my_stocks" else f"{REGION_NAME.get(region, '')} market brief".strip()
     footer = kit.Footer(
         why=f"You get this {'weekly' if weekly else 'daily'} because you chose the {what} in StratLab.",
-        frequency=("Switch to daily" if weekly else "Switch to weekly", "/settings#notifications"),
-        unsubscribe=f"Unsubscribe from {name}", legal=FOOTER)
+        frequency=("Switch to daily" if weekly else "Switch to weekly", kit.MANAGE_NEWSLETTERS),
+        unsubscribe=f"Unsubscribe from {name}", legal=FOOTER, manage=kit.MANAGE_NEWSLETTERS)
     cta = (("Read the full brief" if kind == "market" else "See what changed"), view) if view else None
     return kit.render(title, blocks, footer, label=label, date=day, summary=issue.get("summary") or None, cta=cta,
                       subject=issue["subject"])

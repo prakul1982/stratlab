@@ -8,6 +8,7 @@ import { InstrumentSearch } from "../../components/InstrumentSearch";
 import { LineChart } from "../../components/Charts";
 import { Info } from "../../components/ui";
 import { sipParams } from "../../lib/sip";
+import { numberProblem, type Limits } from "../../lib/validate";
 import { Card, CardHead, ChartFrame, DataTable, Disclosure, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Select, Seg, Stat, StatRow, type Column } from "../../components/kit";
 
 /* /money/sip-test: test a stock or ETF SIP before setting one up: a fixed amount (or number of shares) every day, week or
@@ -35,6 +36,10 @@ type Rule = "plain" | "only_dips" | "extra_on_dips";
 type Compare = { key: string; name: string; invested: number; value: number; xirr: number | null; fall: number; charges: number };
 
 const INDIA = { id: "IN", name: "India" } as Market;
+/** A SIP buys shares: stocks and ETFs (Indian ETFs trade as shares), not indices or F&O. */
+const SIP_KINDS = ["EQ", "ETF"];
+/** The day of the month an instalment goes in: up to the 28th, so every month has it. */
+const DOM: Limits = { min: 1, max: 28, whole: true };
 const rate = (v: number | null | undefined) => (v == null ? "–" : pctPlain(v * 100, 1));
 const signedPts = (v: number | null | undefined) => (v == null ? "–" : `${signed(v, 1)} pts`);
 const month = (m: string) => new Date(`${m.slice(0, 7)}-01T00:00:00`).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
@@ -109,7 +114,8 @@ export function SipTestPage() {
     if (!r?.series) return null;
     return { labels: r.series.map((p) => dateOnly(p.d)), times: r.series.map((p) => p.d), invested: r.series.map((p) => p.invested), value: r.series.map((p) => p.value), rows: r.series.map((p, i) => ({ ...p, i })) };
   }, [r]);
-  const ready = picks.length > 0 && (picks.length === 1 || Math.abs(total - 100) < 0.5) && (mode === "amount" ? Number(amount) > 0 : Number(qty) >= 1);
+  const ready = picks.length > 0 && (picks.length === 1 || Math.abs(total - 100) < 0.5) && (mode === "amount" ? Number(amount) > 0 : Number(qty) >= 1)
+    && (freq !== "monthly" || !numberProblem(dom, DOM));
 
   const sideBySide: Compare[] = [];
   if (res && r) {
@@ -138,11 +144,11 @@ export function SipTestPage() {
     <div className="k-page sip-test">
       <PageHeader eyebrow="Money · Plan" title="Test a SIP"
         lede="What a stock or ETF SIP of your own would have done on past prices, with the charges on every purchase, beside the same money put in on day one."
-        info="History of the rule you set, not a forecast or a suggestion." infoLabel="About this test" />
+        info="History of the rule you set, not a forecast or a suggestion." infoLabel="About the SIP test" />
 
       <Card label="Your SIP">
         <CardHead title="Your SIP" />
-        <FieldGroup label="Stocks or ETFs" info="Up to 10. With more than one, the shares split evenly at first and must add up to 100%." wide><InstrumentSearch market={INDIA} compact onPick={add} /></FieldGroup>
+        <FieldGroup label="Stocks or ETFs" info="Up to 10. With more than one, the shares split evenly at first and must add up to 100%." wide><InstrumentSearch market={INDIA} compact onPick={add} kinds={SIP_KINDS} placeholder="Search a stock or ETF: RELIANCE, NIFTYBEES" label="Search a stock or ETF" /></FieldGroup>
         {picks.length > 0 && (
           <ul className="k-picks" aria-label="In this SIP">
             {picks.map((p) => (
@@ -169,7 +175,8 @@ export function SipTestPage() {
             ? <Field label="Amount each time" unit="₹" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
             : <Field label="Shares each time" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} />}
           <Field label="How often">{(id) => <Select id={id} value={freq} onChange={(v) => setFreq(v as typeof freq)} options={FREQ} />}</Field>
-          {freq === "monthly" && <Field label="Day of the month" type="number" min={1} max={28} value={dom} onChange={(e) => setDom(e.target.value)} />}
+          {freq === "monthly" && <Field label="Day of the month" inputMode="numeric" value={dom} onChange={(e) => setDom(e.target.value)}
+            hint="1 to 28, so every month has it" error={numberProblem(dom, DOM)} />}
           {freq === "weekly" && <Field label="Day of the week">{(id) => <Select id={id} value={weekday} onChange={setWeekday} options={WEEKDAYS.map((d, i) => ({ value: String(i), label: d }))} />}</Field>}
           <Field label="Step-up a year" unit="%" type="number" min={0} max={50} value={stepUp} onChange={(e) => setStepUp(e.target.value)} info="Raises the amount by this much each year." />
           <Field label="Years">{(id) => <Select id={id} value={years} onChange={setYears} options={YEARS} />}</Field>

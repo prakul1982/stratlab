@@ -28,6 +28,7 @@ export interface Strategy {
 
 export interface Instrument {
   id: string; token?: number | string | null; symbol: string; name?: string; exchange?: string; type?: string;
+  match?: number;           // search results: how well it matched (0 the symbol itself … 5 with a typo)
   market?: string; currency?: string; step?: number; lot?: number; fno?: boolean; expiry?: string | null;
   strike?: number | null; tz?: string;
   contract?: string; unit?: string; lot_units?: number;   // MCX: the contract traded, the price unit, price units per lot
@@ -63,6 +64,8 @@ export interface Costs {
 export interface Trade {
   entry_t: string; exit_t: string | null; entry: number; exit: number; qty: number; pnl: number;
   costs?: number; ret: number; why: string; side?: "long" | "short"; symbol?: string;
+  part?: "built" | "unseen";      // which part of the unseen-data check it counts in (the part it was opened in)
+  spans_split?: boolean;          // opened in the built part and closed in the unseen one
 }
 export interface GroupMember { id?: string; symbol: string }
 export interface Group { id: string; name: string; market: string; maxOpen: number; members: GroupMember[] }
@@ -124,9 +127,14 @@ export type Focus = "invest" | "trade" | "money" | "both";
 
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
-  billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean };
+  /** given_by_owner: a paid plan the site owner gave by hand, with no subscription behind it (nothing renews, nothing to cancel). */
+  billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean; given_by_owner?: boolean };
+  /** How the person signed in, as the sign-in service says ("google", "email"), when the session itself doesn't say. */
+  signed_in_with?: string | null;
   usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null;
-    deepdive_used?: number; deepdive_limit?: number | null; deck_used?: number; deck_limit?: number | null };
+    deepdive_used?: number; deepdive_limit?: number | null; deck_used?: number; deck_limit?: number | null;
+    /** The plan's own limits (what the Plans page lists), and what lifts them now ("early access", "the launch offer"). */
+    deepdive_plan_limit?: number | null; deck_plan_limit?: number | null; lifted_by?: string | null };
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
   alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
@@ -135,6 +143,16 @@ export interface Me {
   plans?: Record<string, { price: number; price_year: number } & Record<string, unknown>>;
   paid_plan?: "free" | "basic" | "pro"; promo?: { until: string } | null; free_basic_until?: string | null;
   prefs?: { level: Level | null; focus?: Focus | null; space?: "trade" | "invest" | "money" | "all" | null };
+  /** What anyone can buy and use today: the same answer /pricing gives the landing page (lib/offer.ts words it). */
+  offer?: Offer;
+  /** The first-run guide, kept on the account: shown once per person, not once per device. */
+  onboarding?: { welcome: string | null; tour: "done" | "skipped" | null };
+}
+
+/** plans.offer_state() on the server: payments on or not, the launch offer, and Free's limits as they apply today. */
+export interface Offer {
+  mode: "early" | "promo" | "paid"; payments: boolean; yearly: boolean; promo_until: string | null;
+  free_now: Record<string, number | null>; free_trial_days: number | null;
 }
 
 export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number }

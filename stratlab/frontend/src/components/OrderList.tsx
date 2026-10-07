@@ -12,7 +12,7 @@ export function OrderList({ events, cur, tz, newest = false }: { events: PaperOr
   return (
     <div className="order-list">{groups.map((g) => (
       <div key={g.key} className="order-group">
-        <div className="order-head small"><span><b>{g.why}</b> <span className="muted">· {when(g.t, tz, true)}</span></span>
+        <div className="order-head small"><span><b>{g.why}</b> <span className="muted">· {when(g.t, tz, true, true)}</span></span>
           {g.pnl != null && <span className={`order-num ${signClass(g.pnl)}`}>{money(g.pnl, cur)}</span>}</div>
         <ul className="orders order-rows">{g.rows.map((e, i) => (
           <li key={i} title={e.slices && e.slices > 1 ? `Sent in ${e.slices} slices (the exchange's freeze limit)` : undefined}>

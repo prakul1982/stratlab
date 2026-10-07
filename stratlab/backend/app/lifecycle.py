@@ -48,7 +48,7 @@ ORDER = ("trial_end", "promo_end", "trial_before", "promo_before", "welcome", "d
 # the inactive email's "what's new": (title, one line, where in the app)
 WHATS_NEW = [
     ("Newsletters", "A Market Brief for India and the US after each close, and My Stocks: what changed for the "
-                    "companies you follow.", "/account#newsletters"),
+                    "companies you follow.", "/news"),
     ("Company deep dive", "Growth, margins, capex and cash flow from the reported numbers, with a read of the company's "
                           "own presentations and calls.", "/research"),
     ("Filings and red flags", "Fund raises, pledges, resignations and defaults your watchlist companies reported to "
@@ -123,7 +123,8 @@ def address(profile: dict) -> str | None:
 
 # ---------- the emails ----------
 def _day(d: date) -> str:
-    return d.strftime("%a %d %b")
+    """A day in the app's format: Fri, 9 Oct 2026."""
+    return kit.fmt_date(d, weekday=True)
 
 
 def _last_day(end: datetime) -> date:
@@ -136,7 +137,8 @@ def _url(path: str) -> str:
 
 
 def _compose(subject: str, paras: list[str], cta: tuple[str, str] | None = None, items: list | None = None,
-             transactional: bool = False, label: str = "Your account", tiles: list | None = None) -> tuple[str, str, str]:
+             transactional: bool = False, label: str = "Your account", tiles: list | None = None,
+             extra: list | None = None) -> tuple[str, str, str]:
     """(subject, html, text) in the shared email kit. The first paragraph is the one-line summary under the title.
     Tips carry the {unsubscribe_url} placeholder; account emails say why they can't be turned off."""
     blocks = [kit.tiles(tiles)] if tiles else []
@@ -145,11 +147,12 @@ def _compose(subject: str, paras: list[str], cta: tuple[str, str] | None = None,
         blocks.append(kit.bullets([(title, line, _url(path) if path else None) for title, line, path in items]))
     if transactional:
         footer = kit.Footer(why="You get this because you have a StratLab account.",
-                            transactional="It is about your account, so it is sent even with tips and reminders turned off.")
+                            transactional="It is about your account, so it is sent even with tips and reminders turned off.",
+                            manage=kit.MANAGE_TIPS)
     else:
         footer = kit.Footer(why="You get tips and reminders because you have a StratLab account.",
-                            unsubscribe="Turn off tips and reminders")
-    html, text = kit.render(subject, blocks, footer, label=label, date=_day(datetime.now(IST).date()),
+                            unsubscribe="Turn off tips and reminders", manage=kit.MANAGE_TIPS)
+    html, text = kit.render(subject, blocks + list(extra or []), footer, label=label, date=kit.today_label(),
                             summary=paras[0] if paras else None, cta=cta, subject=subject)
     return subject, html, text
 
@@ -168,7 +171,7 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             ("Test an idea", "describe it in plain words, or start from a ready-made one.", "/new"),
             ("Look into a company", "the numbers, its filings and the business in its own words.", "/research"),
             ("Trade it on paper", "run a strategy live with pretend money.", "/paper"),
-            ("Get the Market Brief", "a short email after each market closes.", "/account#newsletters")], label="Welcome")
+            ("Get the Market Brief", "a short email after each market closes.", "/settings#newsletters")], label="Welcome")
     if kind == "day2":
         return _compose("Test your first strategy in two minutes", [
             "You haven't run a backtest yet. Start from a ready-made idea, such as a moving-average crossover, or "
@@ -198,12 +201,13 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
         plan = PLANS.get(ctx.get("plan") or "pro", PLANS["pro"])["name"]
         period = "yearly" if ctx.get("period") == "year" else "monthly"
         total = inv.get("total")
-        amount = ((kit.inr(total, 2) if (inv.get("currency") or "INR") == "INR" else f"{inv['currency']} {total:,.2f}")
-                  if isinstance(total, (int, float)) else "See the invoice")
+        cur = inv.get("currency") or "INR"
+        amount = kit.money(total, cur, 2) if isinstance(total, (int, float)) else "See the invoice"
         return _compose(f"Receipt: StratLab {plan} plan", [
             f"Thanks for your payment. You're on the {plan} plan, billed {period}.",
             f"Invoice number {inv.get('number') or ''}. It is saved in Account, where you can print it or save it as a PDF."], ("See your invoices", "/account"),
-            transactional=tx, label="Receipt", tiles=[kit.Tile("Amount", amount), kit.Tile("Date", str(inv.get("date") or ""))])
+            transactional=tx, label="Receipt", extra=receipt_blocks(inv),
+            tiles=[kit.Tile("Amount paid", amount), kit.Tile("Date", kit.fmt_date(inv["date"]) if inv.get("date") else "–")])
     if kind == "plan_ended":
         plan = PLANS.get(ctx.get("plan") or "pro", PLANS["pro"])["name"]
         return _compose("Your StratLab plan has changed to Free", [
@@ -240,9 +244,36 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
         title = (f"You've got {ctx.get('days') or 8} extra days of StratLab Basic" if how == "extra"
                  else "You've got a free month of StratLab Basic")
         return _compose(title, [first, when, basic_includes(), rule,
-                        "Nothing to pay and nothing to set up. Invite more friends from Account."],
-                        ("See your account", "/account#invite"), transactional=tx, label="Invite reward")
+                        "Nothing to pay and nothing to set up. Invite more friends from the Invite friends page."],
+                        ("See your invites", "/invite"), transactional=tx, label="Invite reward")
     raise ValueError(f"Unknown email: {kind}")
+
+
+def receipt_blocks(inv: dict) -> list:
+    """The tax invoice's own details in the receipt, from the invoice as invoices.make stored it: the plan's taxable
+    value, each GST line (CGST and SGST, or IGST) and the total; who billed it with their GSTIN, who it is billed to,
+    and the place of supply. An invoice without those details (an older one) shows only what it has."""
+    cur = inv.get("currency") or "INR"
+    item, taxes, s, b = inv.get("item") or {}, inv.get("taxes") or [], inv.get("seller") or {}, inv.get("buyer") or {}
+    out = []
+    if isinstance(item.get("taxable"), (int, float)) and isinstance(inv.get("total"), (int, float)):
+        rows = [[f"{item.get('description') or 'Subscription'}" + (f" (SAC {item['sac']})" if item.get("sac") else ""),
+                 kit.money(item["taxable"], cur, 2)]]
+        rows += [[t["name"], kit.money(t["amount"], cur, 2)] for t in taxes if isinstance(t.get("amount"), (int, float))]
+        rows.append([f"Total paid ({'including GST' if any(t.get('rate') for t in taxes) else 'no GST charged' if not taxes else 'GST at 0%'})",
+                     kit.money(inv["total"], cur, 2)])
+        out.append(kit.table(["Item", "Amount"], rows, right=(1,), title="Tax invoice " + str(inv.get("number") or "")))
+    parties = []
+    if s.get("legal_name") or s.get("gstin"):
+        parties.append(kit.Row("From", sub=s.get("legal_name") or "StratLab",
+                               lines=(f"GSTIN {s['gstin']}" if s.get("gstin") else "Not registered under GST",)))
+    if b.get("name") or b.get("gstin"):
+        parties.append(kit.Row("Billed to", sub=b.get("name") or b.get("email") or "",
+                               lines=tuple(x for x in (f"GSTIN {b['gstin']}" if b.get("gstin") else "",
+                                                       f"Place of supply: {inv['place_of_supply']}" if inv.get("place_of_supply") else "") if x)))
+    if parties:
+        out.append(kit.card("Invoice details", parties, foot=inv.get("note") or None))
+    return out
 
 
 def basic_includes() -> str:
@@ -263,14 +294,29 @@ def sample(kind: str, now: datetime | None = None) -> dict:
     if kind in ("trial_end", "promo_end"):
         return {"last_day": now.astimezone(IST).date()}
     if kind == "receipt":
-        return {"plan": "pro", "period": "month", "invoice": {"number": "SL/2026-27/0001", "total": float(PLANS["pro"]["price"]),
-                                                               "currency": "INR", "date": now.astimezone(IST).date().isoformat(),
-                                                               "payment_id": "pay_sample"}}
+        return {"plan": "pro", "period": "month", "invoice": sample_invoice(now)}
     if kind == "plan_ended":
         return {"plan": "pro"}
     if kind == "invite_reward":
         return {"role": "referrer", "until": now + timedelta(days=30), "banked": 0}
     return {}
+
+
+def sample_invoice(now: datetime) -> dict:
+    """A made-up invoice shaped as invoices.make stores one, with its GST worked out by the invoices' own rules: the
+    seller set in Admin → Invoices when there is one (a sample GSTIN otherwise) and a buyer in the same state."""
+    from . import invoices
+    s = invoices.seller()
+    if not s.get("gstin"):
+        s = {**s, "legal_name": s.get("legal_name") or "StratLab (sample details)", "state": "27", "gstin": "27ABCDE1234F1Z5"}
+    buyer = {"name": "A. Reader", "email": "you@example.com", "address": "", "state": s.get("state") or "27", "country": "IN", "gstin": ""}
+    total = float(PLANS["pro"]["price"])
+    lines, supply, note = invoices.tax_lines(total, s, buyer)
+    tax = round(sum(x["amount"] for x in lines), 2)
+    return {"number": f"{s.get('prefix') or 'SL'}/{invoices.fy(now)}/0001", "date": now.astimezone(IST).date().isoformat(),
+            "payment_id": "pay_sample", "seller": s, "buyer": buyer, "supply": supply, "note": note, "currency": "INR",
+            "item": {"description": "StratLab Pro plan, monthly subscription", "sac": invoices.SAC, "taxable": round(total - tax, 2)},
+            "taxes": lines, "total": total, "place_of_supply": invoices.STATES.get(buyer["state"], "India")}
 
 
 def send(profile: dict, kind: str, key: str | None = None, ctx: dict | None = None, now: datetime | None = None) -> bool:

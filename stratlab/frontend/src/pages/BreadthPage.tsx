@@ -7,6 +7,7 @@ import {
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
+import { marketTz } from "../lib/format";
 import { LineChart, PairBars } from "../components/Charts";
 import { Info } from "../components/ui";
 import {
@@ -69,7 +70,7 @@ export function BreadthPage() {
   const help = data?.help ?? {};
   return (
     <div className="k-page breadth">
-      <PageHeader eyebrow={eyebrowOf("/invest/breadth")} title="Market breadth" asOf={data?.today ? data.as_of : undefined} asOfLabel="Prices as of"
+      <PageHeader eyebrow={eyebrowOf("/invest/breadth")} title="Market breadth" asOf={data?.today ? data.as_of : undefined} asOfLabel="Prices as of" asOfTz={marketTz(data?.group.region)}
         info={help.members} infoLabel="Which stocks are counted"
         lede="How many stocks in a group rose or fell, sit above their averages, or made new highs and lows, day by day, from daily closes. Every stock counts once: facts about what happened, not a forecast." />
 
@@ -157,14 +158,14 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
       </Card>
       {several && (
         <div className="k-cols">
-          <ChartFrame title="Rose and fell through the day" info="How many stocks are above and below yesterday's close at each point." infoLabel="What does this mean?"
+          <ChartFrame title="Rose and fell through the day" info="How many stocks are above and below yesterday's close at each point."
             table={{ label: "Rose and fell through the day", columns: [{ key: "t", header: "Time", rowHeader: true, cell: (i: number) => s.times[i] },
               { key: "a", header: "Rose", numeric: true, cell: (i: number) => count(s.adv[i]) }, { key: "d", header: "Fell", numeric: true, cell: (i: number) => count(s.dec[i]) }],
               rows: s.times.map((_, i) => s.times.length - 1 - i), rowKey: (i: number) => s.times[i] }}>
             <LineChart lines={[{ values: s.adv, color: A, label: "Rose", width: 2 }, { values: s.dec, color: B, label: "Fell", width: 2 }]} legend labels={s.times.map((_, i) => at(i))}
               axisLabels={s.times} ranges={false} table={false} height={200} format={fmtInt} ariaLabel={`Stocks that rose and fell today, ${s.times[0]} to ${s.times[s.times.length - 1]}`} />
           </ChartFrame>
-          <ChartFrame title="Above their averages today" info="The share of stocks above their 20-, 50- and 200-day averages at each point, with the live price as the latest close." infoLabel="What does this mean?"
+          <ChartFrame title="Above their averages today" info="The share of stocks above their 20-, 50- and 200-day averages at each point, with the live price as the latest close."
             table={{ label: "Above their averages today", columns: [{ key: "t", header: "Time", rowHeader: true, cell: (i: number) => s.times[i] },
               { key: "p20", header: "20-day", numeric: true, cell: (i: number) => share(s.pct20[i]) }, { key: "p50", header: "50-day", numeric: true, cell: (i: number) => share(s.pct50[i]) },
               { key: "p200", header: "200-day", numeric: true, cell: (i: number) => share(s.pct200[i]) }],
@@ -271,7 +272,7 @@ function Box({ title, info, h, cols, note, children }: { title: string; info?: s
   const columns: Column<number>[] = [{ key: "day", header: "Day", rowHeader: true, cell: (i) => shortDay(h.days[i]) },
     ...cols.map((c) => ({ key: c.header, header: c.header, numeric: true, cell: (i: number) => c.get(i) }))];
   return (
-    <ChartFrame title={title} info={info} infoLabel="What does this mean?" table={{ label: title, columns, rows: idx, rowKey: (i) => h.days[i], empty: "No days to show." }}
+    <ChartFrame title={title} info={info} table={{ label: title, columns, rows: idx, rowKey: (i) => h.days[i], empty: "No days to show." }}
       footer={note ? <p className="k-note">{note}</p> : undefined}>
       {children}
     </ChartFrame>
@@ -335,12 +336,12 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
       </div>
       {data.sectors && data.sectors.rows.length > 0 && (
         <Card>
-          <CardHead title="Sectors: share above the 50-day average" info={help.sectors} infoLabel="What does this mean?" />
+          <CardHead title="Sectors: share above the 50-day average" info={help.sectors} />
           <SectorHeat t={data.sectors} />
         </Card>
       )}
       <Card>
-        <CardHead title="The last 20 trading days" info="The counts behind the charts, newest first." infoLabel="What does this mean?" />
+        <CardHead title="The last 20 trading days" info="The counts behind the charts, newest first." />
         <Recent h={h} />
       </Card>
     </div>

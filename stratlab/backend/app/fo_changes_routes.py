@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from . import admin, fo_changes as F, stock_alerts
 from .auth import current_profile
-from .plans import FEATURE_PLAN, PLANS, access_plan, allows
+from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 
 router = APIRouter(tags=["fo-changes"])
 
@@ -45,7 +45,7 @@ def listed_expiries():
 
 
 def alerts_allowed(profile: dict) -> bool:
-    return allows(access_plan(profile), "fo_alerts")
+    return allows(plan_of(profile), "fo_alerts")
 
 
 def _send(profile: dict, subject: str, text: str) -> list[str]:
@@ -107,4 +107,5 @@ def fo_changes_alerts(req: FoAlertReq, profile=Depends(current_profile)):
 def fo_changes_refresh(_=Depends(admin.admin_profile)):
     """Read the contract file and the circulars now (no alerts are sent from here) and say what each answered."""
     out = F.refresh(_m().filings_feed, expiry=listed_expiries())
+    job.record(F.ist_now(), out["problems"], F.SOURCES_READ, added=out["added"])
     return _m().ok({"added": out["added"], "problems": out["problems"], "sources": F.view()["sources"], "job": job.status})

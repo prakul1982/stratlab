@@ -318,7 +318,7 @@ def test_email_goes_only_to_a_confirmed_address(monkeypatch):
 def test_plan_limits(monkeypatch):
     assert (PLANS["free"]["stock_alerts"], PLANS["basic"]["stock_alerts"], PLANS["pro"]["stock_alerts"]) == (5, 25, 100)
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
-    assert plan_info("free")["stock_alerts"] == 100                          # open to everyone until payments go live
+    assert plan_info("free")["stock_alerts"] == 5                            # Free's own limit, payments on or not (7 Oct)
     paid(monkeypatch)
     assert [plan_info(p)["stock_alerts"] for p in ("free", "basic", "pro")] == [5, 25, 100]
 

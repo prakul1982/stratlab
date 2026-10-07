@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../../lib/api";
+import { api, type ApiError } from "../../lib/api";
+import { numberProblem, type Limits } from "../../lib/validate";
 import { useApp } from "../../lib/app";
 import { LoanCheck } from "./LoanCheck";
 import { asOf, axisInr, dateOnly, inr, pctPlain, signedInrCompact } from "../../lib/format";
@@ -8,7 +9,7 @@ import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, type Choice, type Column, type TileGroup } from "../../components/kit";
+import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, type Choice, type Column, type TileGroup } from "../../components/kit";
 
 /* /money/net-worth: what you own minus what you owe: stocks from My Holdings, plus the deposits, provident funds, gold,
  * property and loans added here, each with how it is worked out and its date. Built from the kit (components/kit). */
@@ -103,16 +104,22 @@ const ic = {
   ret: <path d="M12 3v18M5 10l7-7 7 7" />, gold: <path d="M4 18h16l-3-6H7zM8 12l2-5h4l2 5" />, home: <path d="M3 11l9-7 9 7M5 10v10h14V10" />,
   loan: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /></>, shield: <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />,
   coin: <path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM9 9h4.5a2 2 0 010 4H9h5a2 2 0 010 4H9M11 7v12" />,
+  // one picture per kind, so no two tiles look the same
+  rd: <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4M8 14h2M12 14h2M16 14h0" /></>,
+  ppf: <path d="M5 20V10l7-6 7 6v10zM9 20v-5h6v5M12 8v3" />,
+  nps: <path d="M4 19l5-6 4 3 7-9M15 7h5v5" />,
+  bond: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
+  other: <path d="M6 12h.01M12 12h.01M18 12h.01M4 6h16v12H4z" />,
 };
 const TILES: TileGroup[] = [
   { title: "Cash and deposits", tiles: [
     { value: "cash", title: "Savings and cash", sub: "Bank balances", icon: ic.cash }, { value: "fd", title: "Fixed deposit", sub: "Works out today's value", icon: ic.fd },
-    { value: "rd", title: "Recurring deposit", sub: "Monthly instalments", icon: ic.fd }] },
+    { value: "rd", title: "Recurring deposit", sub: "Monthly instalments", icon: ic.rd }] },
   { title: "Retirement", tiles: [
-    { value: "epf", title: "EPF", sub: "From your passbook", icon: ic.ret }, { value: "ppf", title: "PPF", sub: "Yearly deposits", icon: ic.ret }, { value: "nps", title: "NPS", sub: "Tier I and II", icon: ic.ret }] },
+    { value: "epf", title: "EPF", sub: "From your passbook", icon: ic.ret }, { value: "ppf", title: "PPF", sub: "Yearly deposits", icon: ic.ppf }, { value: "nps", title: "NPS", sub: "Tier I and II", icon: ic.nps }] },
   { title: "Gold, property and other", tiles: [
-    { value: "gold", title: "Gold", sub: "Grams or value", icon: ic.gold }, { value: "sgb", title: "Sovereign gold bond", sub: "Units in grams", icon: ic.gold },
-    { value: "property", title: "Property", sub: "Your estimate", icon: ic.home }, { value: "crypto", title: "Crypto", sub: "Coins held", icon: ic.coin }, { value: "other", title: "Other asset", sub: "Anything else", icon: ic.coin }] },
+    { value: "gold", title: "Gold", sub: "Grams or value", icon: ic.gold }, { value: "sgb", title: "Sovereign gold bond", sub: "Units in grams", icon: ic.bond },
+    { value: "property", title: "Property", sub: "Your estimate", icon: ic.home }, { value: "crypto", title: "Crypto", sub: "Coins held", icon: ic.coin }, { value: "other", title: "Other asset", sub: "Anything else", icon: ic.other }] },
   { title: "What you owe and cover", tiles: [
     { value: "loan", title: "Loan or card", sub: "Balance left", icon: ic.loan }, { value: "policy", title: "Insurance policy", sub: "Cover and premium", icon: ic.shield }] },
 ];
@@ -145,16 +152,56 @@ function body(kind: Kind, form: Record<string, string>) {
   return out;
 }
 
-function EntryForm({ kind, start, busy, onSave, onCancel, onRemove, saveLabel }: { kind: Kind; start: Record<string, string>; busy: boolean; saveLabel: string;
-  onSave: (b: Record<string, string | number>) => void; onCancel?: () => void; onRemove?: () => void }) {
+/** The limits the server keeps for each kind of box (ItemReq in money_networth.py), checked here first so a problem is
+ * said under its box with the limit named. */
+const SMALL_MONEY = ["monthly", "yearly", "premium"];
+const SMALL_NUM = ["grams", "price_per_g", "units", "issue_price"];
+function limitsFor(f: F): Limits | null {
+  const optional = !!f.optional;
+  if (f.k === "purity") return { min: 1, max: 24, whole: true, optional };
+  if (f.k === "tenure_months") return { min: 0, max: 600, whole: true, optional };
+  if (f.k === "spread") return { min: -10, max: 30, optional, unit: "%" };
+  if (f.type === "money") return { min: 0, max: SMALL_MONEY.includes(f.k) ? 1e10 : SMALL_NUM.includes(f.k) ? 1e7 : 1e12, optional, unit: "₹" };
+  if (f.type === "rate") return { min: 0, max: 60, optional, unit: "%" };
+  if (f.type === "int") return { min: 0, whole: true, optional };
+  if (f.type === "num") return { min: 0, max: SMALL_NUM.includes(f.k) ? 1e7 : 1e12, optional };
+  return null;
+}
+
+/** Each box's problem, or none: numbers against their limits, and the boxes a kind needs filled in. */
+function formProblems(kind: Kind, form: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of FORM[kind].fields) {
+    if (f.floating && !isFloating(form)) continue;
+    const v = form[f.k] ?? "";
+    const lim = limitsFor(f);
+    const p = lim ? numberProblem(v, lim) : !f.optional && f.type !== "select" && !v.trim() ? "Fill this in." : null;
+    if (p) out[f.k] = p;
+  }
+  return out;
+}
+
+function EntryForm({ kind, start, busy, onSave, onCancel, onRemove, saveLabel, serverErrors }: { kind: Kind; start: Record<string, string>; busy: boolean; saveLabel: string;
+  onSave: (b: Record<string, string | number>) => void; onCancel?: () => void; onRemove?: () => void; serverErrors?: Record<string, string> | null }) {
   const { notify } = useApp();
   const [form, setForm] = useState(start);
-  useEffect(() => setForm(start), [start]);
+  const [errs, setErrs] = useState<Record<string, string>>({});
+  useEffect(() => { setForm(start); setErrs({}); }, [start]);
+  useEffect(() => { if (serverErrors) setErrs(serverErrors); }, [serverErrors]);     // the server's own checks, under their boxes
   const spec = FORM[kind];
   const submit = () => {
+    const p = formProblems(kind, form);
+    setErrs(p);
+    if (Object.keys(p).length) return;
     try { onSave(body(kind, form)); } catch (e) { notify((e as Error).message); }
   };
-  const set = (k: string) => (v: string) => setForm((x) => ({ ...x, [k]: v }));
+  const set = (k: string) => (v: string) => {
+    setForm((x) => ({ ...x, [k]: v }));
+    const f = spec.fields.find((x) => x.k === k);
+    const lim = f && limitsFor(f);
+    // a number is checked as it's typed (an empty box only on Add, so the form doesn't start out red)
+    setErrs((e) => { const n = { ...e }; const p = lim && v.trim() ? numberProblem(v, lim) : null; if (p) n[k] = p; else delete n[k]; return n; });
+  };
   return (
     <FormGrid label={spec.title} onSubmit={(e) => { e.preventDefault(); submit(); }}>
       {spec.fields.filter((f) => !f.floating || isFloating(form)).map((f) => {
@@ -162,8 +209,9 @@ function EntryForm({ kind, start, busy, onSave, onCancel, onRemove, saveLabel }:
         if (f.type === "select") {
           return <Field key={f.k} label={f.label} info={f.info}>{(id) => <Select id={id} value={form[f.k] ?? ""} onChange={set(f.k)} options={f.options!.map(([value, label]) => ({ value, label }))} />}</Field>;
         }
-        return <Field key={f.k} label={f.label} optional={f.optional} unit={f.type === "date" || f.type === "text" ? undefined : unit} info={f.info}
-          value={form[f.k] ?? ""} type={f.type === "date" ? "date" : "text"} inputMode={f.type === "text" || f.type === "date" ? undefined : "decimal"}
+        if (f.type === "date") return <DateField key={f.k} label={f.label} optional={f.optional} info={f.info} value={form[f.k] ?? ""} onChange={set(f.k)} error={errs[f.k]} />;
+        return <Field key={f.k} label={f.label} optional={f.optional} unit={f.type === "text" ? undefined : unit} info={f.info}
+          value={form[f.k] ?? ""} type="text" inputMode={f.type === "text" ? undefined : "decimal"} error={errs[f.k]}
           placeholder={f.hint ?? (f.type === "money" ? "1,00,000" : f.type === "rate" ? "7" : "")} maxLength={f.type === "text" ? 60 : undefined}
           onChange={(e) => set(f.k)(e.target.value)} />;
       })}
@@ -240,6 +288,9 @@ export function NetWorthPage() {
   const [addStart, setAddStart] = useState(() => fresh("cash"));
   const [ask, setAsk] = useState<Ask | null>(null);
   const [pick, setPick] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [step, setStep] = useState<"pick" | "form">("pick");
+  const [fieldErrs, setFieldErrs] = useState<Record<string, string> | null>(null);
   const load = useCallback(() => {
     setError(null);
     return api<View>("/money/net-worth").then(setView).catch((e) => { setError(e instanceof Error ? e.message : "Your net worth couldn't be read."); fail(e); });
@@ -248,16 +299,23 @@ export function NetWorthPage() {
 
   const send = async (path: string, method: string, b?: object, done?: string) => {
     setBusy(true);
+    setFieldErrs(null);
     try {
       setView(await api<View>(path, { method, body: b }));
       if (done) notify(done);
       return true;
-    } catch (e) { fail(e); return false; } finally { setBusy(false); }
+    } catch (e) {
+      const f = (e as ApiError).fields;
+      if (f && Object.keys(f).length) setFieldErrs(f);      // said under the boxes they belong to
+      else fail(e);
+      return false;
+    } finally { setBusy(false); }
   };
   const addOne = async (b: Record<string, string | number>) => {
     if (await send("/money/net-worth/items", "POST", b, `${FORM[kind].title} added.`)) {
       track("net worth entry added", { kind });
       setAddStart(fresh(kind));
+      setAdding(false); setStep("pick");
     }
   };
   const startEdit = (e: Entry) => {
@@ -357,17 +415,22 @@ export function NetWorthPage() {
       {view && t && (
         <>
           <Card label="Totals">
-            <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
+            <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined}
+              actions={<button type="button" className="btn sm" onClick={() => setAdding(true)}>Add an entry</button>} />
             <StatRow>
               <Stat label="Net worth" value={inr(t.net)} delta={prev && last ? <Delta value={last.net - prev.net}>{signedInrCompact(last.net - prev.net)}</Delta> : undefined} note={prev && last ? `since ${day(prev.d)}` : undefined} />
               <Stat label="Assets" value={inr(t.assets)} />
               <Stat label="Loans" value={inr(t.liabilities)} />
             </StatRow>
+            {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}
+            {!view.history_allowed
+              ? <PlanNote>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</PlanNote>
+              : hist.length < 2 && !empty && <p className="k-note">History: a snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the second{hist.length === 1 ? ` (the first is from ${day(hist[0].d)})` : ""}.</p>}
           </Card>
 
           {empty && (
-            <EmptyState title="Nothing added yet" action={{ label: "Add an entry", onClick: () => document.getElementById("nw-add")?.scrollIntoView({ behavior: "smooth" }) }}>
-              Add your savings, deposits, EPF or a loan below. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are counted on their own.
+            <EmptyState title="Nothing added yet" action={{ label: "Add an entry", onClick: () => setAdding(true) }}>
+              Add your savings, deposits, EPF or a loan. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are counted on their own.
             </EmptyState>
           )}
 
@@ -379,17 +442,7 @@ export function NetWorthPage() {
             </Card>
           )}
 
-          {!view.history_allowed ? (
-            <Card compact>
-              <CardHead title="History" />
-              <PlanNote>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</PlanNote>
-            </Card>
-          ) : hist.length < 2 ? (
-            <Card compact>
-              <CardHead title="History" />
-              <p className="k-small k-muted">A snapshot is taken on the 1st of each month and whenever you change an entry. The chart starts once there are two{hist.length === 1 ? `; the first is from ${day(hist[0].d)}` : ""}.</p>
-            </Card>
-          ) : (
+          {view.history_allowed && hist.length >= 2 && (
             <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rangeChoices} range={range} onRange={setPick}
               footer={<p className="k-note">Last snapshot {day(last.d)}.</p>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
@@ -425,18 +478,6 @@ export function NetWorthPage() {
             </Card>
           )}
 
-          <Card id="nw-add">
-            <CardHead title="Add an entry" actions={view.limit != null ? <span className="k-note">{view.count} of {view.limit} entries on your plan · <Link className="link" to="/plans">more with Basic</Link></span> : undefined} />
-            <TilePicker label="What is it?" groups={TILES} value={kind} onChange={(k) => { setKind(k as Kind); setAddStart(fresh(k as Kind)); }} />
-            {full
-              ? <PlanNote>Your plan keeps {view.limit} entries. Basic keeps as many as you like, with the history chart.</PlanNote>
-              : (
-                <div className="k-stack">
-                  <h3 className="k-sub">{FORM[kind].title}</h3>
-                  <EntryForm key={kind} kind={kind} start={addStart} busy={busy} saveLabel="Add" onSave={addOne} />
-                </div>
-              )}
-          </Card>
 
           <section className="k-stack">
             <p className="k-note">
@@ -452,9 +493,23 @@ export function NetWorthPage() {
         </>
       )}
 
+      {/* adding: pick what it is, then its few boxes, in one pop-up (the page stays where it was) */}
+      {adding && view && (
+        <Modal title={step === "form" ? `Add: ${FORM[kind].title}` : "Add to your net worth"} onClose={() => { setAdding(false); setStep("pick"); }} wide>
+          <div className="k-stack">
+            {view.limit != null && <span className="k-note">{view.count} of {view.limit} entries on your plan · <Link className="link" to="/plans">more with Basic</Link></span>}
+            {full ? <PlanNote>Your plan keeps {view.limit} entries. Basic keeps as many as you like, with the history chart.</PlanNote>
+              : step === "pick" ? <TilePicker label="What is it?" groups={TILES} value={kind} onChange={(k) => { setKind(k as Kind); setAddStart(fresh(k as Kind)); setStep("form"); setFieldErrs(null); }} />
+              : <>
+                <button type="button" className="btn quiet sm k-btn-end" onClick={() => setStep("pick")}>← Something else</button>
+                <EntryForm key={kind} kind={kind} start={addStart} busy={busy} saveLabel="Add" onSave={addOne} serverErrors={fieldErrs} onCancel={() => { setAdding(false); setStep("pick"); }} />
+              </>}
+          </div>
+        </Modal>
+      )}
       {edit && (
         <Modal title={`Edit: ${FORM[edit.kind].title}`} onClose={() => setEdit(null)} wide>
-          <EntryForm kind={edit.kind} start={edit.form} busy={busy} saveLabel="Save"
+          <EntryForm kind={edit.kind} start={edit.form} busy={busy} saveLabel="Save" serverErrors={fieldErrs}
             onSave={async (b) => { if (await send(`/money/net-worth/items/${edit.id}`, "PUT", b, "Saved.")) setEdit(null); }} onCancel={() => setEdit(null)}
             onRemove={() => { const id = edit.id, name = String(edit.form.name || FORM[edit.kind].title); setEdit(null); askRemove(id, name); }} />
         </Modal>

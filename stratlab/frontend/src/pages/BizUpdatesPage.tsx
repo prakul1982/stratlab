@@ -122,7 +122,7 @@ function Compare({ c, label }: { c: Compare; label: string }) {
   ];
   return (
     <Card label="Month by month" testId="biz-compare">
-      <CardHead title={`${label}: month by month`} info="Each company's own headline figure for each month, in its own unit, with the change on the same month a year earlier. Each figure links to the filing it was read from. Quarterly filers have a figure in the last month of each quarter." infoLabel="About this comparison" />
+      <CardHead title={`${label}: month by month`} info="Each company's own headline figure for each month, in its own unit, with the change on the same month a year earlier. Each figure links to the filing it was read from. Quarterly filers have a figure in the last month of each quarter." />
       {c.companies.length === 0
         ? <EmptyState title="No month to compare yet">Once companies in this list have updates read into numbers, they appear here side by side, month by month.</EmptyState>
         : <DataTable label={`${label}, month by month`} rows={c.periods} rowKey={(p) => p} columns={cols} sticky={c.periods.length > 14} />}

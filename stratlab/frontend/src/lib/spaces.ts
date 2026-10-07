@@ -21,6 +21,17 @@ export function spaceOf(path: string): Space | null {
   return SPACE_IDS.find((s) => SPACES[s].paths.test(path)) ?? null;
 }
 
+/** The menu an address shows: its own space's, so where you are is always in the menu. Pages that belong to no space
+ * (Account, Settings, Plans, Admin, My space) show Mine's menu, as their breadcrumb says. Mine keeps its own menu on a
+ * page it links to (`keepsMine`: a pinned page, Briefs) while Mine is the menu showing. Worked out from the address on
+ * every render, so it never lags behind a saved choice that loads later. */
+export function menuView(path: string, showing: SpaceView, keepsMine = false): SpaceView {
+  if (path === "/") return showing;          // the front door goes on to the home of the menu showing
+  const here = spaceOf(path);
+  if (!here) return "mine";
+  return showing === "mine" && keepsMine ? "mine" : here;
+}
+
 /** The space someone's answer to "What brings you here?" starts them in. */
 export function viewForFocus(focus: Focus | null | undefined): SpaceView | null {
   return focus === "both" ? "mine" : focus ?? null;

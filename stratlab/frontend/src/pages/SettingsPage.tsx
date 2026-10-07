@@ -35,7 +35,21 @@ export function SettingsPage() {
   const nav = useNavigate();
   const asked = loc.hash.replace("#", "");
   const section = SECTIONS.some((s) => s.value === asked) ? asked : ALIAS[asked] ?? "notifications";
-  const go = (v: string) => nav({ hash: v }, { replace: true });
+  // each section is its own history entry, so Back returns to the section before (and then to the page before Settings)
+  const go = (v: string) => { if (v !== section) nav({ hash: v }); };
+  // a link to one card (#alerts, #emails, #newsletters: the emails' "Manage emails" links) opens its section and
+  // scrolls to the card once it is on the page
+  useEffect(() => {
+    if (!me || !asked || asked === section) return;
+    let tries = 0, timer = 0;
+    const find = () => {
+      const card = document.getElementById(asked);
+      if (card) card.scrollIntoView({ block: "start" });
+      else if (tries++ < 20) timer = window.setTimeout(find, 100);
+    };
+    find();
+    return () => window.clearTimeout(timer);
+  }, [me, asked, section]);
 
   return (
     <div className="k-page">

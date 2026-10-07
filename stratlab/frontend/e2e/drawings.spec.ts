@@ -298,7 +298,8 @@ test("drawings follow a timeframe change and survive being signed in elsewhere",
   const { chart } = await open(page, "/research/IN/INFY");
   await count(chart, 1);                                                // it came from the account, not this browser
   await expect(chart).toHaveAttribute("data-type", "line");             // the saved layout too
-  await chart.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: "1 hour", exact: true }).click();
+  if (phone) await chart.getByRole("combobox", { name: "Timeframe" }).selectOption("1h");          // one box on a phone (R1-080)
+  else await chart.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: "1 hour", exact: true }).click();
   await expect(chart).toHaveAttribute("data-loaded", "1h", { timeout: 20_000 });
   await count(chart, 1);                                                // still anchored after the timeframe change
   await expect.poll(async () => (await saved(request)).layout?.tf, { timeout: 8000 }).toBe("1h");

@@ -156,7 +156,9 @@ def table() -> dict:
 
 
 def public() -> dict:
-    """What the Plans page needs: prices, symbols and which currency is charged. Plan IDs stay on the server."""
+    """What the landing page and Plans need: prices, symbols and which currency is charged. Plan IDs stay on the
+    server. Each currency shows the admin price table's amount ($8 and $20 for dollars, the owner's choice, 7 Oct);
+    `charged_in` says when a card is still charged the rupee price instead."""
     return {"currencies": {c: {k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto")} for c, r in table().items()},
             "countries": COUNTRIES}
 

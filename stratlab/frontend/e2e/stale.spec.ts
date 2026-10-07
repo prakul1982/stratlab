@@ -26,7 +26,7 @@ async function open(page: Page, path: string, answers: Record<string, unknown>, 
   await page.goto(path);
   const ask = page.getByText("What brings you here?");      // a first visit asks what the person came for
   await ask.waitFor({ timeout: 4000 }).then(() => page.getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
-  await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   return errors;
 }
 

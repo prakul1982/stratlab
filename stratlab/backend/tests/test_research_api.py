@@ -79,7 +79,7 @@ def test_bad_inputs(api):
     assert api.get("/research/company/XX/NVDA").status_code == 400
     assert api.get("/research/company/US/<script>").status_code in (400, 404)
     r = api.get("/research/company/US/NOPE")
-    assert r.status_code == 502 and "No US company" in r.json()["detail"]["message"]
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "not_found" and "No US company" in r.json()["detail"]["message"]
 
 
 def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):

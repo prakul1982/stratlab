@@ -348,6 +348,11 @@ class PrefsReq(BaseModel):
     space: Literal["trade", "invest", "money", "all"] | None = None       # the menu's space last picked in the sidebar
 
 
+class OnboardingReq(BaseModel):
+    welcome: bool = False                                    # the "What brings you here?" question was answered or closed
+    tour: Literal["done", "skipped"] | None = None           # the short tour was finished, or closed early
+
+
 class NewsletterReq(BaseModel):
     market_in: Literal["daily", "weekly", "off"] | None = None
     market_us: Literal["daily", "weekly", "off"] | None = None
@@ -568,3 +573,8 @@ class ReferralReq(BaseModel):
 class BreadthAlertReq(BaseModel):
     group: str = Field(..., max_length=40)                      # a market breadth group, e.g. nifty500
     level: float = Field(..., ge=1, le=99)                      # % of stocks above their 50-day average
+
+
+class DeleteMyDataReq(BaseModel):
+    """Deleting your own data: the email of the account, typed in to confirm."""
+    confirm: str = Field(..., min_length=1, max_length=320)

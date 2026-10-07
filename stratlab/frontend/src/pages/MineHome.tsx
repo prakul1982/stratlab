@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, firstName, inrCompact, pct, signedInrCompact } from "../lib/format";
+import { asOf, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
 import { evDay } from "../lib/marketEvents";
 import { inWords, marketState } from "../lib/marketHours";
-import { MARKET_TILES, useComingUp, useMarketStrip, type Up } from "../lib/mine";
+import { MARKET_TILES, goldInr10g, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
 import { researchApi, useWatchlist, type Quote, type Region } from "../lib/research";
@@ -59,9 +59,9 @@ export function MineHome() {
 
   return (
     <div className="space-home mine" data-testid="mine-home">
-      <PromoCountdown /><FirstSteps />
       <PageHeader eyebrow={dateLine()} title={`${greeting()}${first ? `, ${first}` : ""}`} lede={lede}
         actions={<button type="button" className="btn quiet sm" aria-expanded={customise} aria-controls="mine-customise" onClick={() => setCustomise(!customise)}>Customise</button>} />
+      <PromoCountdown /><FirstSteps />
       {customise && <CustomisePanel layout={layout} onChange={change} onDone={() => setCustomise(false)} />}
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
@@ -113,7 +113,7 @@ type NwView = {
 function NetWorthCard() {
   const [v, setV] = useState<NwView | null | "none">(null);
   useEffect(() => { api<NwView>("/money/net-worth").then(setV).catch(() => setV("none")); }, []);
-  if (v === null) return <Card testId="mine-networth"><Skeleton label="Adding up what you own" lines={3} /></Card>;
+  if (v === null) return <Card testId="mine-networth"><Skeleton label="Adding up what you own" lines={5} /></Card>;
   if (v === "none" || v.assets.length + v.liabilities.length === 0) {
     return (
       <Card testId="mine-networth">
@@ -157,7 +157,7 @@ type Holdings = { rows: unknown[]; totals: { value: number; day: number | null; 
 function PnlCard() {
   const [h, setH] = useState<Holdings | null | "none">(null);
   useEffect(() => { api<Holdings>("/holdings").then(setH).catch(() => setH("none")); }, []);
-  if (h === null) return <Card testId="mine-pnl"><Skeleton label="Reading your holdings" lines={3} /></Card>;
+  if (h === null) return <Card testId="mine-pnl"><Skeleton label="Reading your holdings" lines={5} /></Card>;
   if (h === "none" || !h.rows.length) {
     return (
       <Card testId="mine-pnl">
@@ -180,7 +180,7 @@ function PnlCard() {
 function PaperCard() {
   const [rows, setRows] = useState<LiveRow[] | null>(null);
   useEffect(() => { api<LiveRow[]>("/live/sessions").then(setRows).catch(() => setRows([])); }, []);
-  if (rows === null) return <Card testId="mine-paper"><Skeleton label="Opening your paper sessions" lines={3} /></Card>;
+  if (rows === null) return <Card testId="mine-paper"><Skeleton label="Opening your paper sessions" lines={5} /></Card>;
   if (!rows.length) {
     return (
       <Card testId="mine-paper">
@@ -216,6 +216,7 @@ function MarketsCard() {
                 : (
                   <>
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
+                    {t.id === "gold" && series.usdinr && <span className="k-note">≈ {inr(goldInr10g(s.last, series.usdinr.last))} per 10 g</span>}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}</span>
                     <Spark values={s.values} tone={t.neutral ? "neutral" : s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month`} />
                   </>

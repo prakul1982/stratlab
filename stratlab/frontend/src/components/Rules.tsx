@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import { money, TF_NAME } from "../lib/format";
 import { DEFAULTS, INDICATORS, mkRef, NO_SESSION, OPS, opSay, refName } from "../lib/rules";
@@ -8,7 +8,7 @@ import { Info } from "./ui";
 import { Pencil } from "./Icons";
 import { Block, More } from "./More";
 import { buildIdea } from "./IdeaComposer";
-import { Card, CardHead, ChipBar, Disclosure, Field, FormGrid, Notice, Select } from "./kit";
+import { Card, CardHead, ChipBar, Disclosure, Field, FormGrid, Notice, Select, TimeInput, usePopover } from "./kit";
 import type { Cond, HigherTf, Op, Ref, RefType, Risk, Session, Strategy, Tf } from "../lib/types";
 import "../pages/trade/trade.css";
 
@@ -16,20 +16,15 @@ import "../pages/trade/trade.css";
 function Pop({ label, cls = "", children, title }: { label: ReactNode; cls?: string; children: (close: () => void) => ReactNode; title: string }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const out = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", out);
-    document.addEventListener("keydown", esc);
-    wrap.current?.querySelector<HTMLElement>(".popover select, .popover input, .popover button")?.focus();
-    return () => { document.removeEventListener("mousedown", out); document.removeEventListener("keydown", esc); };
-  }, [open]);
+  const btn = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  // focus into the editor; Esc or a click outside closes it, and focus goes back to the word
+  usePopover(open, setOpen, btn, panel, { outside: wrap });
   return (
     <span ref={wrap} className="k-pop-wrap">
-      <button type="button" className={`token ${cls}`} aria-label={`${title}: ${typeof label === "string" ? label : ""}`} aria-expanded={open}
+      <button ref={btn} type="button" className={`token ${cls}`} aria-label={`${title}: ${typeof label === "string" ? label : ""}`} aria-expanded={open}
         onClick={() => setOpen((o) => !o)}>{label}</button>
-      {open && <div className="popover k-popover">{children(() => setOpen(false))}</div>}
+      {open && <div ref={panel} className="popover k-popover">{children(() => setOpen(false))}</div>}
     </span>
   );
 }
@@ -150,7 +145,7 @@ function TimeTok({ value, empty, title, onChange, hint }: { value: string; empty
     <Pop title={title} label={value || empty} cls={value ? "risk" : "missing"}>
       {(close) => (
         <>
-          <Field label={title} info={hint} type="time" defaultValue={value} onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") close(); }} />
+          <Field label={title} info={hint}>{(id) => <TimeInput id={id} value={value} onChange={onChange} onEnter={close} allowEmpty />}</Field>
           {value && <button type="button" className="btn quiet sm" onClick={() => { onChange(""); close(); }}>Clear</button>}
         </>
       )}

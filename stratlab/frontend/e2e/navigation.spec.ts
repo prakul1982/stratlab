@@ -154,7 +154,7 @@ test("All features lists every page by space and group, is linked from the accou
   const phone = info.project.name === "phone";
   const errors = await open(page, "/mine");
   const side = await sideMenu(page, phone);
-  await side.getByRole("button", { name: /^Account menu/ }).click();
+  await side.getByRole("button", { name: /account menu$/ }).click();
   await side.getByRole("menuitem", { name: "All features" }).click();
   await expect(page).toHaveURL(/\/features$/);
   const features = page.getByTestId("features-page");

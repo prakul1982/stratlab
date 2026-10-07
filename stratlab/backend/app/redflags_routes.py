@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 
 from . import redflags, scan
 from .auth import current_profile
-from .plans import FEATURE_PLAN, PLANS, access_plan, allows
+from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 from .responses import err, ok
 
 router = APIRouter(tags=["research"])
@@ -16,7 +16,7 @@ NOTE = {
 
 
 def _need(profile: dict, feature: str, what: str):
-    if not allows(access_plan(profile), feature):
+    if not allows(plan_of(profile), feature):
         err(402, "upgrade_required", f"{what} is on the {PLANS[FEATURE_PLAN[feature]]['name']} plan.")
 
 

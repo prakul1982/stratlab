@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
-import { asOf, money, price } from "../../lib/format";
+import { asOf, fmtTime, IST, money, price } from "../../lib/format";
 import { upDown } from "../../lib/tradeUi";
 import { gapText, LIVE_PHASES, PHASE_TEXT, qtyText, steps, type CasDay, type CasHistory, type CasPosition, type CasStock, type CasView } from "../../lib/closingAuction";
 import { Earlier } from "../../components/Earlier";
@@ -17,7 +17,7 @@ import "./trade.css";
  * says what a close will be. Built from the kit (components/kit). */
 
 const REFRESH_MS = 30_000;
-const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }) : null);
+const time = (iso: string | null) => (iso ? fmtTime(iso, { tz: IST, seconds: true, zone: true }) : null);
 const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
 
 /** Where the auction is, and when the next one runs: the status the page leads with. */
@@ -30,7 +30,7 @@ function Status({ v }: { v: CasView }) {
         <Badge tone={open ? "live" : v.phase === "closed" ? "ok" : "plain"}>{open ? "Auction session" : v.phase === "closed" ? "Auction over for today" : v.trading_day ? "No auction right now" : "Market closed"}</Badge>
         <span className="k-small" data-testid="cas-phase">{PHASE_TEXT[v.phase]}</span>
       </div>
-      {n && <p className="k-small" data-testid="cas-next">Next auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> India time.</p>}
+      {n && <p className="k-small" data-testid="cas-next">Next auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> IST.</p>}
       {v.day && !v.fresh && <p className="k-note">Showing the auction of {asOf(v.day)}{v.from_stored ? ", from an earlier day" : ""}.</p>}
     </Card>
   );
@@ -141,7 +141,7 @@ function Stocks({ v }: { v: CasView }) {
       <CardHead title={`F&O stocks${v.stocks.length ? ` (${v.stocks.length})` : ""}`} infoLabel="What the numbers are" info={v.note}
         actions={<label className="k-search cas-search"><Search size={16} /><input type="search" aria-label="Find a stock" placeholder="Find a stock" value={q} onChange={(e) => setQ(e.target.value)} /></label>} />
       <p className="k-note">
-        {v.as_of ? `As of ${asOf(v.as_of)}` : v.read && !v.from_stored ? `Read at ${time(v.read)} India time` : ""}{v.day && !v.fresh ? `${v.as_of || v.read ? " · " : ""}the auction of ${asOf(v.day)}` : ""}
+        {v.as_of ? `As of ${asOf(v.as_of)}` : v.read && !v.from_stored ? `Read at ${time(v.read)}` : ""}{v.day && !v.fresh ? `${v.as_of || v.read ? " · " : ""}the auction of ${asOf(v.day)}` : ""}
         {" "}· the widest gap first
       </p>
       {!rows.length ? <EmptyState title={v.stocks.length ? "No stock matches that." : "No auction recorded yet"}>{v.stocks.length ? "Try another symbol." : "Each trading day's auction shows here once it has run."}</EmptyState> : (
