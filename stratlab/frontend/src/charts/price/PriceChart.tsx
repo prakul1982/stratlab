@@ -52,6 +52,13 @@ export interface PriceChartProps {
   onPickPrice?: ((price: number) => void) | null;
   /** Chart replay: the candles shown are a replay's, so a drawing appears only once the replay reaches the candle it was drawn on. */
   replay?: boolean;
+  /** Fixed decimals for prices (spot forex quotes to 5); by the price's size when left out. */
+  decimals?: number;
+  /** No volume panel or Vol switch: the instrument has no exchange volume (spot forex). */
+  noVolume?: boolean;
+  /** The range buttons only move the window and keep the candle size (a backtest's chart keeps the candles its rules ran
+   *  on, so its indicators stay the strategy's own instead of being worked out again on weekly or monthly candles). */
+  rangesKeepTf?: boolean;
 }
 
 const TF_LABEL: Record<Tf, string> = { "5m": "5m", "15m": "15m", "1h": "1h", "1d": "1D", "1w": "1W", "1mo": "1M" };
@@ -223,7 +230,10 @@ export default function PriceChart(props: PriceChartProps) {
   useEffect(() => { engineRef.current?.setCurrency(currencySymbol(currency)); }, [currency]);
   useEffect(() => { engineRef.current?.setClipFuture(!!props.replay); }, [props.replay]);
   useEffect(() => { lsSet(LS.type, type); }, [type]);
-  useEffect(() => { engineRef.current?.setVolume(volume); lsSet(LS.volume, volume); }, [volume]);
+  const showVolume = volume && !props.noVolume;
+  useEffect(() => { engineRef.current?.setVolume(showVolume); }, [showVolume]);
+  useEffect(() => { lsSet(LS.volume, volume); }, [volume]);
+  useEffect(() => { engineRef.current?.setDecimals(props.decimals ?? null); setTick((x) => x + 1); }, [props.decimals]);
   useEffect(() => { engineRef.current?.setStudies(studies); rootRef.current!.dataset.studies = String(studies.length); setTick((x) => x + 1); }, [studies]);
   useEffect(() => { lsSet(LS.studies, mine); }, [mine]);
   useEffect(() => {
@@ -407,7 +417,7 @@ export default function PriceChart(props: PriceChartProps) {
   const pickTf = (t: Tf) => { touched.current = true; setRange(null); setTf(t); setMenu(null); };
   const pickRange = (r: RangeKey) => {
     touched.current = true;
-    const want = RANGES.find((x) => x.key === r)!.tf;
+    const want = props.rangesKeepTf ? tf : RANGES.find((x) => x.key === r)!.tf;
     const t = offered.includes(want) ? want : offered.includes("1d") ? "1d" : offered[0];
     setTf(t); setRange(r);
     if (t === tf && r === range) applyRange(r);
@@ -585,7 +595,7 @@ export default function PriceChart(props: PriceChartProps) {
               {chg != null && <span>{chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
             </>}
           </div>
-          {h && volume && h.bar.v > 0 && <div><span><span className="k">Vol</span>{compact(h.bar.v)}</span></div>}
+          {h && showVolume && h.bar.v > 0 && <div><span><span className="k">Vol</span>{compact(h.bar.v)}</span></div>}
           {cmp && <div>{sw(th?.ink ?? "currentColor")}<span>{cmp.symbol}</span><span>{signedPct(cmpPct)}</span></div>}
           {e?.studies.map((s) => {
             const i = h?.index ?? -1;
@@ -642,7 +652,7 @@ export default function PriceChart(props: PriceChartProps) {
           </div>
         ) : <span className="pc-note">{TF_LONG[tf]} candles</span>}
         <div className="pc-seg" role="group" aria-label="Scale">
-          <button type="button" className="pc-btn" aria-pressed={volume} onClick={() => { touched.current = true; setVolume(!volume); }} title="Volume bars">Vol</button>
+          {!props.noVolume && <button type="button" className="pc-btn" aria-pressed={volume} onClick={() => { touched.current = true; setVolume(!volume); }} title="Volume bars">Vol</button>}
           <button type="button" className="pc-btn" aria-pressed={mode === "percent"} onClick={() => setMode(mode === "percent" ? "normal" : "percent")} title="Percent scale, from the first candle on screen">%</button>
           <button type="button" className="pc-btn" aria-pressed={mode === "log"} onClick={() => setMode(mode === "log" ? "normal" : "log")} title="Log scale">Log</button>
           <button type="button" className="pc-btn" aria-pressed={auto} onClick={() => { engineRef.current?.setAuto(!auto); setAuto(!auto); }} title="Fit prices to the candles on screen">Auto</button>

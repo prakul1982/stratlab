@@ -63,6 +63,8 @@ export interface Costs {
 export interface Trade {
   entry_t: string; exit_t: string | null; entry: number; exit: number; qty: number; pnl: number;
   costs?: number; ret: number; why: string; side?: "long" | "short"; symbol?: string;
+  part?: "built" | "unseen";      // which part of the unseen-data check it counts in (the part it was opened in)
+  spans_split?: boolean;          // opened in the built part and closed in the unseen one
 }
 export interface GroupMember { id?: string; symbol: string }
 export interface Group { id: string; name: string; market: string; maxOpen: number; members: GroupMember[] }
