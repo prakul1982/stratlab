@@ -124,9 +124,14 @@ export type Focus = "invest" | "trade" | "money" | "both";
 
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
-  billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean };
+  /** given_by_owner: a paid plan the site owner gave by hand, with no subscription behind it (nothing renews, nothing to cancel). */
+  billing: { subscribed_plan: string | null; status: string | null; renews_or_ends: string | null; cancel_at_period_end: boolean; given_by_owner?: boolean };
+  /** How the person signed in, as the sign-in service says ("google", "email"), when the session itself doesn't say. */
+  signed_in_with?: string | null;
   usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null;
-    deepdive_used?: number; deepdive_limit?: number | null; deck_used?: number; deck_limit?: number | null };
+    deepdive_used?: number; deepdive_limit?: number | null; deck_used?: number; deck_limit?: number | null;
+    /** The plan's own limits (what the Plans page lists), and what lifts them now ("early access", "the launch offer"). */
+    deepdive_plan_limit?: number | null; deck_plan_limit?: number | null; lifted_by?: string | null };
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
   alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };

@@ -96,7 +96,7 @@ from . import market_events_routes
 from . import mcp_server
 from . import mtf, slb, stock_desks, stock_futures     # the per-stock market desks: futures, lending, margin funding
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
-from .models import BreadthAlertReq
+from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
@@ -106,7 +106,7 @@ from .plans import networth_items
 from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
-from .plans import decks as decks_limit, deepdives as deepdives_limit
+from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -619,6 +619,7 @@ def me(profile=Depends(current_profile)):
     except Exception as e:
         print("lifecycle visit failed:", str(e)[:160])
     plan = profile["_plan"]
+    paid = profile.get("_paid_plan", plan) if profile.get("_paid_plan", plan) in PLANS else "free"
     info = plan_info(plan)
     used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck"))
     return ok({
@@ -628,11 +629,17 @@ def me(profile=Depends(current_profile)):
         "free_basic_until": fb.isoformat() if profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
         "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                     "renews_or_ends": profile.get("current_period_end"),
-                    "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
+                    "cancel_at_period_end": bool(profile.get("cancel_at_period_end")),
+                    # a paid plan the site owner gave by hand (Admin → Change plan): nothing renews and nothing to cancel
+                    "given_by_owner": profile.get("_paid_plan", plan) != "free" and not profile.get("razorpay_subscription_id")},
+        "signed_in_with": profile.get("_signed_in_with"),
         "usage": {"backtests_used": used["backtest"], "backtests_limit": info["backtests_per_month"],
                   "ai_used": used["ai"], "ai_limit": info["ai_builds_per_month"],
                   "deepdive_used": used["deepdive"], "deepdive_limit": info["deepdives_per_month"],
-                  "deck_used": used["deck"], "deck_limit": info["decks_per_month"]},
+                  "deck_used": used["deck"], "deck_limit": info["decks_per_month"],
+                  # the plan's own limits (what the Plans page lists), and why they're lifted now when they are
+                  "deepdive_plan_limit": PLANS[paid]["deepdives_per_month"], "deck_plan_limit": PLANS[paid]["decks_per_month"],
+                  "lifted_by": "the launch offer" if promo_active() else None if payments_live() else "early access"},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
@@ -678,6 +685,29 @@ def prefs_of(uid: str) -> dict:
         return p if isinstance(p, dict) else {}
     except Exception:
         return {}
+
+
+@app.get("/me/export")
+def export_my_data(profile=Depends(current_profile)):
+    """Your own copy of everything StratLab keeps for you, as one JSON file (no tokens or passwords)."""
+    throttle(profile, "export-my-data", 10, 3600, "Too many downloads. Try again in an hour.")
+    body = json.dumps(user_data.export(profile), ensure_ascii=False, indent=1, default=str)
+    return Response(body, media_type="application/json",
+                    headers={"Content-Disposition": 'attachment; filename="stratlab-my-data.json"', "Cache-Control": "no-store"})
+
+
+@app.post("/me/delete-data")
+def delete_my_data(req: DeleteMyDataReq, profile=Depends(current_profile)):
+    """Erase your own app data (the same steps as Admin's "Delete this user's data"), once the account's email is typed
+    in to confirm. The sign-in account and the plan and payment records stay: closing the sign-in account is done by
+    the site owner on request, and payment records are kept as the law asks."""
+    email = (profile.get("email") or "").strip().lower()
+    if not email or req.confirm.strip().lower() != email:
+        err(400, "confirm_mismatch", "Type your account's email exactly to confirm.")
+    throttle(profile, "delete-my-data", 5, 3600, "Too many tries. Try again in an hour.")
+    out = user_data.erase(profile["id"])
+    log.info("user %s erased their own app data: %d areas done, %d failed", profile["id"], len(out["done"]), len(out["failed"]))
+    return {"ok": not out["failed"], **out}
 
 
 @app.put("/me/prefs")
@@ -1604,6 +1634,7 @@ def surveillance_lists(profile=Depends(current_profile)):
 def admin_surveillance_refresh(_=Depends(admin.admin_profile)):
     """Read the surveillance lists now (no alerts are sent from here) and say what each list answered."""
     out = surveillance.refresh(filings_feed)
+    surv_job.record(surveillance.ist_now(), out["problems"], len(surveillance.PARTS), changes=len(out["changes"]))
     return {"changes": len(out["changes"]), "problems": [public_text(p) for p in out["problems"]],
             "lists": surveillance.view()["lists"], "job": surv_job.status}
 
@@ -3805,13 +3836,15 @@ def kite_callback(request_token: str = "", status: str = "", state: str = ""):
 def server_status() -> dict:
     return {"kite_ready": kite.ready(), "kite_token_day": kite.token_day, "kite_invalid": kite.invalid_reason, "feed_started": hub.started,
             "feed_connected": hub.connected, "live_sessions": len(manager.sessions),
+            # the sessions that need the broker's live feed (India); other markets are polled and never use it
+            "india_sessions": sum(1 for x in list(manager.sessions.values()) if not getattr(x, "polled", False)),
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)),
             "calendar": calendar_status(),
-            "admin_alerts": {"email_ready": alerts.email_ready(), "to": sorted(admin.admin_emails())}}
+            "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
 
 def calendar_status() -> dict:
@@ -3902,8 +3935,11 @@ def admin_overview(_=Depends(admin.admin_profile)):
 
 
 @app.get("/admin/users")
-def admin_users(q: str = "", _=Depends(admin.admin_profile)):
-    return admin.users(q, month_start_iso())
+def admin_users(q: str = "", plan: str = "", _=Depends(admin.admin_profile)):
+    """The newest 200 users, or those whose email contains `q`, on `plan` (free, basic or pro) when given."""
+    if plan and plan not in PLANS:
+        err(400, "bad_plan", "Pick Free, Basic or Pro.")
+    return admin.users(q, month_start_iso(), plan=plan or None)
 
 
 @app.get("/admin/invite-rewards")

@@ -112,8 +112,13 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
   await expect(panel.getByText(/Groq · llama-3.3-70b-versatile → Mistral · mistral-small-latest \(paused\)/)).toBeVisible();
   await expect(panel.getByText(/30% of questions since the last restart were answered from the cache/)).toBeVisible();
   await expect(panel.getByText(/Last time nothing could answer/)).toBeVisible();
+  // the providers with no key are one click away, not 13 set-up guides on the page
   const more = panel.locator("[aria-label='More free providers']");
-  await expect(more.getByText("Prototyping tier")).toBeVisible();
+  const fold = panel.getByTestId("ai-more-providers");
+  await expect(fold).not.toHaveAttribute("open", /.*/);
+  await expect(more.getByRole("link", { name: /Get a key/ })).toHaveCount(0);
+  await fold.locator("summary").click();
+  await expect(more.getByText("Prototyping tier").first()).toBeVisible();
   await expect(more.getByText("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID")).toBeVisible();
   await expect(more.getByRole("link", { name: "Get a key" }).first()).toHaveAttribute("href", "https://github.com/settings/personal-access-tokens/new");
   if (info.project.name === "phone") await touchable(page);
@@ -141,10 +146,14 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
 });
 
 test("admin: with no AI keys, the panel says so and lists every free provider with where to get a key", async ({ page }, info) => {
-  const errors = await open(page, "/admin/system", "More free providers you can add");
+  const errors = await open(page, "/admin/system", "Quickest to set up");
   const panel = page.locator("section[aria-label='AI']");
   await expect(panel.getByText("No AI keys yet")).toBeVisible();
   await expect(panel.getByText("GROQ_API_KEY")).toBeVisible();
+  // the two quickest in view; the other eleven one click away
+  await expect(panel.getByRole("link", { name: "Get a key" })).toHaveCount(2);
+  await expect(panel.getByRole("link", { name: "Get a key: Google Gemini" })).toBeVisible();
+  await panel.getByTestId("ai-more-providers").locator("summary").click();
   await expect(panel.getByRole("link", { name: "Get a key" })).toHaveCount(13);
   await expect(panel.getByRole("button", { name: "Test every provider" })).toBeDisabled();
   if (info.project.name === "phone") await touchable(page);

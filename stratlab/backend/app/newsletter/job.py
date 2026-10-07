@@ -180,6 +180,14 @@ class Job:
         self.last: dict[str, str] = {}
         self.status = {"last_run": None, "sent": 0, "last_error": None}
 
+    def record(self, now: datetime, problems: list[str], parts: int | None = None, **extra) -> None:
+        """How a read went, run by its own clock or by Admin's Run now (so Admin never shows an older run's problem
+        after a newer good one): when, the problems (one per source that failed; the first is the last error) and,
+        for a job that reads several sources, how many it tried (`parts`)."""
+        problems = [str(p) for p in problems or []]
+        self.status.update(last_run=now.isoformat(), problems=problems[:5], last_error=problems[0][:200] if problems else None,
+                           parts=parts, **extra)
+
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="newsletters").start()
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate } from "../../lib/format";
-import { Badge, Card, CardHead, Light, Skeleton } from "../../components/kit";
+import { Badge, Card, CardHead, Disclosure, Light, Skeleton } from "../../components/kit";
 
 // Admin only: provider names are fine here (never on public pages).
 type Model = {
@@ -87,6 +87,9 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
 
   const on = v?.providers.filter((p) => p.configured) ?? [];
   const off = v?.providers.filter((p) => !p.configured) ?? [];
+  // with no key at all, the two quickest to set up stay in view; every other provider's steps are one click away
+  const quick = on.length ? [] : off.filter((p) => QUICK.includes(p.name));
+  const rest = off.filter((p) => !quick.includes(p));
   const lastRank = Math.max(0, ...on.map((p) => p.ranked_at ?? 0));
   const reused = v && v.cache.hits + v.cache.misses ? Math.round((v.cache.hits * 100) / (v.cache.hits + v.cache.misses)) : null;
 
@@ -124,24 +127,38 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
 
           {off.length > 0 && (
             <div className="k-stack" aria-label="More free providers">
-              <b className="k-small">More free providers you can add</b>
+              {quick.length > 0 && <>
+                <b className="k-small">Quickest to set up</b>
+                {quick.map((p) => <MissingProvider key={p.name} p={p} />)}
+              </>}
+              {rest.length > 0 && (
+                <Disclosure summary={`${quick.length ? "Other" : "More"} providers you can add (${rest.length})`} testId="ai-more-providers">
+                  <div className="k-stack">{rest.map((p) => <MissingProvider key={p.name} p={p} />)}</div>
+                </Disclosure>
+              )}
               <p className="k-small k-muted">Each one is optional. Add the variables in Railway → Variables, redeploy, then press Re-rank models.</p>
-              {off.map((p) => (
-                <div key={p.name} className="ai-missing">
-                  <div className="k-stack adm-grow">
-                    <span className="k-small"><b>{p.label}</b>{p.terms === "prototype" && <> <Badge tone="warn" dot={false}>Prototyping tier</Badge></>}
-                      {p.terms === "paid" && <> <Badge tone="warn" dot={false}>Paid</Badge></>}</span>
-                    <span className="k-small k-muted">{p.free}{p.note ? ` ${p.note}` : ""}</span>
-                    <span className="k-small k-muted">Set <span className="adm-mono">{p.missing.join(" and ")}</span>.</span>
-                  </div>
-                  <a className="btn quiet sm" href={p.key_url} target="_blank" rel="noopener noreferrer">Get a key</a>
-                </div>
-              ))}
             </div>
           )}
         </>
       )}
     </Card>
+  );
+}
+
+const QUICK = ["groq", "gemini"];
+
+/** A provider with no key: its free allowance, the variables to set and where to get a key. */
+function MissingProvider({ p }: { p: Provider }) {
+  return (
+    <div className="ai-missing">
+      <div className="k-stack adm-grow">
+        <span className="k-small"><b>{p.label}</b>{p.terms === "prototype" && <> <Badge tone="warn" dot={false}>Prototyping tier</Badge></>}
+          {p.terms === "paid" && <> <Badge tone="warn" dot={false}>Paid</Badge></>}</span>
+        <span className="k-small k-muted">{p.free}{p.note ? ` ${p.note}` : ""}</span>
+        <span className="k-small k-muted">Set <span className="adm-mono">{p.missing.join(" and ")}</span>.</span>
+      </div>
+      <a className="btn quiet sm" href={p.key_url} target="_blank" rel="noopener noreferrer" aria-label={`Get a key: ${p.label}`}>Get a key</a>
+    </div>
   );
 }
 

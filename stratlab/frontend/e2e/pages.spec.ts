@@ -983,13 +983,19 @@ test("invite: your invite link, how many friends joined, and sharing it", async 
   await watchSharing(page);
   const errors = await open(page, "/invite", "Invite friends");
   await expect(page.getByTestId("friends-joined")).toHaveText(/^6 friends joined · 3 free months earned$/);
-  await expect(page.getByTestId("invite-reward-line")).toHaveText("Invite friends, both get a month of Basic. When a friend joins with your link and uses "
-    + "StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends "
-    + "who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a "
-    + "month (about a week extra).");
-  await expect(page.getByTestId("invite-status")).toHaveText("Use: 2 of 2 · Subscribed: 1 of 2 · Extra: 0 weeks");
-  await expect(page.getByTestId("invite-waiting")).toHaveText("1 friend waiting to subscribe");
-  for (const id of ["invite-reward-line", "invite-status", "invite-waiting"]) {      // nothing spills past the card
+  // plain words: what a friend gets, and what you get on your plan (the owner is on Pro, so the time is kept, never "a month of Basic" now)
+  const words = page.getByTestId("invite-reward-line");
+  await expect(words).toContainText("What a friend gets. A friend who joins with your link and uses StratLab on 3 different days in their first 2 weeks gets a month of Basic free.");
+  await expect(words).toContainText("What you get. You earn a month of free Basic for each of your first 2 friends who do this in a year, and for each of your "
+    + "first 2 friends who subscribe. After that, each friend who subscribes adds 8 days. You're on Pro, so it's kept for you and starts only if your Pro plan stops.");
+  await expect(words).not.toContainText("You get a month of Basic");
+  const status = page.getByTestId("invite-status");
+  for (const [k, v] of [["This year: friends who used StratLab", "2 of 2 months"], ["This year: friends who subscribed", "1 of 2 months"],
+    ["Waiting to subscribe", "1 friend"], ["Kept for when your plan stops", /days of Basic|Nothing yet/]] as const) {
+    await expect(status.locator("div", { hasText: k })).toContainText(v);
+  }
+  await expect(status).not.toContainText(/Use:|Extra:|weeks/);
+  for (const id of ["invite-reward-line", "invite-status"]) {      // nothing spills past the card
     const box = (await page.getByTestId(id).boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   }

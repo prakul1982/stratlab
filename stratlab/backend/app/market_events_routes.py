@@ -161,7 +161,7 @@ def events_refresh(_=Depends(admin.admin_profile)):
     def run():
         try:
             out = M.refresh(M.Web())
-            job.status.update(problems=out["problems"][:5])
+            job.record(ist_now(), out["problems"], len(M.READERS))
         except Exception as e:
             print("market events refresh failed:", type(e).__name__, str(e)[:160])
         finally:
