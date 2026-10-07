@@ -27,6 +27,15 @@ test("every page has its own tab title (R1-010)", () => {
   }
 });
 
+test("a signed-out deep link names its page and offers the public company page (R1-013)", async () => {
+  const { gateFor } = await import("../src/lib/gate.ts");
+  assert.equal(gateFor("/", "https://x.test"), null);
+  assert.deepEqual(gateFor("/tax-report", "https://x.test"), { name: "Tax report", publicUrl: null });
+  assert.deepEqual(gateFor("/research/IN/reliance", "https://x.test/"), { name: "RELIANCE", publicUrl: "https://x.test/stocks/in/RELIANCE" });
+  assert.equal(gateFor("/research/US/AAPL/deep", "http://127.0.0.1:8765").publicUrl, "http://127.0.0.1:8765/stocks/us/AAPL");
+  assert.equal(gateFor("/somewhere-else", "https://x.test").name, "this page");
+});
+
 test("the menu follows the address, not the last space used (R1-011)", () => {
   assert.equal(menuView("/n/abc/e/1", "money"), "trade");
   assert.equal(menuView("/holdings", "trade"), "money");

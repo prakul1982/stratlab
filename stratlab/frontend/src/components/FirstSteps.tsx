@@ -10,7 +10,7 @@ type View = { show: boolean; dismissed: boolean; done: number; steps: Step[] };
 /** Home's first-steps checklist for a new account. Each step ticks itself from what the user has really done; the
  *  list hides for good when dismissed, and by itself once every step is done. */
 export function FirstSteps() {
-  const { fail } = useApp();
+  const { fail, me, level, focus } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -20,7 +20,8 @@ export function FirstSteps() {
     return () => { live = false; };
   }, []);
 
-  if (!view?.show) return null;
+  // it waits until the welcome question is answered, so a new account sees one thing at a time
+  if (!view?.show || (!!me && (!level || !focus))) return null;
   const dismiss = async () => {
     setBusy(true);
     try { setView(await api<View>("/me/first-steps", { method: "PUT", body: { dismissed: true } })); }

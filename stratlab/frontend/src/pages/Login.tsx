@@ -5,6 +5,7 @@ import { FEATURES, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/p
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
+import type { Gate } from "../lib/gate";
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
  * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). */
@@ -161,7 +162,7 @@ function Head({ eyebrow, title, children }: { eyebrow: string; title: string; ch
   );
 }
 
-export function Login() {
+export function Login({ gate }: { gate?: Gate | null }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -187,6 +188,18 @@ export function Login() {
         </nav>
         <button className="btn outline sm" onClick={() => signIn()}>Sign in</button>
       </header>
+      {/* a deep link opened signed out: say which page it was, and come back to it after sign-in */}
+      {gate && (
+        <div className="lp-gate" role="status">
+          <div className="lp-wrap lp-gate-row">
+            <span>Sign in to see <b>{gate.name}</b>. You'll come straight back to it.</span>
+            <span className="row wrap g12">
+              <button className="btn sm" onClick={() => signIn()}>Sign in</button>
+              {gate.publicUrl && <a className="btn quiet sm" href={gate.publicUrl}>Read its public page</a>}
+            </span>
+          </div>
+        </div>
+      )}
 
       <main>
       <section id="top" className="lp-hero ruled">

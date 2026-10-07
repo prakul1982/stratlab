@@ -5,7 +5,8 @@ import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, M
 import { Logo } from "./Logo";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { NAV, groupPath, locate, locateGroup, type NavPage } from "../lib/nav";
-import { MINE_HOME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
+import { MINE_HOME, SPACE_HOMES, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
+import { Notice } from "./kit";
 import { titleFor } from "../lib/title";
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
@@ -53,6 +54,7 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
   // ask the experience level once, then show the tour to anyone who hasn't seen it
   const askLevel = !!me && (!level || !focus);
+  const [askNow, setAskNow] = useState(false);
   useEffect(() => { if (me && level && !tourSeen()) setTour(true); }, [me, level]);
   const loc = useLocation();
   const nav = useNavigate();
@@ -65,6 +67,7 @@ export function Shell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", k);
   }, [open]);
   const path = loc.pathname;
+  const onHome = path === "/" || SPACE_HOMES.includes(path);
   const at = locate(path);
   const onGroup = locateGroup(path);
   // a link into another space shows that space's menu, so where you are is always in it. Mine keeps its own menu on the
@@ -205,11 +208,16 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main"><div className="page"><PageBreadcrumb />{children}</div></main>
+      <main className="main"><div className="page"><PageBreadcrumb />
+        {/* on a page opened from a link, the welcome question waits behind one line instead of covering the page */}
+        {askLevel && !onHome && !askNow && (
+          <Notice role="status" action={{ label: "Choose", onClick: () => setAskNow(true) }}>New here? Say what brings you here, and StratLab opens the right space for you.</Notice>
+        )}
+        {children}</div></main>
       <Suspense fallback={null}>
         {tour && <Tour onClose={() => setTour(false)} />}
         {search && <SearchPalette onClose={() => setSearch(false)} />}
-        {askLevel && !tour && <LevelPrompt onDone={() => undefined} />}
+        {askLevel && !tour && (onHome || askNow) && <LevelPrompt onDone={() => setAskNow(false)} />}
       </Suspense>
     </div>
   );

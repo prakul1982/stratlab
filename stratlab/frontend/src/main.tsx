@@ -14,7 +14,7 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import "./styles-invest.css";
 import { AppProvider, useApp } from "./lib/app";
-import { NEXT_PAGE, SESSION_KEY } from "./lib/api";
+import { CFG, NEXT_PAGE, SESSION_KEY } from "./lib/api";
 import { registerPwa } from "./lib/pwa";
 import { captureRef } from "./lib/share";
 import { pageview } from "./lib/analytics";
@@ -23,6 +23,10 @@ import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
 import { SPACE_HOMES } from "./lib/spaces";
 import { fmtDate } from "./lib/format";
+import { gateFor } from "./lib/gate";
+
+/** Where the public company pages are: the site itself (its host forwards /stocks to the API), or the API on a local copy. */
+const publicBase = () => (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && CFG.API_BASE ? CFG.API_BASE : location.origin);
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -41,7 +45,7 @@ const MoneyHome = page(spaceHomes, "MoneyHome");
 const NotebooksHome = page(home, "NotebooksHome");
 const NewNotebook = page(home, "NewNotebook");
 const login = () => import("./pages/Login");
-const Login = page(login, "Login");
+const Login = lazy(() => login().then((m) => ({ default: m.Login })));     // takes the signed-out gate, so not page()
 const legal = () => import("./pages/LegalPage");
 const LegalPage = page(legal, "LegalPage");
 const notebook = () => import("./pages/NotebookPage");
@@ -197,7 +201,7 @@ function Routed() {
   if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) return <Suspense fallback={<Loading label="Opening" />}><LegalPage /></Suspense>;   // policies are public: no sign-in needed
   if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;
   if (!ready) return <Loading label="Opening StratLab" />;
-  if (!session) return <Suspense fallback={<Loading label="Opening StratLab" />}><Login /></Suspense>;
+  if (!session) return <Suspense fallback={<Loading label="Opening StratLab" />}><Login gate={gateFor(loc.pathname, publicBase())} /></Suspense>;
   return (
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
