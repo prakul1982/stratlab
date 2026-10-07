@@ -8,7 +8,8 @@ loans, where the benchmark isn't public in a form we read, the change from the s
 Arithmetic on the user's own loan and the Reserve Bank's published repo rate. Never "switch lender" or "refinance";
 a gap is a fact with where it can be raised, and the RBI's 2026 draft on loan pricing is shown as a draft."""
 import math
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 
@@ -20,6 +21,13 @@ from .responses import ok
 BENCHMARKS = {"repo": "Repo-linked (external benchmark)", "tbill": "T-bill-linked (external benchmark)",
               "mclr": "MCLR (the lender's own rate)", "other": "Another internal rate (base rate, BPLR)", "fixed": "Fixed rate"}
 GAP_PTS = 0.05                      # smaller differences are rounding
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def today() -> date:
+    """Today in India (the server runs on UTC, a day behind from midnight to 5:30 AM IST)."""
+    return datetime.now(IST).date()
+
 
 DRAFT = {
     "title": "Interest Rates on Loans and Advances Directions, 2026: a draft",
@@ -172,7 +180,7 @@ def check(loan: dict, at: date, history: list[tuple[str, float]]) -> dict:
 
 def view(profile: dict) -> dict:
     full = allows(profile["_plan"], "loan_check")
-    at = date.today()
+    at = today()
     loans = [i for i in nw.load(profile["id"])["items"] if i.get("kind") == "loan"]
     floating = [i for i in loans if (i.get("benchmark") or "fixed") != "fixed"]
     history = rbi_rates.repo_history()

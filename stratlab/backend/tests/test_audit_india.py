@@ -114,7 +114,7 @@ def test_meetings_tell_earnings_calls_from_investor_meetings():
              _item("2026-07-01T10:00", "XYZ Ltd has informed the Exchange about Schedule of meet"),
              _item("2026-06-01T10:00", "Outcome of board meeting: financial results", subject="Outcome of Board Meeting"),
              _item("2023-01-01T10:00", "Audio recording of the earnings call")]                 # before the window
-    assert deepdive.meetings(items, "2024-10-05T00:00") == {"meets": 2, "calls": 0, "calls_due": 0, "filed": 3}
+    assert deepdive.meetings(items, "2024-10-05T00:00") == {"meets": 2, "calls": 0, "calls_due": 0, "shareholder": 0, "filed": 3}
     items.insert(0, _item("2026-08-12T10:00", "XYZ Ltd has informed the Exchange about Audio Recording"))
     assert deepdive.meetings(items, "2024-10-05T00:00")["calls"] == 1
 
@@ -163,7 +163,7 @@ def test_bse_is_asked_a_year_at_a_time():
         return httpx.Response(200, json={"Table": table, "Table1": [{"ROWCNT": 1}]})
     feed = F.BSEFilings(transport=httpx.MockTransport(handler), sleep=lambda s: None)
     items = feed.announcements("543210", 732)
-    assert len(asked) == 3 and len(items) == 3 and items[0]["category"] == "concall"   # 365 + 365 + 2 days
+    assert len(asked) == 3 and len(items) == 3 and items[0]["category"] == "investor_meet"   # 365 + 365 + 2 days
     days = [(datetime.strptime(t, "%Y%m%d") - datetime.strptime(f, "%Y%m%d")).days for f, t in asked]
     assert max(days) <= 365
     assert all(datetime.strptime(asked[i + 1][1], "%Y%m%d") < datetime.strptime(asked[i][0], "%Y%m%d") for i in range(2))

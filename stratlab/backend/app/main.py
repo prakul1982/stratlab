@@ -4445,20 +4445,31 @@ def admin_library_seed_status(_=Depends(admin.admin_profile)):
     return {"running": _seeding.locked(), **_seed_result, "official": len(library_seed.seeded())}
 
 
-def library_seed_once():
+SEED_FIRST_WAIT, SEED_RECHECK, SEED_TRIES = 1500, 1800, 48     # seconds; and how many times (a day) market data is waited for
+
+
+def library_seed_once(sleep=time.sleep):
     """A while after starting: StratLab's own strategies are published once, when the library has none yet and market
-    data is up. (After that the admin button refreshes them.)"""
-    time.sleep(1500)
-    try:
-        if library_seed.seeded() or not kite.ready() or not _seeding.acquire(blocking=False):
-            return
+    data is up. Market data comes up with the day's broker login, which a night-time deploy starts before, so a start
+    that finds it down checks again every half hour for a day instead of giving up until the next deploy. A library
+    that has them is never touched again (a deploy costs one cheap check), and a seed is only ever run once a start.
+    (After that the admin button refreshes them.)"""
+    sleep(SEED_FIRST_WAIT)
+    for _ in range(SEED_TRIES):
         try:
-            _seed_result.update(started=db.now_iso(), result=library_seed.seed(markets), error=None)
-        finally:
-            _seed_result["finished"] = db.now_iso()
-            _seeding.release()
-    except Exception as e:
-        print("library seed:", str(e)[:160])
+            if library_seed.seeded():
+                return
+            if kite.ready() and _seeding.acquire(blocking=False):
+                try:
+                    _seed_result.update(started=db.now_iso(), result=library_seed.seed(markets), error=None)
+                finally:
+                    _seed_result["finished"] = db.now_iso()
+                    _seeding.release()
+                return
+        except Exception as e:
+            print("library seed:", str(e)[:160])
+            return
+        sleep(SEED_RECHECK)
 
 
 @app.get("/admin/library")

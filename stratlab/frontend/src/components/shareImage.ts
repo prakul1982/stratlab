@@ -1,4 +1,4 @@
-import { pct } from "../lib/format";
+import { asDate, pct } from "../lib/format";
 import { MARK_RATIO, markSvg } from "../lib/brand";
 import type { CheckStatus, Experiment, Notebook } from "../lib/types";
 
@@ -26,7 +26,7 @@ export interface CardData {
 }
 
 const SHORT: Record<string, string> = { unseen: "Unseen data", nearby: "Nearby settings", shuffle: "Bad-luck drawdown", sample: "Enough trades" };
-const month = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { month: "short", year: "numeric" }).toUpperCase();
+const month = (iso: string) => asDate(iso).toLocaleDateString("en-GB", { month: "short", year: "numeric" }).toUpperCase();
 const TF_WORD: Record<string, string> = { "1d": "DAILY", "1h": "1-HOUR", "15m": "15-MINUTE", "5m": "5-MINUTE" };
 
 export function cardFromExperiment(nb: Notebook, e: Experiment): CardData {

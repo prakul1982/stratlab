@@ -29,6 +29,9 @@ async function open(page: Page, where: string, ready: string, who: ReturnType<ty
   }).catch(() => false);
   if (answered) await page.goto(where);
   await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  // on a busy machine the first-visit question can come after the page is ready: it covers the page until answered
+  await welcome.waitFor({ timeout: 2500 }).then(() => welcome.getByRole("button", { name: /^All of it/ }).click()).catch(() => undefined);
+  await expect(welcome).toHaveCount(0);
   return errors;
 }
 

@@ -902,6 +902,22 @@ def test_ibkr_daily_job(w, flex, monkeypatch):
     assert ibkr.run_daily(nxt + timedelta(days=1))["users"] == 1
 
 
+def test_ibkr_a_crash_while_saving_is_one_failed_try_not_a_read_every_half_hour(w, flex, monkeypatch):
+    connect_ibkr(w["client"])
+    day = datetime.now(ibkr.IST).replace(hour=9, minute=0) + timedelta(days=3)
+
+    def boom(*a, **k):
+        raise RuntimeError("storage went away")
+    monkeypatch.setattr(ibkr, "ingest", boom)
+    flex.calls.clear()
+    assert ibkr.run_daily(day) == {"users": 1, "ok": 0, "failed": 1}
+    box = state.section(PRO_ID, "ibkr")
+    assert box["status"] == "failed" and box["tried_at"]
+    state.update(PRO_ID, "ibkr", tried_at=day.isoformat())                              # the job's clock is the test's clock
+    assert ibkr.run_daily(day + timedelta(minutes=30)) == {"users": 0, "ok": 0, "failed": 0}
+    assert ibkr.run_daily(day + timedelta(days=1))["users"] == 1
+
+
 def test_ibkr_disconnect_deletes_the_token_and_keeps_what_was_read(w, flex):
     c = w["client"]
     connect_ibkr(c)

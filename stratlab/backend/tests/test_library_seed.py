@@ -105,6 +105,32 @@ def test_the_summary_is_a_finding_not_a_suggestion():
     assert S.plain("Only 3 trades.") == "Only 3 trades."
 
 
+def test_start_up_seed_waits_for_market_data_instead_of_giving_up(w, monkeypatch):
+    """A night-time deploy starts before the day's broker login: the one start-up check used to find market data down
+    and never look again until the next deploy, so the library stayed empty."""
+    from app import main
+    seeds, waits, ready = [], [], iter([False, False, True])
+    monkeypatch.setattr(S, "seeded", lambda: [])
+    monkeypatch.setattr(S, "seed", lambda registry, **kw: seeds.append(1) or {"published": [], "failed": []})
+    monkeypatch.setattr(main.kite, "ready", lambda: next(ready))
+    main.library_seed_once(sleep=waits.append)
+    assert seeds == [1] and waits == [main.SEED_FIRST_WAIT, main.SEED_RECHECK, main.SEED_RECHECK]
+
+
+def test_start_up_seed_does_nothing_when_the_library_has_them_and_stops_after_a_day(w, monkeypatch):
+    from app import main
+    seeds, waits = [], []
+    monkeypatch.setattr(S, "seed", lambda registry, **kw: seeds.append(1) or {})
+    monkeypatch.setattr(S, "seeded", lambda: [{"id": "seed-x"}])
+    main.library_seed_once(sleep=waits.append)
+    assert seeds == [] and waits == [main.SEED_FIRST_WAIT]                  # a deploy costs one cheap check
+    monkeypatch.setattr(S, "seeded", lambda: [])
+    monkeypatch.setattr(main.kite, "ready", lambda: False)
+    waits.clear()
+    main.library_seed_once(sleep=waits.append)
+    assert seeds == [] and len(waits) == 1 + main.SEED_TRIES                 # market data never came: it gives up after a day
+
+
 def test_admin_route_runs_it_in_the_background(w, small, monkeypatch):
     called = []
     monkeypatch.setattr(S, "seed", lambda registry, only=None, **kw: called.append(only) or {"published": [], "failed": []})
