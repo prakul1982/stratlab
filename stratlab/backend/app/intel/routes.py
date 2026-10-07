@@ -83,11 +83,25 @@ def search(q: str = "", region: str = "IN", profile=Depends(current_profile)):
     return ok(source_call(lambda: hub.search(q[:40], region_of(region))))
 
 
+def prices_as_of(c: dict) -> str:
+    """When a company page's price is from: the time of the quote's last trade (the exchange's own stamp), never the
+    moment of asking. A quote without one is read as of now."""
+    now = datetime.now(timezone.utc)
+    at = (c.get("quote") or {}).get("at")
+    try:
+        t = datetime.fromisoformat(at) if isinstance(at, str) else None
+    except ValueError:
+        t = None
+    if t is None:
+        return now.isoformat(timespec="minutes")
+    return min(t if t.tzinfo else t.replace(tzinfo=IST), now).isoformat(timespec="minutes")
+
+
 @router.get("/company/{region}/{symbol}")
 def company(region: str, symbol: str, profile=Depends(current_profile)):
     """One company's page. `as_of` is when its prices were read, for the page's "as of" line."""
     c = source_call(lambda: hub.company(region_of(region), symbol_of(symbol)))
-    return ok({**c, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes")})
+    return ok({**c, "as_of": prices_as_of(c)})
 
 
 @router.get("/chart/{region}/{symbol}")
@@ -126,7 +140,15 @@ def company_ai(region: str, symbol: str, refresh: bool = False, profile=Depends(
     def build():
         c = source_call(lambda: hub.company(r, s))
         return A.company(c, _ai, pro, company_key_facts(r, c))
-    read = ai_call(profile, "company", (r, s, pro, datetime.now(IST).date().isoformat()), 12 * 3600, refresh, build)
+    try:
+        read = ai_call(profile, "company", (r, s, pro, datetime.now(IST).date().isoformat()), 12 * 3600, refresh, build)
+    except HTTPException as e:
+        # the read is a nice-to-have on a page that has loaded: no AI answer today is an answer ("unavailable", and why),
+        # not a failed request on every company page opened
+        d = e.detail if isinstance(e.detail, dict) else {}
+        if d.get("code") in ("ai_failed", "ai_busy", "research_ai_limit"):
+            return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
+        raise
     return ok(A.clean_company(read))
 
 

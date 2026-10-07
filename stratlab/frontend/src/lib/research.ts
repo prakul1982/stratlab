@@ -66,7 +66,12 @@ export interface WatchItem { region: Region; symbol: string; name: string | null
 
 export const researchApi = {
   company: (r: Region, s: string) => api<Company>(`/research/company/${r}/${encodeURIComponent(s)}`),
-  companyAI: (r: Region, s: string, refresh = false) => api<CompanyAI>(`/research/company/${r}/${encodeURIComponent(s)}/ai${refresh ? "?refresh=true" : ""}`),
+  /** The AI read, or an Error saying why there is none (an answer of "unavailable" is a 200 on the wire, so a page opening is never a failed request). */
+  companyAI: async (r: Region, s: string, refresh = false): Promise<CompanyAI> => {
+    const got = await api<CompanyAI | { unavailable: true; message: string }>(`/research/company/${r}/${encodeURIComponent(s)}/ai${refresh ? "?refresh=true" : ""}`);
+    if ("unavailable" in got) throw new Error(got.message);
+    return got;
+  },
   chart: (r: Region, s: string, range: string) =>
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),
   quotes: (r: Region, syms: string[]) => api<Record<string, Quote | null>>(`/research/quotes?region=${r}&symbols=${syms.map(encodeURIComponent).join(",")}`),

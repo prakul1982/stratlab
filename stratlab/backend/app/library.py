@@ -23,7 +23,8 @@ MODERATION = ("reports", "hidden", "hidden_by")
 def _unseen(exp: dict) -> float | None:
     for c in (exp.get("verdict") or {}).get("checks") or []:
         if c.get("id") == "unseen" and c.get("status") != "skip":
-            return (c.get("data") or {}).get("unseen_ret")
+            got = (c.get("data") or {}).get("unseen_ret")
+            return got or None            # exactly 0 is no trade at all in the unseen years: no result, not "0.0%"
     return None
 
 
@@ -42,16 +43,48 @@ def entry(nb: dict, exp: dict, owner: str, author: str, description: str, entry_
         "group": None if not ngroup else {k: ngroup.get(k) for k in ("id", "name", "market", "maxOpen", "members")},
         "tf": exp.get("tf"), "side": (exp.get("strategy") or {}).get("side", "long"),
         "range": exp.get("range"), "strategy": exp.get("strategy"),
-        "verdict": {k: v.get(k) for k in ("verdict", "headline", "summary", "passed", "total")},
+        "verdict": {**{k: v.get(k) for k in ("verdict", "headline", "summary", "passed", "total")},
+                    "checks": [{"id": c.get("id"), "status": c.get("status")} for c in v.get("checks") or [] if isinstance(c, dict)]},
         "stats": {"ret": st.get("ret"), "buy_hold": st.get("buy_hold_ret"), "mdd": st.get("mdd"), "trades": st.get("n"), "unseen": _unseen(exp)},
         "published_at": datetime.now(timezone.utc).isoformat(), "copies": 0,
         "owner": owner, "source": {"nid": nb.get("id"), "v": exp.get("v")},
     }
 
 
+CHECK_NAME = {"unseen": "unseen years", "nearby": "nearby settings", "shuffle": "bad-luck fall", "sample": "enough trades"}
+MIN_TRADES = 15          # the verdict's own floor: fewer trades than this is "not enough evidence"
+
+
+def ran(e: dict) -> bool:
+    """Whether the experiment traded at all. One that didn't has no return, fall or unseen result to show: those are
+    "not run", not 0.0%."""
+    n = (e.get("stats") or {}).get("trades")
+    return n is None or n > 0
+
+
+def reason(e: dict) -> str | None:
+    """One line for why the verdict is what it is, from the verdict's own facts: the trade count, and which of its
+    checks passed, failed or weren't run."""
+    v, st = e.get("verdict") or {}, e.get("stats") or {}
+    n = st.get("trades")
+    if n is not None and n < MIN_TRADES:
+        return "No trades in this period, so nothing was tested." if n == 0 else f"Only {n} trade{'s' if n != 1 else ''} in this period, too few to tell skill from luck."
+    if v.get("verdict") == "no_edge" and (st.get("ret") or 0) <= 0:
+        return "Lost money after costs over the period, so there was no edge to test."
+    checks = [c for c in v.get("checks") or [] if c.get("id") in CHECK_NAME]
+    if not checks:
+        return None
+    groups: dict[str, list[str]] = {"pass": [], "fail": [], "skip": []}
+    for c in checks:
+        groups[c.get("status") if c.get("status") in groups else "fail"].append(CHECK_NAME[c["id"]])
+    parts = [f"{label}: {', '.join(groups[k])}" for k, label in (("pass", "Passed"), ("fail", "Failed"), ("skip", "Not run")) if groups[k]]
+    return ". ".join(parts) + "."
+
+
 def public(e: dict, viewer: str | None = None) -> dict:
     """What anyone sees: everything but the owner's id and who reported it (flags say whether it's yours)."""
     out = {k: v for k, v in e.items() if k not in ("owner", "source") + MODERATION}
+    out["ran"], out["reason"] = ran(e), reason(e)
     out["mine"] = bool(viewer and e.get("owner") == viewer)
     out["reported"] = bool(viewer and viewer in (e.get("reports") or {}))
     if out["mine"] and e.get("hidden"):
@@ -128,4 +161,5 @@ def search(entries: list[dict], market: str = "", verdict: str = "", q: str = ""
     else:   # best: the strongest verdicts first, then what held up on unseen data
         rows.sort(key=lambda e: (RANK.get((e.get("verdict") or {}).get("verdict"), 9),
                                  -((e.get("stats") or {}).get("unseen") or -1e9), -((e.get("stats") or {}).get("ret") or -1e9)))
+    rows.sort(key=lambda e: not ran(e))          # strategies that never traded have no evidence: below the rest, whatever the sort
     return rows

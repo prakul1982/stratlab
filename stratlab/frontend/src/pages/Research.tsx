@@ -160,7 +160,7 @@ export function CompanyPage() {
   const [tries, setTries] = useState(0);
   const nav = useNavigate();
   const share = useShareCompany(region, sym);
-  useDocTitle(c ? `${c.symbol}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : sym);
+  useDocTitle(c ? `${c.name || c.symbol}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : sym);
   useEffect(() => {
     let live = true;
     setC(null); setError(null); setResults(null);

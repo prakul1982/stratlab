@@ -213,6 +213,27 @@ def us_sector(fund: str | None) -> str:
 
 
 # ---------- the page ----------
+def latest_trade(quotes: list[dict], now: datetime) -> datetime | None:
+    """The time of the latest trade among some quotes (each has an ISO `at`; one without a zone is read as India's),
+    never later than `now`. None when no quote carries one."""
+    from zoneinfo import ZoneInfo
+    best = None
+    for q in quotes:
+        at = q.get("at")
+        try:
+            t = datetime.fromisoformat(at) if isinstance(at, str) else None
+        except ValueError:
+            t = None
+        if t is None:
+            continue
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=ZoneInfo("Asia/Kolkata"))
+        t = min(t, now)
+        if best is None or t > best:
+            best = t
+    return best
+
+
 def _r(v, dp=2):
     return None if v is None else round(v, dp)
 

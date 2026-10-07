@@ -22,6 +22,18 @@ export function niceTicks(lo: number, hi: number, count = 5): number[] {
   return out;
 }
 
+/** The ticks with their labels, each label once: a tick that reads the same as one already kept ("1, 1, 1, 0" on a count
+ * that rounds, "5%, 5%, 0%") is dropped, the first (lowest) one stays. */
+export function distinctTicks(ticks: number[], format: (v: number) => string): [number[], string[]] {
+  const seen = new Set<string>(), keep: number[] = [], labels: string[] = [];
+  for (const t of ticks) {
+    const l = format(t);
+    if (seen.has(l)) continue;
+    seen.add(l); keep.push(t); labels.push(l);
+  }
+  return [keep, labels];
+}
+
 /** Domain padded out to round ticks: [min, max] with a little air, plus the ticks inside it. */
 export function niceDomain(lo: number, hi: number, count = 5, includeZero = false): { min: number; max: number; ticks: number[] } {
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) { lo = 0; hi = 1; }

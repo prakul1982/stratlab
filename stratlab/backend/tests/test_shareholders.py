@@ -234,7 +234,8 @@ def test_company_route_reads_on_demand(w):
     body = r.json()
     assert body["quarter"] == "2026-06-30" and body["prev_quarter"] == "2026-03-31" and len(body["holders"]) == 9 and "search" in body
     assert "above 1%" in body["note"]
-    assert c.get("/research/holders/RELIANCE", headers=headers("free-token")).status_code == 404
+    nothing = c.get("/research/holders/RELIANCE", headers=headers("free-token"))             # nothing filed: an empty 200, never a 404
+    assert nothing.status_code == 200 and nothing.json()["available"] is False and nothing.json()["holders"] == []
     for bad in ("x" * 40, "A;B", "..", "-x"):
         assert c.get(f"/research/holders/{bad}", headers=headers("free-token")).status_code in (400, 404)
     assert c.get("/research/holders/SAFARI").status_code == 401

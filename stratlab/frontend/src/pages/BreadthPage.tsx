@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  breadthApi, count, delta, liveSeries, liveTitle, savePick, savedPick, share, shortDay,
+  breadthApi, count, delta, flatZero, liveSeries, liveTitle, savePick, savedPick, share, shortDay,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -267,13 +267,13 @@ function AlertBox({ group }: { group: Group }) {
 type Col = { header: string; get: (i: number) => string };
 
 /** One chart in its card, with the same numbers as a table under its Table switch (newest day first). */
-function Box({ title, info, h, cols, note, children }: { title: string; info?: string; h: History; cols: Col[]; note?: ReactNode; children: ReactNode }) {
+function Box({ title, info, h, cols, note, none, children }: { title: string; info?: string; h: History; cols: Col[]; note?: ReactNode; none?: boolean; children: ReactNode }) {
   const idx = Array.from({ length: h.days.length }, (_, k) => h.days.length - 1 - k);
   const columns: Column<number>[] = [{ key: "day", header: "Day", rowHeader: true, cell: (i) => shortDay(h.days[i]) },
     ...cols.map((c) => ({ key: c.header, header: c.header, numeric: true, cell: (i: number) => c.get(i) }))];
   return (
     <ChartFrame title={title} info={info} table={{ label: title, columns, rows: idx, rowKey: (i) => h.days[i], empty: "No days to show." }}
-      footer={note ? <p className="k-note">{note}</p> : undefined}>
+      footer={note || none ? <p className="k-note">{none && <b data-testid="breadth-none">None in this period. </b>}{note}</p> : undefined}>
       {children}
     </ChartFrame>
   );
@@ -303,7 +303,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
             format={(v) => v.toLocaleString("en-IN", { maximumFractionDigits: 2 })} axisFormat={fmtInt} ariaLabel={`${data.group.index_name} closing level`} />
             : <p className="k-small k-muted">The index's prices weren't available for these days.</p>}
         </Box>
-        <Box title="New 52-week highs and lows" info={help.highs_lows} h={h} cols={[{ header: "New highs", get: (i) => count(h.highs[i]) }, { header: "New lows", get: (i) => count(h.lows[i]) }]} note={`Highs drawn up, lows down · last ${last}`}>
+        <Box title="New 52-week highs and lows" info={help.highs_lows} h={h} cols={[{ header: "New highs", get: (i) => count(h.highs[i]) }, { header: "New lows", get: (i) => count(h.lows[i]) }]} none={flatZero(h.highs, h.lows)} note={`Highs drawn up, lows down · last ${last}`}>
           <PairBars up={h.highs} down={h.lows} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="new highs" downLabel="new lows" upName="New highs" downName="New lows" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="New 52-week highs (up) and lows (down) each day" />
         </Box>
@@ -315,11 +315,11 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           <LineChart lines={[{ values: h.summation, color: A, label: "Summation", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan summation index" />
         </Box>
-        <Box title="Stocks up 4% and down 4%" info={help.moves} h={h} cols={[{ header: "Up 4%+", get: (i) => count(h.up4[i]) }, { header: "Down 4%+", get: (i) => count(h.down4[i]) }]} note={`Last ${last}`}>
+        <Box title="Stocks up 4% and down 4%" info={help.moves} h={h} cols={[{ header: "Up 4%+", get: (i) => count(h.up4[i]) }, { header: "Down 4%+", get: (i) => count(h.down4[i]) }]} none={flatZero(h.up4, h.down4)} note={`Last ${last}`}>
           <PairBars up={h.up4} down={h.down4} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="up 4%+" downLabel="down 4%+" upName="Up 4% or more" downName="Down 4% or more" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="Stocks up 4% or more (up) and down 4% or more (down) each day" />
         </Box>
-        <Box title="Share in Stage 2" info={help.stage2} h={h} cols={[{ header: "In Stage 2", get: (i) => share(h.stage2[i]) }]} note={`Last ${last}`}>
+        <Box title="Share in Stage 2" info={help.stage2} h={h} cols={[{ header: "In Stage 2", get: (i) => share(h.stage2[i]) }]} none={flatZero(h.stage2)} note={`Last ${last}`}>
           <LineChart lines={[{ values: h.stage2, color: A, label: "In Stage 2", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Share of stocks in Stage 2" />
         </Box>
@@ -356,7 +356,7 @@ function SectorHeat({ t }: { t: SectorTable }) {
           ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{c.label}</span>, numeric: true,
             cell: (r: SectorTable["rows"][number]) => {
               const v = r.values[i];
-              return <span className={`inv-heat-cell h${v == null ? 0 : Math.min(9, Math.floor(v / 10))}`} title={`${r.sector}, ${c.label.toLowerCase()} (${c.day}): ${share(v)}`}>{share(v)}</span>;
+              return <span className={`inv-heat-cell heat${v == null ? 0 : Math.min(9, Math.floor(v / 10))}`} title={`${r.sector}, ${c.label.toLowerCase()} (${c.day}): ${share(v)}`}>{share(v)}</span>;
             } }))]} />
       <div className="k-row k-small k-muted" aria-hidden="true">
         <span>0%</span><span className="inv-scale" /><span>100%</span>

@@ -16,6 +16,9 @@ UNDERLYINGS = {  # (exchange, name): (spot key, spot, strike gap, lot)
 TOKENS = {sk: 900001 + i for i, (sk, *_) in enumerate(UNDERLYINGS.values())}
 
 
+PUT_LEAN = {"BANKNIFTY": 0.9, "FINNIFTY": 1.18, "MIDCPNIFTY": 0.8, "SENSEX": 1.07}
+
+
 def _expiries(lingering: bool = False, exchange: str = "NFO", name: str = "NIFTY"):
     """The next four expiries in India's date, by the exchange's rule (app/data/expiries.py): weekly for NIFTY (NSE,
     Tuesdays) and SENSEX (BSE, Thursdays), monthly for the other index options, moved to the trading day before on a
@@ -129,7 +132,8 @@ class FakeOptionsKite:
                 k = float(sym[len(name) + 6:-2])
                 peak = spot + (4 if sym.endswith("CE") else -3) * gap
                 bump = math.exp(-((k - peak) / (5 * gap)) ** 2)
-                return int(20000 + (300000 if sym.endswith("CE") else 260000) * bump)
+                lean = PUT_LEAN.get(name, 1.0)          # each index has its own balance of puts to calls, so their put-call ratios differ
+                return int(20000 + (300000 if sym.endswith("CE") else 260000 * lean) * bump)
         return 100000
 
     def spot(self, key, now):
