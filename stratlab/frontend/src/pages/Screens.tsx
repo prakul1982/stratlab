@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { CRORE, inrCompact, pct, price } from "../lib/format";
+import { pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { REGION_NAME, bigMoney, useRegion, type Region } from "../lib/research";
+import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import {
   NO_FILTERS, conditionCount, screensApi, type Bound, type Filters, type RangeId, type SavedPage, type SavedScreen,
   type ScreenMeta, type ScreenResult, type ScreenRow,
@@ -20,8 +20,10 @@ type Draft = Partial<Record<RangeId, { min: string; max: string }>>;
 type Col = { id: keyof ScreenRow; label: string; short?: string; cell: (r: ScreenRow, region: Region) => string; india?: boolean; text?: boolean };
 
 const num = (v: number | null, dp = 1, unit = "") => (v == null ? "–" : `${v.toFixed(dp)}${unit}`);
-/** A market value: Indian figures arrive in crore, US ones in millions of dollars. */
-const cap = (v: number | null, region: Region) => (v == null ? "–" : region === "IN" ? inrCompact(v * CRORE) : bigMoney(v * 1e6, "USD"));
+/** A market value in one unit down the whole column, so values compare at a glance: Indian figures (they arrive in
+ * crore) as whole crore with Indian grouping ("₹7,35,120 cr"), US ones (millions of dollars) in billions. */
+const cap = (v: number | null, region: Region) => (v == null ? "–" : region === "IN"
+  ? `₹${Math.round(v).toLocaleString("en-IN")} cr` : `$${(v / 1e3).toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} bn`);
 
 const COLS: Col[] = [
   { id: "name", label: "Company", cell: (r) => r.name, text: true },
@@ -89,7 +91,7 @@ export function ScreensPage() {
   const [weekly, setWeekly] = useState(false);
   const [saving, setSaving] = useState(false);
   // on a phone the filters start folded, so the table is in view; one tap opens them
-  const [showFilters, setShowFilters] = useState(() => typeof matchMedia !== "function" || matchMedia("(min-width: 1001px)").matches);
+  const [showFilters, setShowFilters] = useState(() => typeof matchMedia !== "function" || matchMedia("(min-width: 1361px)").matches);
   const seq = useRef(0);
 
   const { ranges, bad } = useMemo(() => fromDraft(draft), [draft]);

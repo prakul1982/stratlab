@@ -1319,6 +1319,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 
 /* form grid: every label one line, every box the same height, all boxes on one baseline */
 .k-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s4); align-items: end; min-width: 0; }
+.k-form.k-form-pair { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 .k-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */

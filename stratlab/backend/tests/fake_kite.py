@@ -119,12 +119,12 @@ class FakeKiteConnect:
             t = t.replace(hour=0, minute=0)
         else:
             t = t.replace(minute=(t.minute // step) * step)
+        now = datetime.now(IST) if t.tzinfo else datetime.now(IST).replace(tzinfo=None)
         while t <= to:
             day_ok = t.weekday() < 5
             in_hours = step == 1440 or (t.hour, t.minute) >= (9, 15) and (t.hour, t.minute) < (15, 30)
             if day_ok and in_hours:
                 # the candle still forming closes at the price now, so the chart's last candle and the quote agree
-                now = datetime.now(IST) if t.tzinfo else datetime.now(IST).replace(tzinfo=None)
                 o, c = price_of(r["tradingsymbol"], t), price_of(r["tradingsymbol"], min(t + timedelta(minutes=step), now))
                 out.append({"date": t.replace(tzinfo=IST), "open": o, "high": max(o, c) * 1.004, "low": min(o, c) * 0.996,
                             "close": c, "volume": 1000})

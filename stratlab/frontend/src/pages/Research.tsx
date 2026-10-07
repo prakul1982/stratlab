@@ -10,7 +10,7 @@ import {
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Region, type SectorAI,
 } from "../lib/research";
 import {
-  AIRead, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
+  AIRead, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
   Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
 import { preloadPriceChart } from "../charts/price/lazy";
@@ -463,11 +463,14 @@ export function PulsePage() {
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><IndexStrip indices={data?.indices ?? null} /></Card>
       <Card>
         <CardHead title="The mood" info={HELP.researchPulse}
-          actions={<>{ai && <span className="k-note">Written {ago(new Date(ai.generated_at * 1000).toISOString())}</span>}<button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></>} />
-        {aiErr ? <ErrorState title="The mood couldn't be read" action={{ label: "Try again", onClick: () => loadAI(true) }}>{aiErr}</ErrorState>
-          : !ai ? <Skeleton label="Reading the tape" lines={2} />
-            : ai.tone ? <p className="inv-summary">{ai.tone}</p>
-              : <EmptyState title="No AI read of today's mood yet" action={{ label: "Write one", onClick: () => loadAI(true) }} />}
+          actions={ai?.tone && !aiErr ? <><span className="k-note">Written {ago(new Date(ai.generated_at * 1000).toISOString())}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
+        {/* "Written" only beside a read that exists; no read is one calm line and one button, like a company's AI read */}
+        {aiErr || (ai && !ai.tone) ? (
+          <div className="k-row ai-read-off" role="status">
+            <span className="k-small k-muted">No AI read of the mood right now ({aiErr ? aiReason(aiErr) : "the AI's reply had none"}). The index levels and headlines don't depend on it.</span>
+            <button type="button" className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Asking…" : "Ask again"}</button>
+          </div>
+        ) : !ai ? <Skeleton label="Reading the tape" lines={2} /> : <p className="inv-summary">{ai.tone}</p>}
       </Card>
       {ai && (ai.hot.length > 0 || ai.flows.length > 0) && (
         <div className="k-cols">
@@ -537,9 +540,9 @@ export function ComparePage() {
       <PageHeader eyebrow={eyebrowOf("/research/compare")} title="Two companies, side by side" lede="Pick two companies to line up their numbers, with an AI summary of where they differ." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card>
-        <FormGrid label="The two companies">
-          <Field label="First company">{(id) => <StockPicker id={id} market={region} value={a} placeholder={a ? `Change ${a}…` : "First company, e.g. TCS"} onPick={(s) => setSide("a", s)} />}</Field>
-          <Field label="Second company">{(id) => <StockPicker id={id} market={region} value={b} placeholder={b ? `Change ${b}…` : "Second company, e.g. Infosys"} onPick={(s) => setSide("b", s)} />}</Field>
+        <FormGrid label="The two companies" pair>
+          <Field label="First company">{(id) => <StockPicker id={id} market={region} value={a} placeholder={a ? `Change ${a}…` : "Name or symbol, e.g. TCS"} onPick={(s) => setSide("a", s)} />}</Field>
+          <Field label="Second company">{(id) => <StockPicker id={id} market={region} value={b} placeholder={b ? `Change ${b}…` : "Name or symbol, e.g. Infosys"} onPick={(s) => setSide("b", s)} />}</Field>
         </FormGrid>
       </Card>
       {error && <ErrorState title="The two couldn't be compared">{error}</ErrorState>}
