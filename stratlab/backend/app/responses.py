@@ -10,7 +10,12 @@ from .branding import public_text
 
 
 def err(status: int, code: str, message: str) -> NoReturn:
-    """Stop the request with `status` and a {code, message} body."""
+    """Stop the request with `status` and a {code, message} body. A 402 (a plan's feature or limit) is worded through
+    plans.upgrade_note, so every upgrade prompt is honest while paid plans can't be bought yet."""
+    if status == 402:
+        from .plans import payments_live, upgrade_note
+        message = upgrade_note(message)
+        raise HTTPException(status, {"code": code, "message": public_text(message), "payments": payments_live()})
     raise HTTPException(status, {"code": code, "message": public_text(message)})
 
 

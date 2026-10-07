@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago } from "../../lib/format";
-import { Card, CardHead, ConfirmDialog, ErrorState, Meter, Notice, Skeleton } from "../../components/kit";
+import { Card, CardHead, ConfirmDialog, Disclosure, ErrorState, Meter, Notice, Skeleton } from "../../components/kit";
 
 type Sized = { name: string; bytes: number };
 type Group = { prefix: string; bytes: number; rows: number };
@@ -46,12 +46,12 @@ export function StoragePanel() {
         <ErrorState title="Couldn't read the database's size">{s.error}</ErrorState>
       ) : s.missing ? (
         <div className="k-stack">
-          <p className="k-small">One step to see the size here: in Supabase, open <b>SQL Editor</b> → <b>New query</b>, paste this, and press <b>Run</b>. It only reads sizes.</p>
-          <pre className="k-code adm-pre">{s.sql}</pre>
+          <p className="k-small">Not measured yet. One step shows the size here: copy the SQL, then in Supabase open <b>SQL Editor</b> → <b>New query</b>, paste it and press <b>Run</b>. It only reads sizes.</p>
           <div className="k-row">
             <button type="button" className="btn sm" onClick={copy}>{copied ? "Copied" : "Copy SQL"}</button>
             <button type="button" className="btn quiet sm" onClick={load}>Check again</button>
           </div>
+          <Disclosure summary="Show the SQL" testId="storage-sql"><pre className="k-code adm-pre" tabIndex={0} aria-label="The SQL to run">{s.sql}</pre></Disclosure>
         </div>
       ) : (
         <div className="k-stack">

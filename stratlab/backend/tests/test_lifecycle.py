@@ -262,9 +262,9 @@ def test_every_email_is_facts_not_advice_and_names_no_data_source(w, kind):
 
 def test_dates_in_reminders(w):
     s, _, text = lifecycle.build("trial_before", {}, {"last_day": date(2026, 10, 9)})
-    assert s == "Your paper-trading trial ends tomorrow" and "Fri 09 Oct" in text
+    assert s == "Your paper-trading trial ends tomorrow" and "Fri, 9 Oct 2026" in text
     s, _, text = lifecycle.build("promo_end", {}, {"last_day": date(2026, 10, 9)})
-    assert s == "The launch offer ends today" and "Fri 09 Oct" in text
+    assert s == "The launch offer ends today" and "Fri, 9 Oct 2026" in text
     assert "What's new" in lifecycle.build("inactive", {})[0]
     with pytest.raises(ValueError):
         lifecycle.build("nope", {})
@@ -298,7 +298,7 @@ def test_sweep_end_to_end_with_trial_and_offer(w, outbox):
     user("u-p", "p@example.com", NOW - timedelta(days=40))
     lifecycle.sweep(datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc))
     assert [m["subject"] for m in outbox if m["to"] in ("p@example.com", "t@example.com")] == ["The launch offer ends tomorrow"] * 2
-    assert "Mon 02 Nov" in outbox[0]["text"]
+    assert "Mon, 2 Nov 2026" in outbox[0]["text"]
     lifecycle.sweep(datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc))
     assert len([m for m in outbox if m["to"] == "p@example.com"]) == 1
     lifecycle.sweep(datetime(2026, 11, 2, 5, 0, tzinfo=timezone.utc))

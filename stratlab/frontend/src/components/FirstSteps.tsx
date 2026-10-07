@@ -3,24 +3,29 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { Card, CardHead } from "./kit";
+import { useGuideOpen, welcomePending } from "../lib/onboarding";
 
 type Step = { id: string; title: string; to: string; done: boolean };
 type View = { show: boolean; dismissed: boolean; done: number; steps: Step[] };
 
 /** Home's first-steps checklist for a new account. Each step ticks itself from what the user has really done; the
  *  list hides for good when dismissed, and by itself once every step is done. */
-export function FirstSteps() {
-  const { fail } = useApp();
+export function FirstSteps({ onShown }: { onShown?: (shown: boolean) => void }) {
+  const { fail, me } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [busy, setBusy] = useState(false);
+  const guiding = useGuideOpen();
 
   useEffect(() => {
     let live = true;
     api<View>("/me/first-steps").then((v) => { if (live && v && Array.isArray(v.steps)) setView(v); }).catch(() => undefined);
     return () => { live = false; };
   }, []);
+  // one guide at a time: the checklist waits for the welcome question and the tour
+  const shown = !!view?.show && !!me && !welcomePending(me) && !guiding;
+  useEffect(() => { onShown?.(shown); }, [shown, onShown]);
 
-  if (!view?.show) return null;
+  if (!shown || !view) return null;
   const dismiss = async () => {
     setBusy(true);
     try { setView(await api<View>("/me/first-steps", { method: "PUT", body: { dismissed: true } })); }

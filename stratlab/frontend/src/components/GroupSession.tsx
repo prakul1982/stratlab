@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useApp } from "../lib/app";
 import { money, price, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { HELP } from "../lib/help";
 import { upDown } from "../lib/tradeUi";
@@ -10,6 +11,7 @@ import { Earlier, splitToday } from "./Earlier";
 import { OrderList } from "./OrderList";
 import "../pages/trade/trade.css";
 import "../pages/trade/paper.css";
+import { sessionFeed } from "../lib/marketHours";
 
 export interface GroupSnapshot {
   id: string; name: string; kind: "group"; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
@@ -35,7 +37,8 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
   const holding = snap.members.filter((m) => m.position);
   const { today, earlier } = splitToday(snap.events, (e) => e.t, tz);     // today's orders in view, the earlier ones folded
   const closedPnl = earlier.reduce((n, e) => n + (e.pnl ?? 0), 0);
-  const feed = !running ? "" : snap.feed_connected ? (snap.last_tick_at ? "Live prices" : "Waiting for the market to open") : "Reconnecting to prices";
+  const { markets } = useApp();
+  const feed = sessionFeed({ feedConnected: snap.feed_connected, lastTickAt: snap.last_tick_at, market: markets.find((m) => m.id === snap.instrument.market) });
   const holdCols: Column<Member>[] = [
     { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
     { key: "side", header: "Side", cell: (m) => (m.position!.side === "short" ? "Short" : "Long") },
@@ -61,11 +64,11 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
     <div className="k-page">
       <div className="k-spread k-session-head">
         <div className="k-stack k-tight">
-          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
+          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true, true)}</span>
           <h2 className="k-session-name">{snap.name}</h2>
         </div>
         <div className="k-row">
-          {running && <span className="k-row"><Badge tone={snap.feed_connected && snap.last_tick_at ? "live" : "plain"}>{feed}</Badge><Info>{HELP.feed}</Info></span>}
+          {running && <span className="k-row"><Badge tone={feed.tone}>{feed.text}</Badge><Info>{HELP.feed}</Info></span>}
           {running ? <button type="button" className="btn danger" onClick={() => setAsk("stop")}>Stop session</button>
             : <><Badge tone="plain">{snap.status}</Badge><button type="button" className="btn danger sm" onClick={() => setAsk("delete")}>Delete</button></>}
         </div>

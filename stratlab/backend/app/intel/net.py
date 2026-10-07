@@ -21,6 +21,10 @@ class SourceError(Exception):
         self.source, self.busy = source, busy
 
 
+class NotFound(SourceError):
+    """The sources answered, and there is no such company or ticker: a wrong name, not a fault (answered as a 404)."""
+
+
 def approx_size(value, _budget: list | None = None) -> int:
     """A rough byte count of a cached value (strings, bytes, dicts, lists, numbers), cheap enough to run on every
     set: it walks at most 20,000 nodes and scales up from there. Counted generously, since parsed JSON takes several

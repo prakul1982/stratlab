@@ -32,7 +32,7 @@ export function StockPicker({ value = "", onPick, onText, market = "IN", id, pla
     const t = window.setTimeout(() => {
       suggestions(q.slice(0, 40), market).then((r) => {
         if (n !== asked.current) return;
-        setRows(r); setOn(0); setOpen(document.activeElement === box.current);
+        setRows(r); setOn(-1); setOpen(document.activeElement === box.current);      // nothing marked until ↓, so ↓ goes to the first
       }).catch(() => { if (n === asked.current) { setRows([]); setOpen(false); } });
     }, 200);
     return () => window.clearTimeout(t);
@@ -53,9 +53,15 @@ export function StockPicker({ value = "", onPick, onText, market = "IN", id, pla
     onPick(s, market === "US" ? "US" : "IN");
   };
   const key = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); if (!open && rows.length) setOpen(true); setOn((a) => (rows.length ? (a + 1) % rows.length : 0)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setOn((a) => (rows.length ? (a - 1 + rows.length) % rows.length : 0)); }
-    else if (e.key === "Enter") { e.preventDefault(); if (open && rows[on]) pick(rows[on]); else exact(); }
+    if (e.key === "ArrowDown") { e.preventDefault(); if (!open && rows.length) setOpen(true); setOn((a) => (rows.length ? (a + 1) % rows.length : -1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setOn((a) => (rows.length ? (a <= 0 ? rows.length - 1 : a - 1) : -1)); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      // the marked suggestion; else the one whose symbol is exactly what was typed; else the typed symbol itself
+      const typed = text.trim().toUpperCase();
+      const same = rows.find((r) => r.symbol.toUpperCase() === typed || r.id.toUpperCase() === typed);
+      if (open && rows[on]) pick(rows[on]); else if (same) pick(same); else exact();
+    }
     else if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); }
   };
   const shown = open && text.trim().length > 0;

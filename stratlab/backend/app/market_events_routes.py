@@ -16,7 +16,7 @@ from . import admin, db, market_events as M, stock_alerts
 from .auth import current_profile
 from .intel.filings import ist_now
 from .intel.net import TTLCache
-from .plans import FEATURE_PLAN, PLANS, access_plan, allows
+from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 from .responses import err
 
 router = APIRouter(tags=["market-events"])
@@ -54,7 +54,7 @@ def forget():
 
 
 def reminders_allowed(profile: dict) -> bool:
-    return allows(access_plan(profile), "event_reminders")
+    return allows(plan_of(profile), "event_reminders")
 
 
 def _send(profile: dict, subject: str, text: str) -> list[str]:
@@ -161,7 +161,7 @@ def events_refresh(_=Depends(admin.admin_profile)):
     def run():
         try:
             out = M.refresh(M.Web())
-            job.status.update(problems=out["problems"][:5])
+            job.record(ist_now(), out["problems"], len(M.READERS))
         except Exception as e:
             print("market events refresh failed:", type(e).__name__, str(e)[:160])
         finally:

@@ -21,7 +21,7 @@ function List({ items }: { items: Item[] }) {
       <CardHead title={`${items.length} emails`} info="Each sample goes through the same builder the real email uses, with made-up details. Nothing is sent." />
       <div className="adm-mail-list" role="list" aria-label="Emails">
         {groups.map(([group, rows]) => (
-          <div key={group} role="group" aria-label={group}>
+          <div key={group}>
             <div className="adm-mail-group k-eyebrow">{group}</div>
             {rows.map((r) => (
               <div key={r.kind} role="listitem">

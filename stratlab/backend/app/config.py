@@ -102,6 +102,8 @@ class Settings:
     SMTP_USER = _env("SMTP_USER")
     SMTP_PASSWORD = _env("SMTP_PASSWORD")
     ALERT_FROM_EMAIL = _env("ALERT_FROM_EMAIL")
+    # where replies to any app email go (a real inbox; ALERT_FROM_EMAIL may be a send-only address)
+    REPLY_TO_EMAIL = _env("REPLY_TO_EMAIL", "support@stratlab.studio")
     RESEND_API_KEY = _env("RESEND_API_KEY")                       # email over HTTPS (hosts that block SMTP, like Railway)
     BREVO_API_KEY = _env("BREVO_API_KEY")                         # email over HTTPS; tried before Resend and SMTP
     # signs unsubscribe and email-confirmation links; when unset, one is derived from SUPABASE_SERVICE_KEY

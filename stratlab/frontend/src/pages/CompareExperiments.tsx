@@ -133,7 +133,7 @@ export function CompareExperiments() {
           format={(v) => pct(v)} axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
       </Card>
       <Card label="The numbers">
-        <CardHead level={3} title="The numbers" info="Bold marks the larger of the two on each line. A higher backtest figure is not proof: the verdict's honesty checks are what test for luck." infoLabel="About this table" />
+        <CardHead level={3} title="The numbers" info="Bold marks the larger of the two on each line. A higher backtest figure is not proof: the verdict's honesty checks are what test for luck." infoLabel="About the numbers" />
         <DataTable label="Compared numbers" columns={cols} rows={lines} rowKey={(l) => l.label} />
       </Card>
     </div>

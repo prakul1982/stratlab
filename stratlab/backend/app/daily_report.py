@@ -38,7 +38,7 @@ def due(market: str, now: datetime) -> str | None:
 
 def traded_today(sessions: list, market: str, day: str) -> bool:
     """False on a holiday: no session in that market saw a price today, so there's nothing to report."""
-    tz = ZoneInfo(SEND_AT[market][0])
+    tz = zone_of(market)
     for s in sessions:
         t = getattr(s, "last_tick_at", None)
         try:
@@ -49,8 +49,20 @@ def traded_today(sessions: list, market: str, day: str) -> bool:
     return False
 
 
-def _day(v) -> str:
-    return str(v)[:10]
+def zone_of(market: str) -> ZoneInfo:
+    """The one zone a report's day is counted in: the market's own (UTC for crypto), the same one `due` and
+    `traded_today` use."""
+    return ZoneInfo(SEND_AT.get(market, ("UTC", None))[0])
+
+
+def day_of(v, tz: ZoneInfo) -> str:
+    """The date of a stamp in the report's zone. A stamp with a zone (a signal session's trades carry India's, its
+    signal log UTC) is converted; one without is already the market's own time (a bar's time)."""
+    try:
+        t = datetime.fromisoformat(str(v))
+    except ValueError:
+        return str(v)[:10]
+    return (t.astimezone(tz) if t.tzinfo else t).date().isoformat()
 
 
 def summarise(s, day: str) -> dict:
@@ -58,6 +70,8 @@ def summarise(s, day: str) -> dict:
     kind = getattr(s, "kind", "single")
     snap = s.snapshot()
     acct = snap["account"]
+    tz = zone_of(getattr(s, "market", "IN"))
+    _day = lambda v: day_of(v, tz)
     if kind == "group":
         trades = [t for m in s.members for t in m.engine.trades if _day(t["exit_t"]) == day]
         open_n = acct.get("open", 0)
@@ -78,12 +92,14 @@ def summarise(s, day: str) -> dict:
 
 
 def _money(x: float, cur: str) -> str:
-    sign = "-" if x < 0 else "+"
-    return f"{sign}{abs(x):,.0f} {cur}".strip()
+    """+₹200, −$35: the currency's sign, as everywhere else in the app (a currency without one keeps its code)."""
+    from .email_kit import money
+    return money(x, cur or "INR", signed=True)
 
 
 def text(market_name: str, day: str, rows: list[dict]) -> str:
-    d = date.fromisoformat(day).strftime("%a %d %b")
+    from .email_kit import fmt_date
+    d = fmt_date(day, year=False, weekday=True)
     lines = [f"StratLab daily report: {market_name}, {d}", ""]
     for r in rows:
         total = r["equity"] - r["capital"]
@@ -97,7 +113,7 @@ def text(market_name: str, day: str, rows: list[dict]) -> str:
             extra = [f"{sig['late']} late" if sig["late"] else "", f"{sig['refused']} refused" if sig["refused"] else ""]
             extra = [x for x in extra if x]
             lines.append(f"  Signals: {sig['received']} arrived" + (f" ({', '.join(extra)}; see the session's signal log)" if extra else ""))
-    lines += ["", "Paper trading only: no real orders. Turn this report off under Account → Alerts."]
+    lines += ["", "Paper trading only: no real orders. Turn this report off in Settings → Notifications → Alerts."]
     return "\n".join(lines)
 
 

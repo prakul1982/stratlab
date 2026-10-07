@@ -17,7 +17,7 @@ export interface PayoffCurve {
   shade?: boolean;                  // profit/loss wash (the first curve has it unless set false)
   hidden?: boolean;                 // starts switched off in the legend
 }
-export interface PayoffMarker { x: number; label: string; kind?: "spot" | "breakeven" | "strike" | "other"; color?: string }
+export interface PayoffMarker { x: number; label: string; kind?: "spot" | "breakeven" | "strike" | "other"; color?: string; side?: "left" | "right" }
 
 const COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)"];
 
@@ -32,7 +32,7 @@ export function PayoffChart({ xs, curves, markers = [], format, axisFormat, xFor
   }));
   const xMarkers: XMarker[] = markers.map((m) => ({
     x: m.x, label: m.label, color: m.color ?? (m.kind === "spot" ? "var(--ink)" : "var(--muted)"),
-    dash: m.kind !== "spot", strong: m.kind === "spot",
+    dash: m.kind !== "spot", strong: m.kind === "spot", side: m.side,
   }));
   return (
     <XYChart series={series} x={xs} xFormat={xFormat} labels={xs.map((x) => `At ${xFormat(x)}`)} tableX="Underlying at"

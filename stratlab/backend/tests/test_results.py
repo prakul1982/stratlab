@@ -219,8 +219,8 @@ def test_india_results_out_message_has_the_filing_and_stated_numbers(w):
     assert len(outs) == 1
     _, subject, text, url = outs[0]
     assert subject == "StratLab: RELIANCE results are out" and url == "/research/IN/RELIANCE"
-    assert "https://nsearchives.nseindia.com/res.pdf" in text and "Revenue from operations ₹2,35,481 crore" in text
-    assert "Net profit ₹18,540 crore" in text and not write.banned(text)
+    assert "https://nsearchives.nseindia.com/res.pdf" in text and "Revenue from operations: ₹2,35,481 crore" in text
+    assert "Net profit: ₹18,540 crore" in text and not write.banned(text)
     row = R.lookup("IN", "RELIANCE", TODAY)["next"]
     assert row["out"]["url"] == "https://nsearchives.nseindia.com/res.pdf"
     job.tick(datetime(2026, 10, 5, 11, 0, tzinfo=timezone.utc))           # the next hour: already sent, not again
@@ -261,9 +261,9 @@ def test_my_stocks_newsletter_has_a_results_this_week_section(w):
          "stocks": [], "unchanged": [], "results": due, "paper": []}
     secs = {s["title"]: s for s in write.sections(f)}
     items = secs["Results this week"]["items"]
-    assert items[0]["text"].startswith("MSFT: results filed Sat 03 Oct") and items[0]["lines"][0]["text"] == "EPS: $3.21 (as stated in the filing)"
-    assert items[1]["text"] == "RELIANCE: Financial Results on Tue 06 Oct"
-    assert write.subject(f) == "My Stocks, Mon 05 Oct: results this week for 2 of your stocks"
+    assert items[0]["text"].startswith("MSFT: results filed Sat 3 Oct") and items[0]["lines"][0]["text"] == "EPS: $3.21 (as stated in the filing)"
+    assert items[1]["text"] == "RELIANCE: Financial Results on Tue 6 Oct"
+    assert write.subject(f) == "My Stocks, Mon 5 Oct: results this week for 2 of your stocks"
     assert "results date this week" in write.template(f) and not write.banned(write.template(f))
 
 

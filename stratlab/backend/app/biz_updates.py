@@ -26,7 +26,7 @@ from . import db, docs
 from .ai_providers import AIError, complete, extract_json
 from .auth import current_profile
 from .intel.net import SourceError, TTLCache
-from .plans import FEATURE_PLAN, PLANS, access_plan, allows
+from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 from .responses import err, ok
 
 KEY = "bizupd:"                 # bizupd:<SYMBOL> = {"reads": {filing id: {"at", "title", "url", "read_at", "period", "span", "figures", "problem"}}}
@@ -800,7 +800,7 @@ router = APIRouter(tags=["invest"])
 
 
 def _allowed(profile: dict) -> bool:
-    return allows(access_plan(profile), "biz_updates")
+    return allows(plan_of(profile), "biz_updates")
 
 
 def _symbol(symbol: str) -> str:

@@ -134,10 +134,10 @@ def test_render_gives_html_and_text_with_the_footer():
     html, text = write.render(issue)
     assert html.startswith("<!doctype html>") and "&lt;a little&gt;" in html and "<img" not in html and "<link" not in html
     for out in (html, text):
-        assert write.FOOTER in out and "{unsubscribe_url}" in out and "/news/market.IN.2026-10-01" in out
+        assert write.FOOTER in out and "{unsubscribe_url}" in out and "/news?tab=IN&issue=market.IN.2026-10-01" in out.replace("&amp;", "&")
         assert "TCS matches the Stage 2 rule" in out and "/research/IN/TCS" in out
         assert "Brokerage says buy" not in out             # a headline giving advice is left out
-    assert issue["subject"].startswith("Market Brief India, Thu 01 Oct")
+    assert issue["subject"].startswith("Market Brief India, Thu 1 Oct")
 
 
 # ---------- the schedule ----------
@@ -188,7 +188,7 @@ def test_my_stocks_issue_when_something_changed(w, monkeypatch, outbox):
     monkeypatch.setattr(main.filings_feed, "announcements", lambda sym, days=365: [qip], raising=False)
     assert job.Job().tick(AFTER_IN_CLOSE) == 1
     issue = job.load(job.ids("my_stocks", "u-pro")[0])
-    assert issue["uid"] == "u-pro" and "QIP" in issue["text"] and issue["subject"].startswith("My Stocks, Thu 01 Oct")
+    assert issue["uid"] == "u-pro" and "QIP" in issue["text"] and issue["subject"].startswith("My Stocks, Thu 1 Oct")
 
 
 def test_the_email_carries_one_click_unsubscribe_headers(w, monkeypatch):

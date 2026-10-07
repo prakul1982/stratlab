@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import type { Offer } from "./types";
 
 export type CurrencyRow = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number;
   charged_in: string; yearly_charged_in: string };
-export type Pricing = { currencies: Record<string, CurrencyRow>; countries: Record<string, string> };
+export type Pricing = { currencies: Record<string, CurrencyRow>; countries: Record<string, string>; offer?: Offer };
 
 const KEY = "stratlab.currency";
 

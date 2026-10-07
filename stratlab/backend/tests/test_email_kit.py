@@ -24,7 +24,8 @@ def test_every_email_type_renders_html_and_text(built, kind):
     d = built[kind]
     assert d["subject"] and d["html"].startswith("<!doctype html>") and d["text"].strip()
     assert 'name="color-scheme"' in d["html"] and "max-width:600px" in d["html"] and "StratLab" in d["html"]
-    assert "Manage emails" in d["html"] and "/settings#notifications" in d["text"]
+    # each kind's "Manage emails" opens its own card in Settings → Notifications (test_email_links checks the card is there)
+    assert "Manage emails" in d["html"] and re.search(r"^Manage emails: \S+/settings#(alerts|newsletters|emails)$", d["text"], re.M)
     assert "<img" not in d["html"] and "<script" not in d["html"]
     assert "<" not in d["text"].replace("<=", "")                     # the text version has no markup
     assert d["html"].count('class="btn-a"') == 1                       # one primary button
@@ -103,7 +104,7 @@ def test_tiles_two_or_three_to_a_row_and_stack_on_phones():
 
 
 def test_receipt_has_no_unsubscribe_and_tips_do(built):
-    assert kit.UNSUBSCRIBE not in built["lifecycle_receipt"]["html"] and "/settings#notifications" in built["lifecycle_receipt"]["html"]
+    assert kit.UNSUBSCRIBE not in built["lifecycle_receipt"]["html"] and "/settings#emails" in built["lifecycle_receipt"]["html"]
     assert built["lifecycle_welcome"]["unsubscribe"] and not built["lifecycle_receipt"]["unsubscribe"]
 
 

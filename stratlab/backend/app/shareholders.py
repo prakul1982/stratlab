@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 from . import db
 from .auth import current_profile
 from .intel.net import SourceError, TTLCache
-from .plans import FEATURE_PLAN, PLANS, access_plan, allows
+from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 from .responses import err, ok
 
 KEY = "shp:co:"                 # shp:co:<SYMBOL> = {"name", "isin", "q": {"2026-06-30": {"rec", "filed", "url", "rows": [[name, kind, group, shares, pct]]}}}
@@ -716,7 +716,7 @@ router = APIRouter(tags=["invest"])
 
 
 def _allowed(profile: dict) -> bool:
-    return allows(access_plan(profile), "holders")
+    return allows(plan_of(profile), "holders")
 
 
 def _need(profile: dict, what: str):

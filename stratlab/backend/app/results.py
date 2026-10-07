@@ -373,10 +373,9 @@ def check_out(region: str, sources: dict, symbols: set[str], today: date | None 
 
 # ---------- the messages ----------
 def _day(iso: str) -> str:
-    try:
-        return date.fromisoformat(iso[:10]).strftime("%a %d %b")
-    except ValueError:
-        return iso
+    """A day in the app's format: Mon 5 Oct."""
+    from .email_kit import fmt_date
+    return fmt_date(str(iso), year=False, weekday=True)
 
 
 def describe(r: dict) -> str:
@@ -390,12 +389,16 @@ def morning_text(rows: list[dict]) -> str:
 
 
 def out_text(r: dict) -> str:
+    """The message, one fact a line: what was filed and when, the numbers as the filing states them (a row each), the
+    filing's address, and the small print. A phone shows the lines; an email turns the rows into figures and the
+    address into a link."""
     o = r["out"]
-    nums = "; ".join(f"{n['label']} {n['value']}" for n in o.get("numbers") or [])
-    return " ".join(x for x in (
+    nums = [f"- {n['label']}: {n['value']}" for n in o.get("numbers") or []]
+    return "\n".join([
         f"{r['symbol']} results are out: {o.get('title') or 'Results'} ({_day(o.get('at') or r['date'])}).",
-        f"As stated: {nums}." if nums else "",
-        o.get("url") or "", "From the company's filing. Not investment advice.") if x)
+        *(["As stated in the filing:", *nums] if nums else []),
+        *([f"Read the filing: {o['url']}"] if o.get("url") else []),
+        "From the company's filing. Not investment advice."])
 
 
 def quiet(profile: dict) -> dict:

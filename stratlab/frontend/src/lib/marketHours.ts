@@ -1,3 +1,4 @@
+import { fmtTime } from "./format";
 import type { Market } from "./types";
 
 /** When each market is open, and how long until it opens or closes, skipping weekends and the exchange
@@ -79,4 +80,32 @@ export function marketState(m: Market, now = new Date()): MarketState {
   const short = open ? "open" : closedFor ?? (until < DAY ? `opens ${inWords(until)}` : `opens ${change.toLocaleDateString("en-GB", { weekday: "short" })}`);
   return { ...base, open, closedFor, short, change, hoursLocal: `${m.hours.open}–${m.hours.close} local, ${m.hours.days}`,
     hoursYours: `${yours(todayOpen)}–${yours(todayClose)} your time` };
+}
+
+/** "Thu 8 Oct, 09:15 IST": a moment in an exchange's own zone, with the zone's short name. */
+export function exchangeTime(d: Date, tz: string): string {
+  const day = d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "").replace(/\bSept\b/, "Sep");
+  // the time and the zone's name the one way every market time is written (lib/format: "09:15 IST", "09:30 ET")
+  return `${day}, ${fmtTime(d, { tz, zone: true })}`;
+}
+
+export type FeedLine = { text: string; tone: "live" | "plain" | "warn" };
+
+/** What a running paper session's price line says. Outside market hours that's the market being closed and when it
+ * opens, not a lost connection; "Reconnecting" only when the market is open and the feed is down, and a warning once
+ * no price has come for a while. `market` is the session's market (from the app's list); crypto never closes. */
+export function sessionFeed(o: { feedConnected: boolean | undefined; lastTickAt: string | null | undefined; market?: Market | null; alwaysOpen?: boolean; now?: Date }): FeedLine {
+  const now = o.now ?? new Date();
+  const st = o.market && !o.alwaysOpen ? marketState(o.market, now) : null;
+  if (st && !st.open && !st.always && !st.offline) {
+    const next = st.change ? ` · opens ${exchangeTime(st.change, o.market!.tz)}` : "";
+    return { text: `Market closed${next}`, tone: "plain" };
+  }
+  if (o.feedConnected) {
+    if (o.lastTickAt) return { text: "Live prices", tone: "live" };
+    return { text: o.alwaysOpen ? "Fetching the latest prices" : "Waiting for the first price", tone: "plain" };
+  }
+  const quiet = o.lastTickAt ? (now.getTime() - Date.parse(o.lastTickAt)) / 60000 : null;
+  if (quiet != null && quiet > 10) return { text: `No prices for ${inWords(quiet)}: the price feed is down, orders wait for it`, tone: "warn" };
+  return { text: "Reconnecting to prices", tone: "plain" };
 }

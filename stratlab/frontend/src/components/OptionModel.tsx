@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, fmtDate } from "../lib/format";
-import { moneyCompact } from "../lib/chartFormat";
+import { axisInrFor, money, fmtDate } from "../lib/format";
 import { curve, legGreeks, NO_MOVE, scenario, type GreekModel, type ModelLeg, type NetGreeks, type OptionGreeks, type WhatIf } from "../lib/greeks";
 import type { HeldLeg } from "../lib/options";
 import type { OptChain, OptRoll } from "../lib/types";
@@ -72,7 +71,8 @@ function Slider({ id, label, value, min, max, step, show, onChange }: {
 
 type GRow = { row: ModelRow | null; label: string };
 
-/** Each leg's IV and Greeks per option, and the position's net (× quantity, sold legs negative). */
+/** Each leg's IV (per option) and its Greeks for the position: the option's Greeks × the leg's quantity, negative for a
+ * sold leg, so the legs add up to the net. */
 function GreeksTable({ rows, spot, w, r, net }: { rows: ModelRow[]; spot: number; w: WhatIf; r: number; net: NetGreeks | null }) {
   const data: GRow[] = [...rows.map((row) => ({ row, label: row.label })), ...(net ? [{ row: null, label: "Net" }] : [])];
   const leg = (x: GRow) => {
@@ -81,15 +81,18 @@ function GreeksTable({ rows, spot, w, r, net }: { rows: ModelRow[]; spot: number
     const g = row.m ? legGreeks(row.m, spot, w, r) : null;
     const s = row.g;
     const v = g ?? (s?.iv ? { iv: s.iv, delta: s.delta!, gamma: s.gamma!, theta: s.theta!, vega: s.vega! } : null);
-    return { v, atm: s?.iv_from === "atm" };
+    const n = (row.held.side === "sell" ? -1 : 1) * row.held.qty;      // the position: bought +, sold −, × quantity
+    const pos = v ? { delta: v.delta * n, gamma: v.gamma * n, theta: v.theta * n, vega: v.vega * n } : null;
+    return { v, pos, atm: s?.iv_from === "atm" };
   };
   const cols: Column<GRow>[] = [
-    { key: "leg", header: "Leg", rowHeader: true, cell: (x) => (x.row ? x.label : <><b>Net</b> <span className="k-muted">(× quantity)</span></>) },
+    { key: "leg", header: "Leg", rowHeader: true, cell: (x) => (x.row ? x.label : <b>Net</b>) },
     { key: "iv", header: "IV", numeric: true, cell: (x) => { const l = leg(x); return l ? (l.v ? `${l.v.iv > 0 ? pctIv(l.v.iv) : "expired"}${l.atm ? "*" : ""}` : "No price, so no IV") : ""; } },
-    { key: "delta", header: "Delta", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.v ? signed(l.v.delta, 3) : "") : <b data-testid="net-delta">{net ? signed(net.delta, 1) : ""}</b>; } },
-    { key: "gamma", header: "Gamma", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.v ? sig(l.v.gamma) : "") : <b data-testid="net-gamma">{net ? sig(net.gamma) : ""}</b>; } },
-    { key: "theta", header: "Theta / day", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.v ? inr(l.v.theta, 2) : "") : <b data-testid="net-theta">{net ? inr(net.theta) : ""}</b>; } },
-    { key: "vega", header: "Vega / vol pt", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.v ? inr(l.v.vega, 2) : "") : <b data-testid="net-vega">{net ? inr(net.vega) : ""}</b>; } },
+    { key: "qty", header: "Units held", numeric: true, cell: (x) => (x.row ? signed((x.row.held.side === "sell" ? -1 : 1) * x.row.held.qty, 0) : "") },
+    { key: "delta", header: "Delta", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? signed(l.pos.delta, 1) : "") : <b data-testid="net-delta">{net ? signed(net.delta, 1) : ""}</b>; } },
+    { key: "gamma", header: "Gamma", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? sig(l.pos.gamma) : "") : <b data-testid="net-gamma">{net ? sig(net.gamma) : ""}</b>; } },
+    { key: "theta", header: "Theta / day", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? inr(l.pos.theta) : "") : <b data-testid="net-theta">{net ? inr(net.theta) : ""}</b>; } },
+    { key: "vega", header: "Vega / vol pt", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? inr(l.pos.vega) : "") : <b data-testid="net-vega">{net ? inr(net.vega) : ""}</b>; } },
   ];
   return (
     <div data-testid="greeks-table">
@@ -131,6 +134,7 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
   const settings = [w.spotPct !== 0 && `${name} ${w.spotPct > 0 ? "+" : MINUS}${Math.abs(w.spotPct)}% at ${pts(spotW)}`,
     w.ivShift !== 0 && `IV ${w.ivShift > 0 ? "+" : MINUS}${Math.abs(w.ivShift)} pts`, days > 0 && (atExpiry ? "at expiry" : `${dayWord(days)} on`)].filter(Boolean).join(", ");
   const missing = rows.filter((x) => !x.m).map((x) => x.label);
+  const span = Math.max(0, ...curves.flatMap((c) => c.values.map((v) => Math.abs(v ?? 0))));     // one unit on the whole axis
 
   return (
     <div className="k-stack" data-testid={testId}>
@@ -164,10 +168,11 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
         </div>
       )}
       <PayoffChart ariaLabel={ariaLabel} height={240} xs={xs} testId="payoff-chart" curves={curves} markers={allMarkers}
-        format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => pts(x)} />
+        format={(v) => inr(v)} axisFormat={axisInrFor(span)} xFormat={(x) => pts(x)} />
       <div className="k-stack k-tight">
         <span className="k-eyebrow">Greeks, model estimate{settings ? ` (${settings})` : ""}</span>
         <GreeksTable rows={rows} spot={model.spot} w={{ ...w, days }} r={r} net={complete && sc ? sc : null} />
+        <p className="k-note" data-testid="greeks-sum-note">Each leg's Greeks are for the units it holds, negative for a sold leg, so the legs add up to the net (give or take rounding). IV is per option.</p>
         {!complete && <p className="k-note">{missing.join(", ")}: no price right now, so the model can't value {missing.length === 1 ? "it" : "them"} and the net Greeks and the today curve wait for one.</p>}
         {rows.some((x) => x.g?.iv_from === "atm") && <p className="k-note">* IV of the at-the-money strike: this option's own price gives none.</p>}
         <ModelInputs m={model} extra={moved ? `What-if: ${settings}; IV floored at 0.5%.` : undefined} />

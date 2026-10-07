@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, CRORE, inrCompact, pct, safeHref, fmtDate } from "../lib/format";
+import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { millionsOf, scaleFor } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
@@ -215,12 +215,12 @@ export function DeepDivePage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title={`${v?.name ?? sym}: business, capex and growth`}
-        asOf={v?.numbers_at} asOfLabel="Reported numbers as of"
+        asOf={v?.numbers_at} asOfLabel="Reported numbers as of" asOfTz={marketTz(region)}
         lede={us
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in {cur === "$" ? "dollars" : `the currency it reports in (${cur})`}, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}
         actions={<>
-          {v?.price_at && <Badge>Last close as of {asOf(v.price_at)}</Badge>}
+          {v?.price_at && <Badge>Last close as of {asOf(v.price_at, { tz: marketTz(region) })}</Badge>}
           <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
         </>} />
       <div className="k-row">

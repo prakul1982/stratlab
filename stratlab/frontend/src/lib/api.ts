@@ -1,9 +1,10 @@
 import { AuthClient } from "@supabase/auth-js";
+import { fieldWords, invalidField, invalidText, serverProblems } from "./validate";
 
 declare global {
   interface Window {
     STRATLAB_CONFIG?: { API_BASE: string; SUPABASE_URL: string; SUPABASE_ANON_KEY: string; SENTRY_DSN?: string;
-      BUSINESS_NAME?: string; CONTACT_EMAIL?: string; BUSINESS_ADDRESS?: string; POSTHOG_KEY?: string; POSTHOG_HOST?: string };
+      BUSINESS_NAME?: string; CONTACT_EMAIL?: string; PRIVACY_EMAIL?: string; BILLING_EMAIL?: string; BUSINESS_ADDRESS?: string; POSTHOG_KEY?: string; POSTHOG_HOST?: string };
     Razorpay?: any;
   }
 }
@@ -23,8 +24,6 @@ const sbBase = new URL((CFG.SUPABASE_URL || "http://localhost").replace(/\/?$/, 
 const sbKey = CFG.SUPABASE_ANON_KEY || "missing";
 /** Where the saved login lives in localStorage. */
 export const SESSION_KEY = `sb-${sbBase.hostname.split(".")[0]}-auth-token`;
-/** Where to go once signed in, when sign-in started on a page other than home (a public company page's link). */
-export const NEXT_PAGE = "stratlab.next";
 export const supabase = {
   auth: new AuthClient({
     url: new URL("auth/v1", sbBase).href,
@@ -37,6 +36,8 @@ export const supabase = {
 export class ApiError extends Error {
   status = 0;
   code?: string;
+  /** For a 422: each field the server turned down, with what's wrong in plain words and its limit (lib/validate). */
+  fields?: Record<string, string>;
 }
 
 /** `file` sends a file as the request body itself (no JSON, no base64), for uploads too big to wrap. */
@@ -84,6 +85,7 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
     const e = new ApiError(msg);
     e.status = r.status;
     e.code = d?.code;
+    if (Array.isArray(d)) e.fields = serverProblems(d);
     if (r.status === 401) onUnauthorized();
     if (d?.code === "data_offline") onOffline();
     throw e;
@@ -97,12 +99,16 @@ const FIELD_HELP: Record<string, string> = {
   endpoint: "This browser's notification service isn't supported.",
 };
 
-/** A readable message for FastAPI's list of invalid fields. */
-function invalidMessage(items: { loc?: (string | number)[] }[]): string {
+/** A readable message for FastAPI's list of invalid fields: the field named, with its limit ("Check the quantity:
+ * enter at most 1,00,00,00,000."). A page that shows problems under its boxes reads `ApiError.fields` instead. */
+function invalidMessage(items: { loc?: (string | number)[]; type?: string; ctx?: Record<string, unknown> }[]): string {
   for (const it of items) {
     const field = [...(it.loc ?? [])].reverse().find((x) => typeof x === "string" && FIELD_HELP[x as string]);
     if (field) return FIELD_HELP[field as string];
   }
+  const first = items[0];
+  const f = first ? invalidField(first) : null;
+  if (first && f) return `Check the ${fieldWords(f)}: ${invalidText(first).replace(/^./, (c) => c.toLowerCase())}`;
   return "Some settings are out of range. Check the numbers and try again.";
 }
 

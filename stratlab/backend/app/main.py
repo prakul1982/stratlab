@@ -96,17 +96,17 @@ from . import market_events_routes
 from . import mcp_server
 from . import mtf, slb, stock_desks, stock_futures     # the per-stock market desks: futures, lending, margin funding
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
-from .models import BreadthAlertReq
+from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
-from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
 from . import money_networth
 from .plans import networth_items
-from .plans import FEATURE_PLAN, PLANS, allows, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
+from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
-from .plans import decks as decks_limit, deepdives as deepdives_limit
+from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live  # noqa: F401  (tests set main.payments_live)
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -135,7 +135,8 @@ def warm_caches():
     """Fill the caches the busiest pages share (instrument lists, the NIFTY 50 and US scans, sector rotation, the
     option contracts), so the first people after a restart or the morning login don't all wait on them at once.
     Each step is independent; one failing (a source down, the broker not logged in yet) skips only itself."""
-    steps = [("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
+    steps = [("company list", lambda: isin_list()),         # full names and ISINs, for search by name
+             ("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
              ("option contracts", lambda: options_data.ready() and options_data.underlyings()),
              ("market list", lambda: markets.markets()),
              ("scan IN", lambda: markets.provider("IN").ready() and scan.run(markets, "IN", [{"symbol": x} for x in universes.PRESETS["IN"][0]["symbols"]])),
@@ -153,8 +154,8 @@ auto_login = AutoLogin(kite, after_login)
 
 
 def _scan_alert_ok(profile: dict) -> bool:
-    from .plans import access_plan
-    return allows(access_plan(profile), "scans") and bool(alerts.jobs_for(profile, "", ""))
+    from .plans import plan_of
+    return allows(plan_of(profile), "scans") and bool(alerts.jobs_for(profile, "", ""))
 
 
 def alert_quotes(region: str, syms: list[str]) -> dict:
@@ -174,8 +175,8 @@ def alert_bars(region: str, sym: str) -> list[dict]:
 
 
 def _alert_limit(profile: dict) -> int:
-    from .plans import access_plan
-    return stock_alert_limit(access_plan(profile))
+    from .plans import plan_of
+    return stock_alert_limit(plan_of(profile))
 
 
 ALERT_FEATURE = {"etfgap": "etf_gaps", "bizupdate": "biz_updates", "mwpl": "stock_futures", "mtf": "mtf"}     # kinds of alert on a paid plan
@@ -184,8 +185,8 @@ ALERT_FEATURE = {"etfgap": "etf_gaps", "bizupdate": "biz_updates", "mwpl": "stoc
 def _alert_kind_ok(profile: dict, kind: str) -> bool:
     """Alerts on an ETF's price against its NAV, on business updates, on MWPL use and on margin funding are Basic and up;
     after a downgrade they wait."""
-    from .plans import access_plan
-    return kind not in ALERT_FEATURE or allows(access_plan(profile), ALERT_FEATURE[kind])
+    from .plans import plan_of
+    return kind not in ALERT_FEATURE or allows(plan_of(profile), ALERT_FEATURE[kind])
 
 
 stock_checker = stock_alerts.Checker(lambda r, s: alert_quotes(r, s), lambda r, s: alert_bars(r, s), _alert_limit,
@@ -195,8 +196,8 @@ scan_alerts_job = scan.Alerts(markets, notify=lambda p, subject, text, url: aler
 
 
 def _filing_alert_ok(profile: dict) -> bool:
-    from .plans import access_plan
-    return allows(access_plan(profile), "filings") and bool(alerts.jobs_for(profile, "", ""))
+    from .plans import plan_of
+    return allows(plan_of(profile), "filings") and bool(alerts.jobs_for(profile, "", ""))
 
 
 filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), lambda s: bse_code(s), lambda s: bse_twin(s))
@@ -558,8 +559,9 @@ def plans():
 
 @app.get("/pricing")
 def prices():
-    """Prices in every currency StratLab shows, which currency each is charged in, and country → currency."""
-    return pricing.public()
+    """Prices in every currency StratLab shows, which currency each is charged in, country → currency, and the offer
+    in force today (payments on or not, the launch offer), so the public pages say what the app does."""
+    return {**pricing.public(), "offer": offer_state()}
 
 
 def fx_rate(code: str) -> float:
@@ -618,6 +620,7 @@ def me(profile=Depends(current_profile)):
     except Exception as e:
         print("lifecycle visit failed:", str(e)[:160])
     plan = profile["_plan"]
+    paid = profile.get("_paid_plan", plan) if profile.get("_paid_plan", plan) in PLANS else "free"
     info = plan_info(plan)
     used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck"))
     return ok({
@@ -627,11 +630,17 @@ def me(profile=Depends(current_profile)):
         "free_basic_until": fb.isoformat() if profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
         "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                     "renews_or_ends": profile.get("current_period_end"),
-                    "cancel_at_period_end": bool(profile.get("cancel_at_period_end"))},
+                    "cancel_at_period_end": bool(profile.get("cancel_at_period_end")),
+                    # a paid plan the site owner gave by hand (Admin → Change plan): nothing renews and nothing to cancel
+                    "given_by_owner": profile.get("_paid_plan", plan) != "free" and not profile.get("razorpay_subscription_id")},
+        "signed_in_with": profile.get("_signed_in_with"),
         "usage": {"backtests_used": used["backtest"], "backtests_limit": info["backtests_per_month"],
                   "ai_used": used["ai"], "ai_limit": info["ai_builds_per_month"],
                   "deepdive_used": used["deepdive"], "deepdive_limit": info["deepdives_per_month"],
-                  "deck_used": used["deck"], "deck_limit": info["decks_per_month"]},
+                  "deck_used": used["deck"], "deck_limit": info["decks_per_month"],
+                  # the plan's own limits (what the Plans page lists), and why they're lifted now when they are
+                  "deepdive_plan_limit": PLANS[paid]["deepdives_per_month"], "deck_plan_limit": PLANS[paid]["decks_per_month"],
+                  "lifted_by": "the launch offer" if promo_active() else None},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
@@ -640,6 +649,8 @@ def me(profile=Depends(current_profile)):
         "data_online": kite.ready(),
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
+        "offer": offer_state(),
+        "onboarding": onboarding_of(profile["id"]),
         "is_admin": admin.is_admin(profile),
     })
 
@@ -677,6 +688,29 @@ def prefs_of(uid: str) -> dict:
         return {}
 
 
+@app.get("/me/export")
+def export_my_data(profile=Depends(current_profile)):
+    """Your own copy of everything StratLab keeps for you, as one JSON file (no tokens or passwords)."""
+    throttle(profile, "export-my-data", 10, 3600, "Too many downloads. Try again in an hour.")
+    body = json.dumps(user_data.export(profile), ensure_ascii=False, indent=1, default=str)
+    return Response(body, media_type="application/json",
+                    headers={"Content-Disposition": 'attachment; filename="stratlab-my-data.json"', "Cache-Control": "no-store"})
+
+
+@app.post("/me/delete-data")
+def delete_my_data(req: DeleteMyDataReq, profile=Depends(current_profile)):
+    """Erase your own app data (the same steps as Admin's "Delete this user's data"), once the account's email is typed
+    in to confirm. The sign-in account and the plan and payment records stay: closing the sign-in account is done by
+    the site owner on request, and payment records are kept as the law asks."""
+    email = (profile.get("email") or "").strip().lower()
+    if not email or req.confirm.strip().lower() != email:
+        err(400, "confirm_mismatch", "Type your account's email exactly to confirm.")
+    throttle(profile, "delete-my-data", 5, 3600, "Too many tries. Try again in an hour.")
+    out = user_data.erase(profile["id"])
+    log.info("user %s erased their own app data: %d areas done, %d failed", profile["id"], len(out["done"]), len(out["failed"]))
+    return {"ok": not out["failed"], **out}
+
+
 @app.put("/me/prefs")
 def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     """Experience level, what the user came for (trading, investing, their money or all of it) and the space last picked
@@ -686,6 +720,31 @@ def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     prefs = {**prefs_of(profile["id"]), **{k: v for k, v in given.items() if v}}
     db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
     return {"prefs": {k: prefs.get(k) for k in PREF_KEYS}}
+
+
+def onboarding_of(uid: str) -> dict:
+    """Where this account is in the first-run guide, kept on the account (not the browser), so it shows once per person
+    rather than once per device: `welcome` when the "What brings you here?" question was answered or closed, `tour`
+    "done" or "skipped" once the short tour was finished or closed."""
+    o = prefs_of(uid).get("onboarding")
+    o = o if isinstance(o, dict) else {}
+    return {"welcome": o.get("welcome") if isinstance(o.get("welcome"), str) else None,
+            "tour": o.get("tour") if o.get("tour") in ("done", "skipped") else None}
+
+
+@app.put("/me/onboarding")
+def set_onboarding(req: OnboardingReq, profile=Depends(current_profile)):
+    """Remember that the welcome question or the tour was seen. Only moves forward: a tour that was done stays done."""
+    prefs = prefs_of(profile["id"])
+    cur = prefs.get("onboarding") if isinstance(prefs.get("onboarding"), dict) else {}
+    nxt = dict(cur)
+    if req.welcome and not cur.get("welcome"):
+        nxt["welcome"] = db.now_iso()
+    if req.tour and cur.get("tour") != "done":
+        nxt["tour"] = req.tour
+    if nxt != cur:
+        db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "onboarding": nxt}))
+    return {"onboarding": onboarding_of(profile["id"])}
 
 
 @app.get("/push/key")
@@ -1105,10 +1164,26 @@ def list_notebooks(profile=Depends(current_profile)):
     return out
 
 
+def unique_name(profile, name: str) -> str:
+    """A new notebook's name, numbered when another notebook already has it ("Ride the trend 2"), so two notebooks
+    from the same template can be told apart in the sidebar."""
+    name = (name or "Untitled notebook").strip()[:80]
+    try:
+        taken = {str(r.get("name") or "").strip().lower() for r in db.list_notebook_rows(profile["id"])}
+    except Exception:
+        return name
+    if name.lower() not in taken:
+        return name
+    n = 2
+    while f"{name} {n}".lower() in taken:
+        n += 1
+    return f"{name[:76]} {n}"
+
+
 @app.post("/notebooks")
 def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
     strategy = req.strategy or Strategy(name=req.name or "Untitled notebook")
-    nb = {"name": req.name or strategy.name, "question": req.question or "", "notes": req.notes or "",
+    nb = {"name": unique_name(profile, req.name or strategy.name), "question": req.question or "", "notes": req.notes or "",
           "strategy": strategy.model_dump(), "instrument": instrument_summary(req.instrument),
           "experiments": [], "summary": research.summary([])}
     if req.group is not None and not req.instrument:
@@ -1184,6 +1259,19 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     experiments = list(nb.get("experiments") or [])
     version = (experiments[-1]["v"] + 1) if experiments else 1
     group = nb.get("group")
+    defaulted = None
+    if not req.bars and not group and not req.instrument and not (nb.get("instrument") or {}).get("id"):
+        # nothing picked yet: test on the default instrument (the first one the market picker offers) and say so
+        first = next(iter(markets.defaults()), None)
+        if first is None:
+            err(400, "no_instrument", "Pick an instrument or upload candles first.")
+        nb["instrument"] = instrument_summary(first["id"])
+        defaulted = first.get("symbol") or first["id"]
+    same = research.unchanged(experiments, strategy, None if group else (nb.get("instrument") or {}).get("id"),
+                              req.days, db.now_iso()) if not req.bars and not req.instrument else None
+    if same is not None:
+        err(409, "unchanged", f"Nothing has changed since v{same}: the same rules, market and period, already run "
+            f"today. Its result stands, and no experiment was used. Change something to run a new one.")
     if group and not req.bars:
         rec, usage = run_group_test(profile, strategy, group, req, version)
         out = {"usage": usage}
@@ -1192,10 +1280,13 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
             req.instrument = (nb.get("instrument") or {}).get("id")
         out = run_test(profile, strategy, req)
         rec = research.record(out, strategy, req.label, version, db.now_iso())
+    if not req.label.strip():
+        rec["label"] = research.describe_change(experiments[-1] if experiments else None, rec)
     experiments = research.slim((experiments + [rec])[-50:])
     nb["experiments"], nb["summary"] = experiments, research.summary(experiments)
     save_notebook(profile, nb)
-    return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"]})
+    return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"], "defaulted": defaulted,
+               "instrument": nb.get("instrument") if defaulted else None})
 
 
 @app.post("/notebooks/{nid}/experiments/{version}/basket")
@@ -1524,9 +1615,9 @@ def filing_call(fn):
 
 @app.get("/research/filings")
 def filings_watchlist(profile=Depends(current_profile)):
-    """Red flags in the last 3 months for each India watchlist stock."""
+    """Red flags in the last 3 months for each Indian stock the person holds or watches."""
     need(profile, "filings", "Watchlist red flags")
-    syms = filings.watchlist_symbols(profile["id"])
+    syms = filings.followed_symbols(profile["id"])
     out = filings.overview(filings_feed, syms) if syms else {"rows": [], "problems": [], "days": filings.WINDOW_DAYS}
     out["problems"] = [public_text(x) for x in out["problems"]]
     return ok({**out, "alerts": bool(filings.alert_state(profile["id"]).get("on")), "send_at": filings.SEND_AT})
@@ -1560,6 +1651,7 @@ def surveillance_lists(profile=Depends(current_profile)):
 def admin_surveillance_refresh(_=Depends(admin.admin_profile)):
     """Read the surveillance lists now (no alerts are sent from here) and say what each list answered."""
     out = surveillance.refresh(filings_feed)
+    surv_job.record(surveillance.ist_now(), out["problems"], len(surveillance.PARTS), changes=len(out["changes"]))
     return {"changes": len(out["changes"]), "problems": [public_text(p) for p in out["problems"]],
             "lists": surveillance.view()["lists"], "job": surv_job.status}
 
@@ -2047,7 +2139,7 @@ def holdings_matcher() -> holdings.Matcher:
 
 
 def _india_suggestions() -> list[dict]:
-    return suggest.india_rows(kite.equities()) if kite.ready() else []
+    return suggest.india_rows(kite.equities(), _isin["map"]) if kite.ready() else []
 
 
 def _india_listed() -> dict[str, dict]:
@@ -2058,6 +2150,12 @@ def _india_listed() -> dict[str, dict]:
 
 suggester = suggest.Suggester({"IN": _india_suggestions, "US": lambda: suggest.us_rows(_sec_companies())},
                               {"IN": _india_listed, "US": lambda: stock_pages.companies("US")})
+
+
+# search by name everywhere: the broker's list with the exchange's full names and ISINs (as far as they're read; the
+# morning warm-up reads them), and the company boxes' own lists for the research search's US side
+KiteService.names_fn = staticmethod(lambda: _isin["map"])
+Research.local_search = staticmethod(lambda q, region: suggester.search_ranked(q, region, 10))
 
 
 @app.get("/suggest/companies")
@@ -2918,6 +3016,26 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=SEO_HEADERS)
 
 
+@app.get("/public/company/{region}/{symbol}")
+def public_company(region: str, symbol: str):
+    """A company's name and its public page, for the "Sign in to see …" screen a signed-out visitor gets on a company's
+    address in the app. Only what the public page itself shows; 404 when the company has no public page."""
+    r = stock_pages.REGIONS.get(region.lower())
+    hit = stock_pages.find(r, symbol) if r and len(symbol) <= 20 else None
+    if not hit:
+        err(404, "not_found", "No public page for that company.")
+    sym, co = hit
+    return {"region": r, "symbol": sym, "name": co.get("name") or sym, "page": stock_pages.path(r, sym)}
+
+
+@app.get("/public/business")
+def public_business():
+    """Who runs the site, for the Contact, Terms and Refund pages: the seller's legal name, address and email as set in
+    Admin → Invoices (they already print on every invoice). Blank fields stay blank; the pages fall back to config.js."""
+    s = invoices.seller()
+    return {k: (s.get(k) or "").strip() for k in ("legal_name", "address", "email")}
+
+
 @app.get("/robots.txt")
 def robots_txt():
     return Response(stock_pages.robots(), media_type="text/plain", headers=SEO_HEADERS)
@@ -3741,13 +3859,15 @@ def kite_callback(request_token: str = "", status: str = "", state: str = ""):
 def server_status() -> dict:
     return {"kite_ready": kite.ready(), "kite_token_day": kite.token_day, "kite_invalid": kite.invalid_reason, "feed_started": hub.started,
             "feed_connected": hub.connected, "live_sessions": len(manager.sessions),
+            # the sessions that need the broker's live feed (India); other markets are polled and never use it
+            "india_sessions": sum(1 for x in list(manager.sessions.values()) if not getattr(x, "polled", False)),
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)),
             "calendar": calendar_status(),
-            "admin_alerts": {"email_ready": alerts.email_ready(), "to": sorted(admin.admin_emails())}}
+            "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
 
 def calendar_status() -> dict:
@@ -3838,8 +3958,11 @@ def admin_overview(_=Depends(admin.admin_profile)):
 
 
 @app.get("/admin/users")
-def admin_users(q: str = "", _=Depends(admin.admin_profile)):
-    return admin.users(q, month_start_iso())
+def admin_users(q: str = "", plan: str = "", _=Depends(admin.admin_profile)):
+    """The newest 200 users, or those whose email contains `q`, on `plan` (free, basic or pro) when given."""
+    if plan and plan not in PLANS:
+        err(400, "bad_plan", "Pick Free, Basic or Pro.")
+    return admin.users(q, month_start_iso(), plan=plan or None)
 
 
 @app.get("/admin/invite-rewards")
@@ -4578,7 +4701,7 @@ NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "s
 
 def news_view(issue: dict) -> dict:
     out = {k: issue.get(k) for k in NEWS_FIELDS}
-    out["html"] = (out["html"] or "").replace(news.write.UNSUBSCRIBE, f"{news.write.origin()}/account")
+    out["html"] = (out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out
 
 

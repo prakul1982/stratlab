@@ -8,7 +8,7 @@
 .k-row > .k-in { margin: 0; }
 .k-form.two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
 .k-in.num { width: 92px; }
-.k-in.time { width: 122px; }
+.k-sentence .k-time { margin: 0 4px; }
 .k-in.pick { max-width: 100%; }
 .k-plain { margin: 0; padding: var(--s3) var(--s4); border-radius: var(--r-ctl); background: var(--paper-2); border: 1px solid var(--line); font-size: var(--t-label); }
 .k-struct { display: flex; flex-direction: column; gap: var(--s4); }

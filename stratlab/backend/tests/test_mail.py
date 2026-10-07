@@ -38,7 +38,8 @@ def test_brevo_request_shape_and_sender_falls_back_to_the_first_admin(no_email, 
     assert url == "https://api.brevo.com/v3/smtp/email" and kw["headers"]["api-key"] == "xkeysib-test"
     assert kw["json"] == {"sender": {"name": "StratLab", "email": "owner@example.com"}, "to": [{"email": "a@b.c"}],
                           "subject": "Hello", "textContent": "Plain", "htmlContent": "<p>Rich</p>",
-                          "headers": {"List-Unsubscribe": "<https://x>"}}
+                          "headers": {"List-Unsubscribe": "<https://x>"}, "replyTo": {"email": settings.REPLY_TO_EMAIL}}
+    assert settings.REPLY_TO_EMAIL == "support@stratlab.studio"                # replies go to support@
     monkeypatch.setattr(settings, "ALERT_FROM_EMAIL", "news@stratlab.studio")
     alerts.send_email("a@b.c", "Hello", "Plain")                          # the old three-argument call
     assert calls[1][1]["json"]["sender"]["email"] == "news@stratlab.studio"

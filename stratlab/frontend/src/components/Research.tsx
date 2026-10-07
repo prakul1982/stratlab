@@ -8,7 +8,7 @@ import {
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { Star } from "./Icons";
-import { BarList, Card, CardHead, DataTable, Delta, Disclosure, ErrorState, Notice, Seg, Skeleton } from "./kit";
+import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { FoBadges } from "./FoBadges";
 import { track } from "../lib/analytics";
@@ -81,12 +81,23 @@ export function PriceChart({ region, symbol, currency }: { region: Region; symbo
 }
 
 /* ---------- 52-week rail ---------- */
-export function Rail52({ q, low, high, currency }: { q: Quote | null; low: number | null; high: number | null; currency: string }) {
+export function Rail52({ q, low, high, currency, compact }: { q: Quote | null; low: number | null; high: number | null; currency: string; compact?: boolean }) {
   const px = q?.price;
   if (px == null || low == null || high == null || high <= low) return null;
   const at = (v: number) => Math.max(0, Math.min(100, ((v - low) / (high - low)) * 100));
   const p = at(px);
   const band = q?.low != null && q?.high != null && q.high > q.low ? [at(q.low), at(q.high)] : null;
+  // in a company's header: the rail and its two ends, under the price (the percentile is in the rail's label)
+  if (compact) return (
+    <div className="inv-rail52" title={`${ordinal(Math.round(p))} percentile of its 52-week range${band ? "; the shaded band is today's range" : ""}`}>
+      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`52-week range ${price(low, currency)} to ${price(high, currency)}; today's price sits at the ${ordinal(Math.round(p))} percentile`}>
+        <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
+        {band && <rect className="band" x={band[0]} y="1" width={Math.max(band[1] - band[0], 0.8)} height="8" />}
+        <rect className="mark" x={Math.min(98.8, Math.max(0, p - 0.6))} y="0" width="1.2" height="10" />
+      </svg>
+      <div className="k-spread k-note"><span>52-wk low {price(low, currency)}</span><span>high {price(high, currency)}</span></div>
+    </div>
+  );
   return (
     <div className="k-stack">
       <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`Today's price sits at ${ordinal(Math.round(p))} percentile of its 52-week range`}>
@@ -360,6 +371,14 @@ export function QuarterTable({ q }: { q: NonNullable<Company["quarters"]> }) {
 }
 
 /* ---------- AI read ---------- */
+/** Why an AI read is missing, in a few words (the full message can be long, or name an internal step). */
+export function aiReason(message: string): string {
+  if (/busy|overloaded|try again in/i.test(message)) return "the AI service is busy";
+  if (/used \d+|limit|allowance|tomorrow/i.test(message)) return "today's fresh AI reads are used up";
+  if (/plan|upgrade/i.test(message)) return "not on your plan";
+  return "the AI's reply couldn't be used";
+}
+
 export function AIRead({ region, symbol, onTest }: { region: Region; symbol: string; onTest: (idea: Idea) => void }) {
   const [r, setR] = useState<CompanyAI | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -376,8 +395,14 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
     <div className="ai-read">
       <Card label="AI read">
         <CardHead title="AI read" info={"A written read from the live numbers on this page, with no scores or ratings. \"The numbers\" are worked out from the reported results and daily prices, not by the AI. Segment shares are estimates. A starting point for ideas, not advice."}
-          actions={<>{r && <span className="k-note">Written {age}</span>}<button className="btn quiet sm" disabled={busy} onClick={() => load(true)}>{busy ? "Thinking…" : "Refresh"}</button></>} />
-        {error ? <ErrorState title="The AI read couldn't be written" action={{ label: "Try again", onClick: () => load(true) }}>{error}</ErrorState>
+          actions={error ? undefined : <>{r && <span className="k-note">Written {age}</span>}<button className="btn quiet sm" disabled={busy} onClick={() => load(true)}>{busy ? "Thinking…" : "Refresh"}</button></>} />
+        {/* a missing AI read is not a fault with the company's numbers: one calm line and one way to ask again */}
+        {error ? (
+          <div className="k-row ai-read-off" role="status">
+            <span className="k-small k-muted">No AI read right now ({aiReason(error)}). The numbers on this page don't depend on it.</span>
+            <button type="button" className="btn quiet sm" disabled={busy} onClick={() => load(true)}>{busy ? "Asking…" : "Ask again"}</button>
+          </div>
+        )
           : !r ? <Skeleton label="Reading the numbers" lines={3} /> : (
             <>
               {r.summary && <p className="inv-summary">{r.summary}</p>}

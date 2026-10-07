@@ -29,7 +29,7 @@ async function open(page: Page, path: string, ready: string) {
     return true;
   }).catch(() => false);
   if (answered) await page.goto(path);
-  await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(400);
   return errors;
 }

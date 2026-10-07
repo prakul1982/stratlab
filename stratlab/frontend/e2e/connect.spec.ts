@@ -41,7 +41,7 @@ async function sane(page: Page, errors: string[], phone: boolean) {
   if (!phone) return;
   const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main a, main select, main input:not([type=checkbox])")).filter((el) => {
     const b = el.getBoundingClientRect();
-    return b.width && b.height && !el.closest("p, li, .info-btn, .k-label-row, .k-linkcard") && !el.matches(".info-btn") && getComputedStyle(el).display !== "inline" && b.height < 32;
+    return b.width && b.height && !el.closest("p, li, .info-btn, .k-label-row, .k-linkcard, [aria-hidden=true]") && !el.matches(".info-btn") && getComputedStyle(el).display !== "inline" && b.height < 32;
   }).map((el) => `${el.tagName} "${(el.textContent || "").trim().slice(0, 30)}"`));
   expect(small, "controls too small to tap").toEqual([]);
 }

@@ -29,6 +29,7 @@ import httpx
 
 from . import db
 from .intel.net import SourceError, TTLCache, num
+from .data.expiries import cycle as expiry_cycle, fits as expiry_fits
 from .newsletter import job as news_job
 from .options.greeks import black76, implied_vol, years_to  # noqa: F401  (Black's formula lives with the Greeks)
 
@@ -796,7 +797,8 @@ def live_chain(options_data, exchange: str, name: str, choice: str) -> dict | No
 def recorded_chain(name: str, choice: str, today: date) -> dict | None:
     """The newest recorded chain for the expiry asked for, when the live feed is offline."""
     for back in range(0, 8):
-        snaps = recorded_last(name, today - timedelta(days=back))
+        # a monthly-only index's recordings of a date it can't expire on (an old weekly list) are left out
+        snaps = [s for s in recorded_last(name, today - timedelta(days=back)) if expiry_fits(NAMES[name], name, str(s["expiry"])[:10])]
         if not snaps:
             continue
         exps = [str(s["expiry"])[:10] for s in snaps]
@@ -859,7 +861,7 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
             out.append({"name": name, "exchange": ex, "source": None})
             continue
         p = pcr(got["chain"])
-        out.append({"name": name, "exchange": ex, "expiry": got["expiry"], "pcr_oi": p["oi"], "pcr_vol": p["vol"],
+        out.append({"name": name, "exchange": ex, "expiry": got["expiry"], "cycle": expiry_cycle(ex, name), "pcr_oi": p["oi"], "pcr_vol": p["vol"],
                     "pcr_near": pcr(near(got["chain"], got.get("spot")))["oi"], "spot": got.get("spot"),
                     "source": got["source"], "as_of": got["taken_at"]})
     return out

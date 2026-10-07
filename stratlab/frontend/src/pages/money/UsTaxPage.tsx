@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import { ago, dateOnly, inr, money, qty as qtyText, signTone } from "../../lib/format";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
  * 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the calendar-year Schedule FA table.
@@ -168,7 +168,7 @@ export function UsTaxPage() {
         {note && <p className="k-small" role="status">{note}</p>}
         <div role="group" aria-label="Add a trade">
           <FormGrid onSubmit={(e) => { e.preventDefault(); void add(); }}>
-            <Field label="Date" type="date" value={form.d} max={today()} onChange={set("d")} aria-label="Trade date" />
+            <DateField label="Date" value={form.d} max={today()} onChange={(d) => set("d")({ target: { value: d } })} ariaLabel="Trade date" />
             <Field label="Trade">{(id) => <Select id={id} value={form.side} label="Purchase or sale" onChange={(x) => setForm((f) => ({ ...f, side: x as "B" | "S" }))} options={[{ value: "B", label: "Purchase" }, { value: "S", label: "Sale" }]} />}</Field>
             <Field label="Ticker" value={form.sym} onChange={set("sym")} placeholder="AAPL" maxLength={10} aria-label="Ticker" />
             <Field label="Shares" type="number" inputMode="decimal" min={0} step="any" value={form.qty} onChange={set("qty")} aria-label="Shares" />

@@ -19,6 +19,7 @@ import { Explore } from "../components/Explore";
 import { CompanySearch } from "../components/CompanySearch";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Receipt, Search, Wallet } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
+import { pickFy } from "../lib/fy";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
@@ -33,9 +34,9 @@ export function SpaceHome() {
   return <Navigate to={homeOf(space, focus)} replace />;
 }
 
-/** The new-account checklist and the launch offer sit on top of every space's home. */
-function Top() {
-  return <><PromoCountdown /><FirstSteps /></>;
+/** The launch offer and the new-account checklist, right under every space home's heading. */
+function Top({ onSteps }: { onSteps?: (shown: boolean) => void }) {
+  return <><PromoCountdown /><FirstSteps onShown={onSteps} /></>;
 }
 
 /** A space home's heading: the space's name, one question or title, one line under it. */
@@ -77,6 +78,7 @@ const TRADE_TOP: Tool[] = [
 ];
 
 export function TradeHome() {
+  const [steps, setSteps] = useState(false);
   const [rows, setRows] = useState<LiveRow[] | null>(null);
   useEffect(() => { api<LiveRow[]>("/live/sessions").then(setRows).catch(() => setRows([])); }, []);
   const [journal, setJournal] = useState<Journal | null | "none">(null);
@@ -94,11 +96,12 @@ export function TradeHome() {
   ];
   return (
     <div className="space-home">
-      <Top />
       <Head eyebrow="Trade · your strategy lab" title="Test an idea, then trade it on paper">
         Years of real prices, real costs and four checks for luck. Fake money, never real orders.
       </Head>
-      <NextIdea />
+      <Top onSteps={setSteps} />
+      {/* the checklist's first step is a first test: one guide at a time, so "Start here" waits until it's gone */}
+      <NextIdea hideStart={steps} />
       <ToolStrip label="Trade tools" tools={tools} />
       <p className="k-small k-muted" data-testid="positioning-link">FII and DII flows, futures positions, PCR and India VIX are on <Link className="link" to="/trade/positioning">Positioning</Link>.</p>
       <Explore title="More you can do" hide={TRADE_LINKED} order="trade" />
@@ -108,9 +111,10 @@ export function TradeHome() {
 
 /** Trade's next step: for a new account, how a test goes and the button to start one; after that, the latest
  * notebooks to pick up again. */
-function NextIdea({ count = 3 }: { count?: number }) {
+function NextIdea({ count = 3, hideStart = false }: { count?: number; hideStart?: boolean }) {
   const { notebooks } = useApp();
   if (notebooks === null) return <Card className="space-next"><PanelSkel lines={3} label="Opening your notebooks" /></Card>;
+  if (!notebooks.length && hideStart) return null;
   if (!notebooks.length) return (
     <Card className="space-next" label="Start here">
       <CardHead title="Start here: your first notebook" actions={<Link to="/new" className="btn">Test your first idea</Link>} />
@@ -161,10 +165,10 @@ export function InvestHome() {
   const tools = INVEST_STRIP;
   return (
     <div className="space-home">
-      <Top />
       <Head eyebrow="Invest · your research desk" title="Which company do you want to look into?">
         The numbers, the business in its own words, red flags and whether management delivers. Facts, not tips.
       </Head>
+      <Top />
       <Card className="space-next" label="Find a company">
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
         <CompanySearch region={region} autoFocus />
@@ -305,10 +309,10 @@ export function MoneyHome() {
   });
   return (
     <div className="space-home">
-      <Top />
       <Head eyebrow="Money · seen only by you" title="Your money">
         What you own and what it means at tax time, from your own files. Facts and arithmetic.
       </Head>
+      <Top />
       <ToolStrip label="Money tools" tools={tools} />
       <div className="grid2 space-panels">
         <HoldingsSummary />
@@ -359,9 +363,10 @@ function HoldingsSummary() {
 function TaxSummary() {
   const [t, setT] = useState<Tax | null | "error">(null);
   useEffect(() => { api<Tax>("/tax").then(setT).catch(() => setT("error")); }, []);
-  const year = t && t !== "error" ? t.years.find((y) => y.fy === t.current_fy) ?? null : null;
+  // the Money pages' shared year (lib/fy): the one being filed now, unless another was picked
+  const year = t && t !== "error" ? t.years.find((y) => y.fy === pickFy(t.years.map((x) => x.fy), t.current_fy, (fy) => t.years.some((x) => x.fy === fy && x.count > 0))) ?? null : null;
   return (
-    <Panel title="Tax this year" right={<Link to="/tax-report" className="link">Tax report →</Link>}>
+    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} right={<Link to="/tax-report" className="link">Tax report →</Link>}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !t.trades ? (

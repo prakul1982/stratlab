@@ -2,8 +2,12 @@
 import math
 import zlib
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
+
+from tests.fake_prices import level
 
 CATALOGUE = [
     {"symbol": "AAPL", "shortname": "Apple Inc.", "longname": "Apple Inc.", "exchange": "NMS", "exchDisp": "NASDAQ", "quoteType": "EQUITY"},
@@ -22,7 +26,7 @@ STEP = {"1d": 86400, "60m": 3600, "15m": 900, "5m": 300}
 
 
 def base_price(sym: str) -> float:
-    return {"VOD.L": 7000.0, "7203.T": 2800.0, "EURUSD=X": 1.1, "RELIANCE.NS": 1400.0}.get(sym, 180.0)
+    return {"VOD.L": 7000.0, "7203.T": 2800.0, "EURUSD=X": 1.1}.get(sym) or level(sym, 19000) or 180.0   # Indian names: fake_prices
 
 
 def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTransport:
@@ -42,11 +46,16 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
             ts, o, h, l, c, v = [], [], [], [], [], []
             t = p1 - p1 % g
             b = base_price(sym)
+            zone = ZoneInfo(tz)
             while t <= p2:
+                if datetime.fromtimestamp(t, zone).weekday() >= 5:     # like the real feed: these markets close at weekends
+                    t += g
+                    continue
                 d = t / 86400
                 phase = (zlib.crc32(sym.encode()) % 628) / 100 if varied else 0   # varied: each symbol its own rhythm
                 px = b * (1 + 0.0003 * (d - 19000)) + b * 0.08 * math.sin(d / 9 + phase) + b * 0.01 * math.sin(t / 7000)
-                ts.append(t); o.append(px * 0.998); h.append(px * 1.01); l.append(px * 0.99); c.append(px); v.append(1000)
+                ts.append(t); o.append(px * 0.998); h.append(px * 1.01); l.append(px * 0.99); c.append(px)
+                v.append(0 if sym.endswith("=X") else 1000)     # spot forex has no exchange volume
                 t += g
             meta = {"symbol": sym, "currency": cur, "exchangeTimezoneName": tz, "regularMarketPrice": c[-1],
                     "chartPreviousClose": c[-2] if len(c) > 1 else c[-1], "fiftyTwoWeekHigh": max(c) * 1.02,
@@ -60,7 +69,7 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
                                  "splits": {str(split): {"date": split, "numerator": 4, "denominator": 1, "splitRatio": "4:1"}}}
             if "div" in req.url.params.get("events", "") and sym in OTHER_PAYERS and g == 86400 and len(ts) > 40:
                 # a dividend a few days ago (a different day for each company) and, for one, a split: for the US corporate-actions list
-                k = 2 + zlib.crc32(sym.encode()) % 24
+                k = 2 + zlib.crc32(sym.encode()) % 15      # at most 16 trading days back: always inside the four-week window, whatever the weekday or holidays
                 res["events"] = {"dividends": {str(ts[-k]): {"amount": round(0.3 + (zlib.crc32(sym.encode()) % 90) / 100, 2), "date": ts[-k]}}}
                 if sym == "NVDA":
                     res["events"]["splits"] = {str(ts[-9]): {"date": ts[-9], "numerator": 10, "denominator": 1, "splitRatio": "10:1"}}

@@ -18,7 +18,7 @@ from ..plans import has_indicators
 from . import ai as A
 from . import key_facts
 from .company import Research
-from .net import SourceError
+from .net import NotFound, SourceError
 
 router = APIRouter(prefix="/research", tags=["research"])
 hub: Research | None = None
@@ -52,6 +52,8 @@ def symbol_of(symbol: str) -> str:
 def source_call(fn):
     try:
         return fn()
+    except NotFound as e:
+        err(404, "not_found", str(e))
     except SourceError as e:
         err(503 if e.busy else 502, "source_error", str(e))
 

@@ -3,6 +3,7 @@ run went) and the routes that run one now. GET /admin/jobs lists them; each row 
 start it (empty for a job with no manual trigger). Facts only: the schedule text says when the job's own clock runs it."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
@@ -25,9 +26,27 @@ def _iso(unix) -> str | None:
         return None
 
 
+_ERROR_CLASS = re.compile(r"\s*\((?:[A-Za-z_]+\.)*[A-Z][A-Za-z]*(?:Error|Exception|Timeout)\)")
+
+
+def plain_error(text: str | None) -> str | None:
+    """A job's problem in words for the table: "Couldn't reach www.rbi.org.in." without the "(ConnectError)" the
+    reader adds. The log keeps the full text."""
+    return _ERROR_CLASS.sub("", text).strip() if text else text
+
+
 def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | None = None, log: list[str] | None = None,
-         run: list[dict] | None = None, running: bool = False, note: str | None = None) -> dict:
+         run: list[dict] | None = None, running: bool = False, note: str | None = None, parts: int | None = None) -> dict:
+    """One job. `parts`: how many sources the last run tried, for a job that reads several (each failed one is a line
+    of `log`); when some were read and some weren't, the run is partial: Check, not Problem."""
     state = "bad" if error else "ok" if last_run else "warn"
+    problems = [str(x) for x in (log or []) if x] if error else []
+    failed = len(problems)
+    if error and parts and 0 < failed < parts:
+        state = "warn"
+        error = f"Partial: {parts - failed} of {parts} sources read. Not read: {plain_error(problems[0])}" + (f" And {failed - 1} more (see the log)." if failed > 1 else "")
+    else:
+        error = plain_error(error)
     return {"id": id, "name": name, "schedule": schedule, "last_run": last_run, "error": error, "state": state,
             "running": bool(running), "log": [str(x)[:240] for x in (log or []) if x][:8], "run": run or [], "note": note}
 
@@ -124,20 +143,20 @@ def rows() -> list[dict]:
         from . import market_events_routes as r
         st = _plain(r.job)
         return _row("events", "Market events", "7:20 AM and 6:40 PM IST", st.get("last_run"), st.get("last_error"), _problems(st),
-                    [{"label": "Run now", "path": "/admin/events/refresh"}])
+                    [{"label": "Run now", "path": "/admin/events/refresh"}], parts=st.get("parts"))
     add("Market events", events)
 
     def fo():
         from . import fo_changes_routes as r
         st = _plain(r.job)
         return _row("fo", "F&O contract changes", "8:15 AM and 7:50 PM IST on trading days", st.get("last_run"), st.get("last_error"),
-                    _problems(st), [{"label": "Run now", "path": "/admin/fo-changes/refresh"}])
+                    _problems(st), [{"label": "Run now", "path": "/admin/fo-changes/refresh"}], parts=st.get("parts"))
     add("F&O contract changes", fo)
 
     def surv():
         st = _plain(m.surv_job)
         return _row("surveillance", "Surveillance lists", "8:20 AM and 7:45 PM IST on trading days", st.get("last_run"), st.get("last_error"),
-                    _problems(st), [{"label": "Run now", "path": "/admin/surveillance/refresh"}])
+                    _problems(st), [{"label": "Run now", "path": "/admin/surveillance/refresh"}], parts=st.get("parts"))
     add("Surveillance lists", surv)
 
     def auction():

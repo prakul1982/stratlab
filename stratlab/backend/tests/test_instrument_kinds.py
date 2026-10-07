@@ -152,15 +152,16 @@ def test_non_equity_file_leaves_out_company_bonds():
 def test_holdings_badges_and_unpriced_units(w):
     c = w["client"]
     csv = ("Symbol,ISIN,Qty,Avg price\nRELIANCE,INE002A01018,5,2500\nSGBMAY29I-GB,IN0020210079,4,4800\n"
-           "EMBASSY,INE041025011,20,360\n,INF204KB17I5,10,55\n").encode()
+           "EMBASSY,INE041025011,20,360\n,INF174KA1HS9,10,55\n").encode()
     csv = csv.replace(b"Symbol,ISIN,Qty,Avg price", b"Symbol,ISIN,Name,Qty,Avg price").replace(b",5,2500", b",,5,2500")
-    csv = csv.replace(b",4,4800", b",,4,4800").replace(b",20,360", b",,20,360").replace(b",10,55", b",Nippon India ETF Gold BeES,10,55")
+    csv = csv.replace(b",4,4800", b",,4,4800").replace(b",20,360", b",,20,360").replace(b",10,55", b",Kotak Gold ETF,10,55")
     r = c.post("/holdings/import", headers=PRO, json={"filename": "h.csv", "data": base64.b64encode(csv).decode(), "mode": "replace"})
     assert r.status_code == 200, r.text
     rows = {x["symbol"]: x for x in r.json()["holdings"]["rows"]}
     assert (rows["SGBMAY29I-GB"]["kind"], rows["SGBMAY29I-GB"]["kind_label"], rows["SGBMAY29I-GB"]["sector"]) == ("sgb", "Gold bond", "Sovereign Gold Bonds")
     assert (rows["EMBASSY"]["kind"], rows["EMBASSY"]["sector"]) == ("reit", "REITs and InvITs")
-    assert rows["INF204KB17I5"]["kind_label"] == "Gold ETF"                    # an ISIN alone: kept by its ISIN
+    # an ISIN alone, for an ETF the day's lists don't have (the demo broker lists GOLDBEES, so a made-up one): kept by its ISIN
+    assert rows["INF174KA1HS9"]["kind_label"] == "Gold ETF"
     assert rows["RELIANCE"]["kind"] == "stock" and r.json()["unmatched"] == []
     saved = {i["symbol"]: i for i in holdings.load("u-pro")["items"]}
     assert saved["EMBASSY"]["kind"] == "reit" and "kind" not in saved["RELIANCE"]

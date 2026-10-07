@@ -674,6 +674,8 @@ def assistant_page(profile=Depends(current_profile)):
 def make_key(req: KeyReq, profile=Depends(current_profile)):
     """A new key. The key itself is in this answer only; StratLab keeps just its hash."""
     _need(profile)
+    if not mcp_keys.clean_name(req.name):
+        err(422, "name_needed", "Name the key after the assistant that will use it, like \"Claude on my laptop\".")
     _m().throttle(profile, "assistant_key", 10, 3600, "That's a lot of new keys in an hour. Try again later.")
     try:
         token, k = mcp_keys.create(profile["id"], req.name, req.paper)

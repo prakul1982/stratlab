@@ -6,7 +6,7 @@ import { analyticsDashboard } from "../../lib/analytics";
 import { money } from "../../lib/format";
 import { Badge, Card, CardHead, EmptyState, HealthGrid, HealthTile, Skeleton, Stat, StatRow } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
-import { attention, lights } from "./attention";
+import { attention, lights, paidUsers } from "./attention";
 
 type InvoiceRow = { date: string; total: number; currency: string };
 type UserRow = { created_at: string | null };
@@ -33,7 +33,7 @@ export function OverviewSection() {
   const todays = (invoices ?? []).filter((i) => i.date === today);
   const rupees = todays.filter((i) => i.currency === "INR").reduce((a, i) => a + i.total, 0);
   const others = [...new Set(todays.filter((i) => i.currency !== "INR").map((i) => i.currency))];
-  const paid = st.plans.basic + st.plans.pro;
+  const paidStat = paidUsers(st);
   const errors = sv.recent_errors?.length ?? 0;
   const dash = analyticsDashboard();
 
@@ -59,7 +59,7 @@ export function OverviewSection() {
         <CardHead title="Today's numbers" info="Sign-ups and revenue are for today in India (IST). Server errors are the crashes since the server last started." />
         <StatRow label="Today">
           <Stat item label="Sign-ups today" value={signups ?? "–"} note={`${st.new_7d} in the last 7 days · ${st.users} in all`} />
-          <Stat item label="Paid users" value={paid} note={`${st.plans.basic} Basic · ${st.plans.pro} Pro`} />
+          <Stat item label={paidStat.label} value={paidStat.value} note={paidStat.note} />
           <Stat item label="Revenue today" value={invoices ? money(rupees, "INR") : "–"}
             note={invoices ? `${todays.length} invoice${todays.length === 1 ? "" : "s"}${others.length ? ` · also in ${others.join(", ")}` : ""}` : undefined} />
           <Stat item label="Server errors" value={errors} note={<Link className="link" to="/admin/system">since the last restart</Link>} />

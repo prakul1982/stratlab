@@ -2,8 +2,13 @@
 // Run: npm run test:unit
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { legRule, PICKS } from "../src/lib/options.ts";
-import { vixChange, vixNum, vixPercentileLine } from "../src/lib/vix.ts";
+import { register } from "node:module";
+
+// vix.ts reads its dates through ./format, written without the .ts the way the app's imports are
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
+const { legRule, PICKS } = await import("../src/lib/options.ts");
+const { vixChange, vixNum, vixPercentileLine } = await import("../src/lib/vix.ts");
 
 const leg = (p) => ({ side: "sell", opt: "PE", offset: 0, lots: 1, ...p });
 

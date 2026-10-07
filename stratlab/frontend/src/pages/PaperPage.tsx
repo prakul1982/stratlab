@@ -12,6 +12,7 @@ import type { PriceLevel } from "../charts/price/engine";
 import { Info } from "../components/ui";
 import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, EmptyState, ErrorState, Notice, PageHeader, Skeleton } from "../components/kit";
 import { HELP } from "../lib/help";
+import { sessionFeed } from "../lib/marketHours";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
 import { SurvBadges, survRegion } from "../components/Surveillance";
 import { FoBadges } from "../components/FoBadges";
@@ -50,7 +51,7 @@ function LiveChart({ snap, cur }: { snap: LiveSnapshot; cur: string }) {
 }
 
 function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
-  const { fail, refreshMe } = useApp();
+  const { fail, refreshMe, markets } = useApp();
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const [ask, setAsk] = useState<"stop" | "delete" | null>(null);
 
@@ -82,9 +83,9 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   const orders: PaperOrder[] = snap.events.map((e) => ({ ...e, sym: snap.instrument.symbol }));
   const { today, earlier } = splitToday(orders, (e) => e.t, tz);
   const closedPnl = earlier.reduce((n, e) => n + (e.pnl ?? 0), 0);
-  const feed = !running ? "" : snap.feed_connected
-    ? (snap.last_tick_at ? "Live prices" : alwaysOpen ? "Fetching the latest prices" : "Waiting for the market to open")
-    : "Reconnecting to prices";
+  // the market's own hours first: after the close it's "Market closed · opens …", not a lost connection (lib/marketHours)
+  const feed = sessionFeed({ feedConnected: snap.feed_connected, lastTickAt: snap.last_tick_at, alwaysOpen,
+    market: markets.find((m) => m.id === snap.instrument.market) });
 
   const stop = async () => {
     setAsk(null);
@@ -110,7 +111,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     <div className="k-page">
       <div className="k-spread k-session-head">
         <div className="k-stack k-tight">
-          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true)}</span>
+          <span className="k-eyebrow">{snap.instrument.symbol} · {TF_NAME[snap.strategy.tf]} candles · started {when(snap.started_at, tz, true, true)}</span>
           <div className="k-row">
             <SurvBadges region={survRegion(snap.instrument)} symbol={snap.instrument.symbol} />
             <FoBadges region={survRegion(snap.instrument)} symbol={foSymbol(snap.instrument)} />
@@ -118,7 +119,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
           <h2 className="k-session-name">{snap.name}</h2>
         </div>
         <div className="k-row">
-          {running && <span className="k-row"><Badge tone={snap.feed_connected && snap.last_tick_at ? "live" : "plain"}>{feed}</Badge><Info>{HELP.feed}</Info></span>}
+          {running && <span className="k-row" data-testid="feed-line"><Badge tone={feed.tone}>{feed.text}</Badge><Info>{HELP.feed}</Info></span>}
           {running ? <button type="button" className="btn danger" onClick={() => setAsk("stop")}>Stop session</button>
             : <><Badge tone={statusTone(snap.status)}>{snap.status}</Badge><button type="button" className="btn danger sm" onClick={() => setAsk("delete")}>Delete</button></>}
         </div>
@@ -210,7 +211,7 @@ export function PaperPage() {
   let sub = me ? `${me.plan_info.name} plan · ${me.live_running} of ${me.live_limit} running` : "";
   if (me?.plan === "free" && me.trial) {
     sub = !me.trial.started ? "Free trial: 5 market days, starting with your first session"
-      : me.trial.active ? `Free trial until ${fmtDateTime(me.trial.ends_at, { year: false })}`
+      : me.trial.active ? `Free trial until ${fmtDateTime(me.trial.ends_at, { year: false, zone: true })}`
         : "Free trial ended · upgrade to keep paper trading";
   }
 

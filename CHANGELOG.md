@@ -4,6 +4,18 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 7 October 2026: review-driven fixes, emails, market time zones, accessibility and pricing wording
+
+- **Emails:** every link in every email resolves to a page that exists (a test walks them all); "Read the full brief" opens `/news?tab=…&issue=…` and "Manage emails" opens that email's own Settings card. Dates read as in the app ("7 Oct 2026"), amounts use ₹ and $, subjects have no "StratLab:" prefix, and the receipt shows the taxable value, CGST/SGST or IGST, SAC, GSTIN and place of supply.
+- **Business emails:** the legal pages and Contact name info@, support@, billing@ and privacy@; replies go to support@; a `security.txt` was added.
+- **Search by name:** every company box and Ctrl K find a company by its name, short name or ISIN, or with a typo; Ctrl K lists companies first.
+- **Market time zones:** a market's times carry its own zone ("09:15 IST", "09:30 ET"), written by one formatter. The daily report and the signal session count a day in the market's own zone (UTC for crypto) instead of mixing India's date with UTC.
+- **Accessibility and layout:** one shared focus trap (`lib/focusTrap.ts`) serves every dialog (the kit Dialog, Modal, the search palette, the phone menu and the tour); a skip link, named account and market buttons, less layout shift while pages load, and fixes in the options builder.
+- **Backtest reconciliation:** one drawdown everywhere, the unseen split built from the run's own trades, costs that include slippage, and weekday calendars; checks are counted out of four on every page.
+- **Onboarding:** the first-run steps and signed-out links were reworked, with one tour that uses the shared focus trap.
+- **Pricing honesty:** plan and offer wording states what is open today, from the one offer state the landing page, Plans and the app share.
+- **Tests:** the signal daily-report test is pinned to a set time and runs inside and outside 18:30-24:00 UTC; the newsletter plan-gate test no longer inherits a launch offer another test started (the world fixture clears it); the Brevo test asserts the replyTo field.
+
 ### 6 and 7 October 2026: the UI overhaul, My space, connect once and the data behind them
 
 - **UI overhaul:** every page now sits on the design kit: one title block, one card, one stat, one table, one set of states for empty, loading and failed. Money, Invest and Trade pages were rebuilt on it, Account and Settings were regrouped with Connected accounts in one place, and a last sweep checked every page at 400px, in light and dark, with guards against one-off styles and the browser's own confirm box.

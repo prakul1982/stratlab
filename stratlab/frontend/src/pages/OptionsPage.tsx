@@ -2,14 +2,13 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, price, fmtDate } from "../lib/format";
+import { axisInrFor, money, price, fmtDate, IST, tzLabel } from "../lib/format";
 import { HELP } from "../lib/help";
-import { blankOptions, IMPORTED, legName, legRule, payoff, PICKS, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
+import { blankOptions, IMPORTED, isAutoName, legName, legRule, payoff, PICKS, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import type { OptionGreeks } from "../lib/greeks";
-import { moneyCompact } from "../lib/chartFormat";
 import { More } from "../components/More";
 import { Info } from "../components/ui";
 import { track } from "../lib/analytics";
@@ -18,6 +17,7 @@ import { FoBadges } from "../components/FoBadges";
 import { foSymbol } from "../lib/foChanges";
 import {
   Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, Disclosure, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Skeleton,
+  TimeInput,
   Stat, StatRow, TilePicker, type Column, type TileGroup,
 } from "../components/kit";
 import "./trade/trade.css";
@@ -63,9 +63,12 @@ function InNum({ label, value, onChange, min = 0, max, step = 1 }: { label: stri
   );
 }
 
-/** A time box inside a sentence. */
+/** Every exchange the builder trades on (NSE, BSE, MCX, NSE currency) keeps India's time: its times are IST. */
+const ZONE = tzLabel(IST);
+
+/** A time box inside a sentence: 24-hour, in the exchange's time, with the zone beside it. */
 function InTime({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return <input className="k-input k-in time" aria-label={label} type="time" value={value} onChange={(e) => e.target.value && onChange(e.target.value)} />;
+  return <TimeInput small label={label} zone={ZONE} value={value} onChange={onChange} />;
 }
 
 /** How a leg's strike is picked, and the number(s) the rule needs. */
@@ -138,12 +141,18 @@ function Charges({ c }: { c: OptCharges }) {
     { key: "label", header: "Charge", rowHeader: true, cell: (r) => r.label },
     { key: "amount", header: "Amount", numeric: true, cell: (r) => inr(r.amount, 2) },
   ];
+  // a sold structure whose most it can make is the premium it takes in: one figure, not the same one twice
+  const sameAsPremium = c.credit && c.max_profit != null && Math.abs(c.max_profit - c.premium) < 0.5;
   return (
     <div className="k-stack" data-testid="opt-charges">
       <StatRow label="Charges">
         <Stat label="Charges to open and close" value={inr(c.total, 2)} />
-        <Stat label="Share of the premium" value={share(c.pct_of_premium)} />
-        <Stat label="Share of the most it can make" value={c.max_profit == null ? "No ceiling" : share(c.pct_of_max_profit)} />
+        {sameAsPremium
+          ? <Stat label="Share of the premium (also the most it can make)" value={share(c.pct_of_premium)} />
+          : <>
+            <Stat label="Share of the premium" value={share(c.pct_of_premium)} />
+            <Stat label="Share of the most it can make" value={c.max_profit == null ? "No ceiling" : share(c.pct_of_max_profit)} />
+          </>}
         {c.credit
           ? <Stat label="Premium kept after charges" value={inr(c.premium_after, 2)} />
           : <Stat label="Most it can make after charges" value={c.max_profit_after == null ? "Unlimited" : inr(c.max_profit_after, 2)} />}
@@ -190,21 +199,24 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
   const curves: PayoffCurve[] = [{ id: "expiry", label: "At expiry", values: f.ys },
     ...(c ? [{ id: "after", label: "After charges", values: f.ys.map((y) => y - c.total), dash: "4 4", width: 1.4 }] : [])];
   const markers: PayoffMarker[] = [{ x: p.spot, label: `Spot ${Math.round(p.spot).toLocaleString("en-IN")}`, kind: "spot" as const },
-    ...before.map((x) => ({ x, label: "Breakeven", kind: "breakeven" as const })),
-    ...(c ? c.breakevens_after.map((x) => ({ x, label: "Breakeven after charges", kind: "other" as const })) : [])];
+    // each breakeven's label sits on the side away from the spot, so both read beside the spot's
+    ...before.map((x) => ({ x, label: `Breakeven ${Math.round(x).toLocaleString("en-IN")}`, kind: "breakeven" as const, side: x < p.spot ? "left" as const : "right" as const })),
+    // after charges they sit a few points inside: lines only, the numbers are in the note under the chart
+    ...(c ? c.breakevens_after.map((x) => ({ x, label: "", kind: "other" as const })) : [])];
   return (
     <>
       <Card label="Summary">
-        <CardHead title="Summary" info="Worked out at expiry from the fills shown, with the legs held to the end. Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes." infoLabel="About this summary" />
+        <CardHead title="Summary" info="Worked out at expiry from the fills shown, with the legs held to the end. Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes." />
         <StatRow label="Priced structure">
           <Stat label={f.credit >= 0 ? "Premium collected" : "Premium paid"} value={inr(Math.abs(f.credit))} />
-          <div data-testid="opt-max-profit"><Stat label="Most it can make" value={best == null ? "Unlimited" : inr(best)} tone={best == null ? undefined : "up"}
-            note={c && c.max_profit_after != null ? `${inr(c.max_profit_after)} after charges` : undefined} /></div>
-          <div data-testid="opt-max-loss"><Stat label="Most it can lose" value={worst == null ? "Unlimited" : inr(worst)} tone={worst == null ? undefined : "down"}
-            note={c && c.max_loss_after != null ? `${inr(c.max_loss_after)} after charges` : undefined} /></div>
-          <div data-testid="opt-be-stat"><Stat label="Breakevens" value={before.length ? points(before) : "None"}
-            note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after)} after charges` : "none after charges") : undefined} /></div>
-          <Stat label="Margin needed" value={p.margin != null ? inr(p.margin) : "Not available"} />
+          <Stat testId="opt-max-profit" label="Most it can make" value={best == null ? "Unlimited" : inr(best)} tone={best == null ? undefined : "up"}
+            note={c && c.max_profit_after != null ? `${inr(c.max_profit_after)} after charges` : undefined} />
+          <Stat testId="opt-max-loss" label="Most it can lose" value={worst == null ? "Unlimited" : inr(worst)} tone={worst == null ? undefined : "down"}
+            note={c && c.max_loss_after != null ? `${inr(c.max_loss_after)} after charges` : undefined} />
+          <Stat testId="opt-be-stat" label="Breakevens" value={before.length ? points(before) : "None"}
+            note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after)} after charges` : "none after charges") : undefined} />
+          <Stat testId="opt-margin" label="Margin needed" value={p.margin != null ? inr(p.margin) : "Not available"}
+            note={p.margin != null ? "the broker's figure for these legs, asked when priced" : "the broker didn't give one; price it again"} />
         </StatRow>
       </Card>
       <Card label="Payoff">
@@ -215,7 +227,7 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
             ariaLabel="Profit or loss at expiry and today across prices" />
         ) : (
           <PayoffChart ariaLabel="Profit or loss at expiry across prices" height={220} xs={f.xs} testId="payoff-chart"
-            format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
+            format={(v) => inr(v)} axisFormat={axisInrFor(Math.max(0, ...curves.flatMap((x) => x.values.map((v) => Math.abs(v ?? 0)))))} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
             curves={curves} markers={markers} />
         )}
         <p className="k-note" data-testid="opt-breakevens">
@@ -333,16 +345,18 @@ export function OptionsPage() {
   const und = unds?.find((u) => u.exchange === s.exchange && u.name === s.underlying);
   const popular = (unds?.length ? unds.filter((u) => u.popular) : POPULAR_FALLBACK.map((u) => ({ ...u, venue: u.exchange === "BFO" ? "BSE" : u.exchange === "MCX" ? "MCX" : u.exchange === "CDS" ? "NSE currency" : "NSE" }))).slice(0, 5);
   const onPopular = popular.some((u) => u.exchange === s.exchange && u.name === s.underlying);
+  // a name the person typed stays; one the builder made up follows the strategy, underlying and rules
+  const named = (next: string) => (isAutoName(s.name, s.underlying) ? { name: next } : {});
   const pickUnderlying = (exchange: OptionStrategy["exchange"], name: string) => {
     const t = s.exchange !== exchange ? sessionFor(exchange) : null;
     const st = STRUCTURES.find((x) => x.id === s.structure);
     patch({ exchange, underlying: name, expiry: "current", ...(t ? { timing: { ...s.timing, ...t } } : {}),
-      name: `${name} ${st ? st.name.toLowerCase() : "options"}` });
+      ...named(`${name} ${st ? st.name.toLowerCase() : "options"}`) });
   };
   const pickStructure = (id: string) => {
     if (id === "custom") { patch({ structure: "custom" }); return; }
     const st = STRUCTURES.find((x) => x.id === id)!;
-    patch({ structure: id, offsetUnit: st.unit, legs: st.legs.map((l) => ({ ...l })), name: `${s.underlying} ${st.name.toLowerCase()}` });
+    patch({ structure: id, offsetUnit: st.unit, legs: st.legs.map((l) => ({ ...l })), ...named(`${s.underlying} ${st.name.toLowerCase()}`) });
   };
   const hasShort = s.legs.some((l) => l.side === "sell");
 
@@ -388,9 +402,9 @@ export function OptionsPage() {
       // a directional signal usually buys an option; swap out the default short straddle
       const bc = STRUCTURES.find((x) => x.id === "buy_call")!;
       if (s.structure === "short_straddle") {
-        patch({ signal, structure: "buy_call", offsetUnit: bc.unit, legs: bc.legs.map((l) => ({ ...l })), name: `${s.underlying} options on ${nb.name}` });
+        patch({ signal, structure: "buy_call", offsetUnit: bc.unit, legs: bc.legs.map((l) => ({ ...l })), ...named(`${s.underlying} options on ${nb.name}`) });
         notify("Switched the structure to Buy a call. Change it above if you want something else.");
-      } else patch({ signal, name: `${s.underlying} options on ${nb.name}` });
+      } else patch({ signal, ...named(`${s.underlying} options on ${nb.name}`) });
     } catch (e) { fail(e); } finally { setSigBusy(false); }
   };
   useEffect(() => {   // "Trade it with options" on a verdict hands over its notebook
@@ -412,7 +426,7 @@ export function OptionsPage() {
   const exp = und?.expiries?.[s.expiry === "next" ? 1 : 0];
   const stopWord = r.stopType === "none" ? "" : `, stopping out if the loss reaches ${r.stopType === "amount" ? inr(r.stop) : `${r.stop}% of the premium`}`;
   const tgtWord = r.tgtType === "none" ? "" : ` and taking profit at ${r.tgtType === "amount" ? inr(r.tgt) : `${r.tgt}% of the premium`}`;
-  const words = `${s.name}: ${legsText}, on ${expiryNames[s.expiry] ?? `the ${s.expiry} expiry`}. ${s.signal ? `Enters whenever "${s.signal.name}" signals a trade, from ${t.entry} to ${t.lastEntry}` : `Enters at ${t.entry}, no later than ${t.lastEntry}`}, and exits by ${t.squareoff}${stopWord}${tgtWord}.`;
+  const words = `${s.name}: ${legsText}, on ${expiryNames[s.expiry] ?? `the ${s.expiry} expiry`}. ${s.signal ? `Enters whenever "${s.signal.name}" signals a trade, from ${t.entry} to ${t.lastEntry} ${ZONE}` : `Enters at ${t.entry} ${ZONE}, no later than ${t.lastEntry} ${ZONE}`}, and exits by ${t.squareoff} ${ZONE}${stopWord}${tgtWord}.`;
   const tileGroups: TileGroup[] = [
     ...TILE_GROUPS.map((g) => ({ title: g.title, tiles: g.ids.map((id) => { const x = STRUCTURES.find((y) => y.id === id)!; return { value: id, title: x.name, sub: x.hint }; }) })),
     { title: "Your own", tiles: [{ value: "custom", title: "Custom legs", sub: "Choose each leg yourself" }] },
@@ -446,7 +460,7 @@ export function OptionsPage() {
               {!!unds?.length && (
                 <Select small label="Other underlyings" value={onPopular ? "" : `${s.exchange}:${s.underlying}`}
                   onChange={(v) => { if (v) { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); } }}
-                  options={[{ value: "", label: "More…" }, ...unds.map((u) => ({ value: `${u.exchange}:${u.name}`, label: `${u.name} (${u.venue})` }))]} />
+                  options={[{ value: "", label: `Other underlyings (${Math.max(0, unds.length - popular.length)})…` }, ...unds.filter((u) => !popular.some((p) => p.exchange === u.exchange && p.name === u.name)).map((u) => ({ value: `${u.exchange}:${u.name}`, label: `${u.name} (${u.venue})` }))]} />
               )}
             </div>
           </FieldGroup>

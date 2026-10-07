@@ -12,7 +12,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from .. import alerts, db, email_kit as kit, newsletter_prefs
-from ..plans import access_plan, allows
+from ..plans import allows, plan_of
 from . import content, write
 
 KINDS = ("market", "my_stocks")
@@ -132,7 +132,7 @@ def confirmed(profile: dict) -> bool:
 
 def allowed(profile: dict, what: str, how: str) -> bool:
     """The plan allows this choice: the weekly editions of both newsletters for everyone, the daily ones on Basic and up."""
-    return how != "daily" or allows(access_plan(profile), "newsletter")
+    return how != "daily" or allows(plan_of(profile), "newsletter")
 
 
 def subscribers() -> list[dict]:
@@ -151,7 +151,7 @@ def teaser(profile: dict, issue: dict):
     if not alerts.jobs_for(quiet, "", ""):
         return
     first = re.split(r"(?<=\.)\s", issue.get("summary") or "", maxsplit=1)[0][:160]
-    alerts.notify(quiet, issue["subject"], f"{issue['subject']}\n{first}".strip(), url=f"/news/{issue['id']}")
+    alerts.notify(quiet, issue["subject"], f"{issue['subject']}\n{first}".strip(), url=kit.news_path(issue["id"]))
 
 
 def deliver(profile: dict, issue: dict, what: str) -> bool:
@@ -179,6 +179,14 @@ class Job:
     def __init__(self):
         self.last: dict[str, str] = {}
         self.status = {"last_run": None, "sent": 0, "last_error": None}
+
+    def record(self, now: datetime, problems: list[str], parts: int | None = None, **extra) -> None:
+        """How a read went, run by its own clock or by Admin's Run now (so Admin never shows an older run's problem
+        after a newer good one): when, the problems (one per source that failed; the first is the last error) and,
+        for a job that reads several sources, how many it tried (`parts`)."""
+        problems = [str(p) for p in problems or []]
+        self.status.update(last_run=now.isoformat(), problems=problems[:5], last_error=problems[0][:200] if problems else None,
+                           parts=parts, **extra)
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="newsletters").start()

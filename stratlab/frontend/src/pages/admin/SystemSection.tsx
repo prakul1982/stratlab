@@ -4,6 +4,7 @@ import { useApp } from "../../lib/app";
 import { Card, CardHead, DataTable, EmptyState, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type ServerError } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
+import { service } from "./attention";
 import { PlatformPanel } from "./PlatformPanel";
 
 type FilingCheck = { ok: boolean; symbol: string; count?: number; error?: string; latest?: { at: string; label: string; subject: string }[];
@@ -26,6 +27,7 @@ export function SystemSection() {
   const [note, setNote] = useState<string | null>(null);
   const run = async (key: string, fn: () => Promise<void>) => { setBusy(key); try { await fn(); } catch (e) { fail(e); } finally { setBusy(null); } };
   const sv = ov?.server;
+  const co = service(ov, "co"), mail = service(ov, "mail");     // the same lights and words as Overview's
   const testEmail = () => run("mail", async () => {
     const r = await api<{ sent_to: string }>("/admin/alerts/test", { method: "POST" });
     notify(`Test email sent to ${r.sent_to}. Check your inbox (and spam).`);
@@ -58,10 +60,8 @@ export function SystemSection() {
         <CardHead title="Other services" />
         {sv && (
           <StatusList label="Other services">
-            <StatusRow state={sv.research?.finnhub ? "ok" : "warn"} label="US company data" detail={sv.research?.finnhub ? "Key is set" : "Add the company-data key in Railway for US company pages (setup guide, step 6). India needs no key."} />
-            {sv.admin_alerts && <StatusRow state={sv.admin_alerts.email_ready ? "ok" : "bad"} label="Alerts to you"
-              detail={sv.admin_alerts.email_ready ? `Emailed to ${sv.admin_alerts.to.join(", ")}, plus your phone or Telegram if set in Account.`
-                : "Email isn't set up on the server: make a free account at resend.com with this address, create an API key, and add it in Railway as RESEND_API_KEY. Until then alerts reach only your phone or Telegram."}
+            {co && <StatusRow state={co.state} label={co.label} detail={co.fix ?? co.detail} />}
+            {sv.admin_alerts && mail && <StatusRow state={mail.state} label={mail.label} detail={mail.fix ?? mail.detail}
               actions={<>
                 {sv.admin_alerts.email_ready && <button type="button" className="btn quiet sm" disabled={busy === "mail"} onClick={testEmail}>{busy === "mail" ? "Sending…" : "Send a test email"}</button>}
                 <button type="button" className="btn quiet sm" disabled={busy === "weekly"} onClick={sendWeekly} title="The summary that goes out every Monday at 9:00 IST">{busy === "weekly" ? "Sending…" : "Send this week's summary now"}</button>

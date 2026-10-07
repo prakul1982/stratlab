@@ -28,7 +28,7 @@ async function open(page: Page, path: string, ready: string, who: typeof session
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
   await answerWelcome(page);
-  await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(400);
   return errors;
 }
@@ -49,7 +49,7 @@ async function touchable(page: Page) {
   const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main select, main a, main [role=button], main input:not([type=range]):not([type=checkbox]):not([type=radio])"))
     .filter((el) => {
       const b = el.getBoundingClientRect();
-      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name")) return false;
+      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name, [aria-hidden=true]")) return false;
       if (el.matches(".info-btn, .chip-x") || getComputedStyle(el).display === "inline") return false;
       return b.height < 32;
     }).map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || (el as HTMLInputElement).placeholder || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`));
@@ -86,7 +86,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
+  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
@@ -265,7 +265,7 @@ test("first steps on Home tick themselves from real data, and hide for good", as
   await list.getByRole("button", { name: "Hide this" }).click();
   await expect(page.getByText("Your first steps")).toHaveCount(0);
   await page.reload();
-  await expect(page.getByText("notebook", { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Net worth", { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(600);
   await expect(page.getByText("Your first steps")).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -376,7 +376,7 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   if (info.project.name === "phone") await touchable(page);
   // the keyboard: down to Reliance, Enter picks it and fills the NSE symbol
   const at = options.findIndex((t) => /Reliance/.test(t));
-  for (let i = 0; i < at; i++) await box.press("ArrowDown");
+  for (let i = 0; i <= at; i++) await box.press("ArrowDown");                 // nothing is marked until the first ↓ (R1-017)
   await expect(reliance).toHaveAttribute("aria-selected", "true");
   await box.press("Enter");
   await expect(box).toHaveValue("RELIANCE");
@@ -394,6 +394,8 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   const apple = list.getByRole("option", { name: /Apple Inc/ });
   await expect(apple).toBeVisible();
   await expect(apple.getByText("US", { exact: true })).toBeVisible();
+  await us.press("ArrowDown");                                                // nothing is marked until the first ↓, so Enter alone keeps what was typed
+  await expect(apple).toHaveAttribute("aria-selected", "true");
   await us.press("Enter");
   await expect(us).toHaveValue("AAPL");
   await page.getByLabel("Quantity").fill("3");
@@ -660,7 +662,7 @@ test("the tools grid shows one group until asked, and the menu reaches Account w
   await expect(page.getByRole("button", { name: "Paper trade options" })).toHaveCount(0);
   await page.getByRole("button", { name: /Show \d+ more tools/ }).click();
   await expect(page.getByRole("button", { name: "Paper trade options" })).toBeVisible();
-  if (info.project.name === "desktop") await expect(page.getByRole("button", { name: /^Account menu/ })).toBeInViewport();
+  if (info.project.name === "desktop") await expect(page.getByRole("button", { name: /account menu$/ })).toBeInViewport();
   await sane(page, errors);
 });
 
@@ -705,8 +707,8 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   await expect(main.getByRole("link", { name: "Scans", exact: true })).toHaveCount(0);       // no catch-all "Scans" entry any more
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
-  await expect(foot.getByRole("button", { name: /^\d+ of \d+ markets open$/ })).toBeVisible();
-  await expect(foot.getByRole("button", { name: "Account menu, Pro plan" })).toBeVisible();
+  await expect(foot.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ })).toBeVisible();
+  await expect(foot.getByRole("button", { name: /Pro plan, account menu$/ })).toBeVisible();
   expect((await foot.boundingBox())!.height, "the footer stays slim").toBeLessThanOrEqual(100);
   const scrolls = await side.evaluate((aside) => [aside, ...aside.querySelectorAll("*")].filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY)).map((el) => el.className));
   expect(scrolls, "one scrolling part in the sidebar").toEqual(["side-groups"]);
@@ -790,7 +792,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
 test("the menu shows Admin only to admins", async ({ page }, info) => {
   await open(page, "/research", "Companies", sessionAs("free-token", "u-free", "free@example.com"));
   const side = await menu(page, info.project.name === "phone");
-  await side.getByRole("button", { name: "Account menu, Free plan" }).click();
+  await side.getByRole("button", { name: /Free plan, account menu$/ }).click();
   const acct = side.getByRole("menu", { name: "Account" });
   await expect(acct.getByRole("menuitem", { name: /^Account/ })).toBeVisible();
   await expect(acct.getByRole("menuitem", { name: "Admin" })).toHaveCount(0);
@@ -800,8 +802,8 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   const side = await menu(page, phone);
-  const btn = side.getByRole("button", { name: /^\d+ of \d+ markets open$/ });
-  const [, , total] = (await btn.innerText()).match(/(\d+) of (\d+)/)!.map(Number);
+  const btn = side.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ });
+  const [, , total] = (await btn.innerText()).match(/(\d+)\/(\d+) markets/)!.map(Number);
   await expect(btn).toHaveAttribute("aria-expanded", "false");
   const footBefore = (await side.locator(".side-foot").boundingBox())!.height;
   await btn.click();
@@ -814,7 +816,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   for (const r of await rows.all()) await expect(r).toHaveText(/(Open 24\/7|Closes in|Opens in|Holiday|Data offline|Closed)/);
   // the count is re-read now: a market can open or close between reading the line and opening the list
   await expect(async () => {
-    const now = Number((await btn.innerText()).match(/(\d+) of/)![1]);
+    const now = Number((await btn.innerText()).match(/(\d+)\/\d+ markets/)![1]);
     expect(await pop.locator(".mkt-dot.on").count()).toBe(now);
   }).toPass({ timeout: 5_000 });
   // it floats: the sidebar's footer and menu keep their size
@@ -850,7 +852,7 @@ test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   let side = await menu(page, phone);
-  const btn = side.getByRole("button", { name: "Account menu, Pro plan" });
+  const btn = side.getByRole("button", { name: /Pro plan, account menu$/ });
   await expect(btn).toContainText("owner");
   await expect(btn).toContainText("Pro");
   await btn.click();
@@ -954,7 +956,10 @@ for (const [path, ready] of [["/research/IN/RELIANCE", "Reliance"], ["/research/
     await watchSharing(page);
     const errors = await open(page, path, ready);
     await answerLevel(page);
-    const button = page.getByRole("button", { name: "Share", exact: true });
+    // a company page keeps Share under More (R1-042); the deep dive shows it as a button
+    const more = path.endsWith("/deep") ? null : page.locator("main").getByRole("button", { name: "More", exact: true }).first();
+    if (more) await more.click();
+    const button = more ? page.getByRole("menuitem", { name: "Share", exact: true }) : page.getByRole("button", { name: "Share", exact: true });
     await expect(button).toBeVisible();
     if (phone) await touchable(page);
     await button.click();
@@ -980,13 +985,19 @@ test("invite: your invite link, how many friends joined, and sharing it", async 
   await watchSharing(page);
   const errors = await open(page, "/invite", "Invite friends");
   await expect(page.getByTestId("friends-joined")).toHaveText(/^6 friends joined · 3 free months earned$/);
-  await expect(page.getByTestId("invite-reward-line")).toHaveText("Invite friends, both get a month of Basic. When a friend joins with your link and uses "
-    + "StratLab on 3 different days in their first 2 weeks, they get a month of Basic free. You get a free month for each of your first 2 friends "
-    + "who do this each year, and for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a "
-    + "month (about a week extra).");
-  await expect(page.getByTestId("invite-status")).toHaveText("Use: 2 of 2 · Subscribed: 1 of 2 · Extra: 0 weeks");
-  await expect(page.getByTestId("invite-waiting")).toHaveText("1 friend waiting to subscribe");
-  for (const id of ["invite-reward-line", "invite-status", "invite-waiting"]) {      // nothing spills past the card
+  // plain words: what a friend gets, and what you get on your plan (the owner is on Pro, so the time is kept, never "a month of Basic" now)
+  const words = page.getByTestId("invite-reward-line");
+  await expect(words).toContainText("What a friend gets. A friend who joins with your link and uses StratLab on 3 different days in their first 2 weeks gets a month of Basic free.");
+  await expect(words).toContainText("What you get. You earn a month of free Basic for each of your first 2 friends who do this in a year, and for each of your "
+    + "first 2 friends who subscribe. After that, each friend who subscribes adds 8 days. You're on Pro, so it's kept for you and starts only if your Pro plan stops.");
+  await expect(words).not.toContainText("You get a month of Basic");
+  const status = page.getByTestId("invite-status");
+  for (const [k, v] of [["This year: friends who used StratLab", "2 of 2 months"], ["This year: friends who subscribed", "1 of 2 months"],
+    ["Waiting to subscribe", "1 friend"], ["Kept for when your plan stops", /days of Basic|Nothing yet/]] as const) {
+    await expect(status.locator("div", { hasText: k })).toContainText(v);
+  }
+  await expect(status).not.toContainText(/Use:|Extra:|weeks/);
+  for (const id of ["invite-reward-line", "invite-status"]) {      // nothing spills past the card
     const box = (await page.getByTestId(id).boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   }
@@ -1005,11 +1016,11 @@ test("invite: your invite link, how many friends joined, and sharing it", async 
 test("an invite link is remembered through sign-in, sent once, and taken out of the address", async ({ page }) => {
   const sent: unknown[] = [];
   await page.route("**/me/referral", async (r) => { sent.push(r.request().postDataJSON()); await r.fulfill({ status: 200, contentType: "application/json", body: '{"recorded":false}' }); });
-  const errors = await open(page, "/?ref=AbCdEf123_-x", "notebook");
+  const errors = await open(page, "/?ref=AbCdEf123_-x", "Net worth");
   await expect.poll(() => sent).toEqual([{ code: "AbCdEf123_-x" }]);
   expect(new URL(page.url()).search).toBe("");
   await page.reload();
-  await expect(page.getByText("notebook").first()).toBeVisible();
+  await expect(page.getByText("Net worth").filter({ visible: true }).first()).toBeVisible();
   await page.waitForTimeout(500);
   expect(sent, "sent only once").toHaveLength(1);
   await sane(page, errors);
@@ -1062,12 +1073,12 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   const errors = await open(page, "/research/screens?region=IN", "Filter companies by plain facts");
   await answerLevel(page);
   await expect(page.getByText(/20 of 20 companies match/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/Prices as of 1 Oct 2026/)).toBeVisible();
+  await expect(page.getByText(/Prices as of \d+ \w+ \d{4}/)).toBeVisible();              // read today, like the rest of the app
   const table = page.locator(".screens-table");
-  await expect(table.locator("tbody tr").first()).toContainText("Axisbank Ltd");          // alphabetical by default
+  await expect(table.locator("tbody tr").first()).toContainText("Axis Bank Ltd");         // alphabetical by default, the listed name
   if (phone) await page.getByRole("button", { name: /Show filters/ }).click();
   await page.getByRole("button", { name: "Energy", exact: true }).click();
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();                 // RELIANCE, ONGC, COALINDIA
   await page.getByRole("button", { name: "What is Debt to equity?" }).click();
   await expect(page.getByRole("note")).toContainText("Borrowings divided by shareholders' equity");
   await page.getByLabel("P/E (price to earnings): at most").fill("abc");
@@ -1075,7 +1086,7 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await page.getByLabel("P/E (price to earnings): at most").fill("1");
   await expect(page.getByText("No company meets every condition.", { exact: false })).toBeVisible();
   await page.getByLabel("P/E (price to earnings): at most").fill("");
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();
   await table.getByRole("button", { name: "P/E" }).click();                             // sort by a column the user picks
   await expect(table.locator("th[aria-sort=ascending]")).toContainText("P/E");
   await page.getByRole("button", { name: /Low to high/ }).click();
@@ -1089,7 +1100,7 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByText(/20 of 20 companies match/)).toBeVisible();
   await saved.click();                                                                  // a saved screen opens its conditions
-  await expect(page.getByText(/4 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();
   await page.getByRole("button", { name: `Delete ${tag}` }).click();
   await expect(page.getByRole("button", { name: `${tag} · weekly` })).toHaveCount(0);
   const text = await page.locator("main").innerText();
@@ -1283,7 +1294,7 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByText("TCS: quantity 24, average price ₹1,760.00.")).toBeVisible();
   const positions = page.getByRole("table", { name: "Positions" });
-  await expect(positions.getByRole("row").filter({ hasText: "TCS" }).getByText("24", { exact: true })).toBeVisible();
+  await expect(positions.getByRole("row").filter({ hasText: "TCS" }).getByRole("cell", { name: /^24 ₹1,760\.00 → / })).toBeVisible();   // the one "Qty · avg → last" cell
   await expect(notice).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText("TCS is back to 12 shares.")).toBeVisible();
@@ -1500,8 +1511,9 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
 });
 
 test("money tax tools: dividends from a file into the estimate, advance tax by date with reminders, and the long-term exemption", async ({ page, request }, info) => {
-  // the same users as the tax report tests (which run before this one in each project), starting from no tax data
-  const [token, id, email] = info.project.name === "phone" ? ["basic-token", "u-basic", "basic@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
+  // Pro in both projects: the amounts due by each date are a Pro feature (the phone project's own Pro user, load-299),
+  // starting from no tax data
+  const [token, id, email] = info.project.name === "phone" ? ["load-299", "u-load-299", "load299@example.com"] : ["pro-token", "u-pro", "pro@example.com"];
   const auth = { Authorization: `Bearer ${token}` };
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
   expect((await request.post(`${API}/tax/import?filename=zerodha_console_tradebook.csv&mode=add`, {
@@ -1520,6 +1532,8 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await page.getByLabel("Dividend file").setInputFiles({ name: "dividends.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
   await expect(page.getByText("2 dividends added.")).toBeVisible({ timeout: 30_000 });
   const year = page.getByRole("region", { name: "Dividends for the year" });
+  // the page opens on the year being filed now (the one before this year) when it has dividends; these are this year's
+  await year.getByLabel("Financial year").selectOption(String(fy));
   await expect(year.getByText("From your files")).toBeVisible();
   await expect(year.getByLabel("Dividend income")).toHaveText("₹15,000");
   const byCompany = year.getByRole("table", { name: "Dividends by company" });
@@ -1539,7 +1553,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await expect(page.getByLabel("Tax for the year", { exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "TDS for the year" }).fill("50000");
   await page.getByRole("button", { name: "Add a payment" }).click();
-  await page.getByLabel("Payment 1 date").fill(`${fy}-06-15`);
+  await page.getByRole("textbox", { name: "Payment 1 date" }).fill(`${fy}-06-15`);
   await page.getByLabel("Payment 1 amount").fill("20000");
   await page.getByRole("button", { name: "Save and update" }).click();
   await expect(page.getByText("Saved. The instalments are updated.")).toBeVisible();
@@ -1590,7 +1604,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   expect(await charts.locator("svg[role=img]").count()).toBeGreaterThanOrEqual(9);
   await expect(page.getByText(/Prices as of/).first()).toBeVisible();
   // each figure and chart explains itself
-  await charts.getByRole("heading", { name: "McClellan oscillator" }).getByRole("button", { name: "What does this mean?" }).click();
+  await charts.getByRole("button", { name: "About McClellan oscillator" }).click();
   await expect(page.getByRole("note")).toContainText("39-day");
   // the sector table and the counts behind the charts
   await expect(page.getByRole("table", { name: /Share of each sector/ }).locator("tbody tr").first()).toBeVisible();

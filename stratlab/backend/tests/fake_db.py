@@ -171,7 +171,7 @@ class FakeSupabase:
         self.auth = FakeAuth(self)
         self.tables["profiles"] = [{"id": uid, "email": email, "plan": plan, "created_at": "2026-09-01T00:00:00+00:00",
                                     "plan_status": "active" if plan != "free" else None,
-                                    "current_period_end": "2099-01-01T00:00:00+00:00" if plan != "free" else None}
+                                    "current_period_end": None}          # paid plans given by hand, with no end date
                                    for uid, email, plan in USERS.values()]
 
     def table(self, name):

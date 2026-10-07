@@ -4,6 +4,7 @@ import { breadthApi, count, savedPick, share, type BreadthView } from "../lib/br
 import { Panel } from "./Research";
 import { AsOf, PanelSkel } from "./ui";
 import { Stat } from "./kit";
+import { marketTz } from "../lib/format";
 
 /** Market breadth on the Invest home: the latest day's numbers for the group last picked (every plan). */
 export function BreadthCard() {
@@ -22,7 +23,7 @@ export function BreadthCard() {
               <Stat label="Above 50-day average" value={share(d.today.pct50.value)} />
               <Stat label="52-week highs / lows" value={`${count(d.today.highs.value)} / ${count(d.today.lows.value)}`} />
             </div>
-            <AsOf parts={[["Prices", d.as_of]]} />
+            <AsOf parts={[["Prices", d.as_of]]} tz={marketTz(d.group.region)} />
           </div>
         )}
     </Panel>

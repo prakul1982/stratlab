@@ -510,6 +510,9 @@ def _retrying(fn, sleep=time.sleep):
             sleep(RETRIES[i])
 
 
+SOURCES_READ = 2          # what refresh() reads: the contract file and the circulars (one problem each at most)
+
+
 def refresh(feed, today: date | None = None, now: datetime | None = None, expiry=None, sleep=time.sleep) -> dict:
     """Read the contract file and the circulars; keep each one that answered (with its date) and the old copy of one
     that didn't. Adds the changes not seen before to the dated list and returns them ("new"), with "problems". On
@@ -689,6 +692,5 @@ class Job(news_job.Job):
     def run(self, now: datetime, day: date) -> int:
         out = refresh(self.feed_fn(), day, expiry=self.expiry() if self.expiry else None)
         sent = self.fire_fn(out["new"]) if out["new"] else 0
-        self.status.update(last_run=now.isoformat(), sent=sent, added=out["added"], problems=out["problems"][:5],
-                           last_error=out["problems"][0][:200] if out["problems"] else None)
+        self.record(now, out["problems"], SOURCES_READ, sent=sent, added=out["added"])
         return sent

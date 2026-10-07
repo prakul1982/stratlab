@@ -15,7 +15,7 @@ from .daily_report import Reporter
 from .data import sessions as S
 from .data.markets import MARKETS
 from .errors import report
-from .plans import PLANS, access_plan, allows, has_fno, has_indicators, trial_state
+from .plans import PLANS, allows, has_fno, has_indicators, plan_of, trial_state
 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}
 POLL_SECONDS = 15          # how often polled markets (crypto) are checked for a newly closed candle
@@ -532,7 +532,7 @@ class LiveManager:
                 profile = db.get_profile(uid)
             except Exception:
                 continue
-            plan = access_plan(profile)
+            plan = plan_of(profile)
             if plan == "free" and not trial_state(profile)["active"]:
                 why = ("Free live trial ended. Upgrade to keep paper trading." if trial_state(profile)["started"] else
                        "The free launch offer has ended. Start the session again to use your free live trial, or upgrade.")
@@ -579,13 +579,13 @@ def session_needs(s, plan: str) -> str | None:
 
 def alerts_on(profile: dict) -> bool:
     """A message for every paper trade: for anyone who turned alerts on and whose plan has them."""
-    return bool(profile.get("alerts_enabled")) and allows(access_plan(profile), "alerts")
+    return bool(profile.get("alerts_enabled")) and allows(plan_of(profile), "alerts")
 
 
 def report_on(profile: dict) -> bool:
     """The daily report goes wherever alerts are set up (phone, Telegram or email), on plans that include it."""
     has_channel = bool(alerts.jobs_for(profile, "", ""))      # only channels the server can actually use
-    return bool(has_channel) and allows(access_plan(profile), "daily_report")
+    return bool(has_channel) and allows(plan_of(profile), "daily_report")
 
 
 def market_name(mid: str) -> str:

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, safeHref, fmtDate } from "../lib/format";
+import { ago, safeHref, fmtDate, marketTz } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
@@ -83,7 +83,7 @@ export function ResultsPage() {
       <PageHeader eyebrow={eyebrowOf("/research/results")} title="Results this week and next"
         lede={region === "IN" ? "Board meetings companies have called to consider their financial results, from their filings with the exchange."
           : "The dates US companies have set for their quarterly results, and the earnings release once it's filed."}
-        asOf={data?.updated_at} asOfLabel="Updated" />
+        asOf={data?.updated_at} asOfLabel="Updated" asOfTz={marketTz(region)} />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={setRegion} />
         <Seg label="Which companies" value={scope} onChange={setScope} options={[{ value: "mine", label: "My stocks" }, { value: "all", label: "All companies" }]} />

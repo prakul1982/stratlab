@@ -5,6 +5,7 @@ exchange data rules before serving this data to paying users. All data access go
 through this file so it can be swapped for a licensed vendor later."""
 import math
 import secrets
+from bisect import bisect_left
 import threading
 import re
 import time
@@ -15,7 +16,7 @@ from kiteconnect import KiteConnect, KiteTicker
 from kiteconnect.exceptions import TokenException
 
 from .config import settings
-from . import db
+from . import db, name_search
 
 IST = ZoneInfo("Asia/Kolkata")
 # our timeframe -> (kite interval, max days per request, candles per trading day)
@@ -87,6 +88,9 @@ def token_valid(token_day: str | None, now: datetime | None = None) -> bool:
     return now.hour < RESET_HOUR and token_day == (now.date() - timedelta(days=1)).isoformat()
 
 
+_NO_NAMES: dict = {}
+
+
 class KiteNotReady(Exception):
     pass
 
@@ -112,6 +116,9 @@ class _Guarded:
 
 
 class KiteService:
+    # the exchange's list of companies, () -> {isin: [symbol, name]}, for search by full name and ISIN. Set by main.
+    names_fn = None
+
     def __init__(self):
         self.kite = _Guarded(KiteConnect(api_key=settings.KITE_API_KEY), self._token_rejected)
         self.invalid_reason: str | None = None
@@ -125,6 +132,8 @@ class KiteService:
         self._inst_day: str | None = None
         self._idx: dict = {}
         self._idx_of: list | None = None
+        self._names_of: tuple | None = None
+        self._names_idx: dict = {}
         from .intel.net import SizedDict
         self._cache = SizedDict(max_items=300, max_bytes=96 * 1024 * 1024)   # candles: bounded, the market audit reads every company
         self.login_state: str | None = None
@@ -273,45 +282,81 @@ class KiteService:
             out += [r for r in self._inst if r["exchange"] == exch and r["symbol"] == sym][:1]
         return out
 
-    ALIASES = {
-        # Tata Motors demerged in 2025; the old symbol was replaced
-        "TATAMOTORS": ["TMPV", "TMCV"], "TATA MOTORS": ["TMPV", "TMCV"],
-        "BANKNIFTY": ["NIFTY BANK"], "BANK NIFTY": ["NIFTY BANK"], "NIFTY": ["NIFTY 50"], "NIFTY50": ["NIFTY 50"],
-        "SBI": ["SBIN"], "STATE BANK": ["SBIN"], "HDFC": ["HDFCBANK"], "ICICI": ["ICICIBANK"], "KOTAK": ["KOTAKBANK"],
-        "AIRTEL": ["BHARTIARTL"], "BHARTI AIRTEL": ["BHARTIARTL"], "L&T": ["LT"], "LARSEN": ["LT"], "M&M": ["M&M"],
-        "MAHINDRA": ["M&M"], "BAJAJ FINANCE": ["BAJFINANCE"], "ASIAN PAINTS": ["ASIANPAINT"], "SUN PHARMA": ["SUNPHARMA"],
-        "HUL": ["HINDUNILVR"], "HINDUSTAN UNILEVER": ["HINDUNILVR"], "MARUTI": ["MARUTI"], "ZOMATO": ["ETERNAL"],
-    }
+    ALIASES = name_search.ALIASES["IN"]      # short names people use ("RIL", "Airtel"), and renamed symbols
+    INDEX_DERIVATIVES = {"NIFTY 50": "NIFTY", "NIFTY BANK": "BANKNIFTY", "NIFTY FIN SERVICE": "FINNIFTY",
+                         "NIFTY MID SELECT": "MIDCPNIFTY"}
+
+    def _names(self) -> "name_search.NameIndex":
+        """The day's stocks, indices and BSE-only companies by symbol, name, short name, BSE code and ISIN. The
+        exchange's own list of companies (`names_fn`: {isin: [symbol, name]}) adds each company's full name and ISIN
+        beside the broker's shortened one ("APOLLO HOSPITALS ENTER. L"). Rebuilt when either list changes."""
+        self._load_instruments()
+        try:
+            listed = (self.names_fn() if self.names_fn else None) or _NO_NAMES
+        except Exception:
+            listed = _NO_NAMES
+        if not self._names_of or self._names_of[0] is not self._inst or self._names_of[1] is not listed:
+            full = {}
+            for isin, v in listed.items():
+                if isinstance(v, (list, tuple)) and len(v) == 2 and v[0]:
+                    full[str(v[0]).upper()] = (str(v[1] or ""), str(isin).upper())
+            from . import universes
+            boost = {s for p in universes.PRESETS["IN"] for s in p["symbols"]}
+            rows = [r for r in self._inst if not r["fno"]]
+            base = lambda r: r["symbol"].split("-")[0] if r["exchange"] == "NSE" else r["symbol"]    # noqa: E731
+            idx = name_search.NameIndex(
+                rows, names=lambda r: [full[base(r)][0]] if base(r) in full and r["type"] == "EQ" else [],
+                codes=lambda r: [r.get("bse_code"), full[base(r)][1] if base(r) in full and r["type"] == "EQ" else None],
+                rank=lambda r: 0 if r["type"] == "INDEX" else 1 if r["type"] == "EQ" else 2, boost=boost, aliases=self.ALIASES)
+            fno = sorted((r["symbol"].upper(), r["expiry"] or "", r["token"]) for r in self._inst if r["fno"])
+            by_name: dict[str, list[dict]] = {}
+            for r in self._inst:
+                if r["fno"]:
+                    by_name.setdefault(str(r["name"]).upper(), []).append(r)
+            self._names_idx = {"idx": idx, "fno": fno, "by_name": by_name,
+                               "full": {s: v[0] for s, v in full.items() if v[0]}}
+            self._names_of = (self._inst, listed)
+        return self._names_idx
+
+    def company_name(self, symbol: str) -> str | None:
+        """The company's full name from the exchange's list ("Apollo Hospitals Enterprise Limited"), when it's known."""
+        return self._names()["full"].get(symbol.split("-")[0].upper())
 
     def search(self, q: str, allow_fno: bool, limit: int = 25) -> list[dict]:
-        self._load_instruments()
-        q = q.strip().upper()
-        alias_hits = []
-        for sym in self.ALIASES.get(q, []):
-            alias_hits += [r for r in self._inst if r["symbol"] == sym and not r["fno"]]
+        """Stocks, indices and (when allowed) futures and options for what's typed, best first (name_search's groups),
+        each a copy with `match` (its group) and the company's full name where the exchange's list has it. Contracts
+        come after the stock or index they're on: by symbol, or by the company's name ("hdfc bank" → HDFCBANK futures)."""
+        q = q.strip()
         if len(q) < 2:
             return []
-        scored = []
-        for r in self._inst:
-            if r["fno"] and not allow_fno:
-                continue
-            sym, name = r["symbol"].upper(), r["name"].upper()
-            if sym == q or r.get("bse_code") == q:
-                score = 0
-            elif sym.startswith(q):
-                score = 1
-            elif name.startswith(q):
-                score = 2
-            elif q in sym or q in name:
-                score = 3
-            else:
-                continue
-            # indices and cash stocks first, then nearest expiry
-            score = score * 10 + (0 if r["type"] == "INDEX" else 1 if r["type"] == "EQ" else 2 if r["type"] == "FUT" else 3)
-            scored.append((score, r["expiry"] or "", r["symbol"], r))
-        scored.sort(key=lambda x: x[:3])
-        seen = {r["token"] for r in alias_hits}
-        return (alias_hits + [x[3] for x in scored if x[3]["token"] not in seen])[:limit]
+        n = self._names()
+        hits = n["idx"].search(q, limit)
+        full = n["full"]
+
+        def shown(r, t):
+            name = full.get(r["symbol"].split("-")[0].upper()) if r["type"] == "EQ" and r["exchange"] == "NSE" else None
+            return {**r, "match": t, **({"name": name} if name else {})}
+        out = [(t, 0, (k,), shown(r, t)) for k, (t, r) in enumerate(hits)]
+        if allow_fno:
+            qs = q.upper()
+            seen = set()
+            ranked = {"FUT": 2}                 # futures before options, as before
+            j = bisect_left(n["fno"], (qs,))
+            while j < len(n["fno"]) and n["fno"][j][0].startswith(qs):
+                tok = n["fno"][j][2]
+                seen.add(tok)
+                r = self._by_token[tok]
+                t = name_search.EXACT if n["fno"][j][0] == qs else name_search.SYMBOL
+                out.append((t, 1, (ranked.get(r["type"], 3), r["expiry"] or "", r["symbol"]), shown(r, t)))
+                j += 1
+            if hits and hits[0][0] <= name_search.NAME:
+                top = hits[0][1]
+                under = self.INDEX_DERIVATIVES.get(top["symbol"], top["symbol"]) if top["type"] == "INDEX" else top["symbol"]
+                for r in n["by_name"].get(under.upper(), []):
+                    if r["token"] not in seen:
+                        out.append((hits[0][0], 1, (ranked.get(r["type"], 3), r["expiry"] or "", r["symbol"]), shown(r, hits[0][0])))
+        out.sort(key=lambda x: x[:3])
+        return [x[3] for x in out[:limit]]
 
     def ltp(self, token: int) -> float | None:
         self._require()

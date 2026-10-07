@@ -5,7 +5,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { changeText, quarterEnd, shares, type HolderChange } from "../components/NamedHolders";
 import { useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
-import { asOf, safeHref } from "../lib/format";
+import { asOf, ET, safeHref } from "../lib/format";
 import { Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager, PlanNote, Seg, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
 
 /* Named holders across companies: search a name in every company's latest shareholding pattern (holders above 1%),
@@ -238,7 +238,7 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
     <div className="k-page holders-page">
       <PageHeader eyebrow={eyebrowOf("/invest/holders")} title="Holders above 5%"
         lede="Who holds more than 5% of a US company, as they filed with the SEC. Facts as filed, not advice."
-        asOf={data?.as_of} asOfLabel="Filings read through" info={data ? <>Anyone who holds more than 5% of a US company's shares files a Schedule 13D (an active stake) or 13G (a passive one), and an amendment when it changes. Find one company's filings, or see the latest from every S&P 500 company. {data.note} Names and percentages are read from each filing's cover page{data.unread > 0 ? `; ${data.unread} of these filings are still waiting to be read` : ""}.</> : undefined}
+        asOf={data?.as_of} asOfLabel="Filings read through" asOfTz={ET} info={data ? <>Anyone who holds more than 5% of a US company's shares files a Schedule 13D (an active stake) or 13G (a passive one), and an amendment when it changes. Find one company's filings, or see the latest from every S&P 500 company. {data.note} Names and percentages are read from each filing's cover page{data.unread > 0 ? `; ${data.unread} of these filings are still waiting to be read` : ""}.</> : undefined}
         infoLabel="Where the names come from" />
       {toolbar}
       <Card>
@@ -261,10 +261,10 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
       {data && (
         <Card>
           <CardHead title={`${data.total.toLocaleString("en-IN")} filing${data.total === 1 ? "" : "s"}${symbol ? ` for ${symbol}` : " across companies"}`}
-            actions={data.updated_at ? <span className="k-small k-muted">Read {asOf(data.updated_at)}</span> : undefined} />
+            actions={data.updated_at ? <span className="k-small k-muted">Read {asOf(data.updated_at, { tz: ET })}</span> : undefined} />
           <DataTable label="13D and 13G filings, newest first" rows={data.items} rowKey={(r) => r.id} empty={symbol ? `No 13D or 13G filing found for ${symbol} in the last 13 months.` : "No filings stored yet."}
             columns={[
-              { key: "d", header: "Filed", cell: (r) => asOf(r.at) ?? "–" },
+              { key: "d", header: "Filed", cell: (r) => asOf(r.at, { tz: ET }) ?? "–" },
               { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={`/research/US/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>
                   {r.company && <span className="k-sub-line">{r.company}</span>}</>) },

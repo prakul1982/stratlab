@@ -14,6 +14,7 @@ from app.engine import costs as C
 from tests import world
 
 PRO, BASIC, FREE = world.headers("pro-token"), world.headers("basic-token"), world.headers("free-token")
+OTHER_PRO = world.headers("load-2")      # another Pro account (forward tests are Pro, payments on or not)
 BTC = "CRYPTO:BTC-USD"              # crypto never closes, so these tests don't depend on the clock
 LIVE = 30000.0                      # the fake exchange's last price
 
@@ -201,12 +202,12 @@ def test_huge_and_malformed_bodies_are_refused_and_logged(w):
 def test_another_users_session_is_never_touched(w):
     c = w["client"]
     pro_url = url(c)
-    theirs = session(c, headers=BASIC)
+    theirs = session(c, headers=OTHER_PRO)
     r = send(c, pro_url, {"session": theirs["id"], "action": "buy", "qty": 0.5})
     assert r.status_code == 404 and r.json()["detail"]["code"] == "no_session"
     assert main.manager.sessions[theirs["id"]].signals == [] and main.manager.sessions[theirs["id"]].pos == 0
     assert c.get("/trade/signals", headers=PRO).json()["misses"][0]["reason"] == "No signal session with that id on this account."
-    assert c.get("/trade/signals", headers=BASIC).json()["misses"] == []           # nothing shows on their side either
+    assert c.get("/trade/signals", headers=OTHER_PRO).json()["misses"] == []           # nothing shows on their side either
     assert c.get(f"/trade/signals/sessions/{theirs['id']}", headers=PRO).status_code == 404
     assert c.post(f"/trade/signals/sessions/{theirs['id']}/test", headers=PRO, json={"action": "buy", "qty": 1}).status_code == 404
     # an ordinary (rules) paper session of the same user isn't moved by signals either
@@ -309,7 +310,20 @@ def test_market_hours():
     assert not SS.market_open({"market": "NOPE"}, datetime(2026, 10, 5, 10, 0, tzinfo=ist))
 
 
-def test_thirty_trades_bring_the_verdict_and_the_daily_report_counts_signals(w):
+def pin_now(monkeypatch, moment: datetime):
+    """The session's clock reads `moment` (an aware UTC time) wherever signal_session asks for the time."""
+    class Pinned(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return moment.astimezone(tz) if tz else moment.replace(tzinfo=None)
+    monkeypatch.setattr(SS, "datetime", Pinned)
+
+
+# the crypto report's day is the UTC day; India's date differs from it from 18:30 UTC (00:00 IST) to midnight
+@pytest.mark.parametrize("clock", ["2026-03-10T10:00:00", "2026-03-10T18:29:00", "2026-03-10T18:31:00", "2026-03-10T23:50:00"])
+def test_thirty_trades_bring_the_verdict_and_the_daily_report_counts_signals(w, monkeypatch, clock):
+    moment = datetime.fromisoformat(clock).replace(tzinfo=timezone.utc)
+    pin_now(monkeypatch, moment)
     c = w["client"]
     s = session(c, capital=1_000_000)
     sess = main.manager.sessions[s["id"]]
@@ -320,10 +334,10 @@ def test_thirty_trades_bring_the_verdict_and_the_daily_report_counts_signals(w):
         sess.on_signal({"session": s["id"], "action": "exit"})
     v = c.get(f"/trade/signals/sessions/{s['id']}", headers=PRO).json()["verdict"]
     assert v["ready"] and v["trades"] == 30 and {x["id"] for x in v["checks"]} == {"sample", "luck", "shuffle", "costs"}
-    day = datetime.now(timezone.utc).date().isoformat()
+    day = moment.date().isoformat()         # the report's day, in the market's zone (UTC for crypto)
     row = daily_report.summarise(sess, day)
     assert row["closed"] == 30 and row["signals"] == {"received": 60, "late": 0, "refused": 0}
-    sess.signals.append({"at": datetime.now(timezone.utc).isoformat(), "status": "rejected"})
+    sess.signals.append({"at": moment.isoformat(), "status": "rejected"})
     text = daily_report.text("Crypto", day, [daily_report.summarise(sess, day)])
     assert "Signals: 61 arrived (1 refused; see the session's signal log)" in text
     # the journal's paper-vs-real reads a signal session like any other
