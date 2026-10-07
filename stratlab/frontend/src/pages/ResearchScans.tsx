@@ -101,8 +101,8 @@ export function ScanPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/scan")} title="Trend scan"
-        lede="Which stocks match a chart rule right now: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend. Each match is a fact about the chart on a date, not advice."
-        asOf={preset?.as_of} />
+        lede="Which stocks match a chart rule right now. Each match is a fact about the chart on a date, not advice."
+        asOf={preset?.as_of} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend." infoLabel="Which rules" />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       {!pro && <PlanNote>The trend scans and the Stage 2 + Supertrend alert are on the Basic plan.</PlanNote>}
       <Card>
@@ -507,9 +507,10 @@ export function FilingsPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/filings")} title="Filings and red flags"
-        lede={region === "IN"
-          ? "What companies told the exchange: fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades. Your watchlist's last 3 months, or the latest from every company."
-          : "What US companies told the SEC in a Form 8-K: bankruptcy, a delisting notice, a change of auditor, financial statements that can no longer be relied on, and director or officer changes. Your watchlist, or the latest from every S&P 500 company."} />
+        lede={region === "IN" ? "What companies told the exchange that is worth a closer read: fund raises, pledges, resignations, defaults." : "What S&P 500 companies told the SEC in a Form 8-K that is worth a closer read: bankruptcy, delisting, auditor and officer changes."}
+        info={region === "IN"
+          ? "Fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades. Your watchlist's last 3 months, or the latest from every company."
+          : "Bankruptcy, a delisting notice, a change of auditor, financial statements that can no longer be relied on, and director or officer changes. Your watchlist, or the latest from every S&P 500 company."} infoLabel="What counts" />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={pickRegion} />
         <Seg label="Which companies" value={view} onChange={pickView} options={[{ value: "mine", label: "Your watchlist" }, { value: "all", label: "All companies" }]} />

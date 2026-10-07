@@ -20,7 +20,7 @@
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --q-improving: #2456C7; --q-leading: #138A62; --q-weakening: #B58100; --q-lagging: #A8327A;
-  --up: #138A62; --up-soft: #DDF1E8; --down: #B23B3B; --down-soft: #F6E0DE;
+  --up: #0F7452; --up-soft: #DDF1E8; --down: #B23B3B; --down-soft: #F6E0DE;
   --red-ink: var(--down);
   color-scheme: light;
 }
@@ -1359,7 +1359,14 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* table */
 .k-tbl-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px;
   background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
-    radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, .22), transparent) 0 0 / 12px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, .22), transparent) 100% 0 / 12px 100% no-repeat scroll; }
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll; }
+/* a table wider than its card fades out at the right edge until it is scrolled to the end (where the browser can tie it to the scroll; elsewhere the edge shadow above is the hint) */
+@property --k-edge { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes k-edge { from { --k-edge: 32px; } to { --k-edge: 0px; } }
+@supports (animation-timeline: scroll()) {
+  .k-tbl-wrap:not(.sticky) { animation: k-edge linear both; animation-timeline: scroll(self inline); animation-range: calc(100% - 32px) 100%;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--k-edge)), transparent); mask-image: linear-gradient(to right, #000 calc(100% - var(--k-edge)), transparent); }
+}
 .k-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .k-table th { border-top: 0; text-align: left; font-weight: 500; color: var(--muted); font-size: 12.5px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--paper-2); white-space: nowrap; }
 .k-table td, .k-table tbody th { border-top: 0; padding: 11px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; font-size: 14px; font-weight: 400; color: var(--ink); background: none; }
@@ -1435,9 +1442,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-table tfoot th, .k-table tfoot td { font-weight: 600; border-top: 1px solid var(--line-2); border-bottom: 0; padding: 11px 14px; font-size: 14px; text-align: left; background: var(--paper-2); }
 .k-table tfoot td.k-num { text-align: right; }
 .k-table .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
-.k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 180px; }
-.k-table td.k-act, .k-table th.k-act { text-align: right; width: 1%; }
+.k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 160px; }
+.k-table td.k-act, .k-table th.k-act { text-align: right; width: 1%; padding-left: var(--s1); }
 .k-table td.k-act .k-row { justify-content: flex-end; flex-wrap: nowrap; }
+.k-table td.k-act .k-row.k-col { flex-direction: column; align-items: flex-end; gap: var(--s1); }   /* two actions stacked, so the column stays narrow */
 .k-inline-badge { margin-left: 6px; }
 .k-big { font-size: clamp(30px, 4vw, 40px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
 .k-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; }
