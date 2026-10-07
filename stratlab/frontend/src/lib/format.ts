@@ -72,10 +72,48 @@ export function qty(v: number): string {
 export const tzOf = (inst?: Partial<Instrument> | null) =>
   inst?.tz || (inst?.market === "IN" || !inst?.market ? "Asia/Kolkata" : "UTC");
 
+/* ---------- Time zones (see DESIGN.md "Dates") ----------
+ * A market's times are written in that market's own zone, with the zone's name: "14:05 IST", "09:30 ET". The reader's
+ * own events (a trial's end, a page coming back) may be in the reader's zone, and are labelled too. */
+export const IST = "Asia/Kolkata";
+export const ET = "America/New_York";
+
+/** The zone a market's times are written in: India's exchanges IST, US exchanges ET, crypto UTC. */
+export function marketTz(market?: string | null): string {
+  if (market === "US") return ET;
+  if (market === "CRYPTO" || market === "crypto") return "UTC";
+  return IST;
+}
+
+/** The reader's own zone, as the browser reports it. */
+export function localTz(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+}
+
+const ZONE_NAMES: Record<string, string> = {
+  "Asia/Kolkata": "IST", "Asia/Calcutta": "IST", "America/New_York": "ET", "US/Eastern": "ET", "America/Chicago": "CT",
+  "UTC": "UTC", "Etc/UTC": "UTC", "Etc/GMT": "UTC", "GMT": "UTC", "Europe/London": "UK time", "Asia/Tokyo": "JST",
+  "Asia/Singapore": "SGT", "Asia/Hong_Kong": "HKT", "Asia/Dubai": "GST",
+};
+
+/** A zone's short name for a reader: "IST", "ET", "UTC"; any other zone gets the browser's short name ("CEST",
+ * "GMT+9"). No zone given means the reader's own. */
+export function tzLabel(tz?: string | null, at: Date = new Date()): string {
+  const z = tz || localTz();
+  if (ZONE_NAMES[z]) return ZONE_NAMES[z];
+  try {
+    const part = new Intl.DateTimeFormat("en-GB", { timeZone: z, timeZoneName: "short" }).formatToParts(at).find((x) => x.type === "timeZoneName");
+    return part?.value || z;
+  } catch {
+    return z;
+  }
+}
+
 /** The one date format, day first, as My space shows it: "6 Oct" and "6 Oct 2026". Every date a person reads goes through
  * `fmtDate` (or `fmtDateTime` for a moment). A plain "YYYY-MM-DD" is a calendar day and is never moved by a time zone. */
 export type DateInput = string | number | Date | null | undefined;
-export interface DateOpts { year?: boolean; weekday?: boolean; tz?: string }
+/** `tz` is the zone a moment is read in (the reader's own when left out); `zone` writes the zone's name after a time. */
+export interface DateOpts { year?: boolean; weekday?: boolean; tz?: string; zone?: boolean }
 
 const CALENDAR_DAY = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00)?$/;
 
@@ -96,17 +134,41 @@ export function fmtDate(v: DateInput, o: DateOpts = {}): string {
     day: "numeric", month: "short", ...(o.year === false ? {} : { year: "numeric" }) }).replace(/\bSept\b/, "Sep");
 }
 
-/** A moment: "6 Oct 2026, 14:05" (24-hour), or "6 Oct, 14:05" with `year: false`; `seconds` adds ":07". */
+/** A clock time, 24-hour: "14:05"; `seconds` gives "14:05:07", `zone` "14:05 IST". */
+export function fmtTime(v: DateInput, o: { tz?: string; zone?: boolean; seconds?: boolean } = {}): string {
+  const d = toDate(v);
+  if (!d) return "–";
+  const t = d.toLocaleTimeString("en-GB", { ...(o.tz ? { timeZone: o.tz } : {}), hour: "2-digit", minute: "2-digit", ...(o.seconds ? { second: "2-digit" } : {}), hourCycle: "h23" });
+  return o.zone ? `${t} ${tzLabel(o.tz, d)}` : t;
+}
+
+/** A moment: "6 Oct 2026, 14:05" (24-hour), or "6 Oct, 14:05" with `year: false`; `seconds` adds ":07"; `zone` adds the
+ * zone's name: "6 Oct 2026, 14:05 IST". A market's time passes its `tz` and `zone: true`. */
 export function fmtDateTime(v: DateInput, o: DateOpts & { seconds?: boolean } = {}): string {
   const d = toDate(v);
   if (!d) return "–";
-  const t = d.toLocaleTimeString("en-GB", { ...(o.tz ? { timeZone: o.tz } : {}), hour: "2-digit", minute: "2-digit", ...(o.seconds ? { second: "2-digit" } : {}), hour12: false });
-  return `${fmtDate(d, o)}, ${t}`;
+  return `${fmtDate(d, o)}, ${fmtTime(d, o)}`;
 }
 
-export function when(iso: string | null | undefined, tz: string, intraday: boolean): string {
+/** A market moment in its zone: date and clock time when intraday, else the day; `zone` adds the zone's name. */
+export function when(iso: string | null | undefined, tz: string, intraday: boolean, zone = false): string {
   if (!iso) return "–";
-  return intraday ? fmtDateTime(iso, { tz, year: false }) : fmtDate(iso, { tz });
+  return intraday ? fmtDateTime(iso, { tz, year: false, zone }) : fmtDate(iso, { tz });
+}
+
+/** A typed time of day in the 24-hour form the app writes: "9:30", "0930", "09.30" and "09:30" all give "09:30"; null
+ * when it isn't one (so a box keeps its last good time while someone types). */
+export function parseClock(s: string): string | null {
+  const m = /^\s*(\d{1,2})(?::|\.|\s)?(\d{2})\s*$/.exec(s);
+  if (!m) return null;
+  const h = +m[1], mi = +m[2];
+  return h <= 23 && mi <= 59 ? `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}` : null;
+}
+
+/** The calendar day ("2026-10-07") a moment falls on in a zone (India's by default); null when it isn't a moment. */
+export function dayIn(v: DateInput, tz: string = IST): string | null {
+  const d = toDate(v);
+  return d ? d.toLocaleDateString("en-CA", { timeZone: tz }) : null;
 }
 
 /** A date as written ("2025-03-10") is a calendar day, not an instant: `new Date("2025-03-10")` is midnight UTC, which a
@@ -148,13 +210,15 @@ export function safeHref(url: string | null | undefined): string | undefined {
   }
 }
 
-/** When numbers are from, in words: "3 Oct 2026, 14:05" (in the reader's time), or "3 Oct 2026" for a date alone. */
-export function asOf(iso: string | null | undefined): string | null {
+/** When numbers are from, in words: "3 Oct 2026, 14:05 IST", or "3 Oct 2026" for a date alone. A time is read in the
+ * market's zone (`tz`, India's unless given) and carries the zone's name; `zone: false` leaves the name off where the
+ * sentence already says it. `year: false` gives "3 Oct, 14:05 IST". */
+export function asOf(iso: string | null | undefined, o: { tz?: string; zone?: boolean; year?: boolean } = {}): string | null {
   if (!iso) return null;
   const day = /^\d{4}-\d{2}-\d{2}$/.test(iso);
   const d = toDate(iso);
   if (!d) return null;
-  return day ? fmtDate(iso) : fmtDateTime(d);
+  return day ? fmtDate(iso, { year: o.year }) : fmtDateTime(d, { tz: o.tz ?? IST, zone: o.zone ?? true, year: o.year });
 }
 
 /* ---------- Indian rupee formatting (the one place; see DESIGN.md "Numbers") ----------

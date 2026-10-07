@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, asOf, pct, price, safeHref } from "../lib/format";
+import { ago, asOf, marketTz, pct, price, safeHref } from "../lib/format";
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
@@ -171,7 +171,7 @@ export function CompanyPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrow} title={c.name} lede={`${c.exchange || REGION_NAME[region]} · ${c.symbol}${c.industry ? ` · ${c.industry}` : ""}`}
-        asOf={c.as_of} asOfLabel="Prices as of" actions={c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at)}</Badge> : undefined} />
+        asOf={c.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)} actions={c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at, { tz: marketTz(region) })}</Badge> : undefined} />
       <Card>
         <div className="inv-head">
           <div className="k-stack">

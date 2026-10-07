@@ -39,7 +39,8 @@ type Snap = {
 };
 
 const STATUS: Record<string, string> = { filled: "Filled", late: "Filled late", rejected: "Refused", duplicate: "Repeat", ignored: "Nothing to do" };
-const at = (iso: string) => fmtDateTime(iso, { year: false, seconds: true });
+/** When a signal or hook event happened: the reader's own time, labelled with its zone. */
+const at = (iso: string) => fmtDateTime(iso, { year: false, seconds: true, zone: true });
 const signed = (v: number, cur: string) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${money(Math.abs(v), cur, 2)}`;
 const curOf = (i: Instrument) => i.currency || "INR";
 

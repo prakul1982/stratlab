@@ -8,7 +8,7 @@ import { Info } from "./ui";
 import { Pencil } from "./Icons";
 import { Block, More } from "./More";
 import { buildIdea } from "./IdeaComposer";
-import { Card, CardHead, ChipBar, Disclosure, Field, FormGrid, Notice, Select } from "./kit";
+import { Card, CardHead, ChipBar, Disclosure, Field, FormGrid, Notice, Select, TimeInput } from "./kit";
 import type { Cond, HigherTf, Op, Ref, RefType, Risk, Session, Strategy, Tf } from "../lib/types";
 import "../pages/trade/trade.css";
 
@@ -150,7 +150,7 @@ function TimeTok({ value, empty, title, onChange, hint }: { value: string; empty
     <Pop title={title} label={value || empty} cls={value ? "risk" : "missing"}>
       {(close) => (
         <>
-          <Field label={title} info={hint} type="time" defaultValue={value} onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") close(); }} />
+          <Field label={title} info={hint}>{(id) => <TimeInput id={id} value={value} onChange={onChange} onEnter={close} allowEmpty />}</Field>
           {value && <button type="button" className="btn quiet sm" onClick={() => { onChange(""); close(); }}>Clear</button>}
         </>
       )}

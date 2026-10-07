@@ -7,6 +7,7 @@ import {
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
+import { marketTz } from "../lib/format";
 import { LineChart, PairBars } from "../components/Charts";
 import { Info } from "../components/ui";
 import {
@@ -69,7 +70,7 @@ export function BreadthPage() {
   const help = data?.help ?? {};
   return (
     <div className="k-page breadth">
-      <PageHeader eyebrow={eyebrowOf("/invest/breadth")} title="Market breadth" asOf={data?.today ? data.as_of : undefined} asOfLabel="Prices as of"
+      <PageHeader eyebrow={eyebrowOf("/invest/breadth")} title="Market breadth" asOf={data?.today ? data.as_of : undefined} asOfLabel="Prices as of" asOfTz={marketTz(data?.group.region)}
         info={help.members} infoLabel="Which stocks are counted"
         lede="How many stocks in a group rose or fell, sit above their averages, or made new highs and lows, day by day, from daily closes. Every stock counts once: facts about what happened, not a forecast." />
 

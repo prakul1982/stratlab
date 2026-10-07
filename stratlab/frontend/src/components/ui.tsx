@@ -120,9 +120,10 @@ export function Fig({ label, value, note, tone = "", missing = "Not available ye
   );
 }
 
-/** A small "as of" line, so people know how fresh the numbers next to it are. Each part shows only when known. */
-export function AsOf({ parts }: { parts: [string, string | null | undefined][] }) {
-  const shown = parts.map(([label, iso]) => [label, asOf(iso)] as const).filter(([, t]) => t);
+/** A small "as of" line, so people know how fresh the numbers next to it are. Each part shows only when known. Times
+ * are in the market's zone with its name (India's unless `tz` says otherwise). */
+export function AsOf({ parts, tz }: { parts: [string, string | null | undefined][]; tz?: string }) {
+  const shown = parts.map(([label, iso]) => [label, asOf(iso, { tz })] as const).filter(([, t]) => t);
   if (!shown.length) return null;
   return <p className="tiny muted as-of">{shown.map(([label, t]) => `${label} as of ${t}`).join(" · ")}</p>;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
+import { tzLabel } from "../../lib/format";
 import { linePath, linear, lowerBound, nearest, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
 import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
 
@@ -236,10 +237,13 @@ export function XYChart(p: XYChartProps) {
     if (!n) return [];
     if (T) {
       const ta = T[Math.max(0, Math.min(n - 1, Math.ceil(a)))], tb = T[Math.max(0, Math.min(n - 1, Math.floor(b)))];
-      for (const t of timeTicks(ta, tb, max, p.tz)) {
+      const ticks = timeTicks(ta, tb, max, p.tz);
+      // a clock-time axis in a market's zone names the zone once, on its last clock time: "12:00 IST"
+      const lastClock = intraday && p.tz ? ticks.map((t) => /^\d\d:\d\d$/.test(t.label)).lastIndexOf(true) : -1;
+      ticks.forEach((t, k) => {
         const i = lowerBound(T, t.t - (intraday ? 0 : DAY / 2));
-        if (i < n) push(sx(X[i]), t.label);
-      }
+        if (i < n) push(sx(X[i]), k === lastClock ? `${t.label} ${tzLabel(p.tz)}` : t.label);
+      });
     } else if (p.x || p.xFormat) {
       for (const v of niceTicks(a, b, max)) push(sx(v), (p.xFormat ?? plainTick)(v));
     } else {

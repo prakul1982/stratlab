@@ -2,13 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, fmtDate } from "../../lib/format";
+import { ET, IST, money, fmtDate, tzLabel } from "../../lib/format";
 import { track } from "../../lib/analytics";
 import { upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -402,7 +402,7 @@ function Breakdowns({ b, r }: { b: Record<string, Row[]>; r: Journal["r"] }) {
       <CardHead title="Where the P&L came from"
         actions={<Select label="Break the P&L down by" value={view} onChange={setView} options={VIEWS.map(([k, l]) => ({ value: k, label: `By ${l.toLowerCase()}` }))} />} />
       <BreakdownTable rows={b[view] ?? []} label={label} />
-      {view === "hour" && <p className="k-note">Same-day trades with times in the file, by the hour they were entered (India time).</p>}
+      {view === "hour" && <p className="k-note">Same-day trades with times in the file, by the hour they were entered (IST).</p>}
       {r && <RChart r={r} />}
     </Card>
   );
@@ -628,6 +628,8 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const abroad = f.segment === "us" || f.segment === "crypto";
+  // times are the exchange's own clock: India's for the Indian segments, New York's for US stocks
+  const zone = f.segment === "us" ? tzLabel(ET) : f.segment === "crypto" ? undefined : tzLabel(IST);
   const save = async () => {
     const n = (v: string) => Number(v.replace(/,/g, ""));
     if (!f.symbol.trim() || !(n(f.qty) > 0) || !Number.isFinite(n(f.entry_price)) || !Number.isFinite(n(f.exit_price)) || !f.entry_price || !f.exit_price) {
@@ -649,10 +651,10 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           <Field label="Quantity" inputMode="decimal" value={f.qty} onChange={set("qty")} />
           <Field label="Entry date" type="date" value={f.entry_date} onChange={set("entry_date")} />
-          <Field label="Entry time" optional type="time" value={f.entry_time} onChange={set("entry_time")} />
+          <Field label="Entry time" optional>{(id) => <TimeInput id={id} zone={zone} value={f.entry_time} onChange={(v) => setF({ ...f, entry_time: v })} allowEmpty />}</Field>
           <Field label="Entry price" inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
           <Field label="Exit date" type="date" value={f.exit_date} onChange={set("exit_date")} />
-          <Field label="Exit time" optional type="time" value={f.exit_time} onChange={set("exit_time")} />
+          <Field label="Exit time" optional>{(id) => <TimeInput id={id} zone={zone} value={f.exit_time} onChange={(v) => setF({ ...f, exit_time: v })} allowEmpty />}</Field>
           <Field label="Exit price" inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
           <Field label={abroad ? "Charges ($)" : "Charges (₹)"} optional inputMode="decimal" value={f.charges} onChange={set("charges")}
             info={abroad ? "No charges are worked out for US stocks or crypto: enter what your broker or exchange charged, or leave it empty for none." : "Worked out at the published rates when left empty."} />

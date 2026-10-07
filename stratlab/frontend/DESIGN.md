@@ -48,6 +48,8 @@ The dark values are written twice in `styles.css` (explicit dark and "follow the
 | 2 to 4 choices | `Seg` | 5+ buttons; stretched full-width segs |
 | Many choices (timeframes, ranges) | `ChipBar` (`custom` adds "+ Custom", remembered per `storageKey`) | rows of fixed buttons |
 | A form | `FormGrid` + `Field` + `FormActions` | `.field` inside ad-hoc flex rows |
+| A time of day | `TimeInput` (24-hour, `zone="IST"` beside it; `small` inside a sentence) | `<input type="time">` |
+| A slider | `Range` (kit track and thumb, its value in words beside it) | a bare `<input type="range">` |
 | A stock / company box | `StockPicker` (`value`, `onPick(symbol, region)`) | a bare text input; `CompanyCombobox` in new code |
 | A choice among types | `TilePicker` | long `<select>`s |
 | A table | `DataTable` | a raw `<table>` |
@@ -64,7 +66,9 @@ If nothing fits, add the piece to the kit and to `/dev/kit` first; do not build 
 
 ## Dates
 
-One format, day first, as My space shows it: `fmtDate(v)` gives "6 Oct 2026", `fmtDate(v, { year: false })` "6 Oct", `{ weekday: true }` "Tue, 6 Oct 2026"; `fmtDateTime(v)` adds a 24-hour clock ("6 Oct 2026, 14:05"). A plain `YYYY-MM-DD` is a calendar day and is never moved by a time zone; pass `tz` for a moment that should be read in an exchange's zone. **Don't** call `toLocaleDateString` in a page, write "Oct 6", a two-digit year or a zero-padded day.
+One format, day first, as My space shows it: `fmtDate(v)` gives "6 Oct 2026", `fmtDate(v, { year: false })` "6 Oct", `{ weekday: true }` "Tue 6 Oct 2026"; `fmtDateTime(v)` adds a 24-hour clock ("6 Oct 2026, 14:05"), `fmtTime(v)` is the clock alone. A plain `YYYY-MM-DD` is a calendar day and is never moved by a time zone. **Don't** call `toLocaleDateString` in a page, write "Oct 6", "2:45 PM", a two-digit year or a zero-padded day.
+
+Time zones: **a market's times are in the market's own zone, with the zone's name.** Pass `tz` (`IST`, `ET`, `marketTz(region)`) and `zone: true`: "7 Oct 2026, 13:26 IST", "09:30 ET". `asOf(iso)` (and so `PageHeader asOf`, `AsOf`) does this by default, in India's zone; give `asOfTz={marketTz(region)}` on a page that can show US data. The reader's own events (a trial's end, a signal arriving) may be in the reader's zone, and are labelled the same way (`zone: true` with no `tz`). A chart given `tz` names the zone on its last clock tick and in its tooltip. Data from an earlier day is never titled "Today": say the day it is from. A time a person types goes in `TimeInput` (24-hour, its zone beside the box), never the browser's `type="time"`, which follows the reader's locale.
 
 ## Do and don't
 

@@ -1425,6 +1425,26 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-input.sm { height: var(--ctl-sm); }
 .k-input[type="date"] { min-width: 0; }
 
+/* a time of day (TimeInput): a 24-hour box with its zone beside it */
+.k-time { display: inline-flex; align-items: center; gap: var(--s2); vertical-align: middle; max-width: 100%; }
+.k-input.k-time-box { width: 88px; padding: 0 var(--s3); text-align: center; font-variant-numeric: tabular-nums; }
+.k-time-zone { font-size: var(--t-label); font-weight: 500; color: var(--muted); }
+
+/* a slider (Range): the kit's track and thumb in both themes; --fill is how far along the value is */
+.k-range-row { display: inline-flex; align-items: center; gap: var(--s3); max-width: 100%; }
+.k-range { -webkit-appearance: none; appearance: none; width: 168px; max-width: 100%; height: var(--ctl-sm); margin: 0; background: transparent; cursor: pointer; }
+.k-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--ink) var(--fill, 0%), var(--line-2) var(--fill, 0%)); }
+.k-range::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line-2); }
+.k-range::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--ink); }
+.k-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -7px; border-radius: 50%;
+  background: var(--paper); border: 2px solid var(--ink); }
+.k-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink); }
+.k-range:focus-visible { outline: none; }
+.k-range:focus-visible::-webkit-slider-thumb { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.k-range:focus-visible::-moz-range-thumb { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.k-range:disabled { opacity: .6; cursor: not-allowed; }
+.k-range-value { font-size: var(--t-label); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 .k-bars { display: flex; flex-direction: column; gap: var(--s3); }
 .k-bar { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .k-bar-top { display: flex; justify-content: space-between; gap: var(--s3); font-size: var(--t-label); }
