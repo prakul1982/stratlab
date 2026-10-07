@@ -801,7 +801,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   const errors = await open(page, "/research", "Companies");
   const side = await menu(page, phone);
   const btn = side.getByRole("button", { name: /^\d+ of \d+ markets open$/ });
-  const [, open_, total] = (await btn.innerText()).match(/(\d+) of (\d+)/)!.map(Number);
+  const [, , total] = (await btn.innerText()).match(/(\d+) of (\d+)/)!.map(Number);
   await expect(btn).toHaveAttribute("aria-expanded", "false");
   const footBefore = (await side.locator(".side-foot").boundingBox())!.height;
   await btn.click();
@@ -812,7 +812,11 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   const rows = pop.getByRole("listitem");
   await expect(rows).toHaveCount(total);
   for (const r of await rows.all()) await expect(r).toHaveText(/(Open 24\/7|Closes in|Opens in|Holiday|Data offline|Closed)/);
-  await expect(pop.locator(".mkt-dot.on")).toHaveCount(open_);
+  // the count is re-read now: a market can open or close between reading the line and opening the list
+  await expect(async () => {
+    const now = Number((await btn.innerText()).match(/(\d+) of/)![1]);
+    expect(await pop.locator(".mkt-dot.on").count()).toBe(now);
+  }).toPass({ timeout: 5_000 });
   // it floats: the sidebar's footer and menu keep their size
   expect((await side.locator(".side-foot").boundingBox())!.height).toBe(footBefore);
   const box = (await pop.boundingBox())!;
