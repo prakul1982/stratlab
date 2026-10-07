@@ -376,6 +376,31 @@ def access_plan(profile: dict) -> str:
     return plan
 
 
+LIMIT_KEYS = ("backtests_per_month", "ai_builds_per_month", "live_limit", "group_size", "deepdives_per_month", "decks_per_month",
+              "stock_alerts", "screens", "holdings", "networth_items", "mf_schemes", "journal_trades")
+
+
+def offer_state(now: datetime | None = None) -> dict:
+    """What anyone can buy and use today, in one answer: the landing page, Plans and the in-app banners all read this
+    (through /pricing before sign-in and /me after), so they can't say different things.
+
+    mode: "promo" while the launch offer gives everyone Pro; else "early" while payments aren't set up (nobody can buy
+    a plan, so every feature is open and only some Free limits apply); else "paid".
+    free_now: the Free plan's limits as they apply today (in early access most are lifted to Pro's)."""
+    from . import billing
+    payments = billing.enabled()
+    until = promo_until() if promo_active(now) else None
+    info = plan_info("free")
+    return {
+        "mode": "promo" if until else "paid" if payments else "early",
+        "payments": payments,
+        "yearly": billing.yearly_enabled(),
+        "promo_until": until.isoformat() if until else None,
+        "free_now": {k: info[k] for k in LIMIT_KEYS},
+        "free_trial_days": PLANS["free"]["live_trial_days"],
+    }
+
+
 def trial_end(started: datetime, days: int) -> datetime:
     """Midnight (India time) after the `days`-th Indian trading day, counting the start day if it is one.
     Weekends and exchange holidays don't count: started on a Saturday, it runs to the end of the fifth

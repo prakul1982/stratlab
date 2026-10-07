@@ -5,8 +5,8 @@ import { PageHeader } from "../components/kit";
 export function AssistantPage() {
   return (
     <div className="k-page">
-      <PageHeader eyebrow="AI assistant" title="AI assistant"
-        lede="Use StratLab in Claude or ChatGPT: your watchlist, holdings, a company's facts, the watchlist scan, alerts, and paper sessions with their P&L." />
+      <PageHeader eyebrow="Mine · Connect an AI assistant" title="Connect an AI assistant"
+        lede="Make a key so Claude or ChatGPT can use your StratLab: your watchlist, holdings, a company's facts, the watchlist scan, alerts, and paper sessions with their P&L." />
       <AssistantNotice />
       <AssistantCards />
     </div>

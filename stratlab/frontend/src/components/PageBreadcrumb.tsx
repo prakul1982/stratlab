@@ -5,7 +5,7 @@ import { NAV, groupPath, locate, locateGroup } from "../lib/nav";
 import { usePins } from "../lib/pins";
 
 /** The personal pages that are not in a space: "Mine › Settings". */
-const PERSONAL: Record<string, string> = { "/account": "Account", "/settings": "Settings", "/assistant": "AI assistant", "/app": "Get the app", "/invite": "Invite friends" };
+const PERSONAL: Record<string, string> = { "/account": "Account", "/settings": "Settings", "/assistant": "Connect an AI assistant", "/app": "Get the app", "/invite": "Invite friends" };
 
 /** The breadcrumb for the page showing, drawn from the one map of pages (lib/nav.ts): "Space › Group › Page ▾". It sits
  * at the top of every page that is in the menu, so no page needs its own row of tabs. */

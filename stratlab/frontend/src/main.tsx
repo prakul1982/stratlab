@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useCallback, useEffect, useState, type ComponentType } from "react";
+import { lazy, StrictMode, Suspense, useCallback, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "@fontsource/montserrat/300.css";
@@ -14,7 +14,9 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import "./styles-invest.css";
 import { AppProvider, useApp } from "./lib/app";
-import { NEXT_PAGE, SESSION_KEY } from "./lib/api";
+import { SESSION_KEY } from "./lib/api";
+import { takeNext } from "./lib/returnTo";
+import { isAppPath, landingSection } from "./lib/deepLinks";
 import { registerPwa } from "./lib/pwa";
 import { captureRef } from "./lib/share";
 import { pageview } from "./lib/analytics";
@@ -41,7 +43,13 @@ const MoneyHome = page(spaceHomes, "MoneyHome");
 const NotebooksHome = page(home, "NotebooksHome");
 const NewNotebook = page(home, "NewNotebook");
 const login = () => import("./pages/Login");
-const Login = page(login, "Login");
+const Login = lazy(() => login().then((m) => ({ default: m.Login })));
+// signed out on an app address, a page that doesn't exist, one that isn't yours, and Help
+const gate = () => import("./pages/Gate");
+const SignInGate = page(gate, "SignInGate");
+const NotFound = lazy(() => gate().then((m) => ({ default: m.NotFound })));
+const NoAccess = lazy(() => gate().then((m) => ({ default: m.NoAccess })));
+const HelpPage = page(gate, "HelpPage");
 const legal = () => import("./pages/LegalPage");
 const LegalPage = page(legal, "LegalPage");
 const notebook = () => import("./pages/NotebookPage");
@@ -182,22 +190,38 @@ function PromoBanner({ until }: { until: string }) {
   );
 }
 
+/** A page only the site's team opens: anyone else is told so, not sent home in silence. */
+function AdminOnly({ what, children }: { what: string; children: ReactNode }) {
+  const { me } = useApp();
+  if (!me) return <Loading label="Checking access" />;
+  return me.is_admin ? <>{children}</> : <NoAccess what={what} email={me.email} />;
+}
+
 function Routed() {
   const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => { pageview(loc.pathname); }, [loc.pathname]);    // usage analytics: off without a key
+  // back from Google sign-in: open the page the visitor started on (lib/returnTo.ts keeps it to StratLab's own pages)
+  const signedIn = !!session;
   useEffect(() => {
-    if (!session) return;
-    let next: string | null = null;
-    try { next = sessionStorage.getItem(NEXT_PAGE); sessionStorage.removeItem(NEXT_PAGE); } catch { /* storage off */ }
-    if (next && next.startsWith("/") && !next.startsWith("//")) nav(next, { replace: true });   // own pages only
-  }, [session, nav]);
+    if (!signedIn) return;
+    const next = takeNext();
+    if (next) nav(next, { replace: true });
+  }, [signedIn, nav]);
   // shared verdicts are public: no sign-in needed
   if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) return <Suspense fallback={<Loading label="Opening" />}><LegalPage /></Suspense>;   // policies are public: no sign-in needed
   if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;
   if (!ready) return <Loading label="Opening StratLab" />;
-  if (!session) return <Suspense fallback={<Loading label="Opening StratLab" />}><Login /></Suspense>;
+  if (!session) {
+    // signed out: the landing page (at a section for /pricing, /help…), "Sign in to see …" on an app address, else Not found
+    const section = landingSection(loc.pathname);
+    return (
+      <Suspense fallback={<Loading label="Opening StratLab" />}>
+        {section !== undefined ? <Login section={section} /> : isAppPath(loc.pathname) ? <SignInGate /> : <NotFound signedIn={false} />}
+      </Suspense>
+    );
+  }
   return (
     <Shell>
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
@@ -237,13 +261,17 @@ function Routed() {
         <Route path="/trade/signals/:sid" element={<SignalsPage />} />
         <Route path="/trade/events" element={<EventsPage />} />
         <Route path="/plans" element={<PlansPage />} />
+        {/* the landing page's addresses, signed in: Plans is the pricing page inside the app, Help has its own page */}
+        <Route path="/pricing" element={<Navigate to="/plans" replace />} />
+        <Route path="/upgrade" element={<Navigate to="/plans" replace />} />
+        <Route path="/help" element={<HelpPage />} />
         <Route path="/account" element={<AccountPage />} />
         {/* Account and Settings step 3a: new routes */}
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/app" element={<AppPage />} />
         <Route path="/invite" element={<InvitePage />} />
-        <Route path="/admin/*" element={<AdminPage />} />
+        <Route path="/admin/*" element={<AdminOnly what="The admin pages"><AdminPage /></AdminOnly>} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/tax-report" element={<TaxReportPage />} />
@@ -274,7 +302,7 @@ function Routed() {
         <Route path="/invest/business-updates" element={<BizUpdatesPage />} />
         <Route path="/invest/stock-lending" element={<StockLendingPage />} />
         <Route path="/invest/margin-funding" element={<MarginFundingPage />} />
-        <Route path="/dev/kit" element={<DevKit />} />
+        <Route path="/dev/kit" element={import.meta.env.DEV ? <DevKit /> : <AdminOnly what="The design kit"><DevKit /></AdminOnly>} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />
@@ -282,7 +310,7 @@ function Routed() {
         <Route path="/research/US/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/investor" element={<InvestorHomePage />} />
         <Route path="/research/:region/:symbol" element={<CompanyPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound signedIn />} />
       </Routes>
       </Suspense>
     </Shell>

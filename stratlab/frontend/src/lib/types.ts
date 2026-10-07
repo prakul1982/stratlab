@@ -135,6 +135,16 @@ export interface Me {
   plans?: Record<string, { price: number; price_year: number } & Record<string, unknown>>;
   paid_plan?: "free" | "basic" | "pro"; promo?: { until: string } | null; free_basic_until?: string | null;
   prefs?: { level: Level | null; focus?: Focus | null; space?: "trade" | "invest" | "money" | "all" | null };
+  /** What anyone can buy and use today: the same answer /pricing gives the landing page (lib/offer.ts words it). */
+  offer?: Offer;
+  /** The first-run guide, kept on the account: shown once per person, not once per device. */
+  onboarding?: { welcome: string | null; tour: "done" | "skipped" | null };
+}
+
+/** plans.offer_state() on the server: payments on or not, the launch offer, and Free's limits as they apply today. */
+export interface Offer {
+  mode: "early" | "promo" | "paid"; payments: boolean; yearly: boolean; promo_until: string | null;
+  free_now: Record<string, number | null>; free_trial_days: number | null;
 }
 
 export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number }

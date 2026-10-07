@@ -25,30 +25,32 @@ export const FOCUSES: [Focus, string, string][] = [
 /** Asked once, after the first sign-in (and again to anyone who answered only one of the two old questions): one short
  * step. The experience level sits above the choices, already set to the middle one; picking what you came for answers
  * both. Neither hides anything, and both can be changed in Settings. */
-export function LevelPrompt({ onDone }: { onDone: () => void }) {
+export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>) => void }) {
   const { level, focus, savePrefs } = useApp();
   const [lvl, setLvl] = useState<Level>(level ?? "some");
   const nav = useNavigate();
   const loc = useLocation();
-  const pick = async (f: Focus) => {
+  const pick = (f: Focus) => {
     const view = viewForFocus(f)!;
-    // on a home page, open the home of what they picked
+    // on a home page (the only place this is asked), open the home of what they picked
     if (loc.pathname === "/" || SPACE_HOMES.includes(loc.pathname)) nav(homeOf(view, f), { replace: true });
     track("onboarding answered", { focus: f, level: lvl });
-    onDone();
-    await savePrefs({ focus: f, level: lvl, space: view });     // closes this: the answers are in
+    onDone(savePrefs({ focus: f, level: lvl, space: view }));     // closes this: the answers are in
   };
   return (
-    <Modal title="What brings you here?" onClose={() => pick(focus ?? "both")}>
-      <p className="muted">StratLab has three spaces: Trade, Invest and Money. We'll open the one you pick. The others stay one tap away, and you can change this any time in Settings.</p>
-      <div className="k-stack snug">
-        <span className="k-small k-muted">How much have you done?</span>
-        <Seg label="Experience" value={lvl} onChange={(v) => setLvl(v as Level)} options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} />
-      </div>
+    // closing keeps the page as it is: the default answer is saved, so it isn't asked again
+    <Modal title="What brings you here?" onClose={() => onDone(savePrefs({ focus: focus ?? "both", level: lvl }))}>
       <div className="k-stack">
-        {FOCUSES.map(([f, title, what]) => (
-          <button key={f} className="k-linkcard explore-card" data-focus={f} onClick={() => pick(f)}><b>{title}</b><span className="small muted">{what}</span></button>
-        ))}
+        <p className="k-muted">StratLab has four spaces: Trade, Invest, Money and Mine, your own summary of all three. We'll open the one you pick. The others stay one tap away, and you can change this any time in Settings.</p>
+        <div className="k-stack snug">
+          <span className="k-small k-muted">How much have you done?</span>
+          <Seg label="Experience" value={lvl} onChange={(v) => setLvl(v as Level)} options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} />
+        </div>
+        <div className="k-stack" role="group" aria-label="What brings you here">
+          {FOCUSES.map(([f, title, what]) => (
+            <button key={f} type="button" className="k-linkcard explore-card" data-focus={f} onClick={() => pick(f)}><b>{title}</b><span className="small muted">{what}</span></button>
+          ))}
+        </div>
       </div>
     </Modal>
   );

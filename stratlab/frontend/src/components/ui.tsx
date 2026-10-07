@@ -3,6 +3,7 @@ import { useApp } from "../lib/app";
 import type { CheckStatus, VerdictKind } from "../lib/types";
 import { Close } from "./Icons";
 import { asOf } from "../lib/format";
+import { firstFocus, trapTab } from "../lib/focusTrap";
 
 const VERDICT_NAME: Record<VerdictKind, string> = {
   edge: "Likely real edge", mixed: "Mixed evidence", luck: "Probably luck", not_enough: "Not enough evidence", no_edge: "No edge",
@@ -25,16 +26,24 @@ export function Toast() {
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
+  // read through a ref: a caller's inline onClose is a new function each render, and re-running the effect moved focus
+  // back to the first control (and out of the dialog) on every change inside it
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
-    box.current?.querySelector<HTMLElement>("input, textarea, button:not([data-close])")?.focus();
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("keydown", esc); prev?.focus(); };
-  }, [onClose]);
+    if (box.current) firstFocus(box.current)?.focus();
+    const keys = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;                  // a pop-up inside this one handled it
+      if (e.key === "Escape") { e.preventDefault(); close.current(); }
+      else trapTab(e, box.current);                     // Tab stays inside the dialog
+    };
+    document.addEventListener("keydown", keys);
+    return () => { document.removeEventListener("keydown", keys); prev?.focus(); };
+  }, []);
   return (
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} ref={box}>
+      <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
         <div className="modal-head">
           <h2 className="h2">{title}</h2>
           <button className="icon-btn" data-close aria-label="Close" onClick={onClose}><Close /></button>

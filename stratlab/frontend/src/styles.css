@@ -526,7 +526,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-nav nav { display: flex; gap: 22px; margin-left: auto; }
 .lp-nav nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; font-size: 14.5px; }
 .lp-nav nav a:hover { color: var(--ink); }
-.lp-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(48px, 7vw, 88px); border-bottom: 1px solid var(--line); }
+.lp-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(32px, 4vw, 56px); border-bottom: 1px solid var(--line); }
 .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
 .lp-h1 { font-size: clamp(44px, 6.2vw, 80px); line-height: 1; font-weight: 400; letter-spacing: -.035em; max-width: 12ch; }
 .lp-h1 em { color: var(--orange); }
@@ -603,7 +603,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-price-top { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
 .lp-amount { font-size: 44px; letter-spacing: -.02em; line-height: 1.05; }
 .lp-amount .small { font-family: var(--sans); }
-.lp-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; flex: 1; font-size: 14.5px; }
+.lp-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; }
 .lp-plan-list li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; }
 .lp-plan-list li > span { color: var(--blue); font-weight: 700; flex: none; }
 .lp-plan-list .lp-plan-sub { font-weight: 600; }
@@ -639,7 +639,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-sec .lp-markets { display: flex; flex-wrap: wrap; gap: 8px; }
 .lp-markets .lp-market { padding: 6px 14px 6px 6px; gap: 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
 .lp-markets .lp-sym { width: 32px; height: 32px; border-radius: 50%; font-size: 13px; }
-.lp-money { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.lp-money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .lp-money .lp-beyond-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .lp-money .lp-fix { margin-top: auto; font-size: 13px; }
 @media (max-width: 1000px) { .lp-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -941,8 +941,6 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .lp-space { display: flex; flex-direction: column; gap: 6px; color: var(--ink); text-decoration: none; }
 .lp-space:hover { border-color: var(--ink-2); color: var(--ink); }
 .lp-space > b { font-size: 28px; font-weight: 400; letter-spacing: -.02em; }
-.lp-space[data-space="trade"] { border-color: var(--blue); }
-.lp-options { border-color: var(--blue); }
 @media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }
 .space-tag { flex: none; align-self: center; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
 /* Money: net worth */
@@ -1673,7 +1671,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-blue { color: var(--blue); }
 .lp-top { align-items: flex-start; }
 .lp-end { align-items: flex-end; }
-.lp-fake-btn { align-self: flex-start; pointer-events: none; }
+.lp-idea-btn { align-self: flex-start; }
 
 /* small pieces that used to be styled inline */
 .row.tight { gap: 4px; }
@@ -1705,3 +1703,52 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 @media (max-width: 480px) { .k-toolbar > select.k-input { flex: 1 1 100%; } }
 .k-address { display: inline-block; max-width: 100%; padding: var(--s2) var(--s3); background: var(--paper-2); color: var(--ink); border-radius: var(--r-ctl); font: 13.5px/1.4 var(--mono); overflow-wrap: anywhere; user-select: all; }
 .k-steps { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s2); font-size: var(--t-body); }
+
+/* a tour step pointed at one control (kit Coachmark.tsx): the rest of the page dimmed around a ring, the note beside it */
+.k-coach { position: fixed; inset: 0; z-index: 70; }
+.k-coach-ring { position: fixed; left: var(--cm-hx, 50%); top: var(--cm-hy, 50%); width: var(--cm-hw, 0); height: var(--cm-hh, 0);
+  border-radius: var(--r-ctl); box-shadow: 0 0 0 200vmax rgba(10, 10, 8, .45); outline: 2px solid var(--blue); outline-offset: 2px;
+  pointer-events: none; transition: left .2s ease, top .2s ease, width .2s ease, height .2s ease; }
+.k-coach-ring[data-off] { left: 50%; top: 50%; width: 0; height: 0; outline: none; }
+.k-coach-note { position: fixed; left: var(--cm-x, 16px); top: var(--cm-y, 16px); width: min(360px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: var(--s3); padding: var(--s5); background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line-2); border-radius: var(--r-card); box-shadow: var(--shadow); }
+.k-coach:not([data-placed]) .k-coach-note { visibility: hidden; }
+.k-coach-note:focus, .modal:focus { outline: none; }
+.k-coach-note .tour-title { font-size: var(--t-card); }
+.k-coach-note .tour-body { font-size: var(--t-body); }
+.k-coach-note .tour-dots { justify-content: flex-start; margin-top: 0; }
+.k-coach-note .tour-foot { margin-top: 0; justify-content: flex-end; }
+@media (prefers-reduced-motion: reduce) { .k-coach-ring { transition: none; } }
+
+/* landing, build 3: no card looks picked, a tag is a plain label (not a link), long lists fold, the plans say what's on sale */
+.lp-sec.lp-spaces-sec { padding-top: clamp(32px, 4vw, 48px); }
+.lp-tag { align-self: flex-start; margin-top: auto; padding: 2px 10px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 12.5px; font-weight: 500; }
+.lp-travel > .lp-tag { margin-top: 0; }
+.lp-more > summary { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--ctl-sm); margin-top: var(--s4); padding: 0 var(--s4);
+  border: 1px solid var(--line-2); border-radius: var(--r-ctl); background: var(--card); color: var(--ink); font-weight: 600; font-size: 14px; cursor: pointer; list-style: none; }
+.lp-more > summary::-webkit-details-marker { display: none; }
+.lp-more > summary::after { content: "+"; font-family: var(--mono); color: var(--muted); }
+.lp-more[open] > summary::after { content: "–"; }
+.lp-more[open] > summary { margin-bottom: var(--s2); }
+.lp-plan-note { display: flex; align-items: center; justify-content: center; min-height: 44px; border: 1px dashed var(--line-2); border-radius: var(--r-ctl); }
+.lp-btc { display: block; }
+.lp-menu { display: none; position: relative; margin-left: auto; }
+.lp-menu > summary { display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl);
+  font-weight: 600; font-size: 14px; color: var(--ink); cursor: pointer; list-style: none; }
+.lp-menu > summary::-webkit-details-marker { display: none; }
+.lp-nav .lp-menu nav { display: flex; flex-direction: column; gap: 0; margin: 0; position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+  min-width: 190px; padding: 6px; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); }
+.lp-nav .lp-menu nav a { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; }
+.lp-nav .lp-menu nav a:hover, .lp-nav .lp-menu nav a:focus-visible { background: var(--chip); }
+@media (max-width: 1000px) { .lp-menu { display: block; } .lp-nav > .btn { margin-left: 0; } }
+@media (max-width: 600px) { .lp-more > summary { min-height: 40px; } }
+
+.k-warn-text { color: var(--orange-ink); margin: 0; }
+
+/* signed out on an app address, a page that doesn't exist, a page that isn't yours (pages/Gate.tsx) */
+.gate { max-width: 640px; }
+.gate-actions { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.gate-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: var(--s3); }
+.gate-path { font-family: var(--mono); font-size: var(--t-note); overflow-wrap: anywhere; }
+.gate-actions .lp-cta svg { background: #fff; border-radius: 50%; padding: 2px; width: 22px; height: 22px; }

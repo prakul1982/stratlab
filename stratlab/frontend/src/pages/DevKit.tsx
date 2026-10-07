@@ -7,6 +7,7 @@ import { Loading } from "../components/ui";
 import {
   Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, HealthGrid, HealthTile, LinkCard, Pager, StatusList, StatusRow, PageHeader, ResultBlock, Seg, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
   TilePicker, type TileGroup,
+  Coachmark,
 } from "../components/kit";
 
 /* /dev/kit: every kit component in its states, for checking a change by eye in both themes. Only in dev builds and for
@@ -47,6 +48,7 @@ function Body() {
   const [tile, setTile] = useState<string | null>("fd");
   const [pg, setPg] = useState(2);
   const [sym, setSym] = useState("");
+  const [coach, setCoach] = useState(false);
   const series = useMemo(() => BOOK, []);
   return (
     <div className="k-page" style={{ gap: "var(--s6)" }}>
@@ -200,6 +202,18 @@ function Body() {
           <LineChart lines={[{ values: series, color: "var(--pos-call)", width: 2, label: "MTF book" }]} labels={DAYS} times={DAYS} ranges={false} table={false} format={(v) => `${inr(v, 2)} cr`} axisFormat={(v) => axisInr(v * CRORE)} height={180} ariaLabel="Example book by day" />
         </ChartFrame>
         <ChartFrame title="While loading"><Skeleton label="Reading the margin trading disclosure" lines={3} /></ChartFrame>
+      </Spec>
+
+      <Spec name="Coachmark" rule="One tour step pointed at a real control, the rest dimmed. Short title, one line, Back and Next (Done on the last step). Esc closes; Tab stays inside.">
+        <Card><button type="button" className="btn quiet sm" id="kit-coach-target" onClick={() => setCoach(true)}>Show a coachmark</button></Card>
+        {coach && (
+          <Coachmark anchor={["#kit-coach-target"]} label="Example step" onClose={() => setCoach(false)}>
+            <span className="k-eyebrow">Step 1 of 1</span>
+            <h2 className="tour-title">This button</h2>
+            <p className="tour-body">A coachmark points at the thing it explains.</p>
+            <div className="k-row tour-foot"><button type="button" className="btn sm" data-autofocus onClick={() => setCoach(false)}>Done</button></div>
+          </Coachmark>
+        )}
       </Spec>
 
       <Spec name="Numbers (lib/format.ts)" rule="Indian units everywhere. A minus is a real minus.">

@@ -59,9 +59,9 @@ export function MineHome() {
 
   return (
     <div className="space-home mine" data-testid="mine-home">
-      <PromoCountdown /><FirstSteps />
       <PageHeader eyebrow={dateLine()} title={`${greeting()}${first ? `, ${first}` : ""}`} lede={lede}
         actions={<button type="button" className="btn quiet sm" aria-expanded={customise} aria-controls="mine-customise" onClick={() => setCustomise(!customise)}>Customise</button>} />
+      <PromoCountdown /><FirstSteps />
       {customise && <CustomisePanel layout={layout} onChange={change} onDone={() => setCustomise(false)} />}
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
