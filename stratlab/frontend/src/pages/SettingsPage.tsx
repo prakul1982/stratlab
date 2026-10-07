@@ -35,7 +35,8 @@ export function SettingsPage() {
   const nav = useNavigate();
   const asked = loc.hash.replace("#", "");
   const section = SECTIONS.some((s) => s.value === asked) ? asked : ALIAS[asked] ?? "notifications";
-  const go = (v: string) => nav({ hash: v }, { replace: true });
+  // each section is its own history entry, so Back returns to the section before (and then to the page before Settings)
+  const go = (v: string) => { if (v !== section) nav({ hash: v }); };
 
   return (
     <div className="k-page">

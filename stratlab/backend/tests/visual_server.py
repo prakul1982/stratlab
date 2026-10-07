@@ -64,6 +64,10 @@ def build():
     fo_changes.refresh(main.filings_feed)    # the F&O contract file and circulars, likewise
     from tests import fake_market_events
     fake_market_events.seed()                # the market events calendar's sources, as the morning read would have kept them
+    # ...and its twice-a-day read (and Admin's Run now) answered by the same made-up sources, never the real sites
+    from app import market_events
+    mp.setattr(market_events, "refresh", lambda web=None, today=None, now=None, only=None: (
+        fake_market_events.seed(today), {"problems": [], "read": [n for n, _ in market_events.READERS]})[1])
     screen_index()
     breadth(mp)
     positioning_history()

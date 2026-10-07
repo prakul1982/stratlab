@@ -9,14 +9,16 @@ export type ServerError = { ref: string; at: string; method: string; path: strin
 
 export interface Overview {
   server: {
-    kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number;
+    kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number; india_sessions?: number;
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     recent_errors?: ServerError[];
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
-    calendar?: CalendarStatus; admin_alerts?: { email_ready: boolean; to: string[] };
+    calendar?: CalendarStatus; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
   };
-  stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number };
+  stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number;
+    /** paid plans with a subscription behind them, and those the owner gave by hand (older servers send neither) */
+    paying?: Record<"basic" | "pro", number>; given?: Record<"basic" | "pro", number> };
 }
 
 export type JobRow = {

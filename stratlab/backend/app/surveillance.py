@@ -369,6 +369,5 @@ class Job(news_job.Job):
     def run(self, now: datetime, day: date) -> int:
         out = refresh(self.feed_fn(), day)
         sent = self.fire(out["changes"], now) if out["changes"] else 0
-        self.status.update(last_run=now.isoformat(), sent=sent, changes=len(out["changes"]), problems=out["problems"][:5],
-                           last_error=out["problems"][0][:200] if out["problems"] else None)
+        self.record(now, out["problems"], len(PARTS), sent=sent, changes=len(out["changes"]))
         return sent

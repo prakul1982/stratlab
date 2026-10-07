@@ -119,6 +119,111 @@ STEPS: list[Step] = [
 ]
 
 
+# ---------- the user's own copy: "Download all my data" ----------
+SECRET = ("token", "password", "secret", "api_key")                     # never in an export, even sealed
+SECRET_NAMES = {"key", "keys", "auth", "p256dh", "endpoint", "address", "inbox", "sealed"}
+
+
+def _secret(name) -> bool:
+    n = str(name).lower()
+    return n in SECRET_NAMES or any(s in n for s in SECRET)
+
+
+def _clean(v):
+    """JSON-safe, without any secret: sealed broker tokens, the statement password, push keys and the inbox address."""
+    if isinstance(v, dict):
+        return {str(k): _clean(x) for k, x in v.items() if not _secret(k)}
+    if isinstance(v, (list, tuple, set)):
+        return [_clean(x) for x in v]
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    return str(v)
+
+
+def _settings_of(*prefixes: str) -> Callable[[str], dict]:
+    def run(uid: str) -> dict:
+        import json
+        out = {}
+        for p in prefixes:
+            raw = db.get_setting(p + uid)
+            if raw is not None:
+                try:
+                    out[p.rstrip(":")] = json.loads(raw)
+                except (ValueError, TypeError):
+                    out[p.rstrip(":")] = raw
+        return out
+    return run
+
+
+def _x_drawings(uid: str) -> dict:
+    from . import drawings_store
+    out = {}
+    for name in drawings_store._index(uid):
+        r, _, s = name.partition(":")
+        out[name] = drawings_store.load(uid, r, s)
+    return out
+
+
+def _x_alerts(uid: str) -> dict:
+    from . import breadth, corp_actions, fo_changes, results, scan, shareholders, stock_alerts
+    from .intel import filings
+    return _settings_of(stock_alerts.KEY, scan.ALERT_KEY, results.ALERT_KEY, corp_actions.ALERT_KEY, filings.ALERT_KEY,
+                        breadth.ALERT_KEY, fo_changes.ALERT_KEY, shareholders.FOLLOW_KEY)(uid)
+
+
+def _x_prefs(uid: str) -> dict:
+    from . import daily_report, first_steps, lifecycle
+    return _settings_of(daily_report.PREFS, lifecycle.PREFS, first_steps.KEY)(uid)
+
+
+def _x_connect(uid: str) -> dict:
+    from .connect import state
+    return {name: {k: v for k, v in (part or {}).items() if k in ("status", "detail", "day", "synced_at", "refreshed_at", "kite_user", "positions", "trades")}
+            for name, part in (state.load(uid) or {}).items() if isinstance(part, dict)}
+
+
+def _x_mod(module: str, fn: str) -> Callable[[str], object]:
+    def run(uid: str):
+        import importlib
+        return getattr(importlib.import_module(f".{module}", __package__), fn)(uid)
+    return run
+
+
+EXPORT: list[tuple[str, str, Callable[[str], object]]] = [
+    ("holdings", "Holdings", _x_mod("holdings", "load")),
+    ("net_worth", "Net worth", _x_mod("money_networth", "load")),
+    ("net_worth_history", "Net worth history", _x_mod("money_networth", "history")),
+    ("notebooks", "Notebooks and experiments", lambda uid: db.sb().table("strategies").select("*").eq("user_id", uid).execute().data),
+    ("trade_journal", "Trade journal", _x_mod("journal", "load")),
+    ("tax_lots", "Tradebooks and tax lots", _x_mod("tax_lots", "load")),
+    ("mutual_funds", "Mutual funds", _x_mod("money_mf", "load")),
+    ("money_calendar", "Money calendar", _x_mod("money_calendar", "load")),
+    ("tax_inputs", "Tax report inputs", _x_mod("tax_total", "load_inputs")),
+    ("chart_drawings", "Chart drawings", _x_drawings),
+    ("chart_replays", "Chart replay sessions", _x_mod("replay", "load_all")),
+    ("alerts", "Alerts and follows", _x_alerts),
+    ("preferences", "Preferences", _x_prefs),
+    ("connected_accounts", "Connected accounts (no tokens or passwords)", _x_connect),
+]
+
+
+def export(profile: dict) -> dict:
+    """Everything StratLab keeps for one user, as one JSON document: their profile and each kind of data, with every
+    secret left out. A part that can't be read is named under "not_included" rather than failing the whole copy."""
+    from datetime import datetime, timezone
+    uid = profile["id"]
+    out: dict = {"exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                 "profile": _clean({k: v for k, v in profile.items() if not k.startswith("_") and not k.startswith("razorpay_")}),
+                 "not_included": []}
+    for key, label, fn in EXPORT:
+        try:
+            out[key] = _clean(fn(uid))
+        except Exception as e:
+            log.warning("user data export: %s for %s failed: %s", key, uid, str(e)[:160])
+            out["not_included"].append({"key": key, "label": label})
+    return out
+
+
 def erase(uid: str) -> dict:
     """Run every step for one user. Returns {"done": [{key, label, count}], "failed": [{key, label, error}]}."""
     done, failed = [], []

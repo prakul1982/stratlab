@@ -14,8 +14,19 @@ def telegram_ready() -> bool:
 
 
 def email_ready() -> bool:
-    return bool(settings.BREVO_API_KEY or settings.RESEND_API_KEY
-                or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD))
+    return email_service() is not None
+
+
+def email_service() -> str | None:
+    """Which service sends the server's email, in the order send_email tries them: "Brevo", "Resend", "SMTP", or None
+    when none is set up. Admin shows it, so Overview and System name the same one."""
+    if settings.BREVO_API_KEY:
+        return "Brevo"
+    if settings.RESEND_API_KEY:
+        return "Resend"
+    if settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD:
+        return "SMTP"
+    return None
 
 
 # Resend's shared sender: it delivers only to the address the Resend account was made with, until a domain of your
@@ -110,7 +121,7 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
         _send_resend(to, subject, body, html, headers)
         return
     if not (settings.SMTP_HOST and settings.SMTP_USER):
-        raise RuntimeError("Email isn't set up on the server (SMTP settings are missing).")
+        raise RuntimeError("Email isn't set up on the server: no Brevo or Resend key, and no SMTP settings.")
     msg = EmailMessage()
     msg["From"] = settings.ALERT_FROM_EMAIL or settings.SMTP_USER
     msg["To"] = to

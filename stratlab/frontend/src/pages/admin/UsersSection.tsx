@@ -2,53 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, money } from "../../lib/format";
-import { Modal } from "../../components/ui";
 import { useMoreColumns } from "../../components/MoreColumns";
-import { Badge, Card, CardHead, ConfirmDialog, DataTable, EmptyState, Field, FieldGroup, FormActions, FormGrid, Notice, Seg, Skeleton, type Column } from "../../components/kit";
-import { useAdmin, type Plan } from "./AdminContext";
+import { Badge, Card, CardHead, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Pager, Seg, Skeleton, type Column } from "../../components/kit";
+import { useAdmin } from "./AdminContext";
+import { UserDialog } from "./UserDialog";
+import { PLAN_FILTERS, PLAN_NAME, planNote, usersPath, type PlanFilter, type UserRow } from "./users";
 
-interface UserRow {
-  id: string; email: string | null; created_at: string | null; plan: Plan; plan_set: string; plan_status: string | null;
-  plan_until: string | null; paying: boolean; experiments: number; ai_builds: number; referrals?: number; free_months?: number;
-}
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null }
 
-const PLAN_NAME: Record<Plan, string> = { free: "Free", basic: "Basic", pro: "Pro" };
-const DURATIONS = [{ value: "30", label: "30 days" }, { value: "90", label: "90 days" }, { value: "365", label: "1 year" }, { value: "none", label: "No end date" }];
-
-function PlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: () => void; onSaved: () => void }) {
-  const { notify, fail } = useApp();
-  const [plan, setPlan] = useState<Plan>(user.plan === "free" ? "basic" : user.plan);
-  const [days, setDays] = useState("30");
-  const [busy, setBusy] = useState(false);
-  const save = async () => {
-    const n = days === "none" ? null : Number(days);
-    setBusy(true);
-    try {
-      await api(`/admin/users/${user.id}/plan`, { method: "POST", body: { plan, days: plan === "free" ? null : n } });
-      notify(plan === "free" ? `${user.email} is back on Free.` : `${user.email} now has ${PLAN_NAME[plan]}${n ? ` for ${n} days` : ""}.`);
-      onSaved(); onClose();
-    } catch (e) { fail(e); } finally { setBusy(false); }
-  };
-  return (
-    <Modal title="Change plan" onClose={onClose}>
-      <div className="k-stack">
-        <p className="k-muted">{user.email} · now on <b>{PLAN_NAME[user.plan]}</b>{user.plan_until ? ` until ${dateOnly(user.plan_until)}` : ""}.</p>
-        {user.paying && <Notice tone="warn">This user has a Razorpay subscription. Its next payment or cancellation will overwrite what you set here.</Notice>}
-        <FormGrid label="Change plan" onSubmit={(e) => { e.preventDefault(); save(); }}>
-          <FieldGroup label="Plan" wide><Seg label="Plan" value={plan} onChange={(v) => setPlan(v as Plan)} options={(["free", "basic", "pro"] as Plan[]).map((p) => ({ value: p, label: PLAN_NAME[p] }))} /></FieldGroup>
-          {plan !== "free" && (
-            <FieldGroup label="For how long" info="When it ends, they go back to Free automatically." wide><Seg label="Duration" value={days} onChange={setDays} options={DURATIONS} /></FieldGroup>
-          )}
-          <FormActions>
-            <button type="submit" className="btn" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
-            <button type="button" className="btn quiet" onClick={onClose}>Cancel</button>
-          </FormActions>
-        </FormGrid>
-      </div>
-    </Modal>
-  );
-}
+const PAGE = 25;
 
 type RewardRow = { newcomer: string; newcomer_email: string | null; referrer: string; referrer_email: string | null; at: string | null;
   status: string; given_at: string | null; signups_that_day: number; months: number; capped: boolean;
@@ -112,25 +74,25 @@ export function UsersSection() {
   const { ov, reload } = useAdmin();
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [q, setQ] = useState("");
-  const [shown, setShown] = useState(25);
-  const [editing, setEditing] = useState<UserRow | null>(null);
+  const [plan, setPlan] = useState<PlanFilter>("all");
+  const [page, setPage] = useState(1);
+  const [open, setOpen] = useState<UserRow | null>(null);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [stopping, setStopping] = useState<SessionRow | null>(null);
-  const [erasing, setErasing] = useState<UserRow | null>(null);
   const [promo, setPromo] = useState<"start" | "end" | null>(null);
   const [promoDays, setPromoDays] = useState("10");
   const [busy, setBusy] = useState(false);
   const more = useMoreColumns("admin-users", 2);      // invite counts: one click away, so the users table fits a laptop
 
-  const loadUsers = useCallback(async (query: string) => {
-    try { setUsers(await api<UserRow[]>(`/admin/users?q=${encodeURIComponent(query)}`)); } catch (e) { fail(e); }
+  const loadUsers = useCallback(async (query: string, on: PlanFilter) => {
+    try { setUsers(await api<UserRow[]>(usersPath(query, on))); } catch (e) { fail(e); }
   }, [fail]);
   const loadSessions = useCallback(async () => { try { setSessions(await api<SessionRow[]>("/admin/sessions")); } catch (e) { fail(e); } }, [fail]);
   useEffect(() => {
     if (!me?.is_admin) return;
-    const t = window.setTimeout(() => loadUsers(q), q ? 300 : 0);
+    const t = window.setTimeout(() => loadUsers(q, plan), q ? 300 : 0);
     return () => window.clearTimeout(t);
-  }, [q, me?.is_admin, loadUsers]);
+  }, [q, plan, me?.is_admin, loadUsers]);
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
   const days = Math.max(1, Math.min(90, Number(promoDays) || 1));
@@ -148,21 +110,11 @@ export function UsersSection() {
     try { await api(`/admin/sessions/${stopping.id}/stop`, { method: "POST" }); notify("Session stopped."); setStopping(null); await loadSessions(); } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
-  const doErase = async () => {
-    if (!erasing) return;
-    setBusy(true);
-    try {
-      const r = await api<{ ok: boolean; failed: { label: string }[] }>(`/admin/users/${erasing.id}/delete-data`, { method: "POST" });
-      notify(r.ok ? `The app data of ${erasing.email} is deleted.` : `Deleted, except: ${r.failed.map((f) => f.label).join(", ")}. Run it again to retry.`);
-      setErasing(null);
-    } catch (e) { fail(e); } finally { setBusy(false); }
-  };
-
   const cols: Column<UserRow>[] = [
     { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => u.email ?? "–" },
     { key: "plan", header: "Plan", cell: (u) => (
       <span className="k-row"><Badge tone={u.plan === "free" ? "plain" : "ok"} dot={false}>{PLAN_NAME[u.plan]}</Badge>
-        {u.plan !== "free" && <span className="k-small k-muted">{u.plan_until ? `until ${dateOnly(u.plan_until)}` : u.paying ? "Razorpay" : "no end"}</span>}</span>) },
+        {u.plan !== "free" && <span className="k-small k-muted">{planNote(u)}</span>}</span>) },
     { key: "joined", header: "Joined", cell: (u) => dateOnly(u.created_at) },
     { key: "exp", header: "Experiments", numeric: true, cell: (u) => u.experiments },
     { key: "ai", header: "AI builds", numeric: true, cell: (u) => u.ai_builds },
@@ -171,10 +123,8 @@ export function UsersSection() {
       { key: "free", header: "Free months", info: "Free months of Basic this user earned from invites", numeric: true, cell: (u: UserRow) => u.free_months ?? 0 },
     ] : []),
     { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (u) => (
-      <span className="k-row k-col">
-        <button type="button" className="btn quiet sm" onClick={() => setEditing(u)}>Change plan</button>
-        <button type="button" className="btn quiet sm danger" aria-label={`Delete the data of ${u.email ?? "this user"}`} onClick={() => setErasing(u)}>Delete data</button>
-      </span>) },
+      <button type="button" className="btn quiet sm" aria-haspopup="dialog" aria-label={`Actions for ${u.email ?? "this user"}`} title="Change plan or delete data"
+        onClick={() => setOpen(u)}>⋯</button>) },
   ];
   const sess: Column<SessionRow>[] = [
     { key: "name", header: "Session", rowHeader: true, wrap: true, cell: (s) => s.name },
@@ -186,24 +136,30 @@ export function UsersSection() {
     { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (s) => <button type="button" className="btn quiet sm" onClick={() => setStopping(s)}>Stop</button> },
   ];
   const until = ov?.server.promo_until;
+  const pages = Math.max(1, Math.ceil((users?.length ?? 0) / PAGE));
+  const at = Math.min(page, pages);
 
   return (
     <>
       <Card label="Users">
-        <CardHead title="Users" info="Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever; Free months are the months of Basic they earned from invites. The newest 200 users are loaded; search by email to find others."
-          actions={<>
-            <input className="k-input adm-search" type="search" placeholder="Search by email" value={q} onChange={(e) => { setQ(e.target.value); setShown(25); }} aria-label="Search users by email" />
-            {more.toggle}
-          </>} />
-        {!users ? <Skeleton label="Loading users" /> : users.length === 0 ? <EmptyState title="No users match">Try part of an email address.</EmptyState> : (
+        <CardHead title="Users" info="Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever; Free months are the months of Basic they earned from invites. The newest 200 users are loaded; search by email to find others. The … button on a row changes the plan or deletes the user's data."
+          actions={more.toggle} />
+        <div className="k-row adm-filters">
+          <input className="k-input adm-search" type="search" placeholder="Search by email" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Search users by email" />
+          <Seg label="Plan" options={PLAN_FILTERS} value={plan} onChange={(v) => { setPlan(v as PlanFilter); setPage(1); }} />
+        </div>
+        {!users ? <Skeleton label="Loading users" /> : users.length === 0 ? (
+          <EmptyState title="No users match">{plan === "all" ? "Try part of an email address." : `No ${PLAN_NAME[plan]} users${q ? " with that in their email" : ""}.`}</EmptyState>
+        ) : (
           <>
-            <DataTable label="Users" rows={users.slice(0, shown)} rowKey={(u) => u.id} columns={cols} />
-            {users.length > shown && <div className="k-row"><button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 50)}>Show more ({users.length - shown} more)</button></div>}
+            <DataTable label="Users" rows={users.slice((at - 1) * PAGE, at * PAGE)} rowKey={(u) => u.id} columns={cols} />
+            <Pager page={at} pages={pages} total={users.length} noun={users.length === 1 ? "user" : "users"} onPage={setPage} />
+            {users.length >= 200 && <p className="k-small k-muted">The newest 200 are listed. Search by email to find others.</p>}
           </>
         )}
       </Card>
 
-      <InviteRewards onChanged={() => loadUsers(q)} />
+      <InviteRewards onChanged={() => loadUsers(q, plan)} />
 
       <Card label="Launch offer">
         <CardHead title="Launch offer" actions={until ? <Badge tone="ok">On</Badge> : <Badge>Off</Badge>} />
@@ -226,11 +182,9 @@ export function UsersSection() {
         {!sessions ? <Skeleton label="Loading sessions" lines={2} /> : <DataTable label="Paper trading sessions" rows={sessions} rowKey={(s) => s.id} columns={sess} empty="No sessions running." />}
       </Card>
 
-      {editing && <PlanModal user={editing} onClose={() => setEditing(null)} onSaved={() => { loadUsers(q); reload(); }} />}
+      {open && <UserDialog user={open} onClose={() => setOpen(null)} onChanged={() => { void loadUsers(q, plan); void reload(); }} />}
       {promo === "start" && <ConfirmDialog title={`Start the launch offer for ${days} days?`} confirmLabel="Start the offer" danger={false} busy={busy} onConfirm={doPromo} onClose={() => setPromo(null)}>Every user gets every Pro feature, free, for {days} days starting now.</ConfirmDialog>}
       {promo === "end" && <ConfirmDialog title="End the launch offer now?" confirmLabel="End the offer" busy={busy} onConfirm={doPromo} onClose={() => setPromo(null)}>Everyone goes back to their own plan within a minute.</ConfirmDialog>}
-      {erasing && <ConfirmDialog title={`Delete the data of ${erasing.email ?? "this user"}?`} confirmLabel="Delete this user's data" busy={busy} onConfirm={doErase} onClose={() => setErasing(null)}>
-        This removes their chart drawings, connected accounts (tokens, inbox address and statement password), holdings, net worth entries, notebooks, alerts and preferences, with no way back. Their sign-in account, plan and payment records stay.</ConfirmDialog>}
       {stopping && <ConfirmDialog title={`Stop "${stopping.name}"?`} confirmLabel="Stop the session" busy={busy} onConfirm={doStop} onClose={() => setStopping(null)}>This ends {stopping.email}'s paper trading session now.</ConfirmDialog>}
     </>
   );

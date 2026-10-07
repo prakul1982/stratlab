@@ -568,3 +568,8 @@ class ReferralReq(BaseModel):
 class BreadthAlertReq(BaseModel):
     group: str = Field(..., max_length=40)                      # a market breadth group, e.g. nifty500
     level: float = Field(..., ge=1, le=99)                      # % of stocks above their 50-day average
+
+
+class DeleteMyDataReq(BaseModel):
+    """Deleting your own data: the email of the account, typed in to confirm."""
+    confirm: str = Field(..., min_length=1, max_length=320)

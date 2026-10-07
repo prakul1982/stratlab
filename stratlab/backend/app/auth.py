@@ -6,7 +6,7 @@ from fastapi import Header, HTTPException
 from . import db
 from .plans import access_plan, effective_plan
 
-_cache: dict[str, tuple[float, str, str, bool]] = {}
+_cache: dict[str, tuple[float, str, str, bool, str | None]] = {}     # token -> (until, id, email, verified, sign-in method)
 _rejected: dict[str, float] = {}          # tokens the sign-in service just refused, until when
 _lock = threading.Lock()
 
@@ -36,7 +36,7 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
     if bad and bad > now:                           # the same made-up or expired token again: no sign-in service call
         raise HTTPException(401, {"code": "login_required", "message": "Your session expired. Sign in again."})
     if hit and hit[0] > now:
-        uid, email, verified = hit[1], hit[2], hit[3]
+        uid, email, verified, method = hit[1], hit[2], hit[3], hit[4]
     else:
         try:
             user = db.sb().auth.get_user(token).user
@@ -57,14 +57,16 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
         meta = getattr(user, "app_metadata", None) or {}
         providers = set(meta.get("providers") or []) | {meta.get("provider")}
         verified = bool(getattr(user, "email_confirmed_at", None)) and "google" in providers
+        method = meta.get("provider") or next((p for p in meta.get("providers") or [] if p), None)   # how they signed in, for Account
         with _lock:
             if len(_cache) > 5000:
                 _cache.clear()
-            _cache[token] = (now + 60, uid, email, verified)
+            _cache[token] = (now + 60, uid, email, verified, method)
     profile = db.cached_profile(uid, email)
     profile["_paid_plan"] = effective_plan(profile)
     profile["_plan"] = access_plan(profile)       # Pro for everyone during the launch offer
     # the profile keeps the address from sign-up; trust it only while it's still the one Google just proved
     same = (profile.get("email") or "").strip().lower() == (email or "").strip().lower()
     profile["_email_verified"] = verified and same
+    profile["_signed_in_with"] = method if isinstance(method, str) else None
     return profile

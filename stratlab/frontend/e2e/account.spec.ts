@@ -99,7 +99,7 @@ test("account: Sign out ends this session, and cancelling a plan asks in the pag
   await page.route(`${API}/me`, async (r) => {          // this person pays for Basic, so Cancel subscription is offered
     const res = await r.fetch();
     const me = await res.json();
-    await r.fulfill({ response: res, json: { ...me, paid_plan: "basic", billing: { ...me.billing, subscribed_plan: "basic", status: "active", cancel_at_period_end: false, renews_or_ends: "2026-11-05T00:00:00Z" } } });
+    await r.fulfill({ response: res, json: { ...me, paid_plan: "basic", billing: { ...me.billing, subscribed_plan: "basic", status: "active", cancel_at_period_end: false, renews_or_ends: "2026-11-05T00:00:00Z", given_by_owner: false } } });
   });
   const errors = await signIn(page, request, u, "/account");
   const main = page.locator("main");
@@ -117,6 +117,89 @@ test("account: Sign out ends this session, and cancelling a plan asks in the pag
 
   await main.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("sb-demo-auth-token"))).toBeNull();
+});
+
+test("account: a plan the owner gave says so, with nothing to renew or cancel; the sign-in method comes from the server too", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  const u = who(236, phone);                 // a Pro account the fake world's owner gave by hand, with no end date
+  const errors = await signIn(page, request, u, "/account", null);          // a session that doesn't say how they signed in
+  const main = page.locator("main");
+  const plan = main.locator("#plan");
+  await expect(plan.getByText("Given by the owner")).toBeVisible({ timeout: 30_000 });
+  await expect(plan.locator(".k-rows > div", { hasText: "Given by the owner" })).toContainText("No end date");
+  await expect(plan).not.toContainText(/Renews on|Ends on|2099/);
+  await expect(main.getByRole("button", { name: "Cancel subscription" })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Compare plans" })).toHaveAttribute("href", "/plans");
+  const profile = main.locator("#profile");
+  await expect(profile.locator("div", { hasText: "Signed in with" }).last()).toContainText("Google");
+  await expect(profile).not.toContainText("–");
+  await sane(page, errors, phone);
+  await shot(page, "account-given", phone);
+});
+
+test("account: Free's limits match the Plans page, and deleting all your data asks for your email in the page", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  const u = who(240, phone);                 // a Free account
+  const plans = await (await request.get(`${API}/plans`)).json();
+  const sent: unknown[] = [];
+  await page.route(`${API}/me/delete-data`, async (r) => {            // nothing is really deleted
+    sent.push(r.request().postDataJSON());
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, done: [], failed: [] }) });
+  });
+  const errors = await signIn(page, request, u, "/account");
+  const main = page.locator("main");
+  const plan = main.locator("#plan");
+  await expect(plan.getByText("Deep dives this month")).toBeVisible({ timeout: 30_000 });
+  for (const [label, n] of [["Deep dives this month", plans.free.deepdives_per_month], ["Slide decks this month", plans.free.decks_per_month]] as const) {
+    const row = plan.locator(".k-rows > div", { hasText: label });
+    await expect(row).toContainText(new RegExp(`(of ${n}$|Free has ${n} a month)`));
+  }
+  // "Contact us" once on the page
+  await expect(main.getByRole("link", { name: "Contact us" })).toHaveCount(1);
+  // your own copy of everything, as one JSON file, with no secrets in it
+  const [file] = await Promise.all([page.waitForEvent("download"), main.getByRole("button", { name: "Download all my data" }).click()]);
+  expect(file.suggestedFilename()).toBe("stratlab-my-data.json");
+  const copy = JSON.parse(await (await import("node:fs/promises")).readFile((await file.path())!, "utf8"));
+  expect(copy.profile.email).toBe(u.email);
+  expect(copy).toHaveProperty("holdings");
+  expect(JSON.stringify(copy)).not.toMatch(/"(token|password)"/);
+  await main.getByRole("button", { name: "Delete all my data…" }).click();
+  const ask = page.getByRole("dialog", { name: "Delete all your data?" });
+  await expect(ask).toContainText("Your sign-in account, plan and payment records stay.");
+  const go = ask.getByRole("button", { name: "Delete all my data" });
+  await expect(go).toBeDisabled();
+  await ask.getByLabel("Type your email to confirm").fill("someone@else.com");
+  await expect(go).toBeDisabled();
+  await ask.getByLabel("Type your email to confirm").fill(u.email);
+  await go.click();
+  await expect(page.getByRole("status").filter({ hasText: "Your data is deleted." })).toBeVisible();
+  expect(sent).toEqual([{ confirm: u.email }]);
+  await expect(ask).toHaveCount(0);
+  await sane(page, errors, phone);
+  await shot(page, "account-free", phone);
+});
+
+test("settings: each section is a step in the history, so Back returns to the one before", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await signIn(page, request, who(275, phone), "/settings");
+  const main = page.locator("main");
+  const nav = main.getByRole("radiogroup", { name: "Settings sections" });
+  await expect(nav.getByRole("radio", { name: "Notifications" })).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
+  await nav.getByRole("radio", { name: "Experience" }).click();
+  await expect(page).toHaveURL(/\/settings#experience$/);
+  await nav.getByRole("radio", { name: "Connected accounts" }).click();
+  await expect(page).toHaveURL(/\/settings#accounts$/);
+  await nav.getByRole("radio", { name: "Connected accounts" }).click();            // the section already open adds no step
+  await page.goBack();
+  await expect(page).toHaveURL(/\/settings#experience$/);
+  await expect(nav.getByRole("radio", { name: "Experience" })).toHaveAttribute("aria-checked", "true");
+  await expect(main.getByRole("heading", { name: "What you see first" })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(nav.getByRole("radio", { name: "Notifications" })).toHaveAttribute("aria-checked", "true");
+  await page.goForward();
+  await expect(page).toHaveURL(/\/settings#experience$/);
+  expect(errors).toEqual([]);
 });
 
 test("settings: notifications keep their settings, with the alerts, StratLab emails and newsletters in one place", async ({ page, request }, info) => {
@@ -240,6 +323,11 @@ test("invite: the link has its own page", async ({ page, request }, info) => {
   if (!phone) await page.emulateMedia({ colorScheme: "dark" });
   const errors = await signIn(page, request, who(239, phone), "/invite");
   await expect(page.locator("main").getByLabel("Your invite link")).toHaveValue(/\/\?ref=/, { timeout: 30_000 });
+  // a Pro user (given by the owner) is told what they actually get: time kept for when Pro stops, never "a month of Basic" now
+  const words = page.getByTestId("invite-reward-line");
+  await expect(words).toContainText("You're on Pro, so it's kept for you and starts only if your Pro plan stops.");
+  await expect(words).not.toContainText("You get a month of Basic");
+  await expect(page.locator("main")).not.toContainText(/Use: \d|Extra: \d/);
   await sane(page, errors, phone);
   await shot(page, "invite", phone);
 });
