@@ -10,6 +10,7 @@ import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
 import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
+import { pickFy, rememberFy } from "../lib/fy";
 
 /* /tax-report: capital gains on shares and funds from the tradebooks you upload, matched first in, first out, with the
  * exemption and set-off, F&O and intraday kept apart, and the year's total tax estimate. Estimates, never advice.
@@ -90,12 +91,12 @@ function combine(a: ImportReply | null, b: ImportReply): ImportReply {
   };
 }
 
-/** The year to open on: the one already open if it has sales, else the latest with any. */
+/** The year to open on: the one already open if it has sales, else the Money pages' shared year (lib/fy). */
 function bestYear(r: Report, cur: number | null): number {
   const busy = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0 || !!y.units;
   const open = r.years.find((y) => y.fy === cur);
   if (open && busy(open)) return open.fy;
-  return r.years.find(busy)?.fy ?? (open ? open.fy : r.current_fy);
+  return pickFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && busy(y)));
 }
 
 export function TaxReportPage() {
@@ -289,7 +290,7 @@ export function TaxReportPage() {
         <>
           <Card compact>
             <CardHead title="Financial year" actions={<>
-              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setAllSales(false); }}
+              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setAllSales(false); }}
                 options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}` }))} />
               <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("csv")}><Download size={16} />{getting === "csv" ? "Making the CSV…" : "Download CSV"}</button>
               <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>

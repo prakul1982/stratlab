@@ -51,6 +51,23 @@ def test_company_page_ratios_agree_with_its_price(w):
     assert 0.8 < live / 1408 < 1.25
 
 
+def test_dividend_on_the_money_calendar_counts_the_bonus_before_it(w):
+    """R1-002: TCS's 1:1 bonus goes ex today and its ₹11 dividend in three days. 12 shares held before the bonus are
+    24 on the dividend's ex-date: ₹264 on the Money calendar, as on Holdings and Tax tools."""
+    from datetime import date, timedelta
+    from app import holdings, main, money_calendar
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    holdings.save("u-pro", [{"symbol": "TCS", "qty": 12, "avg": 3000.0, "since": yesterday}], "manual")
+    main.corp_job.refresh("IN")
+    evs = money_calendar.holdings_events("u-pro", date.today(), date.today() + timedelta(days=10))
+    div = [e for e in evs if e.get("symbol") == "TCS" and str(e.get("kind", "")).endswith("dividend")]
+    assert div and {round(e["amount"], 2) for e in div} == {264.0}
+    assert "On 24 shares (counting the bonus or split before it)" in div[0]["detail"]
+    hv = w["client"].get("/holdings", headers=H(w)).json()
+    ahead = [x for x in (hv.get("actions") or {}).get("ahead", []) if x["symbol"] == "TCS"]
+    assert not ahead or ahead[0]["total"] == 264.0
+
+
 def test_an_unchanged_rerun_asks_first(w):
     """R1-023: the same rules, market and period run again the same day would repeat the last experiment."""
     c, h = w["client"], H(w)

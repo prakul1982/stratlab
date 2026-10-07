@@ -223,8 +223,16 @@ def holdings_events(uid: str, frm: date, to: date) -> list[dict]:
     watch_in = {s for r, s in watch if r == "IN"} - set(held)
     for a in corp_actions.between("IN", frm - timedelta(days=60), to, watch_in) if watch_in else []:
         rows[a["id"]] = a
+    # a dividend's total uses the shares held on its ex-date, worked back through any bonus or split (the same sum as
+    # Holdings and Tax tools: corp_actions.qty_before), not today's quantity
+    from . import holdings as H
+    fallback = str(H.load(uid).get("updated_at") or date.today().isoformat())[:10]
     for a in rows.values():
-        out += _action_events(a, held.get(a["symbol"]), frm, to)
+        item, q = held.get(a["symbol"]), None
+        if item and a.get("kind") == "dividend" and a.get("ex_date"):
+            adj = sorted((x for x in rows.values() if x["symbol"] == a["symbol"] and corp_actions.adjusts(x)), key=lambda x: x["ex_date"])
+            q = corp_actions.qty_before(a["ex_date"], item, str(item.get("since") or fallback)[:10], adj)
+        out += _action_events(a, item, frm, to, q)
     for s, i in held.items():                         # gold bonds: the month they mature, from the symbol
         if instrument_kinds.base(i.get("kind") or instrument_kinds.classify(s, i.get("isin"), i.get("name"))) == "sgb":
             m = instrument_kinds.sgb_maturity(s)
@@ -236,19 +244,23 @@ def holdings_events(uid: str, frm: date, to: date) -> list[dict]:
     return out
 
 
-def _action_events(a: dict, item: dict | None, frm: date, to: date) -> list[dict]:
+def _action_events(a: dict, item: dict | None, frm: date, to: date, qty: float | None = None) -> list[dict]:
     """The ex-date (and the record date, when it's another day) of one action, with the estimated total of a
-    dividend on the shares held today."""
+    dividend on `qty`, the shares held on its ex-date (today's quantity when not given)."""
     out = []
     sym = a["symbol"]
     agm = bool(re.search(r"\bAGM\b|annual\s+general\s+meeting", a.get("purpose") or "", re.I))
     total = None
+    shares = ""
     if a.get("kind") == "dividend" and a.get("amount") and item:
-        total = float(item.get("qty") or 0) * float(a["amount"])
+        q = float(item.get("qty") or 0) if qty is None else qty
+        total = q * float(a["amount"])
+        moved = qty is not None and abs(q - float(item.get("qty") or 0)) > 1e-9
+        shares = f" On {q:,.0f} shares{' (counting the bonus or split before it)' if moved else ''}." if q == int(q) else f" On {q:,.4f} shares."
     url = f"/research/IN/{sym}"
     ex, rec = _day(a.get("ex_date")), _day(a.get("record_date"))
     what = a.get("text") or a.get("label") or a.get("kind")
-    held = " You hold this stock." if item else " On your watchlist."
+    held = f" You hold this stock.{shares}" if item else " On your watchlist."
     if ex and frm <= ex <= to:
         out.append(_ev(ex, f"{sym}: ex-date, {a.get('short') or a.get('label')}", "holdings", f"ex_{a.get('kind')}",
                        f"{what}. Shares bought from today don't get it.{held}", amount=total, symbol=sym, ref=a["id"], url=url))

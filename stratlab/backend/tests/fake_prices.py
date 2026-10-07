@@ -14,6 +14,8 @@ LEVELS = {
     "NIFTYBEES": 270.0, "GOLDBEES": 81.5, "SILVERBEES": 104.0, "BANKBEES": 560.0, "LIQUIDBEES": 1000.0,
     "JSWSTEEL": 1050.0, "NESTLEIND": 2400.0, "DABUR": 520.0, "VEDL": 460.0, "SAIL": 130.0, "ULTRACEMCO": 12000.0,
     "AMBUJACEM": 600.0, "TVSMOTOR": 3400.0,
+    # US: Apple near the fake company-data quote ($183.20, 52-week high $195.60), so its chart and header agree
+    "AAPL": 183.0,
 }
 
 # the exchange's own names and broad sectors (its "macro" sector names for India) for the same companies, so the fake broker's instrument list, the screener's index

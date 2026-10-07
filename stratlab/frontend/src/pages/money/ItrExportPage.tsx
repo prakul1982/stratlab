@@ -5,6 +5,7 @@ import { useApp } from "../../lib/app";
 import { Download } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import { rememberFy, savedFy } from "../../lib/fy";
 
 /* /money/itr: the year's figures from the tax report, tax tools and US stocks, laid out as the ITR-2 and ITR-3 schedules,
  * to download as a workbook, CSV files or a PDF pack for a CA. Built from the kit (components/kit). */
@@ -42,7 +43,7 @@ export function ItrExportPage() {
     setV(null);
     api<View>(`/money/itr${fy ? `?fy=${fy}` : ""}`).then(setV).catch(fail);
   }, [fail]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(savedFy() ?? undefined); }, [load]);     // the Money pages' shared year, when one was picked
 
   const download = async (f: Format) => {
     if (!v) return;
@@ -67,7 +68,7 @@ export function ItrExportPage() {
 
       <FormGrid label="Choose the year">
         <Field label="Financial year">{(id) => (
-          <Select id={id} value={v?.fy ?? ""} disabled={!v} onChange={(x) => load(Number(x))}
+          <Select id={id} value={v?.fy ?? ""} disabled={!v} onChange={(x) => { rememberFy(Number(x)); load(Number(x)); }}
             options={(v?.years ?? []).map((y) => ({ value: y, label: `${fyLabel(y)} (AY ${y + 1}-${String(y + 2).slice(2)})` }))} />
         )}</Field>
       </FormGrid>

@@ -7,6 +7,7 @@ import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, EmptyState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { pickFy, rememberFy } from "../../lib/fy";
 
 /* /money/tax-tools: dividends and the TDS on them, advance tax by date, and the long-term exemption, built on the tax
  * report and My Holdings. Estimates and arithmetic on the user's own figures. Built from the kit (components/kit). */
@@ -90,7 +91,7 @@ function DividendsTab() {
   const [asking, setAsking] = useState(false);
   const show = useCallback((d: Dividends) => {
     setV(d);
-    setFy((cur) => cur ?? (d.years.find((y) => y.fy === d.current_fy && y.total > 0) ?? d.years.find((y) => y.total > 0) ?? d.years[0])?.fy ?? d.current_fy);
+    setFy((cur) => cur ?? pickFy(d.years.map((y) => y.fy), d.current_fy, (fy) => d.years.some((y) => y.fy === fy && y.total > 0)));     // the Money pages' shared year
   }, []);
   useEffect(() => { api<Dividends>("/money/dividends").then(show).catch(fail); }, [show, fail]);
 
@@ -152,7 +153,7 @@ function DividendsTab() {
             <CardHead title={`Dividends, ${y.label}`} actions={<>
               {y.source === "files" && <Badge>From your files</Badge>}
               {y.source === "estimated" && <Badge>Estimated</Badge>}
-              <Select small label="Financial year" value={y.fy} onChange={(x) => setFy(Number(x))} options={yearOptions(v.years, v.current_fy)} />
+              <Select small label="Financial year" value={y.fy} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); }} options={yearOptions(v.years, v.current_fy)} />
             </>} />
             {y.source !== "none" && y.taxed && (
               <FieldGroup label="In the total tax estimate" info="Whether this year's dividends are counted as income in the total tax estimate on the tax report.">

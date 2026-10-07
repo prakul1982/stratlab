@@ -36,6 +36,23 @@ test("a signed-out deep link names its page and offers the public company page (
   assert.equal(gateFor("/somewhere-else", "https://x.test").name, "this page");
 });
 
+test("the Money pages open on one financial year (R1-006)", async () => {
+  const { pickFy, fyLabel } = await import("../src/lib/fy.ts");
+  const years = [2026, 2025, 2024];
+  assert.equal(pickFy(years, 2026, () => true, null), 2025);                    // the year being filed now
+  assert.equal(pickFy(years, 2026, (y) => y === 2024, null), 2024);             // ...unless it's empty: the latest with data
+  assert.equal(pickFy(years, 2026, () => false, null), 2026);                   // nothing anywhere: this year
+  assert.equal(pickFy(years, 2026, () => true, 2024), 2024);                    // a year picked by hand wins
+  assert.equal(pickFy(years, 2026, () => true, 2019), 2025);                    // ...when the page has it
+  assert.equal(fyLabel(2025), "FY 2025-26");
+});
+
+test("checks are counted out of four everywhere (R1-020)", async () => {
+  const { checksLine } = await import("../src/lib/tradeUi.ts");
+  assert.equal(checksLine(2, 4), "2 of 4 checks passed");
+  assert.equal(checksLine(3, 3), "3 of 4 checks passed · 1 not run");
+});
+
 test("the menu follows the address, not the last space used (R1-011)", () => {
   assert.equal(menuView("/n/abc/e/1", "money"), "trade");
   assert.equal(menuView("/holdings", "trade"), "money");
