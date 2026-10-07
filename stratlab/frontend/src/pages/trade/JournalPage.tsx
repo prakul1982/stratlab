@@ -8,7 +8,7 @@ import { CHECKS, checksLine, upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -648,10 +648,10 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
           <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF({ ...f, segment: v })} options={ADD_SEGMENTS} />}</Field>
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           <Field label="Quantity" inputMode="decimal" value={f.qty} onChange={set("qty")} />
-          <Field label="Entry date" type="date" value={f.entry_date} onChange={set("entry_date")} />
+          <DateField label="Entry date" value={f.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />
           <Field label="Entry time" optional type="time" value={f.entry_time} onChange={set("entry_time")} />
           <Field label="Entry price" inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
-          <Field label="Exit date" type="date" value={f.exit_date} onChange={set("exit_date")} />
+          <DateField label="Exit date" value={f.exit_date} onChange={(d) => set("exit_date")({ target: { value: d } })} />
           <Field label="Exit time" optional type="time" value={f.exit_time} onChange={set("exit_time")} />
           <Field label="Exit price" inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
           <Field label={abroad ? "Charges ($)" : "Charges (₹)"} optional inputMode="decimal" value={f.charges} onChange={set("charges")}

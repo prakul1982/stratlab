@@ -53,6 +53,42 @@ test("checks are counted out of four everywhere (R1-020)", async () => {
   assert.equal(checksLine(3, 3), "3 of 4 checks passed · 1 not run");
 });
 
+test("a date is typed and read day first (R1-016)", async () => {
+  const { parseDay, showDay } = await import("../src/lib/dateInput.ts");
+  assert.equal(parseDay("9/2/2025"), "2025-02-09");          // 9 February, never 2 September
+  assert.equal(parseDay("09-02-25"), "2025-02-09");
+  assert.equal(parseDay("14 Aug 2025"), "2025-08-14");
+  assert.equal(parseDay("14 august, 2025"), "2025-08-14");
+  assert.equal(parseDay("14aug2025"), "2025-08-14");
+  assert.equal(parseDay("2025-08-14"), "2025-08-14");          // what a browser's own calendar gives
+  assert.equal(parseDay("31/02/2025"), null);                 // not a real day
+  assert.equal(parseDay("14 Agu 2025"), null);
+  assert.equal(parseDay("14 augx 2025"), null);
+  assert.equal(parseDay(""), null);
+  assert.equal(showDay("2025-02-09"), "9 Feb 2025");
+  assert.equal(showDay(""), "");
+});
+
+test("a typed number is checked against its named limits, and the server's own checks read back (R1-050)", async () => {
+  const { numberProblem, serverProblems, limitText } = await import("../src/lib/validate.ts");
+  assert.equal(numberProblem("-5", { min: 0, above: true }), "Enter more than 0.");
+  assert.equal(numberProblem("99999999999", { min: 0, above: true, max: 1e9 }), "Enter at most 1,00,00,00,000.");
+  assert.equal(numberProblem("1,00,000", { min: 0, max: 1e12, unit: "₹" }), null);
+  assert.equal(numberProblem("1e20", { min: 0, max: 1e12, unit: "₹" }), "Enter at most ₹10,00,00,00,00,000.");
+  assert.equal(numberProblem("45", { min: 1, max: 28, whole: true }), "Enter at most 28.");
+  assert.equal(numberProblem("2.5", { whole: true }), "Enter a whole number.");
+  assert.equal(numberProblem("abc"), "Enter a number, like 10.");
+  assert.equal(numberProblem("", { optional: true }), null);
+  assert.equal(numberProblem(""), "Fill this in.");
+  assert.equal(limitText(60, "%"), "60%");
+  const f = serverProblems([
+    { loc: ["body", "items", 0, "qty"], type: "less_than_equal", ctx: { le: 1e9 } },
+    { loc: ["body", "value"], type: "greater_than_equal", ctx: { ge: 0 } },
+    { loc: ["body", "name"], type: "string_too_long", ctx: { max_length: 60 } },
+  ]);
+  assert.deepEqual(f, { qty: "Enter at most 1,00,00,00,000.", value: "Enter 0 or more.", name: "Use at most 60 characters." });
+});
+
 test("the menu follows the address, not the last space used (R1-011)", () => {
   assert.equal(menuView("/n/abc/e/1", "money"), "trade");
   assert.equal(menuView("/holdings", "trade"), "money");

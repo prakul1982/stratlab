@@ -57,7 +57,7 @@ export function AlertsPage() {
         {adding && (
           <Card>
             <CardHead title="New alert" actions={<button className="btn quiet sm" onClick={() => setAdding(false)}>Cancel</button>} />
-            <AlertForm onSaved={(r) => { setPage(r); setAdding(false); }} />
+            <AlertForm nowhere={!page.channels.length} onSaved={(r) => { setPage(r); setAdding(false); }} />
           </Card>
         )}
 

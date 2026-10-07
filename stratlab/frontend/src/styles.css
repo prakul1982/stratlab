@@ -440,6 +440,7 @@ td.num, .num { font-family: var(--sans); }
 
 .search-box { position: relative; display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 18px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 14px; }
 .search-box input { flex: 1; border: 0; background: transparent; font-size: 17px; outline: none; min-width: 0; }
+.search-box:focus-within { box-shadow: 0 0 0 3px var(--blue-soft); }
 
 /* ---------- notebook header: market button and toolbar ---------- */
 .market-btn {
@@ -1328,6 +1329,19 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-input { height: var(--ctl); width: 100%; padding: 0 14px; border-radius: var(--r-ctl); border: 1px solid var(--line-2); background: var(--paper); font-size: var(--t-body); min-width: 0; }
 .k-input::placeholder { color: var(--muted); opacity: .8; }
 .k-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+/* a field's line under the box: its range or format, or what's wrong (lib/validate) */
+.k-input.bad, .k-input.bad:focus { border-color: var(--down); }
+.k-input.bad:focus { box-shadow: 0 0 0 3px var(--down-soft); }
+.k-field-msg { font-size: var(--t-note); color: var(--muted); }
+.k-field-msg.bad { color: var(--down); }
+/* a date box: the day typed day first, and a button for the browser's calendar */
+.k-date { position: relative; }
+.k-date .k-input { padding-right: 46px; }
+.k-date-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.k-date-btn:hover, .k-date-btn:focus-visible { background: var(--paper-2); color: var(--ink); }
+.k-date-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.k-date-native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
 .k-input-unit { position: relative; }
 .k-input-unit .u { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: var(--t-label); pointer-events: none; }
 .k-input-unit .k-input { padding-right: var(--unit-w, 52px); }

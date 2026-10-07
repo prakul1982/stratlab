@@ -9,10 +9,7 @@ import { RegionSwitch } from "../components/Research";
 import { Info } from "../components/ui";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
-import {
-  Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg,
-  Pager, Select, Skeleton, Stat, StatRow,
-} from "../components/kit";
+import { Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, DataTable, DateField, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager, PlanNote, Seg, Select, Skeleton, Stat, StatRow } from "../components/kit";
 
 /* ---------- Trend scan: Stage 2 + Supertrend, and the preset rule sets (Basic and up) ---------- */
 interface ScanRow {
@@ -462,8 +459,8 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
             options={[...RANGES, { value: "custom", label: "Pick dates" }]} />
         </FieldGroup>
         <FormGrid label="Filter the filings" onSubmit={(e) => e.preventDefault()}>
-          {custom && <Field label="From" type="date" value={frmP} max={isoDay(new Date())} onChange={(e) => setParam({ frm: e.target.value || null })} />}
-          {custom && <Field label="To" type="date" value={toP} max={isoDay(new Date())} onChange={(e) => setParam({ to: e.target.value || null })} />}
+          {custom && <DateField label="From" value={frmP} max={isoDay(new Date())} onChange={(d) => setParam({ frm: d || null })} />}
+          {custom && <DateField label="To" value={toP} max={isoDay(new Date())} onChange={(d) => setParam({ to: d || null })} />}
           <Field label="Find a company" optional placeholder={region === "IN" ? "Like RELIANCE or Tata" : "Like AAPL or Apple"} value={text}
             onChange={(e) => setText(e.target.value)} autoComplete="off" />
         </FormGrid>

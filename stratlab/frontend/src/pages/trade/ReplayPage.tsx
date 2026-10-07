@@ -10,7 +10,7 @@ import { simulate, type Action, type RBar, type ROrder, type Rates } from "../..
 import { PriceChart, type Tf } from "../../charts/price/lazy";
 import type { PriceLevel } from "../../charts/price/engine";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
-import { Badge, Card, CardHead, ChipBar, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Seg, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Seg, Select, Skeleton, Stat, StatRow } from "../../components/kit";
 import "./trade.css";
 import "./paper.css";
 import { Info } from "../../components/ui";
@@ -92,7 +92,7 @@ function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void })
               <div className="k-row"><Badge tone="ok">{inst.symbol}</Badge><button type="button" className="btn quiet sm" onClick={() => setInst(null)}>Pick another</button></div>
             ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="k-small k-muted">Market data is offline right now.</p>}
           </FieldGroup>
-          <Field label="Start date" type="date" value={start} max={new Date(Date.now() - 86400_000).toISOString().slice(0, 10)} onChange={(e) => setStart(e.target.value)} />
+          <DateField label="Start date" value={start} max={new Date(Date.now() - 86400_000).toISOString().slice(0, 10)} onChange={setStart} />
           <FormActions><button type="submit" className="btn" disabled={busy || !inst || !start}>{busy ? "Loading candles…" : "Start replay"}</button></FormActions>
         </FormGrid>
         <p className="k-note">Daily candles go back years; smaller candles only a few months (5-minute about four).</p>

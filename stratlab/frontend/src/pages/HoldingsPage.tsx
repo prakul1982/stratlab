@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, dataUrl } from "../lib/api";
+import { api, dataUrl, type ApiError } from "../lib/api";
+import { numberProblem, problems, type Limits } from "../lib/validate";
 import { useApp } from "../lib/app";
 import { ago, dateOnly, inr, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
@@ -54,6 +55,10 @@ function FilingsCell({ f, allowed, plan }: { f?: Facts; allowed: boolean; plan?:
   return <>{f.amber ? `${f.amber} to look at` : "No red flags"}</>;
 }
 
+/** The limits the server keeps (HoldingItem in models.py), checked here first so they're said under the box. */
+const QTY: Limits = { min: 0, above: true, max: 1e9 };
+const AVG: Limits = { min: 0, max: 1e8, optional: true };
+
 export function HoldingsPage() {
   const { fail, notify } = useApp();
   const [view, setView] = useState<View | null>(null);
@@ -66,6 +71,7 @@ export function HoldingsPage() {
   const [edit, setEdit] = useState<Row | null>(null);
   const [asking, setAsking] = useState(false);
   const [add, setAdd] = useState<{ symbol: string; qty: string; avg: string; market: Mkt }>({ symbol: "", qty: "", avg: "", market: "IN" });
+  const [addErr, setAddErr] = useState<Partial<Record<"symbol" | "qty" | "avg", string>>>({});
   const [picked, setPicked] = useState("");        // the symbol picked from the suggestions (what the box shows until you type)
   const [boxes, setBoxes] = useState(0);           // a new number empties the stock box
 
@@ -98,24 +104,38 @@ export function HoldingsPage() {
     }
   };
 
-  const save = async (items: { symbol: string; qty: number; avg: number | null; market: Mkt }[], done?: string) => {
+  /** Save the list; a symbol no listed company has comes back to `onMissing` (said under the box) or as a toast. */
+  const save = async (items: { symbol: string; qty: number; avg: number | null; market: Mkt }[], done?: string, onMissing?: (msg: string) => void) => {
     setBusy(true);
     try {
       const r = await api<{ unmatched: Unmatched[]; holdings: View }>("/holdings", { method: "PUT", body: { items } });
       show(r.holdings);
-      if (r.unmatched.length) notify(`${r.unmatched.map((u) => u.text).join(", ")}: ${r.unmatched[0].reason.startsWith("No US") ? "no US-listed company has that ticker" : "no listed company on NSE or BSE has that symbol"}.`);
+      const missing = r.unmatched.length
+        ? `${r.unmatched.map((u) => u.text).join(", ")}: ${r.unmatched[0].reason.startsWith("No US") ? "no US-listed company has that ticker" : "no listed company on NSE or BSE has that symbol"}. Pick one from the suggestions.` : null;
+      if (missing) (onMissing ?? notify)(missing);
       else if (done) notify(done);
       return !r.unmatched.length;
-    } catch (e) { fail(e); return false; } finally { setBusy(false); }
+    } catch (e) {
+      const f = (e as ApiError).fields;
+      if (f && onMissing && (f.qty || f.avg)) setAddErr((x) => ({ ...x, ...(f.qty ? { qty: f.qty } : {}), ...(f.avg ? { avg: f.avg } : {}) }));
+      else fail(e);
+      return false;
+    } finally { setBusy(false); }
   };
   const current = () => (view?.rows ?? []).map((r) => ({ symbol: r.symbol, qty: r.qty, avg: r.avg, market: (r.market ?? "IN") as Mkt }));
   const same = (x: { symbol: string; market: Mkt }, r: Row) => x.symbol === r.symbol && x.market === (r.market ?? "IN");
 
   const addOne = async () => {
-    const q = Number(add.qty), a = add.avg.trim() ? Number(add.avg) : null;
-    if (!add.symbol.trim() || !(q > 0) || (a != null && !(a >= 0))) { notify("Enter the symbol, a quantity above 0 and, if you like, the average price."); return; }
-    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`)) {
-      setAdd({ symbol: "", qty: "", avg: "", market: add.market }); setPicked(""); setBoxes((n) => n + 1);
+    const errs = problems({
+      symbol: add.symbol.trim() ? null : "Type a name or symbol, then pick the company.",
+      qty: numberProblem(add.qty, QTY), avg: numberProblem(add.avg, { ...AVG, unit: add.market === "US" ? "$" : "₹" }),
+    });
+    setAddErr(errs);
+    if (Object.keys(errs).length) return;
+    const q = Number(add.qty.replace(/,/g, "")), a = add.avg.trim() ? Number(add.avg) : null;
+    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`,
+      (msg) => setAddErr({ symbol: msg }))) {
+      setAdd({ symbol: "", qty: "", avg: "", market: add.market }); setPicked(""); setBoxes((n) => n + 1); setAddErr({});
     }
   };
 
@@ -272,13 +292,16 @@ export function HoldingsPage() {
             <Seg label="Where it's listed" options={[{ value: "IN", label: "India (NSE/BSE)" }, { value: "US", label: "United States" }]} value={add.market}
               onChange={(m) => { setAdd({ ...add, market: m as Mkt, symbol: add.market === m ? add.symbol : "" }); if (add.market !== m) { setPicked(""); setBoxes((n) => n + 1); } }} />} />
           <FormGrid onSubmit={(e) => { e.preventDefault(); void addOne(); }}>
-            <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol.">
+            <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
               {(id) => <StockPicker key={`${add.market}-${boxes}`} id={id} market={add.market} value={picked} placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
-                onText={(text) => setAdd((x) => ({ ...x, symbol: text }))} onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); }} />}
+                onText={(text) => { setAdd((x) => ({ ...x, symbol: text })); setAddErr((x) => ({ ...x, symbol: undefined })); }}
+                onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); setAddErr((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
-            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} onChange={(e) => setAdd({ ...add, qty: e.target.value })} />
-            <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg}
-              onChange={(e) => setAdd({ ...add, avg: e.target.value.replace(/,/g, "") })} />
+            {/* each number is checked as it's typed, with its limit named (lib/validate) */}
+            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} error={addErr.qty} hint="More than 0"
+              onChange={(e) => { setAdd({ ...add, qty: e.target.value }); setAddErr((x) => ({ ...x, qty: e.target.value.trim() ? numberProblem(e.target.value, QTY) ?? undefined : undefined })); }} />
+            <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg} error={addErr.avg}
+              onChange={(e) => { const v = e.target.value.replace(/,/g, ""); setAdd({ ...add, avg: v }); setAddErr((x) => ({ ...x, avg: numberProblem(v, { ...AVG, unit: add.market === "US" ? "$" : "₹" }) ?? undefined })); }} />
             <FormActions><button type="submit" className="btn" disabled={busy}>Add</button></FormActions>
           </FormGrid>
           {add.market === "US" && <p className="k-note">US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. They aren't part of the tax report.</p>}
@@ -305,13 +328,14 @@ export function HoldingsPage() {
 function EditHolding({ row, busy, onClose, onSave, onRemove }: { row: Row; busy: boolean; onClose: () => void; onSave: (qty: number, avg: number | null) => void; onRemove: () => void }) {
   const [q, setQ] = useState(String(row.qty));
   const [a, setA] = useState(row.avg == null ? "" : String(row.avg));
-  const qn = Number(q), an = a.trim() ? Number(a) : null;
-  const ok = qn > 0 && (an == null || an >= 0);
+  const qn = Number(q.replace(/,/g, "")), an = a.trim() ? Number(a) : null;
+  const qErr = numberProblem(q, QTY), aErr = numberProblem(a, { ...AVG, unit: row.market === "US" ? "$" : "₹" });
+  const ok = !qErr && !aErr;
   return (
     <Modal title={`Edit ${row.symbol}`} onClose={onClose}>
       <FormGrid onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(qn, an); }}>
-        <Field label="Quantity" inputMode="decimal" value={q} onChange={(e) => setQ(e.target.value)} />
-        <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} onChange={(e) => setA(e.target.value.replace(/,/g, ""))} />
+        <Field label="Quantity" inputMode="decimal" value={q} error={qErr} onChange={(e) => setQ(e.target.value)} />
+        <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} error={aErr} onChange={(e) => setA(e.target.value.replace(/,/g, ""))} />
         <FormActions>
           <button type="submit" className="btn" disabled={busy || !ok}>Save</button>
           <button type="button" className="btn danger" disabled={busy} onClick={onRemove}><Trash size={16} />Remove from holdings</button>

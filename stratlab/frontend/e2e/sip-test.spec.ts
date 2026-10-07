@@ -69,7 +69,7 @@ test("test a SIP: from a company page, a split, the spread over start months and
   await expect(list.getByText("INFY", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   // a second stock: the shares split evenly and must add up to 100
-  await page.getByPlaceholder(/Search a stock, index or F&O/).fill("TCS");
+  await page.getByPlaceholder(/Search a stock or ETF/).fill("TCS");                 // a SIP takes stocks and ETFs only (R1-040)
   await page.locator(".results button", { hasText: "TCS" }).first().click();
   await expect(page.getByLabel("Share for TCS (%)")).toHaveValue("50");
   await page.getByLabel("Share for INFY (%)").fill("70");

@@ -17,14 +17,22 @@ type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "children">
   id?: string;
   /** A control that is not a plain text box (a StockPicker, a select with className "k-input"): given the id for the label. */
   children?: ReactNode | ((id: string) => ReactNode);
+  /** What's wrong with the value, said under the box (and to screen readers); the box gets a red edge. */
+  error?: string | null;
+  /** A short line under the box: the allowed range ("1 to 28"), a format. Hidden while there's an error. */
+  hint?: string;
 };
 
 /** One labelled box in a FormGrid. The label stays on one line (an (i) holds the detail), "· optional" marks what can be
- * left empty, and a unit sits inside the box. */
-export function Field({ label, info, infoLabel, optional, unit, wide, id, children, ...input }: FieldProps) {
+ * left empty, and a unit sits inside the box. `error` and `hint` sit under it (see lib/validate for the checks). */
+export function Field({ label, info, infoLabel, optional, unit, wide, id, children, error, hint, ...input }: FieldProps) {
   const auto = useId();
   const fid = id ?? auto;
-  const box = typeof children === "function" ? children(fid) : children ?? <input {...input} id={fid} className="k-input" />;
+  const msgId = `${fid}-msg`;
+  const box = typeof children === "function" ? children(fid) : children ?? (
+    <input {...input} id={fid} className={`k-input${error ? " bad" : ""}`} aria-invalid={error ? true : undefined}
+      aria-describedby={error || hint ? msgId : undefined} />
+  );
   return (
     <div className={`k-field${wide ? " wide" : ""}`}>
       <div className="k-label-row">
@@ -36,6 +44,8 @@ export function Field({ label, info, infoLabel, optional, unit, wide, id, childr
           {box}<span className="u" aria-hidden="true">{unit}</span>
         </div>
       ) : box}
+      {error ? <span id={msgId} className="k-field-msg bad" role="alert">{error}</span>
+        : hint ? <span id={msgId} className="k-field-msg">{hint}</span> : null}
     </div>
   );
 }

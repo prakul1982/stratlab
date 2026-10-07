@@ -6,7 +6,7 @@ import { asOf as asOfText, dateOnly, inr, money, qty as qtyText, signTone } from
 import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { Badge, Card, CardHead, ConfirmDialog, DataTable, EmptyState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 import { pickFy, rememberFy } from "../../lib/fy";
 
 /* /money/tax-tools: dividends and the TDS on them, advance tax by date, and the long-term exemption, built on the tax
@@ -320,7 +320,7 @@ function PaymentsForm({ v, onSaved }: { v: Advance; onSaved: (a: Advance) => voi
 function PaymentRow({ i, r, onChange, onRemove }: { i: number; r: { d: string; amount: string }; onChange: (r: { d: string; amount: string }) => void; onRemove: () => void }) {
   return (
     <>
-      <Field label="Date paid" type="date" value={r.d} onChange={(e) => onChange({ ...r, d: e.target.value })} aria-label={`Payment ${i + 1} date`} />
+      <DateField label="Date paid" value={r.d} onChange={(d) => onChange({ ...r, d })} ariaLabel={`Payment ${i + 1} date`} />
       <Field label="Amount" unit="₹" inputMode="decimal" value={r.amount} onChange={(e) => onChange({ ...r, amount: e.target.value })} aria-label={`Payment ${i + 1} amount`} />
       <div className="k-field"><button type="button" className="btn quiet" onClick={onRemove} aria-label={`Remove payment ${i + 1}`}>Remove</button></div>
     </>

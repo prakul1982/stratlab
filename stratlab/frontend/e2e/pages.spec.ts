@@ -376,7 +376,7 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   if (info.project.name === "phone") await touchable(page);
   // the keyboard: down to Reliance, Enter picks it and fills the NSE symbol
   const at = options.findIndex((t) => /Reliance/.test(t));
-  for (let i = 0; i < at; i++) await box.press("ArrowDown");
+  for (let i = 0; i <= at; i++) await box.press("ArrowDown");                 // nothing is marked until the first ↓ (R1-017)
   await expect(reliance).toHaveAttribute("aria-selected", "true");
   await box.press("Enter");
   await expect(box).toHaveValue("RELIANCE");
