@@ -64,10 +64,12 @@ export function Shell({ children }: { children: ReactNode }) {
   const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to));
   // the menu comes from the address itself (lib/spaces menuView), so it can't lag behind a saved choice that loads later
   const space = menuView(path, saved, keepsMine);
-  // remember it on this device, so the front door opens the space last used (only real spaces and Mine's own pages)
+  // remember it on this device, so the front door opens the space last used (only real spaces and Mine's own pages).
+  // Runs when the page changes, not when the saved choice does: picking a space in the switcher saves it first and
+  // navigates a moment later, and the page still showing must not save its own space over that choice.
   useEffect(() => {
     if (space !== saved && (spaceOf(path) || MINE_PAGES.includes(path) || path === MINE_HOME)) setSpace(space, false);
-  }, [space, saved, path]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [space, path]);   // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => { document.title = titleFor(path); }, [path]);    // each page's own title; a page may sharpen it
   // pinned first, then the latest; the one you have open always stays in the list
   const openId = path.match(/^\/n\/([^/]+)/)?.[1];

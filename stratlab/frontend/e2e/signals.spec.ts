@@ -26,7 +26,7 @@ async function open(page: Page, where: string, ready: string, who: ReturnType<ty
     return true;
   }).catch(() => false);
   if (answered) await page.goto(where);
-  await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   return errors;
 }
 

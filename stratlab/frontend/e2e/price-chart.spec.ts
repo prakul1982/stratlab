@@ -152,7 +152,8 @@ async function exercise(page: Page, chart: Locator, phone: boolean, key: string)
   await page.keyboard.press("Delete");
   await expect(chart).toHaveAttribute("data-drawings", "0");
 
-  // zoom in, then reset
+  // zoom in, then reset: the first view is measured after a reset, so the price axis has already settled on its labels
+  await chart.getByRole("button", { name: "Reset the view" }).click();
   const spacing = await num(chart, "spacing");
   if (phone) await chart.locator(".pc-stage").press("+");
   else await chart.getByRole("button", { name: "Zoom in" }).click();

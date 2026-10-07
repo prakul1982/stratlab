@@ -85,7 +85,7 @@ test("the command palette keeps focus inside, Esc closes it and focus goes back 
 
 test("the welcome tour keeps focus inside and gives it back when it closes", async ({ page }) => {
   const errors = await open(page, "/mine", { tour: false });
-  const dialog = page.getByRole("dialog", { name: "What you can do here" });
+  const dialog = page.getByRole("dialog", { name: "A quick tour" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Next" })).toBeFocused();
   expect(await staysIn(page, "[role=dialog]")).toBe(true);

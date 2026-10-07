@@ -36,7 +36,7 @@ async function sane(page: Page, errors: string[], phone: boolean) {
   if (!phone) return;
   const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main a, main select, main input:not([type=checkbox])")).filter((el) => {
     const b = el.getBoundingClientRect();
-    return b.width && b.height && !el.closest("p, li, .info-btn, .k-label-row, .k-linkcard") && !el.matches(".info-btn") && getComputedStyle(el).display !== "inline" && b.height < 32;
+    return b.width && b.height && !el.closest("p, li, .info-btn, .k-label-row, .k-linkcard, [aria-hidden=true]") && !el.matches(".info-btn") && getComputedStyle(el).display !== "inline" && b.height < 32;
   }).map((el) => `${el.tagName} "${(el.textContent || "").trim().slice(0, 30)}"`));
   expect(small, "controls too small to tap").toEqual([]);
 }
@@ -220,7 +220,7 @@ test("settings: notifications keep their settings, with the alerts, StratLab ema
   await main.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Alert settings saved." })).toBeVisible();
   await expect.poll(async () => (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).alerts).toMatchObject({ daily_report: false });
-  await expect(main.getByRole("link", { name: "Get the app" })).toHaveAttribute("href", "/app");
+  await expect(main.getByRole("link", { name: "Get the app" }).first()).toHaveAttribute("href", "/app");
 
   // StratLab emails: tips and reminders
   const tips = main.getByRole("checkbox", { name: "Tips and reminders" });

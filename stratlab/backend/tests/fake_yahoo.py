@@ -69,7 +69,7 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
                                  "splits": {str(split): {"date": split, "numerator": 4, "denominator": 1, "splitRatio": "4:1"}}}
             if "div" in req.url.params.get("events", "") and sym in OTHER_PAYERS and g == 86400 and len(ts) > 40:
                 # a dividend a few days ago (a different day for each company) and, for one, a split: for the US corporate-actions list
-                k = 2 + zlib.crc32(sym.encode()) % 24
+                k = 2 + zlib.crc32(sym.encode()) % 15      # at most 16 trading days back: always inside the four-week window, whatever the weekday or holidays
                 res["events"] = {"dividends": {str(ts[-k]): {"amount": round(0.3 + (zlib.crc32(sym.encode()) % 90) / 100, 2), "date": ts[-k]}}}
                 if sym == "NVDA":
                     res["events"]["splits"] = {str(ts[-9]): {"date": ts[-9], "numerator": 10, "denominator": 1, "splitRatio": "10:1"}}

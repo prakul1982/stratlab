@@ -67,8 +67,9 @@ export function Coachmark({ anchor, label, onClose, children }: { anchor: string
     return () => { window.removeEventListener("resize", again); window.removeEventListener("scroll", again, true); ro?.disconnect(); };
   }, [key]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // focus the step's main button each step; keep Tab inside; Esc closes
-  useEffect(() => { if (note.current) firstFocus(note.current)?.focus(); }, [key]);
+  // focus the step's main button each step, once the note is placed (until then it is hidden, and a hidden control
+  // takes no focus); Tab is kept inside and Esc closes below
+  useEffect(() => { if (placed && note.current) firstFocus(note.current)?.focus(); }, [key, placed]);
   // the kit's one dialog behaviour: Tab kept inside, Esc closes, focus back to what opened the tour
   useDialogFocus(note, true, { onEscape: () => close.current() });
 

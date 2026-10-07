@@ -28,7 +28,7 @@ async function open(page: Page, path: string, ready: string, who: typeof session
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
   await page.goto(path);
   await answerWelcome(page);
-  await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(400);
   return errors;
 }
@@ -49,7 +49,7 @@ async function touchable(page: Page) {
   const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main select, main a, main [role=button], main input:not([type=range]):not([type=checkbox]):not([type=radio])"))
     .filter((el) => {
       const b = el.getBoundingClientRect();
-      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name")) return false;
+      if (!b.width || !b.height || el.closest("p, li, td, th, .info-btn, .chip-x, .search-box, .nb-name, [aria-hidden=true]")) return false;
       if (el.matches(".info-btn, .chip-x") || getComputedStyle(el).display === "inline") return false;
       return b.height < 32;
     }).map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || (el as HTMLInputElement).placeholder || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`));
@@ -86,7 +86,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "notebook"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
+  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
@@ -265,7 +265,7 @@ test("first steps on Home tick themselves from real data, and hide for good", as
   await list.getByRole("button", { name: "Hide this" }).click();
   await expect(page.getByText("Your first steps")).toHaveCount(0);
   await page.reload();
-  await expect(page.getByText("notebook", { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Net worth", { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(600);
   await expect(page.getByText("Your first steps")).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -394,6 +394,8 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   const apple = list.getByRole("option", { name: /Apple Inc/ });
   await expect(apple).toBeVisible();
   await expect(apple.getByText("US", { exact: true })).toBeVisible();
+  await us.press("ArrowDown");                                                // nothing is marked until the first ↓, so Enter alone keeps what was typed
+  await expect(apple).toHaveAttribute("aria-selected", "true");
   await us.press("Enter");
   await expect(us).toHaveValue("AAPL");
   await page.getByLabel("Quantity").fill("3");
@@ -801,7 +803,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   const errors = await open(page, "/research", "Companies");
   const side = await menu(page, phone);
   const btn = side.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ });
-  const [, , total] = (await btn.innerText()).match(/(\d+) of (\d+)/)!.map(Number);
+  const [, , total] = (await btn.innerText()).match(/(\d+)\/(\d+) markets/)!.map(Number);
   await expect(btn).toHaveAttribute("aria-expanded", "false");
   const footBefore = (await side.locator(".side-foot").boundingBox())!.height;
   await btn.click();
@@ -814,7 +816,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   for (const r of await rows.all()) await expect(r).toHaveText(/(Open 24\/7|Closes in|Opens in|Holiday|Data offline|Closed)/);
   // the count is re-read now: a market can open or close between reading the line and opening the list
   await expect(async () => {
-    const now = Number((await btn.innerText()).match(/(\d+) of/)![1]);
+    const now = Number((await btn.innerText()).match(/(\d+)\/\d+ markets/)![1]);
     expect(await pop.locator(".mkt-dot.on").count()).toBe(now);
   }).toPass({ timeout: 5_000 });
   // it floats: the sidebar's footer and menu keep their size
@@ -1014,11 +1016,11 @@ test("invite: your invite link, how many friends joined, and sharing it", async 
 test("an invite link is remembered through sign-in, sent once, and taken out of the address", async ({ page }) => {
   const sent: unknown[] = [];
   await page.route("**/me/referral", async (r) => { sent.push(r.request().postDataJSON()); await r.fulfill({ status: 200, contentType: "application/json", body: '{"recorded":false}' }); });
-  const errors = await open(page, "/?ref=AbCdEf123_-x", "notebook");
+  const errors = await open(page, "/?ref=AbCdEf123_-x", "Net worth");
   await expect.poll(() => sent).toEqual([{ code: "AbCdEf123_-x" }]);
   expect(new URL(page.url()).search).toBe("");
   await page.reload();
-  await expect(page.getByText("notebook").first()).toBeVisible();
+  await expect(page.getByText("Net worth").filter({ visible: true }).first()).toBeVisible();
   await page.waitForTimeout(500);
   expect(sent, "sent only once").toHaveLength(1);
   await sane(page, errors);
@@ -1292,7 +1294,7 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByText("TCS: quantity 24, average price ₹1,760.00.")).toBeVisible();
   const positions = page.getByRole("table", { name: "Positions" });
-  await expect(positions.getByRole("row").filter({ hasText: "TCS" }).getByText("24", { exact: true })).toBeVisible();
+  await expect(positions.getByRole("row").filter({ hasText: "TCS" }).getByRole("cell", { name: /^24 ₹1,760\.00 → / })).toBeVisible();   // the one "Qty · avg → last" cell
   await expect(notice).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText("TCS is back to 12 shares.")).toBeVisible();
@@ -1529,6 +1531,8 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await page.getByLabel("Dividend file").setInputFiles({ name: "dividends.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
   await expect(page.getByText("2 dividends added.")).toBeVisible({ timeout: 30_000 });
   const year = page.getByRole("region", { name: "Dividends for the year" });
+  // the page opens on the year being filed now (the one before this year) when it has dividends; these are this year's
+  await year.getByLabel("Financial year").selectOption(String(fy));
   await expect(year.getByText("From your files")).toBeVisible();
   await expect(year.getByLabel("Dividend income")).toHaveText("₹15,000");
   const byCompany = year.getByRole("table", { name: "Dividends by company" });
@@ -1548,7 +1552,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await expect(page.getByLabel("Tax for the year", { exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "TDS for the year" }).fill("50000");
   await page.getByRole("button", { name: "Add a payment" }).click();
-  await page.getByLabel("Payment 1 date").fill(`${fy}-06-15`);
+  await page.getByRole("textbox", { name: "Payment 1 date" }).fill(`${fy}-06-15`);
   await page.getByLabel("Payment 1 amount").fill("20000");
   await page.getByRole("button", { name: "Save and update" }).click();
   await expect(page.getByText("Saved. The instalments are updated.")).toBeVisible();

@@ -30,7 +30,7 @@ async function go(page: Page, path: string, ready: string) {
   const ask = page.getByRole("dialog", { name: "What brings you here?" });
   const answered = await ask.waitFor({ timeout: 3000 }).then(async () => { await ask.getByRole("button", { name: /^All of it/ }).click(); return true; }).catch(() => false);
   if (answered) await page.goto(path);
-  await expect(page.getByText(ready, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(500);
 }
 async function mine(request: APIRequestContext, n: number) {
