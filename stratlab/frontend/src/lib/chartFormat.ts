@@ -2,7 +2,7 @@
  * axes that pick their own step (minutes, hours, days, months, years) with labels like "10:15", "1 Oct", "Oct '26".
  * Shared by every chart in the app, so the same number reads the same way everywhere. */
 
-import { currencySymbol, fmtDate, fmtDateTime } from "./format";
+import { currencySymbol, fmtDate, fmtDateTime, SHORT_INR, SHORT_INTL, shortStep } from "./format";
 
 const MINUS = "−";
 const sign = (v: number) => (v < 0 ? MINUS : "");
@@ -37,14 +37,8 @@ export function niceDomain(lo: number, hi: number, count = 5, includeZero = fals
 export function compact(v: number, indian = true, dp = 1): string {
   const a = Math.abs(v);
   const f = (x: number, d = dp) => trim(x.toFixed(d));
-  if (indian) {
-    if (a >= 1e7) return `${sign(v)}${f(a / 1e7, a >= 1e9 ? 0 : dp)}Cr`;
-    if (a >= 1e5) return `${sign(v)}${f(a / 1e5)}L`;
-  } else {
-    if (a >= 1e9) return `${sign(v)}${f(a / 1e9)}B`;
-    if (a >= 1e6) return `${sign(v)}${f(a / 1e6)}M`;
-  }
-  if (a >= 1e3) return `${sign(v)}${f(a / 1e3)}k`;
+  const step = shortStep(a, (indian ? SHORT_INR : SHORT_INTL).map(([d, u]) => [d, u, dp] as [number, string, number]));
+  if (step) return `${sign(v)}${f(a / step[0], indian && step[1] === "Cr" && a >= 1e9 ? 0 : dp)}${step[1]}`;
   return `${sign(v)}${f(a, a >= 100 ? 0 : a >= 1 ? 2 : 4)}`;
 }
 
@@ -52,11 +46,6 @@ export function compact(v: number, indian = true, dp = 1): string {
 export function moneyCompact(v: number, currency = "INR", dp = 1): string {
   const c = compact(v, currency === "INR", dp);
   return c.startsWith(MINUS) ? MINUS + currencySymbol(currency) + c.slice(1) : currencySymbol(currency) + c;
-}
-
-/** Money in full for a tooltip: ₹12,50,000 or $12,400.50. */
-export function moneyFull(v: number, currency = "INR", dp = 0): string {
-  return sign(v) + currencySymbol(currency) + Math.abs(v).toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: dp, minimumFractionDigits: dp });
 }
 
 /** A percentage tick: 12%, −3.5%, +4% when signed. */

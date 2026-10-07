@@ -6,8 +6,6 @@ For holdings a statement or a broker *states* what is held, so a sync sets the q
 would double a share count each time the same file arrived) and keeps the average price already known when the
 source has none. Whatever came from a source and is no longer in its latest read is taken out (sold). Where two sources
 name the same stock, the live broker wins over a statement and a statement over a file or typed entry."""
-from datetime import datetime, timezone
-
 from .. import holdings, plans
 
 PRIORITY = {"kite": 3, "ibkr": 3, "cas": 2}
@@ -95,7 +93,3 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
         holdings.save(uid, deps.with_sectors(merged, known), source)
     return {"saved": bool(saved), "count": len(found), "unmatched": missed[:50], "unmatched_count": len(missed),
             "over_limit": over, **counts}
-
-
-def stamp_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")

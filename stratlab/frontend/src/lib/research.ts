@@ -123,17 +123,8 @@ export function useWatchlist() {
 }
 
 /* ---------- formatting ---------- */
-/** Big money in the units people say: $4.31T, $12.4B, ₹1.51 lakh cr, ₹8,500 cr. */
-export function bigMoney(v: number | null | undefined, currency: string): string {
-  if (v == null || !Number.isFinite(v)) return "–";
-  const s = currencySymbol(currency);
-  if (currency === "INR") return inrCompact(v);
-  const a = Math.abs(v);
-  if (a >= 1e12) return `${s}${(v / 1e12).toFixed(2)}T`;
-  if (a >= 1e9) return `${s}${(v / 1e9).toFixed(1)}B`;
-  if (a >= 1e6) return `${s}${(v / 1e6).toFixed(0)}M`;
-  return `${s}${Math.round(v).toLocaleString()}`;
-}
+/* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. */
+export { bigMoney } from "./format";
 
 /** The currency a US filing's amounts are in: "$", or a foreign filer's own ("CAD million" → "CAD"). */
 export function millionsOf(unit: string | null | undefined): string {

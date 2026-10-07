@@ -9,7 +9,7 @@ import hashlib
 import re
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -229,6 +229,13 @@ def sync_user(uid: str) -> dict:
     except FlexError as e:
         state.update(uid, "ibkr", status=e.code, detail=e.message, tried_at=state.now())
         raise
+    except Exception as e:
+        # anything else (a storage error while saving, say) is a failed try as well: without it the day's try wasn't
+        # recorded, and the job read the statement from IBKR again every half hour all day
+        print("IBKR daily read failed:", mask(type(e).__name__))
+        msg = "Something went wrong saving the statement. It will be tried again tomorrow."
+        state.update(uid, "ibkr", status="failed", detail=msg, tried_at=state.now())
+        raise FlexError("failed", msg) from None
 
 
 def due(box: dict, now: datetime) -> bool:

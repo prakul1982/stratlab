@@ -7,7 +7,8 @@ tax at the user's marginal rate.
 The marginal rate is a slab picked on the page (everyone), or worked out from the user's own tax estimate inputs for
 this financial year (Basic): the extra tax on the next ₹10,000 of interest, with the rebate, surcharge and cess.
 Rates and arithmetic with their dates: no ranking, no "best" deposit and no corporate bonds or bank rate tables."""
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 
@@ -16,7 +17,16 @@ from .auth import current_profile
 from .plans import FEATURE_PLAN, PLANS, allows
 from .responses import err, ok
 
+IST = ZoneInfo("Asia/Kolkata")
 CESS = tax_total.CESS
+
+
+def today() -> date:
+    """Today in India: the server runs on UTC, whose date is the day before from midnight to 5:30 AM IST (the financial
+    year turns on 1 April, and a deposit matures on its date, in India)."""
+    return datetime.now(IST).date()
+
+
 SLABS = (0, 5, 10, 15, 20, 25, 30)
 PROBE = 10000.0                    # the marginal rate is the tax on this much more interest
 
@@ -117,7 +127,7 @@ def deposits(uid: str, t: float, at: date) -> list[dict]:
 def tax_basis(profile: dict, slab: float | None, own: bool) -> tuple[float, str, dict | None, int]:
     """(tax rate as a fraction, "estimate" or "slab", the estimate's marginal-rate facts, the financial year). The
     user's own estimate counts only on a plan with `rates_slab`; everyone else gets the picked slab (30% by default)."""
-    fy = tax_lots.fy_of(date.today().isoformat())
+    fy = tax_lots.fy_of(today().isoformat())
     mine = None
     if allows(profile["_plan"], "rates_slab") and own:
         inputs = tax_total.load_inputs(profile["id"]).get(fy)
@@ -132,14 +142,14 @@ def networth_deposits(profile: dict) -> dict:
     """What Net worth shows beside each FD and RD: the interest to maturity after tax, at the same rate the Rates page
     uses by default (the user's own estimate on a plan with `rates_slab`, else the 30% slab)."""
     t, basis, _, _ = tax_basis(profile, None, True)
-    rows = deposits(profile["id"], t, date.today())
+    rows = deposits(profile["id"], t, today())
     return {"tax_rate": round(t * 100, 2), "basis": basis,
             "items": {r["id"]: {"interest": r["interest"], "interest_after_tax": r["interest_after_tax"]} for r in rows}}
 
 
 def view(profile: dict, slab: float | None, own: bool) -> dict:
     full = allows(profile["_plan"], "rates_slab")
-    at = date.today()
+    at = today()
     t, basis, mine, fy = tax_basis(profile, slab, own)
     rbi = rbi_rates.current()
     r = rbi["rates"]

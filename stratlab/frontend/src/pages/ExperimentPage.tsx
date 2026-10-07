@@ -256,7 +256,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={nb.name}
-        lede={<><Link to={`/n/${nb.id}`} className="link">← Back to the notebook</Link> · {e.label} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(String(new Date(e.range.from).getFullYear()), String(new Date(e.range.to).getFullYear()))} · {tradeCount(st.n)}</>}
+        lede={<><Link to={`/n/${nb.id}`} className="link">← Back to the notebook</Link> · {e.label} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(e.range.from.slice(0, 4), e.range.to.slice(0, 4))} · {tradeCount(st.n)}</>}
         actions={<>
           <ShareMenu nb={nb} e={e} />
           <button type="button" className="btn" onClick={() => nav(`/n/${nb.id}`)}>Next experiment →</button>

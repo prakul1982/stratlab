@@ -38,7 +38,13 @@ RULES: list[tuple[str, str, str, list[str]]] = [
     ("kmp_resign", "Director or key officer resigned", "amber", [r"resignation", r"resigned", r"cessation"]),
     ("ncd", "Debt raise (NCDs or bonds)", "amber", [r"non[- ]convertible debentures", r"\bncds?\b", r"commercial paper", r"\bbonds?\b"]),
     ("results", "Financial results", "info", [r"financial results", r"outcome of board meeting.{0,60}results", r"\bresults\b"]),
-    ("concall", "Earnings call", "info", [r"transcript", r"earnings call", r"conference call", r"analysts?/institutional investor meet", r"investor meet"]),
+    # a shareholders' meeting's own transcript, recording or deck is neither an earnings call nor an analyst meeting
+    ("agm", "Shareholder meeting", "info", [r"(?:transcript|recording|audio|proceedings|presentation|minutes)\b.{0,100}\b(?:annual|extra[- ]?ordinary|general) (?:general )?meeting",
+                                             r"\b(?:annual|extra[- ]?ordinary) general meeting\b.{0,100}\b(?:transcript|recording|audio)",
+                                             r"\b[ae]gm\b.{0,60}\b(?:transcript|recording|audio)", r"\b(?:transcript|recording|audio)\b.{0,60}\b[ae]gm\b",
+                                             r"presentation .{0,60}(?:shareholders|postal ballot)"]),
+    ("concall", "Earnings call", "info", [r"transcript", r"earnings call", r"conference call"]),
+    ("investor_meet", "Analyst or investor meeting", "info", [r"analysts?/institutional investor meet", r"investor meet", r"analysts? meet"]),
     ("presentation", "Investor presentation", "info", [r"investor presentation", r"presentation"]),
     ("dividend", "Dividend", "info", [r"dividend"]),
     ("buyback", "Buyback", "info", [r"buy[- ]?back"]),
@@ -58,11 +64,40 @@ def ist_now() -> datetime:
     return datetime.now(IST).replace(tzinfo=None)
 
 
-def classify(desc: str, text: str) -> tuple[str, str]:
-    """(category id, severity) for one announcement, from the exchange's subject and summary."""
+# NSE files every meeting with analysts or investors under one subject that names calls too, so a call is told apart
+# by the rest of the filing: an earnings or conference call, its audio recording or its transcript. A one-on-one
+# meeting with an investor has no transcript to file; an earnings call has to have one.
+MEET_SUBJECT = re.compile(r"analysts?\s*/\s*institutional investors? meet\s*/\s*con\.? ?call updates?", re.I)
+CALL = re.compile(r"earnings? (?:conference )?call|conference call|con\.? ?call|concall|results? call|post[- ]results?|"
+                  r"investors?(?: and analysts?)? call|analysts?(?: and investors?)? call|audio|recording|\btran?scr?i?pts?\b", re.I)
+
+
+def file_words(url: str | None) -> str:
+    """The words in a filing's PDF name: NSE keeps the name the company uploaded ("ACME_01082026190000_Q1FY27
+    ConcallTranscript.pdf"), which often says what the filing is when its subject doesn't."""
+    from urllib.parse import unquote, urlsplit
+    url = (url or "")[:500]                   # from the exchange's feed: untrusted, and only the name is wanted
+    try:
+        path = urlsplit(url).path
+    except ValueError:                        # a malformed link ("https://[..."): its words still count
+        path = url.split("?", 1)[0].split("#", 1)[0]
+    name = unquote(path.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", re.sub(r"[_\-.+]+", " ", name))
+
+
+def is_call(subject: str | None, text: str | None, url: str | None = None) -> bool:
+    """Whether a filing about a meeting with analysts or investors is about an earnings or conference call."""
+    return bool(CALL.search(f"{MEET_SUBJECT.sub(' ', subject or '')} {text or ''} {file_words(url)}"))
+
+
+def classify(desc: str, text: str, url: str | None = None) -> tuple[str, str]:
+    """(category id, severity) for one announcement, from the exchange's subject and summary (and its file's name).
+    Earnings calls, meetings with analysts or investors, and shareholders' meetings are three different kinds."""
     hay = f"{desc or ''} || {text or ''}"
     for cid, _, sev, rx in _COMPILED:
         if any(r.search(hay) for r in rx):
+            if cid == "investor_meet" and is_call(desc, text, url):
+                return "concall", sev
             return cid, sev
     return "other", "info"
 
@@ -91,8 +126,8 @@ def normalise(raw: list[dict]) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        cid, sev = classify(subject, text)
         link = str(r.get("attchmntFile") or "")
+        cid, sev = classify(subject, text, link)
         out.append({"id": str(r.get("seq_id") or abs(hash(key)))[:40], "at": when.isoformat(timespec="minutes"),
                     "category": cid, "label": LABEL[cid], "severity": sev, "subject": subject, "text": text,
                     "url": link if link.startswith("https://") else None})

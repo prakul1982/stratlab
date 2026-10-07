@@ -20,29 +20,45 @@ export function price(v: number | null | undefined, currency?: string | null): s
   return money(v, currency, dp);
 }
 
-/** Prices on a chart axis: whole numbers once they're big, more decimals when small. */
-export function priceAxis(v: number, currency?: string | null): string {
-  const a = Math.abs(v);
-  return money(v, currency, a >= 100 ? 0 : a >= 1 ? 2 : 4);
+/** Size steps of a short figure: [divisor, suffix, decimals], largest first. */
+export const SHORT_INR: [number, string, number][] = [[1e7, "Cr", 1], [1e5, "L", 2], [1e3, "k", 1]];
+export const SHORT_INTL: [number, string, number][] = [[1e9, "B", 1], [1e6, "M", 1], [1e3, "k", 1]];
+
+/** The step a size is written in. A size that rounds up to the next step's size is written in that step: 99,999 is
+ * ₹1.00L, not ₹100.0k; 9,999,999 is ₹1.0Cr, not ₹100.00L; 999,999 dollars is $1.0M, not $1000.0k. */
+export function shortStep(a: number, steps: [number, string, number][]): [number, string, number] | null {
+  for (let i = 0; i < steps.length; i++) {
+    const [div, , dp] = steps[i];
+    if (a < div) continue;
+    const up = i > 0 ? steps[i - 1] : null;
+    return up && Number((a / div).toFixed(dp)) >= up[0] / div ? up : steps[i];
+  }
+  return null;
 }
 
 /** Short money for chart axes: ₹5.2L, $12.4k, $1.2M. */
 export function moneyShort(v: number, currency?: string | null): string {
   const a = Math.abs(v), sign = v < 0 ? "−" : "", s = currencySymbol(currency);
-  if (currency === "INR") {
-    if (a >= 1e7) return `${sign}${s}${(a / 1e7).toFixed(1)}Cr`;
-    if (a >= 1e5) return `${sign}${s}${(a / 1e5).toFixed(2)}L`;
-  } else {
-    if (a >= 1e9) return `${sign}${s}${(a / 1e9).toFixed(1)}B`;
-    if (a >= 1e6) return `${sign}${s}${(a / 1e6).toFixed(1)}M`;
-  }
-  if (a >= 1e3) return `${sign}${s}${(a / 1e3).toFixed(1)}k`;
+  const step = shortStep(a, currency === "INR" ? SHORT_INR : SHORT_INTL);
+  if (step) return `${sign}${s}${(a / step[0]).toFixed(step[2])}${step[1]}`;
   return `${sign}${s}${a.toFixed(a < 10 ? 2 : 0)}`;
+}
+
+/** Big money in the units people say: $4.31T, $12.4B, ₹1.51 lakh cr, ₹8,500 cr. */
+export function bigMoney(v: number | null | undefined, currency: string): string {
+  if (v == null || !Number.isFinite(v)) return "–";
+  const s = currencySymbol(currency);
+  if (currency === "INR") return inrCompact(v);
+  const a = Math.abs(v);
+  const step = shortStep(a, [[1e12, "T", 2], [1e9, "B", 1], [1e6, "M", 0]]);      // $999.96B reads $1.00T, not $1000.0B
+  if (step) return `${v < 0 ? "-" : ""}${s}${(a / step[0]).toFixed(step[2])}${step[1]}`;
+  return `${s}${Math.round(v).toLocaleString()}`;
 }
 
 export function pct(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return "–";
-  return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(dp) + "%";
+  const shown = Math.abs(v).toFixed(dp);
+  return (+shown === 0 ? "" : v > 0 ? "+" : "−") + shown + "%";           // a change that rounds to nothing has no sign: "0.0%", not "−0.0%"
 }
 
 export const signClass = (v: number | null | undefined) => (v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "");
@@ -91,6 +107,13 @@ export function fmtDateTime(v: DateInput, o: DateOpts & { seconds?: boolean } = 
 export function when(iso: string | null | undefined, tz: string, intraday: boolean): string {
   if (!iso) return "–";
   return intraday ? fmtDateTime(iso, { tz, year: false }) : fmtDate(iso, { tz });
+}
+
+/** A date as written ("2025-03-10") is a calendar day, not an instant: `new Date("2025-03-10")` is midnight UTC, which a
+ * reader west of Greenwich (every US reader) sees as the 9th. A date with a time keeps its instant. */
+export function asDate(iso: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
 }
 
 export function dateOnly(iso: string | null | undefined): string {

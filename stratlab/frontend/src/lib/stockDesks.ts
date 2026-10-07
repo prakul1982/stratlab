@@ -68,8 +68,6 @@ export function sharesShort(v: number | null | undefined): string {
 }
 export const rupees = (v: number | null | undefined, dp = 2) =>
   v == null ? "–" : `${v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
-export const croreText = (v: number | null | undefined) =>
-  v == null ? "–" : `₹${v.toLocaleString("en-IN", { maximumFractionDigits: v >= 100 ? 0 : 2 })} crore`;
 export const dayText = (iso: string | null | undefined) =>
   !iso ? "–" : fmtDate(iso.slice(0, 10));
 export const dayShort = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });

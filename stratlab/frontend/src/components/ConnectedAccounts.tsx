@@ -310,7 +310,7 @@ function DocUpload({ kind, saved, set }: { kind: keyof typeof DOCS; saved: Recor
   };
   const summary = saved ? kind === "ais" ? `Saved for ${Object.keys(saved).sort().map((y) => `${y}-${String(Number(y) + 1).slice(2)}`).join(", ")}` : `Saved${saved.as_of ? ` as of ${dateOnly(String(saved.as_of))}` : ""}` : "Nothing saved yet";
   return (
-    <div className="k-field" data-testid={`doc-${kind}`}>
+    <div className="k-field wide" data-testid={`doc-${kind}`}>
       <div className="k-line-row">
         <span className="k-line-text"><b>{d.title}</b><span className="k-sub-line">{summary}</span></span>
         {!read && <UploadButton label="Upload" accept={d.accept} ariaLabel={`${d.title} file`} busy={busy} quiet onFiles={(f, r) => void pick(f, r)} />}
