@@ -61,7 +61,8 @@ test("test a SIP: from a company page, a split, the spread over start months and
   // the welcome question answered up front, so it can't open over the page later on a slow machine
   await request.put(`${API}/me/prefs`, { headers: { Authorization: `Bearer load-${n}` }, data: { focus: "both", level: "some", space: "all" } });
   const errors = await open(page, "/research/IN/INFY", "INFY", n);
-  await page.getByRole("link", { name: "Test a SIP" }).click();
+  await page.locator("main").getByRole("button", { name: "More", exact: true }).first().click();      // under More on a company page
+  await page.getByRole("menuitem", { name: "Test a SIP" }).click();
   await expect(page).toHaveURL(/\/money\/sip-test\?symbol=INFY/);
   await expect(page.getByRole("heading", { name: "Test a SIP" })).toBeVisible();
   const list = page.getByRole("list", { name: "In this SIP" });

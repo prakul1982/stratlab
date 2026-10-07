@@ -20,6 +20,13 @@
 @media (max-width: 640px) { .inv-head { grid-template-columns: minmax(0, 1fr); } }
 .inv-badges { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .inv-badges:empty { display: none; }
+/* the price, its 52-week range and the next results day, in one column on the right of the header */
+.inv-head-price { width: min(280px, 100%); gap: var(--s2); }
+.inv-rail52 { display: grid; gap: var(--s1); }
+.inv-rail52 .k-spread { gap: var(--s3); }
+@media (max-width: 640px) { .inv-head-price { width: 100%; } }
+/* the AI read when there is none: one calm line and one button */
+.ai-read-off { justify-content: space-between; }
 
 /* the day's market: a few index levels */
 

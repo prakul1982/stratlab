@@ -10,6 +10,16 @@ import { Badge, Card, CardHead, Field, FormActions, ErrorState, FormGrid, Skelet
 /** Share a company: draws its fact card, makes a public link that previews as the card (and opens the company's
  *  public page), then the phone's share sheet or, on a computer, the link copied with the image a click away. */
 export function ShareCompanyButton({ region, symbol }: { region: "IN" | "US"; symbol: string }) {
+  const { run, busy } = useShareCompany(region, symbol);
+  return (
+    <button className="btn quiet sm" onClick={run} disabled={busy} title="A card with this company's facts, and a link that previews as it">
+      <Share size={16} /> {busy ? "Making the card…" : "Share"}
+    </button>
+  );
+}
+
+/** Make the company's fact card and share its link: a button runs it, or a page's own menu (a company page's More). */
+export function useShareCompany(region: "IN" | "US", symbol: string) {
   const { notify, fail } = useApp();
   const [busy, setBusy] = useState(false);
   const run = async () => {
@@ -28,11 +38,7 @@ export function ShareCompanyButton({ region, symbol }: { region: "IN" | "US"; sy
       else if (r === "shown") notify(`Your link: ${url}`, save);
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
-  return (
-    <button className="btn quiet sm" onClick={run} disabled={busy} title="A card with this company's facts, and a link that previews as it">
-      <Share size={16} /> {busy ? "Making the card…" : "Share"}
-    </button>
-  );
+  return { run, busy };
 }
 
 type Invites = { code: string; link: string; joined: number; months?: number; free_basic_until?: string | null; banked_days?: number;

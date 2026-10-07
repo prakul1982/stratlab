@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, asOf, pct, price, safeHref } from "../lib/format";
 import { HELP } from "../lib/help";
@@ -18,7 +18,10 @@ import { loadSurveillance } from "../lib/surveillance";
 import { loadEtfGaps } from "../lib/etfGaps";
 import { loadFoChanges } from "../lib/foChanges";
 import { AlertButton } from "../components/AlertForm";
-import { ShareCompanyButton } from "../components/ShareCompany";
+import { useShareCompany } from "../components/ShareCompany";
+import { MoreMenu } from "../components/MoreMenu";
+import { suggestions, type Suggestion } from "../components/CompanyCombobox";
+import { useDocTitle } from "../lib/title";
 import { DealsPanel } from "../components/Deals";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { NamedHoldersPanel } from "../components/NamedHolders";
@@ -114,6 +117,37 @@ export function ResearchHome() {
 }
 
 /* ================= One company ================= */
+/** An outside page in a new tab (only http and https addresses). */
+const openOut = (url: string) => { const h = safeHref(url); if (h) window.open(h, "_blank", "noopener,noreferrer"); };
+
+/** A symbol that isn't listed: say so plainly, offer the listed companies whose name or symbol is close, and a search box.
+ * Nothing failed, so there is no "Try again". */
+function NoSuchCompany({ region, sym, eyebrow }: { region: Region; sym: string; eyebrow: string }) {
+  const [near, setNear] = useState<Suggestion[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    const q = sym.replace(/[^A-Z0-9&]/gi, "").slice(0, 6);       // the start of what was typed finds near spellings
+    (q.length >= 2 ? suggestions(q, region) : Promise.resolve([])).then((r) => live && setNear(r.slice(0, 5))).catch(() => live && setNear([]));
+    return () => { live = false; };
+  }, [region, sym]);
+  return (
+    <div className="k-page">
+      <PageHeader eyebrow={eyebrow} title={`No listed company called ${sym}`} />
+      <Card>
+        <EmptyState title={`${sym} isn't a ${region === "IN" ? "NSE symbol or BSE code" : "US ticker"} we know`}>
+          {region === "IN" ? "Use the NSE symbol (like RELIANCE or TCS), the BSE code for a company listed only on BSE, or search by name below." : "Use the exact ticker (like AAPL or NVDA), or search by name below."}
+        </EmptyState>
+        {near && near.length > 0 && (
+          <div className="k-row" aria-label="Close matches">
+            <span className="k-small k-muted">Did you mean</span>
+            {near.map((s) => <Link key={`${s.market}:${s.id}`} className="btn quiet sm" to={`/research/${s.market}/${encodeURIComponent(s.id)}`} title={s.name}>{s.symbol}</Link>)}
+          </div>
+        )}
+        <OpenCompany region={region} label="Look up a company" autoFocus />
+      </Card>
+    </div>
+  );
+}
 export function CompanyPage() {
   const { region: r = "IN", symbol = "" } = useParams();
   const region: Region = r.toUpperCase() === "US" ? "US" : "IN";
@@ -121,13 +155,17 @@ export function CompanyPage() {
   const { fail, focus } = useApp();
   const test = useTestOnStratLab();
   const [c, setC] = useState<Company | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; missing: boolean } | null>(null);
   const [results, setResults] = useState<{ next: ResultRow | null; last: ResultRow | null } | null>(null);
   const [tries, setTries] = useState(0);
+  const nav = useNavigate();
+  const share = useShareCompany(region, sym);
+  useDocTitle(c ? `${c.symbol}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : sym);
   useEffect(() => {
     let live = true;
     setC(null); setError(null); setResults(null);
-    researchApi.company(region, sym).then((x) => live && setC(x)).catch((e) => live && setError((e as Error).message));
+    researchApi.company(region, sym).then((x) => live && setC(x))
+      .catch((e) => live && setError({ message: (e as Error).message, missing: (e as ApiError).status === 404 }));
     // what the page shows under the company's name loads alongside it, not after it
     preloadPriceChart();
     if (region === "IN") { void loadSurveillance(); void loadEtfGaps(); void loadFoChanges(); }
@@ -138,11 +176,12 @@ export function CompanyPage() {
   const nextResults = results?.next?.date ?? c?.next_earnings?.date ?? null;
   const eyebrow = eyebrowOf("/research");
 
+  if (error?.missing) return <NoSuchCompany region={region} sym={sym} eyebrow={eyebrow} />;
   if (error) return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrow} title={`Couldn't open ${sym}`} />
       <Card>
-        <ErrorState title={`${sym} couldn't be opened`} action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>
+        <ErrorState title={`${sym} couldn't be opened`} action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error.message}</ErrorState>
         <OpenCompany region={region} label="Look up another company" />
       </Card>
     </div>
@@ -156,6 +195,8 @@ export function CompanyPage() {
 
   const ccy = c.currency || (region === "IN" ? "INR" : "USD");
   const wiki = c.about.wiki;
+  const deepTo = `/research/${region}/${encodeURIComponent(c.symbol)}/deep`;
+  const lead = focus === "invest" || !c.testable ? "deep" : "test";
   const deep = (cls: string) => <Link className={`btn ${cls} sm`} to={`/research/${region}/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>;
   const wrap = (title: string, id: string, info: string) => (body: React.ReactNode, right?: React.ReactNode) => (
     <Card id={id}><CardHead title={title} info={info} actions={right} />{body}</Card>
@@ -183,30 +224,36 @@ export function CompanyPage() {
               <IndexBadges region={region} symbol={c.symbol} />
             </div>
           </div>
-          <Change q={c.quote} currency={ccy} />
+          <div className="k-stack inv-head-price">
+            <Change q={c.quote} currency={ccy} />
+            <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} compact />
+            {/* the next results day is a fact about the company: a line with a link, not another button */}
+            {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
+            {!nextResults && results?.last?.out && (results.last.out.url
+              ? <a className="link k-small" href={safeHref(results.last.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.last.out.at)} ↗</a>
+              : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
+          </div>
         </div>
+        {/* one main action (what this person came for), Watch and an alert; the rest under More */}
         <div className="k-row">
-          {focus === "invest" && deep("blue")}
-          {c.testable && <button className={`btn ${focus === "invest" && region === "IN" ? "outline" : "blue"} sm`} onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
-          {focus !== "invest" && deep("outline")}
+          {lead === "deep" ? deep("blue") : <button className="btn blue sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
           <StarButton region={region} symbol={c.symbol} name={c.name} />
-          {nextResults && <Link className="btn quiet sm" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
-          {!nextResults && results?.last?.out && (results.last.out.url
-            ? <a className="btn quiet sm" href={safeHref(results.last.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.last.out.at)} ↗</a>
-            : <Link className="btn quiet sm" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
           <AlertButton region={region} symbol={c.symbol} />
-          <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${c.symbol}`}>Compare</Link>
-          <ShareCompanyButton region={region} symbol={c.symbol} />
-          {region === "IN" && <Link className="btn quiet sm" to={`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`}>Test a SIP</Link>}
-          {c.links.map((l) => <a key={l.url} className="btn quiet sm" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}
-          {c.website && <a className="btn quiet sm" href={safeHref(c.website)} target="_blank" rel="noopener noreferrer">Website ↗</a>}
+          <MoreMenu items={[
+            ...(lead === "deep" ? (c.testable ? [{ label: `Test a strategy on ${c.symbol}`, run: () => test(c) }] : []) : [{ label: "Deep dive: business, capex, management", run: () => nav(deepTo) }]),
+            { label: "Compare with another company", run: () => nav(`/research/compare?region=${region}&a=${c.symbol}`) },
+            { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
+            ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
+            ...c.links.map((l) => ({ label: `${l.label} ↗`, run: () => openOut(l.url) })),
+            ...(c.website ? [{ label: "Company website ↗", run: () => openOut(c.website!) }] : []),
+          ]} />
         </div>
       </Card>
       <SourcesNote sources={c.sources} />
       <Card><PriceChart region={region} symbol={c.symbol} currency={ccy} /></Card>
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} quiet />}
 
-      <div className="k-cols">
+      <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
         {(wiki || c.about.profile) && (
           <Card>
             <CardHead title="What they do" info="From Wikipedia and the company's own profile: facts, not AI." />
@@ -217,13 +264,12 @@ export function CompanyPage() {
             {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">More on Wikipedia ↗</a>}
           </Card>
         )}
-        {c.range52.low != null && <Card><CardHead title="Where the price sits" info={HELP.research52} /><Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} /></Card>}
         {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
       </div>
 
       {c.metrics.length > 0 && (
         <Card>
-          <CardHead title="Key numbers" info={HELP.researchMetrics} />
+          <CardHead title="Key numbers" info={HELP.researchMetrics} actions={<Link className="btn quiet sm" to={deepTo}>10 years in the deep dive →</Link>} />
           <MetricsGrid groups={c.metrics} currency={ccy} industry={c.industry} />
         </Card>
       )}

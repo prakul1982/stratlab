@@ -954,7 +954,10 @@ for (const [path, ready] of [["/research/IN/RELIANCE", "Reliance"], ["/research/
     await watchSharing(page);
     const errors = await open(page, path, ready);
     await answerLevel(page);
-    const button = page.getByRole("button", { name: "Share", exact: true });
+    // a company page keeps Share under More (R1-042); the deep dive shows it as a button
+    const more = path.endsWith("/deep") ? null : page.locator("main").getByRole("button", { name: "More", exact: true }).first();
+    if (more) await more.click();
+    const button = more ? page.getByRole("menuitem", { name: "Share", exact: true }) : page.getByRole("button", { name: "Share", exact: true });
     await expect(button).toBeVisible();
     if (phone) await touchable(page);
     await button.click();

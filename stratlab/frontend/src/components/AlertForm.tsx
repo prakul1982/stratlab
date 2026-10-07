@@ -128,14 +128,21 @@ export function AlertButton({ region, symbol, choices, label = "Set alert", cond
   return (
     <>
       <button className="btn quiet sm" onClick={() => setOpen(true)} disabled={choices && !choices.length}><Bell size={17} />{label}</button>
-      {open && (
-        <Modal title={symbol ? `Alert on ${symbol}` : "Set an alert"} onClose={() => setOpen(false)}>
-          <div className="k-stack">
-            <AlertForm region={region} symbol={symbol} choices={choices} condition={condition} onSaved={() => setOpen(false)} />
-            <p className="k-note">See and change all your alerts on the <Link className="link" to="/alerts">Alerts page</Link>.</p>
-          </div>
-        </Modal>
-      )}
+      {open && <AlertDialog region={region} symbol={symbol} choices={choices} condition={condition} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+/** The alert form in a pop-up, for a page that opens it from its own menu (a company page's More). */
+export function AlertDialog({ region, symbol, choices, condition, onClose }: {
+  region: Region; symbol?: string; choices?: { region: Region; symbol: string }[]; condition?: string; onClose: () => void;
+}) {
+  return (
+    <Modal title={symbol ? `Alert on ${symbol}` : "Set an alert"} onClose={onClose}>
+      <div className="k-stack">
+        <AlertForm region={region} symbol={symbol} choices={choices} condition={condition} onSaved={onClose} />
+        <p className="k-note">See and change all your alerts on the <Link className="link" to="/alerts">Alerts page</Link>.</p>
+      </div>
+    </Modal>
   );
 }
