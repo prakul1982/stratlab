@@ -350,21 +350,28 @@ def fix_fiscal_labels(text: str, today, region: str) -> str:
 def ground_company(read: dict, facts: dict, region: str, today) -> dict:
     """The company read with only what the facts support: no advice, forecasts or judgements ("indicating limited
     upside"), no number that isn't in the facts ("a typical range of 20-30"), and Indian fiscal-quarter labels
-    that match the calendar. Trading ideas are rules to test, worded as such, never instructions (R5O-027)."""
-    pool = fact_numbers(facts)
+    that match the calendar. Trading ideas are rules to test, worded as such, never instructions (R5O-027).
+
+    Every figure is also checked against the page's own table (R6O-001): a CAGR is worked out again from the yearly
+    sales and profit, a year's sales, profit, growth or margin must be that year's, a labelled figure (dividend yield,
+    P/E, the 1-year return) must be the page's own, a date must be one the facts carry, and a year or quarter already
+    reported is never "estimated", "upcoming" or "due"."""
+    page = PageFacts(facts, region, today)
+    pool = fact_numbers({"facts": facts, "derived": page.derived()})     # with what the table gives: growth, CAGRs, margins
     sym = str(facts.get("symbol") or "")
     res = dict(read)
     fy = lambda t: fix_fiscal_labels(t, today, region)        # noqa: E731
     for k in ("summary", "valuation_note", "position"):
-        res[k] = keep_sentences(read.get(k) or "", pool)
+        res[k] = keep_sentences(read.get(k) or "", pool, page.check)
     for k in ("bull", "bear", "watch"):
-        res[k] = [x for x in (keep_sentences(fy(str(i)) if k == "watch" else str(i), pool) for i in read.get(k) or []) if x]
+        check = page.check_watch if k == "watch" else page.check
+        res[k] = [x for x in (keep_sentences(fy(str(i)) if k == "watch" else str(i), pool, check) for i in read.get(k) or []) if x]
     ideas = []
     for i in read.get("ideas") or []:
         text = rule_words(str(i.get("text") or ""), sym)
         if not text:
             continue
-        ideas.append({**i, "text": text, "why": keep_sentences(str(i.get("why") or ""), pool, None)})
+        ideas.append({**i, "text": text, "why": keep_sentences(str(i.get("why") or ""), pool, page.check)})
     res["ideas"] = ideas
     res["checked"] = True
     return res
@@ -388,3 +395,400 @@ def rule_words(text: str, symbol: str) -> str:
     if not re.search(r"\bwhen\b", t, re.I) or ADVICE.search(re.sub(r"\b(short|exit|enter)\b", "", t, flags=re.I)):
         return ""
     return t[:1].upper() + t[1:]
+
+
+# ---------- the company read against the page's own table (R6O-001) ----------
+_MONTHS = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+_ISO = re.compile(r"\b(20\d\d)-(\d\d)-(\d\d)\b")
+_DMY = re.compile(r"\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(20\d\d)\b", re.I)
+_MDY = re.compile(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(20\d\d)\b", re.I)
+_QLABEL = re.compile(r"\bQ([1-4])\s*(?:of\s+)?(?:FY|fiscal(?:\s+year)?)\s*'?(\d{4}|\d{2})\b", re.I)
+_FYEAR = re.compile(r"\b(?:FY\s*'?|fiscal(?:\s+year)?\s+)(\d{4}|\d{2})\b", re.I)
+_MONEY = re.compile(r"(?:(₹|rs\.?|inr|\$|usd|€|eur)\s*)?(\d[\d,]*(?:\.\d+)?)\s*(lakh\s+crore|lakh\s+cr\b|crore|cr\b|billion|bn\b|b\b|million|mn\b|m\b|trillion|tn\b|t\b|lakh)?", re.I)
+_UNIT = {"lakh crore": 1e12, "lakh cr": 1e12, "crore": 1e7, "cr": 1e7, "billion": 1e9, "bn": 1e9, "b": 1e9, "million": 1e6, "mn": 1e6,
+         "m": 1e6, "trillion": 1e12, "tn": 1e12, "t": 1e12, "lakh": 1e5}
+_PCT = re.compile(r"([-−+]?\d+(?:\.\d+)?)\s?(?:%|per\s?cent\b|percent\b)", re.I)
+_SUBJECT = [("eps", re.compile(r"\b(eps|earnings per share)\b", re.I)),
+            ("revenue", re.compile(r"\b(revenue|revenues|sales|turnover|top[- ]line)\b", re.I)),
+            ("profit", re.compile(r"\b(net profit|net income|profit|profits|earnings|bottom[- ]line|pat)\b", re.I)),
+            ("price", re.compile(r"\b(share price|stock price|price|shares|stock|return)\b", re.I))]
+_LATEST = re.compile(r"\b(latest|most recent|last reported|last full|last fiscal|this) (fiscal )?year\b|\bin the latest year\b", re.I)
+_AHEAD = re.compile(r"\b(estimat\w*|upcoming|due|expected|projected|forecast\w*|scheduled|will (report|announce|release|be)|ahead|next|to be (reported|announced|released)|later (today|this))\b", re.I)
+_RESULTS = re.compile(r"\b(results?|earnings|report(s|ed|ing)?|release)\b", re.I)
+# a label on the business or its figures, which the read must leave to the reader ("strong earnings momentum", "a
+# forward P/E of 9.45 indicating low valuation", "indicating leverage exposure")
+JUDGE = re.compile(r"\b(strong|weak|healthy|poor|excellent|robust|solid|impressive|stellar|sluggish)\b"
+                   r"|\b(low|high|rich|stretched|modest|lofty|full|undemanding|demanding|reasonable) valuation\b"
+                   r"|\b(indicating|suggesting|signalling|signaling)\b", re.I)
+_WATCH_PAST = re.compile(r"\b(actual|reported|beat|beats|missed|came in)\b", re.I)
+
+
+def _fy_num(t: str) -> int:
+    y = int(t)
+    return y + 2000 if y < 100 else y
+
+
+def _dp(text: str) -> int:
+    return len(text.split(".", 1)[1]) if "." in text else 0
+
+
+def _close(stated: float, want: float, dp: int, slack: float = 0.1) -> bool:
+    """A stated percentage agrees with the page's to its own rounding (and a tenth of a point for two ways of
+    working the same figure out)."""
+    return abs(stated - want) <= max(0.051, 0.5 * 10 ** -dp) + slack
+
+
+def _num_in(text) -> float | None:
+    m = _NUM.search(str(text or ""))
+    if not m:
+        return None
+    try:
+        return float(m.group(0).replace(",", "").replace("−", "-"))
+    except ValueError:
+        return None
+
+
+def num_or_none(v) -> float | None:
+    if isinstance(v, bool) or v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    return _num_in(v)
+
+
+def json_text(x) -> str:
+    import json
+    return json.dumps(x, ensure_ascii=False, default=str)
+
+
+def dates_in(text: str) -> list[str]:
+    """Every date written in a text, as YYYY-MM-DD: 2026-10-08, 8 Oct 2026, October 8, 2026."""
+    out = []
+    for m in _ISO.finditer(text or ""):
+        out.append(f"{m.group(1)}-{m.group(2)}-{m.group(3)}")
+    for m in _DMY.finditer(text or ""):
+        out.append(f"{m.group(3)}-{_MONTHS[m.group(2)[:3].lower()]:02d}-{int(m.group(1)):02d}")
+    for m in _MDY.finditer(text or ""):
+        out.append(f"{m.group(3)}-{_MONTHS[m.group(1)[:3].lower()]:02d}-{int(m.group(2)):02d}")
+    return out
+
+
+def quarter_end(label: str) -> tuple[int, int] | None:
+    """(year, month) a results column ends: "Sep 2026" is (2026, 9); "2026-06-30" is (2026, 6)."""
+    s = str(label or "").strip()
+    m = re.match(r"^(20\d\d)-(\d\d)", s)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    m = re.match(r"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(20\d\d)", s, re.I)
+    if m:
+        return int(m.group(2)), _MONTHS[m.group(1)[:3].lower()]
+    return None
+
+
+def india_quarter(q: int, fy: int) -> tuple[int, int]:
+    """(year, month) an Indian fiscal quarter ends: Q2 FY2027 is July to September 2026, so (2026, 9)."""
+    return {1: (fy - 1, 6), 2: (fy - 1, 9), 3: (fy - 1, 12), 4: (fy, 3)}[q]
+
+
+def india_label(end: tuple[int, int]) -> str:
+    """"Q2 FY2027" for the quarter that ends in September 2026."""
+    y, m = end
+    q = {6: 1, 9: 2, 12: 3, 3: 4}.get(m)
+    return f"Q{q} FY{y + 1 if m >= 6 else y}" if q else ""
+
+
+class PageFacts:
+    """The page's own figures, in the shapes a sentence's claims are checked against: the yearly table (and what it
+    gives: growth, CAGRs and margins), the labelled Key numbers, the dates the facts carry and the latest quarter
+    reported. A claim of a kind the page can't check falls back to "the number is somewhere in the facts"."""
+
+    def __init__(self, facts: dict, region: str, today):
+        self.region, self.today = region, today
+        trend = facts.get("annual_trend") or {}
+        self.unit = 1e7 if "cr" in str(trend.get("unit") or "").lower() else 1.0
+        self.series: dict[str, dict[int, float]] = {}
+        for kind in ("revenue", "profit"):
+            rows = {}
+            for p in trend.get(kind) or []:
+                m = re.search(r"(\d{2,4})", str(p.get("y") or ""))
+                v = num_or_none(p.get("v"))
+                if m and v is not None:
+                    rows[_fy_num(m.group(1))] = v
+            if rows:
+                self.series[kind] = rows
+        years = sorted({y for s in self.series.values() for y in s})
+        self.years, self.latest = years, (years[-1] if years else None)
+        self.labelled = self._labelled(facts)
+        self.dates = set(dates_in(json_text(facts))) | {today.isoformat()}
+        res = facts.get("results") or {}
+        self.last_q = quarter_end(res.get("latest_quarter_end") or res.get("latest_quarter") or "")
+        self.status = res.get("status")
+        self.next_day = res.get("next_results_date")
+
+    @staticmethod
+    def _labelled(facts: dict) -> list[tuple[str, float]]:
+        """("group: label", value) for every labelled figure: the Key numbers, the margins, the plain-number rows."""
+        out = []
+        for k, v in (facts.get("metrics") or {}).items():
+            n = num_or_none(v)
+            if n is not None:
+                out.append((str(k).lower(), n))
+        for k, v in (facts.get("margins") or {}).items():
+            n = num_or_none(v)
+            if n is not None:
+                out.append((f"{k} margin", n))
+        for row, items in (facts.get("key_facts") or {}).items():
+            for k, t in (items or {}).items():
+                if "→" in str(t):              # "26% → 27% → 26% (FY22 to FY26)": each year's figure
+                    for x in re.findall(r"[-−]?\d+(?:\.\d+)?(?=%)", str(t)):
+                        out.append((f"{row}: {k}".lower(), float(x.replace("−", "-"))))
+                    continue
+                n = _num_in(t)
+                if n is not None:
+                    out.append((f"{row}: {k}".lower(), n))
+        if facts.get("day_change_pct") is not None:
+            out.append(("day change", float(facts["day_change_pct"])))
+        return out
+
+    # --- what the table gives ---
+    def value(self, kind: str, year: int) -> float | None:
+        return (self.series.get(kind) or {}).get(year)
+
+    def yoy(self, kind: str, year: int) -> float | None:
+        a, b = self.value(kind, year - 1), self.value(kind, year)
+        return (b / a - 1) * 100 if a and b is not None and a > 0 else None
+
+    def cagr(self, kind: str, y0: int, y1: int) -> float | None:
+        a, b = self.value(kind, y0), self.value(kind, y1)
+        if not a or not b or a <= 0 or b <= 0 or y1 <= y0:
+            return None
+        return ((b / a) ** (1 / (y1 - y0)) - 1) * 100
+
+    def margin(self, year: int | None) -> float | None:
+        if year is None:
+            return None
+        r, p = self.value("revenue", year), self.value("profit", year)
+        return p / r * 100 if r and p is not None else None
+
+    def derived(self) -> list[float]:
+        """Every figure the yearly table gives: each year's growth and net margin, and the CAGR between any two years.
+        The checks below hold each one to the year or span it is stated for."""
+        out = []
+        for kind in self.series:
+            ys = sorted(self.series[kind])
+            for i, y1 in enumerate(ys):
+                out += [x for x in (self.yoy(kind, y1), self.margin(y1)) if x is not None]
+                out += [x for x in (self.cagr(kind, y0, y1) for y0 in ys[:i]) if x is not None]
+        return [round(x, 2) for x in out]
+
+    def metric(self, *words, without=()) -> list[float]:
+        return [v for k, v in self.labelled if all(re.search(w, k) for w in words) and not any(re.search(w, k) for w in without)]
+
+    # --- reading a sentence ---
+    def years_in(self, s: str) -> list[int]:
+        bare = _QLABEL.sub(" ", s)
+        return [_fy_num(m.group(1)) for m in _FYEAR.finditer(bare)]
+
+    def quarters_in(self, s: str) -> list[tuple[int, int]]:
+        out = []
+        if self.region == "IN":
+            out += [india_quarter(int(m.group(1)), _fy_num(m.group(2))) for m in _QLABEL.finditer(s)]
+        mon = r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
+        for m in re.finditer(r"\b(?:quarter|three months)\s+(?:ended|ending|to)\s+(?:\d{1,2}\s+)?" + mon + r",?\s+(20\d\d)", s, re.I):
+            out.append((int(m.group(2)), _MONTHS[m.group(1)[:3].lower()]))
+        for m in re.finditer(r"\b" + mon + r"\s+(20\d\d)\s+quarter\b", s, re.I):
+            out.append((int(m.group(2)), _MONTHS[m.group(1)[:3].lower()]))
+        for m in re.finditer(r"\bquarter\s+(?:ended|ending|to)\s+(20\d\d)-(\d\d)-\d\d", s, re.I):
+            out.append((int(m.group(1)), int(m.group(2))))
+        return out
+
+    @staticmethod
+    def subject(s: str, at: int) -> str | None:
+        """The figure a number is about: the nearest of revenue, profit, EPS or price named before it (else after)."""
+        best, where = None, -1
+        for kind, rx in _SUBJECT:
+            for m in rx.finditer(s[:at]):
+                if m.start() > where:
+                    best, where = kind, m.start()
+        if best:
+            return best
+        for kind, rx in _SUBJECT:
+            if rx.search(s[at:]):
+                return kind
+        return None
+
+    # --- the checks ---
+    def check(self, s: str) -> bool:
+        return not JUDGE.search(s) and self._periods_ok(s) and self._dates_ok(s) and self._money_ok(s) and self._percents_ok(s)
+
+    def check_watch(self, s: str) -> bool:
+        """A thing ahead: no reported figure ("actual EPS 2.84") and no period already reported."""
+        if _WATCH_PAST.search(s) and re.search(r"\d", s):
+            return False
+        return self.check(s)
+
+    def _periods_ok(self, s: str) -> bool:
+        years = self.years_in(s)
+        ahead = bool(_AHEAD.search(s))
+        if self.years:
+            for y in years:
+                if y < self.years[0] or y > self.latest + 1:
+                    return False                          # a year the table doesn't have
+                if ahead and y <= self.latest:
+                    return False                          # a reported year called estimated or upcoming
+            if years and _LATEST.search(s) and max(years) != self.latest:
+                return False
+            if years and max(years) < self.latest and (_PCT.search(s) or self._money_spans(s)):
+                return False                              # an old year's figure told as if it were the latest
+        qs = self.quarters_in(s)
+        if self.last_q:
+            if ahead and _RESULTS.search(s) and any(q <= self.last_q for q in qs):
+                return False                              # a reported quarter's results called due or upcoming
+            if not qs and self.status == "filed" and _RESULTS.search(s) and re.search(r"\b(due|today|upcoming|scheduled)\b", s, re.I):
+                if not (self.next_day and self.next_day in dates_in(s)):
+                    return False                          # "results are due today" once they are out
+        return True
+
+    def _dates_ok(self, s: str) -> bool:
+        return all(d in self.dates for d in dates_in(s))
+
+    @staticmethod
+    def _money_spans(s: str) -> list[tuple[float, int, int, str]]:
+        """(amount, start, end, qualifier) for each sum of money in the text: one with a currency sign or a unit."""
+        out = []
+        for m in _MONEY.finditer(s):
+            cur, raw, unit = m.group(1), m.group(2), re.sub(r"\s+", " ", (m.group(3) or "").lower())
+            if not cur and not unit:
+                continue
+            if unit in ("b", "m", "t") and not cur:
+                continue                                  # "5 m" alone is not money
+            if _ISO.match(s, m.start(2)):
+                continue
+            try:
+                v = float(raw.replace(",", ""))
+            except ValueError:
+                continue
+            before = s[max(0, m.start() - 18):m.start()].lower()
+            q = "over" if re.search(r"\b(over|more than|above|exceed\w*)\s*$", before) else \
+                "under" if re.search(r"\b(under|nearly|almost|less than|below|just short of)\s*$", before) else ""
+            out.append((v * _UNIT.get(unit, 1.0), m.start(), m.end(), q))
+        return out
+
+    @staticmethod
+    def _bound_year(s: str, start: int, end: int) -> int | None:
+        """The fiscal year a sum is given for: "₹2,40,893 cr in FY24", "FY24 revenue of $391 billion"."""
+        after = _FYEAR.search(s[end:end + 30])
+        if after and not _QLABEL.search(s[end:end + 30]):
+            return _fy_num(after.group(1))
+        before = list(_FYEAR.finditer(s[max(0, start - 25):start]))
+        return _fy_num(before[-1].group(1)) if before else None
+
+    def _money_ok(self, s: str) -> bool:
+        if not self.series:
+            return True
+        for v, a, b, q in self._money_spans(s):
+            y = self._bound_year(s, a, b)
+            if y is None:
+                continue
+            want = [x * self.unit for x in (self.value("revenue", y), self.value("profit", y)) if x is not None]
+            ok = False
+            for w in want:
+                if q == "over":
+                    ok = ok or v <= w <= v * 1.1
+                elif q == "under":
+                    ok = ok or v * 0.9 <= w <= v
+                else:
+                    ok = ok or abs(w - v) <= abs(w) * 0.015
+            if not ok:
+                return False
+        return True
+
+    def _percents_ok(self, s: str) -> bool:
+        for m in _PCT.finditer(s):
+            raw = m.group(1).replace("−", "-")
+            stated, dp = abs(float(raw)), _dp(raw)
+            cut = max(s.rfind(",", 0, m.start()), s.rfind(";", 0, m.start()), s.rfind(" and ", 0, m.start()), s.rfind(" while ", 0, m.start()))
+            ends = [x for x in (s.find(",", m.end()), s.find(";", m.end()), s.find(" while ", m.end())) if x >= 0]
+            clause = s[cut + 1:min(ends or [len(s)])].lower()
+            near = s[max(0, m.start() - 70):m.end() + 40].lower()
+            want = self.expected(s, m.start(), clause, near)
+            if want is None:
+                continue                                  # a kind of figure the page has nothing to check against
+            if not any(_close(stated, abs(w), dp) for w in want):
+                return False
+        return True
+
+    def expected(self, s: str, at: int, clause: str, near: str) -> list[float] | None:
+        """The values a percentage may take, from the page, by what it is about; None when the page can't say."""
+        subj = self.subject(s, at)
+        years = self.years_in(s)
+        span = re.search(r"\b(\d{1,2}|three|five|ten)[- ](?:year|yr)s?\b|\b(\d{1,2})y\b", clause)
+        n = None
+        if span:
+            w = span.group(1) or span.group(2)
+            n = {"three": 3, "five": 5, "ten": 10}.get(w) or int(w)
+        if re.search(r"\bdiv(idend)?s?\.? yield\b|\byield\b", clause) and "dividend" in near or re.search(r"\bdiv(idend)? yield\b", clause):
+            return self.metric(r"yield") or None
+        if re.search(r"\b(roe|return on equity)\b", clause):
+            return self.metric(r"\broe\b") or None
+        if re.search(r"\b(roce|return on capital)\b", clause):
+            return self.metric(r"\broce\b") or None
+        if re.search(r"\bpayout\b", clause):
+            return self.metric(r"payout") or None
+        if "margin" in clause:
+            which = next((w for w in ("gross", "operating", "ebitda", "net") if w in clause), "net")
+            if years and self.series:
+                return [x for x in (self.margin(max(years)),) if x is not None] if which == "net" else []
+            if _LATEST.search(s) and which == "net" and self.margin(self.latest) is not None:
+                return [self.margin(self.latest)]
+            got = self.metric(which, r"margin")
+            if which == "net" and self.margin(self.latest) is not None:
+                got.append(self.margin(self.latest))
+            return got or None
+        rate = re.search(r"\bcagr\b|compound|annuali[sz]ed|a year\b|per year|per annum|annual (growth|rate)|annually|each year|yearly", clause)
+        if rate and subj in ("revenue", "profit"):
+            if len(set(years)) >= 2 and self.series.get(subj):
+                c = self.cagr(subj, min(years), max(years))
+                return [c] if c is not None else []
+            label = r"sales|revenue" if subj == "revenue" else r"profit|net income"
+            got = []
+            for k in (n,) if n else range(1, 11):
+                if self.latest and self.series.get(subj):
+                    c = self.cagr(subj, self.latest - k, self.latest)
+                    got += [c] if c is not None else []
+                got += self.metric(label, rf"\b{k}\s?y|\b{k} years?\b")
+            if not n and self.series.get(subj) and len(self.series[subj]) > 1:
+                ys = sorted(self.series[subj])
+                c = self.cagr(subj, ys[0], ys[-1])
+                got += [c] if c is not None else []
+            return got
+        if rate and subj == "eps":
+            return self.metric(r"eps", rf"\b{n}\s?y" if n else r"\dy") or None
+        if subj == "price" or re.search(r"\b(1|one)[- ]year (return|price change|change)\b|\bprice change\b|\b1y return\b", near):
+            if re.search(r"\b(1|one)[- ]year\b|\bpast (year|12 months)\b|\blast (year|12 months)\b|\b1y\b|\bover the year\b", near):
+                return self.metric(r"1y|1-year|1 year", without=(r"sales|revenue|profit|eps",)) or None
+            if re.search(r"\b(today|on the day)\b", near):
+                return self.metric(r"day change") or None
+            return None
+        growth = re.search(r"\b(yoy|year[- ](on|over)[- ]year|grew|growth|rose|increased|increase|declined|decline|fell|dropped|up|down|higher|lower|jumped|slipped)\b", clause)
+        if growth and subj in ("revenue", "profit"):
+            label = r"sales|revenue" if subj == "revenue" else r"profit|net income"
+            if years and self.series.get(subj):
+                if len(set(years)) >= 2:          # "from FY19 to FY24": the change over the span, or its yearly rate
+                    y0, y1 = min(years), max(years)
+                    a, b = self.value(subj, y0), self.value(subj, y1)
+                    return [x for x in (self.cagr(subj, y0, y1), (b / a - 1) * 100 if a and b is not None else None) if x is not None]
+                return [x for x in (self.yoy(subj, max(years)),) if x is not None]
+            if _LATEST.search(s) and self.latest and self.series.get(subj):
+                return [x for x in (self.yoy(subj, self.latest),) if x is not None]
+            got = self.metric(label, r"yoy|latest")
+            if n:
+                got += self.metric(label, rf"\b{n}\s?y|\b{n} years?\b")
+                c = self.cagr(subj, self.latest - n, self.latest) if self.latest else None
+                got += [c] if c is not None else []
+            yy = self.yoy(subj, self.latest) if self.latest else None
+            got += [yy] if yy is not None else []
+            return got or None
+        if growth and subj == "eps":
+            return self.metric(r"eps") or None
+        return None

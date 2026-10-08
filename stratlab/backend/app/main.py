@@ -309,6 +309,7 @@ _docs = api_docs_enabled()
 app = FastAPI(title="StratLab API", lifespan=lifespan, docs_url="/docs" if _docs else None, redoc_url="/redoc" if _docs else None,
               openapi_url="/openapi.json" if _docs else None)
 research_routes.setup(research_hub, _gemini, _anthropic)
+research_routes.corp_sources = corp_job.sources          # a US company page's dividend yield from its listed payments
 app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs

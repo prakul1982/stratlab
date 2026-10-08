@@ -210,7 +210,10 @@ def holdings_events(uid: str, frm: date, to: date) -> list[dict]:
             continue
         for r in results.between(region, frm, to, syms):
             d = _day(r["date"])
-            if d:
+            if d and r.get("out"):        # filed: said as filed, never as still to come (R6O-016)
+                out.append(_ev(d, f"{r['symbol']}: results filed", "holdings", "results_out", (r["out"].get("title") or "Results filed.")[:200],
+                               symbol=r["symbol"], url=f"/research/{region}/{r['symbol']}"))
+            elif d:
                 why = f" ({r['when']})" if r.get("when") else ""
                 out.append(_ev(d, f"{r['symbol']}: results{why}", "holdings", "results", r.get("purpose") or "Board meeting on results.",
                                symbol=r["symbol"], url=f"/research/{region}/{r['symbol']}"))

@@ -66,7 +66,9 @@ def _share(v) -> int | None:
 def company_facts(c: dict) -> dict:
     """The compact, factual view of a profile the model is allowed to reason from."""
     q = c.get("quote") or {}
-    metrics = {i["label"]: i["value"] for g in c.get("metrics") or [] for i in g["items"]}
+    # each figure under its group's name: India's "3Y CAGR" is in both Sales growth and Profit growth, and one
+    # flat label kept only the profit one (R6O-001)
+    metrics = {f"{g['title']}: {i['label']}": i["value"] for g in c.get("metrics") or [] for i in g["items"]}
     facts = {"name": c["name"], "symbol": c["symbol"], "market": "India (NSE)" if c["region"] == "IN" else "United States",
              "currency": c.get("currency"), "industry": c.get("industry"), "price": q.get("price"),
              "day_change_pct": q.get("change_pct"), "range_52w": c.get("range52"), "market_cap": c.get("market_cap"),
@@ -75,11 +77,59 @@ def company_facts(c: dict) -> dict:
              "shareholding": c.get("shareholding"),
              "about": ((c.get("about") or {}).get("wiki") or {}).get("extract") or (c.get("about") or {}).get("profile"),
              "recent_headlines": [n["headline"] for n in (c.get("news") or [])[:6]], "today": ist_date().isoformat()}
+    years = [p.get("y") for p in ((c.get("trend") or {}).get("revenue") or (c.get("trend") or {}).get("profit") or [])]
+    if years:
+        facts["latest_fiscal_year"] = (f"{years[-1]} is the latest full year reported; use it for the company's present. "
+                                       "Every year in annual_trend is reported: none of them is estimated or upcoming.")
+    qt = c.get("quarters") or {}
+    if qt.get("cols"):
+        facts["quarterly_results"] = {"quarters": qt["cols"], "sales": qt.get("sales"), "net_profit": qt.get("profit")}
+    facts["results"] = results_status(c, ist_date())
     if c["region"] == "IN":
         fq, fy = grounding.fiscal_quarter(ist_date(), "IN")
+        filed = (facts["results"] or {}).get("status") == "filed"
         facts["fiscal_now"] = (f"India's fiscal year runs April to March. The last quarter that ended is Q{fq} FY{fy}; "
-                               f"results due now are for Q{fq} FY{fy}.")
+                               + (f"its results are already filed and in quarterly_results." if filed
+                                  else f"results due now are for Q{fq} FY{fy}."))
     return {k: v for k, v in facts.items() if v not in (None, [], {}, "")}
+
+
+def results_status(c: dict, today) -> dict | None:
+    """The latest quarter reported and whether its results are out (R6O-001, R6O-016): a results day on or before
+    today whose quarter is already in the page's quarterly table is filed, not "due today"."""
+    from datetime import date
+    qt = c.get("quarters") or {}
+    latest = (qt.get("cols") or [None])[-1]
+    if not latest and c.get("earnings"):
+        latest = max((str(e.get("period") or "") for e in c["earnings"]), default=None) or None
+    end = grounding.quarter_end(latest or "")
+    cal = c.get("results_calendar") or {}
+    nxt = (cal.get("next") or {}).get("date") or (c.get("next_earnings") or {}).get("date")
+    last = cal.get("last") or {}
+    out: dict = {}
+    if end:
+        y, m = end
+        end_day = date(y + (m == 12), m % 12 + 1, 1)          # the day after the quarter ended
+        out["latest_quarter"] = latest + (f" ({grounding.india_label(end)})" if c.get("region") == "IN" and grounding.india_label(end) else "")
+        out["latest_quarter_end"] = f"{y}-{m:02d}"
+        if nxt:
+            try:
+                d = date.fromisoformat(str(nxt)[:10])
+            except ValueError:
+                d = None
+            # the quarter before the results day is already in the table: those results are out
+            if d and d <= today and 0 <= (d - end_day).days <= 75:
+                nxt = None
+    if nxt and str(nxt)[:10] >= today.isoformat():
+        out["status"], out["next_results_date"] = "upcoming", str(nxt)[:10]
+        out["note"] = f"The next results are on {str(nxt)[:10]}; the latest quarter reported is {out.get('latest_quarter') or 'not known'}."
+    elif end:
+        out["status"] = "filed"
+        if last.get("date"):
+            out["last_results_date"] = last["date"]
+        out["note"] = (f"The results for {out['latest_quarter']} are already filed. No later results date is known: "
+                       "do not call any results due, upcoming or today.")
+    return out or None
 
 
 SCORE_FIELDS = ("scores", "composite", "valuation", "rating", "grade")   # never sent, even from an old stored read
@@ -105,7 +155,10 @@ numbers instead, e.g. "operating margin has been 18-22% for five years" or "debt
 (daily candles unless intraday clearly suits it) and a stop loss, e.g.
 "Enter long when the 20-day EMA crosses above the 50-day EMA, exit when it crosses back below, 5% stop loss". Write each as a rule
 to test ("Enter long when …" or "Enter short when …"), never as an instruction to buy or sell the stock. Use only numbers
-that are in the FACTS; label Indian fiscal quarters as the FACTS' fiscal_now does.
+that are in the FACTS, copied as they are (a growth rate, yield or return is the FACTS' own figure, never your own
+sum); label Indian fiscal quarters as the FACTS' fiscal_now does. Describe the present with latest_fiscal_year and the
+results status in "results": a year or quarter the FACTS report is never "estimated", "upcoming" or "due". "watch"
+lists only dates ahead that the FACTS give; with none, say the next results date isn't announced yet.
 {RULES}"""
     facts = company_facts(c)
     if key_facts:
