@@ -15,6 +15,8 @@ export interface Overview {
     kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number; india_sessions?: number;
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     recent_errors?: ServerError[];
+    /** when this server started (India time, like each error's "at"), so errors kept from before it are told apart */
+    server_started_at?: string | null;
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
     calendar?: CalendarStatus; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };

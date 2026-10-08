@@ -9,7 +9,7 @@ import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDay
 import { eyebrowOf } from "../lib/eyebrow";
 import { flatZero } from "../lib/chartFormat";
 import { marketTz } from "../lib/format";
-import { savedRegion } from "../lib/research";
+import { homeRegion } from "../lib/homeMarket";
 import { LineChart, PairBars } from "../components/Charts";
 import { Info } from "../components/ui";
 import {
@@ -34,7 +34,7 @@ const PERIOD_UNITS = [
 export function BreadthPage() {
   const { fail } = useApp();
   // the reader's market opens on its own group (R6O-007: an India reader landed on the S&P 500)
-  const [first] = useState(() => { const region = savedRegion(); return { ...savedPick(region), region }; });
+  const [first] = useState(() => { const region = homeRegion(); return { ...savedPick(region), region }; });
   const [group, setGroup] = useState<GroupId>(first.group);
   const [period, setPeriod] = useState<string>(first.range);
   const [data, setData] = useState<BreadthView | null>(null);

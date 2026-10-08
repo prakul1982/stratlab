@@ -338,7 +338,7 @@ function holdersAge(asOf: string): string {
 
 export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> }) {
   return (
-    <BarList label="Who owns it" footnote={`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year.`}
+    <BarList label="Who owns it" footnote={`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year.${s.note ? ` ${s.note}` : ""}`}
       rows={s.rows.map((r) => ({
         key: r.label, name: r.label, pct: Math.min(100, r.value),
         value: <>{r.value.toFixed(1)}%{r.change != null && Math.abs(r.change) >= 0.05 && <span className="k-note"> <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)}</Signed></span>}</>,
@@ -346,11 +346,12 @@ export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> })
   );
 }
 
-export function QuarterTable({ q }: { q: NonNullable<Company["quarters"]> }) {
+export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quarters"]>; bank?: boolean }) {
   const f = (v: number | null) => (v == null ? "–" : num(Math.round(v), 0));
   const rows = [
     { name: "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
-    { name: "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
+    // a bank reports a financing margin there, not an EBITDA margin (R7O-001)
+    { name: bank ? "Financing margin" : "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
   ];
   return (
     <DataTable label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}

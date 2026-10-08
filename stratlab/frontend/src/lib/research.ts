@@ -21,7 +21,10 @@ export interface Company {
   metrics: MetricGroup[];
   trend: { unit: string; revenue: SeriesPoint[]; profit: SeriesPoint[]; revenue_label: string; profit_label: string } | null;
   quarters?: { cols: string[]; sales: (number | null)[]; profit: (number | null)[]; opm: (number | null)[] } | null;
-  shareholding?: { as_of: string; rows: { label: string; value: number; change: number | null }[] } | null;
+  /** `note`: two classes that moved by about the same amount in opposite directions, said as a holder moving class (R7O-012) */
+  shareholding?: { as_of: string; rows: { label: string; value: number; change: number | null }[]; note?: string | null } | null;
+  /** a bank, lender or insurer: no EBITDA margin or debt-to-equity, and the quarters' margin is the financing margin (R7O-001) */
+  bank?: boolean;
   pros?: string[]; cons?: string[];
   earnings: { period: string; actual: number; estimate: number; surprise_pct: number }[];
   next_earnings: { date: string; eps_estimate: number | null } | null;
@@ -98,10 +101,10 @@ export function saveRegion(r: Region) {
 
 /** The page's market: ?region= when the address has one, else the last one picked. Picking one saves it and puts it in
  *  the address, so a shared link opens on the same market. */
-export function useRegion(): [Region, (r: Region) => void] {
+export function useRegion(fallback?: Region): [Region, (r: Region) => void] {
   const [params, setParams] = useSearchParams();
   const fromUrl = params.get("region")?.toUpperCase();
-  const [region, setRegionState] = useState<Region>(fromUrl === "US" || fromUrl === "IN" ? fromUrl : savedRegion());
+  const [region, setRegionState] = useState<Region>(fromUrl === "US" || fromUrl === "IN" ? fromUrl : fallback ?? savedRegion());
   const setRegion = (r: Region) => {
     setRegionState(r); saveRegion(r);
     const p = new URLSearchParams(params); p.set("region", r); setParams(p, { replace: true });

@@ -202,7 +202,8 @@ function Routed() {
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <PageLock />{/* a paid feature this plan lacks: said at the top, honestly (the server refuses it either way) */}
-      <Suspense fallback={<Loading label="Opening" />}>
+      {/* a page whose code is still on its way still has its one heading (axe page-has-heading-one, R7O-010) */}
+      <Suspense fallback={<><h1 className="sr-only">Opening the page</h1><Loading label="Opening" /></>}>
       <Routes>
         <Route path="/" element={<SpaceHome />} />
         <Route path="/mine" element={<MineHome />} />

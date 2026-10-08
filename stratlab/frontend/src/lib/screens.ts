@@ -36,6 +36,8 @@ export interface ScreenRow {
 export interface ScreenResult {
   region: Region; filters: Filters; sort: string; desc: boolean; total: number; offset: number; rows: ScreenRow[];
   indexed: number; as_of: string | null; index_at: string | null;
+  /** the newest price day among the rows shown; `as_of` is the oldest, so the header never claims a newer close (R7O-004) */
+  as_of_newest?: string | null;
 }
 
 export interface SavedScreen {

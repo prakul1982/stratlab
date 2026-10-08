@@ -88,7 +88,9 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   for (const a of aiDown) out.push({ text: `AI, ${a.label}: ${a.state_text || a.last_error || "not answering"}`, to: "/admin/system", label: "System", bad: false });
   if (aiDown.length && aiDown.length === aiKeys.length) out.push({ text: "No AI provider is answering, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
   if (s.mail?.state === "bad") out.push({ text: "Alert emails can't be sent yet: no email service (Resend, Brevo or SMTP) is set up on the server.", to: "/admin/system", label: "System", bad: true });
-  if (sv.recent_errors?.length) out.push({ text: `${plural(sv.recent_errors.length, "server error")} since the last restart.`, to: "/admin/system", label: "System", bad: false });
+  // only the errors since this server started are "since the last restart"; ones kept from before it aren't news (R7O-006)
+  const errs = errorCounts(sv);
+  if (errs.since) out.push({ text: `${plural(errs.since, "server error")} since the last restart.`, to: "/admin/system", label: "System", bad: false });
   const pending = (reported?.entries ?? []).filter((r) => r.hidden_by !== "admin").length;
   if (pending) out.push({ text: `${pending} library entr${pending > 1 ? "ies were" : "y was"} reported by users.`, to: "/admin/quality", label: "Quality", bad: false });
   for (const j of jobs ?? []) if (j.state === "bad") out.push({ text: `${j.name}: ${j.error}`, to: "/admin/data", label: "Data and jobs", bad: false });
@@ -111,8 +113,22 @@ export function paidUsers(st: Overview["stats"]): { label: string; value: number
     note: [paying ? `${st.paying.basic} Basic · ${st.paying.pro} Pro` : "", given ? `${given} on a plan you gave, not paying` : ""].filter(Boolean).join(" · ") || "No paid plans" };
 }
 
-/** A job's line on Overview: its problem, or when it last ran. */
-const jobDetail = (j: JobRow): string => j.error ? j.error : j.last_run ? `Last run ${ago(j.last_run)}` : j.schedule === "Off" ? "Off" : "Not run yet";
+/** A job's line on Overview: its problem, or when it last ran; "Running" first while it runs, as Data and jobs says it
+ * (R7O-006: "Running" on one page and "OK" on the other for the same breadth run). */
+const jobDetail = (j: JobRow): string => {
+  const base = j.error ? j.error : j.last_run ? `Last run ${ago(j.last_run)}` : j.schedule === "Off" ? "Off" : "Not run yet";
+  return j.running ? `Running · ${base}` : base;
+};
+
+/** The server errors listed: those since this server started, and those kept from before it (the list survives a
+ * restart). A server that doesn't say when it started has every one counted as kept, never as "since the restart". */
+export function errorCounts(sv: { recent_errors?: { at: string }[]; server_started_at?: string | null }): { since: number; before: number } {
+  const all = sv.recent_errors ?? [];
+  const start = sv.server_started_at ? Date.parse(sv.server_started_at) : NaN;
+  if (!Number.isFinite(start)) return { since: 0, before: all.length };
+  const since = all.filter((e) => Date.parse(e.at) >= start).length;
+  return { since, before: all.length - since };
+}
 
 /** A light for every service and every data feed. */
 export function lights(ov: Overview | null, jobs: JobRow[] | null): { services: Light[]; feeds: Light[] } {

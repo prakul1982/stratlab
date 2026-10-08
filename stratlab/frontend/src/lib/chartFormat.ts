@@ -179,6 +179,27 @@ export function tickOnPoint(tick: TimeTick, pointMs: number, intraday: boolean, 
   return a.y === b.y && a.mo === b.mo && a.d === b.d ? tick.label : tickLabel(pointMs, "day", tz);
 }
 
+/** Intraday points across more than one day (a paper session's account value, minute by minute over days): one tick at
+ * each day's first point, labelled with the day ("8 Oct"), so the axis never reads as one day's clock times (R7O-010:
+ * "12:00", "03:00" under 13 days of a session, with "03:00" placed on the next morning's first point). */
+export function dayTicks(times: number[], i0: number, i1: number, tz?: string): { i: number; label: string }[] {
+  const out: { i: number; label: string }[] = [];
+  let prev = "";
+  for (let i = Math.max(0, i0); i <= Math.min(times.length - 1, i1); i++) {
+    const p = parts(times[i], tz);
+    const key = `${p.y}-${p.mo}-${p.d}`;
+    if (key !== prev) out.push({ i, label: `${p.d} ${MONTHS[p.mo - 1]}` });
+    prev = key;
+  }
+  return out;
+}
+
+/** Whether intraday points span more than one calendar day in a zone. */
+export function spansDays(t0: number, t1: number, tz?: string): boolean {
+  const a = parts(t0, tz), b = parts(t1, tz);
+  return a.y !== b.y || a.mo !== b.mo || a.d !== b.d;
+}
+
 /** A moment in full for a tooltip: "Fri 3 Oct 2026", or "3 Oct, 14:30" when intraday ("3 Oct, 14:30 IST" in a market's zone). */
 export function tipTime(ms: number, intraday = false, tz?: string): string {
   const d = new Date(ms);

@@ -6,6 +6,7 @@ import { asOf, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
+import { homeRegion } from "../lib/homeMarket";
 import { Info } from "../components/ui";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
@@ -496,7 +497,9 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
 export function FilingsPage() {
   const { me } = useApp();
   const pro = !!me?.plan_info?.features?.filings;
-  const [region, setRegion] = useRegion();
+  // opens on the reader's own market (India for an India reader), not the market a company was last looked up in;
+  // a market picked here stays in the address (R7O-003)
+  const [region, setRegion] = useRegion(homeRegion());
   const [params, setParams] = useSearchParams();
   const view = params.get("view") === "all" ? "all" : "mine";
   const pickView = (v: string) => { const p = new URLSearchParams(params); if (v === "all") p.set("view", "all"); else p.delete("view"); p.delete("page"); setParams(p, { replace: true }); };

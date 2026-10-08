@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { money, usePricing } from "../lib/currency";
+import { approx, money, usePricing } from "../lib/currency";
 import { canBuy, finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
 import { signIn } from "../lib/signin";
@@ -417,7 +417,9 @@ function Pricing() {
     if (!local) return PRICE[p][year ? 1 : 0];
     return (local as unknown as Record<string, number>)[year ? `${p}_year` : p];
   };
-  const price = (p: PlanId, year = false) => (local ? money(local, amount(p, year), currency) : rupees(p, year));
+  const price = (p: PlanId, year = false) => (local
+    ? (p === "free" ? "" : approx(local, year ? local.yearly_charged_in : local.charged_in)) + money(local, amount(p, year), currency)
+    : rupees(p, year));
   const intro = pricingIntro(offer, LIMITS.pro, "landing");
   const [period, setPeriod] = useState<"month" | "year">("month");
   const yearly = (p: PlanId) => price(p, true);

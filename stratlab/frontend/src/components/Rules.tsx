@@ -335,10 +335,11 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
           {s.exit.length || shortExit.length ? "Also close" : <b>Close</b>}{r.sl > 0 ? " at a " : " with "}
           <NumTok title="Stop loss" value={r.sl} missing="no stop loss" max={stopType === "pct" ? 99 : 100000} step={stopType === "swing" ? 1 : 0.1}
             render={(v) => `${v}`} onChange={(v) => setRisk({ sl: v })} hint="0 turns it off. Tap the word after the number to change the unit." />
-          {r.sl > 0 && <>{" "}{unitTok("stop")}</>}{r.tgt > 0 ? (r.sl > 0 ? " or a " : " and at a ") : (r.sl > 0 ? ", with " : " and ")}
+          {/* "3% stop", never "3 % stop" (R6O-010): no space before a percent sign */}
+          {r.sl > 0 && <>{stopType === "pct" ? "" : " "}{unitTok("stop")}</>}{r.tgt > 0 ? (r.sl > 0 ? " or a " : " and at a ") : (r.sl > 0 ? ", with " : " and ")}
           <NumTok title="Target" value={r.tgt} missing="no target" max={100000} render={(v) => `${v}`}
             onChange={(v) => setRisk({ tgt: v })} hint={tgtType === "r" ? "A multiple of the stop distance: 2 means twice what you risk." : "0 turns it off."} />
-          {r.tgt > 0 && <>{" "}{unitTok("tgt")}</>}.
+          {r.tgt > 0 && <>{tgtType === "pct" ? "" : " "}{unitTok("tgt")}</>}.
           <Info label="What are a stop loss and a target?"><b>Stop loss:</b> {HELP.stop}<br /><br /><b>Target:</b> {HELP.target}<br /><br /><b>Units:</b> {HELP.stopUnits}</Info>
         </p>
         {/* below the block's rules, like the entry's add button */}

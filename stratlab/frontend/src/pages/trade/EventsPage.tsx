@@ -62,7 +62,7 @@ function IndexChanges({ rows }: { rows: IndexChange[] }) {
   const shown = rows.filter((c) => c.sections.length);
   if (!shown.length) return null;
   const names = (list: [string, string][]) => list.length
-    ? list.map(([sym, name], j) => <span key={sym}>{j ? ", " : ""}<Link className="link" to={`/research/IN/${encodeURIComponent(sym)}`} title={name}>{sym}</Link></span>)
+    ? list.map(([sym, name], j) => <span key={sym}>{j ? ", " : ""}<Link className="link tap" to={`/research/IN/${encodeURIComponent(sym)}`} title={name}>{sym}</Link></span>)
     : <span className="k-muted">None</span>;
   const cols: Column<IndexChange["sections"][number]>[] = [
     { key: "index", header: "Index", rowHeader: true, cell: (s) => s.index },
@@ -177,8 +177,8 @@ export function EventsPage() {
                   </ul>
                 ) : <p className="k-small k-muted">No scheduled events in the next seven days.</p>}
                 <p className="k-note">
-                  Results this week: <Link className="link" to="/research/results">{v.week.results ?? "the results calendar"}</Link> ·
-                  Dividends and other corporate actions: <Link className="link" to="/research/corporate-actions">{v.week.actions ?? "the calendar"}</Link> ·
+                  Results this week: <Link className="link tap" to="/research/results">{v.week.results ?? "the results calendar"}</Link> ·
+                  Dividends and other corporate actions: <Link className="link tap" to="/research/corporate-actions">{v.week.actions ?? "the calendar"}</Link> ·
                   Lot and expiry-day changes: <Link className="link" to="/trade/fo-changes">F&amp;O changes</Link>
                 </p>
               </Card>

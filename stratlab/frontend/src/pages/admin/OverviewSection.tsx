@@ -7,7 +7,7 @@ import { money } from "../../lib/format";
 import { Badge, Card, CardHead, EmptyState, HealthGrid, HealthTile, Skeleton, Stat, StatRow } from "../../components/kit";
 import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
-import { attention, lights, paidUsers } from "./attention";
+import { attention, errorCounts, lights, paidUsers } from "./attention";
 
 type InvoiceRow = { date: string; total: number; currency: string };
 type UserRow = { created_at: string | null };
@@ -35,7 +35,7 @@ export function OverviewSection() {
   const rupees = todays.filter((i) => i.currency === "INR").reduce((a, i) => a + i.total, 0);
   const others = [...new Set(todays.filter((i) => i.currency !== "INR").map((i) => i.currency))];
   const paidStat = paidUsers(st);
-  const errors = sv.recent_errors?.length ?? 0;
+  const errors = errorCounts(sv);
   const dash = analyticsDashboard();
 
   return (
@@ -66,7 +66,7 @@ export function OverviewSection() {
           <Stat item label="Revenue today" value={invoices ? money(rupees, "INR") : "–"}
             note={invoices ? `${todays.length} invoice${todays.length === 1 ? "" : "s"}${others.length ? ` · also in ${others.join(", ")}` : ""}` : undefined} />
           {st.plan_interest != null && <Stat item label="Waiting for plans" value={st.plan_interest} note={st.plan_interest === 1 ? "person asked to be told when plans open" : "people asked to be told when plans open"} />}
-          <Stat item label="Server errors" value={errors} note={<Link className="link" to="/admin/system">since the last restart</Link>} />
+          <Stat item label="Server errors" value={errors.since} note={<Link className="link" to="/admin/system">since the last restart{errors.before ? ` · ${errors.before} kept from before it` : ""}</Link>} />
         </StatRow>
       </Card>
 

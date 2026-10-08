@@ -5,7 +5,7 @@ import { LegalLinks } from "../components/LegalLinks";
 import { api, loadRazorpay } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { money, usePricing } from "../lib/currency";
+import { approx, money, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
@@ -72,7 +72,8 @@ export function PlansPage() {
     const local = (row as unknown as Record<string, number>)[per === "year" ? `${p}_year` : p];
     const chargedIn = per === "year" ? row.yearly_charged_in : row.charged_in;
     // the admin table's price ($8 and $20 for dollars); "Charged as ₹…" under it while that currency is charged in rupees
-    return { shown: money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false };
+    // a converted amount says so ("≈ SAR 27") beside the rupee charge it comes from (R7O-008)
+    return { shown: approx(row, chargedIn) + money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false };
   };
   /** What a year saves against twelve months, in the price's own currency (Pro's year is ₹9 over ten months, so each card says its own number). */
   const savingOf = (p: "basic" | "pro") => {

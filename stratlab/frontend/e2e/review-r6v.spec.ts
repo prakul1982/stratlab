@@ -50,7 +50,8 @@ test("a library strategy states its checks, buy and hold, its dates and its univ
   await page.goto("/library");
   const card = page.locator(".k-card", { hasText: entry.name.split(" · ")[0] }).filter({ hasText: "20 US large caps" }).first();
   await expect(card.locator(".badge").first()).toHaveText(v.label);
-  expect(v.fact_headline.startsWith(v.label)).toBe(true);
+  // the shortfall against buy and hold leads when there is one (R6V-005, round 7); the label follows it
+  expect(v.fact_headline.toLowerCase()).toContain(v.label.toLowerCase());
   await noSideways(page);
   expect(errors).toEqual([]);
 });

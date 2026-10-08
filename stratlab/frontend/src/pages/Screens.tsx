@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { marketTz, pct, price } from "../lib/format";
+import { fmtDate, marketTz, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import {
@@ -154,12 +154,16 @@ export function ScreensPage() {
     ? { key: c.id, header: c.short ?? c.label, rowHeader: true, wrap: true, sortable: true, cell: (r: ScreenRow) => (
       <><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link> <span className="k-note">{r.symbol}</span>
         {r.surveillance && r.surveillance.length > 0 && <> <SurvBadges region={region} symbol={r.symbol} codes={r.surveillance} /></>}</>) }
-    : { key: c.id, header: c.short ?? c.label, numeric: !c.text, sortable: true, cell: (r: ScreenRow) => c.cell(r, region) });
+    : { key: c.id, header: c.short ?? c.label, numeric: !c.text, sortable: true, cell: (r: ScreenRow) => (
+      // a row whose close is of another day than the header's says its own day (R7O-004)
+      c.id === "price" && r.price != null && r.price_at && out?.as_of && r.price_at.slice(0, 10) !== out.as_of.slice(0, 10)
+        ? <>{c.cell(r, region)}<span className="k-sub-line">{fmtDate(r.price_at.slice(0, 10), { year: false })} close</span></>
+        : c.cell(r, region)) });
 
   const shownCols = more.on ? tableCols : tableCols.filter((c, i) => i < 5 || c.key === sort);
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)}
+      <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel={out?.as_of_newest && out.as_of && out.as_of_newest.slice(0, 10) !== out.as_of.slice(0, 10) ? "Oldest close" : "Prices as of"} asOfTz={marketTz(region)}
         info={out?.index_at ? <>List gathered as of {out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
         lede="Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pickRegion} /></div>

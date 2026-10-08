@@ -12,6 +12,8 @@ export interface EtfGap {
   nav: number | null; nav_date: string | null; nav_gap: number | null;
   /** the price set against the NAV and its day: that day's close (a gap is always of one day), or none yet */
   nav_price?: number | null; nav_price_day?: string | null; nav_waiting?: boolean;
+  /** the close and the latest price are too far apart to both be right: the gap is left out (R7O-007) */
+  nav_doubtful?: boolean;
   gap: number | null; basis: "iNAV" | "NAV" | null; text: string | null; days?: GapSummary | null;
 }
 export interface EtfGaps {

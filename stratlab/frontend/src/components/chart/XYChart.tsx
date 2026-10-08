@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, tickOnPoint, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
+import { dayTicks, distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, spansDays, tickOnPoint, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
 import { signCls, tzLabel } from "../../lib/format";
 import { linePath, linear, lowerBound, nearest, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
 import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
@@ -248,6 +248,11 @@ export function XYChart(p: XYChartProps) {
     if (!n) return [];
     if (T) {
       const ta = T[Math.max(0, Math.min(n - 1, Math.ceil(a)))], tb = T[Math.max(0, Math.min(n - 1, Math.floor(b)))];
+      if (intraday && spansDays(ta, tb, p.tz)) {
+        // points across days on an axis that skips the hours between sessions: each day's first point named by its day
+        for (const d of dayTicks(T, Math.max(in0, Math.ceil(a)), Math.min(in1, Math.floor(b)), p.tz)) push(sx(X[d.i]), d.label);
+        return out.map((t) => ({ ...t, anchor: (t.px - textWidth(t.label) / 2 < padL ? "start" : t.px + textWidth(t.label) / 2 > padL + plotW ? "end" : "middle") as "start" | "middle" | "end" }));
+      }
       const ticks = timeTicks(ta, tb, max, p.tz);
       // a clock-time axis in a market's zone names the zone once, on its last clock time: "12:00 IST"
       const lastClock = intraday && p.tz ? ticks.map((t) => /^\d\d:\d\d$/.test(t.label)).lastIndexOf(true) : -1;

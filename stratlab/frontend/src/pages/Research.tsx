@@ -318,7 +318,7 @@ export function CompanyPage() {
       {region === "IN" && <Card id="deals"><CardHead title="Deals and insider trades"
         info="Who bought or sold, from exchange disclosures: promoters', directors' and key staff's own trades and pledges, holders crossing 5% and moving 2% at a time (substantial acquisitions), and bulk and block deals with the named client." /><DealsPanel symbol={sym} /></Card>}
 
-      {c.quarters && c.quarters.cols.length > 0 && <Card><CardHead title="Last quarters" /><QuarterTable q={c.quarters} /></Card>}
+      {c.quarters && c.quarters.cols.length > 0 && <Card><CardHead title="Last quarters" /><QuarterTable q={c.quarters} bank={!!c.bank} /></Card>}
 
       <Card id="corporate-actions"><CardHead title="Corporate actions"
         info="Dividends, bonus issues, splits, buybacks and rights issues, with ex-dates and record dates, as the company announced them." /><CompanyActions region={region} symbol={c.symbol} /></Card>

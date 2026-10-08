@@ -4,7 +4,7 @@ import { useApp } from "../../lib/app";
 import { Card, CardHead, DataTable, EmptyState, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type ServerError } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
-import { service } from "./attention";
+import { errorCounts, service } from "./attention";
 import { PlatformPanel } from "./PlatformPanel";
 
 type FilingCheck = { ok: boolean; symbol: string; count?: number; error?: string; latest?: { at: string; label: string; subject: string }[];
@@ -52,12 +52,14 @@ export function SystemSection() {
     setNote(`Saved real_prices.json.gz: ${r.headers.get("X-Instruments") ?? "?"} instruments, ${Math.round(blob.size / 1024)} KB${Number(r.headers.get("X-Problems")) ? `, ${r.headers.get("X-Problems")} skipped` : ""}. Upload it to GitHub at stratlab/backend/tests/fixtures/real_prices.json.gz.`);
   });
   const errors = sv?.recent_errors ?? [];
+  const counted = errorCounts(sv ?? {});
 
   return (
     <>
       <Card label="Server errors">
-        <CardHead title={`Server errors (${errors.length})`} info="Crashes since the server last started, newest first. Users see the ref code in the error message." />
-        {!errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started.</EmptyState>
+        <CardHead title={`Server errors (${counted.since} since the last restart${counted.before ? `, ${counted.before} kept from before it` : ""})`}
+          info="Crashes newest first: those since the server last started, and the last ones from before it, which are kept across a restart. Users see the ref code in the error message." />
+        {!errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started, and none were kept from before it.</EmptyState>
           : <DataTable label="Server errors" rows={errors} rowKey={(x) => x.ref} columns={ERRORS} />}
       </Card>
 
