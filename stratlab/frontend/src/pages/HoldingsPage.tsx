@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, dataUrl, type ApiError } from "../lib/api";
 import { numberProblem, problems, type Limits } from "../lib/validate";
 import { useApp } from "../lib/app";
-import { ago, dateOnly, inr, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
+import { ago, dateOnly, fmtDate, inr, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
 import { Trash } from "../components/Icons";
 import { track } from "../lib/analytics";
@@ -21,13 +21,14 @@ import { PlanInline } from "../components/PlanInterest";
 type Row = {
   symbol: string; exchange: string; name: string; sector: string; qty: number; avg: number | null; price: number | null;
   value: number | null; invested: number | null; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null;
-  weight: number | null; market?: "IN" | "US"; currency?: string;
+  weight: number | null; market?: "IN" | "US"; currency?: string; session?: string | null;
   kind?: "stock" | "etf" | "reit" | "invit" | "sgb"; kind_label?: string | null;   // ETFs, REITs, InvITs and gold bonds get a badge
 };
 type UsTotals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; in_total: boolean };
 type View = {
   rows: Row[]; allocation: { sector: string; value: number; pct: number | null; count: number }[];
-  totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number };
+  totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number;
+    no_cost?: { count: number; symbols: string[]; value: number } | null; session?: string | null; other_session?: string[] };
   source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; limit: number; facts_max: number;
   us?: UsTotals | null; usd_inr?: number | null; us_prices?: boolean | null;
 };
@@ -178,7 +179,9 @@ export function HoldingsPage() {
     { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null
       ? <>–<span className="k-sub-line">{r.price == null ? "no price today" : "no average price"}</span></>
       : <><span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.pnl}>{pct(r.pnl_pct)}</Signed></span></>) },
-    { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <><span className={tone(r.day)}>{money(r.day, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.day}>{pct(r.day_pct, 2)}</Signed></span></>) },
+    // a price from another session (a US stock's last session, seen during India's) says which day its change is from
+    { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <><span className={tone(r.day)}>{money(r.day, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.day}>{pct(r.day_pct, 2)}</Signed></span>
+      {r.session && t?.session && r.session !== t.session && <span className="k-sub-line">{fmtDate(r.session, { year: false })} session</span>}</>) },
     { key: "weight", header: "Weight", numeric: true, cell: (r) => (r.weight == null ? "–" : `${r.weight.toFixed(1)}%`) },
     // what a broker's holdings page shows first: the quantity with its average cost and the last price under it
     { key: "qty", header: "Qty · avg → last", numeric: true, cell: (r) => <>{qtyText(r.qty)}<span className="k-sub-line">{price(r.avg, cur(r))} → {price(r.price, cur(r))}</span></> },
@@ -248,7 +251,16 @@ export function HoldingsPage() {
               {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${sourceWords(view.source)}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
               {!view.prices && " · Live prices are offline right now, so values are shown at cost."}
             </p>
-            {view.us && (
+            {t.no_cost && (
+              <p className="k-note">
+                Not in these totals: {t.no_cost.symbols.join(", ")} ({t.no_cost.count === 1 ? "no buy price" : "no buy prices"}), worth {inr(t.no_cost.value)} now{view.usd_inr && rows.some((r) => isUS(r) && t.no_cost!.symbols.includes(r.symbol)) ? ` (at ₹${view.usd_inr.toFixed(2)} a dollar)` : ""}.
+                Add {t.no_cost.count === 1 ? "its buy price" : "their buy prices"} with Edit to count {t.no_cost.count === 1 ? "it" : "them"}.
+              </p>
+            )}
+            {t.session && (t.other_session?.length ?? 0) > 0 && (
+              <p className="k-note">Today is the {fmtDate(t.session, { year: false })} session. {t.other_session!.join(", ")} {t.other_session!.length === 1 ? "has" : "have"} not traded in it yet, so {t.other_session!.length === 1 ? "its" : "their"} last change is left out of Today.</p>
+            )}
+            {view.us && view.us.count > 0 && (
               <p className="k-small" aria-label="US stocks">
                 <b>US stocks</b> ({view.us.count}): {usd(view.us.value)} · invested {usd(view.us.invested)}
                 {view.us.pnl != null && <> · <span className={tone(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}

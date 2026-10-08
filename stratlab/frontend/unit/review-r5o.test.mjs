@@ -18,3 +18,11 @@ test("each watchlist price carries the time it was traded, in the market's zone 
   assert.match(read("src/pages/Research.tsx"), /quoteAt\(q\.at, marketTz\(region\)\)/);
   assert.match(read("src/pages/InvestorHome.tsx"), /quoteAt\(r\.price_at, marketTz\(region\)\)/);
 });
+
+test("holdings name what is left out of the totals and of Today (R5O-004)", () => {
+  const page = read("src/pages/HoldingsPage.tsx");
+  assert.match(page, /Not in these totals: \{t\.no_cost\.symbols\.join/);
+  assert.match(page, /last change is left out of Today/);
+  assert.match(page, /r\.session !== t\.session/);
+  assert.match(page, /view\.us && view\.us\.count > 0/);
+});

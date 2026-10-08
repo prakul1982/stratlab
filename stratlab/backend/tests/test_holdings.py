@@ -205,7 +205,13 @@ def test_view_math():
     assert rows["B"]["pnl"] is None and rows["B"]["value"] == 200                         # no average price: no gain or loss
     assert rows["C"]["value"] is None and rows["C"]["invested"] == 100                    # no price: counted at cost
     t = v["totals"]
-    assert t["value"] == 1500 and t["pnl"] == 200 and t["pnl_pct"] == 20 and t["day"] == 15 and t["day_pct"] == 1.08     # 15 on yesterday's 1,385
+    # R5O-004: value, cost, gain or loss and the day's change are of the same positions. B has no buy price, so it is
+    # named under the totals and not in them (this expected 1,500 and a day of 15 before: value minus cost was 400
+    # while the gain or loss said 200, the mismatch the owner saw)
+    assert t["value"] == 1300 and t["invested"] == 1100 and t["value"] - t["invested"] == t["pnl"] == 200 and t["pnl_pct"] == 20
+    assert t["day"] == 20 and t["day_pct"] == 1.69                                                  # 20 on yesterday's 1,180
+    assert t["no_cost"] == {"count": 1, "symbols": ["B"], "value": 200}
+    # the sector mix is still a share of everything held
     assert v["allocation"][0] == {"sector": "IT", "value": 1300, "pct": 86.7, "count": 2}
 
 
