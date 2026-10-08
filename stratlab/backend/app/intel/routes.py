@@ -226,7 +226,7 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
             news = hub.headlines(r, f)
         except SourceError:
             news = []
-        return A.pulse(r, f, indices, news, _ai)
+        return A.pulse(r, f, indices, news, _ai, closed=not market_open(r))
     try:
         return ok(ai_call(profile, "pulse", (r, f.lower(), hour), 3600, refresh, build))
     except HTTPException as e:

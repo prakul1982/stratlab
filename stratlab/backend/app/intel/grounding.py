@@ -368,6 +368,28 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict]) -> dict:
     return res
 
 
+_OPEN_WORDS = [(re.compile(r"\b(opened|opens|started|began)\b", re.I), "closed"),
+               (re.compile(r"\b(is|are) (trading|opening)\b", re.I), "closed"),
+               (re.compile(r",?\s*\b(in early trade|at the open(ing)?|in (the )?morning trade|this morning)\b", re.I), "")]
+
+
+def closed_words(read: dict) -> dict:
+    """The market read after the close in the past tense of the close: "opened sharply lower" becomes "closed sharply
+    lower", and "in early trade" goes (R6O-025: a read at 23:00 IST said the NIFTY "opened sharply lower" at the
+    day's closing level)."""
+    def fix(t):
+        if not isinstance(t, str):
+            return t
+        for rx, to in _OPEN_WORDS:
+            t = rx.sub(lambda m: (to[:1].upper() + to[1:]) if to and m.group(0)[:1].isupper() else to, t)
+        return re.sub(r"\s{2,}", " ", t).strip()
+    out = dict(read)
+    out["tone"] = fix(read.get("tone"))
+    for k, f in (("hot", "why"), ("flows", "detail"), ("themes", "detail")):
+        out[k] = [{**x, f: fix(x.get(f))} for x in read.get(k) or []]
+    return out
+
+
 # --- the company read ---
 def fiscal_quarter(today, region: str) -> tuple[int, int]:
     """(quarter, fiscal year) of the last quarter that has ended, in India's April-March year: on 8 Oct 2026 that is

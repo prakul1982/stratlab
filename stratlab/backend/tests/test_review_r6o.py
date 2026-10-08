@@ -510,3 +510,23 @@ def test_the_brief_preview_is_the_real_issue_when_there_is_one(monkeypatch):
     assert subject.endswith("−3.11%") and "−3.11%" in text
     monkeypatch.setattr(P, "_today", lambda: date(2026, 10, 9))       # Friday, just after midnight: the sample is Thursday's
     assert "Thu 8 Oct" in P._market("US", False)[0]
+
+
+# ---------- R6O-025: the market read after the close says "closed" ----------
+def test_the_pulse_after_the_close_says_closed(monkeypatch):
+    from app.intel import ai as A
+    seen = {}
+
+    def fake(system, text, **k):
+        seen["facts"] = text
+        return '{"tone": "Indian markets opened sharply lower on Thursday, with the NIFTY 50 at 22,231.8.", "hot": [], "flows": [], "themes": []}'
+    monkeypatch.setattr(A, "complete", fake)
+    idx = [{"name": "NIFTY 50", "price": 22231.8, "change_pct": -1.64, "high52": 26277.35, "low52": 22182.55}]
+    out = A.pulse("IN", "", idx, [], (None, None), closed=True)
+    assert out["tone"] == "Indian markets closed sharply lower on Thursday, with the NIFTY 50 at 22,231.8."
+    assert "The market has closed for the day" in seen["facts"]
+    # during the session the words stay as written
+    assert "opened" in A.pulse("IN", "", idx, [], (None, None), closed=False)["tone"]
+    import inspect
+    from app.intel import routes
+    assert "closed=not market_open(r)" in inspect.getsource(routes.pulse_ai)

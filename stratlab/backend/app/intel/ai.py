@@ -237,7 +237,7 @@ companies with the most direct link to the theme, in value-chain order, not rank
     }
 
 
-def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai) -> dict:
+def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai, closed: bool | None = None) -> dict:
     where = "Indian market only (NSE/BSE, Nifty/Sensex, rupees)." if region == "IN" else "US market (S&P 500, Nasdaq, Dow)."
     system = f"""You are a market reporter writing today's market read{' focused on ' + focus if focus else ''}. {where}
 Base everything ONLY on the live index levels and headlines given. Don't pull events or dates from memory.
@@ -253,6 +253,8 @@ Return ONLY this JSON:
 No outlook: describe what happened, not what will happen. Tickers are {'NSE symbols' if region == 'IN' else 'US tickers'}.
 {RULES}"""
     facts = {"today": ist_date().isoformat(), "indices": grounding.market_facts(indices),
+             # after the close the levels are the day's close: the read says the market closed, never "opened" (R6O-025)
+             **({"session": "The market has closed for the day: the levels are its close. Say how it closed."} if closed else {}),
              "headlines": [f"[{(h.get('at') or '')[:10]}] {h['headline']}" for h in headlines[:14]]}
     r = _ask(system, facts, ai, 2500)
     if not isinstance(r, dict) or not str(r.get("tone") or "").strip():     # never cache a read with nothing in it
@@ -266,7 +268,8 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     read = {"tone": str(r.get("tone") or "")[:900], "hot": rows(r.get("hot"), ("name", "ticker", "why")),
             "flows": flows, "themes": rows(r.get("themes"), ("theme", "detail", "example"))}
     # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)
-    return grounding.ground_pulse(read, indices, headlines)
+    out = grounding.ground_pulse(read, indices, headlines)
+    return grounding.closed_words(out) if closed else out
 
 
 def compare(a: dict, b: dict, ai) -> dict:
