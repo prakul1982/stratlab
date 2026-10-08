@@ -81,6 +81,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
 from . import plan_interest
+from . import email_kit
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -285,6 +286,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
     threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start()
+    threading.Thread(target=stock_price_refresh_job, daemon=True, name="stock-prices").start()   # pages follow each close
     screen_job.start()
     breadth_job.start()
     threading.Thread(target=library_seed_once, daemon=True, name="library-seed-once").start()
@@ -877,6 +879,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
 @app.get("/unsubscribe", response_class=HTMLResponse)
 def unsubscribe_page(t: str = ""):
     """Asks before unsubscribing: mail scanners open every link in an email, and shouldn't unsubscribe anyone."""
+    if t == email_kit.PREVIEW_TOKEN:          # the link in Admin → Email previews: what it does for a reader, nothing changed
+        return mail_page("Unsubscribe (preview)", "In a real email this link opens a page with one Unsubscribe button: no "
+                         "sign-in, and that one email type is turned off. This is a preview, so nothing was changed.")
     name = _unsubscribe(t, act=False)
     if not name:
         return mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400)
@@ -3080,10 +3085,14 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     """One company's public page from the deep dive's cheap sources: reported numbers, the filings list and daily
     prices. Never AI. None when the sources have no page for it; a source that is down or busy raises."""
     sym = co["sym"]
+    checks: dict = {}
     try:
         if region == "US":
             p = sec.with_fx(dict(sec_feed.company(sym)), usd_per)
-            us_price_ratios(p, sym)
+            quote = us_price_ratios(p, sym)
+            kind = stock_pages.FUND_TYPES.get(str(quote.get("type") or "").upper())
+            if kind:                      # an ETN filed under its bank's name, a fund: not a company (R6V-001)
+                checks["not_company"] = kind
             items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
             exchange, red = "Listed in the US", None
         else:
@@ -3101,9 +3110,9 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         return None                       # no company page at the source
     trend = prices = None
     try:
-        ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or sym}])
-        # closed sessions only: the page's price is the last close, with its date, never a session still trading
-        bars = stock_pages.closed_bars(scan._bars(markets, ids[0]) if ids else [], region)
+        # closed sessions only, read after the close settled: the page's price is the last close, with its date, never
+        # a session still trading or a cached read from before the close (R6V-002)
+        bars = stock_pages.closed_bars(stock_page_bars(region, co), region)
         if bars:
             trend, prices = scan.analyse(bars), stock_pages.price_facts(bars)
     except Exception:                     # no prices: the page goes without the price facts
@@ -3123,13 +3132,49 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             p["ratios"].pop("Dividend Yield", None)
         else:
             p["ratios"]["Dividend Yield"] = dy
+    if region == "US":
+        checks.update(us_cap_checks(p, sym))
     nums = deepdive.numbers(p)
     snap = screener_summary(p)
     if region == "IN":
         # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
         # company page does), so the screens' market value and P/E agree with the price beside them
         snap = at_live_price(snap, close)
-    return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red)
+    return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red, checks)
+
+
+def us_cap_checks(p: dict, sym: str) -> dict:
+    """What a US page's market value is checked against (stock_pages.cap_problem): the latest twelve months' (or year's)
+    revenue in dollars, 0 for a company that reports none; whether its US shares are depositary shares whose ratio to
+    ordinary shares couldn't be read; and whether its accounts show dividends paid (a price history with none then
+    gives n/a, not 0%)."""
+    out: dict = {}
+    rate = sec.usd_rate(p)
+    if rate:
+        sales = sec._latest(p.get("pl"), "Sales")
+        out["sales_usd"] = round(float(sales or 0) * rate, 2)
+    if not p.get("ads_ratio") and "depositary" in str(p.get("share_note") or "") and not sec.non_common(sym):
+        out["cap_unverified"] = True
+    if sec._latest(p.get("cashflow"), "Dividends paid"):
+        out["divs_paid"] = True
+    return out
+
+
+def stock_page_bars(region: str, co: dict) -> list[dict]:
+    """A company's daily candles for its public page, read after its market's latest close settled: a copy cached
+    from before then (a session still trading, a last trade before the official close) is read again."""
+    ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or co["sym"]}])
+    if not ids:
+        return []
+    prov, inst = markets.resolve(ids[0])
+    if not prov or not inst:
+        return []
+    _, at = stock_pages.last_close(region)
+    age = time.time() - (at.timestamp() + stock_pages.settle(region))     # how old a copy may be and still be after it
+    try:
+        return prov.history(inst, "1d", scan.DAYS, ttl=max(60.0, age))
+    except TypeError:                     # a source without its own cache control: the scan's copy
+        return scan._bars(markets, ids[0])
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
@@ -3195,6 +3240,8 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     except stock_pages.Busy:
         return JSONResponse(status_code=503, headers={"Retry-After": "600"},
                             content={"detail": {"code": "busy", "message": "This page is being prepared. Try again in a few minutes."}})
+    if (stock_page_store.mem.get(f"stocks:page:{r}:{sym}") or {}).get("not_company"):
+        return HTMLResponse(page, status_code=404)             # a fund or a note: no company page (R6V-001)
     if r == "IN":                           # the surveillance lists change daily, so they're added as the page is sent
         page = stock_pages.with_surveillance(page, surveillance.flags_for(sym))
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=SEO_HEADERS)
@@ -3245,6 +3292,37 @@ def screen_warm(region: str, sym: str, co: dict):
 
 
 screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c))
+
+# after each close, how many stored pages' prices are re-read per run, and the pause between reads (seconds): India's
+# broker allows a few reads a second, the US prices fewer a minute, and people's own pages and backtests come first
+PRICE_REFRESH = {"IN": (300, 1.0), "US": (150, 2.0)}
+PRICE_REFRESH_EVERY = 15 * 60
+price_refresh_status: dict = {"last_run": None, "IN": None, "US": None}
+
+
+def stock_price_refresh_once(sleep=time.sleep) -> dict:
+    """One pass of the price job: every market's stored pages that are a close behind, largest first (R6V-002)."""
+    def bars_of(region: str, symbol: str) -> list[dict]:
+        co = stock_pages.companies(region).get(symbol)
+        return stock_page_bars(region, co) if co else []
+    for region, (limit, gap) in PRICE_REFRESH.items():
+        try:
+            price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep)
+        except Exception as e:                        # a source or storage down: the next pass tries again
+            price_refresh_status[region] = {"error": str(e)[:160]}
+    price_refresh_status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return price_refresh_status
+
+
+def stock_price_refresh_job():
+    """Every quarter of an hour: re-read the prices of stored company pages that are a close behind."""
+    time.sleep(420)                           # after startup traffic, the company lists and the first screens index
+    while True:
+        try:
+            stock_price_refresh_once()
+        except Exception as e:
+            print("stock price refresh failed:", str(e)[:160])
+        time.sleep(PRICE_REFRESH_EVERY)
 screen_job = screens.Job(lambda uid: db.get_profile(uid), lambda p: screens_limit(access_plan(p)))
 
 
@@ -4672,7 +4750,8 @@ def weekly_facts(now: datetime) -> dict:
         audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
     origin = (settings.FRONTEND_ORIGINS or [""])[0].rstrip("/")
     return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
-            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), "admin_url": f"{origin}/admin" if origin else None}
+            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), "errors_listed": len(RECENT_ERRORS),
+            "admin_url": f"{origin}/admin" if origin else None}
 
 
 def weekly_summary(now: datetime | None = None) -> tuple[str, str]:

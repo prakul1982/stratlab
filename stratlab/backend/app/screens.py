@@ -163,17 +163,18 @@ def with_us_red(rows: list[dict]) -> list[dict]:
 
 def row(region: str, symbol: str, f: dict) -> dict | None:
     """One company's line in the index, from its stored page facts; None when there's nothing to screen on."""
-    if not isinstance(f, dict) or not f:
-        return None
+    if not isinstance(f, dict) or not f or f.get("not_company"):
+        return None                              # a fund or a note filed under a company's name isn't screened
     price, high = _num(f.get("price")), _num(f.get("high52"))
     g = f.get("growth") if isinstance(f.get("growth"), dict) else {}
     out = {"symbol": symbol, "name": str(f.get("name") or symbol)[:120], "sector": _sector(region, symbol, f),
            "industry": str((f.get("industry") or [None])[-1] or "")[:80] or None,
-           "market_cap": _num(f.get("market_cap")), "price": price,
+           # a market value (and P/E) that fails its checks is left out, so it never tops a list by size (R6V-001)
+           "market_cap": stock_pages.shown_cap(f), "cap_checked": True, "price": price,
            "from_high": round((price / high - 1) * 100, 2) if price and high and high > 0 else None,
            "sales_cagr_3y": _num(g.get("sales_cagr_3y")), "net_margin": _num(f.get("net_margin")),
            "opm": None if f.get("bank") else _num(f.get("opm")), "debt_equity": None if f.get("bank") else _num(f.get("debt_equity")),
-           "roe": _num(f.get("roe")), "roce": _num(f.get("roce")), "div_yield": _num(f.get("div_yield")), "pe": _num(f.get("pe")),
+           "roe": _num(f.get("roe")), "roce": _num(f.get("roce")), "div_yield": stock_pages.shown_yield(f), "pe": stock_pages.shown_pe(f),
            "stage": int(f["stage"]) if _num(f.get("stage")) in STAGES else None,
            "red_flags": _red_count(f) if region == "IN" else None,
            "price_at": str(f.get("price_at") or "")[:10] or None, "built_at": f.get("built_at")}
@@ -588,7 +589,12 @@ def _when(iso: str | None) -> str | None:
         d = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
     except ValueError:
         return None
-    return f"{d.day} {d:%b %Y}" + (f", {d:%H:%M} UTC" if len(str(iso)) > 10 else "")
+    if len(str(iso)) <= 10:
+        return f"{d.day} {d:%b %Y}"
+    # India time, as every other email gives its times (R6V-016: this one said UTC beside briefs in IST)
+    from zoneinfo import ZoneInfo
+    d = (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).astimezone(ZoneInfo("Asia/Kolkata"))
+    return f"{d.day} {d:%b %Y}, {d:%H:%M} IST"
 
 
 def deliver(profile: dict, subject: str, text: str, html: str) -> list[str]:

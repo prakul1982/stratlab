@@ -34,12 +34,12 @@ def card(f: dict, region: str, symbol: str) -> dict:
     ind = stock_pages._dedupe(f.get("industry"))
     growth = (f.get("growth") or {}).get("sales_cagr_3y")
     whole = region == "IN" and stock_pages._whole([f.get("opm")])
-    rows = [("Market cap", stock_pages.cap_text(f)), ("P/E", stock_pages._fmt(f.get("pe"))),
+    rows = [("Market cap", stock_pages.cap_text(f)), ("P/E", stock_pages._fmt(stock_pages.shown_pe(f))),
             ("Return on equity", stock_pages._fmt(f.get("roe"), 1, "%")),
             ("Sales growth a year, 3 years", stock_pages._fmt(growth, 1, "%")),
             ("EBITDA margin", "–" if f.get("bank") else stock_pages._pct(f.get("opm"), whole)),
             ("Net margin", stock_pages._fmt(f.get("net_margin"), 1, "%")),
-            ("Dividend yield", stock_pages._fmt(f.get("div_yield"), 2, "%"))]
+            ("Dividend yield", stock_pages._fmt(stock_pages.shown_yield(f), 2, "%"))]
     low, high = stock_pages._num(f.get("low52")), stock_pages._num(f.get("high52"))
     return {
         "region": region, "symbol": symbol, "name": f.get("name") or symbol,
