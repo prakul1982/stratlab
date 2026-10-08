@@ -378,6 +378,59 @@ def test_the_owner_connecting_shares_the_data_login_instead_of_cancelling_it(w, 
     assert state.section("u-admin", "kite")["status"] == "ok"
 
 
+# ---------- R5O-025: slow pages ----------
+def test_a_daily_candles_time_is_its_day_not_midnight():
+    from app.main import candle_day
+    assert candle_day("2026-10-08T00:00:00+05:30") == "2026-10-08"
+    assert candle_day("2026-10-08") == "2026-10-08"
+    assert candle_day("2026-10-08T15:29:00+05:30") == "2026-10-08T15:29:00+05:30"
+    assert candle_day(None) is None
+
+
+def test_a_sector_of_business_updates_is_read_in_one_database_call(monkeypatch):
+    from app import biz_updates as B
+    reads, batches = [], []
+    monkeypatch.setattr(B._cache, "get", lambda k: None)
+    monkeypatch.setattr(B._cache, "set", lambda *a, **k: None)
+    monkeypatch.setattr(db, "prefetch_settings", lambda keys: batches.append(list(keys)))
+    monkeypatch.setattr(db, "get_setting", lambda k: reads.append(k) or None)
+    sector = next(iter(B.SECTORS))
+    B.sector_view(sector)
+    assert len(batches) == 1 and len(batches[0]) == len(B.SECTORS[sector]["symbols"])
+
+
+def test_holders_page_opens_on_the_kept_count_and_builds_the_index_behind(monkeypatch):
+    from app import shareholders as S
+    store = {S.COVERAGE_KEY: '{"companies": 1840, "latest_quarter": "2026-06-30"}'}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(S._cache, "get", lambda k: None)
+    built = []
+    monkeypatch.setattr(S, "_build_behind", lambda: built.append(1))
+    monkeypatch.setattr(S, "_index", lambda: (_ for _ in ()).throw(AssertionError("no full read on opening")))
+    assert S.coverage() == {"companies": 1840, "latest_quarter": "2026-06-30", "queued": 0} and built == [1]
+
+
+def test_a_fresh_recording_answers_while_the_live_chain_is_read(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app import positioning as P
+    now = datetime.now(timezone.utc)
+    rec = {"expiry": "2026-10-13", "expiries": ["2026-10-13"], "spot": 22200, "chain": [], "source": "recorded",
+           "taken_at": (now - timedelta(minutes=2)).isoformat()}
+    monkeypatch.setattr(P, "recorded_last", lambda name, day: [rec])
+    monkeypatch.setattr(P, "recorded_chain", lambda name, choice, day: rec)
+    assert P._fresh_recording("NIFTY", "current") is rec
+    old = {**rec, "taken_at": (now - timedelta(minutes=30)).isoformat()}
+    monkeypatch.setattr(P, "recorded_chain", lambda name, choice, day: old)
+    assert P._fresh_recording("NIFTY", "current") is None
+
+
+def test_the_deep_dive_reads_its_sources_side_by_side():
+    from app import main
+    src = open(main.__file__).read()
+    assert '_deep_pool.submit(filings_feed.announcements, sym' in src and '_deep_pool.submit(price_status, sym)' in src
+
+
 # ---------- R5O-016: a job's last run survives a restart ----------
 def test_a_jobs_last_run_is_shown_after_a_restart(monkeypatch):
     from app import job_status

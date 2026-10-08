@@ -375,6 +375,14 @@ def stored(symbol: str) -> dict:
     return reads
 
 
+def prime(symbols) -> None:
+    """Read the companies' stored figures in one database call for the rest of the request, instead of one round trip
+    per company (a sector page made 40 of them, twice over: R5O-025's 19 s)."""
+    want = [KEY + s for s in symbols if _cache.get(("reads", s)) is None]
+    if want:
+        db.prefetch_settings(want)
+
+
 def save(symbol: str, fid: str, read: dict):
     with _lock:
         got = db.json_value(db.get_setting(KEY + symbol), {})
@@ -587,6 +595,7 @@ def sector_view(sector: str) -> dict:
     """Every company in a sector list, alphabetical: its latest headline figure, the change on the previous period and
     on the year, and when it was filed. No ranking."""
     s = SECTORS[sector]
+    prime(sym for sym, _ in s["symbols"])
     rows = [_headline_row(sym, name, stored(sym), s["span"]) for sym, name in s["symbols"]]
     rows.sort(key=lambda r: r["name"].upper())
     return {"sector": sector, "label": s["label"], "rows": rows, "sectors": [{"id": k, "label": v["label"]} for k, v in SECTORS.items()],
@@ -651,7 +660,9 @@ def my_view(uid: str) -> dict:
     the sector view's line. Stocks with none read yet are named, not hidden."""
     names = {sym: name for v in SECTORS.values() for sym, name in v["symbols"]}
     rows, without = [], []
-    for sym, kind in my_symbols(uid):
+    mine = my_symbols(uid)
+    prime(sym for sym, _ in mine)
+    for sym, kind in mine:
         reads = stored(sym)
         row = _headline_row(sym, names.get(sym, sym), reads)
         if row["value"] is None:
