@@ -40,7 +40,7 @@ RANGES = {
     "sales_cagr_3y": ("Revenue growth, 3 years (a year)", "%",
                       "How fast revenue grew each year, on average, over the last three reported years (compounded)."),
     "net_margin": ("Net profit margin", "%", "Net profit as a share of revenue in the last reported year."),
-    "opm": ("Operating margin", "%", "Operating profit (before interest, tax and depreciation) as a share of revenue. "
+    "opm": ("EBITDA margin", "%", "Operating profit before interest, tax and depreciation (EBITDA) as a share of revenue. "
                                       "Banks and lenders don't report one."),
     "debt_equity": ("Debt to equity", "x", "Borrowings divided by shareholders' equity. 0.5 means half as much debt as equity."),
     "roe": ("Return on equity (ROE)", "%", "Net profit as a share of shareholders' equity in the last reported year."),

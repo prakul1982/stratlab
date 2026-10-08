@@ -27,8 +27,9 @@ HEADERS = [
     (b"x-frame-options", b"DENY"),
     (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
 ]
-# the API's own HTML pages (public company pages, share previews, unsubscribe) need no script at all: none may run
-HTML_CSP = (b"content-security-policy", b"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; "
+# the API's own HTML pages (public company pages, share previews, unsubscribe) need no script at all: none may run. The
+# company pages use the site's own fonts (/fonts, on the same host)
+HTML_CSP = (b"content-security-policy", b"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; "
                                          b"form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 
 

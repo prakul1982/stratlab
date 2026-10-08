@@ -31,7 +31,7 @@ def test_an_indian_company_page_has_the_facts_and_the_tags(w):
     assert 'property="og:title"' in t and 'name="description"' in t and 'content="index,follow"' in t
     ld = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', t).group(1))
     assert ld[0]["@type"] == "Corporation" and ld[0]["tickerSymbol"] == "RELIANCE"
-    for part in ("Last price", "1-year range", "Revenue and profit", "Recent filings", "Price trend", "As of ",
+    for part in ("Last close", "1-year range", "Revenue and profit", "Recent filings", "Price trend", "As of ",
                  "Test a strategy on RELIANCE", "Open the full deep dive", "/new?market=IN&amp;symbol=RELIANCE",
                  "/research/IN/RELIANCE/deep", "Same sector", 'href="/stocks/in/ONGC"', "Not investment advice"):
         assert part in t, part

@@ -31,13 +31,13 @@ def _region(market: str | None) -> str | None:
 
 def card(f: dict, region: str, symbol: str) -> dict:
     """The card's words and numbers, ready to draw: plain facts from the company page."""
-    ind = [x for x in f.get("industry") or [] if x]
-    unit = f.get("unit") or ""
+    ind = stock_pages._dedupe(f.get("industry"))
     growth = (f.get("growth") or {}).get("sales_cagr_3y")
-    rows = [(f"Market cap ({unit})", stock_pages._fmt(f.get("market_cap"), 0)), ("P/E", stock_pages._fmt(f.get("pe"))),
+    whole = region == "IN" and stock_pages._whole([f.get("opm")])
+    rows = [("Market cap", stock_pages.cap_text(f)), ("P/E", stock_pages._fmt(f.get("pe"))),
             ("Return on equity", stock_pages._fmt(f.get("roe"), 1, "%")),
             ("Sales growth a year, 3 years", stock_pages._fmt(growth, 1, "%")),
-            ("Operating margin", "–" if f.get("bank") else stock_pages._fmt(f.get("opm"), 1, "%")),
+            ("EBITDA margin", "–" if f.get("bank") else stock_pages._pct(f.get("opm"), whole)),
             ("Net margin", stock_pages._fmt(f.get("net_margin"), 1, "%")),
             ("Dividend yield", stock_pages._fmt(f.get("div_yield"), 2, "%"))]
     low, high = stock_pages._num(f.get("low52")), stock_pages._num(f.get("high52"))

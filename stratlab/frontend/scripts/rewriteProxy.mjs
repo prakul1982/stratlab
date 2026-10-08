@@ -16,7 +16,7 @@ export function sourceRegex(source) {
     .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\/:[A-Za-z_]+\*/g, "(?:/.*)?")
     .replace(/:[A-Za-z_]+/g, "[^/]+");
-  return `^${body}/?$`;
+  return `^${body}/?(?:[?#].*)?$`;     // a query is part of the address the proxy sees ("/stocks?q=tcs")
 }
 
 /** vite's `proxy` option: a key starting with ^ is a pattern. Each forwarded path goes to `target`: the API the app is

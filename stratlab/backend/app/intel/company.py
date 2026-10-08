@@ -474,7 +474,7 @@ class Research:
                                _item("Div yield", s.get("div_yield"), "%"), _item("Book value", s.get("book_value"), "money"),
                                _item("Face value", s.get("face_value"), "money")]),
                 ("Returns and quality", [_item("ROCE", s.get("roce"), "%"), _item("ROE", s.get("roe"), "%"),
-                                         _item("Net margin", s.get("net_margin"), "%"), _item("OPM", s.get("opm"), "%"),
+                                         _item("Net margin", s.get("net_margin"), "%"), _item("EBITDA margin", s.get("opm"), "%"),
                                          _item("Debt", s.get("debt_cr"), "cr"), _item("Debt / equity", s.get("debt_equity"))]),
                 ("Sales growth", [_item("Latest YoY", s.get("sales_yoy"), "%±"), _item("3Y CAGR", gs.get("3 Years"), "%±"),
                                   _item("5Y CAGR", gs.get("5 Years"), "%±"), _item("10Y CAGR", gs.get("10 Years"), "%±")]),

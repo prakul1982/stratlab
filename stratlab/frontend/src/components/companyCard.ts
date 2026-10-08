@@ -51,7 +51,7 @@ export async function renderCompanyCard(d: CompanyCard, theme: "light" | "dark" 
     g.fillStyle = c.ink; g.font = "400 48px Fraunces, Georgia, serif"; g.fillText(d.price, px, py);
     const w = g.measureText(d.price).width;
     g.fillStyle = c.muted; g.font = "400 14px 'IBM Plex Sans', sans-serif";
-    g.fillText(d.as_of ? `Last price, ${d.as_of}` : "Last price", px, py + 24);
+    g.fillText(d.as_of ? `Last close, ${d.as_of}` : "Last close", px, py + 24);
     px += Math.max(w, 160) + 56;
   }
   if (d.range) {

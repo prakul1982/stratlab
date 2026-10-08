@@ -52,7 +52,9 @@ def test_screener_parser_reads_every_section():
     assert p["growth"]["sales"]["5 Years"] == "10%" and p["growth"]["price"]["1 Year"] == "-7%"
     assert len(p["pros"]) == 2 and p["cons"][0].startswith("Stock is trading")
     s = scr.summary(p)
-    assert s["pe"] == 27.4 and s["high52"] == 1609 and s["low52"] == 1115
+    # P/E is the price over the page's own trailing-twelve-months EPS (1,408 / 61.43), not the source's "Stock P/E" of
+    # 27.4, which doesn't reconcile with the TTM figures on the same page (R5V-008)
+    assert s["pe"] == 22.9 and s["high52"] == 1609 and s["low52"] == 1115
     assert s["pb"] == pytest.approx(1408 / 630)
     assert s["net_margin"] == pytest.approx(94470 / 976541 * 100)
     assert s["debt_equity"] == pytest.approx(369575 / (829668 + 13532))
@@ -141,10 +143,10 @@ def test_india_company_profile_without_kite(research):
     assert c["name"] == "Reliance Industries Ltd" and c["currency"] == "INR"
     assert c["quote"]["price"] > 0                      # from Yahoo, since Kite is offline here
     groups = {g["title"]: {i["label"]: i["value"] for i in g["items"]} for g in c["metrics"]}
-    # the fundamentals source's P/E (27.4 at its own price) is re-priced at the live price shown at the top of the page
+    # P/E (the page's price over its trailing EPS: 1,408 / 61.43 = 22.9) is re-priced at the live price shown at the top
     scr_price = 1408.0                                  # "Current Price" in the fixture
     live = c["quote"]["price"]
-    assert groups["Valuation"]["P/E"] == pytest.approx(27.4 * live / scr_price, rel=0.01)
+    assert groups["Valuation"]["P/E"] == pytest.approx(22.9 * live / scr_price, rel=0.01)
     assert groups["Valuation"]["P/B"] == pytest.approx(live / groups["Valuation"]["Book value"])
     # compounded over the last five reported years, as the deep dive and the AI read's facts work it out (the source's
     # own table says 10%, counted to the trailing twelve months)
