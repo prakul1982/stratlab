@@ -382,7 +382,7 @@ export function Login({ section = null, panel }: { section?: string | null; pane
 
       <section className="lp-final ruled">
         <div className="lp-wrap stack g20 lp-center">
-          <h2 className="serif lp-h2 lp-final-h">Test it, research it, track it.</h2>
+          <p className="serif lp-h2 lp-final-h">Test it, research it, track it.</p>
           <p className="lp-p">Sign in with Google, no card needed. Your home page shows the first steps.</p>
           {cta("Continue with Google")}
         </div>
@@ -474,7 +474,7 @@ function Pricing() {
             );
           })}
         </div>
-        {small.length > 0 && !loading && <p className="small muted k-measure m80">{small.join(" ")}</p>}
+        {loading ? <span className="lp-skel lp-skel-fine" /> : small.length > 0 && <p className="small muted k-measure m80">{small.join(" ")}</p>}
       </div>
     </section>
   );
@@ -629,7 +629,7 @@ function LibraryExamples() {
             ))}
           </div>
         )}
-      <p><Link className="link" to="/library">{total > 3 ? `See all ${total} StratLab strategies` : "See StratLab's strategies"} and the verdict each earned</Link></p>
+      <p><Link className="link" to="/library">{total > 1 ? `See all ${total} StratLab strategies` : "See StratLab's strategy"} and the verdict each earned</Link></p>
     </div>
   );
 }

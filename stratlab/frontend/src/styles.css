@@ -1907,6 +1907,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
 .lp-skel-amount { height: 46px; width: 60%; }
 .lp-skel-note { height: 1.2em; width: 80%; }
+.lp-skel-fine { height: calc(13.5px * 1.5 * 3); width: min(80ch, 100%); }
 .lp-price-note { display: block; min-height: calc(1.4em * 2); line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }
 .lp-price > .btn:disabled { opacity: .6; }
@@ -1921,7 +1922,8 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 
 /* the phone menu and the small controls: at least 40px to tap */
 .lp-menu > summary { min-height: 40px; cursor: pointer; }
-.lp-nav .btn.sm { min-height: 40px; }
+.lp-nav .btn.sm, .lp-idea-btn { min-height: 40px; }
+.lp-demo-tabs button { min-height: 40px; }
 .lp-faq summary { min-height: 44px; }
 .legal-links a, .lp-foot .legal-links a { display: inline-flex; align-items: center; min-height: 40px; }
 @media (max-width: 600px) {

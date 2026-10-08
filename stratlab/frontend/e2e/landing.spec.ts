@@ -29,7 +29,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   }
   // the sections, and the menu, go Trade, Invest, Money: the strategy lab is where StratLab began
   expect(await page.locator("main section[id]").evaluateAll((els) => els.map((e) => e.id).filter((id) => id !== "top"))).toEqual(order);
-  await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Pricing", "FAQ"]);
+  await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ"]);
   await expect(page.locator(".lp-space")).toHaveText([/Trade/, /Invest/, /Money/]);
   await expect(page.locator(".lp-space .lp-space-art"), "each space shows a picture of itself").toHaveCount(3);
   await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
@@ -61,14 +61,19 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   await expect(page.locator("#faq details")).not.toHaveCount(0);
   expect(await page.locator("#faq details").count(), "the FAQ stays short").toBeLessThanOrEqual(10);
   // the option chains StratLab records, as the server records them
-  const options = page.locator("#faq details", { hasText: "Can I test options strategies?" });
+  // (R5V-019: options can be paper traded, not backtested, so the question says "backtest" and the answer starts with No)
+  const options = page.locator("#faq details", { hasText: "Can I backtest options?" });
   await options.locator("summary").click();
   await expect(options).toContainText("NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX");
-  // the invite rule, as the owner wrote it
+  await expect(options).toContainText("What you can do today is paper trade options");
+  // the invite rule, in the backend's own numbers (R5V-019: the owner's longer wording was one sentence nobody could follow;
+  // unit/seo.test.mjs checks each number against app/invite_rewards.py)
   const invites = page.locator("#faq details", { hasText: "How do invite rewards work?" });
   await invites.locator("summary").click();
-  await expect(invites).toContainText("Invite friends, both get a month of Basic.");
-  await expect(invites).toContainText("for each of your first 2 friends who subscribe. After that, every friend who subscribes gives you 25% off a month (about a week extra).");
+  await expect(invites).toContainText("You and a friend can each get a free month of Basic.");
+  await expect(invites).toContainText("uses StratLab on 3 different days in their first 14 days");
+  await expect(invites).toContainText("for your first 2 paying friends in 12 months");
+  await expect(invites).toContainText("each further paying friend gives you 8 days free, up to 8 times in 12 months");
   await expect(portfolio).not.toContainText("12 free months");
   expect(errors).toEqual([]);
 });
@@ -126,8 +131,8 @@ test("landing: facts only, no data sources, fits the screen", async ({ page }) =
   if (width < 700) {
     const small = await page.evaluate(() => Array.from(document.querySelectorAll("button, a, summary, [role=button]")).filter((el) => {
       const b = el.getBoundingClientRect();
-      if (!b.width || !b.height || el.closest("p, li") || getComputedStyle(el).display === "inline") return false;
-      return b.height < 32;
+      if (!b.width || !b.height || el.closest("p, li") || getComputedStyle(el).display === "inline" || el.classList.contains("skip-link")) return false;   // (the skip link is only there for the keyboard)
+      return b.height < 40;                // a finger needs 40px (R5V-016; it was 32)
     }).map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`));
     expect(small, "controls too small to tap").toEqual([]);
   }
@@ -135,8 +140,8 @@ test("landing: facts only, no data sources, fits the screen", async ({ page }) =
 
 test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and a menu on a phone", async ({ page }, info) => {
   const errors = await open(page);
-  // the NVIDIA sample's button is a real button: it signs in and opens the idea builder on NVDA
-  const idea = page.locator(".lp-rmock").getByRole("button", { name: /Test an idea on NVDA/ });
+  // the NVIDIA sample's button is a real button that says it goes to Google, then opens the idea builder on NVDA (R5V-011)
+  const idea = page.locator(".lp-rmock").getByRole("button", { name: /Continue with Google to test it/ });
   await expect(idea).toBeVisible();
   expect(await page.locator(".lp-fake-btn").count()).toBe(0);
   // tags under the Money cards and the options card read as labels, not links: not blue, not bold
@@ -155,13 +160,25 @@ test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and
   await expect(page.locator("#markets")).not.toContainText("฿");
   if (info.project.name === "phone") {
     await expect(page.locator('nav[aria-label="Sections"]')).toBeHidden();
-    await page.getByLabel("Sections menu").click();
+    // its name is its visible word, and it is at least 40px to tap (R5V-016)
+    const summary = page.locator(".lp-menu > summary");
+    await expect(summary).toHaveText("Menu");
+    expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+    await summary.click();
     const menu = page.getByRole("navigation", { name: "Sections (menu)" });
-    await expect(menu.getByRole("link")).toHaveText(["Trade", "Invest", "Money", "Alerts", "Pricing", "FAQ"]);
-    await menu.getByRole("link", { name: "Pricing" }).click();
+    await expect(menu.getByRole("link")).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ"]);
+    await page.keyboard.press("Escape");                                          // Esc closes it, and focus goes back to the button
+    await expect(menu).toBeHidden();
+    await expect(summary).toBeFocused();
+    await summary.click();
+    await expect(menu).toBeVisible();
+    await page.locator("h1").click({ position: { x: 5, y: 5 } });                 // so does a tap outside
+    await expect(menu).toBeHidden();
+    await summary.click();
+    await menu.getByRole("link", { name: "Plans" }).click();
     await expect(menu).toBeHidden();
     await expect(page.locator("#pricing")).toBeInViewport();
-  } else await expect(page.getByLabel("Sections menu")).toBeHidden();
+  } else await expect(page.locator(".lp-menu")).toBeHidden();
   expect(errors).toEqual([]);
 });
 
