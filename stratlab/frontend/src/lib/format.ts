@@ -188,6 +188,16 @@ export function when(iso: string | null | undefined, tz: string, intraday: boole
   return intraday ? fmtDateTime(iso, { tz, year: false, zone }) : fmtDate(iso, { tz });
 }
 
+/** When a quote's price was traded, in its market's zone: "15:01 IST" today, "7 Oct, 15:29 IST" on an earlier day, and
+ * "7 Oct" for a daily candle (a plain calendar day). The time beside each price, so a stale one is seen as stale. */
+export function quoteAt(iso: string | null | undefined, tz: string = IST, now: Date = new Date()): string {
+  if (!iso) return "";
+  if (CALENDAR_DAY.test(iso)) return fmtDate(iso, { year: false });
+  const d = toDate(iso);
+  if (!d) return "";
+  return dayIn(d, tz) === dayIn(now, tz) ? fmtTime(d, { tz, zone: true }) : fmtDateTime(d, { tz, year: false, zone: true });
+}
+
 /** A typed time of day in the 24-hour form the app writes: "9:30", "0930", "09.30" and "09:30" all give "09:30"; null
  * when it isn't one (so a box keeps its last good time while someone types). */
 export function parseClock(s: string): string | null {

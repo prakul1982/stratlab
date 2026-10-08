@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { inr, marketTz, money, pct } from "../lib/format";
+import { inr, marketTz, money, pct, quoteAt } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { RegionSwitch } from "../components/Research";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
@@ -10,7 +10,7 @@ import { saveRegion, savedRegion, type Region } from "../lib/research";
 import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, Stat, StatRow } from "../components/kit";
 
 type Row = {
-  symbol: string; name: string; problem: string | null; price: number | null; chg: number | null; stage: number | null;
+  symbol: string; name: string; problem: string | null; price: number | null; chg: number | null; price_at: string | null; stage: number | null;
   st_up: boolean | null; signal: "fresh" | "st_s2" | "stage2" | null; sector: { symbol: string; name: string; quadrant: string | null } | null;
   red: number | null; amber: number | null; fund_raise: boolean; checks: { pass: number; watch: number; fail: number; na: number } | null;
   fails: string[]; card: { met: number; missed: number; score: number } | null; has_read: boolean;
@@ -80,7 +80,8 @@ export function InvestorHomePage() {
           {shown!.map((r) => (
             <Card key={r.symbol}>
               <CardHead level={3} title={<Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>{r.name}</Link>}
-                actions={r.price != null ? <><span className="k-small">{us ? money(r.price, "USD", 2) : inr(r.price, 2)}</span>{r.chg != null && <Delta value={r.chg}>{pct(r.chg)}</Delta>}</> : undefined} />
+                actions={r.price != null ? <><span className="k-small">{us ? money(r.price, "USD", 2) : inr(r.price, 2)}</span>{r.chg != null && <Delta value={r.chg}>{pct(r.chg, 2)}</Delta>}
+                  {r.price_at && <span className="k-note">{quoteAt(r.price_at, marketTz(region))}</span>}</> : undefined} />
               <span className="k-note">{r.symbol}</span>
               {r.problem && <p className="k-note">Company numbers unavailable: {r.problem}</p>}
               <div className="inv-stat-cells">

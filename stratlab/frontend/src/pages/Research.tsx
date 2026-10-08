@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, asOf, marketTz, pct, price, safeHref } from "../lib/format";
+import { ago, asOf, marketTz, pct, price, quoteAt, safeHref } from "../lib/format";
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
   REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, metricText, monthsOld, researchApi, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist,
-  type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Region, type SectorAI,
+  type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
   AIRead, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
@@ -604,7 +604,7 @@ export function WatchlistPage() {
   const [region, setRegion] = useRegion();
   const { items, toggle, has } = useWatchlist();
   const { fail, notify } = useApp();
-  const [quotes, setQuotes] = useState<Record<string, { price: number | null; change_pct?: number | null } | null> | null>(null);
+  const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
   const mine = (items ?? []).filter((w) => w.region === region);
   const key = mine.map((w) => w.symbol).join(",");
   useEffect(() => {
@@ -638,7 +638,13 @@ export function WatchlistPage() {
               { key: "s", header: "Company", rowHeader: true, wrap: true, cell: (w) => (
                 <><Link className="link" to={`/research/${w.region}/${encodeURIComponent(w.symbol)}`}><b>{w.symbol}</b></Link>
                   {w.name && <span className="k-sub-line">{w.name}</span>}</>) },
-              { key: "p", header: "Price", numeric: true, cell: (w) => (quotes == null ? "…" : quotes[w.symbol]?.price != null ? price(quotes[w.symbol]!.price!, region === "IN" ? "INR" : "USD") : "–") },
+              { key: "p", header: "Price", numeric: true, cell: (w) => {
+                const q = quotes?.[w.symbol];
+                if (quotes == null) return "…";
+                if (q?.price == null) return "–";
+                const at = quoteAt(q.at, marketTz(region));
+                return <>{price(q.price, region === "IN" ? "INR" : "USD")}{at && <span className="k-sub-line">{at}</span>}</>;
+              } },
               { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },
               { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w).catch(fail)}>Remove</button> },

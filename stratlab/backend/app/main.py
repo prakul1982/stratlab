@@ -2111,6 +2111,8 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
         quad = {r["symbol"]: {"symbol": r["symbol"], "name": r["name"], "quadrant": r["quadrant"]} for r in rot["rows"]}
     except Exception:
         quad = {}
+    # one price source with the List tab: the same quotes call, each with the time of its last trade
+    quotes = _quiet(research_hub.quotes, region, syms) or {}
 
     def one(sym):
         problem, key = None, f"US:{sym}" if us else sym
@@ -2131,7 +2133,8 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
         checks = checklist.evaluate(p, nums, fsum, trend, card, None if us else sym, trades) if p else None
         sec = investor.sector_of(region, sym)
         sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label(region, sec, None), "quadrant": None} if sec else None)
-        return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem)
+        return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem,
+                            quotes.get(sym))
 
     rows = list(_investor_pool.map(one, syms))
     return ok({"rows": rows, "region": region, "as_of": datetime.now(IST).isoformat(timespec="minutes")})

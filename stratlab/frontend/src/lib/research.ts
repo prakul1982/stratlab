@@ -9,7 +9,7 @@ export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%
 export interface MetricGroup { title: string; items: MetricItem[] }
 export interface NewsItem { headline: string; url: string; source: string; at: string | null }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
-  high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null }
+  high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null }
 export interface SourceStatus { source: string; ok: boolean; error: string | null }
 export interface SeriesPoint { y: string; v: number }
 
