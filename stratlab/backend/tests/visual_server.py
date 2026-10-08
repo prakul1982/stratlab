@@ -295,11 +295,10 @@ def closing_auction(mp):
     from datetime import date, timezone
     from app import closing_auction as CA
     from tests import fake_cas
-    from tests.fake_prices import last_close
     # read just after the latest auction that has ended (today's once it is 15:35, else the trading day before's), so a page
     # opened through the day's continuous trading shows that earlier auction, labelled with its day, never a "final" price
     # from an auction that has not happened yet
-    CA.refresh(main.filings_feed, now=last_close("IN").astimezone(timezone.utc))
+    CA.refresh(main.filings_feed, now=fake_cas.last_auction_close().astimezone(timezone.utc))
     fake_cas.seed(date.today())
     mp.setattr(main.closing_auction_job, "start", lambda: None)
 

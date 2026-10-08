@@ -48,11 +48,18 @@ test("market breadth: live while the market is open, and what it says when live 
   await page.addInitScript(() => localStorage.setItem("stratlab.breadth", JSON.stringify({ group: "nifty500", range: "1y" })));
   const errors = await open(page, "/invest/breadth", "Today, live as of", phone ? 295 : 298);
   const live = page.getByTestId("breadth-live");
-  await expect(live.getByRole("heading", { name: "Today, live as of 10:45" })).toBeVisible();
+  // the card is "live as of" the demo's last quarter hour: the points run up to the market's last trade, never past it
+  // (tests/test_demo_world.py checks that against the clock), so any quarter hour of a session is right whenever this runs
+  const heading = live.getByRole("heading", { name: /^Today, live as of \d\d:\d\d$/ });
+  await expect(heading).toBeVisible();
+  const liveAt = (await heading.innerText()).match(/(\d\d):(\d\d)$/)!;
+  const open = `${liveAt[1]}:${liveAt[2]}`;
+  expect(open >= "09:15" && open <= "15:30", "a time in the session").toBeTruthy();
+  const points = Math.min(6, 1 + Math.floor((Number(liveAt[1]) * 60 + Number(liveAt[2]) - (9 * 60 + 15)) / 15));
   await expect(live.getByText("Live", { exact: true })).toBeVisible();                       // the pulsing badge, with its word
   await expect(live.getByText("Above 50-day average")).toBeVisible();
   await expect(live.getByText("Above 200-day average")).toBeVisible();
-  // 6 points: the day's two lines
+  // up to 6 points (a quarter hour apart, the last six): the day's two lines
   await expect(live.getByRole("heading", { name: "Rose and fell through the day" })).toBeVisible();
   await expect(live.getByRole("heading", { name: "Above their averages today" })).toBeVisible();
   await expect(live.locator("svg[role=img]")).toHaveCount(2);
@@ -60,7 +67,7 @@ test("market breadth: live while the market is open, and what it says when live 
   await expect(page.getByTestId("breadth-today").getByRole("heading", { name: /^Last close · / })).toBeVisible();
   // the Table switch has the same numbers
   await live.getByRole("button", { name: "Table" }).first().click();
-  await expect(live.getByRole("table", { name: "Rose and fell through the day" }).locator("tbody tr")).toHaveCount(6);
+  await expect(live.getByRole("table", { name: "Rose and fell through the day" }).locator("tbody tr")).toHaveCount(points);
   await live.getByRole("button", { name: "Table" }).first().click();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/breadth-live-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);
