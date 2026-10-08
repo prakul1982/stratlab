@@ -75,7 +75,7 @@ test("/login, /signup and /about are real addresses, not dead routes (R4-017)", 
   assert.equal(landingSection("/signup"), null);
   assert.equal(landingSection("/about"), "about");
   for (const p of ["/login", "/signup", "/about"]) assert.ok(isAppPath(p), `${p} has no route`);
-  assert.match(read("pages/Login.tsx"), /<section id="about"/, "the landing page has the section /about scrolls to");
+  assert.match(read("pages/Login.tsx"), /<div id="about" className="lp-wrap/, "the landing page has the place /about scrolls to (not a section[id]: the landing test lists those)");
   const main = read("main.tsx");
   for (const [from, to] of [["/login", "/"], ["/signup", "/"], ["/about", "/features"]]) assert.match(main, new RegExp(`path="${from}" element=\\{<Navigate to="${to}" replace />\\}`), `${from} signed in`);
 });

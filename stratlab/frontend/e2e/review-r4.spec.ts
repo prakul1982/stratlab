@@ -90,7 +90,7 @@ test("R4-016: the menu fades where more is behind it, and its last row scrolls f
   await expect(nav).toHaveAttribute("data-fade", "bottom");
   await nav.evaluate((n) => { n.scrollTop = n.scrollHeight; });
   await expect(nav).toHaveAttribute("data-fade", "top");
-  const last = nav.locator("a").last();
+  const last = nav.locator("a:visible").last();
   const [n, l] = await Promise.all([nav.boundingBox(), last.boundingBox()]);
   expect(l!.y + l!.height, "the last row is clipped by the footer").toBeLessThanOrEqual(n!.y + n!.height);
   expect(errors).toEqual([]);
