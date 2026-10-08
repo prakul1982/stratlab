@@ -45,6 +45,8 @@ function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
   );
 }
 
+const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
+
 export function PlansPage() {
   const { me, fail, notify, refreshMe } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
@@ -90,7 +92,9 @@ export function PlansPage() {
       await loadRazorpay();
       track("checkout started", { plan, period });
       const rz = new window.Razorpay({
-        key: d.key_id, subscription_id: d.subscription_id, name: "StratLab",
+        // the payment window shows the name and the amount only, so the name carries the plan and the period (R6V-009)
+        key: d.key_id, subscription_id: d.subscription_id, name: `StratLab · ${planName(plan)}, ${period === "year" ? "yearly" : "monthly"}`,
+        notes: { plan, period },
         description: `${plan === "pro" ? "Pro" : "Basic"} plan, ${d.currency === "INR" ? `₹${rupees(plan, period).toLocaleString("en-IN")} incl. GST` : priceOf(plan, period).shown} / ${period}`,
         prefill: { email: d.email || "" }, theme: { color: "#1D1B17" },
         handler: async (resp: unknown) => {
@@ -106,8 +110,17 @@ export function PlansPage() {
   };
 
   const [switching, setSwitching] = useState<"basic" | "pro" | null>(null);
-  const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
-  const ask = (plan: "basic" | "pro") => (me && paid !== "free" ? setSwitching(plan) : void subscribe(plan));
+  // every purchase is confirmed on this page first, with the plan, the period, the amount charged and the renewal, since
+  // the payment window itself shows only the amount (R6V-009)
+  const ask = (plan: "basic" | "pro") => setSwitching(plan);
+  const given = !!me?.billing?.given_by_owner;
+  const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };
+  /** What the card is charged, in words: "₹699 incl. 18% GST, every month". */
+  const chargeWords = (p: "basic" | "pro") => {
+    const rs = `₹${rupees(p, period).toLocaleString("en-IN")} incl. 18% GST`;
+    const shown = priceOf(p, period);
+    return `${rs}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
+  };
 
   return (
     <div className="k-page">
@@ -158,6 +171,8 @@ export function PlansPage() {
               {cur ? <button className="btn outline" disabled>Current plan</button>
                 : p === "free" ? <span className="k-small k-muted">Included whenever a paid plan ends</span>
                   : !billing ? <span className="lp-plan-note k-small k-muted">Opens soon</span>
+                    // a plan the owner gave already includes everything below it: nothing to buy there (R6V-009)
+                    : given && paid && RANK[p] <= RANK[paid as PlanId] ? <span className="k-small k-muted" data-testid="plan-included">Included in the {planName(paid as PlanId)} plan you were given</span>
                     : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy} onClick={() => ask(p)}>
                       {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}</button>}
             </Card>
@@ -177,9 +192,14 @@ export function PlansPage() {
       <p className="k-small k-muted k-measure">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>
       <LegalLinks />
       {switching && (
-        <ConfirmDialog title={`Switch to ${planName(switching)}?`} confirmLabel={`Switch to ${planName(switching)}`} danger={false}
+        <ConfirmDialog title={paid !== "free" && me ? `Switch to ${planName(switching)}?` : `Subscribe to ${planName(switching)}?`}
+          confirmLabel="Continue to payment" danger={false}
           onClose={() => setSwitching(null)} onConfirm={() => { const p = switching; setSwitching(null); void subscribe(p); }}>
-          Your current subscription stops billing once the new one is active.
+          <span data-testid="plan-confirm">
+            {planName(switching)} plan, billed {period === "year" ? "yearly" : "monthly"}: {chargeWords(switching)}. It renews automatically
+            each {period} until you cancel, any time from Account. The payment window that opens next shows the amount only.
+            {paid !== "free" && me && !given ? " Your current subscription stops billing once the new one is active." : ""}
+          </span>
         </ConfirmDialog>
       )}
     </div>

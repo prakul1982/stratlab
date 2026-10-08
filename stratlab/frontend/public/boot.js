@@ -22,9 +22,11 @@
     var root = document.getElementById("root");
     if (!root || !root.querySelector("[data-boot], .boot")) return;       // once the app has drawn, its own error screen does this
     root.textContent = "";
+    var main = document.createElement("main");         // the page's main landmark while it is the only thing on it
     var box = document.createElement("div");
     box.className = "boot boot-now";
     box.setAttribute("role", "alert");
+    main.appendChild(box);
     var h = document.createElement("h1");
     h.textContent = "Couldn't load StratLab.";
     var p = document.createElement("p");
@@ -35,7 +37,7 @@
     b.textContent = "Reload";
     b.addEventListener("click", function () { location.reload(); });
     box.appendChild(h); box.appendChild(p); box.appendChild(b);
-    root.appendChild(box);
+    root.appendChild(main);
   }
 
   /** A file failed to load: reload once, else say so. */

@@ -45,7 +45,8 @@ export function VisitorApp() {
     applySeo(seoFor(pathname, kind, view.kind === "libraryEntry" ? { index: false } : {}), title);
   }, [pathname, kind, view.kind]);
 
-  const wait = <Loading label="Opening StratLab" />;
+  // while a page's code downloads, the page is still a page: a main landmark with a heading (R6V-013)
+  const wait = <main id="main" tabIndex={-1}><h1 className="sr-only">StratLab</h1><Loading label="Opening StratLab" /></main>;
   return (
     <Suspense fallback={wait}>
       {view.kind === "landing" ? <Login section={view.section} panel={view.panel} />
