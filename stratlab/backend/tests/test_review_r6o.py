@@ -497,3 +497,16 @@ def test_todays_expiry_is_gone_after_it_expires():
     assert expired_today("BFO", datetime(2026, 10, 8, 23, 45, tzinfo=ist)) is True       # SENSEX weekly of 8 Oct, at 23:45
     assert expired_today("BFO", datetime(2026, 10, 8, 15, 0, tzinfo=ist)) is False
     assert expired_today("MCX", datetime(2026, 10, 8, 23, 0, tzinfo=ist)) is False
+
+
+# ---------- R6O-021: the brief previews carry real figures, or made-up ones on a day that has passed ----------
+def test_the_brief_preview_is_the_real_issue_when_there_is_one(monkeypatch):
+    from app import email_previews as P
+    from app.newsletter import job
+    real = {"id": "market.IN.2026-10-03-weekly", "kind": "market", "weekly": True, "subject": "Market Brief India, week to 3 Oct: NIFTY 50 −3.11%",
+            "html": "<p>NIFTY 50: 22,421.55, −3.11% over the week</p>", "text": "NIFTY 50: 22,421.55, −3.11% over the week"}
+    monkeypatch.setattr(job, "recent", lambda kind, scope, limit=20: [real] if scope == "IN" else [])
+    subject, html, text = P._market("IN", True)
+    assert subject.endswith("−3.11%") and "−3.11%" in text
+    monkeypatch.setattr(P, "_today", lambda: date(2026, 10, 9))       # Friday, just after midnight: the sample is Thursday's
+    assert "Thu 8 Oct" in P._market("US", False)[0]
