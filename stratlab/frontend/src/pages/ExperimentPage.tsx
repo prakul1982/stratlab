@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { charge, fall, money, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { charge, fall, fmtDate, money, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { CHECKS, checkTone, checksLine, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
@@ -212,9 +212,35 @@ function TradesChart({ e, cur }: { e: Experiment; cur: string }) {
   return (
     <PriceChart symbol={e.instrument.symbol} storageKey={(e.instrument.id || e.instrument.symbol).slice(0, 40)} currency={cur}
       load={load} bars={bars} tf={e.tf as Tf} timeframes={csv ? [e.tf as Tf] : tfs} range={null} markers={marks} pageStudies={studies} height={380} closesOnly={csv}
+      openFrom={e.series.t[0] ?? null}
       decimals={priceDp(e.instrument)} noVolume={e.instrument.market === "FX"} rangesKeepTf
       history={e.days <= 366 ? "1y" : e.days <= 1100 ? "3y" : e.days <= 1830 ? "5y" : "max"}
       note={csv ? "Your uploaded data: the closes this experiment kept." : "Markers: entries and exits of this test. Lines from your rules are listed in the legend."} />
+  );
+}
+
+type Unadjusted = { id: string; ex_date: string; label: string; text: string };
+
+/** A demerger in the test window, which the as-traded prices aren't adjusted for (R6O-010: RELIANCE's JioFin demerger
+ *  inside a five-year test): said as a fact beside the chart, with its ex-date. Indian stocks only; nothing when none. */
+function UnadjustedNote({ e }: { e: Experiment }) {
+  const [rows, setRows] = useState<Unadjusted[]>([]);
+  const from = e.series.t[0]?.slice(0, 10), to = e.series.t[e.series.t.length - 1]?.slice(0, 10);
+  const sym = e.instrument.symbol;
+  useEffect(() => {
+    if (e.instrument.market !== "IN" || e.instrument.fno || !from || !to || !sym) return;
+    let live = true;
+    api<{ rows: Unadjusted[] }>(`/research/corp-actions/IN/${encodeURIComponent(sym)}/unadjusted?start=${from}&end=${to}`)
+      .then((x) => live && setRows(x.rows)).catch(() => undefined);           // a note, never a failure on the page
+    return () => { live = false; };
+  }, [e.instrument.market, e.instrument.fno, sym, from, to]);
+  if (!rows.length) return null;
+  return (
+    <p className="k-note" data-testid="unadjusted-note">
+      Prices here are as traded. {rows.map((r) => `${sym}'s ${r.label.toLowerCase()} (ex-date ${fmtDate(r.ex_date)})`).join(" and ")}{" "}
+      {rows.length > 1 ? "aren't" : "isn't"} adjusted for: the price falls by the value moved to the new company on that day, which this
+      test and buy and hold count as a loss.
+    </p>
   );
 }
 
@@ -357,6 +383,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         <Card label="Price and trades">
           <CardHead title="Price and trades" info={HELP.priceChart} actions={<span className="k-note">▲ buy &nbsp; ▼ sell</span>} />
           <TradesChart e={e} cur={cur} />
+          <UnadjustedNote e={e} />
         </Card>
       )}
 

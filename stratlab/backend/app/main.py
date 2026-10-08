@@ -1816,6 +1816,16 @@ def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind
     return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20]))
 
 
+@app.get("/research/corp-actions/{region}/{symbol}/unadjusted")
+def corp_actions_unadjusted(region: str, symbol: str, start: str, end: str, profile=Depends(current_profile)):
+    """The company's actions in a test window that its prices aren't adjusted for (a demerger), for the backtest page's
+    note (R6O-010). Facts as the exchange lists them."""
+    r, s = research_routes.region_of(region), research_routes.symbol_of(symbol)
+    if not (re.fullmatch(r"\d{4}-\d{2}-\d{2}", start or "") and re.fullmatch(r"\d{4}-\d{2}-\d{2}", end or "")):
+        err(400, "bad_dates", "Give the start and end as YYYY-MM-DD.")
+    return research_routes.ok({"rows": corp_actions.unadjusted(r, s, start, end, corp_job.sources())})
+
+
 @app.get("/research/corp-actions/{region}/{symbol}")
 def corp_actions_company(region: str, symbol: str, profile=Depends(current_profile)):
     """One company's corporate actions: those ahead and the last three years'."""

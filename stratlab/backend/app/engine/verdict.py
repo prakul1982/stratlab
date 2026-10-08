@@ -50,6 +50,12 @@ def _year_label(bars: list[dict], i: int) -> str:
     return str(bars[i]["t"])[:4]
 
 
+# the fewest trades in the unseen part that can pass the check (R6O-010: "Passed ... 3 trades +1.1%"). Below five, one
+# or two trades decide the sign of the result: with three, a single winner can turn the part into a profit however the
+# rule does otherwise. Five is the smallest count where no one trade is more than a fifth of what is being judged.
+MIN_UNSEEN_TRADES = 5
+
+
 def unseen_check(trades: list[dict], open_trades: list[dict], capital: float, built: list[bool], spans: list[bool],
                  labels: tuple[str, str, str, str], split_index: int, who: str = "It") -> dict:
     """The unseen-data check from the run's own trades: each trade counts with the part it was opened in (a trade
@@ -71,6 +77,10 @@ def unseen_check(trades: list[dict], open_trades: list[dict], capital: float, bu
             "split_index": split_index}
     if not u_tr:
         status, detail = "warn", "No trades happened in the unseen part, so it couldn't be tested there."
+    elif len(u_tr) < MIN_UNSEEN_TRADES:
+        n = len(u_tr)
+        status, detail = "warn", (f"Only {n} trade{'s' if n != 1 else ''} happened in the unseen part ({'+' if r2 >= 0 else '−'}{abs(r2):.1f}%): "
+                                  f"too few to tell, as one or two trades decide the result. It needs at least {MIN_UNSEEN_TRADES}.")
     elif r2 > 0:
         status, detail = "pass", ("It kept making money on data it wasn't tuned on." if who == "It"
                                   else f"{who} kept making money on the part of the period it wasn't tuned on.")

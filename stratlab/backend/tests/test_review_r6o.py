@@ -408,3 +408,30 @@ def test_the_scan_and_screener_routes_use_it():
     from app import main
     assert "with_nse_close" in inspect.getsource(main.run_scan) and "with_nse_close" in inspect.getsource(main.screens_run)
     assert "with_nse_close" in inspect.getsource(main._stored_scan)
+
+
+# ---------- R6O-010: the notebook's unseen-data check, and the demerger its prices don't adjust for ----------
+def test_unseen_data_cant_pass_on_three_trades():
+    from app.engine import verdict as V
+    t = lambda pnl: {"pnl": pnl}                               # noqa: E731
+    trades = [t(-500)] * 10 + [t(400), t(300), t(400)]        # RELIANCE "R test": 13 trades, 3 of them unseen, +1.1%
+    built = [True] * 10 + [False] * 3
+    got = V.unseen_check(trades, [], 100000, built, [False] * 13, ("2021", "2025", "2025", "2026"), 100)
+    assert got["status"] == "warn" and "Only 3 trades" in got["detail"] and "at least 5" in got["detail"]
+    five = V.unseen_check(trades[:8] + [t(200)] * 5, [], 100000, [True] * 8 + [False] * 5, [False] * 13, ("a", "b", "c", "d"), 100)
+    assert five["status"] == "pass"
+    assert V.MIN_UNSEEN_TRADES == 5
+
+
+def test_a_demerger_in_the_test_window_is_named(monkeypatch):
+    from app import corp_actions as CA
+    monkeypatch.setattr(CA, "history", lambda *a, **k: [])
+
+    class Feed:
+        def actions_of(self, sym):
+            return "nse", [{"symbol": "RELIANCE", "subject": "Demerger", "exDate": "20-Jul-2023", "recDate": "20-Jul-2023", "comp": "Reliance Industries"},
+                           {"symbol": "RELIANCE", "subject": "Bonus 1:1", "exDate": "28-Oct-2024", "recDate": "28-Oct-2024"},
+                           {"symbol": "RELIANCE", "subject": "Dividend - Rs 10 Per Share", "exDate": "14-Aug-2025"}]
+    got = CA.unadjusted("IN", "RELIANCE", "2021-10-08", "2026-10-08", {"in": Feed()})
+    assert [(r["kind"], r["ex_date"]) for r in got] == [("demerger", "2023-07-20")]       # a bonus is adjusted in the candles
+    assert CA.unadjusted("IN", "RELIANCE", "2024-01-01", "2026-10-08", {"in": Feed()}) == []

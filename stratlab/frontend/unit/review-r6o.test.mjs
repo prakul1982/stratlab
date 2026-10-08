@@ -66,3 +66,15 @@ test("Breadth opens on the reader's market: an India reader gets an Indian group
   assert.match(read("src/components/BreadthCard.tsx"), /BROAD_GROUP\[region\]/);         // no counts yet: the broad group
   delete globalThis.localStorage;
 });
+
+test("Notebook: the question keeps the person's casing, the rule line never says 'or a no target', the chart opens on the test window (R6O-010)", async () => {
+  const { questionFrom } = await import("../src/lib/rules.ts");
+  const q = questionFrom("R test: Buy RELIANCE when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below, stop loss 3%", "RELIANCE");
+  assert.ok(q.startsWith('Does "R test: Buy RELIANCE'), q);
+  const rules = read("src/components/Rules.tsx");
+  assert.doesNotMatch(rules, /\{" "\}or a\{" "\}/);
+  assert.match(rules, /r\.tgt > 0 \? \(r\.sl > 0 \? " or a " : " and at a "\) : \(r\.sl > 0 \? ", with " : " and "\)/);
+  const page = read("src/pages/ExperimentPage.tsx");
+  assert.match(page, /openFrom=\{e\.series\.t\[0\] \?\? null\}/);
+  assert.match(page, /<UnadjustedNote e=\{e\} \/>/);
+});

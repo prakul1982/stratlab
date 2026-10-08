@@ -815,6 +815,36 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = ""
             "universe": {"companies": cal.get("universe"), "updated_at": cal.get("universe_at")} if region == "US" else None}
 
 
+# actions the backtests' prices don't adjust for: the broker's daily candles are adjusted for bonus issues and splits,
+# not for a demerger, so the price drops by the value moved to the new company on its ex-date (R6O-010: RELIANCE's
+# JioFin demerger in a five-year test read as part of buy and hold's -6.9%)
+UNADJUSTED = ("demerger",)
+_unadj = TTLCache(max_items=500)
+
+
+def unadjusted(region: str, symbol: str, frm: str, to: str, sources: dict | None) -> list[dict]:
+    """A company's actions between two days (YYYY-MM-DD) that the test's prices are not adjusted for, from the
+    exchange's whole list for the company (not only the three years kept for the corporate actions card)."""
+    symbol = symbol.upper()
+    if region != "IN" or not sources or sources.get("in") is None:
+        return []
+    hit = _unadj.get(symbol)
+    if hit is None:
+        try:
+            where, raw = sources["in"].actions_of(symbol)
+            rows = bse_rows(raw, symbol) if where == "bse" else [r for r in india_rows(raw) if r["symbol"] == symbol]
+        except (SourceError, AttributeError, KeyError, TypeError) as e:
+            print("unadjusted actions:", symbol, str(e)[:120])
+            rows = None
+        hit = [r for r in rows or [] if r.get("kind") in UNADJUSTED] if rows is not None else []
+        _unadj.set(symbol, hit, 12 * 3600 if rows is not None else 600)
+    have = {r["id"]: r for r in hit}
+    for r in history(region, symbol, None, fetch=False):          # what the card has stored, too
+        if r.get("kind") in UNADJUSTED:
+            have.setdefault(r["id"], r)
+    return sorted((r for r in have.values() if frm <= r["ex_date"] <= to), key=lambda r: r["ex_date"])
+
+
 # a foreign company's own (home) listing, by the end of its ticker: the exchanges a US depositary share is issued on
 HOME_SUFFIX = (".MI", ".PA", ".DE", ".AS", ".MC", ".L", ".T", ".HK", ".SW", ".TO", ".AX", ".CO", ".ST", ".OL", ".HE",
                ".BR", ".LS", ".KS", ".TW", ".SA", ".MX", ".JO", ".NS", ".SS", ".SZ", ".IR", ".VI", ".TA", ".SI")
