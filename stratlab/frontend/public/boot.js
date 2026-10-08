@@ -43,6 +43,9 @@
     if (once()) location.reload(); else show();
   }
 
+  // the saved light or dark choice, here as well as in theme.js: if that file fails to load the page still draws in the right theme
+  try { var saved = localStorage.getItem("stratlab-theme"); if (saved) document.documentElement.dataset.theme = saved; } catch (e) { /* storage off */ }
+
   window.__stratlabRecover = recover;
   window.__stratlabShowLoadError = show;
 

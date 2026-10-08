@@ -307,6 +307,8 @@ function App() {
 
 /** Draw the signed-in app (or the first moment of it, before the sign-in check is back). The entry point (entry.tsx) calls this. */
 export function startApp(root: HTMLElement) {
+  // without the config the app can't tell who is signed in: never draw it as signed out
+  if (!window.STRATLAB_CONFIG?.SUPABASE_URL) { window.__stratlabShowLoadError?.(); return; }
   createRoot(root).render(
     <StrictMode>
       <LoadGuard>

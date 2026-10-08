@@ -49,6 +49,30 @@ test.describe("a page that is never blank (R5V-001)", () => {
     await expect(h1(page)).toContainText("Test it, research it, track it", { timeout: 30_000 });
   });
 
+  test("config.js comes back as a plain-text 502 twice: the retries get it, and the page opens", async ({ page }) => {
+    let bad = 2;
+    await page.route("**/config.js*", (r) => (bad-- > 0 ? r.fulfill({ status: 502, contentType: "text/plain", body: "upstream request failed" }) : r.fallback()));
+    await page.goto("/");
+    await expect(h1(page)).toContainText("Test it, research it, track it", { timeout: 30_000 });
+  });
+
+  test("a signed-in person whose config.js fails is never shown as signed out", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("sb-demo-auth-token", JSON.stringify({ access_token: "admin-token", token_type: "bearer", expires_in: 86400,
+      expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } })));
+    await page.route("**/config.js*", (r) => r.fulfill({ status: 502, contentType: "text/plain", body: "upstream request failed" }));
+    await page.goto("/alerts");
+    await expect(page.getByRole("alert")).toContainText("Couldn't load StratLab.", { timeout: 30_000 });
+    await expect(page.getByText(/Sign in to see/)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
+  });
+
+  test("theme.js fails: the saved dark choice still applies", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("stratlab-theme", "dark"));
+    await page.route("**/theme.js", (r) => r.fulfill({ status: 502, contentType: "text/plain", body: "upstream request failed" }));
+    await open(page);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  });
+
   test("a page's code fails to download: reload once, then say so", async ({ page }) => {
     let loads = 0;
     await page.route("**/assets/Login-*.js", (r) => { loads++; return r.abort(); });

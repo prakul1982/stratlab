@@ -27,17 +27,27 @@ const publicPage = (p: string) =>
     : /^\/(pricing|plans|upgrade|help|faq|features|login|signup|about)?\/?$/.test(p) ? import("./pages/Login")
     : import("./pages/Gate");
 
-/** /config.js is a plain script in the page's head. If it didn't run (a failed download), try it once more. */
-async function readConfig(): Promise<boolean> {
-  if (window.STRATLAB_CONFIG) return true;
-  await new Promise<void>((done) => {
+/** Try /config.js once. A failed download (an error page where the file should be) leaves the config unset. */
+function loadConfig(attempt: number): Promise<void> {
+  return new Promise<void>((done) => {
     const s = document.createElement("script");
-    s.src = `/config.js?retry=${Date.now()}`;
+    s.src = `/config.js?retry=${attempt}-${Date.now()}`;
     s.onload = () => done();
     s.onerror = () => done();
     document.head.appendChild(s);
     window.setTimeout(done, 8000);
   });
+}
+
+/** /config.js is a plain script in the page's head. If it didn't run (a failed download, about one load in ten was an
+ * error page), try again, twice, a little later each time. Without it the app can't tell who is signed in, so it never
+ * guesses "signed out": the page says it couldn't load and offers Reload. */
+async function readConfig(): Promise<boolean> {
+  for (const wait of [0, 500, 1500]) {
+    if (window.STRATLAB_CONFIG) return true;
+    if (wait) await new Promise((ok) => window.setTimeout(ok, wait));
+    await loadConfig(wait);
+  }
   return !!window.STRATLAB_CONFIG;
 }
 

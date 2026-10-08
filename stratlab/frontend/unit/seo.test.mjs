@@ -173,6 +173,40 @@ test("the public half never imports the account code (the sign-in library comes 
   assert.match(read("src/lib/signin.ts"), /await import\("\.\/api"\)/, "the sign-in library loads when someone signs in");
 });
 
+test("service worker: a config.js or theme.js that fails, and a page the server can't send, are replaced by the last good copy", async () => {
+  const src = read("public/sw.js");
+  const store = new Map();
+  const handlers = {};
+  const ok = (body, type, status = 200) => ({ ok: status < 300, status, body, headers: { get: () => type }, clone() { return this; } });
+  let next = () => Promise.reject(new Error("offline"));
+  const caches = {
+    open: async () => ({ put: async (k, v) => { store.set(k, v); }, addAll: async () => undefined }),
+    match: async (k) => store.get(k),
+    keys: async () => [], delete: async () => true,
+  };
+  const self = { addEventListener: (t, f) => { handlers[t] = f; }, location: { origin: "https://stratlab.studio" }, skipWaiting() {}, clients: { claim() {} } };
+  vm.runInNewContext(src, { self, caches, fetch: () => next(), URL, Response: { error: () => "error" }, Promise });
+  const ask = async (url, mode = "no-cors") => {
+    let answer;
+    handlers.fetch({ request: { method: "GET", url, mode }, respondWith: (p) => { answer = p; } });
+    return answer === undefined ? undefined : await answer;
+  };
+  next = () => Promise.resolve(ok("window.A=1", "application/javascript"));
+  assert.equal((await ask("https://stratlab.studio/config.js")).body, "window.A=1");
+  next = () => Promise.resolve(ok("upstream request failed", "text/plain", 502));
+  assert.equal((await ask("https://stratlab.studio/config.js")).body, "window.A=1", "the last good config.js, not the error text");
+  next = () => Promise.reject(new Error("offline"));
+  assert.equal((await ask("https://stratlab.studio/config.js")).body, "window.A=1");
+  assert.equal(await ask("https://stratlab.studio/assets/x.js"), undefined, "other files are left to the browser");
+  next = () => Promise.resolve(ok("<html>app</html>", "text/html; charset=utf-8"));
+  assert.equal((await ask("https://stratlab.studio/alerts", "navigate")).body, "<html>app</html>");
+  next = () => Promise.resolve(ok("upstream request failed", "text/plain", 502));
+  assert.equal((await ask("https://stratlab.studio/pricing", "navigate")).body, "<html>app</html>", "a 502 for a page starts the app instead of showing plain text");
+  next = () => Promise.resolve(ok("nope", "text/html", 404));
+  assert.equal((await ask("https://stratlab.studio/nope", "navigate")).status, 404, "a real 404 stays a 404");
+  assert.match(read("public/boot.js"), /localStorage\.getItem\("stratlab-theme"\)/, "boot.js applies the saved theme itself when theme.js fails");
+});
+
 test("the visitor routes: /faq, /library and a strategy, a made-up market, a gate and not found", () => {
   const kind = (p) => links.visitorView(p).kind;
   assert.deepEqual(links.visitorView("/faq"), { kind: "landing", section: "faq", panel: undefined });
