@@ -12,7 +12,7 @@ from .. import name_search
 from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import NotFound, SourceError, num
-from .news import GoogleNews, Wikipedia
+from .news import GoogleNews, Wikipedia, mentions
 from .screener import Screener, summary as scr_summary
 from .yahoo import Yahoo
 from ..kite_service import ist_date
@@ -483,7 +483,8 @@ class Research:
             "trend": trend, "quarters": quarters, "shareholding": holding,
             "pros": (scr or {}).get("pros") or [], "cons": (scr or {}).get("cons") or [],
             "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
-            "news": r2.get("news") or [],
+            # a name search also brings the market's and other companies' headlines: only the ones about this company
+            "news": [n for n in (r2.get("news") or []) if mentions(clean, sym, n.get("headline") or "")],
             "about": {"wiki": r2.get("wiki"), "profile": (scr or {}).get("about")},
             "sources": sources + sources2,
             "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]

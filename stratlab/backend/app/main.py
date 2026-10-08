@@ -64,7 +64,7 @@ from .engine import walkforward
 from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
-from .intel.company import Research
+from .intel.company import Research, at_live_price
 from .intel.net import TTLCache
 from .intel import filings, sec
 from .intel.sec import SEC
@@ -1941,6 +1941,8 @@ def deep_view(sym: str, base: dict) -> dict:
     nums = deepdive.numbers(p)
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
+    if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
+        snap = at_live_price(snap, (base.get("trend") or {}).get("price"))
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
@@ -3015,7 +3017,12 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     except Exception:                     # no prices: the page goes without the price facts
         pass
     nums = deepdive.numbers(p)
-    return stock_pages.facts(region, sym, p, nums, screener_summary(p), trend, prices, items, exchange, red)
+    snap = screener_summary(p)
+    if region == "IN":
+        # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
+        # company page does), so the screens' market value and P/E agree with the price beside them
+        snap = at_live_price(snap, (prices or {}).get("price"))
+    return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red)
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)

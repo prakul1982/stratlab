@@ -32,7 +32,7 @@ def base_price(sym: str) -> float:
 def _shared(sym: str, t: int, p2: int, g: int):
     """Candles from the demo world's price table (fake_prices), the broker's own numbers: in the market's hours only,
     each closing at the price at its end (or now, for the one still forming), none after the last trade. Daily candles
-    run from the session's open to its close, stamped at midnight UTC of their day."""
+    run from the session's open to its close and are stamped at the open, as the real feed stamps them."""
     from datetime import timezone
     market = fake_prices.market_of(sym)
     (oh, om), (ch, cm), zone = fake_prices.SESSION[market]
@@ -51,7 +51,7 @@ def _shared(sym: str, t: int, p2: int, g: int):
         hours_ok = g == 86400 or ((start.hour, start.minute) >= (oh, om) and (start.hour, start.minute) < (ch, cm))
         if hours_ok and start <= clock and fake_prices.trading_day(market, day):
             a, b = fake_prices.price(sym, start), fake_prices.price(sym, min(end, clock))
-            ts.append(t); o.append(a); h.append(round(max(a, b) * 1.004, 2)); l.append(round(min(a, b) * 0.996, 2)); c.append(b)
+            ts.append(int(start.timestamp())); o.append(a); h.append(round(max(a, b) * 1.004, 2)); l.append(round(min(a, b) * 0.996, 2)); c.append(b)
             v.append(0 if sym.endswith("=X") else 1000)
         t += g
     return ts, o, h, l, c, v, clock

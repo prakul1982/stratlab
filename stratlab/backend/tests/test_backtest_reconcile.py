@@ -214,8 +214,12 @@ def test_weekday_markets_have_no_weekend_candles(market, sym):
     inst = prov.instrument(sym)
     bars = prov.history(inst, "1d", 730)
     assert len(bars) > 400 and max(_days(bars)) <= 4
-    # about 261 trading days a year, not 365
-    assert len(bars) == pytest.approx(730 * 5 / 7, abs=10)
+    # about 261 weekdays a year, not 365; the demo world's US stocks also keep the exchange's holidays (about 252 sessions)
+    from datetime import timedelta
+    from app.data.calendar import is_trading_day
+    today = date.today()
+    sessions = sum(is_trading_day("US", today - timedelta(days=d)) for d in range(730))
+    assert len(bars) == pytest.approx(sessions if market == "US" else 730 * 5 / 7, abs=10)
 
 
 def test_a_weekday_backtest_never_trades_at_the_weekend(api):  # noqa: F811

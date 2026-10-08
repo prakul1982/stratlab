@@ -202,6 +202,11 @@ def test_the_email_carries_one_click_unsubscribe_headers(w, monkeypatch):
 
 def test_plan_gates_in_the_job(w, monkeypatch, outbox, paid):
     monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day))
+    # a quiet week for RELIANCE (whatever the demo world's prices did since the issue's reference day), so My Stocks
+    # has nothing to say and only the plan gates decide what goes out
+    monkeypatch.setattr(content, "stock_row", lambda region, sym, day, weekly, since: {
+        "symbol": sym, "region": region, "price": 100.0, "change_pct": 0.1, "stage": 2, "stage_before": 2, "stage_changed": False,
+        "st_s2": False, "filings": [], "headlines": [], "changed": False})
     reader("u-free", "free@example.com", plan="free", market_in="daily", my_stocks="daily")
     db.set_setting("watchlist:u-free", json.dumps({"items": [{"symbol": "RELIANCE", "region": "IN"}]}))
     job.Job().tick(AFTER_IN_CLOSE)

@@ -56,6 +56,15 @@ def test_screener_parser_reads_every_section():
     assert s["pb"] == pytest.approx(1408 / 630)
     assert s["net_margin"] == pytest.approx(94470 / 976541 * 100)
     assert s["debt_equity"] == pytest.approx(369575 / (829668 + 13532))
+    # "Latest YoY" is the last full year against the one before (Mar 2025 vs Mar 2024), never TTM against the last year
+    assert s["sales_yoy"] == pytest.approx((964693 / 901064 - 1) * 100)
+    assert s["profit_yoy"] == pytest.approx((81309 / 79020 - 1) * 100)
+
+
+def test_latest_yoy_has_no_rate_from_a_loss():
+    p = {"pl": {"cols": ["Mar 2024", "Mar 2025", "TTM"], "rows": {"Sales": [100.0, 120.0, 130.0], "Net Profit": [-5.0, 8.0, 9.0]}}}
+    s = scr.summary(p)
+    assert s["sales_yoy"] == pytest.approx(20.0) and s["profit_yoy"] is None
 
 
 def test_screener_survives_a_layout_change():
