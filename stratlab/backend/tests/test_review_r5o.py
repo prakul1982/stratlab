@@ -451,3 +451,14 @@ def test_turnover_past_the_audit_limit_is_said_as_a_fact():
     assert mid.startswith("Turnover of ₹4.2 crore is above ₹1 crore") and "₹10 crore" in mid
     assert T.audit_fact(2025, 0.8e7, True) is None and T.audit_fact(2025, 39.7e7, False) is None
     assert not re.search(r"\b(should|must get|we recommend|consult|advise)\b", got + mid, re.I)
+
+
+# ---------- R5O-026: "the quarter to 5 Oct 2026" ----------
+def test_named_holders_coverage_is_a_quarter_end(monkeypatch):
+    from app import shareholders as S
+    # a pattern filed for an allotment on 5 Oct sits beside the 30 Sep quarter's
+    monkeypatch.setattr(S, "_index", lambda: {"ABC": {"name": "Abc", "q": {"2026-06-30": {}, "2026-10-05": {}}},
+                                              "XYZ": {"name": "Xyz", "q": {"2026-06-30": {}, "2026-09-30": {}}}})
+    monkeypatch.setattr(db, "get_setting", lambda k: None)
+    assert S.coverage()["latest_quarter"] == "2026-09-30"
+    assert S.quarter_end("2026-12-31") and not S.quarter_end("2026-10-05")

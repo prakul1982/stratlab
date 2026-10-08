@@ -422,10 +422,16 @@ def _index() -> dict[str, dict]:
     return out
 
 
+def quarter_end(day: str) -> bool:
+    """Whether a pattern's date is a quarter's last day (31 Mar, 30 Jun, 30 Sep, 31 Dec), as a quarterly filing's is."""
+    return str(day)[5:10] in ("03-31", "06-30", "09-30", "12-31")
+
+
 def coverage() -> dict:
     """How much the search covers: companies read and the latest quarter among them."""
     idx = _index()
-    latest = [max(c["q"]) for c in idx.values() if c["q"]]
+    # quarter ends only: a pattern filed for an allotment or a listing is dated that day ("quarter to 5 Oct 2026")
+    latest = [max(q for q in c["q"] if quarter_end(q)) for c in idx.values() if any(quarter_end(q) for q in c["q"])]
     return {"companies": len(idx), "latest_quarter": max(latest) if latest else None,
             "queued": len(db.json_value(db.get_setting(STATE_KEY), {}).get("queue") or [])}
 

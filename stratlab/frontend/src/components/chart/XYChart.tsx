@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
+import { distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, tickOnPoint, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
 import { signCls, tzLabel } from "../../lib/format";
 import { linePath, linear, lowerBound, nearest, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
 import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
@@ -253,7 +253,7 @@ export function XYChart(p: XYChartProps) {
       const lastClock = intraday && p.tz ? ticks.map((t) => /^\d\d:\d\d$/.test(t.label)).lastIndexOf(true) : -1;
       ticks.forEach((t, k) => {
         const i = lowerBound(T, t.t - (intraday ? 0 : DAY / 2));
-        if (i < n) push(sx(X[i]), k === lastClock ? `${t.label} ${tzLabel(p.tz)}` : t.label);
+        if (i < n) push(sx(X[i]), k === lastClock ? `${t.label} ${tzLabel(p.tz)}` : tickOnPoint(t, T[i], intraday, p.tz));
       });
     } else if (p.x || p.xFormat) {
       for (const v of niceTicks(a, b, max)) push(sx(v), (p.xFormat ?? plainTick)(v));

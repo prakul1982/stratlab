@@ -82,6 +82,23 @@ test("the Money card's tax is the tax report's total, with the audit fact (R5O-0
   assert.doesNotMatch(card, /Capital gains tax, \$\{year/);
 });
 
+test("dates: quarter ends, the app's date format for an expiry, ticks on trading days (R5O-026)", async () => {
+  const { isQuarterEnd } = await import("../src/components/NamedHolders.tsx").catch(() => ({}));
+  const named = read("src/components/NamedHolders.tsx");
+  assert.match(named, /\["03-31", "06-30", "09-30", "12-31"\]\.includes\(iso\.slice\(5, 10\)\)/);
+  assert.match(named, /isQuarterEnd\(v\.quarter\) \? "Quarter to" : "As of"/);
+  if (isQuarterEnd) { assert.equal(isQuarterEnd("2026-09-30"), true); assert.equal(isQuarterEnd("2026-10-05"), false); }
+  assert.match(read("src/pages/OptionsSession.tsx"), /expiry \$\{fmtDate\(snap\.expiry, \{ weekday: true \}\)\}/);
+  const { tickOnPoint } = await import("../src/lib/chartFormat.ts");
+  const ms = (d) => Date.parse(`${d}T00:00:00+05:30`);
+  const IST = "Asia/Kolkata";
+  // 2 Oct 2026 (Gandhi Jayanti) and 3 Oct (Saturday) have no point: their ticks land on Monday 5 Oct's and say so
+  assert.equal(tickOnPoint({ t: ms("2026-10-02"), label: "2 Oct" }, ms("2026-10-05"), false, IST), "5 Oct");
+  assert.equal(tickOnPoint({ t: ms("2026-10-03"), label: "3 Oct" }, ms("2026-10-05"), false, IST), "5 Oct");
+  assert.equal(tickOnPoint({ t: ms("2026-10-07"), label: "7 Oct" }, ms("2026-10-07"), false, IST), "7 Oct");
+  assert.equal(tickOnPoint({ t: ms("2026-10-01"), label: "Oct" }, ms("2026-10-01"), false, IST), "Oct");
+});
+
 test("holdings name what is left out of the totals and of Today (R5O-004)", () => {
   const page = read("src/pages/HoldingsPage.tsx");
   assert.match(page, /Not in these totals: \{t\.no_cost\.symbols\.join/);
