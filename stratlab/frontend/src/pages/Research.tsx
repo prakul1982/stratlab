@@ -188,7 +188,7 @@ export function CompanyPage() {
   const wiki = c.about.wiki;
   const deepTo = `/research/${region}/${encodeURIComponent(c.symbol)}/deep`;
   const lead = focus === "invest" || !c.testable ? "deep" : "test";
-  const deep = (cls: string) => <Link className={`btn ${cls} sm`} to={`/research/${region}/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>;
+  const deep = (cls: string) => <Link className={`btn ${cls} sm`} to={deepTo} title="Business, capex and management">Deep dive →</Link>;
   const wrap = (title: string, id: string, info: string) => (body: React.ReactNode, right?: React.ReactNode) => (
     <Card id={id}><CardHead title={title} info={info} actions={right} />{body}</Card>
   );
@@ -227,12 +227,13 @@ export function CompanyPage() {
         </div>
         {/* one main action (what this person came for), Watch and an alert; the rest under More */}
         <div className="k-row">
+          {/* the page's two main paths are both buttons: the one this person came for first and solid, the other beside it */}
           {lead === "deep" ? deep("") : <button className="btn sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
+          {lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet")}
+          <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>
           <StarButton region={region} symbol={c.symbol} name={c.name} />
           <AlertButton region={region} symbol={c.symbol} />
           <MoreMenu items={[
-            ...(lead === "deep" ? (c.testable ? [{ label: `Test a strategy on ${c.symbol}`, run: () => test(c) }] : []) : [{ label: "Deep dive: business, capex, management", run: () => nav(deepTo) }]),
-            { label: "Compare with another company", run: () => nav(`/research/compare?region=${region}&a=${c.symbol}`) },
             { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
             ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
             ...c.links.map((l) => ({ label: `${l.label} ↗`, run: () => openOut(l.url) })),

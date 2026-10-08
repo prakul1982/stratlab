@@ -194,3 +194,15 @@ test("the notebook's name box fits its name, and the heatmap has a key (R3-012)"
   await noSideways(page);
   expect(errors).toEqual([]);
 });
+
+// the company page's main paths are buttons, not tucked under More: the deep dive, testing a strategy and compare
+test("company page shows Deep dive, Test a strategy and Compare as buttons", async ({ page }) => {
+  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, {
+    access_token: "pro-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r",
+    user: { id: "u-pro", aud: "authenticated", email: "pro@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } });
+  await page.goto("/research/IN/RELIANCE");
+  const main = page.locator("main");
+  await expect(main.getByRole("link", { name: "Deep dive →", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(main.getByRole("link", { name: "Compare", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: /Test a strategy/ }).first()).toBeVisible();
+});
