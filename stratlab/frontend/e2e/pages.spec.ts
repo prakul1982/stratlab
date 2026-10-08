@@ -88,7 +88,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "News"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
   ["/admin", "Needs your attention"], ["/admin/data", "Background jobs"], ["/admin/system", "Check every feature"], ["/admin/users", "Paper trading now"],
   ["/admin/money", "Prices outside India"], ["/admin/quality", "Rates and rules"], ["/admin/emails", "Confirm your email"],
@@ -115,7 +115,7 @@ test("results calendar: every company's dates, and the company page links to it"
 test("losses hang below the zero line, with exact labels (company page)", async ({ page }) => {
   const errors = await open(page, "/research/IN/TCS", "Sales and profit, by year");
   await barsAroundZero(page);
-  await expect(page.getByText("-133").first()).toBeVisible();
+  await expect(page.getByText("−133").first()).toBeVisible();      // the real minus, never a hyphen
   await expect(page.getByText("loss years in between, so no yearly rate").first()).toBeVisible();
   await sane(page, errors);
 });
@@ -218,7 +218,7 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
-  const table = page.getByRole("table", { name: "Plans side by side" });
+  const table = page.locator("#compare");        // one table for each group (how much, what each plan adds, on every plan), each with the plan names on top
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
   await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "2", "15", "Unlimited"]);
@@ -486,8 +486,11 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(check.getByText(/F&O turnover: ₹3,788 netted per contract/)).toBeVisible();
   // the non-equity file is read now (a gold ETF under its own rules), so nothing is left out
   await expect(page.getByRole("list", { name: "Files left out" })).toHaveCount(0);
+  // every Money page opens on the year being filed (FY 2025-26 here), empty or not; a note offers the year that has the trades
+  await expect(page.getByRole("heading", { name: "Total tax estimate, FY 2025-26" })).toBeVisible();
+  await page.getByRole("button", { name: "Show FY 2024-25" }).click();
   await expect(page.getByRole("region", { name: "ETFs and gold bonds" }).getByText("Gold ETF")).toBeVisible();
-  // the only year with sales opens by itself
+  // the year with the sales
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
   await expect(page.getByText("2 same-day round trips", { exact: false })).toBeVisible();
   await expect(page.getByText("Estimate only.")).toHaveCount(1);
@@ -1087,7 +1090,8 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await expect(page.getByText("No company meets every condition.", { exact: false })).toBeVisible();
   await page.getByLabel("P/E (price to earnings): at most").fill("");
   await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();
-  await table.getByRole("button", { name: "P/E" }).click();                             // sort by a column the user picks
+  if (phone) await page.getByLabel("Sort by").selectOption({ label: "P/E" });             // a phone's cards have no header row: the Sort by box does it
+  else { await page.getByTestId("cols-screens").click(); await table.getByRole("button", { name: "P/E" }).click(); }     // the extra columns are one click away
   await expect(table.locator("th[aria-sort=ascending]")).toContainText("P/E");
   await page.getByRole("button", { name: /Low to high/ }).click();
   await expect(table.locator("th[aria-sort=descending]")).toContainText("P/E");

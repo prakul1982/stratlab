@@ -23,13 +23,13 @@ LOSS = "TCS"
 
 
 def loss_company(p: dict) -> dict:
-    """RELIANCE's page with SML-like numbers: losses for three years, then profits."""
+    """RELIANCE's page under TCS's name, with SML-like numbers: losses for three years, then profits."""
     p = copy.deepcopy(p)
     pl = p["pl"]
     n = len(pl["cols"])
     shape = [-21.3, -133.4, -100.2, 20.05, 108.6, 122.4, 160.3]
     pl["rows"]["Net Profit"] = ([None] * max(0, n - len(shape)) + shape)[-n:]
-    p["name"] = "Loss Company Ltd"
+    p["name"] = "Tata Consultancy Services Ltd"
     return p
 
 
@@ -70,7 +70,7 @@ def build():
     mp.setattr(market_events, "refresh", lambda web=None, today=None, now=None, only=None: (
         fake_market_events.seed(today), {"problems": [], "read": [n for n, _ in market_events.READERS]})[1])
     screen_index()
-    breadth(mp)
+    sizes = breadth(mp)
     positioning_history()
     stock_desks_history(mp)
     # the public NAV files, from the test fixtures, for the mutual funds page
@@ -97,7 +97,7 @@ def build():
     closing_auction(mp)
     vix_history(mp)
     holders_and_updates(mp)
-    live_breadth(mp)
+    live_breadth(mp, sizes)
     library_seeds()
     all_company_filings(mp)
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
@@ -204,7 +204,7 @@ def holders_and_updates(mp):
                                                                   {"symbol": "MARUTI", "region": "IN"}, {"symbol": "AAPL", "region": "US"}]}))
 
 
-def live_breadth(mp):
+def live_breadth(mp, sizes):
     """The market is open for the whole run, with today's points stored for two groups (a third has none, so the page shows
     what it says when live prices aren't there). The job stays off, so the stored points stay as they are."""
     import json
@@ -216,11 +216,12 @@ def live_breadth(mp):
     mp.setattr(main.breadth_live_job, "start", lambda: None)
     day = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
     times = ["09:30", "09:45", "10:00", "10:15", "10:30", "10:45"]
-    for g, scale in (("nifty500", 5), ("nifty50", 1)):
+    for g in ("nifty500", "nifty50"):
+        n = sizes[g]            # the live counts are out of the same stocks the last close counts: never more rose and fell than there are
         pts = []
         for i, t in enumerate(times):
-            adv, dec = (230 + 14 * i) * scale, (170 - 9 * i) * scale
-            pts.append([t, adv, dec, 12 * scale, 210 * scale + 6 * i, 400 * scale, 190 * scale + 5 * i, 400 * scale, 160 * scale + 2 * i, 380 * scale,
+            adv, dec = round(n * (0.55 + 0.04 * i)), round(n * (0.38 - 0.04 * i))
+            pts.append([t, adv, dec, n - adv - dec, round(n * (0.52 + 0.01 * i)), n, round(n * (0.47 + 0.0125 * i)), n, round(n * (0.40 + 0.005 * i)), n,
                         24000.5 + 22 * i if g == "nifty500" else 25100.0 + 15 * i])
         db.set_setting(BL.LIVE_KEY + g, json.dumps({"day": day, "fields": list(BL.FIELDS), "points": pts}))
 
@@ -280,6 +281,9 @@ def breadth(mp):
         for region in ("IN", "US"):
             main.breadth_runner.run(region)
     mp.setattr(main.breadth_job, "start", lambda: None)      # the stored counts stay as they are for the whole run
+    return {"nifty500": len(stocks), "nifty50": min(50, len(stocks))}     # how many stocks each group counts, for the live points
+
+
 def closing_auction(mp):
     """Today's closing auction, as read just after it ended, and 8 stored days for the history."""
     from datetime import date

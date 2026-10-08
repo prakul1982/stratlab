@@ -313,7 +313,7 @@ const TILE_GROUPS: { title: string; ids: string[] }[] = [
 export function OptionsPage() {
   const { fail, notify, refreshMe, notebooks, me } = useApp();
   const feats = me?.plan_info?.features;
-  const rulesOk = feats ? !!feats.strike_rules : true, vixOk = feats ? !!feats.vix_filter : true;
+  const rulesOk = feats ? !!feats.strike_rules : true, vixOk = feats ? !!feats.vix_filter : true, canStart = feats ? feats.options !== false : true;
   const nav = useNavigate();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
@@ -582,7 +582,9 @@ export function OptionsPage() {
           <Field label="Name" wide maxLength={80} value={s.name} onChange={(e) => patch({ name: e.target.value })} />
           <FormActions>
             <button type="submit" className="btn quiet" disabled={pricing || !!offline}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
-            <button type="button" className="btn blue" disabled={starting || !!offline || (ruleMode && !s.signal)} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : "Start paper trading"}</button>
+            <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && !s.signal)} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : canStart ? "Start paper trading" : "🔒 Start paper trading (Basic)"}</button>
+            {!canStart && <span className="k-note">Paper trading at set times is on the Basic plan. Price it now works on every plan.</span>}
+            {canStart && ruleMode && !s.signal && <span className="k-note">Pick the notebook whose rules give the signal first.</span>}
           </FormActions>
         </FormGrid>
         {preview && (

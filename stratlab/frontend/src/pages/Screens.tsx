@@ -11,6 +11,7 @@ import {
 import { RegionSwitch } from "../components/Research";
 import { Trash } from "../components/Icons";
 import { SurvBadges } from "../components/Surveillance";
+import { useMoreColumns } from "../components/MoreColumns";
 import {
   Card, CardHead, ChipSet, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Skeleton,
   type Column,
@@ -147,12 +148,15 @@ export function ScreensPage() {
   const n = conditionCount(current);
   const full = !!saved && saved.count >= saved.limit;
   const help = meta?.help ?? {};
+  // the first five columns (and the one sorted by) fit beside the filters; the rest are one click away
+  const more = useMoreColumns("screens", Math.max(0, cols.length - 5));
   const tableCols: Column<ScreenRow>[] = cols.map((c) => c.id === "name"
     ? { key: c.id, header: c.short ?? c.label, rowHeader: true, wrap: true, sortable: true, cell: (r: ScreenRow) => (
       <><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link> <span className="k-note">{r.symbol}</span>
         {r.surveillance && r.surveillance.length > 0 && <> <SurvBadges region={region} symbol={r.symbol} codes={r.surveillance} /></>}</>) }
     : { key: c.id, header: c.short ?? c.label, numeric: !c.text, sortable: true, cell: (r: ScreenRow) => c.cell(r, region) });
 
+  const shownCols = more.on ? tableCols : tableCols.filter((c, i) => i < 5 || c.key === sort);
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)}
@@ -242,14 +246,14 @@ export function ScreensPage() {
             <CardHead title={out ? `${out.total.toLocaleString("en-IN")} of ${out.indexed.toLocaleString("en-IN")} companies match` : "Checking…"}
               actions={<>
                 <Select label="Sort by" small value={sort} onChange={(v) => { setSort(v); setDesc(false); }} options={cols.map((c) => ({ value: c.id, label: c.short ?? c.label }))} />
-                <button className="btn quiet sm" onClick={() => setDesc((d) => !d)}>{desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button></>} />
+                <button className="btn quiet sm" onClick={() => setDesc((d) => !d)}>{desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button>{more.toggle}</>} />
             {!out && !error && <div className="screens-wait"><Skeleton label="Finding the companies" lines={8} /></div>}
             {error && <ErrorState title="The companies couldn't be read" action={{ label: "Try again", onClick: () => run(0) }}>{error}</ErrorState>}
             {out && out.indexed === 0 && <EmptyState title="Still gathering company numbers">StratLab is still gathering company numbers for {REGION_NAME[region]}. Check back in a little while.</EmptyState>}
             {out && out.indexed > 0 && out.total === 0 && <EmptyState title="No company meets every condition.">Try widening one of them.</EmptyState>}
             {rows.length > 0 && (
               <div className="screens-table">
-                <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} sticky columns={tableCols} sort={{ key: sort, desc, onSort: sortBy }} />
+                <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }} />
               </div>
             )}
             {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString("en-IN")} left)</button>}

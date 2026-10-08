@@ -522,7 +522,7 @@ function ResearchMock() {
       <div className="lp-ridea">
         <b className="small">Ideas to test on NVDA</b>
         <p className="small">"Buy NVDA when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below, 7% stop loss"</p>
-        <button type="button" className="btn blue sm lp-idea-btn" onClick={() => void signIn("/new?market=US&symbol=NVDA")}>Test an idea on NVDA →</button>
+        <button type="button" className="btn sm lp-idea-btn" onClick={() => void signIn("/new?market=US&symbol=NVDA")}>Test an idea on NVDA →</button>
       </div>
     </div>
   );

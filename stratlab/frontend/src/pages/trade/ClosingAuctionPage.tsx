@@ -23,14 +23,15 @@ const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(
 /** Where the auction is, and when the next one runs: the status the page leads with. */
 function Status({ v }: { v: CasView }) {
   const n = v.next;
-  const open = LIVE_PHASES.includes(v.phase);
+  const auction = v.phase === "transition" || v.phase === "entry" || v.phase === "matching";
+  const closed = v.phase === "preopen" || v.phase === "holiday";
   return (
     <Card label="Status">
       <div className="k-row">
-        <Badge tone={open ? "live" : v.phase === "closed" ? "ok" : "plain"}>{open ? "Auction session" : v.phase === "closed" ? "Auction over for today" : v.trading_day ? "No auction right now" : "Market closed"}</Badge>
+        <Badge tone={auction ? "live" : v.phase === "closed" ? "ok" : "plain"}>{auction ? "Auction session" : v.phase === "closed" ? "Auction over for today" : closed ? "Market closed" : v.phase === "before" ? "Continuous trading" : "No auction today"}</Badge>
         <span className="k-small" data-testid="cas-phase">{PHASE_TEXT[v.phase]}</span>
       </div>
-      {n && <p className="k-small" data-testid="cas-next">Next auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> IST.</p>}
+      {n && <p className="k-small" data-testid="cas-next">{closed ? "Closed, next" : "Next"} auction window: <b>{n.today ? "today" : weekday(n.day)}, {n.from}–{n.to}</b> IST.</p>}
       {v.day && !v.fresh && <p className="k-note">Showing the auction of {asOf(v.day)}{v.from_stored ? ", from an earlier day" : ""}.</p>}
     </Card>
   );
@@ -205,6 +206,7 @@ export function ClosingAuctionPage() {
       setV(x);
       setError(null);
       if (LIVE_PHASES.includes(x.phase)) timer = window.setTimeout(load, REFRESH_MS);
+      else if (x.phase === "preopen") timer = window.setTimeout(load, 5 * 60_000);          // so the page moves to "continuous trading" at the open
     }).catch(() => { if (live) setError("The closing auction couldn't be read just now. Try again in a minute."); });
     load();
     return () => { live = false; window.clearTimeout(timer); };

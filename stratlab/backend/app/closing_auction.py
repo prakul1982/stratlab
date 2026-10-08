@@ -317,7 +317,7 @@ def next_window(local: datetime, trading: bool, phase: str) -> dict | None:
     """When the next closing auction runs: today while it has not ended, else the next trading day, with the window the
     timetable of that day gives (None when no timetable has an auction yet)."""
     day = local.date()
-    if not (trading and phase in ("before", "transition", "entry", "matching")):
+    if not (trading and phase in ("preopen", "before", "transition", "entry", "matching")):
         day += timedelta(days=1)
         for _ in range(14):
             if is_trading_day("IN", day):
@@ -349,6 +349,8 @@ def view(profile: dict, now: datetime | None = None) -> dict:
     today = local.date()
     trading = is_trading_day("IN", today)
     phase = S.phase(local) if trading else "holiday"
+    if phase == "before" and local.strftime("%H:%M") < S.describe(today)["open"]:
+        phase = "preopen"            # a trading day, but the market has not opened yet: not "continuous trading"
     live = load_live()
     fresh = live.get("day") == today.isoformat()
     stocks = [stock_view(s, r, phase) for s, r in live["stocks"].items()] if live["stocks"] else []

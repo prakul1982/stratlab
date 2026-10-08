@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
+import { distinctTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
 import { tzLabel } from "../../lib/format";
 import { linePath, linear, lowerBound, nearest, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
 import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
@@ -191,9 +191,13 @@ export function XYChart(p: XYChartProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vals, hidden, in0, in1, refs, indexed, hasBars, p.includeZero, H]);
   const [ymin, ymax] = useTween(yTarget, 280, instant);
-  const yTicks = useMemo(() => niceTicks(ymin, ymax, H < 200 ? 4 : 5).filter((t) => t >= ymin && t <= ymax), [ymin, ymax, H]);
   const yFmt = indexed && canIndex ? plainTick : p.axisFormat ?? format;
-  const yLabels = yTicks.map(yFmt);
+  // a tick whose label reads the same as an earlier one ("1, 1, 1, 0" on a small count, "5%, 5%, 0%") is left out
+  const [yTicks, yLabels] = useMemo(() => {
+    const all = niceTicks(ymin, ymax, H < 200 ? 4 : 5).filter((t) => t >= ymin && t <= ymax);
+    return distinctTicks(all, yFmt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ymin, ymax, H, yFmt]);
 
   // ---- layout ----
   const legendOn = p.legend ?? series.filter((s) => s.inLegend !== false).length >= 2;

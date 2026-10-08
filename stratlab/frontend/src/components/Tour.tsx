@@ -21,12 +21,13 @@ export const STEPS: Step[] = [
 
 const phoneNow = () => { try { return window.matchMedia("(max-width: 900px)").matches; } catch { return false; } };
 
-/** The short tour. `onClose(done)`: true when the last step's Done was pressed, false when it was closed early. */
-export function Tour({ onClose }: { onClose: (done: boolean) => void }) {
+/** The short tour. `paused` hides it while a dialog is open. `onClose(done)`: true when the last step's Done was pressed, false when it was closed early. */
+export function Tour({ onClose, paused = false }: { onClose: (done: boolean) => void; paused?: boolean }) {
   const [i, setI] = useState(0);
   const step = STEPS[i];
   const last = i === STEPS.length - 1;
   const phone = phoneNow();
+  if (paused) return null;          // another dialog (the search palette, say) is in front: the tour waits, on the same step
   return (
     <Coachmark anchor={step.at} label="A quick tour" onClose={() => onClose(false)}>
       <div className="k-spread">

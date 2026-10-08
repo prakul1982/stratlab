@@ -16,13 +16,15 @@ export function rememberFy(fy: number) {
   try { localStorage.setItem(KEY, String(fy)); } catch { /* storage off */ }
 }
 
-/** The year a page opens on, from the years it has (`years`, with `hasData` saying which have anything in them):
- * the year last picked, when the page has it; else the year whose return is being filed now (the one before the
- * current year) when it has data; else the latest year with data; else the current year. */
+/** The year a page opens on, from the years it has: the year last picked, when the page has it; else the year whose
+ * return is being filed now (the most recent completed one, the year before the current one), whether or not it has
+ * anything in it, so every page opens on the same year (what each page holds is no part of the choice: the tax report
+ * has sales, tax tools dividends, and they must not pull to different years). Only a page that doesn't list that year
+ * (`hasData` says which of its years have anything) falls back to its latest year with data, else the current year. */
 export function pickFy(years: number[], current: number, hasData: (fy: number) => boolean = () => true, saved = savedFy()): number {
   if (saved != null && years.includes(saved)) return saved;
   const filing = current - 1;
-  if (years.includes(filing) && hasData(filing)) return filing;
+  if (years.includes(filing)) return filing;
   const busy = [...years].sort((a, b) => b - a).find(hasData);
   return busy ?? (years.includes(current) ? current : years[0] ?? current);
 }

@@ -20,8 +20,9 @@ const ERRORS: Column<ServerError>[] = [
 
 /** Admin → System: server errors, the other services, AI providers, the feature check, and real prices for the tests. */
 export function SystemSection() {
-  const { notify, fail } = useApp();
+  const { notify, fail, me } = useApp();
   const { ov } = useAdmin();
+  const chans = me?.alerts.channels;      // which ways of sending an alert the server has (the user's Settings shows only those)
   const [busy, setBusy] = useState<string | null>(null);
   const [filing, setFiling] = useState<FilingCheck | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -60,6 +61,9 @@ export function SystemSection() {
         <CardHead title="Other services" />
         {sv && (
           <StatusList label="Other services">
+            {chans && <StatusRow state={chans.telegram && chans.email ? "ok" : "warn"} label="Alert channels"
+              detail={chans.telegram && chans.email ? "Telegram and email are set up, so users can add them under Settings."
+                : `${[!chans.telegram && "Telegram", !chans.email && "Email"].filter(Boolean).join(" and ")} ${!chans.telegram && !chans.email ? "aren't" : "isn't"} set up on the server, so ${!chans.telegram && !chans.email ? "they're" : "it's"} hidden from users' Settings.`} />}
             {co && <StatusRow state={co.state} label={co.label} detail={co.fix ?? co.detail} />}
             {sv.admin_alerts && mail && <StatusRow state={mail.state} label={mail.label} detail={mail.fix ?? mail.detail}
               actions={<>

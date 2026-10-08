@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
+import { useDialogsOpen } from "./kit/Dialog";
 import { askWelcome, autoTour, setGuideOpen, TOUR_SEEN, tourSeen } from "../lib/onboarding";
 
 // the pop-ups load when they first open, so they don't slow down the first page
@@ -25,6 +26,7 @@ export function Onboarding() {
   const [welcomed, setWelcomed] = useState(false);          // answered in this visit: the tour may follow
   const [closedHere, setClosedHere] = useState(false);       // answered or closed here: don't ask again before /me catches up
   const seen = tourSeen(me, readLocal());
+  const dialogs = useDialogsOpen();
   const ask = !closedHere && askWelcome(me, loc.pathname);
 
   // the account doesn't know this browser already saw the tour (it was only kept here): tell it, once
@@ -52,7 +54,7 @@ export function Onboarding() {
   return (
     <Suspense fallback={null}>
       {ask && !tour && <LevelPrompt onDone={async (saved) => { setClosedHere(true); setWelcomed(true); await saved; void tell({ welcome: true }); }} />}
-      {tour && <Tour onClose={closeTour} />}
+      {tour && <Tour onClose={closeTour} paused={dialogs > 0} />}
     </Suspense>
   );
 }

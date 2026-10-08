@@ -95,7 +95,8 @@ def test_the_trend_carries_the_last_five_closes():
 
 def test_the_quote_carries_its_last_trade_time(w):
     q = main.kite.quote(["RELIANCE"])["RELIANCE"]
-    assert q["at"][:10] == datetime.now(main.IST).date().isoformat()
+    from tests.fake_kite import session_clock          # the fake broker stands still at the last close out of hours, like the real one
+    assert q["at"][:10] == session_clock().date().isoformat() and q["at"].endswith("+05:30")
     got = main.live_price("RELIANCE")
     assert set(got) == {"price", "prev_close", "low", "high", "at"} and got["low"] <= got["price"] <= got["high"]
 

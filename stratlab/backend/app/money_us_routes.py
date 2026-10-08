@@ -227,8 +227,8 @@ def view(profile, fy: int | None = None, cy: int | None = None) -> dict:
         if float(i["qty"]) - got > 1e-4:
             gaps.append({"symbol": i["symbol"], "name": i.get("name") or i["symbol"], "held": float(i["qty"]), "in_trades": round(got, 6),
                          "missing": round(float(i["qty"]) - got, 6), "avg": i.get("avg")})
-    fys = sorted({r["fy"] for r in rows} | {fy_of(t.isoformat())}, reverse=True)
-    fy = fy if fy in fys else fys[0]
+    fys = sorted({r["fy"] for r in rows} | {fy_of(t.isoformat()), fy_of(t.isoformat()) - 1}, reverse=True)
+    fy = fy if fy in fys else fy_of(t.isoformat()) - 1          # the year being filed now, like every Money page
     tax_year = None
     if full and trades:
         tax_year = next((y for y in _m().tax_view(profile)["years"] if y["fy"] == fy), None)

@@ -896,9 +896,8 @@ label.btn.disabled { opacity: .5; }
 
 /* while the first matches load: the table's own height, so the card below doesn't jump when they arrive */
 .screens-wait { min-height: 70vh; }
-.screens-table { margin: 0 -24px; max-height: 70vh; overflow: auto; }
+.screens-table { margin: 0 -24px; }
 @media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
-.screens-table th { position: sticky; top: 0; z-index: 1; padding: 0; }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
 
 /* corporate actions: a quiet tag for each kind, and the bonus/split notice on My Holdings */
@@ -1333,7 +1332,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
  * scrolling row, faded at its end */
 .k-chipbar { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; padding: 2px; }
 @media (max-width: 640px) {
-  .k-chipbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 90%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent); }
+  .k-chipbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 78%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 78%, transparent); padding-inline-end: 28px; }
 }
 .k-chipbar::-webkit-scrollbar { display: none; }
 .k-chip { flex: none; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink-2); font-size: var(--t-label); font-weight: 500; cursor: pointer; white-space: nowrap; }
@@ -1345,14 +1344,14 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-custom .k-input { width: auto; height: 36px; padding-inline: 12px; }
 .k-custom input.k-input { width: 80px; }
 
-/* form grid: every label one line, every box the same height, all boxes on one baseline */
-.k-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s4); align-items: end; min-width: 0; }
+/* form grid: every label one line, every box the same height, all boxes on one baseline (rows start together, so a hint under one box never lifts its neighbours' labels) */
+.k-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s4); align-items: start; min-width: 0; }
 .k-form.k-form-pair { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 .k-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */
 .k-card > .k-field.wide { max-width: none; }   /* a row that should fill the card (a document upload) */
-.k-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.k-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 22px; }
 .k-label-row label { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-label-row .opt { font-weight: 400; color: var(--muted); }
 .k-input { height: var(--ctl); width: 100%; padding: 0 14px; border-radius: var(--r-ctl); border: 1px solid var(--line-2); background: var(--paper); font-size: var(--t-body); min-width: 0; }
@@ -1426,8 +1425,26 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-table .k-row-note { color: var(--muted); font-size: var(--t-label); }
 .k-table .info { margin-left: 4px; }
 .k-table .info-pop { white-space: normal; font-weight: 400; text-transform: none; }
-.k-tbl-wrap.sticky { max-height: min(70vh, 640px); overflow: auto; }
-.k-tbl-wrap.sticky .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
+/* a table that fits its card keeps its header in view as the page scrolls (below the phone's top bar) */
+.k-tbl-wrap.pinhead { overflow: visible; background: none; border-radius: 0; animation: none; -webkit-mask-image: none; mask-image: none; }
+.k-tbl-wrap.pinhead .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
+@media (max-width: 900px) { .k-tbl-wrap.pinhead .k-table thead th { top: 56px; } }
+@media (max-width: 640px) { .k-tbl-wrap.pinhead .k-table th, .k-tbl-wrap.pinhead .k-table td { white-space: normal; padding-left: var(--s2); padding-right: var(--s2); min-width: 0; } }
+/* on a phone a stacked table is a list of cards: the row's name on top, each figure under its own column name */
+@media (max-width: 640px) {
+  .k-tbl-wrap.stack { border: 0; background: none; overflow: visible; border-radius: 0; animation: none; -webkit-mask-image: none; mask-image: none; }
+  .k-tbl-wrap.stack .k-table, .k-tbl-wrap.stack .k-table tbody, .k-tbl-wrap.stack .k-table tfoot { display: block; }
+  /* the column names stay for screen readers (and the sort buttons stay in the Tab order), out of sight */
+  .k-tbl-wrap.stack .k-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .k-tbl-wrap.stack .k-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) var(--s3); padding: var(--s3); margin-bottom: var(--s2);
+    border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .k-tbl-wrap.stack .k-table tbody tr:hover { background: var(--card); }
+  .k-tbl-wrap.stack .k-table td, .k-tbl-wrap.stack .k-table th[scope="row"] { display: block; padding: 0; border: 0; white-space: normal; text-align: left; min-width: 0; background: none; }
+  .k-tbl-wrap.stack .k-table th[scope="row"] { grid-column: 1 / -1; color: var(--ink); font-size: var(--t-body); }
+  .k-tbl-wrap.stack .k-table td[data-label]::before { content: attr(data-label) / ""; display: block; color: var(--muted); font-size: var(--t-note); font-weight: 400; }
+  .k-tbl-wrap.stack .k-table td.k-act, .k-tbl-wrap.stack .k-table td.k-row-note, .k-tbl-wrap.stack .k-table td.k-empty-row { grid-column: 1 / -1; }
+  .k-tbl-wrap.stack .k-table td.k-act { text-align: right; }
+}
 .k-th-sort { background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
 .k-th-sort:hover { color: var(--ink); }
 .k-th-sort:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
@@ -1828,3 +1845,12 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .gate-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: var(--s3); }
 .gate-path { font-family: var(--mono); font-size: var(--t-note); overflow-wrap: anywhere; }
 .gate-actions .lp-cta svg { background: #fff; border-radius: 50%; padding: 2px; width: 22px; height: 22px; }
+
+/* PageNav: the jump links at the top of a long page */
+.k-pagenav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.k-pagenav-k { font-size: var(--t-eyebrow); font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: var(--s1); }
+.k-pagenav-a { display: inline-flex; align-items: center; min-height: var(--ctl-sm); padding: 0 var(--s3); border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: var(--t-note); text-decoration: none; }
+.k-pagenav-a:hover { border-color: var(--line-2); background: var(--paper-2); }
+.k-pagenav-a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.k-card[id] { scroll-margin-top: 72px; }
+.k-card[tabindex="-1"]:focus { outline: none; }

@@ -81,7 +81,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       { id: "find-stocks", label: "Find stocks", blurb: "Filter and scan companies by plain facts, trends and filings.", pages: [
         page("/research/screens", "Screener", "search", "screener screen filter companies growth debt returns roe pe fundamentals ratios", { line: "Filter companies by plain facts: growth, debt, returns." }),
         page("/research/scan", "Trend scan", "pulse", "trend scan stage 2 stage two supertrend st s2 weinstein signals nifty 50 daily alert", { line: "Which stocks are in a rising trend (Stage 2) with the Supertrend line also pointing up." }),
-        page("/research/filings", "Red flags", "bell", "red flags filings announcements qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade", { line: "Fund raises, pledges, resignations and defaults your watchlist companies filed." }),
+        page("/research/filings", "Red flags", "bell", "red flags filings announcements qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade", { line: "Fund raises, pledges, resignations and defaults your held and watched companies filed." }),
         page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies", { line: "Map a sector or trend and see the listed companies linked to it." }),
       ] },
       { id: "market-view", label: "Market view", blurb: "The market as a whole: its mood, breadth, sectors, and the cost of borrowing to invest.", pages: [
@@ -93,7 +93,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/invest/stock-lending", "Stock lending fees", "receipt", "stock lending fees slb securities lending borrowing borrowed shares lend my shares earn on holdings", { isNew: true }),
       ] },
       { id: "company-news", label: "Company news", blurb: "What companies report and announce: news, results, dividends, updates and who holds them.", pages: [
-        page("/news", "News", "news", "news newsletter brief digest email daily weekly market close my stocks watchlist headlines subscribe", { line: "A short brief after each market close, for India, the US and the companies you follow." }),
+        page("/news", "Briefs", "news", "news briefs newsletter brief digest email daily weekly market close my stocks watchlist headlines subscribe", { line: "A short brief after each market close, for India, the US and the companies you follow." }),
         page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement", { line: "Results days for your stocks, or every company, week by week." }),
         page("/research/corporate-actions", "Corporate actions", "calendar", "corporate actions dividend ex date record date bonus issue stock split rights buyback demerger", { line: "Dividends, bonus issues and splits by ex-date, for your stocks or every company." }),
         page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { isNew: true, flag: "biz_updates" }),

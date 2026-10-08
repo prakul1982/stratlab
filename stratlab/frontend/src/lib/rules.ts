@@ -255,3 +255,19 @@ export function nameFor(s: Strategy, instrument?: string | null): string {
   const rule = c ? `${refName(c.l)} ${OP_SHORT[c.op]} ${refName(c.r)}` : "New idea";
   return (instrument ? `${rule} · ${instrument}` : rule).slice(0, 80);
 }
+
+/** Does the sentence say when to trade (a buy or short word and a condition word)? If it does, a build that finds no
+ * rule is the builder's fault, not the wording's. */
+export function looksLikeRule(idea: string): boolean {
+  const t = idea.toLowerCase();
+  return /\b(buy|short|sell|enter|go long|long)\b/.test(t)
+    && /\b(when|if|once|crosses?|crossing|above|below|over|under|rsi|ema|sma|macd|average|breaks?|breakout|falls?|rises?|drops?|supertrend|stage|bollinger|high|low)\b|[<>]/.test(t);
+}
+
+/** The words for a build that found no entry rule: ours when the sentence plainly holds one, else what to add. */
+export function noRuleNote(idea: string, notes: string[] = []): { note: string; system: boolean } {
+  if (looksLikeRule(idea)) {
+    return { system: true, note: "That one is on our side: the builder couldn't turn your sentence into rules just now, and your wording looks fine. Try again, start from a classic idea, or build the rules by hand." };
+  }
+  return { system: false, note: "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." + (notes.length ? " " + notes.join(" ") : "") };
+}

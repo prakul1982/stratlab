@@ -21,6 +21,20 @@ def _base(name: str) -> float:
     return level(name, 20000) or 100 + zlib.crc32(name.encode()) % 3000     # well-known names trade near their real levels (fake_prices)
 
 
+def session_clock(now: datetime | None = None) -> datetime:
+    """The time the exchange's last trade was at: now while the market is open (Mon to Fri, 09:15 to 15:30 IST), else the
+    close of the latest session. Out of hours the broker's quotes stand still at the close and say when it was, as the real
+    ones do, so a page never claims a price from a moment nobody traded."""
+    now = (now or datetime.now(IST)).astimezone(IST)
+    close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    if now.weekday() < 5 and now >= now.replace(hour=9, minute=15, second=0, microsecond=0):
+        return min(now, close)
+    day = close - timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
 def price_of(name: str, t: datetime) -> float:
     d = t.timestamp() / 86400
     b = _base(name)
@@ -120,7 +134,7 @@ class FakeKiteConnect:
             t = t.replace(hour=0, minute=0)
         else:
             t = t.replace(minute=(t.minute // step) * step)
-        now = datetime.now(IST) if t.tzinfo else datetime.now(IST).replace(tzinfo=None)
+        now = session_clock() if t.tzinfo else session_clock().replace(tzinfo=None)
         while t <= to:
             day_ok = t.weekday() < 5
             in_hours = step == 1440 or (t.hour, t.minute) >= (9, 15) and (t.hour, t.minute) < (15, 30)
@@ -136,7 +150,7 @@ class FakeKiteConnect:
 
     def ltp(self, keys):
         self._hit()
-        now = datetime.now(IST)
+        now = session_clock()
         out = {}
         for k in keys:
             r = self.by_key.get(k)
@@ -146,7 +160,7 @@ class FakeKiteConnect:
 
     def quote(self, keys):
         self._hit()
-        now = datetime.now(IST)
+        now = session_clock()
         out = {}
         for k in keys:
             r = self.by_key.get(k)

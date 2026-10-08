@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "./api";
-import { CRORE, currencySymbol, inrCompact } from "./format";
+import { CRORE, currencySymbol, inrCompact, minus } from "./format";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
@@ -66,7 +66,12 @@ export interface WatchItem { region: Region; symbol: string; name: string | null
 
 export const researchApi = {
   company: (r: Region, s: string) => api<Company>(`/research/company/${r}/${encodeURIComponent(s)}`),
-  companyAI: (r: Region, s: string, refresh = false) => api<CompanyAI>(`/research/company/${r}/${encodeURIComponent(s)}/ai${refresh ? "?refresh=true" : ""}`),
+  /** The AI read, or an Error saying why there is none (an answer of "unavailable" is a 200 on the wire, so a page opening is never a failed request). */
+  companyAI: async (r: Region, s: string, refresh = false): Promise<CompanyAI> => {
+    const got = await api<CompanyAI | { unavailable: true; message: string }>(`/research/company/${r}/${encodeURIComponent(s)}/ai${refresh ? "?refresh=true" : ""}`);
+    if ("unavailable" in got) throw new Error(got.message);
+    return got;
+  },
   chart: (r: Region, s: string, range: string) =>
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),
   quotes: (r: Region, syms: string[]) => api<Record<string, Quote | null>>(`/research/quotes?region=${r}&symbols=${syms.map(encodeURIComponent).join(",")}`),
@@ -141,37 +146,37 @@ export function scaleFor(values: (number | null | undefined)[], us: boolean, uni
   const nz = values.filter((x): x is number => x != null && Number.isFinite(x) && x !== 0).map(Math.abs);
   const max = nz.length ? Math.max(...nz) : 0, min = nz.length ? Math.min(...nz) : 0;
   const make = (k: number, unit: string, dp: number, locale: string): Scale =>
-    ({ k, unit, fmt: (x) => (x == null ? "–" : (x / k).toLocaleString(locale, { minimumFractionDigits: dp, maximumFractionDigits: dp })) });
+    ({ k, unit, fmt: (x) => (x == null ? "–" : minus((x / k).toLocaleString(locale, { minimumFractionDigits: dp, maximumFractionDigits: dp }))) });
   if (us) {
     const cur = millionsOf(unit);
     if (max >= 10000 && min >= 5000) return make(1000, `${cur} billion`, 1, "en-US");
     if (max >= 10000 && min >= 500) return make(1000, `${cur} billion`, 2, "en-US");
-    return { k: 1, unit: `${cur} million`, fmt: (x) => (x == null ? "–" : x.toLocaleString("en-US", { maximumFractionDigits: 2 })) };
+    return { k: 1, unit: `${cur} million`, fmt: (x) => (x == null ? "–" : minus(x.toLocaleString("en-US", { maximumFractionDigits: 2 }))) };
   }
   if (max >= 100000 && min >= 50000) return make(100000, "₹ lakh cr", 2, "en-IN");
-  return { k: 1, unit: "₹ cr", fmt: (x) => (x == null ? "–" : x.toLocaleString("en-IN", { maximumFractionDigits: 2 })) };
+  return { k: 1, unit: "₹ cr", fmt: (x) => (x == null ? "–" : minus(x.toLocaleString("en-IN", { maximumFractionDigits: 2 }))) };
 }
 
 /** A trend value in its unit: "₹ Cr" values are already crores, "USD" values are dollars. */
 export function trendValue(v: number, unit: string): string {
   // Indian figures are in crore: show them whole (₹2,812 Cr), with a decimal only for small ones (₹4.6 Cr)
-  if (/billion/i.test(unit)) return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: Math.abs(v) < 10 ? 2 : 1 });
-  if (/lakh/i.test(unit)) return v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (/billion/i.test(unit)) return minus(v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: Math.abs(v) < 10 ? 2 : 1 }));
+  if (/lakh/i.test(unit)) return minus(v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   if (/cr/i.test(unit)) {
     const a = Math.abs(v);
-    return a < 10 ? v.toFixed(1) : Math.round(v).toLocaleString("en-IN");
+    return a < 10 ? minus(v.toFixed(1)) : minus(Math.round(v).toLocaleString("en-IN"));
   }
   const a = Math.abs(v);      // other markets report in whole currency units
-  return a >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : a >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Math.round(v).toLocaleString("en-US");
+  return minus(a >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : a >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Math.round(v).toLocaleString("en-US"));
 }
 
 export function metricText(m: MetricItem, currency: string): string {
   const v = m.value;
-  if (m.unit === "%") return `${v.toFixed(1)}%`;
+  if (m.unit === "%") return minus(`${v.toFixed(1)}%`);
   if (m.unit === "%±") return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%`;
   if (m.unit === "money") return `${currencySymbol(currency)}${v.toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: 2 })}`;
   if (m.unit === "cr") return inrCompact(v * CRORE);        // the figure is in crore: ₹925 cr, ₹1.51 lakh cr
-  return v.toFixed(Math.abs(v) >= 100 ? 0 : 2);
+  return minus(v.toFixed(Math.abs(v) >= 100 ? 0 : 2));
 }
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------

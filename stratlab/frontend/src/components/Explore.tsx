@@ -18,7 +18,9 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
   const latest = notebooks?.[0] ? { id: notebooks[0].id } : null;
   const [all, setAll] = useState(() => { try { return localStorage.getItem(OPEN_KEY) === "1"; } catch { return false; } });
   const showAll = (on: boolean) => { setAll(on); try { localStorage.setItem(OPEN_KEY, on ? "1" : "0"); } catch { /* storage off */ } };
-  const shown = FEATURES.filter((f) => f.home && f.goal && !hide.includes(f.id) && !(level === "new" && f.level === "advanced"));
+  // a card never points at the page it is on
+  const here = loc.pathname + loc.search;
+  const shown = FEATURES.filter((f) => f.home && f.goal && !hide.includes(f.id) && !(level === "new" && f.level === "advanced") && resolve(f.to, loc.pathname, latest) !== here);
   const goals = (GOAL_ORDER[order ?? focus ?? "both"] as Goal[]).filter((g) => !skip.includes(g) && shown.some((f) => f.goal === g));
   const open = (to: string) => {
     const dest = resolve(to, loc.pathname, latest);
@@ -44,7 +46,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
                 <button key={f.id} className="k-linkcard explore-card" onClick={() => open(f.to)}>
                   <b>{f.title}</b>
                   <span className="small muted">{f.what}</span>
-                  {f.to.startsWith("@") && !latest && <span className="small muted">Starts with a notebook</span>}
+                  <span className="small explore-go">{f.to.startsWith("@") && !latest ? "Starts with a notebook →" : "Open →"}</span>
                 </button>
               ))}
             </div>

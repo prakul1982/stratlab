@@ -54,7 +54,7 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
     <Card label="Where to test">
       <CardHead title="1. Where do you want to test it?" info={HELP.markets} infoLabel="About markets" />
       <ChipBar label="Market" value={where.market} onChange={(id) => setWhere({ market: id, instrument: null })}
-        options={usable.map((m) => ({ value: m.id, label: `${m.symbol === "+" ? "" : m.symbol + " "}${m.name}${m.status === "offline" ? " (offline)" : ""}` }))} />
+        options={usable.map((m) => ({ value: m.id, label: `${[...m.symbol].length === 1 && m.symbol !== "+" ? m.symbol + " " : ""}${m.name}${m.status === "offline" ? " (offline)" : ""}` }))} />
       {soon.length > 0 && <p className="k-note">Coming soon: {soon.map((m) => m.name).join(", ")}. Until then, use "Your own data" with a CSV.</p>}
       {where.market === "CSV" ? (
         <p className="k-small k-muted">You'll upload your CSV of candles right after the notebook is created.</p>
@@ -184,7 +184,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
           <ImportStrategy onBuilt={create} market={where.market} />
         </section>
       )}
-      <section className="k-stack" aria-label="Classic ideas">
+      <section id="classic-ideas" className="k-stack" aria-label="Classic ideas">
         <h2 className="k-card-title">Or start from a classic idea</h2>
         <Starters where={where} />
       </section>

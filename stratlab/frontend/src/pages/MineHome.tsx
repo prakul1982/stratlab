@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
+import { asOf, dayIn, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
 import { evDay } from "../lib/marketEvents";
 import { inWords, marketState } from "../lib/marketHours";
 import { MARKET_TILES, goldInr10g, useComingUp, useMarketStrip, type Up } from "../lib/mine";
@@ -166,11 +166,13 @@ function PnlCard() {
     );
   }
   const day = h.totals.day;
+  // data from an earlier day is never titled "Today": out of hours the change is the last session's
+  const fresh = !h.prices_at || dayIn(h.prices_at) === dayIn(new Date());
   return (
     <Card testId="mine-pnl">
-      <CardHead title="Today's P&L" actions={<Link className="btn quiet sm" to="/holdings" aria-label="Open holdings">Open</Link>} />
+      <CardHead title={fresh ? "Today's P&L" : "Last session's P&L"} actions={<Link className="btn quiet sm" to="/holdings" aria-label="Open holdings">Open</Link>} />
       <Stat label={`${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
-        note={day == null ? "Today's change needs live prices, which are not in yet." : h.totals.day_pct != null ? `Holdings ${pct(h.totals.day_pct, 2)}` : undefined} />
+        note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? `Holdings ${pct(h.totals.day_pct, 2)}` : undefined} />
       {h.prices_at && <div><Badge>Prices as of {asOf(h.prices_at)}</Badge></div>}
     </Card>
   );

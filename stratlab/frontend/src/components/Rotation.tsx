@@ -53,7 +53,15 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
   const ticks = (s: number) => { const st = (s > 6 ? 2 : s > 3 ? 1 : 0.5) * (phone ? 2 : 1); const out: number[] = []; for (let v = Math.ceil((100 - s) / st) * st; v <= 100 + s; v += st) out.push(+v.toFixed(2)); return out; };
   const shown = (r: RotationRow) => (step ? r.points.slice(0, Math.max(1, step)) : r.points);
   const hov = rows.find((r) => r.id === hoverId) ?? null;
-  const labels = placeLabels(rows.map((r) => { const e = shown(r)[shown(r).length - 1]; return { id: r.id, name: r.name, x: X(e.x), y: Y(e.y) }; }),
+  // dots that sit on top of each other share one name ("Nifty Energy +2"): three names on one spot can't all be read
+  const heads = rows.map((r) => { const e = shown(r)[shown(r).length - 1]; return { id: r.id, name: r.name, x: X(e.x), y: Y(e.y) }; });
+  const stacked = new Map<string, string[]>();
+  const lead = heads.filter((h, i) => {
+    const first = heads.findIndex((o) => Math.abs(o.x - h.x) < 7 && Math.abs(o.y - h.y) < 7);
+    if (first !== i) { const g = stacked.get(heads[first].id) ?? []; g.push(h.name); stacked.set(heads[first].id, g); return h.id === hover; }
+    return true;
+  });
+  const labels = placeLabels(lead.map((h) => ({ ...h, name: stacked.has(h.id) && h.id !== hover ? `${h.name} +${stacked.get(h.id)!.length}` : h.name })),
     { l: pad.l, r: W - pad.r, t: pad.t, b: H - pad.b }, hover, phone);
   const last = hov ? shown(hov)[shown(hov).length - 1] : null;
 

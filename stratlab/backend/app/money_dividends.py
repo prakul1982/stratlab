@@ -370,7 +370,7 @@ def view(stored: dict, estimated: list[dict], ahead: list[dict], usd_inr: float 
     the estimate beside the files' figure when both exist."""
     cur_fy = fy_of(today.isoformat())
     own_years = {fy_of(r["d"]) for r in stored["rows"]}
-    fys = sorted(own_years | {fy_of(r["d"]) for r in estimated} | {cur_fy}, reverse=True)
+    fys = sorted(own_years | {fy_of(r["d"]) for r in estimated} | {cur_fy, cur_fy - 1}, reverse=True)
     years = []
     for fy in fys:
         own = [r for r in stored["rows"] if fy_of(r["d"]) == fy]

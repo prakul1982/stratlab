@@ -52,7 +52,8 @@ The dark values are written twice in `styles.css` (explicit dark and "follow the
 | A slider | `Range` (kit track and thumb, its value in words beside it) | a bare `<input type="range">` |
 | A stock / company box | `StockPicker` (`value`, `onPick(symbol, region)`) | a bare text input; `CompanyCombobox` in new code |
 | A choice among types | `TilePicker` | long `<select>`s |
-| A table | `DataTable` | a raw `<table>` |
+| A table | `DataTable`. A long table scrolls with the page (never in a box of its own); `stack` turns each row into a card on a phone (give it to a table whose figures all matter, like Positions); `pinHead` keeps the header of a table that fits its card in view | a raw `<table>`, a table in a `max-height` box |
+| A long page | `PageNav` (jump links to the main cards, which carry an `id`) and the detail behind `Disclosure` | a page of ten cards with no way round it |
 | A chart | `ChartFrame` (title, range, Table switch in the header row) around `LineChart`/`XYChart` with `ranges={false} table={false}` | a chart in a bare card |
 | Nothing / failed / loading | `EmptyState`, `ErrorState`, `Skeleton` (each can carry one action button) | `Empty`, `Loading` spinner, a bare `.banner` |
 | Anything that floats over the page | `Dialog` (or `ConfirmDialog`) for a modal; `useDialogFocus` on your own modal box (the palette, the phone menu); `usePopover` for a menu or an editor that opens from a button | a hand-made focus trap or Esc handler |
@@ -63,7 +64,7 @@ If nothing fits, add the piece to the kit and to `/dev/kit` first; do not build 
 
 ## Numbers
 
-`inr(v, dp=0)` full rupees (`₹1,00,000`; `inr(1849.3, 2)` is `₹1,849.30`). `inrCompact(v)` Indian units (`₹925`, `₹5.2 lakh`, `₹3,472 cr`, `₹1.51 lakh cr`). `signedInrCompact(v)` adds a `+`. `axisInr(v)` for chart axes (`₹1.45L cr`). `pct(v)` signed, `pctPlain(v)` unsigned, `signed(v)` plain signed number. All take **rupees** (multiply crore by `CRORE`), print `–` for missing values and a real minus (−). Exact figures belong in the tooltip and the Table view, not on the axis.
+`inr(v, dp=0)` full rupees (`₹1,00,000`; `inr(1849.3, 2)` is `₹1,849.30`). `inrCompact(v)` Indian units (`₹925`, `₹5.2 lakh`, `₹3,472 cr`, `₹1.51 lakh cr`). `signedInrCompact(v)` adds a `+`. `axisInr(v)` for chart axes (`₹1.45L cr`). `pct(v)` signed, `pctPlain(v)` unsigned, `signed(v)` plain signed number. `num(v, dp)` a plain number with fixed decimals. Never `toFixed` or `toLocaleString` on a figure that can be negative: they print a hyphen; `minus(text)` fixes a string, and `Stat` and `DataTable` cells fix what they are given. All take **rupees** (multiply crore by `CRORE`), print `–` for missing values and a real minus (−). Exact figures belong in the tooltip and the Table view, not on the axis.
 
 ## Dates
 

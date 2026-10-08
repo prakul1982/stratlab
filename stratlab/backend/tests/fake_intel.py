@@ -81,14 +81,34 @@ def fake_news() -> httpx.MockTransport:
     return httpx.MockTransport(lambda req: httpx.Response(200, text=RSS))
 
 
+WIKI_PAGES = {
+    "reliance industries": ("Reliance Industries", "Indian multinational conglomerate",
+                            "Reliance Industries Limited is an Indian multinational conglomerate headquartered in Mumbai."),
+    "tata consultancy services": ("Tata Consultancy Services", "Indian information technology company",
+                                  "Tata Consultancy Services Limited is an Indian multinational information technology services and consulting company headquartered in Mumbai."),
+}
+
+
 def fake_wiki() -> httpx.MockTransport:
+    """Wikipedia by name, like the real one: each company gets its own page (a made-up one-liner when it has none here),
+    so a company's heading and its description are always about the same company."""
+    from urllib.parse import unquote
+
+    def page(name: str):
+        key = name.lower().replace("_", " ").replace(" company", "").strip()
+        for k, v in WIKI_PAGES.items():
+            if key.startswith(k):
+                return v
+        title = name.replace("_", " ").replace(" company", "").strip().title()
+        return (title, "Indian listed company", f"{title} is an Indian listed company.")
+
     def handler(req: httpx.Request):
         if req.url.path == "/w/api.php":
-            return httpx.Response(200, json={"query": {"search": [{"title": "Reliance Industries"}]}})
+            return httpx.Response(200, json={"query": {"search": [{"title": page(req.url.params.get("srsearch", "Reliance Industries"))[0]}]}})
         if "/page/summary/" in req.url.path:
-            return httpx.Response(200, json={"title": "Reliance Industries", "description": "Indian multinational conglomerate",
-                                             "extract": "Reliance Industries Limited is an Indian multinational conglomerate headquartered in Mumbai.",
-                                             "type": "standard", "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Reliance_Industries"}}})
+            title, desc, extract = page(unquote(req.url.path.rsplit("/", 1)[1]))
+            return httpx.Response(200, json={"title": title, "description": desc, "extract": extract, "type": "standard",
+                                             "content_urls": {"desktop": {"page": f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"}}})
         return httpx.Response(404)
     return httpx.MockTransport(handler)
 

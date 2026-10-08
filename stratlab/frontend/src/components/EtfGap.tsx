@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { asOf, price, fmtDate } from "../lib/format";
+import { asOf, num, pct, price, fmtDate } from "../lib/format";
 import { etfGapApi, gapShort, gapWords, useEtfGaps, type EtfGapDetail } from "../lib/etfGaps";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
@@ -69,7 +69,7 @@ export function EtfGapDetailView({ symbol, quiet }: { symbol: string; quiet?: bo
             <span className="k-eyebrow">Each day's close against that day's NAV</span>
             <LineChart lines={[{ values: hist.map((h) => h.gap), color: "var(--blue)", width: 2, label: "Gap to NAV" }]}
               labels={hist.map((h) => day(h.day))} height={190} baseline={0} ranges={false} table={false}
-              format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}%`} axisFormat={(v) => `${v.toFixed(1)}%`}
+              format={(v) => pct(v, 2)} axisFormat={(v) => `${num(v, 1)}%`}
               ariaLabel={`${r.symbol}'s gap to NAV at each close, ${day(hist[0].day)} to ${day(hist[hist.length - 1].day)}`} />
             {d.days && <span className="k-small">Over {d.days.days} trading days: from {gapShort(d.days.low)} to {gapShort(d.days.high)}, {gapShort(d.days.avg)} on average.</span>}
           </>

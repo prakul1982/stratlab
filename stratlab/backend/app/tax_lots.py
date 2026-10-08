@@ -640,7 +640,7 @@ def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: li
     c["realised"] += extra or []              # mutual fund sales (money_mf.realised), worked out there
     business, inputs = business or [], inputs or {}
     equity, units = split_units(c)
-    fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today)}
+    fys = sorted({r["fy"] for r in c["realised"]} | {i["fy"] for i in c["intraday"]} | {b["fy"] for b in business} | {fy_of(today), fy_of(today) - 1}      # this year and the one being filed now: every Money page opens on the same year
                  | set(dividends or {}) | set(more_years or ()),
                  reverse=True)
     unmatched = {}

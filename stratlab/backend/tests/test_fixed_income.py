@@ -132,6 +132,19 @@ def test_basic_uses_the_own_estimate_and_lists_deposits(w, paid):
     assert d["basis"] == "slab" and d["tax_rate"] == 5.2
 
 
+def test_the_rate_comes_from_the_latest_saved_tax_inputs_or_says_there_are_none(w, paid):
+    c = w["client"]
+    from app import tax_lots
+    from datetime import date
+    fy = tax_lots.fy_of(date.today().isoformat())
+    d = c.get("/money/rates", headers=BASIC).json()
+    assert d["basis"] == "slab" and d["inputs_saved"] is False and d["tax_rate"] == 31.2          # nothing saved: the 30% slab, said so
+    tax_total.save_inputs("u-basic", fy - 1, {"regime": "new", "other": 2000000, "salary": 2000000})   # saved for last year only
+    d = c.get("/money/rates", headers=BASIC).json()
+    assert d["inputs_saved"] is True and d["basis"] == "estimate" and d["mine"]["fy"] == fy - 1       # carried to this year, and says which
+    assert F.saved_inputs("u-basic", fy)[0] == fy - 1 and F.saved_inputs("u-nobody", fy) is None
+
+
 def test_net_worth_shows_the_same_after_tax_interest(w, paid):
     c = w["client"]
     from app import tax_lots

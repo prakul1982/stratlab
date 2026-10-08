@@ -58,8 +58,8 @@ test("a new user's first session, from the invite link to the plans", async ({ p
   const welcome = page.getByRole("dialog", { name: "What brings you here?" });
   await expect(welcome).toBeVisible({ timeout: 30_000 });
   if (phone) await check(page, errors, phone);
-  // one short step: the experience is asked on the same card, already on the middle answer
-  await expect(welcome.getByRole("radio", { name: "I've done a bit" })).toHaveAttribute("aria-checked", "true");
+  // one short step: the experience is asked on the same card, with nothing picked for them
+  await expect(welcome.getByRole("radio", { name: "I've done a bit" })).toHaveAttribute("aria-checked", "false");
   await welcome.getByRole("button", { name: /All of it/ }).click();
   await level(page);
   await expect(page.getByText("Your first steps")).toBeVisible({ timeout: 30_000 });

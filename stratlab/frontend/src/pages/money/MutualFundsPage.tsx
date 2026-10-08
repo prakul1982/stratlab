@@ -63,7 +63,7 @@ export function MutualFundsPage() {
   const show = useCallback((v: View) => {
     setView(v);
     setFy((cur) => (cur != null && v.gains?.years.some((y) => y.fy === cur) ? cur
-      : v.gains?.years.length ? pickFy(v.gains.years.map((y) => y.fy), Math.max(...v.gains.years.map((y) => y.fy))) : null));     // the Money pages' shared year
+      : v.gains?.years.length ? pickFy(v.gains.years.map((y) => y.fy), v.gains.current_fy) : null));     // the Money pages' shared year
   }, []);
   const load = useCallback(() => {
     setError(null);

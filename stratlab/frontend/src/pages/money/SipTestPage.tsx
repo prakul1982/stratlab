@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { dateOnly, inr, money, pctPlain, signed } from "../../lib/format";
+import { dateOnly, inr, money, pct, pctPlain, signed } from "../../lib/format";
 import type { Instrument, Market } from "../../lib/types";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
 import { LineChart } from "../../components/Charts";
@@ -116,6 +116,12 @@ export function SipTestPage() {
   }, [r]);
   const ready = picks.length > 0 && (picks.length === 1 || Math.abs(total - 100) < 0.5) && (mode === "amount" ? Number(amount) > 0 : Number(qty) >= 1)
     && (freq !== "monthly" || !numberProblem(dom, DOM));
+  // a greyed-out button says what it is waiting for
+  const waiting = ready ? null
+    : picks.length === 0 ? "Pick a stock or fund first."
+    : picks.length > 1 && Math.abs(total - 100) >= 0.5 ? `The shares of the money add up to ${Math.round(total * 10) / 10}%, not 100%.`
+    : mode === "amount" ? (Number(amount) > 0 ? "Fix the day of the month." : "Enter the amount of each instalment.")
+    : Number(qty) >= 1 ? "Fix the day of the month." : "Enter at least 1 share for each instalment.";
 
   const sideBySide: Compare[] = [];
   if (res && r) {
@@ -172,7 +178,7 @@ export function SipTestPage() {
             <Seg label="Each time" options={[{ value: "amount", label: "An amount" }, { value: "qty", label: "Shares" }]} value={mode} onChange={(v) => { setMode(v as typeof mode); if (v === "qty") setRule("plain"); }} />
           </FieldGroup>
           {mode === "amount"
-            ? <Field label="Amount each time" unit="₹" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            ? <Field label="Amount each time" unit="₹" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} hint={Number(amount) >= 1000 ? inr(Number(amount)) : undefined} />
             : <Field label="Shares each time" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} />}
           <Field label="How often">{(id) => <Select id={id} value={freq} onChange={(v) => setFreq(v as typeof freq)} options={FREQ} />}</Field>
           {freq === "monthly" && <Field label="Day of the month" inputMode="numeric" value={dom} onChange={(e) => setDom(e.target.value)}
@@ -180,7 +186,7 @@ export function SipTestPage() {
           {freq === "weekly" && <Field label="Day of the week">{(id) => <Select id={id} value={weekday} onChange={setWeekday} options={WEEKDAYS.map((d, i) => ({ value: String(i), label: d }))} />}</Field>}
           <Field label="Step-up a year" unit="%" type="number" min={0} max={50} value={stepUp} onChange={(e) => setStepUp(e.target.value)} info="Raises the amount by this much each year." />
           <Field label="Years">{(id) => <Select id={id} value={years} onChange={setYears} options={YEARS} />}</Field>
-          <Field label="Brokerage an order" unit="₹" type="number" min={0} value={brokerage} onChange={(e) => setBrokerage(e.target.value)} />
+          <Field label="Brokerage per order" unit="₹" type="number" min={0} value={brokerage} onChange={(e) => setBrokerage(e.target.value)} />
           <Field label="Dip rule">{(id) => (
             <Select id={id} value={rule} onChange={(v) => setRule(v as Rule)} disabled={mode === "qty"} options={[
               { value: "plain", label: "None, on schedule" },
@@ -194,7 +200,7 @@ export function SipTestPage() {
           </>}
           <FormActions>
             <button type="submit" className="btn" disabled={!ready || busy}>{busy ? "Running…" : "Run the test"}</button>
-            {problem && <span className="k-small k-down" role="alert">{problem}</span>}
+            {problem ? <span className="k-small k-down" role="alert">{problem}</span> : waiting && <span className="k-note">{waiting}</span>}
           </FormActions>
         </FormGrid>
         {!canDip && <PlanNote>Dip rules, and the same SIP run from every start month, are on the Basic plan.</PlanNote>}
@@ -207,7 +213,7 @@ export function SipTestPage() {
             <p className="k-small k-muted">{dateOnly(r.start)} to {dateOnly(r.end)}: {r.instalments} instalment{r.instalments === 1 ? "" : "s"}{res.legs.length > 1 ? ` into ${res.legs.map((l) => `${l.weight}% ${l.symbol}`).join(", ")}` : ` into ${res.legs[0].symbol}`}.</p>
             <StatRow>
               <Stat label="Put in" value={inr(r.invested)} />
-              <Stat label="Value at the end" value={inr(r.value)} note={`${r.gain_pct > 0 ? "+" : ""}${r.gain_pct.toFixed(1)}% on the money put in`} />
+              <Stat label="Value at the end" value={inr(r.value)} note={`${pct(r.gain_pct)} on the money put in`} />
               <Stat label="XIRR" value={rate(r.xirr)} />
               <Stat label={<>Deepest fall <Info label="What the deepest fall is">The largest drop of the pot from a high, leaving out the instalments themselves.</Info></>} value={pctPlain(r.deepest_fall_pct, 1)} />
               <Stat label="Longest below the money put in" value={r.underwater_days ? span(r.underwater_days) : "Never"} note={r.underwater_from ? `${dateOnly(r.underwater_from)} to ${dateOnly(r.underwater_to)}` : undefined} />
@@ -252,7 +258,7 @@ export function SipTestPage() {
               )}>
               <LineChart lines={[{ values: res.spread.runs.map((x) => x.xirr * 100), color: "var(--series-1)", width: 2, label: "XIRR" },
                 ...(res.spread.dip ? [{ values: res.spread.runs.map((x) => (x.plain_xirr == null ? null : x.plain_xirr * 100)), color: "var(--series-2)", width: 2, dash: "4 3", label: "No dip rule" }] : [])]}
-                labels={res.spread.runs.map((x) => `Started ${month(x.start)}`)} times={res.spread.runs.map((x) => `${x.start}-01`)} format={(v) => `${v.toFixed(1)}%`} baseline={0}
+                labels={res.spread.runs.map((x) => `Started ${month(x.start)}`)} times={res.spread.runs.map((x) => `${x.start}-01`)} format={(v) => pct(v)} baseline={0}
                 height={200} legend={!!res.spread.dip} ranges={false} table={false} ariaLabel="XIRR by start month" />
             </ChartFrame>
           )}

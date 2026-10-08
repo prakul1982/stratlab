@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { charge, fall, money, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { charge, fall, money, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { CHECKS, checkTone, checksLine, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
@@ -230,7 +230,7 @@ function NextSteps({ nb, e, onDelete }: { nb: Notebook; e: Experiment; onDelete:
     <Card label="Next step" compact>
       <CardHead title="Next step" level={3} info={HELP.nextSteps} infoLabel="About next steps" />
       <div className="k-toolbar" role="toolbar" aria-label="Next step">
-        <button type="button" className="btn blue" onClick={() => go(main.action)}>{main.action === "paper_trade" ? <Pulse size={17} /> : null}{main.text}</button>
+        <button type="button" className="btn" onClick={() => go(main.action)}>{main.action === "paper_trade" ? <Pulse size={17} /> : null}{main.text}</button>
         {rest.map((s) => <button type="button" key={s.action} className="btn quiet sm" onClick={() => go(s.action)}>{s.action === "paper_trade" ? <Pulse size={17} /> : null}{s.text}</button>)}
         {main.action !== "edit_rules" && <button type="button" className="btn quiet sm" onClick={() => go("edit_rules")}><Pencil size={17} />Change the rules</button>}
         {prev.length > 0 && (
@@ -294,7 +294,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     ["Worst fall", fall(st.mdd), st.mdd, HELP.worstFall],
     ["Win rate", st.n ? `${st.win.toFixed(0)}%` : "–", null, HELP.winRate],
     ["Profit factor", st.pf == null ? "∞" : !st.n ? "–" : st.pf > 100 ? "> 100" : st.pf.toFixed(2), null, HELP.profitFactor],
-    ["Sharpe ratio", st.sharpe.toFixed(2), null, HELP.sharpe],
+    ["Sharpe ratio", num(st.sharpe, 2), null, HELP.sharpe],
     ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
     ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString("en-IN")} candles`, null, HELP.period],
   ];
@@ -471,7 +471,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
               )}</Field>
               <Field label="Show it as by" optional wide maxLength={40} value={author} onChange={(x) => setAuthor(x.target.value)} placeholder="A StratLab user" />
               <FormActions>
-                <button type="button" className="btn blue" onClick={publish}>{lib ? "Update" : "Publish"}</button>
+                <button type="button" className="btn" onClick={publish}>{lib ? "Update" : "Publish"}</button>
                 <button type="button" className="btn quiet" onClick={() => setPublishing(false)}>Cancel</button>
               </FormActions>
             </FormGrid>

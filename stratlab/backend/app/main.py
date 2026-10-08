@@ -1636,7 +1636,15 @@ def deals_company(symbol: str, profile=Depends(current_profile)):
     """One Indian company's deals and insider trades over the last year, from exchange disclosures: promoters' and
     insiders' trades and pledges, substantial acquisitions, bulk and block deals. Facts as filed."""
     sym = research_routes.symbol_of(symbol)
-    out = filing_call(lambda: deals.report(filings_feed, sym))
+    try:
+        out = deals.report(filings_feed, sym)
+    except SourceError as e:
+        inst = _quiet(kite.equity, sym) if kite.ready() else None
+        if not inst or inst.get("exchange") == "NSE":
+            err(503 if e.busy else 502, "filings_unavailable", str(e))
+        # listed only on BSE: the exchange's deal lists have nothing for it, which is an empty answer, not a fault
+        out = {"symbol": sym, "days": deals.DEALS_DAYS, "items": [], "count": 0, "problems": [], "flow": None,
+               "flow_days": deals.FLOW_DAYS, "source": deals.SOURCE}
     return ok({**out, "flow_text": deals.flow_text(out["flow"]) if out["flow"] else None})
 
 
@@ -2213,10 +2221,20 @@ def usd_inr() -> float | None:
     return float(got) if got else None
 
 
-def holdings_view(profile) -> dict:
-    h = holdings.load(profile["id"])
-    ind = holdings.indian(h["items"])
-    us = [i["symbol"] for i in h["items"] if holdings.market_of(i) == "US"]
+_PRICED: dict[tuple, tuple[float, dict]] = {}       # (user, symbols) -> (when read, the prices read)
+_PRICED_LOCK = threading.Lock()
+PRICED_FOR = 20.0                                   # seconds one reading of a person's prices is shared by every page
+
+
+def _prices_at(quotes: list[dict]) -> str:
+    """When some prices are from: the latest trade among the quotes (the exchange's own stamp), else the moment they were read."""
+    now = datetime.now(timezone.utc)
+    return (holdings.latest_trade(quotes, now) or now).isoformat(timespec="minutes")
+
+
+def _read_prices(ind: list[dict], us: list[str]) -> dict:
+    """The prices behind a holdings view, read once: the quotes, the US quotes, the dollar rate, and the time of the
+    latest trade among them (the exchange's own stamp, never the moment of asking)."""
     quotes, live = {}, bool(ind) and kite.ready()
     if live:
         try:
@@ -2227,9 +2245,31 @@ def holdings_view(profile) -> dict:
     for n in range(0, len(us), 24):          # the US prices are read 24 at a time
         us_quotes.update({k: v for k, v in (_quiet(research_hub.quotes, "US", us[n:n + 24]) or {}).items() if v})
     rate = usd_inr() if us else None
-    now = datetime.now(timezone.utc).isoformat(timespec="minutes")
-    return {**holdings.view(h["items"], quotes, us_quotes, rate), "source": h["source"], "updated_at": h["updated_at"],
-            "prices": live or (not ind and bool(us_quotes)), "prices_at": now if live or us_quotes else None,
+    return {"quotes": quotes, "live": live, "us_quotes": us_quotes, "rate": rate,
+            "prices_at": _prices_at([q for q in [*quotes.values(), *us_quotes.values()] if q]) if live or us_quotes else None}
+
+
+def holdings_view(profile) -> dict:
+    """The person's holdings at today's prices. The prices are read once and shared for a few seconds, so My space, Money,
+    Holdings and the net worth add up to the same rupees when opened one after another."""
+    h = holdings.load(profile["id"])
+    ind = holdings.indian(h["items"])
+    us = [i["symbol"] for i in h["items"] if holdings.market_of(i) == "US"]
+    key = (profile["id"], tuple(i["symbol"] for i in ind), tuple(us), bool(ind) and kite.ready())
+    with _PRICED_LOCK:
+        hit = _PRICED.get(key)
+    if hit and time.monotonic() - hit[0] < PRICED_FOR:
+        got = hit[1]
+    else:
+        got = _read_prices(ind, us)
+        with _PRICED_LOCK:
+            if len(_PRICED) > 500:
+                for k in [k for k, (t, _) in _PRICED.items() if time.monotonic() - t >= PRICED_FOR]:
+                    _PRICED.pop(k, None)
+            _PRICED[key] = (time.monotonic(), got)
+    live, us_quotes = got["live"], got["us_quotes"]
+    return {**holdings.view(h["items"], got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+            "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"],
             "us_prices": bool(us_quotes) if us else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
 
@@ -2581,7 +2621,7 @@ def tax_view(profile) -> dict:
     return {**rep, "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
-            "prices": i["live"], "prices_at": datetime.now(timezone.utc).isoformat(timespec="minutes") if i["live"] else None,
+            "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q]) if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
             "max_trades": tax_lots.MAX_TRADES}
 

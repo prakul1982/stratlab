@@ -15,7 +15,7 @@ export function periodName(p: string, span: "month" | "quarter" = "month") {
 /** 2,36,013 units, ₹33,275 billion, 34.2%: the unit as filed, Indian digit grouping. */
 export function bizValue(v: number | null | undefined, unit: string | null) {
   if (v == null || !Number.isFinite(v)) return "–";
-  const n = v.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  const n = v.toLocaleString("en-IN", { maximumFractionDigits: 2 }).replace(/^-/, "−");   // the real minus
   const u = (unit ?? "").trim();
   if (u === "%") return `${n}%`;
   if (u.startsWith("₹")) return `₹${n} ${u.slice(1).trim()}`.trim();

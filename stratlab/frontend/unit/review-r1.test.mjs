@@ -31,8 +31,10 @@ test("the Money pages open on one financial year (R1-006)", async () => {
   const { pickFy, fyLabel } = await import("../src/lib/fy.ts");
   const years = [2026, 2025, 2024];
   assert.equal(pickFy(years, 2026, () => true, null), 2025);                    // the year being filed now
-  assert.equal(pickFy(years, 2026, (y) => y === 2024, null), 2024);             // ...unless it's empty: the latest with data
-  assert.equal(pickFy(years, 2026, () => false, null), 2026);                   // nothing anywhere: this year
+  assert.equal(pickFy(years, 2026, (y) => y === 2024, null), 2025);             // ...even when empty: every page opens on the same year
+  assert.equal(pickFy(years, 2026, () => false, null), 2025);                   // whatever the page holds
+  assert.equal(pickFy([2026, 2024], 2026, (y) => y === 2024, null), 2024);      // a page without that year: its latest with data
+  assert.equal(pickFy([2026, 2024], 2026, () => false, null), 2026);            // ...nothing anywhere: this year
   assert.equal(pickFy(years, 2026, () => true, 2024), 2024);                    // a year picked by hand wins
   assert.equal(pickFy(years, 2026, () => true, 2019), 2025);                    // ...when the page has it
   assert.equal(fyLabel(2025), "FY 2025-26");

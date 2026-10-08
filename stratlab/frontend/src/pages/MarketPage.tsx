@@ -98,7 +98,7 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
               const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) setMaxOpen(n);
             }} />
             <FormActions>
-              <button type="submit" className="btn blue" disabled={busy}>{busy ? "Saving…" : `Test on these ${members.length} ${noun}`}</button>
+              <button type="submit" className="btn" disabled={busy}>{busy ? "Saving…" : `Test on these ${members.length} ${noun}`}</button>
             </FormActions>
           </FormGrid>
           <p className="k-note">For a portfolio, size trades by <b>fixed capital per trade</b> in the rules' costs and position size, so each position gets its share.</p>
@@ -162,7 +162,7 @@ export function MarketPage() {
       <Card label="Market">
         <CardHead title="Pick a market" />
         <TilePicker label="Market" value={sel} onChange={setSel}
-          groups={[{ title: "Markets", tiles: markets.map((m) => ({ value: m.id, title: `${m.symbol === "+" ? "" : m.symbol + " "}${m.name}`, sub: `${m.venues}${m.status !== "live" ? ` · ${STATUS[m.status]}` : ""}` })) }]} />
+          groups={[{ title: "Markets", tiles: markets.map((m) => ({ value: m.id, title: `${[...m.symbol].length === 1 && m.symbol !== "+" ? m.symbol + " " : ""}${m.name}`, sub: `${m.venues}${m.status !== "live" ? ` · ${STATUS[m.status]}` : ""}` })) }]} />
         {market && market.status !== "soon" && (
           <p className="k-note">{market.name}: {market.what} · {localHours(market)} · costs: {market.costs}</p>
         )}
@@ -206,7 +206,7 @@ export function MarketPage() {
                 <FieldGroup label="Quantities" info={HELP.quantities}>
                   <Select label="Quantities" value={upStep} onChange={(v) => setUpStep(+v)} options={[{ value: 1, label: "Whole units (shares, lots)" }, { value: 0.0001, label: "Fractions (coins, forex)" }]} />
                 </FieldGroup>
-                <FormActions><button type="submit" className="btn blue">Test on this data</button></FormActions>
+                <FormActions><button type="submit" className="btn">Test on this data</button></FormActions>
               </FormGrid>
               <p className="k-note">The file stays in this browser; only the candles are sent for each test.</p>
             </>

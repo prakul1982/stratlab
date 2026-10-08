@@ -178,6 +178,7 @@ function DividendsTab() {
                   ? <>Included in the <Link className="link" to="/tax-report">total tax estimate</Link> as income from other sources, taxed at your slab rate.</>
                   : <>Not in the <Link className="link" to="/tax-report">total tax estimate</Link>{y.source === "estimated" ? " (an estimate is left out until you include it)" : ""}.</>)
                   : "Dividends were exempt in your hands before FY 2020-21 (the company paid dividend distribution tax)."}</p>
+                <p className="k-note">Added up by financial year, each payment in the year of its record date. <Link className="link" to="/holdings">My Holdings</Link> shows the last 12 months instead, a different slice of the same dividends.</p>
                 {y.source === "files" && y.estimate_total != null && <p className="k-note">From your holdings, the estimate for {y.label} is {inr(y.estimate_total)}.</p>}
                 {y.unpriced > 0 && <p className="k-note">{y.unpriced} US payment{y.unpriced === 1 ? " isn't" : "s aren't"} counted: the dollar rate isn't available right now.</p>}
                 {y.locked ? <PlanNote>Dividends by company, with the TDS expected and the US tax withheld, are on the Basic plan.</PlanNote>

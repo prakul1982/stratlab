@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { money, fmtDate } from "../lib/format";
+import { money, fmtDate, num } from "../lib/format";
 import { upDown } from "../lib/tradeUi";
 import { XYChart } from "./Charts";
 import { moneyCompact } from "../lib/chartFormat";
@@ -49,7 +49,7 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
               <Stat item label="Today" value={money(c.today, c.currency)} tone={tone(c.today)} />
               <Stat item label="Since the start" value={money(c.pnl, c.currency)} tone={tone(c.pnl)} note={`${c.sessions} session${c.sessions === 1 ? "" : "s"}`} />
               <Stat item label="Worst day" value={c.worst_day ? money(c.worst_day.pnl, c.currency) : "None yet"} tone={tone(c.worst_day?.pnl ?? null)} note={c.worst_day ? day(c.worst_day.date) : undefined} />
-              <Stat item label="Deepest fall" value={`${c.max_drawdown_pct.toFixed(1)}%`} note="from the high point" />
+              <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, 1)}%`} note="from the high point" />
             </StatRow>
             {c.curve.length > 1 && (
               <XYChart ariaLabel={`Combined paper P&L in ${c.currency}`} height={150} times={c.curve.map((p) => p.t)} refs={[{ v: 0, strong: true }]}

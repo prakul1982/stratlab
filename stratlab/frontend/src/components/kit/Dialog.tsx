@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { Close } from "../Icons";
 import { firstFocus, tabbables, trapTab } from "../../lib/focusTrap";
 
@@ -32,7 +32,14 @@ function focusEl(el: HTMLElement | null | undefined) {
 
 // the last element focused outside every dialog: what a dialog opened from a menu item that is now gone goes back to
 let lastOutside: HTMLElement | null = null;
-const stack: object[] = [];
+const stack: { coach?: boolean }[] = [];
+const watchers = new Set<() => void>();
+const changed = () => watchers.forEach((f) => f());
+/** How many dialogs are open that aren't a coachmark (the tour's pointer): the palette, a confirm, the welcome question.
+ * The tour waits while there is one, so only one layer is ever in front. */
+export function useDialogsOpen(): number {
+  return useSyncExternalStore((f) => { watchers.add(f); return () => { watchers.delete(f); }; }, () => stack.filter((d) => !d.coach).length, () => 0);
+}
 if (typeof document !== "undefined") {
   document.addEventListener("focusin", (e) => {
     const t = e.target as HTMLElement;
@@ -47,6 +54,8 @@ export interface DialogFocusOptions {
   initial?: () => HTMLElement | null | undefined;
   /** Where focus goes on close when the opener has gone. */
   fallback?: () => HTMLElement | null | undefined;
+  /** A coachmark (the tour's pointer), not a dialog: it doesn't count as one for `useDialogsOpen`. */
+  coach?: boolean;
 }
 
 /** Makes `ref` a modal while `active`: focus in, Tab kept inside, Esc closes, focus back to the opener on close. */
@@ -57,8 +66,9 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, active: boole
     if (!active) return;
     const box = ref.current;
     if (!box) return;
-    const me = {};
+    const me = { coach: !!o.current.coach };
     stack.push(me);
+    changed();
     const ae = document.activeElement as HTMLElement | null;
     const opener = ae && ae !== document.body && !box.contains(ae) ? ae : lastOutside;
     const first = () => {
@@ -90,6 +100,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, active: boole
       document.removeEventListener("focusin", into);
       const i = stack.indexOf(me);
       if (i >= 0) stack.splice(i, 1);
+      changed();
       // back to the opener once this dialog has gone; if it went too (a removed row), to the fallback or the heading
       const back = () => {
         const now = document.activeElement;

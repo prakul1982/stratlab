@@ -62,7 +62,7 @@ export function AlertsPage() {
         )}
 
         <Card>
-          <CardHead title="On" />
+          <CardHead title="Alerts that are on" />
           {page.active.length === 0
             ? <EmptyState title="No alerts on">Set one here, or with Set alert on any company page or your watchlist.</EmptyState>
             : <div className="inv-rows">{page.active.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}</div>}

@@ -129,16 +129,16 @@ a.inv-theme:hover { border-color: var(--ink); }
 /* the sector heat table (Market breadth) */
 .inv-scale { width: 120px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bx-a) 45%, transparent)); border: 1px solid var(--line); }
 .inv-heat-cell { display: block; margin: -11px -14px; padding: 11px 14px; }
-.inv-heat-cell.h1 { background: color-mix(in srgb, var(--bx-a) 5%, transparent); } .inv-heat-cell.h2 { background: color-mix(in srgb, var(--bx-a) 10%, transparent); }
-.inv-heat-cell.h3 { background: color-mix(in srgb, var(--bx-a) 15%, transparent); } .inv-heat-cell.h4 { background: color-mix(in srgb, var(--bx-a) 20%, transparent); }
-.inv-heat-cell.h5 { background: color-mix(in srgb, var(--bx-a) 25%, transparent); } .inv-heat-cell.h6 { background: color-mix(in srgb, var(--bx-a) 30%, transparent); }
-.inv-heat-cell.h7 { background: color-mix(in srgb, var(--bx-a) 35%, transparent); } .inv-heat-cell.h8 { background: color-mix(in srgb, var(--bx-a) 40%, transparent); }
-.inv-heat-cell.h9 { background: color-mix(in srgb, var(--bx-a) 45%, transparent); }
+.inv-heat-cell.heat1 { background: color-mix(in srgb, var(--bx-a) 5%, transparent); } .inv-heat-cell.heat2 { background: color-mix(in srgb, var(--bx-a) 10%, transparent); }
+.inv-heat-cell.heat3 { background: color-mix(in srgb, var(--bx-a) 15%, transparent); } .inv-heat-cell.heat4 { background: color-mix(in srgb, var(--bx-a) 20%, transparent); }
+.inv-heat-cell.heat5 { background: color-mix(in srgb, var(--bx-a) 25%, transparent); } .inv-heat-cell.heat6 { background: color-mix(in srgb, var(--bx-a) 30%, transparent); }
+.inv-heat-cell.heat7 { background: color-mix(in srgb, var(--bx-a) 35%, transparent); } .inv-heat-cell.heat8 { background: color-mix(in srgb, var(--bx-a) 40%, transparent); }
+.inv-heat-cell.heat9 { background: color-mix(in srgb, var(--bx-a) 45%, transparent); }
 
 /* the news reader: the issues beside the one you are reading (the grid itself is .news-grid) */
 .inv-issues { display: flex; flex-direction: column; gap: 2px; }
-.inv-sticky { position: sticky; top: var(--s4); max-height: calc(100vh - 32px); overflow-y: auto; }
-@media (max-width: 1360px) { .inv-sticky { position: static; max-height: none; } }
+/* the filters scroll with the page, like everything else: no box of their own */
+.inv-sticky { position: static; }
 .inv-toggle { display: none; }
 @media (max-width: 1360px) { .inv-toggle { display: inline-flex; } }
 .inv-bounds { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--s2); align-items: end; }
