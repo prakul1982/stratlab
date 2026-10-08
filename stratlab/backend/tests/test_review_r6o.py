@@ -281,3 +281,64 @@ def test_a_feed_without_a_run_on_this_server_shows_its_datas_own_time():
     assert at == "2026-10-08T18:45" and "stored data" in why[0]
     assert _ran({"last_run": "2026-10-08T19:00"}, "last_run", data=lambda: "x") == ("2026-10-08T19:00", [])
     assert _ran({}, "last_run", data=lambda: (_ for _ in ()).throw(ValueError("down"))) == (None, [])
+
+
+# ---------- R6O-004: the brief's counts and headlines ----------
+def test_a_briefs_headlines_are_the_markets_from_its_day_once_and_whole():
+    from app.newsletter.content import pick_headlines
+    us = [{"headline": "Former German spy chief arrested on suspicion of spying for Russia", "at": "2026-10-07T14:00:00+00:00"},
+          {"headline": "Ohio voters line up before dawn for early voting", "at": "2026-10-07T12:00:00+00:00"},
+          {"headline": "Gen Alpha kids are earning money in new ways", "at": "2026-10-07T12:00:00+00:00"},
+          {"headline": "Private capital is reshaping Hollywood moviemaking", "at": "2026-10-07T12:00:00+00:00"},
+          {"headline": "Stocks slip as Treasury yields climb; Nasdaq falls 0.2%", "at": "2026-10-07T20:10:00+00:00"}]
+    assert [h["headline"] for h in pick_headlines("US", us, "2026-10-07", "2026-10-07")] == ["Stocks slip as Treasury yields climb; Nasdaq falls 0.2%"]
+    india = [{"headline": "Why is the stock market down today? 3 factors behind Sensex, Nifty 50 fall", "at": "2026-10-08T05:00:00+00:00"},
+             {"headline": "Why is the stock market down today? 3 factors behind Sensex, Nifty 50 fall", "at": "2026-10-08T06:00:00+00:00"},
+             {"headline": "Sensex drops 571 points, investors lose Rs 5 lakh cr", "at": "2026-10-01T10:00:00+00:00"},
+             {"headline": "Five reasons India's stock market is sinking even when its economy is growing", "at": "2026-10-08T04:00:00+00:00"},
+             {"headline": "Why is market crashing today? Sensex slumps 1,100 points, Nifty below 22,250. 7 key factors behind Rs 10 l",
+              "at": "2026-10-08T09:00:00+00:00"}]
+    got = [h["headline"] for h in pick_headlines("IN", india, "2026-10-08", "2026-10-08",
+                                                 seen={"five reasons india s stock market is sinking even when its economy is growing"})]
+    assert got == ["Why is the stock market down today? 3 factors behind Sensex, Nifty 50 fall",
+                   "Why is market crashing today? Sensex slumps 1,100 points, Nifty below 22,250. 7 key factors behind Rs 10…"]
+
+
+def test_the_summary_counts_the_sectors_the_section_lists():
+    from app.newsletter.write import fix_counts
+    rot = [{"title": "Sector rotation", "items": [{"text": "Nifty Media moved"}, {"text": "Nifty PSU Bank moved"}]}]
+    s = "NIFTY 50 −0.76%; SENSEX −0.59% today. 6 sectors moved to another quadrant on the rotation chart."
+    assert fix_counts(s, rot) == "NIFTY 50 −0.76%; SENSEX −0.59% today. 2 sectors moved to another quadrant on the rotation chart."
+    us = "S&P 500 −0.22% today. 5 sectors moved to another quadrant on the rotation chart."
+    assert fix_counts(us, [{"title": "Indices", "items": []}]) == "S&P 500 −0.22% today."
+    assert fix_counts("Two sectors moved to another quadrant.", rot) == "Two sectors moved to another quadrant."
+
+
+def test_stored_briefs_are_tidied_once(monkeypatch):
+    import json as _j
+    from app import db
+    from app.newsletter import job as J
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(J.write, "render", lambda issue: ("<p>", "text"))
+    today = date.today().isoformat()
+    from datetime import timedelta
+    yday = (date.today() - timedelta(days=1)).isoformat()
+    heads = lambda *t: {"title": "Headlines", "items": [{"text": x, "url": None, "lines": []} for x in t]}    # noqa: E731
+    a = {"id": f"market.IN.{yday}", "kind": "market", "region": "IN", "day": yday, "weekly": False,
+         "summary": "NIFTY 50 +0.98% today. 5 sectors moved to another quadrant on the rotation chart.",
+         "sections": [{"title": "Sector rotation", "items": [{"text": "x"}] * 4}, heads("Five reasons India's stock market is sinking")]}
+    b = {"id": f"market.IN.{today}", "kind": "market", "region": "IN", "day": today, "weekly": False,
+         "summary": "NIFTY 50 −1.64% today. 6 sectors moved to another quadrant on the rotation chart.",
+         "sections": [{"title": "Sector rotation", "items": [{"text": "y"}] * 2},
+                      heads("Five reasons India's stock market is sinking", "Sensex falls 1,100 points", "Sensex falls 1,100 points",
+                            "Gen Alpha kids are earning money")]}
+    for i in (a, b):
+        J.save(i)
+    assert J.repair_headlines("IN") == 2
+    got = _j.loads(store[f"news:market:IN:{today}"])
+    assert got["summary"].endswith("2 sectors moved to another quadrant on the rotation chart.")
+    assert [i["text"] for i in got["sections"][1]["items"]] == ["Sensex falls 1,100 points"]
+    assert _j.loads(store[f"news:market:IN:{yday}"])["summary"].endswith("4 sectors moved to another quadrant on the rotation chart.")
+    assert J.repair_headlines("IN") == 0                        # once: nothing left to change

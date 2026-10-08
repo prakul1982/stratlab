@@ -4,6 +4,7 @@ rotation, the Stage 2 and ST S2 scans, exchange filings, deals and insider trade
 Facts only, never a view. Every source is optional: one that fails or is offline just drops its section. Data a
 stock needs is fetched once per day and shared, so a hundred readers holding the same stock cost one lookup."""
 import json
+import re
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -112,9 +113,88 @@ def stage2_names(region: str, weekly: bool) -> dict:
     return {"group": group["name"], "st_s2": st_s2[:12], "stage2": stage2[:12]}
 
 
-def market_headlines(region: str) -> list[dict]:
-    return [{"headline": h["headline"], "url": h.get("url"), "at": h.get("at")}
-            for h in _main().research_hub.headlines(region) if h.get("headline")][:HEADLINES]
+# a Market Brief's headline is about that region's market, an index or its economy (R6O-004: a US brief carried "Former
+# German spy chief arrested", "Gen Alpha kids are earning money" and Hollywood's financing)
+MARKET_WORDS = {
+    "IN": re.compile(r"\b(sensex|nifty|bse|nse|dalal street|stock markets?|stocks?|shares?|equit\w*|markets?|investors?|"
+                     r"rupee|rbi|repo|inflation|cpi|gdp|economy|economic|fii|fiis|dii|diis|fpi|fpis|ipo|ipos|sebi|"
+                     r"smallcap|midcap|small-cap|mid-cap|crude|bond yields?|m-cap|market cap|lakh crore|trade deficit)\b", re.I),
+    "US": re.compile(r"\b(s&p|s&amp;p|dow|nasdaq|wall street|stock markets?|stocks?|shares?|equit\w*|markets?|investors?|"
+                     r"fed|federal reserve|powell|treasur\w*|yields?|inflation|cpi|pce|jobs report|payrolls|unemployment|gdp|"
+                     r"economy|economic|earnings|ipo|ipos|dollar|oil prices?|crude|tariffs?|recession|rate cuts?|rate hikes?)\b", re.I),
+}
+# a title the source cut off in the middle of a word ("... 7 key factors behind Rs 10 l")
+_SHORT_OK = {"a", "an", "in", "on", "of", "to", "up", "by", "at", "is", "it", "as", "or", "and", "the", "for", "not", "off",
+             "out", "yet", "now", "day", "pts", "bn", "cr", "mn", "us", "uk", "eu", "rbi", "fed", "ipo", "gdp", "cpi", "pm", "ai", "new"}
+
+
+def tidy_title(t: str) -> str:
+    """A headline as a whole: one cut off mid-word by its source ends at its last whole word, with an ellipsis."""
+    t = " ".join(str(t or "").split())
+    if len(t) >= 70 and not re.search(r"[.!?\"'’)\]…]$", t):
+        last = t.rsplit(" ", 1)[-1]
+        if re.fullmatch(r"[a-z]{1,3}", last) and last not in _SHORT_OK:
+            return t.rsplit(" ", 1)[0].rstrip(" ,;:-–") + "…"
+    return t
+
+
+def title_key(t: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(t or "").lower()).strip()
+
+
+def _local_day(iso: str | None, region: str) -> str | None:
+    try:
+        at = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if at.tzinfo is None:
+        return at.date().isoformat()
+    return at.astimezone(ZoneInfo(CLOSE[region][0])).date().isoformat()
+
+
+def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[str] | None = None, n: int = HEADLINES) -> list[dict]:
+    """The brief's headlines (R6O-004): about the region's market, an index or its economy; published on the brief's
+    day (from `frm`, the week's start for a weekly one, to `to`) in the market's own time zone; each title once and
+    not one an earlier brief already carried (`seen`); and never cut mid-word."""
+    out, keys = [], set(seen or ())
+    for h in rows or []:
+        title = tidy_title(h.get("headline"))
+        if not title or not MARKET_WORDS[region].search(title):
+            continue
+        day = _local_day(h.get("at"), region)
+        if day and not (frm <= day <= to):
+            continue
+        k = title_key(title)
+        if k in keys:
+            continue
+        keys.add(k)
+        out.append({"headline": title, "url": h.get("url"), "at": h.get("at")})
+    return out[:n]
+
+
+def earlier_titles(region: str, day: date) -> set[str]:
+    """The headline titles the region's daily briefs of the last few days carried, so a story isn't repeated."""
+    try:
+        from .job import ids, load
+    except ImportError:
+        return set()
+    out: set[str] = set()
+    for iid in ids("market", region)[:8]:
+        issue = load(iid) or {}
+        if issue.get("weekly") or not (day - timedelta(days=4)).isoformat() <= str(issue.get("day") or "") < day.isoformat():
+            continue
+        for s in issue.get("sections") or []:
+            if s.get("title") == "Headlines":
+                out |= {title_key(i.get("text")) for i in s.get("items") or []}
+    return out
+
+
+def market_headlines(region: str, day: date | None = None, weekly: bool = False) -> list[dict]:
+    rows = [h for h in _main().research_hub.headlines(region) if h.get("headline")]
+    if day is None:
+        return pick_headlines(region, rows, "0000-00-00", "9999-99-99")
+    frm = reference_day(region, day, True).isoformat() if weekly else day.isoformat()
+    return pick_headlines(region, rows, frm, day.isoformat(), set() if weekly else _safe(lambda: earlier_titles(region, day), set()) or set())
 
 
 def market_facts(region: str, day: date, weekly: bool = False) -> dict:
@@ -126,7 +206,7 @@ def market_facts(region: str, day: date, weekly: bool = False) -> dict:
     facts = {"kind": "market", "region": region, "day": day.isoformat(), "weekly": weekly,
              "since": reference_day(region, day, weekly).isoformat()}
     for name, fn in (("indices", lambda: index_moves(region, day, weekly)), ("rotation", lambda: rotation_shifts(region, weekly, day)),
-                     ("scan", lambda: stage2_names(region, weekly)), ("headlines", lambda: market_headlines(region))):
+                     ("scan", lambda: stage2_names(region, weekly)), ("headlines", lambda: market_headlines(region, day, weekly))):
         got = _safe(fn)
         if got and (name != "scan" or got["st_s2"] or got["stage2"]):
             facts[name] = got
