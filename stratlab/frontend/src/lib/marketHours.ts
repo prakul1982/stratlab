@@ -109,3 +109,16 @@ export function sessionFeed(o: { feedConnected: boolean | undefined; lastTickAt:
   if (quiet != null && quiet > 10) return { text: `No prices for ${inWords(quiet)}: the price feed is down, orders wait for it`, tone: "warn" };
   return { text: "Reconnecting to prices", tone: "plain" };
 }
+
+/** The line under "Today" when it adds a US session to India's (R6O-015: Today ₹192 = an India day that had closed plus
+ *  AAPL moving live, so it changed by the minute under one word): the US part named, live or at its close, in dollars
+ *  and at the rupee rate used. null when there's no US part in Today. */
+export function usTodayNote(markets: Market[], us: { day: number | null; in_total?: boolean } | null | undefined, usdInr: number | null | undefined,
+  now = new Date()): string | null {
+  if (!us || us.day == null || !us.in_total) return null;
+  const m = markets.find((x) => x.id === "US");
+  const live = !!m && marketState(m, now).open;
+  const usd = `${us.day < 0 ? "−" : "+"}$${Math.abs(us.day).toFixed(2)}`;
+  const inr = usdInr ? ` (₹${Math.round(Math.abs(us.day) * usdInr).toLocaleString("en-IN")} at ₹${usdInr.toFixed(2)} a dollar)` : "";
+  return `Today includes US stocks, ${live ? "US, live: it moves until the US close" : "US, at their last close"}: ${usd}${inr}.`;
+}

@@ -80,9 +80,11 @@ def last_issue(kind: str, scope: str) -> dict | None:
 # ---------- building ----------
 def make_issue(facts: dict, scope: str) -> dict:
     s = write.summary(facts)
+    sections = write.sections(facts)
     issue = {"id": issue_id(facts["kind"], scope, facts["day"], facts["weekly"]), "kind": facts["kind"],
              "region": facts.get("region"), "day": facts["day"], "weekly": facts["weekly"], "subject": write.subject(facts),
-             "sections": write.sections(facts), "summary": s["text"], "ai": s["ai"],
+             # the summary's counts are the sections' own (R6O-004)
+             "sections": sections, "summary": write.fix_counts(s["text"], sections) if facts["kind"] == "market" else s["text"], "ai": s["ai"],
              "title": write.headline(facts), "label": write.type_label(facts), "indices": facts.get("indices") or [],
              "at": datetime.now(ZoneInfo("Asia/Kolkata")).isoformat(timespec="minutes")}
     if facts["kind"] == "my_stocks":
@@ -213,6 +215,47 @@ def repair_briefs(region: str, days: int = 60, shifts=None) -> int:
     return fixed
 
 
+def repair_headlines(region: str, days: int = 60) -> int:
+    """The Market Briefs stored in the last `days` days with the headline rules of R6O-004 and the summary's counts
+    as their sections have them: a headline not about the market, an index or the economy goes; a title already in
+    the same brief, or in an earlier daily brief, goes (a stored headline has no date: one an earlier brief carried
+    is older than this brief's day); a title cut mid-word ends at its last whole word; "N sectors moved" is the
+    Sector rotation section's count. Returns how many issues changed."""
+    from datetime import timedelta
+    fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
+    issues = sorted((x for x in (load(i) for i in ids("market", region)) if x and x.get("day", "") >= cutoff),
+                    key=lambda x: (x.get("day", ""), bool(x.get("weekly"))))
+    seen: set[str] = set()
+    for issue in issues:
+        before = json.dumps(issue, sort_keys=True)
+        sections, mine = [], set()
+        for s in issue.get("sections") or []:
+            if s.get("title") != "Headlines":
+                sections.append(s)
+                continue
+            keep = []
+            for i in s.get("items") or []:
+                title = content.tidy_title(i.get("text"))
+                k = content.title_key(title)
+                if not content.MARKET_WORDS[region].search(title) or k in mine or (not issue.get("weekly") and k in seen):
+                    continue
+                mine.add(k)
+                keep.append({**i, "text": title})
+            if keep:
+                sections.append({**s, "items": keep})
+        if not issue.get("weekly"):
+            seen |= mine
+        issue["sections"] = sections
+        issue["summary"] = write.fix_counts(issue.get("summary") or "", sections)
+        if json.dumps(issue, sort_keys=True) == before:
+            continue
+        issue["html"], issue["text"] = write.render(issue)
+        kind, scope, dkey = parse_id(issue["id"])
+        db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
+        fixed += 1
+    return fixed
+
+
 # ---------- readers ----------
 def address(profile: dict) -> str | None:
     """Where newsletters go: the alert email set in Account, else the address they sign in with."""
@@ -271,8 +314,10 @@ class Job:
     """Checks every five minutes what is due; each run is marked in the database before sending, so it runs once."""
 
     def __init__(self):
+        from .. import job_status
         self.last: dict[str, str] = {}
-        self.status = {"last_run": None, "sent": 0, "last_error": None}
+        # stores itself whenever a run is written into it, so Admin has it after a restart (R6O-003)
+        self.status = job_status.Status(self.status_key, {"last_run": None, "sent": 0, "last_error": None})
 
     def record(self, now: datetime, problems: list[str], parts: int | None = None, **extra) -> None:
         """How a read went, run by its own clock or by Admin's Run now (so Admin never shows an older run's problem
@@ -311,9 +356,23 @@ class Job:
         db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
         print(f"newsletters: restyled {n} stored briefs")
 
+    def headlines_once(self):
+        """Once per database: the stored briefs' headlines and counts by today's rules (see repair_headlines)."""
+        flag = "newsfix:headlines-counts-1"
+        if db.get_setting(flag):
+            return
+        try:
+            n = sum(repair_headlines(r) for r in SEND_AT)
+        except Exception as e:
+            print("newsletters headlines:", str(e)[:160])
+            return
+        db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
+        print(f"newsletters: tidied the headlines and counts of {n} stored briefs")
+
     def _loop(self):
         self.repair_once()
         self.restyle_once()
+        self.headlines_once()
         while True:
             try:
                 self.tick(datetime.now(ZoneInfo("UTC")))

@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, money, pct, signCls } from "../lib/format";
 import { homeOf } from "../lib/spaces";
+import { usTodayNote } from "../lib/marketHours";
 import { NAV_GROUPS } from "../lib/navGroups";
 import { evWhen, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
@@ -297,7 +298,7 @@ type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: nu
   no_cost?: { count: number; symbols: string[]; value: number } | null; other_session?: string[] };
 type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
 type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
-  total?: { available: boolean; total?: number }; audit?: string | null };
+  total?: { available: boolean; total?: number; income?: { business?: number; intraday?: number } }; audit?: string | null };
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number };
 
 
@@ -331,7 +332,9 @@ export function MoneyHome() {
 
 function HoldingsSummary() {
   const [h, setH] = useState<Holdings | null | "error">(null);
+  const { markets } = useApp();
   useEffect(() => { api<Holdings>("/holdings").then(setH).catch(() => setH("error")); }, []);
+  const usNote = h && h !== "error" ? usTodayNote(markets, h.us, h.usd_inr) : null;
   return (
     <Panel title="My Holdings" right={<Link to="/holdings" className="link" data-money="/holdings">Open My Holdings →</Link>}>
       {h === null ? <PanelSkel figs label="Adding up your holdings" />
@@ -354,6 +357,7 @@ function HoldingsSummary() {
             </div>
             {/* the same lines as My Holdings: one with a price but no buy price is named, not half counted (R5O-004) */}
             {h.totals.no_cost && <p className="small muted">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}).</p>}
+            {usNote && <p className="small muted" data-testid="us-today">{usNote}</p>}
             {(h.totals.other_session?.length ?? 0) > 0 && <p className="small muted">Today leaves out {h.totals.other_session!.join(", ")}: {h.totals.other_session!.length === 1 ? "its" : "their"} last change is from an earlier session.</p>}
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
           </div>
@@ -385,6 +389,9 @@ function TaxSummary() {
               {/* the tax report's own total (capital gains, F&O and intraday business income, slab, surcharge and cess), so the
                   two pages agree; the capital gains part alone said ₹0 beside a report of ₹77,61,298 */}
               <Fig label={`Total tax estimate, ${year?.label ?? "this year"}`} value={money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR")} />
+              {/* where the tax comes from: the F&O and intraday income beside the gains (R6O-014: ₹77,61,298 beside −₹59 and ₹0) */}
+              {!!year?.total?.income?.business && <Fig label="F&O and other business income" tone={signCls(year.total.income.business)} value={money(year.total.income.business, "INR")} />}
+              {!!year?.total?.income?.intraday && <Fig label="Intraday income" tone={signCls(year.total.income.intraday)} value={money(year.total.income.intraday, "INR")} />}
               <Fig label="Short-term gains" tone={signCls(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
               <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>

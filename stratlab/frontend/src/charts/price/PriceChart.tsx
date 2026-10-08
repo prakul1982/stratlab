@@ -59,6 +59,9 @@ export interface PriceChartProps {
   /** The range buttons only move the window and keep the candle size (a backtest's chart keeps the candles its rules ran
    *  on, so its indicators stay the strategy's own instead of being worked out again on weekly or monthly candles). */
   rangesKeepTf?: boolean;
+  /** With no range picked, the first view starts on this day ("YYYY-MM-DD"): a backtest's chart opens on its whole
+   *  test window, not its last few months (R6O-010). */
+  openFrom?: string | null;
 }
 
 const TF_LABEL: Record<Tf, string> = { "5m": "5m", "15m": "15m", "1h": "1h", "1d": "1D", "1w": "1W", "1mo": "1M" };
@@ -334,6 +337,16 @@ export default function PriceChart(props: PriceChartProps) {
   // ---------- candles ----------
   const shownFrom = useCallback((base: Bar[], t: Tf) => (t === "1w" ? aggregate(base, "week") : t === "1mo" ? aggregate(base, "month") : base), []);
 
+  const openFromRef = useRef(props.openFrom);
+  openFromRef.current = props.openFrom;
+  /** The first view from `openFrom`, when no range is picked: from the first candle on or after that day. */
+  const applyOpenFrom = useCallback(() => {
+    const e = engineRef.current, bars = e?.bars, day = openFromRef.current;
+    if (!e || !bars?.length || !day) return;
+    const wall = Date.parse(`${day.slice(0, 10)}T00:00:00Z`);
+    const first = Number.isFinite(wall) ? bars.find((b) => b.w >= wall) : undefined;
+    if (first) e.showFrom(first.t);
+  }, []);
   const applyRange = useCallback((r: RangeKey | null) => {
     const e = engineRef.current, bars = e?.bars;
     if (!e || !bars?.length || !r) return;
@@ -370,10 +383,11 @@ export default function PriceChart(props: PriceChartProps) {
         e.setData(shownFrom(bars, tf));
         setStatus(bars.length ? "ready" : "empty");
         if (range) applyRange(range);
+        else applyOpenFrom();
         syncData();
       })
       .catch((err) => { if (req === reqRef.current) { setStatus("error"); setError((err as Error).message || "Couldn't load prices."); } });
-  }, [load, tf, range, shownFrom, applyRange, syncData]);
+  }, [load, tf, range, shownFrom, applyRange, applyOpenFrom, syncData]);
 
   // older candles when the chart is scrolled back to its first ones
   const maybeMore = useCallback(() => {
@@ -407,11 +421,11 @@ export default function PriceChart(props: PriceChartProps) {
     const m = merge(was, next);
     if (m.kind === "same" && was.length) return;
     baseRef.current = m.bars;
-    if (m.kind === "reset" || !was.length) e.setData(m.bars, was.length > 0);
+    if (m.kind === "reset" || !was.length) { e.setData(m.bars, was.length > 0); if (!was.length) applyOpenFrom(); }
     else for (const b of m.bars.slice(Math.max(0, was.length - 1))) e.update(b);
     setStatus(m.bars.length ? "ready" : "empty");
     syncData();
-  }, [load, props.bars, syncData]);
+  }, [load, props.bars, syncData, applyOpenFrom]);
 
   // ---------- actions ----------
   const pickTf = (t: Tf) => { touched.current = true; setRange(null); setTf(t); setMenu(null); };

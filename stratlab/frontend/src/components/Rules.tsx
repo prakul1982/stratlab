@@ -330,10 +330,12 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
         {both && list("shortExit", shortExit, (i) => i === 0 ? <b>Buy back a short when</b> : <b>or when</b>, false)}
         {!s.exit.length && !shortExit.length && <p className="sentence k-muted">No sell rule yet.</p>}
         <p className="sentence">
-          {s.exit.length || shortExit.length ? "Also close" : <b>Close</b>} at a{" "}
+          {/* "at a 3% stop or a 6% target", "at a 3% stop, with no target", "with no stop loss and at a 6% target": never
+              "or a no target" (R6O-010) */}
+          {s.exit.length || shortExit.length ? "Also close" : <b>Close</b>}{r.sl > 0 ? " at a " : " with "}
           <NumTok title="Stop loss" value={r.sl} missing="no stop loss" max={stopType === "pct" ? 99 : 100000} step={stopType === "swing" ? 1 : 0.1}
             render={(v) => `${v}`} onChange={(v) => setRisk({ sl: v })} hint="0 turns it off. Tap the word after the number to change the unit." />
-          {r.sl > 0 && <>{" "}{unitTok("stop")}</>}{" "}or a{" "}
+          {r.sl > 0 && <>{" "}{unitTok("stop")}</>}{r.tgt > 0 ? (r.sl > 0 ? " or a " : " and at a ") : (r.sl > 0 ? ", with " : " and ")}
           <NumTok title="Target" value={r.tgt} missing="no target" max={100000} render={(v) => `${v}`}
             onChange={(v) => setRisk({ tgt: v })} hint={tgtType === "r" ? "A multiple of the stop distance: 2 means twice what you risk." : "0 turns it off."} />
           {r.tgt > 0 && <>{" "}{unitTok("tgt")}</>}.

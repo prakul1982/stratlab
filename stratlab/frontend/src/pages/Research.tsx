@@ -6,7 +6,7 @@ import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, sig
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, metricText, monthsOld, researchApi, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist,
+  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, metricText, monthsOld, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -164,7 +164,11 @@ export function CompanyPage() {
       .then((x) => live && setResults(x)).catch(() => undefined);      // the calendar is a nice-to-have here
     return () => { live = false; };
   }, [region, sym, fail, tries]);
-  const nextResults = results?.next?.date ?? c?.next_earnings?.date ?? null;
+  const nextDay = results?.next?.date ?? c?.next_earnings?.date ?? null;
+  const latestQuarter = c?.quarters?.cols.length ? c.quarters.cols[c.quarters.cols.length - 1] : null;
+  // a results day whose quarter is already in the table has brought its results: not "Results on" any more (R6O-016)
+  const filedNow = !!results?.next?.out || resultsFiled(nextDay, latestQuarter, dayIn(new Date(), marketTz(region)) ?? "");
+  const nextResults = filedNow ? null : nextDay;
   const eyebrow = eyebrowOf("/research");
 
   if (error?.missing) return <NoSuchCompany region={region} sym={sym} eyebrow={eyebrow} />;
@@ -220,7 +224,10 @@ export function CompanyPage() {
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
-            {!nextResults && results?.last?.out && (results.last.out.url
+            {filedNow && (results?.next?.out?.url
+              ? <a className="link k-small" href={safeHref(results.next.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.next.out.at)} ↗</a>
+              : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(nextDay!)}{latestQuarter ? ` · quarter to ${latestQuarter}` : ""}</Link>)}
+            {!nextResults && !filedNow && results?.last?.out && (results.last.out.url
               ? <a className="link k-small" href={safeHref(results.last.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.last.out.at)} ↗</a>
               : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
           </div>

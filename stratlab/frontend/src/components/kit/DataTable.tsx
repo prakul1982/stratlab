@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Info } from "../ui";
 import { minusNode } from "../../lib/format";
 
@@ -19,7 +19,21 @@ const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean }) => [c.n
 /** The one table: a header row, right-aligned numbers, a hover row, and its own horizontal scroll box so a wide table
  * never makes the page scroll sideways. `label` names the table for screen readers. `rowNote` turns a row into its
  * first cell plus one line of words across the rest (a stock with no data). An empty list shows `empty` in one row. */
-export function DataTable<R>({ label, columns, rows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack, pinHead, sort }: {
+/** Whether the page is at phone width (where a `stack` table is a list of cards). */
+function usePhone(): boolean {
+  const q = "(max-width: 640px)";
+  const [on, setOn] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(q);
+    if (!m) return;
+    const f = () => setOn(m.matches);
+    m.addEventListener?.("change", f);
+    return () => m.removeEventListener?.("change", f);
+  }, []);
+  return on;
+}
+
+export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack, pinHead, sort, phonePage }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R) => string; empty?: ReactNode;
   /** No longer used: a long table scrolls with the page, never in a box of its own. Kept so callers need not change. */
   sticky?: boolean;
@@ -33,8 +47,17 @@ export function DataTable<R>({ label, columns, rows, rowKey, empty = "Nothing to
   /** A totals row under the rows: a cell for each column key (the first column's names the row). */
   foot?: Record<string, ReactNode>;
   rowAttrs?: (row: R) => Record<string, string>; rowNote?: (row: R) => ReactNode | undefined;
+  /** With `stack`: on a phone, this many cards at a time, then "Show more" (R6O-018: 352 ETF cards made one 13,000 px page). */
+  phonePage?: number;
 }) {
+  const phone = usePhone();
+  const [pages, setPages] = useState(1);
+  useEffect(() => { setPages(1); }, [allRows.length]);
+  const cap = stack && phonePage && phone ? phonePage * pages : Infinity;
+  const rows = allRows.length > cap ? allRows.slice(0, cap) : allRows;
+  const left = allRows.length - rows.length;
   return (
+    <>
     <div className={`k-tbl-wrap${stack ? " stack" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={`${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
@@ -74,5 +97,12 @@ export function DataTable<R>({ label, columns, rows, rowKey, empty = "Nothing to
         )}
       </table>
     </div>
+    {left > 0 && (
+      <div className="k-row">
+        <span className="k-note">Showing {rows.length} of {allRows.length}.</span>
+        <button type="button" className="btn quiet sm" onClick={() => setPages((n) => n + 1)}>Show {Math.min(left, phonePage ?? left)} more</button>
+      </div>
+    )}
+    </>
   );
 }

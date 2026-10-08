@@ -6,6 +6,18 @@ from .engine import Contracts
 from ..kite_service import ist_date
 from ..data.expiries import keep_listed
 
+# when an exchange's options stop trading on their expiry day, India time
+EXPIRY_TIME = {"NFO": "15:30", "BFO": "15:30", "CDS": "12:30", "MCX": "23:30"}
+
+
+def expired_today(exchange: str, now=None) -> bool:
+    """Whether today's expiry on this exchange has passed (its contracts stopped trading for good)."""
+    from ..kite_service import IST
+    from datetime import datetime
+    at = EXPIRY_TIME.get(exchange)
+    local = (now or datetime.now(IST)).astimezone(IST)
+    return bool(at) and local.strftime("%H:%M") >= at
+
 # the index each index option settles against; stock options use the NSE cash stock
 INDEX_SPOT = {
     ("NFO", "NIFTY"): "NSE:NIFTY 50", ("NFO", "BANKNIFTY"): "NSE:NIFTY BANK",
@@ -103,11 +115,14 @@ class OptionsData:
 
     def expiries(self, exchange: str, name: str) -> list[str]:
         """The option's expiries still to come, as listed; a monthly-only index's list never carries a weekly date
-        (data/expiries.py)."""
+        (data/expiries.py). Today's expiry is gone once its contracts have expired for the day (R6O-019: "SENSEX
+        8 Oct · weekly" listed at 23:45 on 8 Oct)."""
         self._load()
         today = ist_date().isoformat()
+        gone = today if expired_today(exchange) else None
         return keep_listed(exchange, name, sorted({r["expiry"] for r in self._rows.get(exchange, [])
-                                                   if r["name"] == name and r["type"] != "FUT" and r["expiry"] >= today}))
+                                                   if r["name"] == name and r["type"] != "FUT" and r["expiry"] >= today
+                                                   and r["expiry"] != gone}))
 
     def pick_expiry(self, exchange: str, name: str, choice: str) -> str | None:
         ex = self.expiries(exchange, name)

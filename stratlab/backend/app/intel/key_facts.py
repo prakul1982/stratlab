@@ -75,8 +75,10 @@ def _year_ago(bars: list[dict]) -> float | None:
     return num(on_or_before[-1].get("c"))
 
 
-def price_trend(bars: list[dict]) -> dict | None:
-    """Where the price sits against its 50- and 200-day averages, its change over a year, and its Stage."""
+def price_trend(bars: list[dict], page_1y: float | None = None) -> dict | None:
+    """Where the price sits against its 50- and 200-day averages, its change over a year, and its Stage. The year's
+    change is the page's own Key numbers figure when it has one, so the page shows one 1-year return (R6O-008:
+    Eni's "1Y return +59.7%" beside "1-year price change +56.8%")."""
     closes = [x for x in (num(b.get("c")) for b in bars or []) if x is not None and x > 0]
     if len(closes) < 50:
         return None
@@ -93,7 +95,7 @@ def price_trend(bars: list[dict]) -> dict | None:
     stage_now = None if pd.isna(s) else int(s)
     return _row("price", "Price trend",
                 _item("Price vs 50-day average", vs(50)), _item("Price vs 200-day average", vs(200)),
-                _item("1-year price change", _pct((last / ago - 1) * 100, True) if ago else None),
+                _item("1-year price change", _pct(page_1y, True) if page_1y is not None else _pct((last / ago - 1) * 100, True) if ago else None),
                 _item("Stage (150-day average)", STAGE.get(stage_now)))
 
 
@@ -174,7 +176,8 @@ def build(c: dict, reported: dict | None, bars: list[dict] | None) -> list[dict]
         nums = None
     s = summary(reported) if reported else (c.get("summary") or {})
     rows = []
-    for make in (lambda: growth(c, nums), lambda: price_trend(bars or []),
+    page_1y = _first(_metric(c, "Per share and returns", "1Y return"), _metric(c, "Stock price CAGR", "1Y"))
+    for make in (lambda: growth(c, nums), lambda: price_trend(bars or [], page_1y),
                  lambda: debt_and_cash(c, reported, nums, s), lambda: margins_and_returns(c, nums, s)):
         try:
             r = make()

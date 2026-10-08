@@ -91,8 +91,31 @@ SAMPLE_HEADLINES = {
 }
 
 
+def _stored_market(region: str, weekly: bool) -> dict | None:
+    """The newest Market Brief actually built for the region (daily or weekly), with its rendered email: its real
+    figures, never made-up ones beside a real date (R6O-021: "week to 3 Oct: NIFTY 50 -1.34%" where the week was
+    -3.11%). None when none is stored."""
+    try:
+        from .newsletter import job
+        return next((i for i in job.recent("market", region, 12) if bool(i.get("weekly")) == weekly and i.get("html") and i.get("text")), None)
+    except Exception:
+        return None
+
+
+def _last_weekday(day: date) -> date:
+    """The weekday before `day`: a daily sample is of a session that has closed, never of a day still to come."""
+    d = day - timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
 def _market(region: str, weekly: bool = False) -> tuple[str, str, str]:
-    day = _saturday(_today()) if weekly else _today()
+    real = _stored_market(region, weekly)
+    if real:
+        html, text = kit.preview_links(real["html"], real["text"])
+        return real["subject"], html, text
+    day = _saturday(_today()) if weekly else _last_weekday(_today())
     if region == "IN":
         scan = ({"group": "NIFTY 50", "st_s2": [{"symbol": "HDFCBANK"}], "stage2": [{"symbol": "MARUTI"}, {"symbol": "TITAN"}]} if weekly
                 else {"group": "NIFTY 50", "st_s2": [{"symbol": "TCS"}, {"symbol": "INFY"}], "stage2": [{"symbol": "LT"}]})

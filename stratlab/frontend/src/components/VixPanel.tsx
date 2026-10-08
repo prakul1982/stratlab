@@ -52,7 +52,7 @@ export function VixPanel() {
                 <Stat label="Percentile, past year" value={val(v.percentile.percentile != null ? String(Math.round(v.percentile.percentile)) : null, "Not enough days yet")}
                   note={<span data-testid="vix-pct">{vixPercentileLine(v.percentile)}{v.percentile.low != null && v.percentile.high != null ? `; range ${vixNum(v.percentile.low)} – ${vixNum(v.percentile.high)}` : ""}</span>} />
                 <Stat label="NIFTY ATM IV" value={val(ivNow ? `${ivNow.iv.toFixed(2)}%` : null, "Not recorded yet")}
-                  note={ivNow ? `${ivNow.source === "live" ? "Live chain" : "Recorded chain"}, ${vixTime(ivNow.as_of) ?? ""}` : undefined} />
+                  note={ivNow ? `${ivNow.at_close ? "Chain at the close" : ivNow.source === "live" ? "Live chain" : "Recorded chain"}, ${vixTime(ivNow.as_of) ?? ""}` : undefined} />
               </StatRow>
             </div>
             <div className="k-two">

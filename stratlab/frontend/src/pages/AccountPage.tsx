@@ -88,6 +88,8 @@ export function AccountPage() {
       <Card id="plan" label="Plan and usage">
         <CardHead title="Plan and usage" info={HELP.experimentsQuota}
           actions={<Badge tone="plain" dot={false}>{me.plan_info.name}{me.promo ? " (launch offer)" : me.free_basic_until ? " (free from invites)" : ""}</Badge>} />
+        {/* View as shows the viewed plan's limits beside the account's own use: said, so "5 of 2" never reads as a fault (R6O-013) */}
+        {me.view_as && <p className="k-small k-muted k-hint-line" data-testid="viewas-usage">Your own use this month, against the {me.plan_info.name} plan's limits you're viewing as. Your real plan's limits are unchanged.</p>}
         <div className="k-rows">{usage.map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>
         <div className="k-row">
           {run === "free" ? <Link to="/plans" className="btn">See paid plans</Link>

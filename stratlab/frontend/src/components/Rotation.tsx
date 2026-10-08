@@ -67,7 +67,8 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
 
   return (
     <div className="rot-chart" ref={box}>
-      <svg width={W} height={H} role="img" aria-label={`Rotation of ${rows.length} items against ${benchmark}. The table below lists every value.`}>
+      {/* a group, not an image: it holds the points you can tab to and press (R6O-024: axe nested-interactive) */}
+      <svg width={W} height={H} role="group" aria-label={`Rotation of ${rows.length} items against ${benchmark}. The table below lists every value.`}>
         {/* quadrant backgrounds, then hairline grid and the 100 cross */}
         <rect x={pad.l} y={pad.t} width={cx - pad.l} height={cy - pad.t} fill={qColor("improving")} className="rot-tint" />
         <rect x={cx} y={pad.t} width={W - pad.r - cx} height={cy - pad.t} fill={qColor("leading")} className="rot-tint" />

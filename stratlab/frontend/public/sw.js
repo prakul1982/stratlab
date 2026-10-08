@@ -1,13 +1,27 @@
 /* StratLab service worker: phone notifications, and the app shell when offline. Your data is never cached. */
-const SHELL = "stratlab-shell-v2";
+const SHELL = "stratlab-shell-v3";
 // the small files every page needs before it can start: the last good copy is kept, so one that fails to download (an error page
 // where the script should be) is replaced by it instead of leaving the app without its settings
 const STATIC = ["/config.js", "/theme.js", "/boot.js"];
 
+// each file on its own: one that fails to download (a 502 on the icon) no longer leaves the whole shell uncached (R6O-006)
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(["/", "/favicon.svg", "/icon-192.png", ...STATIC])).catch(() => undefined));
+  e.waitUntil(caches.open(SHELL).then((c) => Promise.all(["/", "/favicon.svg", "/icon-192.png", ...STATIC]
+    .map((f) => c.add(f).catch(() => undefined)))).catch(() => undefined));
   self.skipWaiting();
 });
+
+// what a page load gets when the network fails and no copy of the app is kept: a plain offline page, never nothing (a
+// navigation answered with nothing showed Safari's "Returned response is null" error page, R6O-006)
+const OFFLINE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+  + '<title>StratLab: offline</title></head><body style="font-family:system-ui,sans-serif;margin:0;padding:48px 16px;text-align:center">'
+  + '<h1 style="font-size:22px">StratLab can\'t be reached</h1><p>Check the connection, then try again.</p>'
+  + '<p><a href="" onclick="location.reload();return false">Try again</a></p></body></html>';
+function offline() {
+  try { return new Response(OFFLINE, { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }); }
+  catch { return Response.error(); }
+}
+const shellOr = (fallback) => caches.match("/").then((hit) => hit || fallback()).catch(() => fallback());
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== SHELL).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -36,9 +50,9 @@ self.addEventListener("fetch", (e) => {
       caches.open(SHELL).then((c) => c.put("/", copy)).catch(() => undefined);
       return res;
     }
-    if (res.status >= 500) return caches.match("/").then((hit) => hit || res);
+    if (res.status >= 500) return shellOr(() => res);
     return res;
-  }).catch(() => caches.match("/")));
+  }).catch(() => shellOr(offline)));
 });
 
 self.addEventListener("push", (e) => {

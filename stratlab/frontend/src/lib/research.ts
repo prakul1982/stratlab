@@ -137,7 +137,7 @@ export function useWatchlist() {
 /* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
  * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-export { focusParam, metricText, millionsOf, monthsOld, newsAge, periodEnd, scaleFor, staleQuarter, trendValue, type Scale } from "./researchFormat";
+export { focusParam, metricText, millionsOf, monthsOld, newsAge, periodEnd, resultsFiled, scaleFor, staleQuarter, trendValue, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,

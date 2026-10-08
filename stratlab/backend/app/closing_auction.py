@@ -415,7 +415,8 @@ class Job:
 
     def __init__(self, feed_fn):
         self.feed_fn = feed_fn
-        self.status = {"read": None, "recorded": None, "last_error": None}
+        from .job_status import Status        # stores itself on each read, so Admin has it after a restart (R6O-003)
+        self.status = Status("closing-auction", {"read": None, "recorded": None, "last_error": None})
         self._next = 0.0
 
     def start(self):
