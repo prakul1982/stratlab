@@ -12,7 +12,8 @@ import { AlertSettingsCard } from "../components/AlertSettings";
 import { NewslettersCard } from "../components/NewslettersCard";
 import { TipsCard } from "../components/TipsCard";
 import { ConnectCards } from "../components/ConnectedAccounts";
-import { Badge, Card, CardHead, FieldGroup, LinkCard, Notice, PageHeader, Seg, Skeleton } from "../components/kit";
+import { Badge, Card, CardHead, FieldGroup, LinkCard, Notice, PageHeader, Seg } from "../components/kit";
+import { AccountWait } from "../components/AccountWait";
 
 /* /settings: the things you set once. Four sections behind one Seg: where alerts and emails go, what you see first and the
  * theme, the accounts and files StratLab reads, and the connection check. The section is in the address (#notifications). */
@@ -56,7 +57,7 @@ export function SettingsPage() {
     <div className="k-page">
       <PageHeader eyebrow="Settings" title="Settings" lede="Where your alerts and emails go, what you see first, and the accounts and files StratLab reads." />
       <div className="k-section-nav"><Seg label="Settings sections" options={SECTIONS} value={section} onChange={go} /></div>
-      {!me ? <Card label="Loading your settings"><Skeleton label="Loading your settings" /></Card> : <>
+      {!me ? <Card label="Loading your settings"><AccountWait label="Loading your settings" /></Card> : <>
         {section === "notifications" && <><AlertSettingsCard /><TipsCard /><NewslettersCard /></>}
         {section === "experience" && <ExperienceCards />}
         {section === "accounts" && <><ConnectedAccounts /><ConnectCards /></>}

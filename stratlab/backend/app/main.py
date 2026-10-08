@@ -100,7 +100,7 @@ from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGre
 from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
-                     Strategy, SubscribeReq, VerifyReq)
+                     Strategy, SubscribeReq, VerifyReq, ViewAsReq)
 from .plans import holdings_limit
 from . import money_networth
 from .plans import networth_items
@@ -548,8 +548,13 @@ def _kite_error(request, exc):
 # ---------- account ----------
 @app.get("/health")
 def health():
-    """Public: only whether things are up. Provider details are on the admin page."""
+    """Public: only whether things are up. Provider details are on the admin page.
+    `data_online`: the Indian market data login is valid, so Indian prices (quotes, charts, company pages) are read live.
+    `feed`: the streaming tick connection that only live paper-trading sessions on Indian instruments use. It opens with
+    the first such session and stays shut while there is none ("idle"), which says nothing about prices elsewhere;
+    "disconnected" means it was opened and has dropped. `feed_connected` is kept for monitors that read it."""
     return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
+            "feed": "connected" if hub.connected else "disconnected" if hub.started else "idle",
             "ai_configured": any(p["in_use"] for p in ai_health())}
 
 
@@ -621,19 +626,25 @@ def me(profile=Depends(current_profile)):
     except Exception as e:
         print("lifecycle visit failed:", str(e)[:160])
     plan = profile["_plan"]
-    paid = profile.get("_paid_plan", plan) if profile.get("_paid_plan", plan) in PLANS else "free"
+    # the site owner's "View as": every plan field below reads as that plan (no launch offer, no stored plan); the real
+    # plan and billing are untouched in the database, and billing changes are refused while it is on
+    seen = profile.get("_view_as") if profile.get("_view_as") in PLANS else None
+    paid = seen or (profile.get("_paid_plan", plan) if profile.get("_paid_plan", plan) in PLANS else "free")
     info = plan_info(plan)
     used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck"))
     return ok({
         "id": profile["id"], "email": profile.get("email"),
-        "plan": plan, "plan_info": info, "paid_plan": profile.get("_paid_plan", plan),
-        "promo": {"until": until.isoformat()} if (until := promo_until()) and promo_active() else None,
-        "free_basic_until": fb.isoformat() if profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
-        "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
-                    "renews_or_ends": profile.get("current_period_end"),
-                    "cancel_at_period_end": bool(profile.get("cancel_at_period_end")),
-                    # a paid plan the site owner gave by hand (Admin → Change plan): nothing renews and nothing to cancel
-                    "given_by_owner": profile.get("_paid_plan", plan) != "free" and not profile.get("razorpay_subscription_id")},
+        "plan": plan, "plan_info": info, "paid_plan": seen or profile.get("_paid_plan", plan),
+        "view_as": seen,
+        "promo": {"until": until.isoformat()} if not seen and (until := promo_until()) and promo_active() else None,
+        "free_basic_until": fb.isoformat() if not seen and profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
+        "billing": ({"subscribed_plan": None if seen == "free" else seen, "status": None if seen == "free" else "active",
+                     "renews_or_ends": None, "cancel_at_period_end": False, "given_by_owner": seen != "free"} if seen else
+                    {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
+                     "renews_or_ends": profile.get("current_period_end"),
+                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end")),
+                     # a paid plan the site owner gave by hand (Admin → Change plan): nothing renews and nothing to cancel
+                     "given_by_owner": profile.get("_paid_plan", plan) != "free" and not profile.get("razorpay_subscription_id")}),
         "signed_in_with": profile.get("_signed_in_with"),
         "usage": {"backtests_used": used["backtest"], "backtests_limit": info["backtests_per_month"],
                   "ai_used": used["ai"], "ai_limit": info["ai_builds_per_month"],
@@ -641,7 +652,7 @@ def me(profile=Depends(current_profile)):
                   "deck_used": used["deck"], "deck_limit": info["decks_per_month"],
                   # the plan's own limits (what the Plans page lists), and why they're lifted now when they are
                   "deepdive_plan_limit": PLANS[paid]["deepdives_per_month"], "deck_plan_limit": PLANS[paid]["decks_per_month"],
-                  "lifted_by": "the launch offer" if promo_active() else None},
+                  "lifted_by": "the launch offer" if promo_active() and not seen else None},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
@@ -650,7 +661,7 @@ def me(profile=Depends(current_profile)):
         "data_online": kite.ready(),
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
-        "offer": offer_state(),
+        "offer": offer_state(promo=not seen),
         "onboarding": onboarding_of(profile["id"]),
         "established": established_of(profile["id"]),
         "is_admin": admin.is_admin(profile),
@@ -1154,7 +1165,7 @@ def get_notebook(profile, nid: str) -> dict:
 
 
 def save_notebook(profile, nb: dict) -> dict:
-    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group")}
+    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group", "gaps")}
     body["kind"] = "notebook"
     body["tf"] = (nb.get("strategy") or {}).get("tf")
     inst = nb.get("instrument") or {}
@@ -1219,6 +1230,8 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
           "experiments": [], "summary": research.summary([])}
     if req.group is not None and not req.instrument:
         nb["group"] = group_body(req.group)     # e.g. "Backtest ST S2 on this group" from a scan
+    if req.gaps is not None:
+        nb["gaps"] = req.gaps.model_dump()      # the questions still open, there when the person comes back
     return save_notebook(profile, nb)
 
 
@@ -1246,6 +1259,10 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
         nb.pop("group", None)                 # picking one instrument replaces a group
     if req.group is not None:
         nb["group"] = group_body(req.group)
+    if req.gaps is not None:
+        nb["gaps"] = req.gaps.model_dump()
+    if req.clearGaps:
+        nb.pop("gaps", None)
     return ok(save_notebook(profile, nb))
 
 
@@ -1876,12 +1893,21 @@ def deep_years(years: int) -> int:
 BSE_WAIT = "Documents are not available from BSE right now (it is turning requests away). Try again later."
 
 
+_deep_pool = ThreadPoolExecutor(max_workers=12, thread_name_prefix="deep-dive")   # the deep dive's sources, read side by side
+
+
 def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True) -> dict:
     """Numbers and the list of readable documents for one company (no AI), documents from the last `years` years.
     `trades`: also read its insider-trading disclosures, for the checklist (the market audit leaves them out)."""
     if region == "US":
         return deep_base_us(sym, years)
     code = bse_code(sym)                                  # listed only on BSE: its numbers are under the BSE code
+    # the filings, insider trades and prices don't wait for the numbers: they are read alongside them (R5O-025: the
+    # sources were read one after another)
+    ahead = {"items": _deep_pool.submit(filings_feed.announcements, sym, max(deepdive.DOC_DAYS, 366 * years)),
+             "trend": _deep_pool.submit(price_status, sym)}
+    if trades:
+        ahead["insider"] = _deep_pool.submit(lambda: _quiet(lambda: filings_feed.insider_trades(sym)))
     p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(code or sym)))
     try:
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
@@ -1894,14 +1920,14 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
         except Exception:
             pass
     try:
-        items = filings_feed.announcements(sym, max(deepdive.DOC_DAYS, 366 * years))
+        items = ahead["items"].result()
         doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:
         # a company listed only on BSE, and BSE turning this server away: its documents wait, they aren't missing
         note = BSE_WAIT if code and getattr(e, "busy", False) else str(e)
         items, doc_note, fsum = [], public_text(note), None
-    insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
-    trend, why = price_status(sym)
+    insider = ahead["insider"].result() if trades else None
+    trend, why = ahead["trend"].result()
     cut = (datetime.now(IST) - timedelta(days=366 * years)).strftime("%Y-%m-%dT%H:%M")
     told = None if doc_note else deepdive.meetings(items, cut)
     # four of each kind a year: a deck and a transcript a quarter, so a run of decks can't push the transcripts out
@@ -1964,6 +1990,15 @@ def price_trend(sym: str, market: str = "IN") -> dict | None:
     return price_status(sym, market)[0]
 
 
+def candle_day(t) -> str | None:
+    """A daily candle's time as its day ("2026-10-08"): the candle is stamped at midnight, so the page said "Last
+    close as of 8 Oct 2026, 00:00 IST" (R5O-025). A time within the day stays as it is."""
+    s = str(t or "")
+    if not s:
+        return None
+    return s[:10] if len(s) <= 10 or s[11:19] in ("00:00:00", "") else s
+
+
 def deep_view(sym: str, base: dict) -> dict:
     p = base["p"]
     us = p.get("region") == "US"
@@ -1984,7 +2019,7 @@ def deep_view(sym: str, base: dict) -> dict:
             "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym, base.get("trades")),
             "ai": True, "report_card": True, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-            "numbers_at": p.get("fetched_at"), "price_at": (base["trend"] or {}).get("t"),
+            "numbers_at": p.get("fetched_at"), "price_at": candle_day((base["trend"] or {}).get("t")),
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
 
 
@@ -2106,6 +2141,8 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
         quad = {r["symbol"]: {"symbol": r["symbol"], "name": r["name"], "quadrant": r["quadrant"]} for r in rot["rows"]}
     except Exception:
         quad = {}
+    # one price source with the List tab: the same quotes call, each with the time of its last trade
+    quotes = _quiet(research_hub.quotes, region, syms) or {}
 
     def one(sym):
         problem, key = None, f"US:{sym}" if us else sym
@@ -2126,7 +2163,8 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
         checks = checklist.evaluate(p, nums, fsum, trend, card, None if us else sym, trades) if p else None
         sec = investor.sector_of(region, sym)
         sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label(region, sec, None), "quadrant": None} if sec else None)
-        return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem)
+        return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem,
+                            quotes.get(sym))
 
     rows = list(_investor_pool.map(one, syms))
     return ok({"rows": rows, "region": region, "as_of": datetime.now(IST).isoformat(timespec="minutes")})
@@ -2510,7 +2548,7 @@ def _nw_stocks(profile) -> dict:
     rate = h.get("usd_inr")
     return {"in": sum(worth(r) for r in h["rows"] if r.get("market") != "US"),
             "us": sum(worth(r) for r in h["rows"] if r.get("market") == "US") * rate if rate else 0,
-            "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"])}
+            "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"]), "usd_inr": rate}
 
 
 app.include_router(money_networth.make_router(
@@ -2945,6 +2983,28 @@ def unshare_experiment(nid: str, version: int, profile=Depends(current_profile))
     return {"shared": False}
 
 
+PUBLIC_LIBRARY_HEADERS = {"Cache-Control": "public, max-age=300"}
+
+
+@app.get("/public/library")
+def public_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", limit: int = 100):
+    """StratLab's own library strategies, readable without an account: the rules that were tested and the verdict each
+    earned, as the app's own backtest gave it. Only entries StratLab published itself and that are not hidden; a user's
+    published strategy is never listed here (signed-in people see those in /library)."""
+    rows = library.search(library.public_entries(), market.upper()[:10], verdict[:12], q[:80], sort)
+    cap = max(1, min(limit, 200))
+    return JSONResponse({"entries": [library.public_view(e) for e in rows[:cap]], "total": len(rows), "reasons": library.REASONS},
+                        headers=PUBLIC_LIBRARY_HEADERS)
+
+
+@app.get("/public/library/{eid}")
+def public_library_entry(eid: str):
+    e = next((x for x in library.public_entries() if x.get("id") == eid), None)
+    if not e:
+        err(404, "not_found", "That strategy isn't in StratLab's public library.")
+    return JSONResponse(library.public_view(e), headers=PUBLIC_LIBRARY_HEADERS)
+
+
 @app.get("/public/v/{token}")
 def public_verdict(token: str):
     snap = public.load(token)
@@ -3042,17 +3102,33 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     trend = prices = None
     try:
         ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or sym}])
-        bars = scan._bars(markets, ids[0]) if ids else []
+        # closed sessions only: the page's price is the last close, with its date, never a session still trading
+        bars = stock_pages.closed_bars(scan._bars(markets, ids[0]) if ids else [], region)
         if bars:
             trend, prices = scan.analyse(bars), stock_pages.price_facts(bars)
     except Exception:                     # no prices: the page goes without the price facts
         pass
+    close = (prices or {}).get("price")
+    if region == "US" and close and not sec.non_common(sym):
+        # the ratios at the same close the page shows (the quote read above is the live price), and the dividend yield
+        # from the dividends the price history lists for the year to that close: none in the year is a real 0%, a
+        # history that couldn't be read is n/a (the filings' dividend line is missing for many foreign filers)
+        p["ratios"] = sec.ratios(p, close, prices.get("high52"), prices.get("low52"))
+        try:
+            divs = research_hub.yahoo.events(sec.price_symbol(sym), 400)["dividends"]
+            dy = stock_pages.dividend_yield(divs, close, prices.get("price_at"))
+        except Exception:
+            dy = None
+        if dy is None:
+            p["ratios"].pop("Dividend Yield", None)
+        else:
+            p["ratios"]["Dividend Yield"] = dy
     nums = deepdive.numbers(p)
     snap = screener_summary(p)
     if region == "IN":
         # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
         # company page does), so the screens' market value and P/E agree with the price beside them
-        snap = at_live_price(snap, (prices or {}).get("price"))
+        snap = at_live_price(snap, close)
     return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red)
 
 
@@ -3070,6 +3146,36 @@ def stock_list_job():
             except Exception as e:
                 print(f"stock list {region} failed:", str(e)[:160])
         time.sleep(24 * 3600)
+
+
+@app.get("/stocks", response_class=HTMLResponse)
+@app.get("/stocks/", response_class=HTMLResponse, include_in_schema=False)
+def stock_index(q: str = "", m: str = ""):
+    """Every company page's way in: search by name or symbol (`m`: in or us), and each market's largest companies."""
+    r = stock_pages.REGIONS.get((m or "").lower())
+    return HTMLResponse(stock_pages.index_page(r if q else None, q), headers=SEO_HEADERS)
+
+
+@app.get("/stocks/{region}", response_class=HTMLResponse)
+@app.get("/stocks/{region}/", response_class=HTMLResponse, include_in_schema=False)
+def stock_region_index(region: str, q: str = ""):
+    r = stock_pages.REGIONS.get(region.lower())
+    if not r:
+        return HTMLResponse(stock_pages.not_found(None, region), status_code=404)
+    if region != region.lower():
+        return RedirectResponse(f"/stocks/{region.lower()}", status_code=301)
+    return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS)
+
+
+@app.get("/stocks/{region}/{symbol}/", include_in_schema=False)
+def stock_page_slash(region: str, symbol: str):
+    """An address with a trailing slash: one address per company, without it (a relative redirect, so it stays on the
+    site's own host)."""
+    r = stock_pages.REGIONS.get(region.lower())
+    hit = stock_pages.find(r, symbol) if r else None
+    if not hit:
+        return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
+    return RedirectResponse(stock_pages.path(r, hit[0]), status_code=301)
 
 
 @app.get("/stocks/{region}/{symbol}", response_class=HTMLResponse)
@@ -3808,8 +3914,16 @@ def import_options(text: str, profile) -> dict:
 
 
 # ---------- billing ----------
+def not_viewing(profile) -> None:
+    """Billing is the real account's. While the owner views the app as a plan, it is closed (the Plans page would be
+    showing a plan they don't have), so a click there can never start a subscription."""
+    if profile.get("_view_as"):
+        err(409, "view_as_on", "You're viewing as another plan. Turn off View as to change your billing.")
+
+
 @app.post("/billing/subscribe")
 def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
+    not_viewing(profile)
     if profile.get("_paid_plan", profile["_plan"]) == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
     try:
@@ -3829,6 +3943,7 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
 
 @app.post("/billing/verify")
 def verify(req: VerifyReq, profile=Depends(current_profile)):
+    not_viewing(profile)
     try:
         billing.verify_checkout(profile, req.razorpay_payment_id, req.razorpay_subscription_id, req.razorpay_signature)
     except SignatureVerificationError:
@@ -3887,6 +4002,7 @@ def admin_invoice_seller(req: SellerReq, _=Depends(admin.admin_profile)):
 
 @app.post("/billing/cancel")
 def cancel(profile=Depends(current_profile)):
+    not_viewing(profile)
     try:
         billing.cancel(profile)
     except ValueError as e:
@@ -4098,7 +4214,9 @@ def admin_sessions(_=Depends(admin.admin_profile)):
         out.append({"id": s.id, "name": s.name, "email": emails.get(s.user_id), "symbol": s.inst.get("symbol"),
                     "market": getattr(s, "market", s.inst.get("market")), "kind": getattr(s, "kind", "rules"),
                     "started_at": s.started_at, "capital": account.get("capital"),
-                    "equity": account.get("equity"), "trades": account.get("trades")})
+                    "equity": account.get("equity"), "trades": account.get("trades"),
+                    # the account's currency, so its money is grouped as that currency writes it (Rs47,53,636, $10,000)
+                    "currency": s.inst.get("currency") or ("INR" if getattr(s, "market", s.inst.get("market")) == "IN" else "USD")})
     return out
 
 
@@ -4587,6 +4705,14 @@ def admin_audit_stop(_=Depends(admin.admin_profile)):
     """Stop a running audit after the current company; the rows so far are kept."""
     audit_runner.cancel()
     return audit_runner.status()
+
+
+@app.put("/admin/view-as")
+def admin_view_as(req: ViewAsReq, who=Depends(admin.admin_profile)):
+    """Check a "View as" choice before the page keeps it: free, basic, pro, or off (null). Nothing is stored on the
+    server: the page sends the choice with each request (the X-View-As header), and auth.current_profile honours it for
+    the site owner only. Anyone else gets a 403 here, and the header does nothing for them."""
+    return {"view_as": req.plan}
 
 
 @app.post("/admin/promo")

@@ -127,6 +127,20 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
     return () => window.clearInterval(t);
   }, [playing, speed, last]);
 
+  // → steps one candle, as the Next candle button does, when the keys aren't busy elsewhere: typing in a box, a menu
+  // or dialog that is open, or the chart's own keys (R5O-029)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowRight" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || playing) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='menu'], [role='slider'], [role='radiogroup'], [role='tablist'], .k-chart, canvas")) return;
+      e.preventDefault();
+      setCursor((c) => Math.min(c + 1, last));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [playing, last]);
+
   const sim = useMemo(() => simulate(s.bars, orders, s.first, cursor, s.kind, s.rates, s.step, false), [s, orders, cursor]);
   const shown = useMemo(() => s.bars.slice(0, cursor + 1), [s.bars, cursor]);
   const markers = useMemo(() => sim.fills.map((f) => ({ t: f.t, side: f.side })), [sim.fills]);
@@ -187,7 +201,7 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
         <CardHead level={3} title="Replay controls" actions={<Seg label="Speed" options={SPEEDS.map((x) => ({ value: String(x), label: `${x}×` }))} value={String(speed)} onChange={(v) => setSpeed(Number(v))} />} />
         <div className="k-row">
           <button type="button" className="btn" onClick={() => setPlaying(!playing)} disabled={atEnd} aria-pressed={playing}>{playing ? "Pause" : "Play"}</button>
-          <button type="button" className="btn outline" onClick={() => setCursor((c) => Math.min(c + 1, last))} disabled={atEnd || playing}>Next candle</button>
+          <button type="button" className="btn outline" onClick={() => setCursor((c) => Math.min(c + 1, last))} disabled={atEnd || playing} aria-keyshortcuts="ArrowRight" title="Next candle (→)">Next candle</button>
         </div>
         <FormGrid label="Practice order" onSubmit={(e) => e.preventDefault()}>
           <Field label={s.fno ? "Quantity (units)" : "Quantity"} aria-label="Quantity" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />

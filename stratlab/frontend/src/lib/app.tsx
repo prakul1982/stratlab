@@ -6,7 +6,10 @@ import { takeRef } from "./share";
 import { identify, resetAnalytics, track, trackSignup } from "./analytics";
 import { plansCall } from "./offer";
 import { JOINED, JOIN_LABEL, joinInterest, resetInterest } from "./planInterest";
+import { readViewAs, writeViewAs, type ViewAs } from "./viewAs";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
+
+const ME_RETRY_MS = 1500;
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
@@ -39,6 +42,11 @@ interface AppState {
   /** Show another space's menu. `save` keeps it as the account's choice too (the switcher); a deep link into another
    * space only switches on this device. */
   setSpace: (s: SpaceView, save?: boolean) => void;
+  /** The plan the site owner is viewing the app as, as the server confirms it (null: off, and always null for anyone else). */
+  viewAs: ViewAs | null;
+  /** Turn "View as" on for a plan, or off (null). Checked with the server, kept on this device, then the page reloads so every
+   * lock, limit and number is read again as that plan. */
+  setViewAs: (v: ViewAs | null) => Promise<void>;
   theme: "light" | "dark" | "system";
   setTheme: (t: "light" | "dark" | "system") => void;
 }
@@ -87,7 +95,13 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
 
   const refreshMe = useCallback(async () => {
     try {
-      const m = await api<Me>("/me");
+      // one quiet second try when the server or the network had a moment (a 503 or no answer): the person sees the
+      // error and its Retry button only if that fails too (R5O-002)
+      const m = await api<Me>("/me").catch(async (e: ApiError) => {
+        if (e?.status && e.status !== 503 && e.status !== 502 && e.status !== 504) throw e;
+        await new Promise((ok) => window.setTimeout(ok, ME_RETRY_MS));
+        return api<Me>("/me");
+      });
       setMe(m);
       setMeError(null);
       setDataOffline(!m.data_online);
@@ -126,6 +140,14 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     trackSignup(me.id, session.user?.created_at);
   }, [me?.id, me?.plan]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the choice is kept on this device; an account that isn't the owner's can't use it, so a stale one is dropped
+  useEffect(() => { if (me && !me.is_admin && readViewAs()) writeViewAs(null); }, [me]);
+  const setViewAs = useCallback(async (v: ViewAs | null) => {
+    try { await api("/admin/view-as", { method: "PUT", body: { plan: v } }); } catch (e) { fail(e); return; }
+    writeViewAs(v);
+    window.location.reload();
+  }, [fail]);
+
   const setTheme = useCallback((t: "light" | "dark" | "system") => {
     setThemeState(t);
     try {
@@ -154,7 +176,8 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
     allIndicators: !!me?.plan_info.indicators, fno: !!me?.plan_info.fno, level: me?.prefs?.level ?? null, setLevel,
     focus: me?.prefs?.focus ?? null, setFocus, savePrefs, space, setSpace, theme, setTheme,
-  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme]);
+    viewAs: me?.is_admin ? me.view_as ?? null : null, setViewAs,
+  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme, setViewAs]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

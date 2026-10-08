@@ -375,9 +375,22 @@ def free_basic_until(profile: dict, now: datetime | None = None) -> datetime | N
     return until if until and now < until else None
 
 
+def view_as_of(value) -> str | None:
+    """The plan named by the "View as" header ("free", "basic" or "pro"), or None for anything else (off, empty, junk)."""
+    v = str(value or "").strip().lower()
+    return v if v in PLANS else None
+
+
 def access_plan(profile: dict) -> str:
     """What the user can use right now: Pro for everyone during the launch offer, else what they pay for, or Basic
-    while they have free Basic time (from inviting friends) and pay for less."""
+    while they have free Basic time (from inviting friends) and pay for less.
+
+    The site owner's "View as" (auth.current_profile sets `_view_as` for a verified admin only) wins over all of it,
+    the launch offer and free Basic time included, so every lock and limit shows as that plan has it. It changes this
+    answer only: effective_plan, the stored plan and billing never read it."""
+    seen = view_as_of(profile.get("_view_as"))
+    if seen:
+        return seen
     if promo_active():
         return "pro"
     plan = effective_plan(profile)
@@ -394,16 +407,17 @@ LIMIT_KEYS = ("backtests_per_month", "ai_builds_per_month", "live_limit", "group
               "stock_alerts", "screens", "holdings", "networth_items", "mf_schemes", "journal_trades")
 
 
-def offer_state(now: datetime | None = None) -> dict:
+def offer_state(now: datetime | None = None, promo: bool = True) -> dict:
     """What anyone can buy and use today, in one answer: the landing page, Plans and the in-app banners all read this
     (through /pricing before sign-in and /me after), so they can't say different things.
 
     mode: "promo" while the launch offer gives everyone Pro; else "early" while payments aren't set up (nobody can buy
     a plan, so every feature is open and only some Free limits apply); else "paid".
-    free_now: the Free plan's limits as they apply today (in early access most are lifted to Pro's)."""
+    free_now: the Free plan's limits as they apply today (in early access most are lifted to Pro's).
+    promo=False leaves the launch offer out, as the site owner sees it while viewing as a plan."""
     from . import billing
     payments = billing.enabled()
-    until = promo_until() if promo_active(now) else None
+    until = promo_until() if promo and promo_active(now) else None
     info = plan_info("free")
     return {
         "mode": "promo" if until else "paid" if payments else "early",

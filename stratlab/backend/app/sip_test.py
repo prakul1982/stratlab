@@ -15,6 +15,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from .auth import current_profile
+from .email_kit import inr as _inr
 from .engine import costs as C
 from .money_mf import xirr
 from .plans import FEATURE_PLAN, PLANS, allows
@@ -284,16 +285,20 @@ def _add_years(d: str, years: int) -> str:
         return a.replace(year=a.year + years, day=28).isoformat()
 
 
-def spread(legs: list[dict], plan: dict, years: int, first_day: str, last_day: str) -> dict | None:
+def spread(legs: list[dict], plan: dict, years: int, first_day: str, last_day: str, also: tuple[str, ...] = ()) -> dict | None:
     """The same SIP, for `years`, from every start month the history allows: the XIRRs' worst, median and best, and,
-    for a dip rule, how often it beat the plain SIP over the same months."""
+    for a dip rule, how often it beat the plain SIP over the same months. `also` adds start days of their own (the
+    page's own window), so its lowest and highest include the run shown above them (NIFTYBEES, 8 Oct 2026: the run
+    starting Nov 2021 gave 3.7% while "the lowest" said 4.2%, as the month starts stopped at Oct 2021). Each run is
+    named by the month of its first instalment."""
     starts = [m for m in _months(first_day, last_day) if m >= first_day and _add_years(m, years) <= last_day]
-    if len(starts) < 2:
+    extra = [d for d in also if d >= first_day and _add_years(d, years) <= last_day and d not in starts]
+    if len(starts) + len(extra) < 2:
         return None
     # many legs, or a dip rule run beside the plain SIP, cost more per start: take every second or third month then
     cap = max(24, min(MAX_STARTS, 600 // (len(legs) * (2 if plan["rule"] != "plain" else 1))))
     step = math.ceil(len(starts) / cap) if len(starts) > cap else 1
-    starts = starts[::step]
+    starts = sorted(starts[::step] + extra)
     runs = []
     plain = {**plan, "rule": "plain"}
     for s in starts:
@@ -301,7 +306,7 @@ def spread(legs: list[dict], plan: dict, years: int, first_day: str, last_day: s
         r = simulate(legs, plan, s, e, keep=False)
         if not r or r["xirr"] is None:
             continue
-        row = {"start": s[:7], "xirr": r["xirr"], "deepest_fall_pct": r["deepest_fall_pct"]}
+        row = {"start": str(r.get("start") or s)[:7], "xirr": r["xirr"], "deepest_fall_pct": r["deepest_fall_pct"]}
         if plan["rule"] != "plain":
             p = simulate(legs, plain, s, e, keep=False)
             row["plain_xirr"] = p["xirr"] if p else None
@@ -328,7 +333,7 @@ def words(plan: dict, legs: list[dict]) -> str:
     split = ", ".join(f"{round(leg['weight'] * 100)}% {leg['symbol']}" for leg in legs) if len(legs) > 1 else legs[0]["symbol"]
     when = {"daily": "Every trading day", "weekly": f"Every {WEEKDAYS[plan['weekday']]} (or the next trading day)",
             "monthly": f"On day {plan['dom']} of every month (or the next trading day)"}[plan["freq"]]
-    what = (f"invest ₹{plan['amount']:,.0f}" if plan["mode"] == "amount" else f"purchase {plan['qty']} share{'s' if plan['qty'] != 1 else ''}")
+    what = (f"invest {_inr(plan['amount'])}" if plan["mode"] == "amount" else f"purchase {plan['qty']} share{'s' if plan['qty'] != 1 else ''}")
     s = f"{when}, {what} in {split}" + (" (split by these weights)" if len(legs) > 1 and plan["mode"] == "amount" else "") + "."
     if plan["step_up"]:
         s += f" Raise the amount by {plan['step_up'] * 100:g}% each year."
@@ -446,7 +451,7 @@ def run(req: SipReq, profile: dict) -> dict:
            "history": {"from": first_day, "to": last_day}, "window": {"from": start, "to": end, "years": years},
            "words": words(plan, legs), "assumptions": ASSUMPTIONS, "disclaimer": DISCLAIMER, "spread": None}
     if full and req.spread and req.mode == "amount":
-        out["spread"] = spread(legs, plan, years, first_day, last_day)
+        out["spread"] = spread(legs, plan, years, first_day, last_day, also=(start,))
     return out
 
 

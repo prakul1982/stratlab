@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from . import db
+from .email_kit import fmt_date as _day, inr as _inr  # the app's own number and date styles
 
 IST = timezone(timedelta(hours=5, minutes=30))
 KEY = "networth:"
@@ -487,7 +488,7 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
         rate = i.get("rate", EPF_RATE)
         now_v = provident(i["balance"], rate, since, at, monthly=i.get("monthly") or 0)
         year = provident(i["balance"], rate, since, fy_end(at) + timedelta(days=1), monthly=i.get("monthly") or 0) if since <= fy_end(at) else None
-        row.update(value=now_v["value"], rule=(f"Balance of {since:%d %b %Y}, plus {'the monthly contribution and ' if i.get('monthly') else ''}"
+        row.update(value=now_v["value"], rule=(f"Balance of {_day(since)}, plus {'the monthly contribution and ' if i.get('monthly') else ''}"
                                                f"interest at {rate:g}% a year, worked out monthly and credited on 31 March"
                                                + (f" ({EPF_RATE_NOTE})" if rate == EPF_RATE else "")))
         row["facts"] = {"interest_so_far": _r(now_v["interest"]), "year_end": _r(year["value"]) if year else None,
@@ -497,7 +498,7 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
         rate = i.get("rate", PPF_RATE)
         now_v = provident(i["balance"], rate, since, at)
         opened = _date(i.get("opened"))
-        row.update(value=now_v["value"], rule=f"Balance of {since:%d %b %Y}, plus interest at {rate:g}% a year, worked out monthly and "
+        row.update(value=now_v["value"], rule=f"Balance of {_day(since)}, plus interest at {rate:g}% a year, worked out monthly and "
                                                "credited on 31 March" + (f" ({PPF_RATE_NOTE})" if rate == PPF_RATE else ""))
         facts = {"interest_so_far": _r(now_v["interest"]), "rate": rate, "maturity": None, "maturity_value": None}
         if opened:
@@ -506,7 +507,7 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
             if m > at:
                 proj = provident(i["balance"], rate, since, m, yearly=i.get("yearly") or 0)
                 facts["maturity_value"] = _r(proj["value"])
-                facts["maturity_rule"] = (f"If the rate stays {rate:g}%" + (f" and ₹{i['yearly']:,.0f} goes in by 5 April each year" if i.get("yearly") else "")
+                facts["maturity_rule"] = (f"If the rate stays {rate:g}%" + (f" and {_inr(i['yearly'])} goes in by 5 April each year" if i.get("yearly") else "")
                                           + "; the rate is reset every quarter.")
         row["facts"] = facts
     elif k == "nps":
@@ -519,7 +520,7 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
         v = fd_value(i["principal"], i["rate"], start, at, comp, mat)
         m = fd_value(i["principal"], i["rate"], start, mat, comp, mat)
         how = "simple interest" if comp == "simple" else f"compounded {comp}"
-        row.update(value=v, as_of=min(at, mat).isoformat(), rule=f"₹{i['principal']:,.0f} at {i['rate']:g}% a year, {how}, from {start:%d %b %Y}"
+        row.update(value=v, as_of=min(at, mat).isoformat(), rule=f"{_inr(i['principal'])} at {i['rate']:g}% a year, {how}, from {_day(start)}"
                                                                  + ("; matured" if at >= mat else ""))
         row["facts"] = {"interest_so_far": _r(v - i["principal"]), "maturity": mat.isoformat(), "maturity_value": _r(m),
                         "matured": at >= mat}
@@ -527,7 +528,7 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
         start, mat = date.fromisoformat(i["start"]), date.fromisoformat(i["maturity"])
         v, paid = rd_value(i["monthly"], i["rate"], start, mat, at)
         m, total = rd_value(i["monthly"], i["rate"], start, mat, mat)
-        row.update(value=v, as_of=min(at, mat).isoformat(), rule=f"₹{i['monthly']:,.0f} a month from {start:%d %b %Y}, each instalment at "
+        row.update(value=v, as_of=min(at, mat).isoformat(), rule=f"{_inr(i['monthly'])} a month from {_day(start)}, each instalment at "
                                                                  f"{i['rate']:g}% a year compounded quarterly")
         row["facts"] = {"paid_in": _r(paid), "instalments": rd_instalments(start, mat), "maturity": mat.isoformat(),
                         "maturity_value": _r(m), "matured": at >= mat, "total_in": _r(total)}
@@ -538,7 +539,7 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
             per = i["price_per_g"] if i.get("price_per_g") is not None else g[0] * purity / 24
             row.update(value=i["grams"] * per, basis="your price" if i.get("price_per_g") is not None else "market price",
                        as_of=i.get("as_of") if i.get("price_per_g") is not None else g[1],
-                       rule=(f"{i['grams']:g} g × ₹{per:,.0f} a gram" + ("" if i.get("price_per_g") is not None else
+                       rule=(f"{i['grams']:g} g × {_inr(per)} a gram" + ("" if i.get("price_per_g") is not None else
                              f" ({purity} carat: the reference 24 carat price × {purity}/24, before making charges and GST)")))
         else:
             row.update(value=i.get("value"), basis="as entered", as_of=i.get("as_of"), rule="Value as entered"
@@ -547,10 +548,10 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
     elif k == "sgb":
         units = i["units"]
         if i.get("price_per_g") is not None:
-            row.update(value=units * i["price_per_g"], basis="your price", rule=f"{units:g} units × ₹{i['price_per_g']:,.0f} a gram (your price)")
+            row.update(value=units * i["price_per_g"], basis="your price", rule=f"{units:g} units × {_inr(i['price_per_g'])} a gram (your price)")
         elif gold:
             row.update(value=units * gold[0], basis="market price", as_of=gold[1],
-                       rule=f"{units:g} units × ₹{gold[0]:,.0f} a gram (reference 24 carat price; one unit is one gram)")
+                       rule=f"{units:g} units × {_inr(gold[0])} a gram (reference 24 carat price; one unit is one gram)")
         elif i.get("issue_price"):
             row.update(value=units * i["issue_price"], basis="issue price", rule=f"{units:g} units × the issue price (no gold price right now)")
         facts = {"units": units, "rate": SGB_RATE, "yearly_interest": _r(units * i["issue_price"] * SGB_RATE / 100) if i.get("issue_price") else None,
@@ -566,7 +567,7 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
         fx = usd_inr() if usd else None
         if usd and fx:
             row.update(value=i["qty"] * usd * fx, basis="market price", as_of=now_iso,
-                       rule=f"{i['qty']:g} {i['coin']} × ${usd:,.2f} × ₹{fx:,.2f} a dollar")
+                       rule=f"{i['qty']:g} {i['coin']} × ${usd:,.2f} × {_inr(fx, 2)} a dollar")
         else:
             row.update(value=i.get("value"), basis="as entered", as_of=i.get("as_of"),
                        rule="Value as entered" + ("; no price for this coin right now" if i.get("coin") else ""))
@@ -584,8 +585,8 @@ def _loan(i: dict, at: date) -> dict:
     start = _date(i.get("start"))
     if i.get("tenure_months") and start:
         s = loan_state(i["principal"], i["rate"], i["tenure_months"], start, at)
-        row.update(value=_r(s["outstanding"]), rule=f"₹{i['principal']:,.0f} at {i['rate']:g}% a year over {i['tenure_months']} months from "
-                                                     f"{start:%d %b %Y}, with the first EMI a month later")
+        row.update(value=_r(s["outstanding"]), rule=f"{_inr(i['principal'])} at {i['rate']:g}% a year over {i['tenure_months']} months from "
+                                                     f"{_day(start)}, with the first EMI a month later")
         row["facts"] = {k: (_r(v) if isinstance(v, float) else v) for k, v in s.items()} | {"fy": fy_label(at)}
     else:
         row.update(value=_r(i["principal"]), basis="as entered", rule="Amount owed as entered")
@@ -669,7 +670,9 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
         if stocks.get("us"):
             linked.append({"id": "stocks_us", "kind": "stocks_us", "label": "US stocks", "name": "My Holdings: US stocks", "class": "stocks_us",
                            "value": _r(stocks["us"]), "as_of": stocks.get("as_of"), "basis": "market price",
-                           "rule": "From My Holdings, at today's prices in rupees", "facts": {}, "linked": "/holdings"})
+                           "rule": "From My Holdings, at today's prices in rupees"
+                                   + (f", at ₹{stocks['usd_inr']:.2f} a dollar" if stocks.get("usd_inr") else ""),
+                           "facts": {}, "linked": "/holdings"})
     if mf and mf.get("value"):
         linked.append({"id": "mf", "kind": "mf", "label": "Mutual funds", "name": "Mutual funds", "class": "mf", "value": _r(mf["value"]),
                        "as_of": mf.get("as_of"), "basis": "market price", "rule": "From your mutual fund statement, at the latest NAV",

@@ -111,6 +111,21 @@ def rows_from(holdings: list[dict], positions: list[dict]) -> list[dict]:
     return rows
 
 
+def shared_token(box: dict) -> str | None:
+    """Today's token of the app's own data login, when the user's connected Zerodha account is that same account through
+    the same Kite app (the owner's). Zerodha keeps one live session per account and app: a second login for My Holdings
+    would cancel the data login's token, and the data login logs in again each morning, which ended the owner's holdings
+    login every day ("Today's login has ended · last refreshed yesterday") (R5O-031). That account reuses the data
+    login's token instead. None for anyone else."""
+    if not settings.KITE_USER_ID or api_key() != settings.KITE_API_KEY:
+        return None
+    if str(box.get("kite_user") or "").upper() != settings.KITE_USER_ID.strip().upper():
+        return None
+    from .. import db
+    tok, day = db.get_setting("kite_access_token"), db.get_setting("kite_token_day")
+    return tok if tok and token_valid(day) else None
+
+
 def refresh(uid: str) -> dict:
     """Re-read holdings and positions with today's token. Raises KiteConnectError(expired=True) when it needs a login."""
     box = state.section(uid, "kite")
@@ -118,8 +133,12 @@ def refresh(uid: str) -> dict:
     if not token:
         raise KiteConnectError("Connect Zerodha first.", expired=True)
     if not token_valid(box.get("day")):
-        state.update(uid, "kite", status="expired")
-        raise KiteConnectError("Today's Zerodha login has ended. Log in again.", expired=True)
+        shared = shared_token(box)
+        if not shared:
+            state.update(uid, "kite", status="expired")
+            raise KiteConnectError("Today's Zerodha login has ended. Log in again.", expired=True)
+        token = shared                   # the same account's data login, already logged in today
+        state.update(uid, "kite", token=vault.seal(token), day=today_ist(), shared=True)
     profile = sync.profile_for(uid)
     kite = factory(api_key())
     kite.set_access_token(token)
@@ -139,7 +158,7 @@ def refresh(uid: str) -> dict:
 
 def status(uid: str, profile: dict) -> dict:
     box = state.section(uid, "kite")
-    live = bool(box.get("token")) and token_valid(box.get("day"))
+    live = bool(box.get("token")) and (token_valid(box.get("day")) or bool(shared_token(box)))
     return {"available": allowed(profile), "configured": configured(), "connected": bool(box.get("token")), "live": live,
             "expired": bool(box.get("token")) and not live, "refreshed_at": box.get("refreshed_at"), "count": box.get("count"),
             "detail": box.get("detail"), "kite_user": box.get("kite_user")}
@@ -156,6 +175,43 @@ def disconnect(uid: str) -> None:
         except Exception:
             pass
     state.drop(uid, "kite")
+
+
+def link_shared(uid: str, profile: dict) -> dict | None:
+    """The owner connecting Zerodha when the data login is their own account through the same Kite app: link My Holdings
+    to the data login's token instead of a second Zerodha login, which would cancel it. None when that doesn't apply."""
+    if not admin.is_admin(profile) or not settings.KITE_USER_ID or api_key() != settings.KITE_API_KEY:
+        return None
+    if not shared_token({"kite_user": settings.KITE_USER_ID}):
+        return None
+    tok = shared_token({"kite_user": settings.KITE_USER_ID})
+    state.update(uid, "kite", token=vault.seal(tok), kite_user=settings.KITE_USER_ID.strip().upper()[:20], day=today_ist(),
+                 status="ok", detail=None, connected_at=state.now(), shared=True)
+    return refresh(uid)
+
+
+REFRESH_FROM = "09:20"          # after the data login (automatic from about 8:30 IST) and the market's open
+
+
+def run_daily(now: datetime | None = None) -> int:
+    """Once a trading morning, re-read My Holdings for an account that shares the data login's token (the owner's), so
+    its holdings follow Zerodha without a login each day. How many were read."""
+    now = (now or datetime.now(IST)).astimezone(IST)
+    if now.strftime("%H:%M") < REFRESH_FROM:
+        return 0
+    day, done = now.date().isoformat(), 0
+    for uid, rec in state.everyone():
+        box = rec.get("kite") or {}
+        last = box.get("refreshed_at")
+        read_today = bool(last) and datetime.fromisoformat(last).astimezone(IST).date().isoformat() == day
+        if not box.get("token") or read_today or not shared_token(box):
+            continue
+        try:
+            refresh(uid)
+            done += 1
+        except KiteConnectError as e:
+            print("zerodha daily holdings:", e.message)
+    return done
 
 
 def when_label(iso: str | None) -> str | None:

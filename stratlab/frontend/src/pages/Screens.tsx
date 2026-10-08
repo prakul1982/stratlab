@@ -30,11 +30,11 @@ const COLS: Col[] = [
   { id: "name", label: "Company", cell: (r) => r.name, text: true },
   { id: "sector", label: "Sector", cell: (r) => r.sector ?? "–", text: true },
   { id: "market_cap", label: "Market value", cell: (r, g) => cap(r.market_cap, g) },
-  { id: "price", label: "Last price", cell: (r, g) => (r.price == null ? "–" : price(r.price, g === "IN" ? "INR" : "USD")) },
+  { id: "price", label: "Last close", cell: (r, g) => (r.price == null ? "–" : price(r.price, g === "IN" ? "INR" : "USD")) },
   { id: "from_high", label: "vs 52-week high", cell: (r) => (r.from_high == null ? "–" : pct(r.from_high)) },
   { id: "sales_cagr_3y", label: "Revenue growth, 3y", cell: (r) => (r.sales_cagr_3y == null ? "–" : <Signed value={r.sales_cagr_3y}>{pct(r.sales_cagr_3y)}</Signed>) },
   { id: "net_margin", label: "Net margin", cell: (r) => num(r.net_margin, 1, "%") },
-  { id: "opm", label: "Operating margin", cell: (r) => num(r.opm, 1, "%") },
+  { id: "opm", label: "EBITDA margin", cell: (r) => num(r.opm, 1, "%") },
   { id: "debt_equity", label: "Debt to equity", cell: (r) => num(r.debt_equity, 2) },
   { id: "roe", label: "ROE", cell: (r) => num(r.roe, 1, "%") },
   { id: "roce", label: "ROCE", cell: (r) => num(r.roce, 1, "%") },
@@ -73,15 +73,15 @@ function Group({ title, help, children }: { title: string; help?: string; childr
 }
 
 /** Companies filtered by plain facts, in a table. No ranking, scores or picks: the user's own conditions, sorted
- * alphabetically or by the column they choose. */
+ * by market value (the largest first) or by the column they choose. */
 export function ScreensPage() {
   const { fail, notify } = useApp();
   const [region, setRegion] = useRegion();
   const [meta, setMeta] = useState<ScreenMeta | null>(null);
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [draft, setDraft] = useState<Draft>({});
-  const [sort, setSort] = useState("name");
-  const [desc, setDesc] = useState(false);
+  const [sort, setSort] = useState("market_cap");             // the largest companies first (R5O-012)
+  const [desc, setDesc] = useState(true);
   const [out, setOut] = useState<ScreenResult | null>(null);
   const [rows, setRows] = useState<ScreenRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +123,7 @@ export function ScreensPage() {
     });
   const setBound = (k: RangeId, side: "min" | "max", v: string) =>
     setDraft((d) => ({ ...d, [k]: { min: d[k]?.min ?? "", max: d[k]?.max ?? "", [side]: v } }));
-  const clear = () => { setFilters(NO_FILTERS); setDraft({}); setSort("name"); setDesc(false); setOpen(null); };
+  const clear = () => { setFilters(NO_FILTERS); setDraft({}); setSort("market_cap"); setDesc(true); setOpen(null); };
   const sortBy = (id: string) => { if (sort === id) setDesc((d) => !d); else { setSort(id); setDesc(false); } };
 
   const load = (s: SavedScreen) => {
@@ -161,7 +161,7 @@ export function ScreensPage() {
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)}
         info={out?.index_at ? <>List gathered as of {out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
-        lede="Pick the conditions; see every company that meets them. Nothing here ranks or scores companies: the list is alphabetical unless you sort by a column." />
+        lede="Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pickRegion} /></div>
 
       {saved && saved.items.length > 0 && (
@@ -184,7 +184,7 @@ export function ScreensPage() {
           <Card label="Filters">
             <CardHead title="Filters" actions={<>
               <button className="btn quiet sm inv-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>{showFilters ? "Hide filters" : "Show filters"}{n ? ` (${n})` : ""}</button>
-              <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "name" && !desc}>Clear</button></>} />
+              <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "market_cap" && desc}>Clear</button></>} />
             {!meta ? <Skeleton label="Loading the filters" lines={4} /> : showFilters && <>
               <Group title="Sector" help={help.sector}>
                 {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>

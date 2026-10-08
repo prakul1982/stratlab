@@ -72,7 +72,7 @@ export function analyticsDashboard(): string | null {
 }
 
 /** The browser asks not to be tracked (Do Not Track, or Global Privacy Control). */
-function doNotTrack(): boolean {
+export function doNotTrack(): boolean {
   if (typeof navigator === "undefined") return false;
   const n = navigator as Navigator & { msDoNotTrack?: string; globalPrivacyControl?: boolean };
   const w = typeof window === "undefined" ? undefined : (window as Window & { doNotTrack?: string });

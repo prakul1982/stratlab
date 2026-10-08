@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
-import { refName } from "../lib/rules";
+import { defaultExit, refName } from "../lib/rules";
 import type { Instrument, Strategy } from "../lib/types";
 import { Badge, Card, CardHead, Notice } from "./kit";
 import "../pages/trade/trade.css";
 
-export interface GapInfo { mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string }
+/** What the idea didn't say, and the answers given so far: kept with the notebook, so the questions are still there
+ * after the person leaves and comes back (R5O-010). */
+export interface GapInfo { mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string; answered?: Record<string, string> }
 
 interface Opt { label: string; explain: string; rec?: boolean; apply: (s: Strategy) => Strategy | "pick-market" | { instrument: Instrument } }
 interface Q { id: string; short: string; title: string; why: string; options: Opt[] }
@@ -14,7 +16,7 @@ interface Q { id: string; short: string; title: string; why: string; options: Op
 const plain = (r: Strategy["entry"][number]["l"]) => refName(r);
 
 function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults: Instrument[], currency: string): Q[] {
-  const m = new Set(gaps.mentioned), qs: Q[] = [], first = s.entry[0], r = s.risk;
+  const m = new Set(gaps.mentioned), qs: Q[] = [], r = s.risk;
   if (!hasInstrument) {
     qs.push({ id: "inst", short: "Instrument", title: "What do you want to test it on?",
       why: gaps.instName ? `We couldn't find "${gaps.instName}". Pick one, or search every market.` : "The same rules can behave very differently on different markets.",
@@ -37,15 +39,19 @@ function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults:
     }
   });
   if (!m.has("exit")) {
+    // the default sell rule is already in the rules (withDefaultExit), so leaving this question changes nothing
     const opts: Opt[] = [];
-    if (first && first.r.t !== "num" && (first.op === "gt" || first.op === "xa"))
-      opts.push({ label: `Sell when ${plain(first.l)} drops below ${plain(first.r)}`, rec: true, explain: "Exit when the entry condition no longer holds.",
-        apply: (st) => ({ ...st, exit: [{ l: { ...first.l }, op: "xb", r: { ...first.r } }] }) });
-    if (first && first.l.t === "rsi" && (first.op === "lt" || first.op === "xb"))
-      opts.push({ label: "Sell when RSI rises back above 55", rec: true, explain: "Exit once RSI is back above 55.",
-        apply: (st) => ({ ...st, exit: [{ l: { ...first.l }, op: "xa", r: { t: "num", v: 55 } }] }) });
-    opts.push({ label: "Only my stop loss and target", rec: !opts.length, explain: "Exit only at a fixed loss or gain.", apply: (st) => ({ ...st, exit: [] }) });
-    qs.push({ id: "exit", short: "Sell rule", title: "When should it sell?", why: "Your idea says when to buy but not when to sell.", options: opts });
+    const dflt = defaultExit(s);
+    if (dflt.length) {
+      const d = dflt[0];
+      opts.push({ label: d.r.t === "num" ? `Sell when ${plain(d.l)} rises back above ${d.r.v}` : `Sell when ${plain(d.l)} drops below ${plain(d.r)}`, rec: true,
+        explain: "Exit when the entry condition no longer holds.", apply: (st) => ({ ...st, exit: defaultExit(st) }) });
+    }
+    opts.push({ label: r.tgt > 0 ? "Only my stop loss and target" : "No sell rule, only my stop loss", rec: !opts.length,
+      explain: r.tgt > 0 ? "Exit only at a fixed loss or gain." : "A trade closes only if the stop loss is hit, or at the end of the test.", apply: (st) => ({ ...st, exit: [] }) });
+    qs.push({ id: "exit", short: "Sell rule", title: "When should it sell?",
+      why: dflt.length ? "Your idea says when to buy but not when to sell. Until you choose, the default below is the sell rule." : "Your idea says when to buy but not when to sell, and no sell rule is set.",
+      options: opts });
   }
   if (!m.has("tf")) {
     qs.push({ id: "tf", short: "Candles", title: "How long should each candle be?", why: "Your rules are checked once per candle.",
@@ -67,10 +73,12 @@ function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults:
   }
   if (!m.has("tgt")) {
     const sl = r.sl || 2, hasExit = s.exit.length > 0;
+    // never a target the person didn't ask for: "No target" is the default, and it is what the rules hold (R5O-010)
     qs.push({ id: "tgt", short: "Target", title: "Take profit at a fixed gain?", why: hasExit ? "Your sell rule will close trades; a target also closes a trade at a fixed gain." : "Without a sell rule, a target is what closes a trade at a gain.",
       options: [
-        ...(hasExit ? [{ label: "No target, let the sell rule decide", rec: true, explain: "Trades run until the sell rule fires.", apply: (st: Strategy) => ({ ...st, risk: { ...st.risk, tgt: 0 } }) }] : []),
-        { label: `${+(sl * 2).toFixed(2)}% (2× the stop)`, rec: !hasExit, explain: "A gain of twice the stop.", apply: (st) => ({ ...st, risk: { ...st.risk, tgt: +(sl * 2).toFixed(2) } }) },
+        { label: hasExit ? "No target, let the sell rule decide" : "No target", rec: true, explain: hasExit ? "Trades run until the sell rule fires." : "Trades close at the stop loss or at the end of the test.",
+          apply: (st: Strategy) => ({ ...st, risk: { ...st.risk, tgt: 0 } }) },
+        { label: `${+(sl * 2).toFixed(2)}% (2× the stop)`, explain: "A gain of twice the stop.", apply: (st) => ({ ...st, risk: { ...st.risk, tgt: +(sl * 2).toFixed(2) } }) },
         { label: `${+(sl * 3).toFixed(2)}% (3× the stop)`, explain: "A bigger gain; fewer trades reach it.", apply: (st) => ({ ...st, risk: { ...st.risk, tgt: +(sl * 3).toFixed(2) } }) },
       ] });
   }
@@ -83,11 +91,19 @@ function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults:
   return qs;
 }
 
-export function GapsCard({ s, gaps, hasInstrument, currency, onStrategy, onInstrument, onPickMarket, onDone }: {
+export function GapsCard({ s, gaps, hasInstrument, currency, onStrategy, onInstrument, onPickMarket, onDone, onAnswered }: {
   s: Strategy; gaps: GapInfo; hasInstrument: boolean; currency: string;
   onStrategy: (s: Strategy) => void; onInstrument: (i: Instrument) => void; onPickMarket: () => void; onDone: () => void;
+  /** Called with every answer so far, to keep them with the notebook. */
+  onAnswered?: (answered: Record<string, string>) => void;
 }) {
-  const [answered, setAnswered] = useState<Record<string, string>>({});
+  const [answered, setAnsweredState] = useState<Record<string, string>>(gaps.answered ?? {});
+  const latest = useRef(answered);         // several answers in one click ("Use the default answers") all count
+  const setAnswered = (f: (a: Record<string, string>) => Record<string, string>) => {
+    latest.current = f(latest.current);
+    setAnsweredState(latest.current);
+    onAnswered?.(latest.current);
+  };
   const [defaults, setDefaults] = useState<Instrument[]>([]);
   useEffect(() => { api<Instrument[]>("/instruments/defaults").then(setDefaults).catch(() => {}); }, []);
   const all = questions(s, gaps, hasInstrument, defaults, currency);

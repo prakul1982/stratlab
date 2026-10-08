@@ -73,7 +73,7 @@ export function bigMoney(v: number | null | undefined, currency: string): string
   const a = Math.abs(v);
   const step = shortStep(a, [[1e12, "T", 2], [1e9, "B", 1], [1e6, "M", 0]]);      // $999.96B reads $1.00T, not $1000.0B
   if (step) return `${v < 0 ? "-" : ""}${s}${(a / step[0]).toFixed(step[2])}${step[1]}`;
-  return `${s}${Math.round(v).toLocaleString()}`;
+  return `${s}${Math.round(v).toLocaleString("en-US")}`;            // a dollar figure is grouped the international way, whatever the reader's locale
 }
 
 export function pct(v: number | null | undefined, dp = 1): string {
@@ -186,6 +186,16 @@ export function fmtDateTime(v: DateInput, o: DateOpts & { seconds?: boolean } = 
 export function when(iso: string | null | undefined, tz: string, intraday: boolean, zone = false): string {
   if (!iso) return "–";
   return intraday ? fmtDateTime(iso, { tz, year: false, zone }) : fmtDate(iso, { tz });
+}
+
+/** When a quote's price was traded, in its market's zone: "15:01 IST" today, "7 Oct, 15:29 IST" on an earlier day, and
+ * "7 Oct" for a daily candle (a plain calendar day). The time beside each price, so a stale one is seen as stale. */
+export function quoteAt(iso: string | null | undefined, tz: string = IST, now: Date = new Date()): string {
+  if (!iso) return "";
+  if (CALENDAR_DAY.test(iso)) return fmtDate(iso, { year: false });
+  const d = toDate(iso);
+  if (!d) return "";
+  return dayIn(d, tz) === dayIn(now, tz) ? fmtTime(d, { tz, zone: true }) : fmtDateTime(d, { tz, year: false, zone: true });
 }
 
 /** A typed time of day in the 24-hour form the app writes: "9:30", "0930", "09.30" and "09:30" all give "09:30"; null
@@ -352,10 +362,19 @@ export function signCls(v: number | null | undefined, text?: string): "k-up" | "
   return `k-${t}`;
 }
 
-/** A plain number with its sign, in Indian grouping: +1,234 / −5. */
-export function signed(v: number | null | undefined, dp = 0): string {
+/** A plain number with its sign, in Indian grouping: +1,234 / −5. `market` "US" (or any market but India) groups
+ * the international way, +208,772, as a US company's figures are written (DESIGN.md "Numbers"). */
+export function signed(v: number | null | undefined, dp = 0, market?: string | null): string {
   if (!ok(v)) return "–";
-  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${nf(Math.abs(v), dp)}`;
+  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${grouped(Math.abs(v), dp, market)}`;
+}
+
+/** A plain count or amount without a currency sign, grouped as its market writes it: 2,08,772 in India, 208,772 in the
+ * US. With no market, India's. */
+export function grouped(v: number | null | undefined, dp = 0, market?: string | null): string {
+  if (!ok(v)) return "–";
+  const s = Math.abs(v).toLocaleString(market && market !== "IN" ? "en-US" : "en-IN", { maximumFractionDigits: dp, minimumFractionDigits: 0 });
+  return `${v < 0 && /[1-9]/.test(s) ? "−" : ""}${s}`;
 }
 
 /** The first name to greet by, from what the sign-in gave the profile (a first or given name, else the first word of the

@@ -4,6 +4,21 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 8 October 2026: Admin "View as" a plan
+
+- **View as Free / Basic / Pro / Off (site owner only):** the app reads as that plan's user would see it, with its locks, upgrade prompts and monthly limits, on the live site. Choose it in the account menu ("View as:") or on Admin → Overview; a banner on every page says "Viewing as Free. Your real plan is unchanged." with a Turn off button, and the choice stays on this device across reloads until turned off.
+- **How it works:** the page sends the choice in the `X-View-As` header; `auth.current_profile` honours it for a Google-proved admin address only (it does nothing for anyone else), and `plans.access_plan` returns that plan first, so the launch offer and free Basic time are bypassed too. `/me` shows the viewed plan, its limits and billing as that plan; the stored plan, `_paid_plan`, billing and Admin access are never touched, and subscribing, verifying and cancelling are refused (`view_as_on`) while it is on. `PUT /admin/view-as` checks a choice (403 for anyone else).
+
+### 8 October 2026: a visitor's review of the live site (round 5)
+
+- **Never a blank page:** `public/boot.js` reloads once when a script or a page's code fails to download, then shows "Couldn't load StratLab. Reload"; the page has a start-up fallback and a `<noscript>` message in `index.html`; `config.js` is read again once if it failed, is served as a plain static file with a 5-minute cache, and carries no notes.
+- **Two halves, smaller downloads:** a visitor with no saved sign-in loads only the public half (`entry.tsx`, `visitor/`): the landing page is about 340 KB of JavaScript (was 713) and a policy page about 300 KB (was 695), with the sign-in library loaded only when someone signs in.
+- **Plans:** amounts wait for the visitor's currency (no ₹ flash, no layout jump); a card whose currency is charged in rupees says "Charged as ₹699 / month incl. GST"; one pricing look whether or not the prices could be read; the yearly choice says "about 2 months free" and each yearly card its exact saving.
+- **Public library:** StratLab's own strategies, with the rules and the verdict each earned, can be read signed out (`/library`, `/library/<id>`, backed by read-only `/public/library` that exposes only StratLab-published, visible entries); the landing page links real verdicts.
+- **SEO:** a title, description, canonical address and robots tag for every public page (also written into each page's own HTML at build time), noindex for sign-in gates, structured data (Organization, WebSite, FAQPage) on the home page, `lastmod` and the public pages in the sitemaps, no empty company pages in them, a real 404 for addresses nothing is at, and `/faq`, `/login`, `/signup`, `/about`, `/help` that open the right thing.
+- **Accessibility and phone:** hero tabs follow the tab pattern, a skip link, `<main>` on the policies, the phone menu closes on Esc and outside taps and is named by its visible word, 40px targets, no text under 12px on the landing page; the hero no longer changes height between examples and shows its demo on a phone.
+- **Copy and privacy:** one tagline, a plain invite-reward answer in the backend's own numbers, options described as paper trade only, sample labels, "Continue with Google" on every button that signs in, a rule template instead of an idea to test on a named stock; the Privacy page lists the browser storage set before sign-in, says when analytics are not collected (Do Not Track, Global Privacy Control) and names all thirteen AI providers.
+
 ### 7 October 2026: review-driven fixes, emails, market time zones, accessibility and pricing wording
 
 - **Emails:** every link in every email resolves to a page that exists (a test walks them all); "Read the full brief" opens `/news?tab=…&issue=…` and "Manage emails" opens that email's own Settings card. Dates read as in the app ("7 Oct 2026"), amounts use ₹ and $, subjects have no "StratLab:" prefix, and the receipt shows the taxable value, CGST/SGST or IGST, SAC, GSTIN and place of supply.

@@ -72,11 +72,12 @@ function IndexChanges({ rows }: { rows: IndexChange[] }) {
   return (
     <section className="k-stack" aria-labelledby="ev-idx-h">
       <h2 id="ev-idx-h" className="k-sub">Index changes</h2>
-      {shown.slice(0, 4).map((c) => (
+      {shown.slice(0, 4).map((c, n) => (
         <Card key={c.id} testId="ev-index-change">
           <CardHead level={3} title={c.effective ? `From ${evDay(c.effective, true)}` : c.title}
             actions={<span className="k-note">Announced {asOf(c.announced)} · <a className="link" href={c.url} target="_blank" rel="noopener noreferrer">Press release ↗</a></span>} />
-          <DataTable label={`Index changes ${c.effective ? `from ${evDay(c.effective, true)}` : c.title}`} columns={cols} rows={c.sections} rowKey={(s) => s.index} />
+          {/* each table names its own announcement: two changes on one date gave two landmarks with one name (R5O-030) */}
+          <DataTable label={`Index changes ${c.effective ? `from ${evDay(c.effective, true)}` : c.title}, announcement ${n + 1} of ${Math.min(4, shown.length)}`} columns={cols} rows={c.sections} rowKey={(s) => s.index} />
         </Card>
       ))}
       <p className="k-note">The provider's list of stocks going in and out of its main indices. No estimate of any flows.</p>

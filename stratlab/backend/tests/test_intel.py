@@ -52,9 +52,13 @@ def test_screener_parser_reads_every_section():
     assert p["growth"]["sales"]["5 Years"] == "10%" and p["growth"]["price"]["1 Year"] == "-7%"
     assert len(p["pros"]) == 2 and p["cons"][0].startswith("Stock is trading")
     s = scr.summary(p)
-    assert s["pe"] == 27.4 and s["high52"] == 1609 and s["low52"] == 1115
+    # P/E is the price over the page's own trailing-twelve-months EPS (1,408 / 61.43), not the source's "Stock P/E" of
+    # 27.4, which doesn't reconcile with the TTM figures on the same page (R5V-008)
+    assert s["pe"] == 22.9 and s["high52"] == 1609 and s["low52"] == 1115
     assert s["pb"] == pytest.approx(1408 / 630)
-    assert s["net_margin"] == pytest.approx(94470 / 976541 * 100)
+    # the last reported year's (FY25), as the label says and the year table shows; this expected the TTM column's
+    # 94,470 / 9,76,541 (R5O-011: TCS showed the TTM 18.1% beside FY26 figures that give 18.5%)
+    assert s["net_margin"] == pytest.approx(81309 / 964693 * 100)
     assert s["debt_equity"] == pytest.approx(369575 / (829668 + 13532))
     # "Latest YoY" is the last full year against the one before (Mar 2025 vs Mar 2024), never TTM against the last year
     assert s["sales_yoy"] == pytest.approx((964693 / 901064 - 1) * 100)
@@ -125,7 +129,8 @@ def test_us_company_profile(research):
     assert c["range52"] == {"low": 86.6, "high": 195.6}
     assert [p["y"] for p in c["trend"]["revenue"]] == ["FY22", "FY23", "FY24", "FY25"]
     assert c["earnings"][0]["period"] == "2024-10-31" and c["earnings"][-1]["surprise_pct"] == 3.9
-    assert c["peers"] == ["AMD", "AVGO", "INTC"] and c["next_earnings"]["date"] == "2099-11-19"
+    # the largest US companies in its sector first, then the source's narrow-industry peers (R5O-020)
+    assert c["peers"] == ["AAPL", "MSFT", "AVGO", "AMD", "INTC"] and c["next_earnings"]["date"] == "2099-11-19"
     assert c["analysts"]["buy"] == 38 and c["insider"]["net"] == -150000
     assert c["news"][0]["headline"].startswith("Nvidia unveils")
     assert all(s["ok"] for s in c["sources"])
@@ -141,10 +146,10 @@ def test_india_company_profile_without_kite(research):
     assert c["name"] == "Reliance Industries Ltd" and c["currency"] == "INR"
     assert c["quote"]["price"] > 0                      # from Yahoo, since Kite is offline here
     groups = {g["title"]: {i["label"]: i["value"] for i in g["items"]} for g in c["metrics"]}
-    # the fundamentals source's P/E (27.4 at its own price) is re-priced at the live price shown at the top of the page
+    # P/E (the page's price over its trailing EPS: 1,408 / 61.43 = 22.9) is re-priced at the live price shown at the top
     scr_price = 1408.0                                  # "Current Price" in the fixture
     live = c["quote"]["price"]
-    assert groups["Valuation"]["P/E"] == pytest.approx(27.4 * live / scr_price, rel=0.01)
+    assert groups["Valuation"]["P/E"] == pytest.approx(22.9 * live / scr_price, rel=0.01)
     assert groups["Valuation"]["P/B"] == pytest.approx(live / groups["Valuation"]["Book value"])
     # compounded over the last five reported years, as the deep dive and the AI read's facts work it out (the source's
     # own table says 10%, counted to the trailing twelve months)
@@ -154,7 +159,9 @@ def test_india_company_profile_without_kite(research):
     assert c["quarters"]["opm"][-1] == 18
     holders = {r["label"]: r for r in c["shareholding"]["rows"]}
     assert holders["Promoters"]["value"] == 50.07 and holders["FIIs"]["change"] == pytest.approx(19.19 - 21.75)
-    assert c["pros"] and c["cons"] and c["about"]["wiki"]["title"] == "Reliance Industries"
+    # R5O-011: the source's "strengths and concerns" judge ("poor sales growth") and recompute at their own price; this
+    # expected them on the page
+    assert c["pros"] == [] and c["cons"] == [] and c["about"]["wiki"]["title"] == "Reliance Industries"
     assert c["news"][0]["source"] == "Economic Times"
     assert c["links"][0]["url"].endswith("/company/RELIANCE/consolidated/")
 

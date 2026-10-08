@@ -4,7 +4,7 @@ import time
 from fastapi import Header, HTTPException
 
 from . import db
-from .plans import access_plan, effective_plan
+from .plans import access_plan, effective_plan, view_as_of
 
 _cache: dict[str, tuple[float, str, str, bool, str | None]] = {}     # token -> (until, id, email, verified, sign-in method)
 _rejected: dict[str, float] = {}          # tokens the sign-in service just refused, until when
@@ -25,7 +25,7 @@ def _unreachable(e: Exception) -> bool:
     return isinstance(e, (httpx.TransportError, ConnectionError, TimeoutError))
 
 
-def current_profile(authorization: str | None = Header(None)) -> dict:
+def current_profile(authorization: str | None = Header(None), x_view_as: str | None = Header(None)) -> dict:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, {"code": "login_required", "message": "Sign in to continue."})
     token = authorization.split(" ", 1)[1].strip()
@@ -63,14 +63,19 @@ def current_profile(authorization: str | None = Header(None)) -> dict:
                 _cache.clear()
             _cache[token] = (now + 60, uid, email, verified, method)
     profile = db.cached_profile(uid, email)
-    profile["_paid_plan"] = effective_plan(profile)
-    profile["_plan"] = access_plan(profile)       # Pro for everyone during the launch offer
+    profile["_paid_plan"] = effective_plan(profile)     # what they pay for: billing reads this, never the "View as" plan
     # the profile keeps the address from sign-up; trust it only while it's still the one Google just proved
     same = (profile.get("email") or "").strip().lower() == (email or "").strip().lower()
     profile["_email_verified"] = verified and same
     profile["_signed_in_with"] = method if isinstance(method, str) else None
     # the site owner uses every feature (what they pay for is unchanged); only a Google-proved admin address counts
     from . import admin
-    if admin.is_admin(profile):
+    owner = admin.is_admin(profile)
+    # "View as": the owner, and nobody else, can see the app as Free, Basic or Pro (the X-View-As header). It is ignored
+    # for every other account, so it can't be used to look at paid features; access_plan honours it first.
+    if owner and (seen := view_as_of(x_view_as)):
+        profile["_view_as"] = seen
+    profile["_plan"] = access_plan(profile)       # Pro for everyone during the launch offer
+    if owner and not profile.get("_view_as"):
         profile["_plan"] = "pro"
     return profile

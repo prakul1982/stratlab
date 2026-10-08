@@ -8,6 +8,7 @@ import json
 import time
 
 from ..ai_providers import AIError, complete, extract_json
+from . import grounding
 from .net import TTLCache
 from ..kite_service import ist_date
 
@@ -72,9 +73,12 @@ def company_facts(c: dict) -> dict:
              "metrics": metrics, "margins": c.get("margins"),
              "annual_trend": c.get("trend"), "earnings_surprises": c.get("earnings"),
              "shareholding": c.get("shareholding"),
-             "screener_pros": c.get("pros"), "screener_cons": c.get("cons"),
              "about": ((c.get("about") or {}).get("wiki") or {}).get("extract") or (c.get("about") or {}).get("profile"),
              "recent_headlines": [n["headline"] for n in (c.get("news") or [])[:6]], "today": ist_date().isoformat()}
+    if c["region"] == "IN":
+        fq, fy = grounding.fiscal_quarter(ist_date(), "IN")
+        facts["fiscal_now"] = (f"India's fiscal year runs April to March. The last quarter that ended is Q{fq} FY{fy}; "
+                               f"results due now are for Q{fq} FY{fy}.")
     return {k: v for k, v in facts.items() if v not in (None, [], {}, "")}
 
 
@@ -90,18 +94,18 @@ Given FACTS about one listed company, return ONLY this JSON:
 {{"summary": "2-3 sentences: what the business is and the single most important thing about it right now",
  "valuation_note": "one sentence stating its valuation in numbers against its own history (e.g. P/E now vs its usual range), no judgement",
  "bull": ["3-4 specific strengths, as facts"], "bear": ["3-4 specific risks, as facts"],
- "segments": [{{"label": "business segment", "share": 0}}],
  "position": "2 sentences on where it sits in its value chain and who it depends on",
- "watch": ["2-3 upcoming things that could move the stock"],
- "ideas": [{{"title": "3-6 words", "text": "one trading rule in plain English", "why": "one sentence"}}]}}
+ "watch": ["2-3 scheduled things ahead (the next results, a meeting, an ex-date), stated as facts with no view on the price"],
+ "ideas": [{{"title": "3-6 words", "text": "one rule to test, in plain English", "why": "one sentence"}}]}}
 No scores, ratings or grades of any kind: no 0-100 numbers, letter grades or stars, and no "strong", "weak", "good",
 "poor", "healthy" or "excellent" labels on the business, its growth, its price trend or its balance sheet. State the
 numbers instead, e.g. "operating margin has been 18-22% for five years" or "debt is 0.4 times equity".
-Segment shares are estimates that add up to about 100.
 "ideas" are exactly 3 trading ideas a trader could backtest on THIS stock, suited to how it behaves
 (trend, mean reversion, breakout...). Each "text" must use only {PRO if pro else BASICS}, a timeframe
 (daily candles unless intraday clearly suits it) and a stop loss, e.g.
-"Buy {c['symbol']} when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below, 5% stop loss".
+"Enter long when the 20-day EMA crosses above the 50-day EMA, exit when it crosses back below, 5% stop loss". Write each as a rule
+to test ("Enter long when …" or "Enter short when …"), never as an instruction to buy or sell the stock. Use only numbers
+that are in the FACTS; label Indian fiscal quarters as the FACTS' fiscal_now does.
 {RULES}"""
     facts = company_facts(c)
     if key_facts:
@@ -112,16 +116,19 @@ Segment shares are estimates that add up to about 100.
         if isinstance(i, dict) and str(i.get("text", "")).strip():
             ideas.append({"title": str(i.get("title") or "Idea")[:60], "text": str(i["text"])[:400],
                           "why": str(i.get("why") or "")[:300]})
-    segs = []
-    for s in r.get("segments") or []:
-        if isinstance(s, dict) and s.get("label") and _share(s.get("share")) is not None:
-            segs.append({"label": str(s["label"])[:50], "share": _share(s["share"])})
     if not str(r.get("summary") or "").strip() and not r.get("bull") and not r.get("bear"):
         raise AIError("The AI's reply was empty. Press Refresh to try again.")     # never cache a blank read
-    return {"summary": str(r.get("summary") or "")[:700], "facts": key_facts or [],
+    read = {"summary": str(r.get("summary") or "")[:700], "facts": key_facts or [],
             "valuation_note": str(r.get("valuation_note") or "")[:300],
-            "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": segs[:8],
+            # no revenue split: the model's guess isn't sourced (AAPL read "iPhone 100%, Services 0%, Mac 0%")
+            "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": [],
             "position": str(r.get("position") or "")[:500], "watch": _clip(r.get("watch"), 4), "ideas": ideas[:3]}
+    # checked in code against the facts it was given: no advice or forecast, no number that isn't in them, the
+    # right fiscal-quarter labels, ideas worded as rules to test (R5O-027)
+    out = grounding.ground_company(read, facts, c.get("region") or "IN", ist_date())
+    if not out["summary"] and not out["bull"] and not out["bear"]:
+        raise AIError("The AI's read didn't hold up against the company's numbers. Press Refresh to try again.")
+    return out
 
 
 def clean_company(read: dict) -> dict:
@@ -129,6 +136,7 @@ def clean_company(read: dict) -> dict:
     still carry them), and an empty list of fact rows when it has none."""
     out = {k: v for k, v in read.items() if k not in SCORE_FIELDS}
     out["facts"] = out.get("facts") if isinstance(out.get("facts"), list) else []
+    out["segments"] = []                        # a read stored with the model's unsourced revenue split shows none
     return out
 
 
@@ -180,7 +188,9 @@ def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], a
     where = "Indian market only (NSE/BSE, Nifty/Sensex, rupees)." if region == "IN" else "US market (S&P 500, Nasdaq, Dow)."
     system = f"""You are a market reporter writing today's market read{' focused on ' + focus if focus else ''}. {where}
 Base everything ONLY on the live index levels and headlines given. Don't pull events or dates from memory.
-Never say the market is at record highs unless an index's from_high_pct is above -0.5.
+Never say the market is at record highs unless an index's from_high_pct is above -0.5. Describe where an index sits in its
+52-week range only with from_low_pct and from_high_pct (above its low when from_low_pct is positive). Quote only numbers
+from the FACTS. Mention a central bank, economic data, money flows or a sector only when a headline given names it.
 Return ONLY this JSON:
 {{"tone": "3-4 sentences on how the market moved today and what the headlines say is driving it, citing the live levels",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
@@ -189,7 +199,7 @@ Return ONLY this JSON:
 "hot" are 4 companies named in today's headlines, with what the news says (not why to buy them). 4 flows, 4 themes.
 No outlook: describe what happened, not what will happen. Tickers are {'NSE symbols' if region == 'IN' else 'US tickers'}.
 {RULES}"""
-    facts = {"today": ist_date().isoformat(), "indices": indices,
+    facts = {"today": ist_date().isoformat(), "indices": grounding.market_facts(indices),
              "headlines": [f"[{(h.get('at') or '')[:10]}] {h['headline']}" for h in headlines[:14]]}
     r = _ask(system, facts, ai, 2500)
     if not isinstance(r, dict) or not str(r.get("tone") or "").strip():     # never cache a read with nothing in it
@@ -200,8 +210,10 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     flows = rows(r.get("flows"), ("title", "detail", "direction"))
     for f in flows:
         f["direction"] = f["direction"].upper() if f["direction"].upper() in ("INFLOW", "OUTFLOW", "ROTATION") else "ROTATION"
-    return {"tone": str(r.get("tone") or "")[:900], "hot": rows(r.get("hot"), ("name", "ticker", "why")),
+    read = {"tone": str(r.get("tone") or "")[:900], "hot": rows(r.get("hot"), ("name", "ticker", "why")),
             "flows": flows, "themes": rows(r.get("themes"), ("theme", "detail", "example"))}
+    # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)
+    return grounding.ground_pulse(read, indices, headlines)
 
 
 def compare(a: dict, b: dict, ai) -> dict:

@@ -10,6 +10,8 @@ export interface EtfGap {
   symbol: string; name: string; underlying: string | null; fund: Fund; fund_label: string;
   price: number; price_at: string | null; inav: number | null; inav_gap: number | null;
   nav: number | null; nav_date: string | null; nav_gap: number | null;
+  /** the price set against the NAV and its day: that day's close (a gap is always of one day), or none yet */
+  nav_price?: number | null; nav_price_day?: string | null; nav_waiting?: boolean;
   gap: number | null; basis: "iNAV" | "NAV" | null; text: string | null; days?: GapSummary | null;
 }
 export interface EtfGaps {

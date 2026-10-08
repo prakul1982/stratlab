@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "./api";
+import { publicGet } from "./http";
 import type { Offer } from "./types";
 
 export type CurrencyRow = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number;
@@ -26,11 +26,16 @@ function country(): string | null {
 export function usePricing() {
   const [p, setP] = useState<Pricing | null>(null);
   const [code, setCode] = useState<string>(() => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } });
-  useEffect(() => { api<Pricing>("/pricing").then(setP).catch(() => setP(null)); }, []);
+  const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
+  useEffect(() => {
+    let live = true;
+    publicGet<Pricing>("/pricing").then((r) => { if (live) { setP(r); setStatus("ready"); } }).catch(() => { if (live) { setP(null); setStatus("failed"); } });
+    return () => { live = false; };
+  }, []);
   const auto = p ? p.countries[country() ?? ""] ?? (country() ? "USD" : "INR") : "INR";
   const chosen = p && code && p.currencies[code] ? code : auto;
   const pick = (c: string) => { setCode(c); try { localStorage.setItem(KEY, c); } catch { /* private window */ } };
-  return { pricing: p, currency: chosen, pick };
+  return { pricing: p, currency: chosen, pick, status };
 }
 
 export function money(row: CurrencyRow | undefined, v: number, code: string): string {

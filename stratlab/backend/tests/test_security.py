@@ -10,7 +10,9 @@ from tests import world as W
 PUBLIC = {"/health", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/{token}.png", "/v/{token}", "/c/{card}.png", "/c/{card}", "/billing/webhook",
           "/admin/kite/callback", "/unsubscribe", "/email/confirm",
           "/stocks/{region}/{symbol}", "/robots.txt", "/sitemap.xml", "/sitemaps/{name}.xml",   # public company pages, for search engines
+          "/stocks", "/stocks/", "/stocks/{region}", "/stocks/{region}/", "/stocks/{region}/{symbol}/",   # their search, and one address each
           "/public/company/{region}/{symbol}",      # a company's name and public page, for "Sign in to see …"
+          "/public/library", "/public/library/{eid}",   # StratLab's own library strategies, read only, for visitors
           "/public/business"}                       # the seller's name, address and email, for the policy pages
 
 

@@ -20,6 +20,11 @@ export interface CompanyHolders {
   available?: boolean;
 }
 
+/** Whether a pattern's date is a quarter's last day; one filed for an allotment or a listing is dated that day. */
+export function isQuarterEnd(iso: string | null | undefined) {
+  return !!iso && ["03-31", "06-30", "09-30", "12-31"].includes(iso.slice(5, 10));
+}
+
 export function quarterEnd(iso: string | null | undefined) {
   if (!iso) return "–";
   const s = fmtDate(iso);
@@ -69,7 +74,7 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
   const right = v.search ? <Link className="btn quiet sm" to="/invest/holders">Search a holder</Link> : null;
   return wrap(
     <div className="k-stack named-holders">
-      <span className="k-small">Quarter to <b>{quarterEnd(v.quarter)}</b>{v.prev_quarter ? <> · changes since {quarterEnd(v.prev_quarter)}</> : null}
+      <span className="k-small">{isQuarterEnd(v.quarter) ? "Quarter to" : "As of"} <b>{quarterEnd(v.quarter)}</b>{v.prev_quarter ? <> · changes since {quarterEnd(v.prev_quarter)}</> : null}
         {v.url && <> · <a className="link" href={safeHref(v.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a></>}</span>
       {v.holders.length === 0 ? <p className="k-small k-muted">The filing names no holder above 1%.</p> : (
         <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} sticky={list.length > 14} rowAttrs={(h) => ({ "data-holder": h.name })}

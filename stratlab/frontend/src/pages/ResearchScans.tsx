@@ -22,7 +22,7 @@ interface ScanRow {
 interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number> }
 interface PresetRow { symbol: string; name: string | null; currency: string | null; price: number; chg: number | null; as_of: string; days_ago: number; day: string; detail: string }
 interface PresetOut {
-  kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; as_of: string | null;
+  kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; asked?: number; as_of: string | null;
   updated_at?: string | null; stored: boolean; missing: string[]; problems: string[];
 }
 interface ScanInfo { id: string; name: string; text: string; rules: string[]; within: number }
@@ -114,7 +114,7 @@ export function ScanPage() {
           {scan.text && (
             <div className="k-field wide" data-testid="scan-rule">
               <p className="k-small">{scan.text}</p>
-              {scan.rules.length > 0 && <p className="k-note">Rules: {scan.rules.join("; ")}. Counts as a match when it held on any of the last {scan.within} candle{scan.within === 1 ? "" : "s"}.</p>}
+              {scan.rules.length > 0 && <p className="k-note">Rules: {scan.rules.join("; ")}. {scan.within === 1 ? "Counts as a match when it held on the latest candle." : `Counts as a match when it held on any of the last ${scan.within} candles.`}</p>}
             </div>
           )}
           <Field label="Group to scan">
@@ -140,7 +140,8 @@ export function ScanPage() {
             : "Read now from each stock's daily candles."} />
           <StatRow>
             <Stat label="Match the rule" value={String(preset.matches)} note={preset.as_of ? `as of ${asOf(preset.as_of, { tz: marketTz(region) })}` : undefined} />
-            <Stat label="Stocks checked" value={String(preset.checked)} note={preset.stored ? "read after the close" : "read just now"} />
+            <Stat label="Stocks checked" value={preset.asked && preset.asked > preset.checked ? `${preset.checked} of ${preset.asked}` : String(preset.checked)}
+              note={`${preset.stored ? "read after the close" : "read just now"}${preset.asked && preset.asked > preset.checked ? ` · ${preset.asked - preset.checked} skipped, named below` : ""}`} />
           </StatRow>
           <DataTable label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
             columns={[
@@ -338,7 +339,7 @@ export function RotationPage() {
 interface FilingsOverview {
   rows: { symbol: string; summary: FilingSummary; flags: FilingItem[] }[]; problems: string[]; days: number; alerts: boolean; send_at: string;
 }
-interface AllItem { id: string; symbol: string; company: string | null; at: string; category: string; label: string; severity: "red" | "amber" | "info"; subject: string; url: string | null }
+interface AllItem { id: string; symbol: string; company: string | null; at: string; category: string; label: string; severity: "red" | "amber" | "info"; subject: string; url: string | null; copies?: number }
 interface FlagType { id: string; label: string; severity: "red" | "amber"; count: number }
 interface AllOut {
   region: Region; scope: "all" | "mine"; items: AllItem[]; total: number; page: number; pages: number; size: number; from: string; to: string; flag: string;
@@ -482,7 +483,7 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
                     {r.company && r.company !== r.symbol && <span className="k-sub-line">{r.company}</span>}</>) },
                 { key: "f", header: "Flag", wrap: true, cell: (r) => <Badge tone={r.severity === "red" ? "warn" : "plain"} dot={false}>{r.severity === "red" ? "⚑ " : ""}{r.label}</Badge> },
                 { key: "s", header: "The filing", wrap: true, cell: (r) => (
-                  <>{r.subject}{r.url && <span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span>}</>) },
+                  <>{r.subject}{(r.copies ?? 1) > 1 && <span className="k-note"> · listed {r.copies} times by the exchange</span>}{r.url && <span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span>}</>) },
               ]} />
             <Pager page={data.page} pages={data.pages} total={data.total} noun="filings" onPage={(n) => setParam({ page: n > 1 ? String(n) : null }, true)} />
           </Card>

@@ -27,7 +27,7 @@ test("the proxy sends each of them to the API, for the dev server and for previe
 
 test("a pattern matches the whole path the site's host would forward, and nothing else of the app's", () => {
   const hits = (path) => forwardedPaths().some((s) => new RegExp(sourceRegex(s)).test(path));
-  for (const yes of ["/stocks/in/TCS", "/stocks/us/AAPL", "/stocks", "/v/abc123", "/c/abc123", "/sitemap.xml", "/sitemaps/in-1.xml"]) assert.ok(hits(yes), yes);
+  for (const yes of ["/stocks/in/TCS", "/stocks/us/AAPL", "/stocks", "/stocks?q=tcs&m=in", "/stocks/in/TCS?ref=abc", "/v/abc123", "/c/abc123", "/sitemap.xml", "/sitemaps/in-1.xml"]) assert.ok(hits(yes), yes);
   // the app's own files and pages that only start with the same letters
   for (const no of ["/config.js", "/charts", "/c", "/verdict/abc", "/v", "/stockss/in", "/sitemap.xml.js", "/research/IN/TCS", "/assets/c/x.js"]) assert.ok(!hits(no), no);
 });

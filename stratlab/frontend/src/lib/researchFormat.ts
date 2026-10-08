@@ -51,7 +51,8 @@ export function trendValue(v: number, unit: string): string {
 export function metricText(m: MetricItem, currency: string): string {
   const v = m.value;
   // a percentage that isn't zero never reads as "0.0%": a tiny one keeps two decimals (a 0.01% net margin)
-  const dp = v !== 0 && Math.abs(v) < 0.05 ? 2 : 1;
+  // a figure the source gives in whole numbers (its growth rates: "-12%") is shown whole, never as a precise "-12.0%"
+  const dp = m.dp ?? (v !== 0 && Math.abs(v) < 0.05 ? 2 : 1);
   if (m.unit === "%") return minus(`${v.toFixed(dp)}%`);
   if (m.unit === "%±") return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(dp)}%`;
   if (m.unit === "money") return `${currencySymbol(currency)}${v.toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: 2 })}`;

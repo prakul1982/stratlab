@@ -85,7 +85,7 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
    - `/refunds` (cancellation, refunds and delivery)
    - `/contact`
 
-   The business name and contact email are set in `frontend/public/config.js` (`BUSINESS_NAME`, `CONTACT_EMAIL`; add `BUSINESS_ADDRESS` if you want one listed). Read the four pages once and adjust the refund terms if you want a different policy.
+   The business name and contact email are set in `frontend/public/config.js` (`BUSINESS_NAME`, `CONTACT_EMAIL`; add `BUSINESS_ADDRESS` and `BUSINESS_GSTIN` to list them on the Contact page). Read the four pages once and adjust the refund terms if you want a different policy.
 2. **Switch to Live mode** in the dashboard, then repeat the Test Mode setup there: live plans cannot see test plans.
    - Create the plans again: Basic ₹699 and Pro ₹1,999 monthly, plus ₹6,999 and ₹19,999 yearly if you want it. The amounts must match `backend/app/plans.py`, because the Plans page shows those prices while Razorpay charges the plan's own amount.
    - Generate live API keys.

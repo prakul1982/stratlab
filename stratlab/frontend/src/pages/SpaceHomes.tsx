@@ -92,7 +92,7 @@ export function TradeHome() {
       status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? `None running · ${rows.length} stopped` : "" },
     { ...TRADE_TOP[2],
       status: journal === null ? null : journal !== "none" && journal.count ? `${plural(journal.count, "closed trade")} · ${money(journal.net, "INR")}` : "" },
-    { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Rules others published, with the verdict they earned." },
+    { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Published rules, each with the result of its checks." },
   ];
   return (
     <div className="space-home">
@@ -293,9 +293,11 @@ function RedFlags() {
 }
 
 /* ---------- Money: what you own ---------- */
-type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number };
-type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; updated_at: string | null; prices_at?: string | null };
-type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number } };
+type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number;
+  no_cost?: { count: number; symbols: string[]; value: number } | null; other_session?: string[] };
+type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
+type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
+  total?: { available: boolean; total?: number }; audit?: string | null };
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number };
 
 
@@ -342,12 +344,17 @@ function HoldingsSummary() {
         ) : (
           <div className="k-stack" data-testid="holdings-summary">
             <div className="k-stats">
-              <Fig label={`Value · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />
+              {(() => { const n = h.totals.count - (h.totals.no_cost?.count ?? 0);   // the lines the value is of
+                return <Fig label={`Value · ${n} stock${n === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />; })()}
               <Fig label="Gain or loss" tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
                 note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing="Needs the buy prices" />
               {h.totals.day != null && <Fig label="Today" tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
-              {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")} />}
+              {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")}
+                note={h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined} />}
             </div>
+            {/* the same lines as My Holdings: one with a price but no buy price is named, not half counted (R5O-004) */}
+            {h.totals.no_cost && <p className="small muted">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}).</p>}
+            {(h.totals.other_session?.length ?? 0) > 0 && <p className="small muted">Today leaves out {h.totals.other_session!.join(", ")}: {h.totals.other_session!.length === 1 ? "its" : "their"} last change is from an earlier session.</p>}
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
           </div>
         )}
@@ -375,11 +382,14 @@ function TaxSummary() {
         ) : (
           <div className="k-stack" data-testid="tax-summary">
             <div className="k-stats">
-              <Fig label={`Capital gains tax, ${year?.label ?? "this year"} (estimate)`} value={money(year?.tax_with_cess ?? 0, "INR")} />
+              {/* the tax report's own total (capital gains, F&O and intraday business income, slab, surcharge and cess), so the
+                  two pages agree; the capital gains part alone said ₹0 beside a report of ₹77,61,298 */}
+              <Fig label={`Total tax estimate, ${year?.label ?? "this year"}`} value={money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR")} />
               <Fig label="Short-term gains" tone={signCls(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
               <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
-            <p className="tiny muted">Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge. {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
+            {year?.audit && <p className="small">{year.audit}</p>}
+            <p className="tiny muted">{year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge."} {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
             <AsOf parts={[["Trades", t.updated_at], ["Prices", t.prices_at]]} />
           </div>
         )}

@@ -1,30 +1,19 @@
 import { lazy, StrictMode, Suspense, useCallback, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import "@fontsource/montserrat/300.css";
-import "@fontsource/montserrat/800.css";
-import "@fontsource/fraunces/400.css";
-import "@fontsource/fraunces/600.css";
-import "@fontsource/fraunces/400-italic.css";
-import "@fontsource/ibm-plex-sans/400.css";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/600.css";
-import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
-import "./styles.css";
-import "./styles-invest.css";
 import { AppProvider, useApp } from "./lib/app";
-import { SESSION_KEY } from "./lib/api";
 import { takeNext } from "./lib/returnTo";
-import { isAppPath, landingSection } from "./lib/deepLinks";
-import { signedOutTitle } from "./lib/title";
-import { registerPwa } from "./lib/pwa";
-import { captureRef } from "./lib/share";
+import { isPublicForAll } from "./lib/entry";
+import { applySeo, seoFor } from "./lib/seo";
 import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
 import { PageLock } from "./components/PageLock";
-import { Loading, Toast } from "./components/ui";
-import { LEGAL_PAGES } from "./components/LegalLinks";
+import { ViewAsBanner } from "./components/ViewAs";
+import { Loading } from "./components/ui";
+import { Toast } from "./components/Toast";
+import { VisitorApp } from "./visitor/VisitorApp";
+import { LoadGuard } from "./components/LoadGuard";
+import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { fmtDate } from "./lib/format";
 
@@ -44,16 +33,11 @@ const InvestHome = page(spaceHomes, "InvestHome");
 const MoneyHome = page(spaceHomes, "MoneyHome");
 const NotebooksHome = page(home, "NotebooksHome");
 const NewNotebook = page(home, "NewNotebook");
-const login = () => import("./pages/Login");
-const Login = lazy(() => login().then((m) => ({ default: m.Login })));
-// signed out on an app address, a page that doesn't exist, one that isn't yours, and Help
-const gate = () => import("./pages/Gate");
-const SignInGate = page(gate, "SignInGate");
-const NotFound = lazy(() => gate().then((m) => ({ default: m.NotFound })));
-const NoAccess = lazy(() => gate().then((m) => ({ default: m.NoAccess })));
-const HelpPage = page(gate, "HelpPage");
-const legal = () => import("./pages/LegalPage");
-const LegalPage = page(legal, "LegalPage");
+// signed in but not allowed (Admin for someone else) and Help; the pages for a visitor are in visitor/VisitorApp.tsx
+const gates = () => import("./pages/AppGates");
+const NoAccess = lazy(() => gates().then((m) => ({ default: m.NoAccess })));
+const HelpPage = page(gates, "HelpPage");
+const NotFound = lazy(() => import("./pages/Gate").then((m) => ({ default: m.NotFound })));
 const notebook = () => import("./pages/NotebookPage");
 const NotebookPage = page(notebook, "NotebookPage");
 const experiment = () => import("./pages/ExperimentPage");
@@ -62,8 +46,6 @@ const MarketPage = page(() => import("./pages/MarketPage"), "MarketPage");
 const OptionsPage = page(() => import("./pages/OptionsPage"), "OptionsPage");
 const PositioningPage = page(() => import("./pages/PositioningPage"), "PositioningPage");
 const ImportPage = page(() => import("./pages/ImportPage"), "ImportPage");
-const verdict = () => import("./pages/PublicVerdict");
-const PublicVerdict = page(verdict, "PublicVerdict");
 const OptionsSession = page(() => import("./pages/OptionsSession"), "OptionsSession");
 const PaperPage = page(() => import("./pages/PaperPage"), "PaperPage");
 const ReplayPage = page(() => import("./pages/trade/ReplayPage"), "ReplayPage");
@@ -131,12 +113,7 @@ const DevKit = page(() => import("./pages/DevKit"), "DevKit");   // /dev/kit: th
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
 function warmFirstPage(path: string) {
-  let saved = false;
-  try { saved = !!localStorage.getItem(SESSION_KEY); } catch { /* storage off */ }
-  const load = LEGAL_PAGES.some((p) => p.path === path) ? legal
-    : path.startsWith("/verdict/") ? verdict
-    : !saved ? login
-    : /^\/(trade|invest|money)?$/.test(path) ? spaceHomes
+  const load = /^\/(trade|invest|money)?$/.test(path) ? spaceHomes
     : path === "/mine" ? mineHome
     : /^\/(notebooks|new)$/.test(path) ? home
     : /^\/n\/[^/]+$/.test(path) ? notebook
@@ -195,7 +172,7 @@ function PromoBanner({ until }: { until: string }) {
 /** A page only the site's team opens: anyone else is told so, not sent home in silence. */
 function AdminOnly({ what, children }: { what: string; children: ReactNode }) {
   const { me } = useApp();
-  if (!me) return <Loading label="Checking access" />;
+  if (!me) return <div className="k-page"><AccountWait label="Checking access" /></div>;
   return me.is_admin ? <>{children}</> : <NoAccess what={what} email={me.email} />;
 }
 
@@ -204,12 +181,6 @@ function Routed() {
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => { pageview(loc.pathname); }, [loc.pathname]);    // usage analytics: off without a key
-  // "Sign in · Options builder · StratLab": a tab says what it waits for. The policies are open to everyone and have a title of
-  // their own, signed in or not (the shell that titles the other pages isn't around them).
-  useEffect(() => {
-    if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) document.title = signedOutTitle(loc.pathname);
-    else if (ready && !session) document.title = signedOutTitle(loc.pathname);
-  }, [ready, session, loc.pathname]);
   // back from Google sign-in: open the page the visitor started on (lib/returnTo.ts keeps it to StratLab's own pages)
   const signedIn = !!session;
   useEffect(() => {
@@ -217,22 +188,17 @@ function Routed() {
     const next = takeNext();
     if (next) nav(next, { replace: true });
   }, [signedIn, nav]);
-  // shared verdicts are public: no sign-in needed
-  if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) return <Suspense fallback={<Loading label="Opening" />}><LegalPage /></Suspense>;   // policies are public: no sign-in needed
-  if (loc.pathname.startsWith("/verdict/")) return <Suspense fallback={<Loading label="Opening the verdict" />}><Routes><Route path="/verdict/:token" element={<PublicVerdict />} /></Routes></Suspense>;
+  // the pages anyone sees the same way (the policies, a shared verdict, a library strategy) and a visitor's pages: the landing
+  // page, "Sign in to see …" on an app address, else Not found (visitor/VisitorApp.tsx titles and describes them)
+  const everyone = isPublicForAll(loc.pathname);
+  useEffect(() => { if (ready && session && !everyone) applySeo({ ...seoFor(loc.pathname, "account"), index: false }); }, [ready, session, everyone, loc.pathname]);
+  if (everyone) return <VisitorApp />;
   if (!ready) return <Loading label="Opening StratLab" />;
-  if (!session) {
-    // signed out: the landing page (at a section for /pricing, /help…), "Sign in to see …" on an app address, else Not found
-    const section = landingSection(loc.pathname);
-    return (
-      <Suspense fallback={<Loading label="Opening StratLab" />}>
-        {section !== undefined ? <Login section={section} /> : isAppPath(loc.pathname) ? <SignInGate /> : <NotFound signedIn={false} />}
-      </Suspense>
-    );
-  }
+  if (!session) return <VisitorApp />;
   return (
     <Shell>
-      {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
+      <ViewAsBanner />{/* the owner is viewing the app as another plan: on every page until it is turned off */}
+      {meError && <div className="banner" role="alert"><span>StratLab couldn't load your account: {meError}</span><AccountRetry /></div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <PageLock />{/* a paid feature this plan lacks: said at the top, honestly (the server refuses it either way) */}
@@ -278,6 +244,7 @@ function Routed() {
         <Route path="/pricing" element={<Navigate to="/plans" replace />} />
         <Route path="/upgrade" element={<Navigate to="/plans" replace />} />
         <Route path="/help" element={<HelpPage />} />
+        <Route path="/faq" element={<Navigate to="/help" replace />} />
         <Route path="/account" element={<AccountPage />} />
         {/* Account and Settings step 3a: new routes */}
         <Route path="/settings" element={<SettingsPage />} />
@@ -341,13 +308,17 @@ function App() {
   );
 }
 
-if (import.meta.env.PROD) registerPwa();
-captureRef();          // a friend's invite link: kept until sign-in
-
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </StrictMode>,
-);
+/** Draw the signed-in app (or the first moment of it, before the sign-in check is back). The entry point (entry.tsx) calls this. */
+export function startApp(root: HTMLElement) {
+  // without the config the app can't tell who is signed in: never draw it as signed out
+  if (!window.STRATLAB_CONFIG?.SUPABASE_URL) { window.__stratlabShowLoadError?.(); return; }
+  createRoot(root).render(
+    <StrictMode>
+      <LoadGuard>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </LoadGuard>
+    </StrictMode>,
+  );
+}

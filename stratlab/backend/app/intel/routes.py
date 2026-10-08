@@ -16,8 +16,8 @@ from ..config import settings
 from ..kite_service import IST
 from ..plans import has_indicators
 from . import ai as A
-from . import key_facts
-from .company import Research
+from . import grounding, key_facts
+from .company import Research, with_dividend_yield
 from .net import NotFound, SourceError
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -116,7 +116,18 @@ def company(region: str, symbol: str, profile=Depends(current_profile)):
     its market is trading now (else the price is the last close)."""
     r = region_of(region)
     c = source_call(lambda: hub.company(r, symbol_of(symbol)))
+    if r == "IN":
+        c = with_dividend_yield(c, stored_dividends(c["symbol"]), datetime.now(IST).date().isoformat())
     return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r)})
+
+
+def stored_dividends(symbol: str) -> list[dict]:
+    """A company's stored corporate actions (no new read: the page's own Corporate actions card reads them), or none."""
+    try:
+        from .. import corp_actions
+        return corp_actions.actions_for("IN", symbol, None, fetch=False)
+    except Exception:
+        return []
 
 
 @router.get("/chart/{region}/{symbol}")
@@ -211,7 +222,9 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     r, theme = region_of(region), " ".join(q.split())[:80]
     if len(theme) < 2:
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
-    return ok(ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh, lambda: A.sector(theme, r, _ai)))
+    # every ticker the AI wrote is checked against the market's list before the map is kept (R5O-008)
+    return ok(ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
+                      lambda: grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search)))
 
 
 @router.get("/compare")

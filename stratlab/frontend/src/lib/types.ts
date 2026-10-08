@@ -109,6 +109,8 @@ export interface NotebookItem {
 export interface Notebook extends NotebookItem {
   kind: "notebook"; notes: string; strategy: Strategy; instrument: Instrument | null; experiments: Experiment[];
   group?: Group | null;
+  /** The questions about the idea still open, and the answers so far (R5O-010). */
+  gaps?: import("../components/Gaps").GapInfo | null;
 }
 
 export interface PlanInfo {
@@ -141,7 +143,10 @@ export interface Me {
   data_online: boolean;
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
   plans?: Record<string, { price: number; price_year: number } & Record<string, unknown>>;
-  paid_plan?: "free" | "basic" | "pro"; promo?: { until: string } | null; free_basic_until?: string | null;
+  paid_plan?: "free" | "basic" | "pro";
+  /** The site owner is viewing the app as this plan (lib/viewAs.ts); the server sends it for the owner only, null when it is off. */
+  view_as?: "free" | "basic" | "pro" | null;
+  promo?: { until: string } | null; free_basic_until?: string | null;
   prefs?: { level: Level | null; focus?: Focus | null; space?: "trade" | "invest" | "money" | "all" | null };
   /** What anyone can buy and use today: the same answer /pricing gives the landing page (lib/offer.ts words it). */
   offer?: Offer;

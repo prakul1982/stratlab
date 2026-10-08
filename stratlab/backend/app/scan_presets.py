@@ -100,38 +100,41 @@ def _f(v: float) -> str:
     return f"{v:,.2f}"
 
 
-def _detail(pid: str, ctx: Ctx, i: int) -> str:
-    """The numbers behind a match on one candle, as plain text."""
+def _detail(pid: str, ctx: Ctx, i: int, live: bool = False) -> str:
+    """The numbers behind a match on one candle, as plain text. `live`: read just now, when the newest candle may be
+    today's, still trading, so its price is the last price, not a close (R5O-023)."""
     px = ctx.val(Ref(t="price"), i)
+    newest = i == len(ctx.df) - 1
+    at, word = ("Last price", "last price") if live and newest else ("Closed at", "close")
 
     def val(t, **kw):
         return ctx.val(Ref(t=t, **kw), i)
     try:
         if pid == "high52":
-            return f"Closed at {_f(px)}, above the previous 252-day high of {_f(val('dc_upper', p=YEAR))}"
+            return f"{at} {_f(px)}, above the previous 252-day high of {_f(val('dc_upper', p=YEAR))}"
         if pid == "golden_cross":
             return f"50-day average {_f(val('sma', p=50))} crossed above the 200-day average {_f(val('sma', p=200))}"
         if pid == "rsi_bounce":
             return f"14-day RSI is {val('rsi', p=14):.1f}, back above 30 from {ctx.val(Ref(t='rsi', p=14), i - 1):.1f}"
         if pid == "volume_surge":
             v, avg = val("volume"), val("vol_sma", p=20, ago=1)
-            return f"Volume {v:,.0f} is {v / avg:.1f} times the 20-day average of {avg:,.0f}; the close {_f(px)} is above the previous close"
+            return f"Volume {v:,.0f} is {v / avg:.1f} times the 20-day average of {avg:,.0f}; the {word} {_f(px)} is above the previous close"
         if pid == "bb_squeeze":
-            return f"Closed at {_f(px)}, above the upper band of {_f(val('bb_upper', p=20, m=2))}, after a squeeze"
+            return f"{at} {_f(px)}, above the upper band of {_f(val('bb_upper', p=20, m=2))}, after a squeeze"
         if pid == "near_low52":
             low = val("dc_lower", p=YEAR)
-            return f"Closed at {_f(px)}, {(px / low - 1) * 100:.1f}% above the previous 252-day low of {_f(low)}" if px >= low \
-                else f"Closed at {_f(px)}, below the previous 252-day low of {_f(low)}"
+            return f"{at} {_f(px)}, {(px / low - 1) * 100:.1f}% above the previous 252-day low of {_f(low)}" if px >= low \
+                else f"{at} {_f(px)}, below the previous 252-day low of {_f(low)}"
         if pid == "pullback":
-            return f"Closed at {_f(px)}: above the 50-day average {_f(val('sma', p=50))}, below the 20-day {_f(val('ema', p=20))}; 50-day above 200-day {_f(val('sma', p=200))}"
+            return f"{at} {_f(px)}: above the 50-day average {_f(val('sma', p=50))}, below the 20-day {_f(val('ema', p=20))}; 50-day above 200-day {_f(val('sma', p=200))}"
         if pid == "st_s2":
-            return f"Stage 2, and the close {_f(px)} is above the Supertrend {_f(val('supertrend', p=10, m=3))}"
+            return f"Stage 2, and the {word} {_f(px)} is above the Supertrend {_f(val('supertrend', p=10, m=3))}"
     except (TypeError, ValueError, ZeroDivisionError):
         pass
     return ""
 
 
-def evaluate(bars: list[dict], through: str | None = None, only: list[str] | None = None) -> dict | None:
+def evaluate(bars: list[dict], through: str | None = None, only: list[str] | None = None, live: bool = False) -> dict | None:
     """Every preset's answer for one stock's daily candles (up to the day `through`, "YYYY-MM-DD"):
     {"as_of", "price", "chg", "matches": {id: {"days_ago", "day", "detail"}}}. None when there are too few candles.
     A preset matches when all its conditions held on one of its last `within` candles; the latest such candle counts."""
@@ -159,7 +162,7 @@ def evaluate(bars: list[dict], through: str | None = None, only: list[str] | Non
                 if squeeze is not None and not squeeze[i]:
                     continue
                 if all(eval_cond(ctx, c, i) for c in p["conds"]):
-                    out["matches"][p["id"]] = {"days_ago": back, "day": str(rows[i]["t"])[:10], "detail": _detail(p["id"], ctx, i)}
+                    out["matches"][p["id"]] = {"days_ago": back, "day": str(rows[i]["t"])[:10], "detail": _detail(p["id"], ctx, i, live)}
                     break
         except Exception as e:      # one preset's data problem leaves the others' answers standing
             print("scan preset:", p["id"], str(e)[:100])

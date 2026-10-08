@@ -1,7 +1,8 @@
 /* The Invest pages on the kit: only what the kit has no piece for. Every colour and gap is a token from styles.css. */
 
 /* two columns of cards (one on a phone); a lone last card spans the row */
-.k-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: stretch; }
+/* side-by-side cards keep their own height (R5O-036): stretched to the taller one, the other was a big empty box */
+.k-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; }
 .k-cols > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (max-width: 900px) { .k-cols { grid-template-columns: minmax(0, 1fr); } }
 .k-split2 { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s5); align-items: start; }
@@ -81,16 +82,6 @@
 .tbar-year { font-size: var(--t-note); color: var(--muted); }
 .tbar-sub { line-height: 1.35; }
 @media (max-width: 560px) { .tbar-num { font-size: 11px; } }
-
-/* a pie of segments */
-.inv-donut { display: flex; flex-wrap: wrap; gap: var(--s5); align-items: center; }
-.inv-donut .d-track { stroke: var(--chip); }
-.inv-donut circle.d0 { stroke: var(--ink); } .inv-donut circle.d1 { stroke: var(--blue); } .inv-donut circle.d2 { stroke: var(--orange); } .inv-donut circle.d3 { stroke: var(--dash); }
-.inv-donut circle.d4 { stroke: var(--blue-ink); } .inv-donut circle.d5 { stroke: var(--orange-ink); } .inv-donut circle.d6 { stroke: var(--muted); } .inv-donut circle.d7 { stroke: var(--line-2); }
-.inv-legend { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-label); }
-.inv-legend .fill.d0 { fill: var(--ink); } .inv-legend .fill.d1 { fill: var(--blue); } .inv-legend .fill.d2 { fill: var(--orange); } .inv-legend .fill.d3 { fill: var(--dash); }
-.inv-legend .fill.d4 { fill: var(--blue-ink); } .inv-legend .fill.d5 { fill: var(--orange-ink); } .inv-legend .fill.d6 { fill: var(--muted); } .inv-legend .fill.d7 { fill: var(--line-2); }
-.inv-legend svg { flex: none; }
 
 /* the AI read */
 .inv-summary { font-family: var(--serif); font-size: 19px; line-height: 1.45; }

@@ -28,9 +28,9 @@ def test_research_payload_is_relabelled():
     out = public_research(company)
     assert [s["source"] for s in out["sources"]] == ["Fundamentals", "Market data"]
     assert "Yahoo" not in out["sources"][1]["error"]
-    assert [l["label"] for l in out["links"]] == ["Wikipedia"]
+    assert [l["label"] for l in out["links"]] == ["Company profile"]      # the link stays, under a plain label (R5O-020)
     assert out["chart"]["source"] == "Live prices"
-    assert out["news"][0]["source"] == "Yahoo Finance"       # a news publisher's name is left alone
+    assert out["news"][0]["source"] is None       # a data provider standing in as the "publisher" is not named (R5O-020)
 
 
 def test_market_list_does_not_name_the_provider():

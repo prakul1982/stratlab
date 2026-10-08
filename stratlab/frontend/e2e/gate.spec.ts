@@ -41,7 +41,7 @@ test("signed out: a company's address says what's there, and Google sign-in come
   await expect(page.getByRole("link", { name: /Open the public page for/ })).toHaveAttribute("href", "/stocks/in/RELIANCE");
   await noSideways(page);
   if (info.project.name === "phone") await page.emulateMedia({ colorScheme: "dark" });
-  await page.getByRole("button", { name: "Sign in with Google" }).click();
+  await page.getByRole("button", { name: "Continue with Google" }).click();           // (R5V-011: every button that signs in says it goes to Google)
   await expect.poll(() => authorize?.href ?? "").toContain("provider=google");
   // Google comes back to the site's root (the address Supabase allows); the page itself was kept in this browser
   expect(new URL(authorize!.searchParams.get("redirect_to")!).pathname).toBe("/");
@@ -73,10 +73,13 @@ test("signed out: the public page link opens the company's public page on this s
 test("signed out: other app addresses, a page that doesn't exist, and no way back to another site", async ({ page }) => {
   const errors = await offline(page);
   for (const [path, title] of [["/holdings", "Sign in to see Holdings"], ["/n/abc123", "Sign in to see this notebook"],
-    ["/library", "Sign in to see Strategy library"], ["/tax-report", "Sign in to see Tax report"]] as const) {
+    ["/tax-report", "Sign in to see Tax report"]] as const) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 }), path).toHaveText(title, { timeout: 30_000 });
   }
+  // the library is open to read signed out (R5V-011): StratLab's own strategies, not a sign-in gate
+  await page.goto("/library");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("StratLab's own strategies", { timeout: 30_000 });
   await page.goto("/no-such-page");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Page not found", { timeout: 30_000 });
   await expect(page.getByText("/no-such-page")).toBeVisible();

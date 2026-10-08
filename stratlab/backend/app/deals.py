@@ -14,6 +14,7 @@ import threading
 from datetime import date, datetime, timedelta
 
 from . import db
+from .email_kit import inr as _inr
 from .intel.filings import DEAL_KINDS, DEALS_DAYS, RELATIONS, ist_now, sort_deals
 from .intel.net import SourceError, TTLCache
 from .newsletter import job as news_job
@@ -117,7 +118,7 @@ def describe(d: dict) -> str:
     how = {"market": " on the open market", "off_market": " off market", "esop": " through employee stock options"}.get(d.get("mode"), "")
     if d["kind"] in ("bulk", "block"):
         how = ""
-        price = f" at ₹{d['price']:,.2f}" if d.get("price") else ""
+        price = f" at {_inr(d['price'], 2)}" if d.get("price") else ""
     else:
         price = f" ({rupees(d['value'])})" if d.get("value") else ""
     head = f"{d['label']}: " if d["kind"] != "insider" else "Insider trade: "

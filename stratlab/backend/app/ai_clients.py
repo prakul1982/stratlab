@@ -63,6 +63,12 @@ def _short(r: httpx.Response) -> str:
     return redact(_short_raw(r))[:160]
 
 
+def not_a_reply(r: httpx.Response) -> str:
+    """What came back instead of the JSON asked for: its type and the start of it, keys taken out."""
+    kind = (r.headers.get("content-type") or "no content type").split(";")[0]
+    return f"{kind}: {_short(r) or 'nothing'}"
+
+
 def _short_raw(r: httpx.Response) -> str:
     try:
         data = r.json()
@@ -82,24 +88,28 @@ def classify(name: str, r: httpx.Response, model: str) -> CallError:
     """What an error status means for the router."""
     p, code, body = PROVIDERS[name], r.status_code, r.text or ""
     msg = _short(r)
+    # every message carries the status code and the provider's own words, so Admin tells a rejected key from a bug
     if code == 401:
-        return CallError("auth", f"rejected the key ({msg})" if msg else "rejected the key", scope="provider")
+        return CallError("auth", f"rejected the key (401: {msg})" if msg else "rejected the key (401)", scope="provider")
+    if re.search(r"credit card|payment method on file|billing (details|information)", body, re.I):
+        # an account setting, not a used-up allowance: nothing resets on its own (Vercel's gateway: a card on file)
+        return CallError("auth", f"the account needs a payment method on file ({code}: {msg})", scope="provider")
     if code == 402 or re.search(r"credit balance|insufficient (credit|balance|quota)|out of credits|payment required", body, re.I):
         return CallError("credit", "the free credit is used up", wait=6 * 3600, scope="provider", daily=True)
     if code == 429:
         wait, daily = wait_from(r.headers, body), is_daily(body)
         scope = "provider" if p.limit_scope == "provider" or re.search(r"free-models-per-day|account|organization", body, re.I) else "model"
-        return CallError("rate", "rate limited" + (" (daily free quota)" if daily else ""), wait=wait, scope=scope,
+        return CallError("rate", "rate limited" + (" (daily free quota)" if daily else "") + (f" (429: {msg})" if msg else " (429)"), wait=wait, scope=scope,
                          daily=daily or (wait or 0) > 600)
     if too_big(code, body):
         return CallError("context", "the prompt is too long for this model")
     if code == 403:
         if name == "gemini" and re.search(r"api key|permission", body, re.I):
-            return CallError("auth", f"rejected the key ({msg})", scope="provider")
-        return CallError("forbidden", f"this key can't use {model} ({msg})")
+            return CallError("auth", f"rejected the key (403: {msg})", scope="provider")
+        return CallError("forbidden", f"this key can't use {model} (403: {msg})")
     if code in (404, 400, 422, 405):
         if name == "gemini" and code == 400 and re.search(r"api key not valid|api_key_invalid", body, re.I):
-            return CallError("auth", "rejected the key", scope="provider")
+            return CallError("auth", f"rejected the key (400: {msg})", scope="provider")
         return CallError("model", f"couldn't use {model} ({code}: {msg})")
     if code == 408 or code >= 500:
         return CallError("transient", f"server error {code}" + (f" ({msg})" if msg else ""), scope="provider")
@@ -202,9 +212,17 @@ class OpenAIStyle:
         if r.status_code != 200:
             raise classify(self.name, r, model)
         try:
-            choice = r.json()["choices"][0]
+            data = r.json()
+        except ValueError:
+            data = None
+        if not isinstance(data, dict) or not isinstance(data.get("choices"), list):
+            # a 200 that isn't a chat reply at all (a gateway's page, an error in another shape): say what came back,
+            # so Admin shows the provider's own words instead of "empty reply" (R5O-016)
+            raise CallError("transient", f"answered {r.status_code} without a chat reply ({not_a_reply(r)})", scope="provider")
+        try:
+            choice = data["choices"][0]
             msg = choice.get("message") or {}
-        except (KeyError, IndexError, ValueError, TypeError, AttributeError):
+        except (KeyError, IndexError, TypeError, AttributeError):
             return Reply("", None, ms, dict(r.headers))
         return Reply(answer(msg), choice.get("finish_reason"), ms, dict(r.headers))
 
@@ -216,13 +234,17 @@ class OpenAIStyle:
         except httpx.HTTPError as e:
             raise CallError("transient", f"couldn't list models ({e.__class__.__name__})", scope="provider") from None
         if r.status_code in (401, 403):
-            raise CallError("auth", "rejected the key while listing models", scope="provider")
+            raise CallError("auth", f"rejected the key while listing models ({r.status_code}: {_short(r)})", scope="provider")
         if r.status_code >= 400:
-            raise CallError("transient", f"couldn't list models ({r.status_code})", scope="provider")
+            raise CallError("transient", f"couldn't list models ({r.status_code}: {_short(r)})", scope="provider")
+        if r.is_redirect:
+            raise CallError("transient", f"couldn't list models ({r.status_code}: moved to {redact(r.headers.get('location', '?'))[:120]})",
+                            scope="provider")
         try:
             return parse_models(r.json())
         except (ValueError, TypeError, AttributeError):
-            raise CallError("transient", "sent something that isn't a model list", scope="provider") from None
+            raise CallError("transient", f"sent something that isn't a model list ({r.status_code}, {not_a_reply(r)})",
+                            scope="provider") from None
 
 
 def _ctx(item: dict) -> int | None:
@@ -245,6 +267,9 @@ def _ctx(item: dict) -> int | None:
     return max(sizes) if sizes else None
 
 
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
 def parse_models(data) -> list[dict]:
     """[{"id", "ctx"}] from any provider's model list: OpenAI-style {"data": […]}, Cloudflare's {"result": […]},
     Google's {"models": […]} or GitHub's plain list."""
@@ -254,6 +279,11 @@ def parse_models(data) -> list[dict]:
         if not isinstance(it, dict):
             continue
         mid = str(it.get("id") or it.get("name") or "")
+        name = str(it.get("name") or "")
+        if name.startswith(("@cf/", "@hf/")) or (_UUID.match(mid) and name):
+            # Cloudflare lists each model under a UUID `id` and its usable name ("@cf/meta/…") in `name`; the chat API
+            # wants the name ("No such model <uuid>", code 5007, otherwise)
+            mid = name
         if mid.startswith("models/"):
             mid = mid[len("models/"):]
         methods = it.get("supportedGenerationMethods")
@@ -332,13 +362,17 @@ class GeminiNative:
         except httpx.HTTPError as e:
             raise CallError("transient", f"couldn't list models ({e.__class__.__name__})", scope="provider") from None
         if r.status_code in (400, 401, 403):
-            raise CallError("auth", "rejected the key while listing models", scope="provider")
+            raise CallError("auth", f"rejected the key while listing models ({r.status_code}: {_short(r)})", scope="provider")
         if r.status_code >= 400:
-            raise CallError("transient", f"couldn't list models ({r.status_code})", scope="provider")
+            raise CallError("transient", f"couldn't list models ({r.status_code}: {_short(r)})", scope="provider")
+        if r.is_redirect:
+            raise CallError("transient", f"couldn't list models ({r.status_code}: moved to {redact(r.headers.get('location', '?'))[:120]})",
+                            scope="provider")
         try:
             return parse_models(r.json())
         except (ValueError, TypeError, AttributeError):
-            raise CallError("transient", "sent something that isn't a model list", scope="provider") from None
+            raise CallError("transient", f"sent something that isn't a model list ({r.status_code}, {not_a_reply(r)})",
+                            scope="provider") from None
 
 
 # ---------- Anthropic ----------

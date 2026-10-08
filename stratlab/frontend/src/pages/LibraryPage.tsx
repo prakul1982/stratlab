@@ -4,50 +4,13 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
-import { opSay, refName } from "../lib/rules";
-import { checksLine } from "../lib/tradeUi";
-import type { Cond, Strategy, VerdictKind } from "../lib/types";
+import { checksOf, HoldLine, Rules, shownStats, VERDICTS, type LibEntry } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat, type Column } from "../components/kit";
 import { usePersisted } from "../lib/persist";
 import "./trade/trade.css";
 
-export interface LibEntry {
-  id: string; name: string; question: string; description: string; author: string; market: string;
-  instrument: { symbol: string; name?: string } | null; group: { name: string; members?: unknown[] } | null;
-  tf: string; side: string; range: { from: string; to: string } | null; strategy: Strategy;
-  verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number };
-  stats: { ret: number | null; buy_hold: number | null; mdd: number | null; trades: number | null; unseen: number | null };
-  published_at: string; copies: number; mine: boolean; reported?: boolean; hidden?: boolean;
-  /** StratLab's own entries: run by StratLab through its own backtest and verdict. */
-  official?: boolean; badge?: string;
-  /** false when the experiment never traded: its return, fall and unseen result are "not run", not 0.0% */
-  ran?: boolean;
-  /** one line for why the verdict is what it is, from the verdict's own checks */
-  reason?: string | null;
-}
-
-/** The figures a card shows: all of them when the experiment traded, and "–" for the ones that need trades when it didn't. */
-export const shownStats = (e: LibEntry) => {
-  const ran = e.ran !== false && (e.stats.trades ?? 1) > 0;
-  return { ran, ret: ran ? e.stats.ret : null, unseen: ran ? e.stats.unseen : null, mdd: ran ? e.stats.mdd : null, buy_hold: e.stats.buy_hold };
-};
-
-const VERDICTS: [string, string][] = [["", "Any verdict"], ["edge", "Likely a real edge"], ["mixed", "Mixed evidence"], ["not_enough", "Not enough evidence"], ["luck", "Probably luck"], ["no_edge", "No edge here"]];
-const line = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
-
-function Rules({ s }: { s: Strategy }) {
-  const parts: [string, Cond[]][] = [["Buy when", s.entry], ["Sell when", s.exit], ["Short when", s.shortEntry ?? []], ["Cover when", s.shortExit ?? []]];
-  return (
-    <div className="k-stack k-tight k-small">
-      {parts.filter(([, cs]) => cs?.length).map(([label, cs]) => (
-        <span key={label}><b>{label}</b> {cs.map(line).join(s.entryJoin === "any" && label !== "Sell when" ? " or " : " and ")}</span>
-      ))}
-      {s.risk?.sl ? <span className="k-muted">Stop {s.risk.sl}{s.risk.stopType === "points" ? " points" : s.risk.stopType === "atr" ? "× ATR" : "%"}{s.risk.tgt ? ` · target ${s.risk.tgt}${s.risk.tgtType === "r" ? "R" : s.risk.tgtType === "points" ? " points" : "%"}` : ""}</span> : null}
-    </div>
-  );
-}
 
 /** True on a phone-width screen: the library cards then show the headline and keep the rest behind "Rules and all figures". */
 function usePhone(): boolean {
@@ -125,7 +88,7 @@ export function LibraryPage() {
   const signedPct = (n: number | null) => (n == null ? "–" : <span className={n > 0 ? "k-up" : n < 0 ? "k-down" : undefined}>{pct(n)}</span>);
   const tableCols: Column<LibEntry>[] = [
     { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{plainTerms(e.name)}</b><span className="k-sub-line">{e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} · by {e.author}</span></> },
-    { key: "verdict", header: "Verdict", wrap: true, cell: (e) => <><VerdictBadge v={e.verdict.verdict} /><span className="k-sub-line">{checksLine(e.verdict.passed, e.verdict.total)}</span>{e.reason && <span className="k-sub-line">{e.reason}</span>}</> },
+    { key: "verdict", header: "Checks", wrap: true, cell: (e) => <><VerdictBadge v={e.verdict.verdict} facts /><span className="k-sub-line">{checksOf(e)}</span>{e.reason && <span className="k-sub-line">{e.reason}</span>}</> },
     { key: "ret", header: "After costs", numeric: true, cell: (e) => signedPct(shownStats(e).ret) },
     { key: "bh", header: "Buy and hold", numeric: true, cell: (e) => signedPct(e.stats.buy_hold) },
     { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => signedPct(shownStats(e).unseen) },
@@ -133,12 +96,18 @@ export function LibraryPage() {
     { key: "copy", header: "", action: true, cell: (e) => <button type="button" className="btn quiet sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${plainTerms(e.name)}`}>{busy === e.id ? "Copying…" : "Copy"}</button> },
   ];
   const filtered = !!(q || market || verdict || official);
+  // the intro doesn't promise other people's rules while every entry is StratLab's own (R5O-014); read from the
+  // unfiltered list, kept while a filter narrows it
+  const [onlyOurs, setOnlyOurs] = useState(true);
+  useEffect(() => {
+    if (rows && !filtered && rows.length === total) setOnlyOurs(rows.every((e) => e.official));
+  }, [rows, filtered, total]);
 
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title="Strategy library"
-        lede="Real rules with honest verdicts, published by other traders and by StratLab itself. Copy one and test it yourself: a verdict here describes the past, not what comes next."
-        info="Strategies people published from their own experiments, each with the verdict it earned: the lucky ones are shown as plainly as the real edges. Copy any of them into a notebook of your own and re-test it on your market and dates. Publish yours from a verdict: Share verdict → Publish to the library." infoLabel="About the library" />
+        lede={onlyOurs ? "Rules StratLab tested itself, each with the result of its checks and its return beside buying and holding. Publish your own from a verdict, and copy any rule to test it yourself: a result here describes the past, not what comes next." : "Rules published by StratLab and by people using it, each with the result of its checks and its return beside buying and holding. Copy one and test it yourself: a result here describes the past, not what comes next."}
+        info="Rules published from experiments, each with the result its checks gave: the ones that failed are shown as plainly as the ones that passed. Copy any of them into a notebook of your own and re-test it on your market and dates. Publish yours from a verdict: Share verdict → Publish to the library." infoLabel="About the library" />
       <Card label="Find a strategy">
         <div className="k-toolbar">
           <label className="k-search"><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: RSI, BANKNIFTY, breakout" aria-label="Search the library" /></label>
@@ -182,7 +151,8 @@ export function LibraryPage() {
                           <CardHead title={plainTerms(e.name)} />
                           <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
                         </div>
-                        <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{checksLine(e.verdict.passed, e.verdict.total)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
+                        <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
+                        <HoldLine e={e} />
                         {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                         {/* two lines of the description; the rest is a tap away in its title, so a card isn't a wall of text */}
                         {e.description && <p className={`k-small ${phone ? "lib-oneline" : "lib-clamp"}`} title={plainTerms(e.description)}>{plainTerms(e.description)}</p>}

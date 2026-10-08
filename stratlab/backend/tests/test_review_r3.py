@@ -144,7 +144,10 @@ def test_screens_and_deep_dive_are_priced_at_the_last_close(w, monkeypatch):
     assert f["market_cap"] == pytest.approx(s["market_cap_cr"] * f["price"] / s["price"])
     assert f["pe"] == pytest.approx(s["pe"] * f["price"] / s["price"])
     live = w["client"].get("/research/company/IN/RELIANCE", headers=H()).json()
-    assert live["market_cap"] / 1e7 == pytest.approx(f["market_cap"], rel=1e-6)    # the same market value
+    # the same market value at the same price: the public page is priced at the last close (R5V-005: a session still
+    # trading is never its price), the company page at the live price it shows with its time, so set at one price the
+    # two agree exactly (the same shares, the same re-pricing)
+    assert live["market_cap"] / 1e7 * f["price"] / live["quote"]["price"] == pytest.approx(f["market_cap"], rel=1e-6)
 
 
 def test_replay_reads_enough_history_for_its_context_across_holidays():

@@ -5,11 +5,11 @@ import { focusParam } from "./researchFormat";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
-export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr" }
+export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr"; note?: string; dp?: number }
 export interface MetricGroup { title: string; items: MetricItem[] }
 export interface NewsItem { headline: string; url: string; source: string; at: string | null }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
-  high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null }
+  high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null }
 export interface SourceStatus { source: string; ok: boolean; error: string | null }
 export interface SeriesPoint { y: string; v: number }
 
@@ -25,7 +25,7 @@ export interface Company {
   pros?: string[]; cons?: string[];
   earnings: { period: string; actual: number; estimate: number; surprise_pct: number }[];
   next_earnings: { date: string; eps_estimate: number | null } | null;
-  insider: { net: number; rows: { name: string; change: number; date: string }[] } | null;
+  insider: { net: number; count?: number; rows: { name: string; change: number; date: string }[] } | null;
   peers: string[]; news: NewsItem[];
   about: { wiki: { title: string; description?: string; extract: string; url: string } | null; profile: string | null };
   sources: SourceStatus[]; links: { label: string; url: string }[];
@@ -147,7 +147,7 @@ const BANDS: Record<string, Band> = {
   "P/E": [0, 12, 30, 70, false], "Fwd P/E": [0, 10, 26, 60, false], "P/S": [0, 1.5, 6, 20, false], "P/B": [0, 1.5, 6, 50, false],
   "EV/EBITDA": [0, 7, 18, 45, false], "EV/FCF": [0, 12, 30, 70, false], "PEG (fwd)": [0, 1, 2.5, 5, false],
   "Gross margin": [0, 25, 45, 90, true], "Operating margin": [-10, 8, 22, 55, true], "Net margin": [-10, 5, 18, 45, true],
-  "OPM": [-10, 8, 22, 55, true], "ROE": [-10, 8, 20, 60, true], "ROA": [-5, 3, 10, 35, true], "ROCE": [-5, 8, 20, 50, true],
+  "OPM": [-10, 8, 22, 55, true], "EBITDA margin": [-10, 8, 22, 55, true], "ROE": [-10, 8, 20, 60, true], "ROA": [-5, 3, 10, 35, true], "ROCE": [-5, 8, 20, 50, true],
   "Revenue YoY": [-25, 0, 10, 45, true], "EPS YoY": [-40, 0, 12, 70, true], "Revenue 3Y": [-15, 0, 8, 35, true],
   "Revenue 5Y": [-15, 0, 8, 35, true], "EPS 5Y": [-25, 0, 10, 45, true], "Latest YoY": [-25, 0, 10, 45, true],
   "3Y CAGR": [-15, 0, 10, 35, true], "5Y CAGR": [-15, 0, 10, 35, true], "10Y CAGR": [-10, 0, 10, 30, true],

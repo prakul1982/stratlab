@@ -1,6 +1,6 @@
 import type { HealthState } from "../../components/kit";
 import { ago, dateOnly } from "../../lib/format";
-import type { JobRow, Overview, Reported } from "./AdminContext";
+import type { AIRow, JobRow, Overview, Reported } from "./AdminContext";
 
 /* One reading of the server's status for all of Admin: Overview's lights and "Needs your attention", the rows on Data and
  * jobs and on System all come from services() below, so two pages can never tell the same fact two ways. */
@@ -14,6 +14,10 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /** The India paper sessions that need the broker's live feed (other markets are polled). Older servers sent only the total. */
 export const indiaSessions = (sv: Overview["server"]): number => sv.india_sessions ?? sv.live_sessions;
+
+/** Whether a provider with a key can answer now: the server's own reading (a short rate limit or a used-up free quota
+ * still counts as up; one listed model it can't use doesn't make it down). Older servers sent only the last error. */
+export const aiUp = (a: AIRow): boolean => (a.answering ?? null) !== null ? !!a.answering : !a.last_error || !!a.quota;
 
 /** Every service's light, worded once. */
 export function services(ov: Overview | null): Service[] {
@@ -31,7 +35,7 @@ export function services(ov: Overview | null): Service[] {
     detail: !sv.auto_login_configured ? "Off" : `${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}`,
     fix: !sv.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : undefined });
   const keys = sv.ai.filter((a) => a.configured);
-  const up = keys.filter((a) => !a.last_error || a.quota).length;
+  const up = keys.filter(aiUp).length;
   out.push({ key: "ai", label: "AI providers", state: !keys.length ? "bad" : up === keys.length ? "ok" : up ? "warn" : "bad", to: "/admin/system",
     detail: keys.length ? `${up} of ${keys.length} answering` : "No keys set" });
   if (sv.admin_alerts) {
@@ -66,14 +70,22 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (s.auto.state === "bad") out.push({ text: `The automatic broker login failed: ${sv.auto_login.message}`, to: "/admin/data", label: "Data and jobs", bad: true });
   if (s.feed.state !== "ok") out.push({ text: `Live price feed: ${s.feed.detail}.`, to: "/admin/data", label: "Data and jobs", bad: false });
   const aiKeys = sv.ai.filter((a) => a.configured);
-  const aiDown = aiKeys.filter((a) => a.last_error && !a.quota).map((a) => a.label);
+  const aiDown = aiKeys.filter((a) => !aiUp(a));
   if (!aiKeys.length) out.push({ text: "No AI keys are set, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
-  else if (aiDown.length) out.push({ text: `AI: ${aiDown.join(", ")} ${aiDown.length > 1 ? "aren't" : "isn't"} answering. The others take over by themselves.`, to: "/admin/system", label: "System", bad: false });
+  // one line per provider that can't answer, with the provider's own reason (status code and message), so a rejected
+  // key reads differently from a fault on our side (R5O-016)
+  for (const a of aiDown) out.push({ text: `AI, ${a.label}: ${a.state_text || a.last_error || "not answering"}`, to: "/admin/system", label: "System", bad: false });
+  if (aiDown.length && aiDown.length === aiKeys.length) out.push({ text: "No AI provider is answering, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
   if (s.mail?.state === "bad") out.push({ text: "Alert emails can't be sent yet: no email service (Resend, Brevo or SMTP) is set up on the server.", to: "/admin/system", label: "System", bad: true });
   if (sv.recent_errors?.length) out.push({ text: `${plural(sv.recent_errors.length, "server error")} since the last restart.`, to: "/admin/system", label: "System", bad: false });
   const pending = (reported?.entries ?? []).filter((r) => r.hidden_by !== "admin").length;
   if (pending) out.push({ text: `${pending} library entr${pending > 1 ? "ies were" : "y was"} reported by users.`, to: "/admin/quality", label: "Quality", bad: false });
   for (const j of jobs ?? []) if (j.state === "bad") out.push({ text: `${j.name}: ${j.error}`, to: "/admin/data", label: "Data and jobs", bad: false });
+  // feeds on "Check": never run, or only partly read (R5O-016: seven sat on "Not run yet" without a word here). A job
+  // switched off on purpose isn't listed.
+  const waiting = (jobs ?? []).filter((j) => j.state === "warn" && j.schedule !== "Off");
+  if (waiting.length) out.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j).toLowerCase()})`).join(", ")}.`,
+    to: "/admin/data", label: "Data and jobs", bad: false });
   if (s.cal && s.cal.state !== "ok") out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });
   return out.sort((x, y) => Number(y.bad) - Number(x.bad));

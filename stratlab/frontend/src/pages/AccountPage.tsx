@@ -7,7 +7,8 @@ import { dateOnly } from "../lib/format";
 import { HELP } from "../lib/help";
 import { LegalLinks } from "../components/LegalLinks";
 import { InvoicesCard } from "../components/InvoicesCard";
-import { Badge, Card, CardHead, ConfirmDialog, Field, FormActions, FormGrid, LinkCard, PageHeader, Skeleton } from "../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, Field, FormActions, FormGrid, LinkCard, PageHeader } from "../components/kit";
+import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
 import { confirmMatches, monthlyUse, planRow, planRun, signedInWith } from "../lib/account";
 
@@ -30,7 +31,7 @@ export function AccountPage() {
   const [ask, setAsk] = useState<"cancel" | "everywhere" | "erase" | null>(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
-  if (!me) return <div className="k-page"><PageHeader eyebrow="Account" title="Account" /><Card label="Loading your account"><Skeleton label="Loading your account" /></Card></div>;
+  if (!me) return <div className="k-page"><PageHeader eyebrow="Account" title="Account" /><Card label="Loading your account"><AccountWait label="Loading your account" /></Card></div>;
   const b = me.billing, u = me.usage;
   const meta = session?.user.user_metadata as { full_name?: string; name?: string } | undefined;
   const name = meta?.full_name || meta?.name || "";

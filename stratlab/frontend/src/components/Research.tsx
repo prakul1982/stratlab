@@ -142,7 +142,7 @@ const TERMS: Record<string, string> = {
   "Face value": "The nominal value printed on each share; it doesn't change with the price.",
   "ROCE": "Return on capital employed: operating profit as a share of all the money in the business, borrowed or not.",
   "ROE": "Return on equity: profit as a share of the shareholders' money in the business.",
-  "OPM": "Operating profit margin: the share of sales left after running costs, before interest and tax.",
+  "EBITDA margin": "Operating profit before depreciation, interest and tax (EBITDA) as a share of sales: what is left after running costs.",
   "Net margin": "Profit after everything, as a share of sales.",
   "Debt / equity": "Borrowings divided by the shareholders' money in the business.",
   "Latest YoY": "The latest year against the year before.",
@@ -162,7 +162,8 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                 const b = bandPosition(m.label, m.value, industry);
                 return (
                   <div key={m.label} className="inv-metric">
-                    <span className="k-small k-muted">{m.label}</span>
+                    {/* a note says what a figure counts (a dividend yield with a special dividend in it) */}
+                    <span className="k-small k-muted">{m.label}{m.note && <span className="k-sub-line">{m.note}</span>}</span>
                     <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
                     {b ? (
                       <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
@@ -260,34 +261,6 @@ export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
   );
 }
 
-function Donut({ segments }: { segments: { label: string; share: number }[] }) {
-  const tot = segments.reduce((a, s) => a + s.share, 0) || 1;
-  const R = 42, C = 2 * Math.PI * R;
-  let acc = 0;
-  return (
-    <div className="inv-donut">
-      <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Revenue by segment, an estimate">
-        <circle className="d-track" cx="60" cy="60" r={R} fill="none" strokeWidth="15" />
-        {segments.map((s, i) => {
-          const f = s.share / tot;
-          const el = <circle key={s.label} className={`d${i % 8}`} cx="60" cy="60" r={R} fill="none" strokeWidth="15"
-            strokeDasharray={`${f * C} ${C}`} strokeDashoffset={-acc * C} transform="rotate(-90 60 60)" />;
-          acc += f;
-          return el;
-        })}
-      </svg>
-      <ul className="k-list plain">
-        {segments.map((s, i) => (
-          <li key={s.label} className="inv-legend">
-            <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><rect className={`d${i % 8} fill`} width="10" height="10" rx="3" /></svg>
-            {s.label}<span className="k-muted">{Math.round((s.share / tot) * 100)}%</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 /** Plain-number lines (growth, price trend, debt and cash, margins and returns), each a label and its facts. No
  *  bars, grades or colours: the numbers are the whole story. */
 function FactRows({ rows }: { rows: FactRow[] }) {
@@ -316,7 +289,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
         return (
           <a key={i} className="inv-news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
             <span>{n.headline}</span>
-            <span className="k-note">{n.source}{n.at ? ` · ${ago(n.at)}` : ""}{old ? ` · ${old}` : ""} ↗</span>
+            <span className="k-note">{[n.source, n.at ? ago(n.at) : null, old].filter(Boolean).join(" · ")} ↗</span>
           </a>
         );
       })}
@@ -377,7 +350,7 @@ export function QuarterTable({ q }: { q: NonNullable<Company["quarters"]> }) {
   const f = (v: number | null) => (v == null ? "–" : num(Math.round(v), 0));
   const rows = [
     { name: "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
-    { name: "Operating margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
+    { name: "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
   ];
   return (
     <DataTable label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}
@@ -443,12 +416,11 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
                   {r.watch.length > 0 && <div className="k-stack"><b className="k-sub">What to watch</b><ul className="k-list">{r.watch.map((w) => <li key={w}>{w}</li>)}</ul></div>}
                 </div>
               )}
-              {r.segments.length > 1 && <div className="k-stack"><b className="k-sub">Revenue by segment <span className="k-muted inv-plain">(estimate)</span></b><Donut segments={r.segments} /></div>}
               {r.ideas.length > 0 && (
                 <div className="k-inset">
                   <div className="k-stack">
-                    <b className="k-sub">Ideas to test on {symbol}</b>
-                    <span className="k-small k-muted">Pick one and StratLab will test it on years of real prices, after costs.</span>
+                    <b className="k-sub">Rule templates to test on {symbol}</b>
+                    <span className="k-small k-muted">Each is a test setup, not a suggestion. Pick one and StratLab shows how it would have done on years of real prices, after costs.</span>
                   </div>
                   <div className="inv-ideas">
                     {r.ideas.map((i) => (

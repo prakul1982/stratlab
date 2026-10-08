@@ -148,17 +148,20 @@ def debt_and_cash(c: dict, reported: dict | None, nums: dict | None, s: dict) ->
 
 # ---------- margins and returns ----------
 def margins_and_returns(c: dict, nums: dict | None, s: dict) -> dict | None:
-    """The operating margin year by year over five years, and the returns on capital and equity."""
+    """The EBITDA margin year by year over five years (the reported numbers' operating profit is before depreciation),
+    else the last twelve months' operating margin (after depreciation) the US company data gives; and the returns on
+    capital and equity."""
     years = [y for y in ((nums or {}).get("years") or [])[-5:] if y.get("opm") is not None]
-    trend = None
+    trend, label = None, "Operating margin"
     if not (nums or {}).get("bank") and len(years) >= 2:
         trend = " → ".join(_pct(y["opm"]).replace(".0%", "%") for y in years) + f" ({years[0]['year']} to {years[-1]['year']})"
+        label = "EBITDA margin, 5 years"
     elif (opm := _metric(c, "Profitability", "Operating margin")) is not None:
         trend = f"{_pct(opm)} (last twelve months)"
     roce = _first(s.get("roce"), _metric(c, "Returns and quality", "ROCE"))
     roe = _first(s.get("roe"), _metric(c, "Returns and quality", "ROE"), _metric(c, "Profitability", "ROE"))
     return _row("margins", "Margins and returns",
-                _item("Operating margin, 5 years" if len(years) >= 2 else "Operating margin", trend),
+                _item(label, trend),
                 _item("ROCE", _pct(roce) if roce is not None else None), _item("ROE", _pct(roe) if roe is not None else None))
 
 

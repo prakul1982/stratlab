@@ -32,7 +32,7 @@ def test_rows_from_reported_numbers_and_prices():
     assert got["price"]["1-year price change"].startswith("+") and got["price"]["Stage (150-day average)"] == "Stage 2 (advancing)"
     assert got["debt"]["Debt to equity"] == "0.40" and got["debt"]["Interest cover"] == "5.0x"
     assert got["debt"]["Cash from operations"] == "106% of net profit over 5 years"
-    assert got["margins"]["Operating margin, 5 years"] == "18% → 19% → 21% → 20% → 22% (Mar 2021 to Mar 2025)"
+    assert got["margins"]["EBITDA margin, 5 years"] == "18% → 19% → 21% → 20% → 22% (Mar 2021 to Mar 2025)"
     assert got["margins"]["ROCE"] == "19.5%" and got["margins"]["ROE"] == "16.2%"
 
 
@@ -50,4 +50,4 @@ def test_missing_sources_leave_lines_out_and_nothing_is_a_score():
 def test_banks_have_no_debt_or_margin_lines():
     bank = {**REPORTED, "pl": {"cols": COLS, "rows": {**REPORTED["pl"]["rows"], "Financing Margin %": [1] * 6}}}
     got = rows(K.build({}, bank, None))
-    assert "debt" not in got and "Operating margin, 5 years" not in got.get("margins", {})
+    assert "debt" not in got and "EBITDA margin, 5 years" not in got.get("margins", {})

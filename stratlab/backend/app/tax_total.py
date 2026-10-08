@@ -455,6 +455,25 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
 
 
 # ---------- returns and audit, facts only ----------
+CRORE = 1e7
+
+
+def _crore(v: float) -> str:
+    return f"₹{v / CRORE:,.1f} crore".replace(".0 crore", " crore")
+
+
+def audit_fact(fy: int, turnover: float, has_business: bool) -> str | None:
+    """Where the year's turnover stands against section 44AB's limits, as a fact (the owner's FY 2025-26: Rs39.7 crore
+    of F&O turnover, past the Rs10 crore limit, while no page said so). None below Rs1 crore or with no business income."""
+    if not has_business or not turnover or turnover <= CRORE:
+        return None
+    high = 10 * CRORE if fy >= 2020 else 5 * CRORE if fy == 2019 else CRORE
+    if turnover > high:
+        return f"Turnover of {_crore(turnover)} is above {_crore(high)}, the higher limit in section 44AB: a tax audit applies."
+    return (f"Turnover of {_crore(turnover)} is above ₹1 crore: section 44AB requires a tax audit unless cash receipts "
+            f"and cash payments were each no more than 5% of the total, when the limit is {_crore(high)}.")
+
+
 def filing_facts(fy: int, turnover: float, has_business: bool) -> list[str]:
     """What the law says about the return form and tax audit, for a year with business income."""
     if not has_business:
@@ -462,6 +481,9 @@ def filing_facts(fy: int, turnover: float, has_business: bool) -> list[str]:
     out = ["Intraday, F&O, commodity and currency trading results are business income. Individuals with business "
            "income file ITR-3 (ITR-4 is only for the presumptive scheme).",
            f"Turnover worked out from your files (the total of profits and losses, trade by trade): {money(turnover)}."]
+    mine = audit_fact(fy, turnover, has_business)
+    if mine:
+        out.append(mine)
     if fy >= 2020:
         out.append("Tax audit (section 44AB): needed when turnover is over ₹1 crore, or over ₹10 crore when cash "
                    "receipts and cash payments are each no more than 5% of the total (the ₹10 crore limit applies "

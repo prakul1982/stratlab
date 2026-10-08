@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, asOf, marketTz, pct, price, safeHref } from "../lib/format";
+import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
   REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, metricText, monthsOld, researchApi, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist,
-  type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Region, type SectorAI,
+  type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
   AIRead, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
@@ -210,7 +210,7 @@ export function CompanyPage() {
             {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
             <div className="inv-badges">
               <SurvBadges region={region} symbol={c.symbol} />
-              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} />}
+              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}
               <FoBadges region={region} symbol={c.symbol} />
               <IndexBadges region={region} symbol={c.symbol} />
             </div>
@@ -247,17 +247,17 @@ export function CompanyPage() {
         ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : []),
         { id: "corporate-actions", label: "Corporate actions" }, { id: "co-news", label: "News" }]} />
       <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>
-      {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} quiet />}
+      {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
 
       <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
         {(wiki || c.about.profile) && (
           <Card>
-            <CardHead title="What they do" info="From Wikipedia and the company's own profile: facts, not AI." />
+            <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
             {wiki?.description && <p className="k-sub">{wiki.description}</p>}
             <p className="k-small">{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
             {c.facts.some((f) => !/market cap/i.test(f.label)) && <dl className="k-dl">{c.facts.filter((f) => !/market cap/i.test(f.label)).map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
-            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">More on Wikipedia ↗</a>}
+            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
           </Card>
         )}
         {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
@@ -286,21 +286,15 @@ export function CompanyPage() {
       <div className="k-cols">
         {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} /></Card>}
         {c.shareholding && c.shareholding.rows.length > 0 && <Card id="co-owners"><CardHead title="Who owns it" info={HELP.researchHolding} /><Shareholding s={c.shareholding} /></Card>}
-        {((c.pros?.length ?? 0) > 0 || (c.cons?.length ?? 0) > 0) && (
-          <Card>
-            <CardHead title="Strengths and concerns" info="Automatic checks on the company's reported numbers." />
-            {(c.pros?.length ?? 0) > 0 && <ul className="k-list">{c.pros!.map((p) => <li key={p}>{p}</li>)}</ul>}
-            {(c.cons?.length ?? 0) > 0 && <ul className="k-list">{c.cons!.map((p) => <li key={p}>{p}</li>)}</ul>}
-          </Card>
-        )}
         {c.insider && c.insider.rows.length > 0 && (
           <Card>
             <CardHead title="Insider trades" info="Shares bought or sold by the company's own directors and officers, from filings." />
-            <p className="k-small k-muted">Net <Signed value={c.insider.net} fmt={(v) => `${v > 0 ? "+" : "−"}${Math.abs(Math.round(v)).toLocaleString("en-IN")}`} /> shares across recent filings</p>
+            {/* the net is the sum of exactly the rows below, grouped as the company's market writes numbers */}
+            <p className="k-small k-muted">Net <Signed value={c.insider.net} fmt={(v) => signed(Math.round(v), 0, region)} /> shares over the {c.insider.rows.length} filing{c.insider.rows.length === 1 ? "" : "s"} below</p>
             <DataTable label="Insider trades" rows={c.insider.rows} rowKey={(t) => `${t.name}-${t.date}-${t.change}`}
               columns={[{ key: "n", header: "Name", rowHeader: true, wrap: true, cell: (t) => t.name },
-                { key: "c", header: "Shares", numeric: true, cell: (t) => <Signed value={t.change} fmt={(v) => `${v > 0 ? "+" : "−"}${Math.abs(v).toLocaleString("en-IN")}`} /> },
-                { key: "d", header: "Date", numeric: true, cell: (t) => t.date }]} />
+                { key: "c", header: "Shares", numeric: true, cell: (t) => <Signed value={t.change} fmt={(v) => signed(v, 0, region)} /> },
+                { key: "d", header: "Date", numeric: true, cell: (t) => (t.date ? fmtDate(t.date) : "–") }]} />
           </Card>
         )}
       </div>
@@ -392,7 +386,7 @@ export function ThemesPage() {
           )}
           {r.clusters.length > 0 && (
             <Card>
-              <CardHead title="Who's in it" info="Groups of companies involved in the theme. Tap a ticker to open the company." />
+              <CardHead title="Who's in it" info="Groups of companies involved in the theme. Every ticker is checked against the exchange lists; a company without one isn't listed there. Tap a ticker to open the company." />
               {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
               <div className="inv-clusters">
                 {r.clusters.map((cl) => (
@@ -400,7 +394,7 @@ export function ThemesPage() {
                     <b className="k-small">{cl.name}</b>
                     <div className="k-row">{cl.companies.map((co) => co.ticker
                       ? <Link key={co.name} className="inv-chip" to={coLink(co.ticker)}><b>{co.ticker}</b> {co.name}</Link>
-                      : <span key={co.name} className="inv-chip off">{co.name} (private)</span>)}</div>
+                      : <span key={co.name} className="inv-chip off">{co.name} (not listed)</span>)}</div>
                   </div>
                 ))}
               </div>
@@ -538,8 +532,13 @@ export function ComparePage() {
     setAsking(true);
     researchApi.compare(region, a, b, true).then((x) => setRes((r) => (r ? { ...r, ai: x.ai } : x))).catch(() => {}).finally(() => setAsking(false));
   };
-  const rows = (c: Company) => Object.fromEntries(c.metrics.flatMap((g) => g.items.map((i) => [i.label, i])));
-  const labels = res ? Array.from(new Set([...res.a.metrics, ...res.b.metrics].flatMap((g) => g.items.map((i) => i.label)))) : [];
+  // each measure under its section ("5Y CAGR" is in Sales growth and in Profit growth): keyed by both, so one never
+  // stands in for the other, and each section is labelled
+  const key = (g: string, l: string) => `${g} · ${l}`;
+  const rows = (c: Company) => Object.fromEntries(c.metrics.flatMap((g) => g.items.map((i) => [key(g.title, i.label), i])));
+  const groups = res ? [...res.a.metrics, ...res.b.metrics] : [];
+  const sections = Array.from(new Set(groups.map((g) => g.title)))
+    .map((t) => ({ title: t, labels: Array.from(new Set(groups.filter((g) => g.title === t).flatMap((g) => g.items.map((i) => i.label)))) }));
   const ra = res ? rows(res.a) : {}, rb = res ? rows(res.b) : {};
   // each figure as its company page writes it (₹3.7 lakh cr, 0.44, 9.7%), never a bare number without its unit
   const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => (m ? metricText(m, c.currency) : "–");
@@ -589,9 +588,15 @@ export function ComparePage() {
           </div>
           <Card>
             <CardHead title="The numbers side by side" />
-            <DataTable label="Measures for both companies" rows={labels} rowKey={(l) => l}
-              columns={[{ key: "m", header: "Measure", rowHeader: true, cell: (l) => l },
-                { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[l], res.a) }, { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[l], res.b) }]} />
+            {sections.map((sec) => (
+              <div key={sec.title} className="k-stack">
+                <span className="k-eyebrow">{sec.title}</span>
+                <DataTable label={`${sec.title} for both companies`} rows={sec.labels} rowKey={(l) => l}
+                  columns={[{ key: "m", header: "Measure", rowHeader: true, cell: (l) => l },
+                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[key(sec.title, l)], res.a) },
+                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[key(sec.title, l)], res.b) }]} />
+              </div>
+            ))}
           </Card>
         </>
       )}
@@ -604,7 +609,7 @@ export function WatchlistPage() {
   const [region, setRegion] = useRegion();
   const { items, toggle, has } = useWatchlist();
   const { fail, notify } = useApp();
-  const [quotes, setQuotes] = useState<Record<string, { price: number | null; change_pct?: number | null } | null> | null>(null);
+  const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
   const mine = (items ?? []).filter((w) => w.region === region);
   const key = mine.map((w) => w.symbol).join(",");
   useEffect(() => {
@@ -638,7 +643,13 @@ export function WatchlistPage() {
               { key: "s", header: "Company", rowHeader: true, wrap: true, cell: (w) => (
                 <><Link className="link" to={`/research/${w.region}/${encodeURIComponent(w.symbol)}`}><b>{w.symbol}</b></Link>
                   {w.name && <span className="k-sub-line">{w.name}</span>}</>) },
-              { key: "p", header: "Price", numeric: true, cell: (w) => (quotes == null ? "…" : quotes[w.symbol]?.price != null ? price(quotes[w.symbol]!.price!, region === "IN" ? "INR" : "USD") : "–") },
+              { key: "p", header: "Price", numeric: true, cell: (w) => {
+                const q = quotes?.[w.symbol];
+                if (quotes == null) return "…";
+                if (q?.price == null) return "–";
+                const at = quoteAt(q.at, marketTz(region));
+                return <>{price(q.price, region === "IN" ? "INR" : "USD")}{at && <span className="k-sub-line">{at}</span>}</>;
+              } },
               { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },
               { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w).catch(fail)}>Remove</button> },

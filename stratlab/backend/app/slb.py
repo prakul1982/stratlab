@@ -30,7 +30,7 @@ KEEP = 130                                # trading days kept: about six months
 WINDOWS = (30, 90)
 MAX_SYMBOLS = 120                         # stocks one request can ask about
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
-SOURCE = "the exchange's daily SLB bhavcopy and its list of securities eligible for lending"
+SOURCE = "the exchange's daily securities lending file and its list of securities eligible for lending"
 NOTE = ("Past traded lending fees with their dates, from the exchange's SLB segment. Actual demand and fees vary, many "
         "stocks see no lending on most days, and StratLab doesn't arrange lending: that goes through an approved "
         "intermediary, usually your broker.")
@@ -132,7 +132,7 @@ def summary(series: list[list], today: str, days: int) -> dict:
 # ---------- the desk ----------
 class Desk(X.Desk):
     name = "slb"
-    what = "SLB bhavcopy"
+    what = "daily securities lending file"
     ready_at = "19:00"
     backfill_days = 95
     store = X.DayStore(PREFIX, KEEP, point, shards=8)

@@ -79,7 +79,8 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
           entryJoin: out.entryJoin || "all", tf: out.tf || "1d", side: out.side === "short" || out.side === "both" ? out.side : "long",
           shortEntry: out.shortEntry ?? [], shortExit: out.shortExit ?? [], minScore: out.minScore ?? 0,
           session: out.session ?? s.session, product: out.product ?? "auto",
-          risk: riskForCurrency({ ...s.risk, ...(out.risk || {}) }, instrument?.currency) };
+          // an import is a translation: no stop or target the script didn't have (R5O-010)
+          risk: riskForCurrency({ ...s.risk, sl: 0, tgt: 0, ...(out.risk || {}) }, instrument?.currency) };
       }
       const group = out.universe ? await groupFor(out.universe, out.market || market || "IN") : null;
       if (group) instrument = null;
