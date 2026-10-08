@@ -647,11 +647,15 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
   const abroad = f.segment === "us" || f.segment === "crypto";
   // times are the exchange's own clock: India's for the Indian segments, New York's for US stocks
   const zone = f.segment === "us" ? tzLabel(ET) : f.segment === "crypto" ? undefined : tzLabel(IST);
+  // what's missing is said under its own box, not only in a toast (R5O-029)
+  const [bad, setBad] = useState<Partial<Record<"symbol" | "qty" | "entry_price" | "exit_price", string>>>({});
   const save = async () => {
     const n = (v: string) => Number(v.replace(/,/g, ""));
-    if (!f.symbol.trim() || !(n(f.qty) > 0) || !Number.isFinite(n(f.entry_price)) || !Number.isFinite(n(f.exit_price)) || !f.entry_price || !f.exit_price) {
-      notify("Fill in the symbol, quantity and both prices."); return;
-    }
+    const price = (v: string) => (!v.trim() ? "Enter the price." : !(Number.isFinite(n(v)) && n(v) > 0) ? "Enter a price above 0." : undefined);
+    const problems = { symbol: f.symbol.trim() ? undefined : "Enter the symbol.", qty: n(f.qty) > 0 ? undefined : "Enter a quantity above 0.",
+      entry_price: price(f.entry_price), exit_price: price(f.exit_price) };
+    setBad(problems);
+    if (Object.values(problems).some(Boolean)) { notify("Fill in the symbol, quantity and both prices."); return; }
     setBusy(true);
     try {
       onSaved(await api<Journal>("/trade/journal/trades", { method: "POST", body: {
@@ -663,16 +667,16 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
     <Modal title="Add a trade" onClose={onClose}>
       <div className="k-stack">
         <FormGrid>
-          <Field label="Symbol" value={f.symbol} maxLength={40} placeholder={abroad ? (f.segment === "us" ? "AAPL" : "BTCUSD") : "INFY or NIFTY26OCT25000CE"} onChange={set("symbol")} />
+          <Field label="Symbol" error={bad.symbol} value={f.symbol} maxLength={40} placeholder={abroad ? (f.segment === "us" ? "AAPL" : "BTCUSD") : "INFY or NIFTY26OCT25000CE"} onChange={set("symbol")} />
           <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF({ ...f, segment: v })} options={ADD_SEGMENTS} />}</Field>
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
-          <Field label="Quantity" inputMode="decimal" value={f.qty} onChange={set("qty")} />
+          <Field label="Quantity" error={bad.qty} inputMode="decimal" value={f.qty} onChange={set("qty")} />
           <DateField label="Entry date" value={f.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />
-          <Field label="Entry time" optional>{(id) => <TimeInput id={id} zone={zone} value={f.entry_time} onChange={(v) => setF({ ...f, entry_time: v })} allowEmpty />}</Field>
-          <Field label="Entry price" inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
+          <Field label="Entry time" optional>{(id) => <TimeInput id={id} label="Entry time" zone={zone} value={f.entry_time} onChange={(v) => setF({ ...f, entry_time: v })} allowEmpty />}</Field>
+          <Field label="Entry price" error={bad.entry_price} inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
           <DateField label="Exit date" value={f.exit_date} onChange={(d) => set("exit_date")({ target: { value: d } })} />
-          <Field label="Exit time" optional>{(id) => <TimeInput id={id} zone={zone} value={f.exit_time} onChange={(v) => setF({ ...f, exit_time: v })} allowEmpty />}</Field>
-          <Field label="Exit price" inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
+          <Field label="Exit time" optional>{(id) => <TimeInput id={id} label="Exit time" zone={zone} value={f.exit_time} onChange={(v) => setF({ ...f, exit_time: v })} allowEmpty />}</Field>
+          <Field label="Exit price" error={bad.exit_price} inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
           <Field label={abroad ? "Charges ($)" : "Charges (₹)"} optional inputMode="decimal" value={f.charges} onChange={set("charges")}
             info={abroad ? "No charges are worked out for US stocks or crypto: enter what your broker or exchange charged, or leave it empty for none." : "Worked out at the published rates when left empty."} />
         </FormGrid>

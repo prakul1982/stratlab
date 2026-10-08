@@ -13,6 +13,23 @@ from bs4 import BeautifulSoup
 from .net import BROWSER_UA, Source, SourceError, num
 
 
+_CITE = re.compile(r"\s*\[\d{1,3}\]")
+# where a profile's own words end and its pasted breakdowns begin: "[1] Revenue Breakup Q3FY26 [1] BFSI : 31.9% …"
+_BREAKDOWN = re.compile(r"\s*(?:\[\d{1,3}\]\s*)?\b(?:Revenue|Business|Segment(?:al)?|Geograph\w*|Product|Order book|Key)\s+"
+                        r"(?:Breakup|Break-up|Mix|Split|Share|Wise|Highlights?)\b.*$", re.I | re.S)
+
+
+def clean_profile(text: str | None) -> str | None:
+    """A company profile as people read it: no "[1]" footnote marks and no breakdown lists pasted after the
+    description (R5O-027). Nothing left: None."""
+    if not text:
+        return text
+    t = _BREAKDOWN.sub("", str(text))
+    t = _CITE.sub("", t)
+    t = re.sub(r"\s+", " ", t).strip(" :;,-")
+    return t or None
+
+
 def _text(el) -> str:
     return re.sub(r"\s+", " ", el.get_text(" ", strip=True)).replace(" ", " ").strip() if el else ""
 
@@ -69,7 +86,9 @@ def parse(html: str) -> dict:
         paras = [_text(p) for p in prof.find_all("p")]
         paras = [p for p in paras if len(p) > 30]
         if paras:
-            out["about"] = " ".join(paras[:2])[:1200]
+            about = clean_profile(" ".join(paras[:2]))
+            if about:
+                out["about"] = about[:1200]
         for a in prof.find_all("a", href=True):
             href = a["href"]
             if href.startswith("http") and "screener.in" not in href and "bseindia" not in href and "nseindia" not in href:
@@ -127,6 +146,22 @@ def _pe(p: dict, price: float | None) -> float | None:
     return round(price / latest, 1) if latest > 0 else None
 
 
+SHARES_DRIFT = 0.015           # the source's market value and its share capital disagree by more than this: use the capital
+
+
+def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None) -> float | None:
+    """Market value in crore: price times shares. The source's own figure is price times its share count at the moment
+    it was read, which can lag (TCS, 8 Oct 2026: the screener said 370.3 crore shares, the company page 361.7, from two
+    reads). The share capital over the face value counts the shares from the balance sheet; when the two differ by
+    more than SHARES_DRIFT, that count is used, so every page multiplies the price by the same number of shares."""
+    if not price or price <= 0:
+        return cap_cr
+    shares = (equity_cr / face) if equity_cr and face and face > 0 else None
+    if shares and shares > 0 and (not cap_cr or abs(cap_cr / price / shares - 1) > SHARES_DRIFT):
+        return round(price * shares, 2)
+    return cap_cr
+
+
 def summary(p: dict) -> dict:
     """The handful of numbers the research page and the AI need."""
     r = p.get("ratios", {})
@@ -141,7 +176,6 @@ def summary(p: dict) -> dict:
     book = num(r.get("Book Value"))
     hl = r.get("High / Low", "")
     hi_lo = [num(x) for x in hl.split("/")] if "/" in hl else [None, None]
-    net_margin = (profit[-1] / sales[-1] * 100) if sales and profit and sales[-1] else None
     # "Latest YoY" is the latest reported year against the year before: full years only, never the trailing twelve
     # months (which overlap the last year by nine months) against the last year
     years = [str(c).strip().upper() != "TTM" for c in (pl or {}).get("cols") or []]
@@ -151,10 +185,14 @@ def summary(p: dict) -> dict:
         keep = [v for v, ok in zip(vals, years + [True] * (len(vals) - len(years))) if ok and v is not None]
         return keep
     sales_y, profit_y = full("Sales", "Revenue"), full("Net Profit")
+    # the last reported year's, as its definition says and as the year table beside it shows (TCS FY26: 49,454 of
+    # 2,67,021 = 18.5%; the trailing twelve months' 18.1% sat next to the FY26 figures)
+    net_margin = (profit_y[-1] / sales_y[-1] * 100) if sales_y and profit_y and sales_y[-1] else None
+    face = num(r.get("Face Value"))
     whole = [v for v in _row(bal, "Equity") if v is not None]       # US filings: one shareholders' equity row
     net_worth = (reserves[-1] + (equity[-1] if equity else 0)) if reserves else (whole[-1] if whole else None)
     return {
-        "market_cap_cr": num(r.get("Market Cap")), "price": price,
+        "market_cap_cr": market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face), "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
         "pe": _pe(p, price), "book_value": book, "pb": (price / book) if price and book else None,
         "div_yield": num(r.get("Dividend Yield")), "roce": num(r.get("ROCE")), "roe": num(r.get("ROE")),

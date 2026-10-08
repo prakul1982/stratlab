@@ -4,7 +4,9 @@ import { useApp } from "../../lib/app";
 import type { CalendarStatus } from "./HolidaysPanel";
 
 export type Plan = "free" | "basic" | "pro";
-export type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quota?: boolean; quick_rank?: number | null; research_rank?: number | null };
+export type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quota?: boolean; quick_rank?: number | null; research_rank?: number | null;
+  /** whether it can answer now (a short rate limit or a used-up free quota still counts), and why not in the provider's own words */
+  answering?: boolean | null; state_text?: string | null };
 export type ServerError = { ref: string; at: string; method: string; path: string; error: string; where: string };
 
 export interface Overview {

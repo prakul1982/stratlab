@@ -1,17 +1,20 @@
-/* The price chart. Up and down are blue and orange (validated for colour-blind readers against the card surface),
- * never red and green. Indicator slots: green and magenta (labelled in the legend), then neutral, then repeats dashed. */
+/* The price chart. Candles use the app's own up and down colours (--up green, --down red), the same as every change
+ * arrow beside them (R5O-035); both pass 4.5:1 and differ in lightness, and "Hollow candles" draws a rise as an outline for
+ * readers who tell shapes apart more easily than colours. Indicator slots: green and magenta (labelled in the legend), then
+ * neutral, then repeats dashed. */
+
 .pc {
-  --pc-up: #1F4FB5; --pc-down: #B4500F; --pc-on-up: #FFFFFF; --pc-on-down: #FFFFFF;
+  --pc-up: var(--up); --pc-down: var(--down); --pc-on-up: #FFFFFF; --pc-on-down: #FFFFFF;
   --pc-s0: #138A62; --pc-s1: #A8327A; --pc-s2: #6F695C;
   position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; outline: none;
 }
 :root[data-theme="dark"] .pc {
-  --pc-up: #6A8EE4; --pc-down: #D9773A; --pc-on-up: #0F1422; --pc-on-down: #1A0E05;
+  --pc-up: var(--up); --pc-down: var(--down); --pc-on-up: #0F1422; --pc-on-down: #1A0E05;
   --pc-s0: #2FA877; --pc-s1: #D465A9; --pc-s2: #A39C8C;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) .pc {
-    --pc-up: #6A8EE4; --pc-down: #D9773A; --pc-on-up: #0F1422; --pc-on-down: #1A0E05;
+    --pc-up: var(--up); --pc-down: var(--down); --pc-on-up: #0F1422; --pc-on-down: #1A0E05;
     --pc-s0: #2FA877; --pc-s1: #D465A9; --pc-s2: #A39C8C;
   }
 }
@@ -126,7 +129,7 @@
 .pc-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--card); outline: 1px solid var(--line-2); cursor: pointer; padding: 0; }
 .pc-dot[aria-pressed="true"] { outline: 2px solid var(--ink); }
 .pc-dot:disabled { opacity: .4; cursor: not-allowed; }
-.pc-dot.sw-ink { background: var(--ink); } .pc-dot.sw-blue { background: var(--blue); } .pc-dot.sw-orange { background: var(--pc-down); }
+.pc-dot.sw-ink { background: var(--ink); } .pc-dot.sw-blue { background: var(--blue); } .pc-dot.sw-orange { background: var(--orange); }
 .pc-dot.sw-green { background: var(--pc-s0); } .pc-dot.sw-magenta { background: var(--pc-s1); } .pc-dot.sw-grey { background: var(--muted); }
 .pc-text, .pc-risk input { min-height: 34px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--paper); padding: 0 8px; font: inherit; font-size: 14px; color: var(--ink); }
 .pc-text { width: 180px; max-width: 100%; }

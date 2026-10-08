@@ -87,7 +87,7 @@ function readTheme(el: HTMLElement): Theme {
   return {
     bg: v("--card", "#FFFDF8"), text: v("--ink", "#1D1B17"), muted: v("--muted", "#5C574D"), grid: v("--rule", "#EAE3D3"),
     border: v("--line", "#E2DAC8"), ink: v("--ink", "#1D1B17"), accent: v("--blue", "#1F4FB5"),
-    up: v("--pc-up", "#1F4FB5"), down: v("--pc-down", "#B4500F"), onUp: v("--pc-on-up", "#fff"), onDown: v("--pc-on-down", "#fff"),
+    up: v("--pc-up", "#0F7452"), down: v("--pc-down", "#B23B3B"), orange: v("--orange", "#B4500F"), onUp: v("--pc-on-up", "#fff"), onDown: v("--pc-on-down", "#fff"),
     slots: [v("--pc-s0", "#138A62"), v("--pc-s1", "#A8327A"), v("--pc-s2", "#6F695C")],
     font: `11.5px ${sans}`,
   };

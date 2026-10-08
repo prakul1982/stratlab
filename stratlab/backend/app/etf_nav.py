@@ -38,8 +38,9 @@ RETRY = 1800                       # with nothing stored, wait this long between
 CLOSE_AT = "15:45"                 # India time: the day's closing prices are recorded after this
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
 NOTE = ("Price is the last traded price on the exchange. The NAV is the fund house's own figure for what one unit "
-        "holds, published each evening for that day, so through the day the price moves while the NAV stays at the "
-        "last close. A gap is the price's distance from the NAV, as a percent. Figures as of the times shown.")
+        "holds, published each evening for that day. A gap compares a price and a NAV of the same day: the day's close "
+        "against that day's NAV. Through the day, before that day's NAV is out, the gap shown is the last close's "
+        "against its NAV, so the day's market move is never read as a gap. Figures as of the times shown.")
 # said only when a source gave a real indicative NAV (the exchange's list gives none)
 INAV_NOTE = (" The indicative NAV (iNAV) is the estimate of what one unit holds, worked out through market hours from "
              "the holdings' prices; a gap to it is shown too.")
@@ -301,12 +302,41 @@ def summary(hist: list[dict]) -> dict | None:
 
 
 # ---------- what the pages show ----------
+def day_of(iso: str | None) -> str | None:
+    """The India day of an ISO time (the list's read), or None."""
+    if not iso:
+        return None
+    try:
+        t = datetime.fromisoformat(str(iso))
+    except ValueError:
+        return None
+    return (t if t.tzinfo is None else t.astimezone(IST)).date().isoformat()
+
+
+def same_day(sym: str, price, price_day: str | None, nav_day: str | None) -> tuple[float | None, str | None]:
+    """The price to set against a NAV of `nav_day`, and its day: the list's price when it is from that same day (after
+    the close, once the evening NAV is out), else that day's stored close. None while neither exists: a price from
+    today against yesterday's NAV is the day's market move, not a gap (8 Oct 2026: NIFTYBEES at 254.15 against the
+    7 Oct NAV of 257.80 read "1.4% below" with the market down 1.7%)."""
+    if not nav_day:
+        return None, None
+    if price_day == nav_day:
+        return num(price), nav_day
+    close = (_days().get(nav_day) or {}).get(sym)
+    if isinstance(close, list) and close and num(close[0]) is not None:
+        return num(close[0]), nav_day
+    return None, None
+
+
 def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
     """One ETF: its price, iNAV and last NAV, the gap to each, and the headline gap in words (to the iNAV when the
-    exchange gave one, else to the last NAV)."""
+    exchange gave one, else to the last NAV). The NAV gap is of one day: that day's close (or the list's price, when it
+    is of the NAV's day) against that day's NAV; `nav_price` and `nav_price_day` say which price, and `nav_waiting`
+    that there is a NAV but no price of its day to set against it."""
     sch = nav_of(r, data)
     nav, nav_day = (sch["nav"], sch.get("date")) if sch else (None, None)
-    inav_gap, nav_gap = gap(r["price"], r.get("inav")), gap(r["price"], nav)
+    vs, vs_day = same_day(sym, r["price"], day_of(as_of), nav_day)
+    inav_gap, nav_gap = gap(r["price"], r.get("inav")), gap(vs, nav)
     basis = "iNAV" if inav_gap is not None else "NAV" if nav_gap is not None else None
     g = inav_gap if basis == "iNAV" else nav_gap
     fund = instrument_kinds.fund_of(f"{sym} {r.get('name') or ''} {r.get('underlying') or ''}")
@@ -315,7 +345,18 @@ def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
     return {"symbol": sym, "name": name, "underlying": r.get("underlying"), "fund": fund,
             "fund_label": instrument_kinds.FUND_LABELS.get(fund, "ETF"), "price": r["price"], "price_at": as_of,
             "inav": r.get("inav"), "inav_gap": inav_gap, "nav": nav, "nav_date": nav_day, "nav_gap": nav_gap,
-            "gap": g, "basis": basis, "text": f"{sym} {words(g, 'indicative NAV' if basis == 'iNAV' else 'last NAV')}" if basis else None}
+            "nav_price": vs if nav_gap is not None else None, "nav_price_day": vs_day if nav_gap is not None else None,
+            "nav_waiting": bool(nav_day and vs is None),
+            "gap": g, "basis": basis, "text": _text(sym, g, basis, vs_day, day_of(as_of)) if basis else None}
+
+
+def _text(sym: str, g: float | None, basis: str | None, vs_day: str | None, price_day: str | None) -> str:
+    if basis == "iNAV":
+        return f"{sym} {words(g, 'indicative NAV')}"
+    if vs_day and vs_day != price_day:              # an earlier day's close: said in the past, with its day
+        d = date.fromisoformat(vs_day)
+        return f"{sym} {words(g, 'NAV').replace('trades', 'closed', 1)} on {d.day} {d.strftime('%b')}"
+    return f"{sym} {words(g, 'last NAV')}"
 
 
 def table() -> dict:
@@ -369,7 +410,11 @@ def gap_now(symbol: str, price) -> dict | None:
         return {"gap": inav_g, "basis": "iNAV",
                 "text": f"{symbol} {words(inav_g, 'indicative NAV')} (price {money(float(price), 'IN')}, iNAV {money(r['inav'], 'IN')})"}
     sch = nav_of(r, navs())
-    g = gap(price, sch["nav"]) if sch else None
+    # only a NAV of the price's own day: through the day the last NAV is yesterday's, and a live price against it is the
+    # market's move, not a gap (the list's read stands for the day of the price)
+    if not sch or sch.get("date") != day_of(load_live().get("as_of")):
+        return None
+    g = gap(price, sch["nav"])
     if g is None:
         return None
     return {"gap": g, "basis": "NAV",
@@ -381,6 +426,8 @@ class Job(news_job.Job):
     """Every five minutes: while India's market is open, read the exchange's ETF list (at most every few minutes);
     after the close, record the day's closing prices once (run marker newsjob:etfnav-close); and fill in NAVs the
     evening file has since published. With nothing stored yet (a new server), it reads the list at once."""
+
+    status_key = "etf"
 
     def __init__(self, feed_fn):
         super().__init__()

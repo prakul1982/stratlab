@@ -19,6 +19,17 @@ SECTOR_OF_INDEX = {"NIFTY BANK": "Financial Services", "NIFTY PSU BANK": "Financ
                    "NIFTY METAL": "Commodities", "NIFTY AUTO": "Consumer Discretionary", "NIFTY ENERGY": "Energy",
                    "NIFTY OIL AND GAS": "Energy"}
 UNCLASSIFIED = "Not classified"
+# a US sector fund's sector in the exchange's broad sector names, so an Indian and a US technology company are one sector
+# on the sector card ("Technology" and "Information Technology" were two)
+SECTOR_OF_US = {"Technology": "Information Technology", "Financials": "Financial Services", "Health care": "Healthcare",
+                "Consumer staples": "Fast Moving Consumer Goods", "Consumer discretionary": "Consumer Discretionary",
+                "Materials": "Commodities", "Communication": "Telecommunication", "Real estate": "Realty"}
+MARKET_TZ = {"IN": "Asia/Kolkata", "US": "America/New_York"}
+
+
+def sector_name(s: str | None) -> str:
+    """One name per sector, whichever market's words a holding was saved with."""
+    return SECTOR_OF_US.get(s or "", s) or UNCLASSIFIED
 
 
 def _key(uid: str) -> str:
@@ -209,7 +220,7 @@ def us_sector(fund: str | None) -> str:
     if not fund:
         return UNCLASSIFIED
     from .rotation import _label
-    return _label("US", fund, None)
+    return sector_name(_label("US", fund, None))
 
 
 # ---------- the page ----------
@@ -238,6 +249,21 @@ def _r(v, dp=2):
     return None if v is None else round(v, dp)
 
 
+def session_day(q: dict, market: str) -> str | None:
+    """The day (in the market's own zone) of the session a quote's price and change are from, or None when the quote
+    carries no trade time."""
+    from zoneinfo import ZoneInfo
+    at = q.get("at")
+    try:
+        t = datetime.fromisoformat(at) if isinstance(at, str) else None
+    except ValueError:
+        return None
+    if t is None:
+        return None
+    zone = ZoneInfo(MARKET_TZ.get(market, "Asia/Kolkata"))
+    return (t.replace(tzinfo=zone) if t.tzinfo is None else t.astimezone(zone)).date().isoformat()
+
+
 def _position(i: dict, q: dict) -> dict:
     """One holding at today's price, in its own currency."""
     price, qty, avg = q.get("price"), i["qty"], i.get("avg")
@@ -251,19 +277,28 @@ def _position(i: dict, q: dict) -> dict:
     return {"symbol": i["symbol"], "exchange": i.get("exchange") or ("US" if us else "NSE"), "name": i.get("name") or i["symbol"],
             "market": "US" if us else "IN", "currency": "USD" if us else "INR", "kind": kind,
             "kind_label": None if kind == "stock" else instrument_kinds.label(code),
-            "sector": instrument_kinds.SECTORS.get(kind) or i.get("sector") or UNCLASSIFIED, "qty": qty, "avg": _r(avg), "price": _r(price),
+            "sector": instrument_kinds.SECTORS.get(kind) or sector_name(i.get("sector")), "qty": qty, "avg": _r(avg), "price": _r(price),
             "value": _r(val), "invested": _r(inv), "pnl": _r(pnl), "pnl_pct": _r(pnl / inv * 100) if pnl is not None and inv else None,
-            "day": _r(chg), "day_pct": _r(q.get("change_pct"))}
+            "day": _r(chg), "day_pct": _r(q.get("change_pct")), "session": session_day(q, "US" if us else "IN") if price else None}
 
 
-def _totals(rows: list[dict], rate) -> dict:
-    """Value, cost, gain or loss and the day's change of some positions, each converted with rate(row) (None leaves
-    a position out). A position without a price counts at cost."""
+def _counted(r: dict) -> bool:
+    """Whether a position is in the value, cost and gain-or-loss totals: one with a buy price is (at its price, or at
+    cost when it has no price); one with a price but no buy price is not, since its gain or loss is unknown and counting
+    only its value would make value minus cost differ from the gain or loss."""
+    return r["invested"] is not None or r["value"] is None
+
+
+def _totals(rows: list[dict], rate, session: str | None = None) -> dict:
+    """Value, cost, gain or loss and the day's change of the same positions, each converted with rate(row) (None leaves
+    a position out). A position without a price counts at cost; one without a buy price is left out (see `_counted`).
+    `session` is the day the day's change is for: a position whose price is from another session (a US stock's last
+    session, seen during India's) is left out of the day's change."""
     value = cost = cost_priced = day = before = 0.0
     pnl, days, n = None, False, 0
     for r in rows:
         fx = rate(r)
-        if fx is None:
+        if fx is None or not _counted(r):
             continue
         n += 1
         value += fx * (r["value"] if r["value"] is not None else r["invested"] or 0)
@@ -271,14 +306,22 @@ def _totals(rows: list[dict], rate) -> dict:
         if r["pnl"] is not None:
             pnl = (pnl or 0) + fx * r["pnl"]
             cost_priced += fx * r["invested"]
-        if r["day"] is not None:
+        if r["day"] is not None and (session is None or r.get("session") in (None, session)):
             days = True
             day += fx * r["day"]
             before += fx * (r["value"] - r["day"])
     day_total = day if days else None
     return {"value": _r(value), "invested": _r(cost), "pnl": _r(pnl), "pnl_pct": _r(pnl / cost_priced * 100) if pnl is not None and cost_priced else None,
             "day": _r(day_total), "day_pct": _r(day_total / before * 100) if day_total is not None and before else None,
-            "count": n, "priced": sum(1 for r in rows if r["price"] is not None and rate(r) is not None)}
+            "count": n, "priced": sum(1 for r in rows if r["price"] is not None and rate(r) is not None and _counted(r))}
+
+
+def day_session(rows: list[dict]) -> str | None:
+    """The session the day's change is for: the latest one among the Indian positions (the page is India's), else the
+    latest among all."""
+    ind = [r["session"] for r in rows if r.get("session") and r["market"] == "IN" and r["day"] is not None]
+    every = [r["session"] for r in rows if r.get("session") and r["day"] is not None]
+    return max(ind or every) if (ind or every) else None
 
 
 def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] | None = None, usd_inr: float | None = None) -> dict:
@@ -290,8 +333,18 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
     us_quotes = us_quotes or {}
     rows = [_position(i, (us_quotes if market_of(i) == "US" else quotes).get(i["symbol"]) or {}) for i in items]
     rate = (lambda r: 1.0 if r["market"] == "IN" else usd_inr)
-    totals = _totals(rows, rate)
-    value = totals["value"] or 0
+    session = day_session(rows)
+    totals = _totals(rows, rate, session)
+    # positions with a price but no buy price: shown, and named under the totals, but not in them
+    left = [r for r in rows if not _counted(r) and rate(r) is not None]
+    totals["no_cost"] = {"count": len(left), "symbols": [r["symbol"] for r in left],
+                         "value": _r(sum(r["value"] * rate(r) for r in left))} if left else None
+    totals["session"] = session
+    # the other session's moves, left out of the day's change: named, so the page can say so
+    totals["other_session"] = sorted({r["symbol"] for r in rows if session and r.get("session") and r["session"] != session
+                                      and r["day"] is not None and rate(r) is not None and _counted(r)})
+    # weights and the sector mix are shares of everything held that has a value (a position without a buy price too)
+    value = sum((r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r) for r in rows if rate(r) is not None)
     for r in rows:
         fx = rate(r)
         weight = r["value"] if r["value"] is not None else r["invested"]
@@ -307,7 +360,7 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
     us = [r for r in rows if r["market"] == "US"]
     totals["count"] = len(rows)
     return {"rows": rows, "allocation": allocation, "totals": totals,
-            "us": {**_totals(us, lambda r: 1.0), "in_total": usd_inr is not None} if us else None,
+            "us": {**_totals(us, lambda r: 1.0, session), "in_total": usd_inr is not None} if us else None,
             "usd_inr": _r(usd_inr, 4) if us and usd_inr else None}
 
 

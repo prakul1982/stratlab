@@ -706,6 +706,8 @@ class Job:
                 sent, ran = sent + self.eve(region, day, who), True
         if ran:
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
+            from . import job_status
+            job_status.keep("corp", self)          # Admin shows this run after a restart too
         return sent
 
     def _universe_due(self, now: datetime) -> bool:

@@ -711,6 +711,14 @@ def live_chains(options_data, names: tuple, choice: str) -> dict[str, dict | Non
             behind.append(name)
         else:
             need.append(name)
+    # a chain the recorder saved in the last few minutes answers at once while the live one is read behind it: the
+    # first visitor after a quiet spell waited 6 to 16 s for the feed's one-request-a-second reads (R5O-025)
+    for name in list(need):
+        rec = _fresh_recording(name, choice)
+        if rec:
+            out[name] = rec
+            need.remove(name)
+            behind.append(name)
     if behind:
         _refresh_behind(options_data, behind, choice)
     if not need:
@@ -726,6 +734,24 @@ def live_chains(options_data, names: tuple, choice: str) -> dict[str, dict | Non
             out[name] = got.get(name)
             _keep_live(name, choice, got.get(name))
     return out
+
+
+RECORDED_FRESH = 300          # seconds a recording stands in for the live chain while that one is read
+
+
+def _fresh_recording(name: str, choice: str) -> dict | None:
+    """The recorder's chain for this index and expiry, when it was taken in the last RECORDED_FRESH seconds; else None."""
+    try:
+        today = ist_now().date()
+        if not recorded_last(name, today):          # nothing recorded today: don't walk back through older days
+            return None
+        got = recorded_chain(name, choice, today)
+        at = datetime.fromisoformat(str((got or {}).get("taken_at")).replace("Z", "+00:00"))
+    except (TypeError, ValueError, KeyError):
+        return None
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return got if 0 <= time.time() - at.timestamp() <= RECORDED_FRESH else None
 
 
 def _keep_live(name: str, choice: str, chain: dict | None):
@@ -1120,6 +1146,8 @@ class Job(news_job.Job):
     twenty minutes until 21:30, when it gives up for the day); the newsletter job's run marker (newsjob:positioning)
     remembers a finished day across restarts. At any other time it catches up on what an evening run missed (every
     twenty minutes while something is behind), and outside market hours it walks the archives back a few days."""
+
+    status_key = "positioning"
 
     def __init__(self, runner: Runner):
         super().__init__()

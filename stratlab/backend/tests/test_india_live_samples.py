@@ -177,14 +177,22 @@ def test_the_live_etf_list_gives_the_last_nav_and_the_isins_come_from_the_securi
     E.add_isins(parsed, _EtfFeed())
     assert parsed["rows"]["NIFTYBEES"]["isin"] == "INF204KB14I2" and all(r["isin"] for r in parsed["rows"].values())
     navs = money_mf_nav.parse((FIX / "etf/navall_2026-10-05.txt").read_text())
+    # R5O-005: the list was read at 12:12 on 5 Oct and the last NAV is of 1 Oct. This expected "trades 0.28% below its
+    # last NAV" from 5 Oct's midday price against 1 Oct's NAV: two different days, so the gap mixed in the market's
+    # move. A gap is now one day's close against that day's NAV; with no 1 Oct close stored there is none yet.
     v = E.row_view("GOLDBEES", parsed["rows"]["GOLDBEES"], navs, parsed["as_of"])
-    assert (v["name"], v["basis"], v["nav"], v["nav_date"], v["inav"]) == ("Nippon India ETF Gold BeES", "NAV", 121.5196, "2026-10-01", None)
-    assert v["text"] == "GOLDBEES trades 0.28% below its last NAV"
+    assert (v["name"], v["basis"], v["nav"], v["nav_date"], v["inav"]) == ("Nippon India ETF Gold BeES", None, 121.5196, "2026-10-01", None)
+    assert v["gap"] is None and v["nav_waiting"] is True and v["text"] is None
+    # with 1 Oct's close stored (here at the same 121.18), the gap is of that day, and says so
+    monkeypatch.setattr(E, "_days", lambda: {"2026-10-01": {"GOLDBEES": [121.18, None], "MAFANG": [256.42, None]}})
+    v = E.row_view("GOLDBEES", parsed["rows"]["GOLDBEES"], navs, parsed["as_of"])
+    assert (v["basis"], v["gap"], v["nav_price"], v["nav_price_day"]) == ("NAV", -0.28, 121.18, "2026-10-01")
+    assert v["text"] == "GOLDBEES closed 0.28% below its NAV on 1 Oct"
     fang = E.row_view("MAFANG", parsed["rows"]["MAFANG"], navs, parsed["as_of"])
     assert fang["gap"] == 42.69 and fang["basis"] == "NAV"                   # an overseas ETF's real premium
-    # with no NAV file match, the list's own NAV and date stand in
+    # with no NAV file match, the list's own NAV and date stand in (4 Oct: no close of that day, so no gap yet)
     alone = E.row_view("GOLDBEES", parsed["rows"]["GOLDBEES"], {"schemes": {}, "isin": {}}, parsed["as_of"])
-    assert (alone["nav"], alone["nav_date"], alone["basis"]) == (121.5196, "2026-10-04", "NAV")
+    assert (alone["nav"], alone["nav_date"], alone["basis"], alone["nav_waiting"]) == (121.5196, "2026-10-04", None, True)
 
 
 def test_etf_isins_reads_the_columns_by_name():

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 
-from . import admin
+from . import admin, job_status
 
 router = APIRouter(tags=["admin"])
 
@@ -51,8 +51,10 @@ def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | N
             "running": bool(running), "log": [str(x)[:240] for x in (log or []) if x][:8], "run": run or [], "note": note}
 
 
-def _plain(job) -> dict:
-    return dict(getattr(job, "status", None) or {})
+def _plain(job, key: str | None = None) -> dict:
+    """A job's status; with `key`, the one kept from before a restart while this server hasn't run the job yet."""
+    st = dict(getattr(job, "status", None) or {})
+    return job_status.kept(key, st) if key else st
 
 
 def _problems(st: dict) -> list[str]:
@@ -96,14 +98,14 @@ def rows() -> list[dict]:
     add("Red flags across companies", redflags)
 
     def positioning():
-        st = _plain(m.positioning_job)
+        st = _plain(m.positioning_job, "positioning")
         return _row("positioning", "Positioning", "Trading days from 6:40 PM IST until the day's files are in", st.get("last_run"),
                     st.get("last_error"), [str(st.get("last_result") or "")], [{"label": "Run now", "path": "/admin/positioning/run"}],
                     running=m.positioning_runner.running)
     add("Positioning", positioning)
 
     def etf():
-        st = _plain(m.etf_job)
+        st = _plain(m.etf_job, "etf")
         return _row("etf", "ETF price against NAV", "Every 4 minutes while the market is open; closing prices after 3:45 PM IST",
                     st.get("read") or st.get("last_run"), st.get("last_error"),
                     [f"Closing prices recorded for {st['recorded']}" if st.get("recorded") else "", f"{st.get('filled')} NAVs filled in" if st.get("filled") else ""],
@@ -125,13 +127,13 @@ def rows() -> list[dict]:
     add("Exchange holidays", holidays)
 
     def results():
-        st = _plain(m.results_job)
+        st = _plain(m.results_job, "results")
         return _row("results", "Results calendar", "India 7:15 AM and 6:30 PM IST, US 6:00 AM New York time", st.get("last_run"),
                     st.get("last_error"), _problems(st), [{"label": "Run now", "path": "/admin/results/refresh"}])
     add("Results calendar", results)
 
     def corp():
-        st = _plain(m.corp_job)
+        st = _plain(m.corp_job, "corp")
         return _row("corp", "Corporate actions", "India 7:20 AM and 6:40 PM IST, US 6:10 AM New York time", st.get("last_run"),
                     st.get("last_error"), _problems(st), [{"label": "Run now", "path": "/admin/corp-actions/refresh"},
                                                            {"label": "Read the whole US universe", "path": "/admin/corp-actions/refresh?universe=true"}],
@@ -141,32 +143,32 @@ def rows() -> list[dict]:
 
     def events():
         from . import market_events_routes as r
-        st = _plain(r.job)
+        st = _plain(r.job, "events")
         return _row("events", "Market events", "7:20 AM and 6:40 PM IST", st.get("last_run"), st.get("last_error"), _problems(st),
                     [{"label": "Run now", "path": "/admin/events/refresh"}], parts=st.get("parts"))
     add("Market events", events)
 
     def fo():
         from . import fo_changes_routes as r
-        st = _plain(r.job)
+        st = _plain(r.job, "fo")
         return _row("fo", "F&O contract changes", "8:15 AM and 7:50 PM IST on trading days", st.get("last_run"), st.get("last_error"),
                     _problems(st), [{"label": "Run now", "path": "/admin/fo-changes/refresh"}], parts=st.get("parts"))
     add("F&O contract changes", fo)
 
     def surv():
-        st = _plain(m.surv_job)
+        st = _plain(m.surv_job, "surveillance")
         return _row("surveillance", "Surveillance lists", "8:20 AM and 7:45 PM IST on trading days", st.get("last_run"), st.get("last_error"),
                     _problems(st), [{"label": "Run now", "path": "/admin/surveillance/refresh"}], parts=st.get("parts"))
     add("Surveillance lists", surv)
 
     def auction():
-        st = _plain(m.closing_auction_job)
+        st = _plain(m.closing_auction_job, "closing-auction")
         return _row("closing-auction", "Closing auction", "Every 30 seconds from 3:14 to 3:40 PM IST; the day is stored after 3:40",
                     st.get("read") or st.get("recorded"), st.get("last_error"), [f"Stored for {st['recorded']}" if st.get("recorded") else ""])
     add("Closing auction", auction)
 
     def vix():
-        st = _plain(m.vix_job)
+        st = _plain(m.vix_job, "vix")
         return _row("vix", "India VIX history", "After each trading day's close", st.get("last_run") or st.get("read"), st.get("last_error"))
     add("India VIX history", vix)
 

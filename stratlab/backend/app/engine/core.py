@@ -340,7 +340,10 @@ class Engine:
             q = cap / px
         else:
             cap = self.cash * r.maxAlloc / 100
-            q = self.cash * r.riskPct / 100 / dist if dist > 0 else math.inf
+            # the stated risk is a share of the capital ("1% of Rs5,00,000, that is Rs5,000 if the stop loss is hit"): a
+            # stop hit never costs more, however much the account has grown (11 units x 2% x Rs24,187 = Rs5,321 did,
+            # from 1% of the grown account); after losses the smaller account's share is risked
+            q = min(self.cash, r.capital) * r.riskPct / 100 / dist if dist > 0 else math.inf
             q = min(q, (cap - brok) / px)
         q = C.floor_to(q, self.qty_step)
         # percentage costs (STT, exchange fees) must fit in the budget too

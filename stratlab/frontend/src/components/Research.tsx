@@ -162,7 +162,8 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                 const b = bandPosition(m.label, m.value, industry);
                 return (
                   <div key={m.label} className="inv-metric">
-                    <span className="k-small k-muted">{m.label}</span>
+                    {/* a note says what a figure counts (a dividend yield with a special dividend in it) */}
+                    <span className="k-small k-muted">{m.label}{m.note && <span className="k-sub-line">{m.note}</span>}</span>
                     <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
                     {b ? (
                       <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
@@ -260,34 +261,6 @@ export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
   );
 }
 
-function Donut({ segments }: { segments: { label: string; share: number }[] }) {
-  const tot = segments.reduce((a, s) => a + s.share, 0) || 1;
-  const R = 42, C = 2 * Math.PI * R;
-  let acc = 0;
-  return (
-    <div className="inv-donut">
-      <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Revenue by segment, an estimate">
-        <circle className="d-track" cx="60" cy="60" r={R} fill="none" strokeWidth="15" />
-        {segments.map((s, i) => {
-          const f = s.share / tot;
-          const el = <circle key={s.label} className={`d${i % 8}`} cx="60" cy="60" r={R} fill="none" strokeWidth="15"
-            strokeDasharray={`${f * C} ${C}`} strokeDashoffset={-acc * C} transform="rotate(-90 60 60)" />;
-          acc += f;
-          return el;
-        })}
-      </svg>
-      <ul className="k-list plain">
-        {segments.map((s, i) => (
-          <li key={s.label} className="inv-legend">
-            <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><rect className={`d${i % 8} fill`} width="10" height="10" rx="3" /></svg>
-            {s.label}<span className="k-muted">{Math.round((s.share / tot) * 100)}%</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 /** Plain-number lines (growth, price trend, debt and cash, margins and returns), each a label and its facts. No
  *  bars, grades or colours: the numbers are the whole story. */
 function FactRows({ rows }: { rows: FactRow[] }) {
@@ -316,7 +289,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
         return (
           <a key={i} className="inv-news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
             <span>{n.headline}</span>
-            <span className="k-note">{n.source}{n.at ? ` · ${ago(n.at)}` : ""}{old ? ` · ${old}` : ""} ↗</span>
+            <span className="k-note">{[n.source, n.at ? ago(n.at) : null, old].filter(Boolean).join(" · ")} ↗</span>
           </a>
         );
       })}
@@ -443,7 +416,6 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
                   {r.watch.length > 0 && <div className="k-stack"><b className="k-sub">What to watch</b><ul className="k-list">{r.watch.map((w) => <li key={w}>{w}</li>)}</ul></div>}
                 </div>
               )}
-              {r.segments.length > 1 && <div className="k-stack"><b className="k-sub">Revenue by segment <span className="k-muted inv-plain">(estimate)</span></b><Donut segments={r.segments} /></div>}
               {r.ideas.length > 0 && (
                 <div className="k-inset">
                   <div className="k-stack">

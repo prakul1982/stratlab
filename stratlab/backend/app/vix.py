@@ -351,6 +351,8 @@ class Job(news_job.Job):
     last fortnight (the day's row, and any day a restart missed); outside market hours, walk the history back a few
     pieces at a time until FIRST_DAY."""
 
+    status_key = "vix"
+
     def __init__(self, feed_fn, sleep=time.sleep):
         super().__init__()
         self.feed_fn, self.sleep = feed_fn, sleep

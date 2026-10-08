@@ -169,6 +169,16 @@ function tickLabel(ms: number, unit: Unit, tz?: string): string {
   return String(p.y);
 }
 
+/** The label of a date tick placed on a data point: a day tick names the day of the point it sits on. Daily data has
+ * no point on a holiday or a weekend, so a tick for 2 Oct (a holiday) or 3 Oct (a Saturday) lands on the next trading
+ * day's point and is labelled with that day ("5 Oct"), never the day without trading. Month and year ticks, and clock
+ * times, keep their own label. */
+export function tickOnPoint(tick: TimeTick, pointMs: number, intraday: boolean, tz?: string): string {
+  if (intraday || !/^\d{1,2} [A-Z][a-z]{2}$/.test(tick.label)) return tick.label;
+  const a = parts(tick.t, tz), b = parts(pointMs, tz);
+  return a.y === b.y && a.mo === b.mo && a.d === b.d ? tick.label : tickLabel(pointMs, "day", tz);
+}
+
 /** A moment in full for a tooltip: "Fri 3 Oct 2026", or "3 Oct, 14:30" when intraday ("3 Oct, 14:30 IST" in a market's zone). */
 export function tipTime(ms: number, intraday = false, tz?: string): string {
   const d = new Date(ms);

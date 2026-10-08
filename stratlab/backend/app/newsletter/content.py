@@ -90,11 +90,11 @@ def index_moves(region: str, day: date, weekly: bool) -> list[dict]:
     return out
 
 
-def rotation_shifts(region: str, weekly: bool) -> list[dict]:
-    """Sectors that moved to another quadrant of the rotation chart since the last candle (a day, or a week)."""
-    out = rotation.run(_main().markets, region, "sectors", None, "weekly" if weekly else "daily", 2)
-    return [{"sector": r["name"], "from": r["moved"], "to": r["quadrant"]}
-            for r in out["rows"] if r.get("core") and r.get("moved") and r["moved"] != r["quadrant"]]
+def rotation_shifts(region: str, weekly: bool, day: date | None = None) -> list[dict]:
+    """Sectors that moved to another quadrant of the rotation page's chart (its weekly candles) since the session
+    before (a daily brief) or the week before (a weekly one), as of the brief's day."""
+    return [{"sector": r["sector"], "from": r["from"], "to": r["to"]}
+            for r in rotation.shifts(_main().markets, region, day.isoformat() if day else None, weekly)]
 
 
 def stage2_names(region: str, weekly: bool) -> dict:
@@ -125,7 +125,7 @@ def market_facts(region: str, day: date, weekly: bool = False) -> dict:
         return hit
     facts = {"kind": "market", "region": region, "day": day.isoformat(), "weekly": weekly,
              "since": reference_day(region, day, weekly).isoformat()}
-    for name, fn in (("indices", lambda: index_moves(region, day, weekly)), ("rotation", lambda: rotation_shifts(region, weekly)),
+    for name, fn in (("indices", lambda: index_moves(region, day, weekly)), ("rotation", lambda: rotation_shifts(region, weekly, day)),
                      ("scan", lambda: stage2_names(region, weekly)), ("headlines", lambda: market_headlines(region))):
         got = _safe(fn)
         if got and (name != "scan" or got["st_s2"] or got["stage2"]):

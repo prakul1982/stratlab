@@ -152,9 +152,9 @@ test("strategy library: StratLab's own strategies, badged, each with the verdict
   await expect(first.getByText("StratLab", { exact: true }).first()).toBeVisible();      // the badge
   await expect(first.getByText("by StratLab", { exact: true })).toBeVisible();
   await expect(first.getByText(/checks passed/)).toBeVisible();
-  // honest verdicts, whatever they are: every card carries one of the five
+  // honest results, whatever they are, as facts about the checks (R5O-014: no "Likely a real edge" on a card): one of the five
   const verdicts = await cards.locator(".verdict-badge, [data-verdict]").count();
-  expect(verdicts + (await page.getByText(/Likely a real edge|Mixed evidence|Probably luck|Not enough evidence|No edge here/).count())).toBeGreaterThan(0);
+  expect(verdicts + (await page.getByText(/Passed the checks|Mixed check results|Failed a robustness check|Too few trades|Lost money after costs/).count())).toBeGreaterThan(0);
   await expect(first.getByRole("button", { name: "Copy and re-test" })).toBeVisible();
   await expect(first.getByRole("button", { name: "Take down" })).toHaveCount(0);       // not anyone's to take down
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/library-stratlab-${info.project.name}.png`, fullPage: true });

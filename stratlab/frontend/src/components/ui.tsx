@@ -8,8 +8,14 @@ const VERDICT_NAME: Record<VerdictKind, string> = {
 };
 export const STATUS_NAME: Record<CheckStatus, string> = { pass: "Passed", warn: "Warning", fail: "Failed", skip: "Skipped" };
 
-export const VerdictBadge = ({ v }: { v: VerdictKind | null | undefined }) =>
-  v ? <span className={`badge ${v}`}>{VERDICT_NAME[v]}</span> : <span className="badge skip">No experiments yet</span>;
+/** The same verdicts as facts about the checks, with no judgement of the strategy: the library lists other people's
+ * rules side by side, where "Likely a real edge" beside a return far behind buy and hold reads as a recommendation (R5O-014). */
+export const VERDICT_FACT: Record<VerdictKind, string> = {
+  edge: "Passed the checks", mixed: "Mixed check results", luck: "Failed a robustness check", not_enough: "Too few trades", no_edge: "Lost money after costs",
+};
+
+export const VerdictBadge = ({ v, facts }: { v: VerdictKind | null | undefined; facts?: boolean }) =>
+  v ? <span className={`badge ${v}`}>{(facts ? VERDICT_FACT : VERDICT_NAME)[v]}</span> : <span className="badge skip">No experiments yet</span>;
 
 /** The kit's modal dialog (components/kit/Dialog), under its old name. */
 export { Dialog as Modal } from "./kit/Dialog";

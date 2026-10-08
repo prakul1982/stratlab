@@ -5,11 +5,11 @@ import { focusParam } from "./researchFormat";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
-export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr" }
+export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr"; note?: string; dp?: number }
 export interface MetricGroup { title: string; items: MetricItem[] }
 export interface NewsItem { headline: string; url: string; source: string; at: string | null }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
-  high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null }
+  high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null }
 export interface SourceStatus { source: string; ok: boolean; error: string | null }
 export interface SeriesPoint { y: string; v: number }
 
@@ -25,7 +25,7 @@ export interface Company {
   pros?: string[]; cons?: string[];
   earnings: { period: string; actual: number; estimate: number; surprise_pct: number }[];
   next_earnings: { date: string; eps_estimate: number | null } | null;
-  insider: { net: number; rows: { name: string; change: number; date: string }[] } | null;
+  insider: { net: number; count?: number; rows: { name: string; change: number; date: string }[] } | null;
   peers: string[]; news: NewsItem[];
   about: { wiki: { title: string; description?: string; extract: string; url: string } | null; profile: string | null };
   sources: SourceStatus[]; links: { label: string; url: string }[];

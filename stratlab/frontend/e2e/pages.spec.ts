@@ -1092,7 +1092,7 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await expect(page.getByText(/20 of 20 companies match/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Prices as of \d+ \w+ \d{4}/)).toBeVisible();              // read today, like the rest of the app
   const table = page.locator(".screens-table");
-  await expect(table.locator("tbody tr").first()).toContainText("Axis Bank Ltd");         // alphabetical by default, the listed name
+  await expect(table.locator("tbody tr").first()).toContainText("Reliance Industries Ltd");   // the largest market value first (R5O-012), the listed name
   if (phone) await page.getByRole("button", { name: /Show filters/ }).click();
   await page.getByRole("button", { name: "Energy", exact: true }).click();
   await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();                 // RELIANCE, ONGC, COALINDIA

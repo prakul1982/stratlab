@@ -7,9 +7,10 @@ import re
 # research "sources" rows and chart sources: provider name -> what the page shows
 LABELS = {
     "Kite": "Live prices", "Yahoo Finance": "Market data", "Screener.in": "Fundamentals", "Finnhub": "Company data",
-    "Google News": "News", "Wikipedia": "Wikipedia", "Research": "Research",
+    "Google News": "News", "Wikipedia": "Company profile", "Research": "Research",
 }
-# outside links to provider sites are dropped; Wikipedia stays (its licence asks for the link)
+# outside links to provider sites are dropped; the encyclopedia link stays (its licence asks for the link), under a
+# plain label
 HIDDEN_LINKS = ("yahoo.", "screener.in", "finnhub.", "zerodha.", "kite.")
 
 _WORDS = [
@@ -20,6 +21,8 @@ _WORDS = [
     (r"Google News", "the news source"), (r"SEC EDGAR", "The SEC"), (r"\bEDGAR\b", "the SEC's filing system"),
 ]
 _RX = [(re.compile(p), r) for p, r in _WORDS]
+# news "publishers" that are really the data providers' own news pages
+_PROVIDER_PUBLISHER = re.compile(r"\b(yahoo|finnhub|screener|zerodha|kite|google news)\b", re.I)
 
 
 def public_text(s):
@@ -43,9 +46,12 @@ def public_research(obj):
             out[k] = [{**s, "source": LABELS.get(s.get("source"), "Data"), "error": public_text(s.get("error"))}
                       if isinstance(s, dict) else s for s in v]
         elif k == "links" and isinstance(v, list):
-            out[k] = [l for l in v if not (isinstance(l, dict) and any(h in str(l.get("url", "")) for h in HIDDEN_LINKS))]
+            out[k] = [{**l, "label": LABELS.get(l.get("label"), l.get("label"))} if isinstance(l, dict) else l for l in v
+                      if not (isinstance(l, dict) and any(h in str(l.get("url", "")) for h in HIDDEN_LINKS))]
         elif k == "source" and isinstance(v, str) and v in LABELS and "candles" in obj:
             out[k] = LABELS[v]       # a chart's source; a news item's "source" is the publisher and stays
+        elif k == "source" and isinstance(v, str) and "headline" in obj and _PROVIDER_PUBLISHER.search(v):
+            out[k] = None            # ...unless the "publisher" is a data provider's own news page ("Yahoo") (R5O-020)
         else:
             out[k] = public_research(v)
     return out

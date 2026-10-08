@@ -422,12 +422,48 @@ def _index() -> dict[str, dict]:
     return out
 
 
-def coverage() -> dict:
-    """How much the search covers: companies read and the latest quarter among them."""
+def quarter_end(day: str) -> bool:
+    """Whether a pattern's date is a quarter's last day (31 Mar, 30 Jun, 30 Sep, 31 Dec), as a quarterly filing's is."""
+    return str(day)[5:10] in ("03-31", "06-30", "09-30", "12-31")
+
+
+COVERAGE_KEY = "holders:coverage"
+_building = threading.Lock()
+
+
+def _build_behind() -> None:
+    """Build the search index in a background thread (one at a time), so the next search finds it ready."""
+    if not _building.acquire(blocking=False):
+        return
+
+    def work():
+        try:
+            coverage(wait=True)
+        finally:
+            _building.release()
+    threading.Thread(target=work, daemon=True, name="holders-index").start()
+
+
+def coverage(wait: bool = False) -> dict:
+    """How much the search covers: companies read and the latest quarter among them. Opening the page with nothing
+    searched read every company's stored holders to count them (13.7 s, R5O-025): without the index in memory the
+    count kept from the last build answers, and the index is built behind it."""
+    queued = len(db.json_value(db.get_setting(STATE_KEY), {}).get("queue") or [])
+    if not wait and _cache.get("index") is None:
+        kept = db.json_value(db.get_setting(COVERAGE_KEY), {})
+        if kept.get("companies") is not None:
+            _build_behind()
+            return {"companies": kept["companies"], "latest_quarter": kept.get("latest_quarter"), "queued": queued}
     idx = _index()
-    latest = [max(c["q"]) for c in idx.values() if c["q"]]
-    return {"companies": len(idx), "latest_quarter": max(latest) if latest else None,
-            "queued": len(db.json_value(db.get_setting(STATE_KEY), {}).get("queue") or [])}
+    # quarter ends only: a pattern filed for an allotment or a listing is dated that day ("quarter to 5 Oct 2026")
+    latest = [max(q for q in c["q"] if quarter_end(q)) for c in idx.values() if any(quarter_end(q) for q in c["q"])]
+    out = {"companies": len(idx), "latest_quarter": max(latest) if latest else None}
+    try:
+        if db.json_value(db.get_setting(COVERAGE_KEY), {}) != out and idx:
+            db.set_setting(COVERAGE_KEY, json.dumps(out))
+    except Exception as e:                      # only a head start for the next cold start
+        print("holders coverage:", str(e)[:120])
+    return {**out, "queued": queued}
 
 
 def search(query: str) -> list[dict]:
