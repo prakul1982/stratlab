@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { Card, EmptyState, PageHeader } from "../components/kit";
 import { PageTags } from "../components/PageTags";
 import { NAV, SPACE_LIST, groupPath, locateGroup, type NavPage } from "../lib/nav";
+import { MINE_NAME } from "../lib/spaces";
 
 /* The two pages that list the menu as cards: a group's own page (/trade/g/practise, from the group's title in the sidebar)
  * and "All features" (/features). Both are drawn from lib/nav.ts, so a page added there appears in the sidebar, here,
@@ -41,7 +42,7 @@ export function GroupPage() {
 
 /** Mine's own pages, listed beside the three spaces' groups. */
 const MINE_PAGES: { to: string; label: string; line: string }[] = [
-  { to: "/mine", label: "My space", line: "Your net worth, today's change, the markets, what is coming up and your watchlist, in the order you choose." },
+  { to: "/mine", label: MINE_NAME, line: "Your net worth, today's change, the markets, what is coming up and your watchlist, in the order you choose." },
   { to: "/news", label: "Briefs", line: "A short brief after each market close, for India, the US and the companies you follow." },
   { to: "/holdings", label: "Connected accounts", line: "Bring in your broker's file: the stocks you hold." },
 ];
@@ -65,7 +66,7 @@ export function FeaturesPage() {
       {!spaces.length && !mine.length && <EmptyState title="No page matches that" action={{ label: "Show everything", onClick: () => setQ("") }}>Try a shorter word, or press Ctrl K to ask in your own words.</EmptyState>}
       {mine.length > 0 && (
         <Card testId="features-mine">
-          <h2 className="k-card-title"><Link to="/mine">Mine</Link></h2>
+          <h2 className="k-card-title"><Link to="/mine">{MINE_NAME}</Link></h2>
           <ul className="feat-list">
             {mine.map((p) => <li key={p.to}><Link to={p.to}><b>{p.label}</b></Link><span className="feat-line">{p.line}</span></li>)}
           </ul>

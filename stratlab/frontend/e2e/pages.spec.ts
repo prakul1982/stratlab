@@ -86,7 +86,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
+  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Your research desk"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
@@ -696,7 +696,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
   const space = side.getByRole("radiogroup", { name: "Space" });
-  await expect(space.getByRole("radio")).toHaveText(["Mine", "Trade", "Invest", "Money"]);
+  await expect(space.getByRole("radio")).toHaveText(["My space", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
   // Invest: its home, then its five groups; the other spaces' groups wait behind the switcher
   await expect(main.locator(".side-group .side-title")).toHaveText(NAV.invest.groups.map((g) => g.label));

@@ -181,7 +181,7 @@ a.link { margin-inline: -2px; }
   border-radius: 8px; background: var(--card); color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
 .search-btn:hover { color: var(--ink); border-color: var(--dash); }
 .search-btn span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.space-switch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 8px; background: var(--chip); }
+.space-switch { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 8px; background: var(--chip); }
 .space-switch button { height: 28px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font: 500 13px var(--sans); color: var(--ink-2); }
 .space-switch button:hover { color: var(--ink); }
 .space-switch button[aria-checked="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }

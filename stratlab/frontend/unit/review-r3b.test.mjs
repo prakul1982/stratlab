@@ -39,6 +39,21 @@ test("an empty journal has nothing to delete (R3-019)", async () => {
   assert.match(page, /!journalEmpty\(j\) && .*Delete my journal/);
 });
 
+test("one name for the person's own space, and the company lookup and the Invest home are different pages (R3-016)", async () => {
+  const { MINE_NAME } = await import("../src/lib/spaces.ts");
+  assert.equal(MINE_NAME, "My space");
+  for (const f of ["components/Shell.tsx", "components/PageBreadcrumb.tsx", "components/LevelPrompt.tsx", "components/Tour.tsx", "pages/NavPages.tsx", "lib/title.ts", "lib/features.ts"]) {
+    const text = src(f).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    assert.doesNotMatch(text, /["'`>]Mine["'`<.,]|\bMine is\b|and Mine\b/, f + " names the space \"Mine\"");
+  }
+  const research = src("pages/Research.tsx"), invest = src("pages/SpaceHomes.tsx");
+  assert.match(research, /title="Look up a company"/);
+  assert.match(invest, /title="Your research desk"/);
+  // the watchlist lives on the desk (and its own page), not on both
+  const lookup = research.slice(research.indexOf("export function ResearchHome"), research.indexOf("/* ================= One company"));
+  assert.doesNotMatch(lookup, /title="Your watchlist"/);
+});
+
 test("options premiums and what is left after charges are rounded alike (R3-020)", async () => {
   const { optMoney } = await import("../src/lib/options.ts");
   assert.equal(optMoney(22455), "₹22,455");

@@ -7,8 +7,8 @@ type Step = { title: string; body: string; phone?: string; at: string[] };
 
 export const STEPS: Step[] = [
   { title: "Four spaces", at: [".sidebar .space-switch", ".topbar [aria-label='Open menu']"],
-    body: "Mine is your own summary. Trade is for testing trading ideas, Invest for researching companies and Money for what you own.",
-    phone: "The menu holds the four spaces. Mine is your own summary. Trade is for testing trading ideas, Invest for researching companies and Money for what you own." },
+    body: "My space is your own summary. Trade is for testing trading ideas, Invest for researching companies and Money for what you own.",
+    phone: "The menu holds the four spaces. My space is your own summary. Trade is for testing trading ideas, Invest for researching companies and Money for what you own." },
   { title: "Ask or do anything", at: [".sidebar .search-btn", ".topbar [aria-label='Search or ask anything']"],
     body: "Type a company, a page or an idea, like \"test RSI below 30 on NIFTY\". Ctrl K opens it from any page." },
   { title: "Start here", at: [".sidebar .side-new", ".topbar [aria-label='New notebook']"],

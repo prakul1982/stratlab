@@ -39,6 +39,8 @@ export function viewForFocus(focus: Focus | null | undefined): SpaceView | null 
 
 /** Mine has a home of its own: the person's net worth, the markets, what is coming up and their watchlist. */
 export const MINE_HOME = "/mine";
+/** The one name for it, in the tab, the breadcrumb, the menu, the page title and every sentence. */
+export const MINE_NAME = "My space";
 
 /** The home page `/` opens: the space showing. */
 export function homeOf(view: SpaceView, _focus?: Focus | null): string {

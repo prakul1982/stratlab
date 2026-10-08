@@ -165,11 +165,11 @@ export function InvestHome() {
   const tools = INVEST_STRIP;
   return (
     <div className="space-home">
-      <Head eyebrow="Invest · your research desk" title="Which company do you want to look into?">
-        The numbers, the business in its own words, red flags and whether management delivers. Facts, not tips.
+      <Head eyebrow="Invest · your research desk" title="Your research desk">
+        What your watchlist, results days and red flags say today, and the market around them. Facts, not tips.
       </Head>
       <Top />
-      <Card className="space-next" label="Find a company">
+      <Card className="space-next" label="Jump to a company">
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
         <CompanySearch region={region} autoFocus />
         <div className="k-row">
