@@ -392,7 +392,7 @@ export function ThemesPage() {
           )}
           {r.clusters.length > 0 && (
             <Card>
-              <CardHead title="Who's in it" info="Groups of companies involved in the theme. Tap a ticker to open the company." />
+              <CardHead title="Who's in it" info="Groups of companies involved in the theme. Every ticker is checked against the exchange lists; a company without one isn't listed there. Tap a ticker to open the company." />
               {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
               <div className="inv-clusters">
                 {r.clusters.map((cl) => (
@@ -400,7 +400,7 @@ export function ThemesPage() {
                     <b className="k-small">{cl.name}</b>
                     <div className="k-row">{cl.companies.map((co) => co.ticker
                       ? <Link key={co.name} className="inv-chip" to={coLink(co.ticker)}><b>{co.ticker}</b> {co.name}</Link>
-                      : <span key={co.name} className="inv-chip off">{co.name} (private)</span>)}</div>
+                      : <span key={co.name} className="inv-chip off">{co.name} (not listed)</span>)}</div>
                   </div>
                 ))}
               </div>

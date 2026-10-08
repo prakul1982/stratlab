@@ -8,6 +8,8 @@ import { plansCall } from "./offer";
 import { JOINED, JOIN_LABEL, joinInterest, resetInterest } from "./planInterest";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 
+const ME_RETRY_MS = 1500;
+
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
 interface AppState {
@@ -87,7 +89,13 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
 
   const refreshMe = useCallback(async () => {
     try {
-      const m = await api<Me>("/me");
+      // one quiet second try when the server or the network had a moment (a 503 or no answer): the person sees the
+      // error and its Retry button only if that fails too (R5O-002)
+      const m = await api<Me>("/me").catch(async (e: ApiError) => {
+        if (e?.status && e.status !== 503 && e.status !== 502 && e.status !== 504) throw e;
+        await new Promise((ok) => window.setTimeout(ok, ME_RETRY_MS));
+        return api<Me>("/me");
+      });
       setMe(m);
       setMeError(null);
       setDataOffline(!m.data_online);

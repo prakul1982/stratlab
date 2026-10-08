@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { Card, PageHeader, Skeleton } from "../components/kit";
+import { AccountWait } from "../components/AccountWait";
 import { AdminData, SECTIONS, useAdmin } from "./admin/AdminContext";
 import { attention } from "./admin/attention";
 import { OverviewSection } from "./admin/OverviewSection";
@@ -69,7 +70,7 @@ function Frame() {
  * System, Email previews) at /admin/... Only site owners get in. */
 export function AdminPage() {
   const { me } = useApp();
-  if (!me) return <div className="k-page"><PageHeader eyebrow="Admin" title="Admin" /><Card label="Opening admin"><Skeleton label="Opening admin" /></Card></div>;
+  if (!me) return <div className="k-page"><PageHeader eyebrow="Admin" title="Admin" /><Card label="Opening admin"><AccountWait label="Opening admin" /></Card></div>;
   if (!me.is_admin) return <Navigate to="/" replace />;
   return <AdminData><Frame /></AdminData>;
 }

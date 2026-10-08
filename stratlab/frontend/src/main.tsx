@@ -23,6 +23,7 @@ import { captureRef } from "./lib/share";
 import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
 import { PageLock } from "./components/PageLock";
+import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { Loading, Toast } from "./components/ui";
 import { LEGAL_PAGES } from "./components/LegalLinks";
 import { SPACE_HOMES } from "./lib/spaces";
@@ -195,7 +196,7 @@ function PromoBanner({ until }: { until: string }) {
 /** A page only the site's team opens: anyone else is told so, not sent home in silence. */
 function AdminOnly({ what, children }: { what: string; children: ReactNode }) {
   const { me } = useApp();
-  if (!me) return <Loading label="Checking access" />;
+  if (!me) return <div className="k-page"><AccountWait label="Checking access" /></div>;
   return me.is_admin ? <>{children}</> : <NoAccess what={what} email={me.email} />;
 }
 
@@ -232,7 +233,7 @@ function Routed() {
   }
   return (
     <Shell>
-      {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
+      {meError && <div className="banner" role="alert"><span>StratLab couldn't load your account: {meError}</span><AccountRetry /></div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <PageLock />{/* a paid feature this plan lacks: said at the top, honestly (the server refuses it either way) */}
