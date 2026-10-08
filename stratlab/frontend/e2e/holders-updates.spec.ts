@@ -108,7 +108,17 @@ test("business updates: automakers side by side, alphabetical", async ({ page },
   await expect(rows.nth(0)).toHaveAttribute("data-company", "MARUTI");
   await expect(rows.nth(0)).toContainText("2,36,013 units");
   await expect(rows.nth(0)).toContainText("+24.4%");
+  // only a year-ago figure is filed, no August: nothing "on the previous", the +24.4% is the year's (R4-013)
+  await expect(rows.nth(0).locator("td").nth(1)).toHaveText("–");
+  await expect(rows.nth(0).locator("td").nth(2)).toHaveText("+24.4%");
   await expect(rows.nth(1)).toHaveAttribute("data-company", "TVSMOTOR");
+  // month by month: September, one row for the eleven months with no figures, and the year-ago September (R4-013)
+  const byMonth = page.getByRole("table", { name: "Automakers' monthly sales, month by month" }).locator("tbody tr");
+  await expect(byMonth).toHaveCount(3);
+  await expect(byMonth.nth(0)).toContainText("Sep 2026");
+  await expect(byMonth.nth(1)).toContainText("Oct 2025 to Aug 2026");
+  await expect(byMonth.nth(1)).toContainText("11 months with no figures filed");
+  await expect(byMonth.nth(2)).toContainText("Sep 2025");
   await expect(page.getByText(/Not read yet: Ashok Leyland/)).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/business-updates-page-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);

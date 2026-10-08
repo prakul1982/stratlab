@@ -94,7 +94,11 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   await expect(panel.getByRole("heading", { name: "Price against NAV" })).toBeVisible();
   await expect(panel.getByText("SILVERBEES trades 6.9% above its last NAV.")).toBeVisible();
   await expect(panel.getByText("Indicative NAV")).toHaveCount(0);
-  await expect(panel.getByText(/NAV of 3 Oct/)).toBeVisible();
+  // the NAV is dated the latest trading day (the demo's list is stamped with the last close): a weekday, never a future day
+  const navDay = (await panel.getByText(/NAV of \d{1,2} \w{3}/).innerText()).match(/NAV of (\d{1,2}) (\w{3})/)!;
+  const navDate = new Date(`${navDay[1]} ${navDay[2]} ${new Date().getFullYear()} 12:00 UTC`);
+  expect([0, 6], "the NAV's day is a weekday").not.toContain(navDate.getUTCDay());
+  expect(navDate.getTime(), "the NAV's day is not in the future").toBeLessThanOrEqual(Date.now() + 14 * 3600_000);
   await expect(panel.getByRole("img", { name: /SILVERBEES's gap to NAV at each close/ })).toBeVisible();
   await expect(panel.getByText(/Over 30 trading days/)).toBeVisible();
   await expect(panel.getByRole("button", { name: "Alert on the gap" })).toBeVisible();          // a Basic user

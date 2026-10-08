@@ -113,16 +113,16 @@ test("results calendar: every company's dates, and the company page links to it"
 });
 
 test("losses hang below the zero line, with exact labels (company page)", async ({ page }) => {
-  const errors = await open(page, "/research/IN/TCS", "Sales and profit, by year");
+  const errors = await open(page, "/research/IN/ORIONPOLY", "Sales and profit, by year");
   await barsAroundZero(page);
-  // TCS, the demo world's loss case, at its own scale: a ₹53,360 crore loss in FY22 (tests/fake_fundamentals.py)
-  await expect(page.getByText("−53,360").first()).toBeVisible();      // the real minus, never a hyphen
+  // Orion Polymers, the demo world's made-up loss case, at its own scale: a ₹1,250 crore loss in FY22 (tests/fake_fundamentals.py)
+  await expect(page.getByText("−1,250").first()).toBeVisible();      // the real minus, never a hyphen
   await expect(page.getByText("loss years in between, so no yearly rate").first()).toBeVisible();
   await sane(page, errors);
 });
 
 test("losses hang below the zero line (deep dive)", async ({ page }) => {
-  const errors = await open(page, "/research/IN/TCS/deep", "Growth and margins");
+  const errors = await open(page, "/research/IN/ORIONPOLY/deep", "Growth and margins");
   await barsAroundZero(page);
   await expect(page.getByText("A loss year in the period, so no yearly rate").first()).toBeVisible();
   await sane(page, errors);

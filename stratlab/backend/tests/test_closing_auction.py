@@ -78,6 +78,23 @@ def test_stock_view_uses_the_final_price_once_out():
     assert v["final_out"] and v["final_qty"] == 91000 and v["text"].startswith("TCS: final price")
 
 
+def test_a_price_is_called_final_only_once_the_auction_is_over(w):
+    """A closing price read as final while continuous trading goes on was called "final" on the page (R4-010): the indicative
+    equilibrium price stays indicative until the auction has finished; an earlier day's read is that day's finished auction."""
+    done = CA.parse_stocks(FC.auction_stocks(final=True))["rows"]["TCS"]
+    for phase in ("preopen", "before", "transition", "entry", "matching"):
+        v = CA.stock_view("TCS", done, phase)
+        assert not v["final_out"] and v["final"] is None and v["price"] == done["iep"] and "IEP" in v["text"], phase
+    assert CA.stock_view("TCS", done, "closed")["final_out"]
+    me = {"id": "u-pro", "_plan": "pro"}
+    CA.refresh(FC.Feed(final=True), now=ist(2026, 10, 5, 15, 40).astimezone(timezone.utc))      # the read the day's auction left
+    for at, final in ((ist(2026, 10, 5, 15, 31), False), (ist(2026, 10, 5, 15, 36), True),       # the same day: through matching, then over
+                      (ist(2026, 10, 6, 10, 4), True)):                                          # the next morning: that day's finished auction
+        v = CA.view(me, at)
+        assert v["stocks"] and all(r["final_out"] is final for r in v["stocks"]), at
+        assert v["fresh"] is (at.date() == date(2026, 10, 5)) and v["day"] == "2026-10-05"
+
+
 @pytest.mark.parametrize("hm,phase", [("15:14:59", "before"), ("15:15", "transition"), ("15:19:59", "transition"), ("15:20", "entry"),
                                       ("15:29:59", "entry"), ("15:30", "matching"), ("15:34:59", "matching"), ("15:35", "closed")])
 def test_phase_boundaries(hm, phase):

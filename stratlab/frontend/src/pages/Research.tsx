@@ -210,7 +210,7 @@ export function CompanyPage() {
             {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
             <div className="inv-badges">
               <SurvBadges region={region} symbol={c.symbol} />
-              {region === "IN" && <EtfGapBadge symbol={c.symbol} />}
+              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} />}
               <FoBadges region={region} symbol={c.symbol} />
               <IndexBadges region={region} symbol={c.symbol} />
             </div>
@@ -246,8 +246,8 @@ export function CompanyPage() {
         ...(c.shareholding && c.shareholding.rows.length > 0 ? [{ id: "co-owners", label: "Who owns it" }] : []),
         ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : []),
         { id: "corporate-actions", label: "Corporate actions" }, { id: "co-news", label: "News" }]} />
-      <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} /></Card>
-      {region === "IN" && <EtfGapDetailView symbol={c.symbol} quiet />}
+      <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>
+      {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} quiet />}
 
       <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
         {(wiki || c.about.profile) && (

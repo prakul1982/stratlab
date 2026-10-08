@@ -153,6 +153,21 @@ def test_series_and_changes():
     assert B._month("2026-09", "quarter") == "Q2 FY27" and B._month("2027-03", "quarter") == "Q4 FY27"
 
 
+def test_the_previous_period_is_the_period_just_before():
+    """"On the previous" is last month's (or last quarter's) figure; a month with no figure, or a year-ago figure a filing states,
+    is not it (R4-013: Maruti showed +24.4% on the previous beside a blank August)."""
+    reads = {k: v for k, v in FB.sample_reads().items() if v.get("period") != "2026-08"}
+    ms = B.series(reads)
+    assert ms
+    for m in ms:
+        if m["prev"] is not None:
+            gap = (int(m["latest"]["period"][:4]) * 12 + int(m["latest"]["period"][5:])) - (int(m["prev"]["period"][:4]) * 12 + int(m["prev"]["period"][5:]))
+            assert gap == 1 or (m["step"] == "quarter" and gap == 3), (m["metric"], m["latest"]["period"], m["prev"]["period"])
+        else:
+            assert m["change_prev"] is None, m["metric"]
+    assert ms[0]["latest"]["period"] == "2026-09" and ms[0]["prev"] is None and ms[0]["change_year"] is not None
+
+
 def test_series_from_a_real_quarter(w):
     item = next(u for u in B.updates(FB.announcements("HDFCBANK")) if u["url"].endswith(FB.FILES["HDFCBANK"]))
     B.save("HDFCBANK", item["id"], B.read_one("HDFCBANK", item, docs_api(), None, []))
@@ -160,6 +175,8 @@ def test_series_from_a_real_quarter(w):
     dep = ms[0]
     assert dep["metric"] == "Period-end deposits" and dep["change_year"] == 18.8 and dep["year_ago"]["filed_later"]
     assert B.words(dep) == "Period-end deposits ₹33,275 billion in Q2 FY27: up 18.8% on Q2 FY26"
+    # only the year-ago figure is known: that is not "the previous" quarter, so there is no change on the previous (R4-013)
+    assert dep["prev"] is None and dep["change_prev"] is None
 
 
 # ---------- the routes ----------

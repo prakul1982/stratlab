@@ -1,24 +1,26 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { asOf, num, pct, price, fmtDate } from "../lib/format";
-import { etfGapApi, gapShort, gapWords, useEtfGaps, type EtfGapDetail } from "../lib/etfGaps";
+import { etfGapApi, gapAtPrice, gapShort, gapWords, useEtfGaps, type EtfGapDetail } from "../lib/etfGaps";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
 import { Info } from "./ui";
 import { ChartFrame, ErrorState, Skeleton, Stat, StatRow } from "./kit";
 
 /** An Indian ETF's gap to its last NAV as a small factual badge ("4.2% above last NAV"; "iNAV" only when a source
- * gives a real indicative NAV) that opens the ETF's page. Nothing for a stock, or for an ETF with neither value. */
-export function EtfGapBadge({ symbol }: { symbol: string }) {
+ * gives a real indicative NAV) that opens the ETF's page. Nothing for a stock, or for an ETF with neither value. With `price`
+ * (the price the page shows beside it) the gap is worked out from that price, not the list's own, so the two never disagree. */
+export function EtfGapBadge({ symbol, price: shown }: { symbol: string; price?: number | null }) {
   const v = useEtfGaps();
-  const r = v?.rows.find((x) => x.symbol === symbol);
+  const listed = v?.rows.find((x) => x.symbol === symbol);
+  const r = listed && gapAtPrice(listed, shown);
   if (!r || r.gap == null || !r.basis) return null;
   const basis = r.basis === "iNAV" ? "iNAV" : "last NAV";
   const label = Math.abs(r.gap) < 0.005 ? `At ${basis}` : `${gapShort(r.gap)} ${basis}`;
   const of = r.basis === "NAV" && r.nav_date ? ` of ${asOf(r.nav_date)}` : "";
   return (
     <Link className="etf-gap-badge" data-etf-gap={symbol} to={`/invest/etf-gaps?etf=${encodeURIComponent(symbol)}`}
-      title={`${symbol} ${gapWords(r.gap, r.basis === "iNAV" ? "indicative NAV" : "last NAV")}${of}${r.price_at ? ` (price as of ${asOf(r.price_at)})` : ""}`}>
+      title={`${symbol} ${gapWords(r.gap, r.basis === "iNAV" ? "indicative NAV" : "last NAV")}${of}${r.price_at ? ` (price as of ${asOf(r.price_at)})` : ` (at the price shown, ${price(r.price, "INR")})`}`}>
       {label}
     </Link>
   );
@@ -26,7 +28,7 @@ export function EtfGapBadge({ symbol }: { symbol: string }) {
 
 /** "Price against NAV" for one ETF: the price against its last published NAV (and its iNAV, only when a source gives
  * one), and each day's close against that day's NAV over the last 30 trading days. `quiet` leaves the panel out when the symbol isn't an ETF (a company page). */
-export function EtfGapDetailView({ symbol, quiet }: { symbol: string; quiet?: boolean }) {
+export function EtfGapDetailView({ symbol, quiet, price: shown }: { symbol: string; quiet?: boolean; price?: number | null }) {
   const list = useEtfGaps();
   const known = !!list?.rows.some((x) => x.symbol === symbol);
   const [d, setD] = useState<EtfGapDetail | null>(null);
@@ -41,7 +43,7 @@ export function EtfGapDetailView({ symbol, quiet }: { symbol: string; quiet?: bo
   if (quiet && !known) return null;
   if (error) return quiet ? null : <ErrorState title={`${symbol} couldn't be read`}>{error}</ErrorState>;
   if (!d) return quiet ? null : <Skeleton label={`Reading ${symbol}`} lines={3} />;
-  const r = d.row;
+  const r = gapAtPrice(d.row, shown);
   const hist = d.history.filter((h) => h.gap != null);
   const day = (iso: string) => fmtDate(iso, { year: false });
   return (

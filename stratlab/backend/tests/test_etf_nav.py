@@ -12,7 +12,7 @@ from tests import fake_etf as FE
 from tests import world as W
 from tests.fake_db import headers
 
-DAY = date(2026, 10, 3)
+DAY = date(2026, 10, 2)
 PROVIDERS = re.compile(r"kite|zerodha|yahoo|screener|finnhub|amfi|nseindia|bseindia", re.I)
 ADVICE = re.compile(r"\b(buy|sell|hold|accumulate|avoid|cheap|expensive|overpriced|underpriced|overvalued|undervalued|wait)\b", re.I)
 
@@ -63,11 +63,11 @@ def test_words_are_neutral():
 # ---------- the exchange's list ----------
 def test_parse_exchange_list():
     got = E.parse_exchange(FE.answer())
-    assert got["as_of"] == "2026-10-03T15:30+05:30"
+    assert got["as_of"] == "2026-10-02T15:30+05:30"
     rows = got["rows"]
     assert set(rows) == {"SILVERBEES", "GOLDBEES", "NIFTYBEES", "BANKBEES", "LIQUIDBEES"}       # ODDETF has no price
     assert rows["SILVERBEES"] == {"name": "Nippon India Silver ETF", "isin": "", "price": 105.2, "inav": 99.15,
-                                  "underlying": "Nippon India Silver ETF", "nav": None, "nav_date": "2026-10-03"}
+                                  "underlying": "Nippon India Silver ETF", "nav": None, "nav_date": "2026-10-02"}
     assert rows["LIQUIDBEES"]["price"] == 1000.0
 
 
@@ -88,12 +88,12 @@ def test_table_widest_gap_first(w):
     assert syms[0] == "SILVERBEES" and syms[-1] == "LIQUIDBEES" and t["count"] == 5
     by = {r["symbol"]: r for r in t["rows"]}
     s = by["SILVERBEES"]
-    assert (s["inav_gap"], s["nav"], s["nav_date"], s["basis"], s["fund"], s["fund_label"]) == (6.1, 98.4, "2026-10-03", "iNAV", "silver", "Silver ETF")
+    assert (s["inav_gap"], s["nav"], s["nav_date"], s["basis"], s["fund"], s["fund_label"]) == (6.1, 98.4, "2026-10-02", "iNAV", "silver", "Silver ETF")
     assert s["nav_gap"] == E.gap(105.2, 98.4) and s["text"] == "SILVERBEES trades 6.1% above its indicative NAV"
     assert by["BANKBEES"]["nav"] is None and by["BANKBEES"]["inav_gap"] == -1.3        # no NAV in the file: the iNAV gap only
     assert by["GOLDBEES"]["fund"] == "gold" and by["LIQUIDBEES"]["fund"] == "debt" and by["NIFTYBEES"]["fund"] == "equity"
     assert by["LIQUIDBEES"]["text"] == "LIQUIDBEES trades at its indicative NAV"
-    assert t["nav_as_of"] == "2026-10-03" and t["as_of"] == "2026-10-03T15:30+05:30"
+    assert t["nav_as_of"] == "2026-10-02" and t["as_of"] == "2026-10-02T15:30+05:30"
 
 
 def test_nav_only_when_no_inav(w):
@@ -121,7 +121,7 @@ def test_record_fill_and_history(w):
     E.refresh(Feed())
     live = E.load_live()
     assert E.record_close(DAY, live, FE.navs(DAY - timedelta(days=1))) == 5          # tonight's NAVs aren't out yet
-    assert E.history("SILVERBEES") == [{"day": "2026-10-03", "close": 105.2, "nav": None, "gap": None}]
+    assert E.history("SILVERBEES") == [{"day": "2026-10-02", "close": 105.2, "nav": None, "gap": None}]
     assert E.fill_navs(FE.navs(DAY), DAY) == 4                                       # out now (BANKBEES has none)
     h = E.history("SILVERBEES")[0]
     assert (h["nav"], h["gap"]) == (98.4, E.gap(105.2, 98.4))
@@ -264,7 +264,7 @@ def test_gap_now(w):
         it["iNavValue"] = "-"
     E.refresh(Feed(data))
     g = E.gap_now("GOLDBEES", 81.2)
-    assert g["basis"] == "NAV" and g["gap"] == -0.98 and "on 2026-10-03" in g["text"]
+    assert g["basis"] == "NAV" and g["gap"] == -0.98 and "on 2026-10-02" in g["text"]
 
 
 def test_checker_sends_the_gap_alert(w, monkeypatch):

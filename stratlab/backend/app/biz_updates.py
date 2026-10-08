@@ -472,6 +472,10 @@ def series(reads: dict) -> list[dict]:
         prev = before[-1] if before else None
         year = m["points"].get(shift(latest["period"], -12))
         step = "quarter" if m["span"] == "quarter" or (prev and shift(prev["period"], 3) == latest["period"]) else "month"
+        # "the previous" is the period just before (last month, or last quarter for a quarterly figure). A point further back, such as
+        # the year-ago figure a filing states, is not it: with no previous period there is no change on it
+        if prev and shift(prev["period"], 1) != latest["period"] and not (step == "quarter" and shift(prev["period"], 3) == latest["period"]):
+            prev = None
         lo = shift(latest["period"], -(CHART_MONTHS - 1))
         out.append({**{x: m[x] for x in ("key", "metric", "segment", "unit", "basis", "span", "headline")},
                     "latest": latest, "prev": prev, "year_ago": year, "step": step,

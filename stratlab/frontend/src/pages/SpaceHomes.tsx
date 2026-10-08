@@ -283,7 +283,7 @@ function RedFlags() {
             {flagged.slice(0, 5).map((r) => (
               <div key={r.symbol} className="space-line">
                 <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
-                <SummaryLine s={r.summary} />
+                <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
               </div>
             ))}
           </div>

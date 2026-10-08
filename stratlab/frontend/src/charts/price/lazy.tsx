@@ -3,11 +3,13 @@
 import { lazy, Suspense } from "react";
 import type { PriceChartProps } from "./PriceChart";
 import { api } from "../../lib/api";
+import { settleLast, type QuoteReading } from "./settle";
 import type { BaseTf, Loader } from "./PriceChart";
 import type { RawCandle } from "./transforms";
 import type { StudyConfig, StudyType } from "./studies";
 
 export type { PriceChartProps, Tf, RangeKey, Loader } from "./PriceChart";
+export type { QuoteReading } from "./settle";
 
 const load = () => import("./PriceChart");
 const Chart = lazy(load);
@@ -28,9 +30,10 @@ export function PriceChart(props: PriceChartProps) {
 
 type Answer = { candles: RawCandle[]; more?: boolean; currency?: string };
 
-/** Candles of a company on the research pages (India or the US). */
-export function companyLoader(region: string, symbol: string): Loader {
-  return (tf: BaseTf, o) => api<Answer>(`/research/chart/${region}/${encodeURIComponent(symbol)}?tf=${tf}&range=${(o.range ?? "1y").toLowerCase()}${o.before ? `&before=${encodeURIComponent(o.before)}` : ""}`);
+/** Candles of a company on the research pages (India or the US). With `reading`, the newest candle is the page's own price. */
+export function companyLoader(region: string, symbol: string, reading?: QuoteReading | null): Loader {
+  return (tf: BaseTf, o) => api<Answer>(`/research/chart/${region}/${encodeURIComponent(symbol)}?tf=${tf}&range=${(o.range ?? "1y").toLowerCase()}${o.before ? `&before=${encodeURIComponent(o.before)}` : ""}`)
+    .then((a) => (o.before ? a : { ...a, candles: settleLast(a.candles ?? [], reading) }));
 }
 
 /** Candles of any instrument the app trades on (notebooks, backtests, paper trading). */
